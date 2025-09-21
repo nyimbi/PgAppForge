@@ -14,6 +14,154 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+class SecurityError(Exception):
+    """Raised when security validation fails."""
+    pass
+
+
+class SafeASTValidator(ast.NodeVisitor):
+    """
+    Validates AST nodes against security policy.
+
+    Prevents code injection by ensuring only safe import statements
+    are allowed and blocking dangerous node types.
+    """
+
+    # Node types that are never allowed in import statements
+    DANGEROUS_NODES = {
+        ast.Call,           # Function calls
+        ast.Import,         # Checked separately for safety
+        ast.ImportFrom,     # Checked separately for safety
+        ast.FunctionDef,    # Function definitions
+        ast.AsyncFunctionDef, # Async function definitions
+        ast.ClassDef,       # Class definitions
+        ast.For,            # For loops
+        ast.AsyncFor,       # Async for loops
+        ast.While,          # While loops
+        ast.If,             # If statements
+        ast.With,           # With statements
+        ast.AsyncWith,      # Async with statements
+        ast.Try,            # Try statements
+        ast.Delete,         # Delete statements
+        ast.Assign,         # Assignment statements
+        ast.AugAssign,      # Augmented assignment
+        ast.AnnAssign,      # Annotated assignment
+        ast.Return,         # Return statements
+        ast.Yield,          # Yield expressions
+        ast.YieldFrom,      # Yield from expressions
+        ast.Raise,          # Raise statements
+        ast.Assert,         # Assert statements
+        ast.Global,         # Global statements
+        ast.Nonlocal,       # Nonlocal statements
+        ast.Lambda,         # Lambda expressions
+        ast.ListComp,       # List comprehensions
+        ast.SetComp,        # Set comprehensions
+        ast.DictComp,       # Dict comprehensions
+        ast.GeneratorExp,   # Generator expressions
+    }
+
+    # Dangerous attribute names
+    DANGEROUS_ATTRIBUTES = {
+        '__import__', '__builtins__', '__globals__', '__locals__',
+        'exec', 'eval', 'compile', 'open', 'file',
+        'input', 'raw_input', 'reload', 'vars', 'dir',
+        'getattr', 'setattr', 'delattr', 'hasattr'
+    }
+
+    # Dangerous module names that should never be imported dynamically
+    DANGEROUS_MODULES = {
+        'os', 'sys', 'subprocess', 'imp', 'importlib',
+        'builtins', '__builtin__', 'gc', 'types',
+        'marshal', 'pickle', 'copyreg', 'operator',
+        'ctypes', 'code', 'codeop', 'inspect',
+        'dis', 'ast', 'compile', 'eval', 'exec'
+    }
+
+    def __init__(self):
+        self.errors = []
+        self.import_count = 0
+        self.has_dangerous_content = False
+
+    def visit(self, node):
+        """Visit a node and validate it for security."""
+        node_type = type(node)
+
+        # Check for dangerous node types
+        if node_type in self.DANGEROUS_NODES:
+            # Allow Import and ImportFrom, but validate them specially
+            if node_type in (ast.Import, ast.ImportFrom):
+                self._validate_import_node(node)
+            else:
+                error = f"Dangerous node type not allowed: {node_type.__name__}"
+                self.errors.append(error)
+                raise SecurityError(error)
+
+        # Check for dangerous attribute access
+        if isinstance(node, ast.Attribute):
+            self._validate_attribute_access(node)
+
+        # Check for dangerous name access
+        if isinstance(node, ast.Name):
+            self._validate_name_access(node)
+
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def _validate_import_node(self, node):
+        """Validate import and import-from nodes for security."""
+        self.import_count += 1
+
+        # Limit number of imports to prevent abuse
+        if self.import_count > 10:
+            error = "Too many import statements in single validation"
+            self.errors.append(error)
+            raise SecurityError(error)
+
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in self.DANGEROUS_MODULES:
+                    error = f"Import of dangerous module not allowed: {alias.name}"
+                    self.errors.append(error)
+                    raise SecurityError(error)
+
+                # Check for dangerous import patterns
+                if any(dangerous in alias.name.lower() for dangerous in ['os.', 'sys.', 'subprocess']):
+                    error = f"Import pattern appears dangerous: {alias.name}"
+                    self.errors.append(error)
+                    raise SecurityError(error)
+
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.module in self.DANGEROUS_MODULES:
+                error = f"Import from dangerous module not allowed: {node.module}"
+                self.errors.append(error)
+                raise SecurityError(error)
+
+            for alias in node.names:
+                if alias.name in self.DANGEROUS_ATTRIBUTES:
+                    error = f"Import of dangerous attribute not allowed: {alias.name}"
+                    self.errors.append(error)
+                    raise SecurityError(error)
+
+    def _validate_attribute_access(self, node):
+        """Validate attribute access for dangerous patterns."""
+        if isinstance(node.attr, str) and node.attr in self.DANGEROUS_ATTRIBUTES:
+            error = f"Access to dangerous attribute not allowed: {node.attr}"
+            self.errors.append(error)
+            raise SecurityError(error)
+
+    def _validate_name_access(self, node):
+        """Validate name access for dangerous patterns."""
+        if isinstance(node.id, str) and node.id in self.DANGEROUS_ATTRIBUTES:
+            error = f"Access to dangerous name not allowed: {node.id}"
+            self.errors.append(error)
+            raise SecurityError(error)
+
+    def get_validation_errors(self):
+        """Get list of validation errors."""
+        return self.errors.copy()
+
+
 class ImportInfo(NamedTuple):
     """Information about a parsed import statement."""
     module: str
@@ -83,6 +231,10 @@ def parse_import(import_statement: str) -> Optional[ImportInfo]:
         # Parse using AST - safe parsing without execution
         tree = ast.parse(import_statement)
 
+        # SECURITY: Validate AST nodes for safety
+        validator = SafeASTValidator()
+        validator.visit(tree)
+
         if len(tree.body) != 1:
             return None
 
@@ -108,6 +260,9 @@ def parse_import(import_statement: str) -> Optional[ImportInfo]:
 
         return None
 
+    except SecurityError as e:
+        logger.warning(f"Security validation failed for import '{import_statement}': {e}")
+        return None
     except (SyntaxError, ValueError) as e:
         logger.debug(f"Failed to parse import statement '{import_statement}': {e}")
         return None

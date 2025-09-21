@@ -360,12 +360,27 @@ class AppBuilder:
         """
         # Set up plugin configuration
         app.config.setdefault("FAB_PLUGINS", [])
-        app.config.setdefault("FAB_PLUGIN_SECURITY_STRICT", False)
+        app.config.setdefault("FAB_PLUGIN_SECURITY_STRICT", True)
         app.config.setdefault("FAB_PLUGIN_PATHS", [])
 
         # Initialize plugin loader based on security settings
-        strict_security = app.config.get("FAB_PLUGIN_SECURITY_STRICT", False)
+        # SECURITY: Default to strict security (was False, now True)
+        strict_security = app.config.get("FAB_PLUGIN_SECURITY_STRICT", True)
         plugin_paths = app.config.get("FAB_PLUGIN_PATHS", [])
+
+        # SECURITY: Prevent disabling plugin security in production
+        if not strict_security:
+            if app.config.get('ENV') == 'production':
+                from ..exceptions import FABConfigurationError
+                raise FABConfigurationError(
+                    "Plugin security cannot be disabled in production environment. "
+                    "Set FAB_PLUGIN_SECURITY_STRICT=True or remove the setting."
+                )
+            # Warn about insecure configuration in non-production
+            log.warning(
+                "Plugin security is disabled (FAB_PLUGIN_SECURITY_STRICT=False). "
+                "This is unsafe for production environments."
+            )
 
         if strict_security:
             from pathlib import Path

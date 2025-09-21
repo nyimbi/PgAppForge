@@ -13,6 +13,7 @@ from contextlib import contextmanager
 
 from .base_plugin import BasePlugin, PluginMetadata, PluginStatus, PluginPriority
 from .exceptions import PluginError, PluginDependencyError, PluginLoadError
+from ..exceptions import FABSecurityError, FABConfigurationError, ErrorContext
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,19 @@ class PluginManager:
                     return False
 
             except Exception as e:
-                logger.error(f"Error loading plugin {name}: {e}")
+                # Use standardized error handling with context
+                context = ErrorContext(
+                    operation="plugin_loading",
+                    additional_data={"plugin_name": name}
+                )
+
+                # Log as security event if it's a security-related plugin error
+                if any(term in str(e).lower() for term in ['security', 'permission', 'access']):
+                    logger.error(f"Security-related plugin loading error for {name}: {e}")
+                    # Note: Not raising here to maintain existing behavior, just enhanced logging
+                else:
+                    logger.error(f"Error loading plugin {name}: {e}")
+
                 return False
 
     def unload_plugin(self, name: str) -> bool:
