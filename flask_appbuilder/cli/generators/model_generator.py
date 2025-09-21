@@ -16,7 +16,8 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set, Tuple
 from dataclasses import dataclass
-from jinja2 import Environment, BaseLoader, Template
+from jinja2 import Environment, FileSystemLoader, Template
+import os
 import inflect
 
 from .database_inspector import (
@@ -82,7 +83,14 @@ class EnhancedModelGenerator:
         """
         self.inspector = inspector
         self.config = config or ModelGenerationConfig()
-        self.jinja_env = Environment(loader=BaseLoader())
+        
+        # Set up Jinja2 environment with template directory
+        template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
+        self.jinja_env = Environment(
+            loader=FileSystemLoader(template_dir),
+            trim_blocks=True,
+            lstrip_blocks=True
+        )
 
         # Analysis cache
         self.database_analysis = None
@@ -137,8 +145,7 @@ class EnhancedModelGenerator:
         Returns:
             Generated model code
         """
-        template_str = self._get_model_template()
-        template = self.jinja_env.from_string(template_str)
+        template = self.jinja_env.get_template('model.j2')
 
         # Prepare template context
         context = {
@@ -162,8 +169,7 @@ class EnhancedModelGenerator:
 
     def generate_pydantic_model(self, table_info: TableInfo) -> str:
         """Generate Pydantic model for API serialization."""
-        template_str = self._get_pydantic_template()
-        template = self.jinja_env.from_string(template_str)
+        template = self.jinja_env.get_template('pydantic_schema.j2')
 
         context = {
             'table_info': table_info,
@@ -386,8 +392,40 @@ def before_update_{table_name}(mapper, connection, target):
         }
 
     def _get_sqlalchemy_type(self, column: ColumnInfo) -> str:
-        """Get SQLAlchemy type string for a column."""
-        type_mapping = {
+        """Get SQLAlchemy type string with PostgreSQL dialect support."""
+        
+        # PostgreSQL-specific types that use dialect imports
+        postgresql_types = {
+            'UUID': 'UUID',
+            'JSONB': 'JSONB', 
+            'HSTORE': 'HSTORE',
+            'INET': 'INET',
+            'CIDR': 'CIDR',
+            'MACADDR': 'MACADDR',
+            'TSVECTOR': 'TSVECTOR',
+            'TSQUERY': 'TSQUERY',
+            'INT4RANGE': 'INT4RANGE',
+            'INT8RANGE': 'INT8RANGE',
+            'NUMRANGE': 'NUMRANGE',
+            'TSRANGE': 'TSRANGE',
+            'TSTZRANGE': 'TSTZRANGE',
+            'DATERANGE': 'DATERANGE'
+        }
+        
+        # PostGIS spatial types
+        spatial_types = {
+            'GEOMETRY': 'Geometry',
+            'GEOGRAPHY': 'Geography',
+            'RASTER': 'Raster'
+        }
+        
+        # pgVector types
+        vector_types = {
+            'VECTOR': 'Vector'
+        }
+        
+        # Standard SQLAlchemy types
+        standard_types = {
             'VARCHAR': f'String({column.length})' if column.length else 'String(255)',
             'TEXT': 'Text',
             'INTEGER': 'Integer',
@@ -402,22 +440,53 @@ def before_update_{table_name}(mapper, connection, target):
             'TIMESTAMP': 'DateTime(timezone=True)',
             'TIME': 'Time',
             'JSON': 'JSON',
-            'JSONB': 'JSON',
             'ARRAY': 'ARRAY',
-            'UUID': 'UUID',
             'BINARY': 'LargeBinary',
             'BYTEA': 'LargeBinary'
         }
 
         base_type = column.type.upper()
+        
+        # Handle parameterized types
         if base_type.startswith('VARCHAR'):
-            # Extract length from VARCHAR(n)
             import re
             match = re.search(r'VARCHAR\((\d+)\)', base_type)
             length = match.group(1) if match else '255'
             return f'String({length})'
-
-        return type_mapping.get(base_type, 'String(255)')
+        elif base_type.startswith('GEOMETRY'):
+            # Handle PostGIS GEOMETRY(type, srid) format
+            import re
+            match = re.search(r'GEOMETRY\(([^,]+),?\s*(\d+)?\)', base_type)
+            if match:
+                geom_type = match.group(1).strip()
+                srid = match.group(2)
+                if srid:
+                    return f'Geometry(geometry_type="{geom_type}", srid={srid})'
+                else:
+                    return f'Geometry(geometry_type="{geom_type}")'
+            return 'Geometry'
+        elif base_type.startswith('VECTOR'):
+            # Handle pgVector VECTOR(dimensions) format
+            import re
+            match = re.search(r'VECTOR\((\d+)\)', base_type)
+            if match:
+                dimensions = match.group(1)
+                return f'Vector({dimensions})'
+            return 'Vector'
+        
+        # Check type categories in priority order
+        clean_type = base_type.split('(')[0]  # Remove parameters for lookup
+        
+        if clean_type in postgresql_types:
+            return postgresql_types[clean_type]
+        elif clean_type in spatial_types:
+            return spatial_types[clean_type]
+        elif clean_type in vector_types:
+            return vector_types[clean_type]
+        elif clean_type in standard_types:
+            return standard_types[clean_type]
+        else:
+            return 'String(255)'  # Safe default
 
     def _get_python_type(self, column: ColumnInfo) -> str:
         """Get Python type hint for a column."""
@@ -495,7 +564,7 @@ def before_update_{table_name}(mapper, connection, target):
         return ''.join(word.capitalize() for word in snake_str.split('_'))
 
     def _generate_imports(self):
-        """Generate import statements."""
+        """Generate import statements with PostgreSQL dialect support."""
         base_imports = {
             'from datetime import datetime',
             'from typing import Optional, List, Dict, Any',
@@ -505,6 +574,16 @@ def before_update_{table_name}(mapper, connection, target):
             'from flask_appbuilder import Model'
         }
 
+        # Add PostgreSQL-specific imports based on detected types
+        if self._has_postgresql_types():
+            base_imports.add('from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY, HSTORE, INET, CIDR, MACADDR')
+            
+        if self._has_spatial_types():
+            base_imports.add('from geoalchemy2 import Geometry, Geography, Raster')
+            
+        if self._has_vector_types():
+            base_imports.add('from pgvector.sqlalchemy import Vector')
+
         if self.config.generate_pydantic:
             base_imports.add('from pydantic import BaseModel, Field, validator')
 
@@ -513,10 +592,53 @@ def before_update_{table_name}(mapper, connection, target):
 
         self.import_statements.update(base_imports)
 
+    def _has_postgresql_types(self) -> bool:
+        """Check if any PostgreSQL-specific types are used."""
+        if not self.database_analysis:
+            return False
+            
+        postgresql_types = {
+            ColumnType.UUID, ColumnType.JSONB, ColumnType.HSTORE, ColumnType.LTREE,
+            ColumnType.INET, ColumnType.CIDR, ColumnType.MACADDR, ColumnType.TSVECTOR,
+            ColumnType.TSQUERY, ColumnType.INT4RANGE, ColumnType.INT8RANGE,
+            ColumnType.NUMRANGE, ColumnType.TSRANGE, ColumnType.TSTZRANGE, ColumnType.DATERANGE
+        }
+        
+        for table_info in self.database_analysis['tables'].values():
+            for column in table_info.columns:
+                if column.category in postgresql_types:
+                    return True
+        return False
+
+    def _has_spatial_types(self) -> bool:
+        """Check if any PostGIS spatial types are used."""
+        if not self.database_analysis:
+            return False
+            
+        spatial_types = {ColumnType.GEOMETRY, ColumnType.GEOGRAPHY, ColumnType.RASTER}
+        
+        for table_info in self.database_analysis['tables'].values():
+            for column in table_info.columns:
+                if column.category in spatial_types:
+                    return True
+        return False
+
+    def _has_vector_types(self) -> bool:
+        """Check if any pgVector types are used."""
+        if not self.database_analysis:
+            return False
+            
+        for table_info in self.database_analysis['tables'].values():
+            for column in table_info.columns:
+                if column.category == ColumnType.VECTOR:
+                    return True
+        return False
+
+
+
     def _generate_complete_file(self) -> str:
         """Generate complete models file."""
-        template_str = self._get_complete_file_template()
-        template = self.jinja_env.from_string(template_str)
+        template = self.jinja_env.get_template('models_file.j2')
 
         return template.render(
             imports=sorted(self.import_statements),
@@ -529,8 +651,7 @@ def before_update_{table_name}(mapper, connection, target):
 
     def _generate_pydantic_file(self) -> str:
         """Generate Pydantic schemas file."""
-        template_str = self._get_pydantic_file_template()
-        template = self.jinja_env.from_string(template_str)
+        template = self.jinja_env.get_template('pydantic_file.j2')
 
         return template.render(
             schemas=self.pydantic_models,
@@ -539,231 +660,9 @@ def before_update_{table_name}(mapper, connection, target):
 
     def _generate_validators_file(self) -> str:
         """Generate custom validators file."""
-        template_str = self._get_validators_template()
-        template = self.jinja_env.from_string(template_str)
+        template = self.jinja_env.get_template('validators.j2')
 
         return template.render(
             timestamp=datetime.now().isoformat()
         )
 
-    def _get_model_template(self) -> str:
-        """Get model template string."""
-        return '''
-{% if config.include_documentation %}
-"""
-{{ table_info.display_name }} Model
-
-{{ table_info.description }}
-
-Category: {{ table_info.category }}
-Security Level: {{ table_info.security_level }}
-Generated: {{ timestamp }}
-"""
-{% endif %}
-
-{% if config.use_dataclasses %}
-@dataclass
-{% endif %}
-class {{ class_name }}({{ base_class }}):
-    """{{ table_info.display_name }} model{% if table_info.comment %} - {{ table_info.comment }}{% endif %}"""
-
-    __tablename__ = '{{ table_info.name }}'
-    {% if table_info.comment %}
-    __table_args__ = {'comment': '{{ table_info.comment }}'}
-    {% endif %}
-
-    # Columns
-    {% for column in columns %}
-    {{ column.name }}{% if config.use_type_hints and column.python_type %}: {{ column.python_type }}{% endif %} = Column({{ column.type }}{% if column.constraints %}, {{ column.constraints|join(', ') }}{% endif %}){% if column.comment %} # {{ column.comment }}{% endif %}
-    {% endfor %}
-
-    # Relationships
-    {% for relationship in relationships %}
-    {{ relationship.name }} = relationship(
-        '{{ relationship.remote_class }}',
-        {% if relationship.association_table %}secondary='{{ relationship.association_table }}',{% endif %}
-        back_populates='{{ relationship.back_populates }}'{% if relationship.cascade %},
-        cascade=[{{ relationship.cascade }}]{% endif %},
-        lazy='{{ relationship.lazy }}'
-    ) # {{ relationship.description }}
-    {% endfor %}
-
-    {% if hybrid_properties %}
-    # Hybrid Properties
-    {% for prop in hybrid_properties %}
-    @hybrid_property
-    def {{ prop.name }}(self):
-        """{{ prop.name|title }} hybrid property."""
-        return {{ prop.expression }}
-    {% if prop.setter %}
-    {{ prop.setter }}
-    {% endif %}
-    {% endfor %}
-    {% endif %}
-
-    {% if validation_methods %}
-    # Validation Methods
-    {% for validation in validation_methods %}
-    {{ validation.code }}
-    {% endfor %}
-    {% endif %}
-
-    {% if utility_methods %}
-    # Utility Methods
-    {% for method in utility_methods %}
-    {{ method.code }}
-    {% endfor %}
-    {% endif %}
-
-    {% if config.generate_repr %}
-    def __repr__(self):
-        """String representation of {{ class_name }}."""
-        {% set display_cols = columns[:2] %}
-        return f"<{{ class_name }}({% for col in display_cols %}{{ col.name }}={getattr(self, '{{ col.name }}', 'None')}{% if not loop.last %}, {% endif %}{% endfor %})>"
-    {% endif %}
-
-    {% if config.generate_str %}
-    def __str__(self):
-        """Human-readable string representation."""
-        {% if 'name' in columns|map(attribute='name') %}
-        return self.name or f"{{ class_name }} #{self.id}"
-        {% else %}
-        return f"{{ class_name }} #{self.id}"
-        {% endif %}
-    {% endif %}
-
-{% for listener in event_listeners %}
-{{ listener.code.format(class_name=class_name, table_name=table_info.name) }}
-{% endfor %}
-        '''.strip()
-
-    def _get_pydantic_template(self) -> str:
-        """Get Pydantic model template."""
-        return '''
-class {{ class_name }}(BaseModel):
-    """Pydantic schema for {{ table_info.display_name }}."""
-
-    {% for column in columns %}
-    {{ column.name }}: {% if column.nullable %}Optional[{% endif %}{{ column.python_type or 'str' }}{% if column.nullable %}]{% endif %}{% if column.comment %} = Field(description="{{ column.comment }}"){% endif %}
-    {% endfor %}
-
-    class Config:
-        """Pydantic configuration."""
-        orm_mode = True
-        schema_extra = {
-            "example": {
-                {% for column in columns[:3] %}
-                "{{ column.name }}": {% if 'str' in (column.python_type or 'str') %}"example_value"{% elif 'int' in (column.python_type or 'str') %}123{% elif 'bool' in (column.python_type or 'str') %}True{% else %}None{% endif %}{% if not loop.last %},{% endif %}
-                {% endfor %}
-            }
-        }
-        '''.strip()
-
-    def _get_complete_file_template(self) -> str:
-        """Get complete file template."""
-        return '''"""
-Enhanced SQLAlchemy Models
-
-Generated by Flask-AppBuilder Enhanced Model Generator
-Database: {{ database_info.name }} ({{ database_info.dialect }})
-Generated: {{ timestamp }}
-Statistics: {{ statistics.regular_tables }} tables, {{ statistics.association_tables }} associations
-"""
-
-# Imports
-{% for import_stmt in imports %}
-{{ import_stmt }}
-{% endfor %}
-
-{% for model_name, model_code in models.items() %}
-{{ model_code }}
-
-{% endfor %}
-
-# Model Registry
-MODELS = [
-{% for model_name in models.keys() %}
-    {{ model_name|title|replace('_', '') }},
-{% endfor %}
-]
-
-def get_model_by_name(name: str):
-    """Get model class by name."""
-    model_map = {model.__name__.lower(): model for model in MODELS}
-    return model_map.get(name.lower())
-        '''.strip()
-
-    def _get_pydantic_file_template(self) -> str:
-        """Get Pydantic file template."""
-        return '''"""
-Pydantic Schemas for API Serialization
-
-Generated: {{ timestamp }}
-"""
-
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, validator
-from datetime import datetime
-
-{% for schema_name, schema_code in schemas.items() %}
-{{ schema_code }}
-
-{% endfor %}
-        '''.strip()
-
-    def _get_validators_template(self) -> str:
-        """Get validators template."""
-        return '''"""
-Custom Validators for Enhanced Models
-
-Generated: {{ timestamp }}
-"""
-
-import re
-from typing import Any
-from sqlalchemy.orm import validates
-
-
-def validate_email(email: str) -> bool:
-    """Validate email format."""
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
-
-
-def validate_phone(phone: str) -> bool:
-    """Validate phone number format."""
-    # Remove all non-digits
-    digits = re.sub(r'\\D', '', phone)
-    return len(digits) >= 10
-
-
-def validate_url(url: str) -> bool:
-    """Validate URL format."""
-    pattern = r'^https?://(?:[-\\w.])+(?::[0-9]+)?(?:/(?:[\\w/_.])*(?:\\?(?:[\\w&=%.]*))?(?:#(?:[\\w.]*))?)?$'
-    return bool(re.match(pattern, url))
-
-
-class ValidationMixin:
-    """Mixin class for common validation methods."""
-
-    @validates('email')
-    def validate_email_field(self, key, value):
-        """Validate email fields."""
-        if value and not validate_email(value):
-            raise ValueError(f'Invalid email format: {value}')
-        return value
-
-    @validates('phone')
-    def validate_phone_field(self, key, value):
-        """Validate phone fields."""
-        if value and not validate_phone(value):
-            raise ValueError(f'Invalid phone format: {value}')
-        return value
-
-    @validates('url', 'website')
-    def validate_url_field(self, key, value):
-        """Validate URL fields."""
-        if value and not validate_url(value):
-            raise ValueError(f'Invalid URL format: {value}')
-        return value
-        '''.strip()

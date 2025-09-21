@@ -9,3 +9,7 @@ mypy-extensions
 pip-tools
 tox
 types-PyYAML
+
+# Database introspection and code generation dependencies
+inflect>=6.0.0
+watchdog>=3.0.0

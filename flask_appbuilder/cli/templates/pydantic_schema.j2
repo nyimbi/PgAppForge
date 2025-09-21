@@ -1,0 +1,17 @@
+class {{ class_name }}(BaseModel):
+    """Pydantic schema for {{ table_info.display_name }}."""
+
+    {% for column in columns %}
+    {{ column.name }}: {% if column.nullable %}Optional[{% endif %}{{ column.python_type or 'str' }}{% if column.nullable %}]{% endif %}{% if column.comment %} = Field(description="{{ column.comment }}"){% endif %}
+    {% endfor %}
+
+    class Config:
+        """Pydantic configuration."""
+        orm_mode = True
+        schema_extra = {
+            "example": {
+                {% for column in columns[:3] %}
+                "{{ column.name }}": {% if 'str' in (column.python_type or 'str') %}"example_value"{% elif 'int' in (column.python_type or 'str') %}123{% elif 'bool' in (column.python_type or 'str') %}True{% else %}None{% endif %}{% if not loop.last %},{% endif %}
+                {% endfor %}
+            }
+        }

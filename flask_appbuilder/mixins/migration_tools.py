@@ -235,7 +235,7 @@ class MigrationHelper:
                 'step': 2,
                 'title': 'Install Enhanced Mixins',
                 'description': 'Ensure enhanced mixin package is installed',
-                'command': 'pip install flask-appbuilder[enhanced-mixins]',
+                'command': 'pip install flask-appbuilder[mfa,export,analytics]',
                 'required': True
             },
             {

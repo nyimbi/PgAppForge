@@ -1,0 +1,14 @@
+"""
+Pydantic Schemas for API Serialization
+
+Generated: {{ timestamp }}
+"""
+
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, validator
+from datetime import datetime
+
+{% for schema_name, schema_code in schemas.items() %}
+{{ schema_code }}
+
+{% endfor %}

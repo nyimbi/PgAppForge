@@ -10,7 +10,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, AsyncIterator, AsyncGenerator
+from typing import Any, Dict, List, Optional, AsyncIterator, AsyncGenerator, Callable
 import json
 
 logger = logging.getLogger(__name__)

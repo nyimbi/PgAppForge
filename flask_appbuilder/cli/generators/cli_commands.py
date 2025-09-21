@@ -364,7 +364,7 @@ def generate_models(
         # Initialize database inspector with context management
         with EnhancedDatabaseInspector(uri) as inspector:
             # Create model generation configuration
-        model_config = ModelGenerationConfig(
+            model_config = ModelGenerationConfig(
             generate_pydantic=include_pydantic,
             generate_validation=include_validation,
             generate_hybrid_properties=include_hybrid_properties,
@@ -739,60 +739,58 @@ def generate_app(
 
         # Initialize database inspector with context management
         with EnhancedDatabaseInspector(uri) as inspector:
+            # Create app generation configuration
+            app_config = AppGenerationConfig(
+                app_name=name,
+                app_title=title or name,
+                app_description=description or f"Generated Flask-AppBuilder application: {name}",
+                author_name=author or "Generated",
+                author_email=email or "generated@example.com",
+                version=version,
+                enable_auth=enable_auth,
+                enable_api=enable_api,
+                enable_websockets=enable_websockets,
+                enable_docker=enable_docker,
+                enable_testing=enable_testing,
+                security_level=security_level,
+                database_type=database_type,
+                theme=theme
+            )
 
-        # Create app generation configuration
-        app_config = AppGenerationConfig(
-            app_name=name,
-            app_title=title or name,
-            app_description=description or f"Generated Flask-AppBuilder application: {name}",
-            author_name=author or "Generated",
-            author_email=email or "generated@example.com",
-            version=version,
-            enable_auth=enable_auth,
-            enable_api=enable_api,
-            enable_websockets=enable_websockets,
-            enable_docker=enable_docker,
-            enable_testing=enable_testing,
-            security_level=security_level,
-            database_type=database_type,
-            theme=theme
-        )
+            # Initialize app generator
+            generator = FullAppGenerator(inspector, app_config, output_dir)
 
-        # Initialize app generator
-        generator = FullAppGenerator(inspector, app_config, output_dir)
+            click.echo("🏗️ Generating application structure...")
 
-        click.echo("🏗️ Generating application structure...")
+            # Generate complete application
+            result = generator.generate_complete_app()
 
-        # Generate complete application
-        result = generator.generate_complete_app()
+            if result['status'] == 'success':
+                click.echo("✅ Application generation complete!")
+                click.echo(f"📁 Generated {result['files_generated']} files")
+                click.echo(f"📂 Output directory: {result['output_dir']}")
 
-        if result['status'] == 'success':
-            click.echo("✅ Application generation complete!")
-            click.echo(f"📁 Generated {result['files_generated']} files")
-            click.echo(f"📂 Output directory: {result['output_dir']}")
+                # Show feature summary
+                click.echo("\n🌟 Generated features:")
+                if enable_auth:
+                    click.echo("   • Authentication & authorization system")
+                if enable_api:
+                    click.echo("   • RESTful API with OpenAPI documentation")
+                if enable_websockets:
+                    click.echo("   • Real-time features with WebSocket support")
+                if enable_docker:
+                    click.echo("   • Docker & Docker Compose configuration")
+                if enable_testing:
+                    click.echo("   • Comprehensive testing framework")
 
-            # Show feature summary
-            click.echo("\n🌟 Generated features:")
-            if enable_auth:
-                click.echo("   • Authentication & authorization system")
-            if enable_api:
-                click.echo("   • RESTful API with OpenAPI documentation")
-            if enable_websockets:
-                click.echo("   • Real-time features with WebSocket support")
-            if enable_docker:
-                click.echo("   • Docker & Docker Compose configuration")
-            if enable_testing:
-                click.echo("   • Comprehensive testing framework")
-
-            # Show next steps
-            click.echo("\n📋 Next steps:")
-            for step in result['next_steps']:
-                if step.strip():
-                    click.echo(f"   {step}")
-
-        else:
-            click.echo("❌ Application generation failed", err=True)
-            sys.exit(1)
+                # Show next steps
+                click.echo("\n📋 Next steps:")
+                for step in result['next_steps']:
+                    if step.strip():
+                        click.echo(f"   {step}")
+            else:
+                click.echo("❌ Application generation failed", err=True)
+                sys.exit(1)
 
     except Exception as e:
         click.echo(f"❌ Error generating application: {e}", err=True)

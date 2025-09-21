@@ -20,6 +20,8 @@ from .const import (
 # from .filters import TemplateFilters  # Class doesn't exist
 from .menu import Menu, MenuApi
 from .views import IndexView, UtilView
+# Enhanced plugin system imports
+from .plugins import PluginManager, PluginLoader, SecurePluginLoader, BasePlugin
 
 if TYPE_CHECKING:
     from flask_appbuilder.basemanager import BaseManager
@@ -130,6 +132,10 @@ class AppBuilder:
         self._addon_managers: List[str] = []
         # dict with addon name has key and instantiated class has value
         self.addon_managers: Dict[str, Any] = {}
+
+        # Enhanced plugin system
+        self.plugin_manager: PluginManager = None  # type: ignore
+        self.plugin_loader: PluginLoader = None  # type: ignore
         self.menu = menu
         self.base_template = base_template
         self.security_manager_class = security_manager_class
@@ -212,7 +218,10 @@ class AppBuilder:
         self.bm = BabelManager(self)
         self.openapi_manager = OpenApiManager(self)
         self.menuapi_manager = MenuApi()
-        
+
+        # Initialize enhanced plugin system
+        self._init_plugin_system(app)
+
         # Initialize enhanced security modules
         self._init_enhanced_security(app)
         
@@ -342,25 +351,141 @@ class AppBuilder:
         self.openapi_manager.register_views()
         self.menuapi_manager.register_views()
 
+    def _init_plugin_system(self, app: Flask) -> None:
+        """
+        Initialize the enhanced plugin system.
+
+        Args:
+            app: Flask application instance
+        """
+        # Set up plugin configuration
+        app.config.setdefault("FAB_PLUGINS", [])
+        app.config.setdefault("FAB_PLUGIN_SECURITY_STRICT", False)
+        app.config.setdefault("FAB_PLUGIN_PATHS", [])
+
+        # Initialize plugin loader based on security settings
+        strict_security = app.config.get("FAB_PLUGIN_SECURITY_STRICT", False)
+        plugin_paths = app.config.get("FAB_PLUGIN_PATHS", [])
+
+        if strict_security:
+            from pathlib import Path
+            allowed_paths = [Path(p) for p in plugin_paths] if plugin_paths else []
+            self.plugin_loader = SecurePluginLoader(
+                strict_security=True,
+                allowed_paths=allowed_paths
+            )
+        else:
+            self.plugin_loader = PluginLoader()
+
+        # Add configured plugin paths
+        for path_str in plugin_paths:
+            from pathlib import Path
+            path = Path(path_str)
+            if path.exists():
+                self.plugin_loader.add_plugin_path(path)
+
+        # Initialize plugin manager
+        self.plugin_manager = PluginManager(self)
+
+        log.info("Enhanced plugin system initialized with %s security mode",
+                "strict" if strict_security else "standard")
+
     def _add_addon_views(self) -> None:
         """
-        Registers declared addon's
+        Registers declared addon's and plugins with enhanced plugin system support.
+
+        Supports both legacy ADDON_MANAGERS and new plugin architecture for
+        backward compatibility and gradual migration.
         """
+        # Process legacy ADDON_MANAGERS
+        self._process_legacy_addons()
+
+        # Process new plugin system
+        self._process_plugins()
+
+    def _process_legacy_addons(self) -> None:
+        """Process legacy ADDON_MANAGERS for backward compatibility."""
         for addon in self._addon_managers:
             addon_class_ = dynamic_class_import(addon)
             addon_class = cast(Type["BaseManager"], addon_class_)
             if addon_class:
-                # Instantiate manager with appbuilder (self)
-                inst_addon_class: "BaseManager" = addon_class(self)
                 try:
+                    # Check if this is a modern plugin
+                    if issubclass(addon_class, BasePlugin):
+                        # Handle as new plugin
+                        plugin_instance = addon_class(self)
+                        if self.plugin_manager.load_plugin(plugin_instance.metadata.name):
+                            log.info(f"Loaded modern plugin via legacy config: {addon}")
+                        continue
+
+                    # Handle as legacy manager
+                    inst_addon_class: "BaseManager" = addon_class(self)
                     inst_addon_class.pre_process()
                     inst_addon_class.register_views()
                     inst_addon_class.post_process()
                     self.addon_managers[addon] = inst_addon_class
                     log.info(LOGMSG_INF_FAB_ADDON_ADDED, addon)
+
+                    # Optionally wrap legacy manager in plugin adapter
+                    if hasattr(self.get_app.config, 'FAB_AUTO_WRAP_LEGACY') and self.get_app.config['FAB_AUTO_WRAP_LEGACY']:
+                        try:
+                            adapter_class = self.plugin_loader.load_legacy_manager(addon_class)
+                            self.plugin_manager.register_plugin_class(adapter_class)
+                            log.info(f"Auto-wrapped legacy manager as plugin: {addon}")
+                        except Exception as wrap_error:
+                            log.warning(f"Failed to auto-wrap legacy manager {addon}: {wrap_error}")
+
                 except Exception as e:
                     log.exception(e)
                     log.error(LOGMSG_ERR_FAB_ADDON_PROCESS, addon, e)
+
+    def _process_plugins(self) -> None:
+        """Process new plugin system configurations."""
+        if not self.plugin_manager:
+            return
+
+        # Get plugin configurations from Flask config
+        plugin_configs = self.get_app.config.get("FAB_PLUGINS", [])
+
+        for plugin_config in plugin_configs:
+            try:
+                if isinstance(plugin_config, str):
+                    # Simple plugin name/module string
+                    plugin_class = self.plugin_loader.load_plugin_from_module(plugin_config)
+                    self.plugin_manager.register_plugin_class(plugin_class)
+                    self.plugin_manager.load_plugin(plugin_class(self).metadata.name)
+
+                elif isinstance(plugin_config, dict):
+                    # Plugin configuration dictionary
+                    plugin_name = plugin_config.get('name')
+                    plugin_module = plugin_config.get('module')
+                    plugin_file = plugin_config.get('file')
+                    plugin_config_data = plugin_config.get('config', {})
+
+                    if plugin_module:
+                        plugin_class = self.plugin_loader.load_plugin_from_module(plugin_module)
+                    elif plugin_file:
+                        from pathlib import Path
+                        plugin_class = self.plugin_loader.load_plugin_from_file(Path(plugin_file))
+                    else:
+                        log.error(f"Invalid plugin configuration, missing module or file: {plugin_config}")
+                        continue
+
+                    self.plugin_manager.register_plugin_class(plugin_class)
+                    metadata = plugin_class(self).metadata
+                    plugin_name = plugin_name or metadata.name
+
+                    if self.plugin_manager.load_plugin(plugin_name, plugin_config_data):
+                        log.info(f"Successfully loaded plugin: {plugin_name}")
+                    else:
+                        log.error(f"Failed to load plugin: {plugin_name}")
+
+                else:
+                    log.warning(f"Invalid plugin configuration format: {plugin_config}")
+
+            except Exception as e:
+                log.exception(e)
+                log.error(f"Error processing plugin configuration {plugin_config}: {e}")
 
     def _check_and_init(
         self, baseview: Union[Type["AbstractViewApi"], "AbstractViewApi"]
@@ -827,3 +952,153 @@ class AppBuilder:
         # Store references for use by views
         if hasattr(self, '_rate_limiter'):
             self.rate_limiter = self._rate_limiter
+
+    # ========================================================================
+    # Enhanced Plugin System API
+    # ========================================================================
+
+    def register_plugin(self, plugin_class: Type[BasePlugin]) -> bool:
+        """
+        Register a plugin class with the plugin system.
+
+        Args:
+            plugin_class: Plugin class to register
+
+        Returns:
+            True if registration successful, False otherwise
+
+        Example:
+            appbuilder.register_plugin(MyCustomPlugin)
+        """
+        try:
+            self.plugin_manager.register_plugin_class(plugin_class)
+            return True
+        except Exception as e:
+            log.error(f"Failed to register plugin {plugin_class.__name__}: {e}")
+            return False
+
+    def load_plugin(self, name: str, config: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Load and activate a registered plugin.
+
+        Args:
+            name: Plugin name to load
+            config: Optional plugin configuration
+
+        Returns:
+            True if load successful, False otherwise
+
+        Example:
+            appbuilder.load_plugin("my_plugin", {"feature_x": True})
+        """
+        if not self.plugin_manager:
+            log.error("Plugin system not initialized")
+            return False
+
+        try:
+            return self.plugin_manager.load_plugin(name, config)
+        except Exception as e:
+            log.error(f"Failed to load plugin {name}: {e}")
+            return False
+
+    def unload_plugin(self, name: str) -> bool:
+        """
+        Unload and deactivate a plugin.
+
+        Args:
+            name: Plugin name to unload
+
+        Returns:
+            True if unload successful, False otherwise
+
+        Example:
+            appbuilder.unload_plugin("my_plugin")
+        """
+        if not self.plugin_manager:
+            log.error("Plugin system not initialized")
+            return False
+
+        try:
+            return self.plugin_manager.unload_plugin(name)
+        except Exception as e:
+            log.error(f"Failed to unload plugin {name}: {e}")
+            return False
+
+    def get_plugin_status(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get status information for a plugin.
+
+        Args:
+            name: Plugin name
+
+        Returns:
+            Plugin status dictionary or None if not found
+
+        Example:
+            status = appbuilder.get_plugin_status("my_plugin")
+            print(f"Status: {status['status']}")
+        """
+        if not self.plugin_manager:
+            return None
+
+        return self.plugin_manager.get_plugin_status(name)
+
+    def list_plugins(self) -> List[Dict[str, Any]]:
+        """
+        List all registered plugins with their status.
+
+        Returns:
+            List of plugin status dictionaries
+
+        Example:
+            plugins = appbuilder.list_plugins()
+            for plugin in plugins:
+                print(f"{plugin['name']}: {plugin['status']}")
+        """
+        if not self.plugin_manager:
+            return []
+
+        return self.plugin_manager.list_plugins()
+
+    def get_plugin_dependency_info(self, name: str) -> Dict[str, Any]:
+        """
+        Get dependency information for a plugin.
+
+        Args:
+            name: Plugin name
+
+        Returns:
+            Dependency information dictionary
+
+        Example:
+            deps = appbuilder.get_plugin_dependency_info("my_plugin")
+            print(f"Dependencies: {deps['dependencies']}")
+        """
+        if not self.plugin_manager:
+            return {}
+
+        return self.plugin_manager.get_dependency_info(name)
+
+    def reload_plugin(self, name: str, config: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Reload a plugin (unload then load).
+
+        Args:
+            name: Plugin name to reload
+            config: Optional new configuration
+
+        Returns:
+            True if reload successful, False otherwise
+
+        Example:
+            appbuilder.reload_plugin("my_plugin", {"debug": True})
+        """
+        if not self.plugin_manager:
+            log.error("Plugin system not initialized")
+            return False
+
+        try:
+            return self.plugin_manager.reload_plugin(name, config)
+        except Exception as e:
+            log.error(f"Failed to reload plugin {name}: {e}")
+            return False

@@ -361,7 +361,7 @@ class FullAppGenerator:
         self.generated_files['app/static/js/custom.js'] = self._generate_custom_js()
 
         # Favicon and icons
-        self.generated_files['app/static/img/favicon.ico'] = "# Favicon placeholder"
+        self.generated_files['app/static/img/favicon.ico'] = self._generate_favicon_content()
 
         # Service Worker for PWA
         if self.config.enable_pwa:
@@ -823,5 +823,506 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \\
 # Run application
 CMD ["python", "app.py"]
         '''.strip()
+
+    def _generate_custom_js(self) -> str:
+        """Generate custom JavaScript file."""
+        return '''
+/*
+ * Custom JavaScript for Flask-AppBuilder Application
+ * 
+ * Add your custom JavaScript functionality here.
+ */
+
+// Initialize application when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Flask-AppBuilder application initialized');
+    
+    // Add custom initialization code here
+    initializeCustomFeatures();
+});
+
+/**
+ * Initialize custom features for the application
+ */
+function initializeCustomFeatures() {
+    // Add tooltips to elements with data-toggle="tooltip"
+    if (typeof $ !== 'undefined' && $.fn.tooltip) {
+        $('[data-toggle="tooltip"]').tooltip();
+    }
+    
+    // Add custom form enhancements
+    enhanceFormElements();
+    
+    // Initialize custom widgets
+    initializeCustomWidgets();
+}
+
+/**
+ * Enhance form elements with custom functionality
+ */
+function enhanceFormElements() {
+    // Add auto-save functionality for long forms
+    const forms = document.querySelectorAll('form[data-autosave="true"]');
+    forms.forEach(form => {
+        setupAutoSave(form);
+    });
+    
+    // Add real-time validation feedback
+    const inputs = document.querySelectorAll('input[data-validate="true"]');
+    inputs.forEach(input => {
+        setupRealTimeValidation(input);
+    });
+}
+
+/**
+ * Initialize custom widgets
+ */
+function initializeCustomWidgets() {
+    // Initialize date pickers
+    if (typeof flatpickr !== 'undefined') {
+        flatpickr('.date-picker', {
+            dateFormat: 'Y-m-d',
+            allowInput: true
+        });
+    }
+    
+    // Initialize select2 for better dropdowns
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.select2-enable').select2({
+            theme: 'bootstrap',
+            placeholder: 'Select an option...'
+        });
+    }
+}
+
+/**
+ * Setup auto-save functionality for forms
+ */
+function setupAutoSave(form) {
+    let saveTimeout;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                autoSaveForm(form);
+            }, 2000); // Save after 2 seconds of inactivity
+        });
+    });
+}
+
+/**
+ * Auto-save form data to localStorage
+ */
+function autoSaveForm(form) {
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    const formId = form.id || 'default-form';
+    
+    localStorage.setItem(`autosave_${formId}`, JSON.stringify(data));
+    
+    // Show save indicator
+    showSaveIndicator('Draft saved');
+}
+
+/**
+ * Setup real-time validation for inputs
+ */
+function setupRealTimeValidation(input) {
+    input.addEventListener('blur', () => {
+        validateInput(input);
+    });
+}
+
+/**
+ * Validate individual input field
+ */
+function validateInput(input) {
+    const value = input.value.trim();
+    const type = input.type;
+    let isValid = true;
+    let message = '';
+    
+    // Basic validation based on input type
+    switch (type) {
+        case 'email':
+            isValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
+            message = isValid ? '' : 'Please enter a valid email address';
+            break;
+        case 'url':
+            isValid = /^https?:\\/\\/[^\\s$.?#].[^\\s]*$/.test(value);
+            message = isValid ? '' : 'Please enter a valid URL';
+            break;
+        case 'tel':
+            isValid = /^[\\d\\s\\-\\+\\(\\)]+$/.test(value);
+            message = isValid ? '' : 'Please enter a valid phone number';
+            break;
+    }
+    
+    // Show validation feedback
+    showValidationFeedback(input, isValid, message);
+}
+
+/**
+ * Show validation feedback for input
+ */
+function showValidationFeedback(input, isValid, message) {
+    const feedbackElement = input.parentNode.querySelector('.validation-feedback');
+    
+    if (feedbackElement) {
+        feedbackElement.textContent = message;
+        feedbackElement.style.display = message ? 'block' : 'none';
+    }
+    
+    // Update input styling
+    input.classList.remove('is-valid', 'is-invalid');
+    if (input.value.trim()) {
+        input.classList.add(isValid ? 'is-valid' : 'is-invalid');
+    }
+}
+
+/**
+ * Show temporary save indicator
+ */
+function showSaveIndicator(message) {
+    const indicator = document.createElement('div');
+    indicator.className = 'save-indicator alert alert-success';
+    indicator.textContent = message;
+    indicator.style.position = 'fixed';
+    indicator.style.top = '20px';
+    indicator.style.right = '20px';
+    indicator.style.zIndex = '9999';
+    indicator.style.opacity = '0';
+    indicator.style.transition = 'opacity 0.3s ease';
+    
+    document.body.appendChild(indicator);
+    
+    // Fade in
+    setTimeout(() => {
+        indicator.style.opacity = '1';
+    }, 10);
+    
+    // Fade out and remove
+    setTimeout(() => {
+        indicator.style.opacity = '0';
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }, 300);
+    }, 2000);
+}
+
+// Export functions for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        initializeCustomFeatures,
+        enhanceFormElements,
+        initializeCustomWidgets,
+        setupAutoSave,
+        setupRealTimeValidation
+    };
+}
+        '''.strip()
+
+    def _generate_custom_css(self) -> str:
+        """Generate custom CSS file."""
+        return '''
+/*
+ * Custom CSS for Flask-AppBuilder Application
+ * 
+ * Add your custom styles here to override or extend the default theme.
+ */
+
+/* ==========================================================================
+   Custom Variables and Theme Overrides
+   ========================================================================== */
+
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    
+    --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-size-base: 14px;
+    --line-height-base: 1.5;
+    
+    --border-radius: 4px;
+    --box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    --transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   Enhanced Form Styles
+   ========================================================================== */
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-control {
+    border-radius: var(--border-radius);
+    border: 1px solid #ced4da;
+    transition: var(--transition);
+    font-size: var(--font-size-base);
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: 0;
+}
+
+.form-control.is-valid {
+    border-color: var(--success-color);
+}
+
+.form-control.is-invalid {
+    border-color: var(--danger-color);
+}
+
+.validation-feedback {
+    display: none;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.form-control.is-invalid + .validation-feedback {
+    color: var(--danger-color);
+}
+
+.form-control.is-valid + .validation-feedback {
+    color: var(--success-color);
+}
+
+/* ==========================================================================
+   Enhanced Table Styles
+   ========================================================================== */
+
+.table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--box-shadow);
+}
+
+.table thead th {
+    background-color: var(--light-color);
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+    transition: var(--transition);
+}
+
+.table td, .table th {
+    vertical-align: middle;
+    padding: 0.75rem;
+}
+
+/* ==========================================================================
+   Enhanced Card Styles
+   ========================================================================== */
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+}
+
+.card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid rgba(0,0,0,0.125);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Enhanced Button Styles
+   ========================================================================== */
+
+.btn {
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: var(--transition);
+    font-size: 0.875rem;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ==========================================================================
+   Enhanced Navigation
+   ========================================================================== */
+
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.nav-link {
+    transition: var(--transition);
+    border-radius: var(--border-radius);
+    margin: 0 2px;
+}
+
+.nav-link:hover {
+    background-color: rgba(255,255,255,0.1);
+}
+
+/* ==========================================================================
+   Custom Components
+   ========================================================================== */
+
+.save-indicator {
+    border-radius: var(--border-radius);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Responsive Enhancements
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .table-responsive {
+        border-radius: var(--border-radius);
+    }
+    
+    .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1rem;
+    }
+}
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .btn {
+        display: none;
+    }
+}
+
+/* ==========================================================================
+   Accessibility Enhancements
+   ========================================================================== */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Dark Mode Support
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --light-color: #343a40;
+        --dark-color: #f8f9fa;
+    }
+    
+    body {
+        background-color: #1a1a1a;
+        color: #f8f9fa;
+    }
+    
+    .card {
+        background-color: #2d3748;
+        color: #f8f9fa;
+    }
+    
+    .table {
+        background-color: #2d3748;
+        color: #f8f9fa;
+    }
+    
+    .form-control {
+        background-color: #2d3748;
+        border-color: #4a5568;
+        color: #f8f9fa;
+    }
+}
+        '''.strip()
+
+    def _generate_favicon_content(self) -> str:
+        """Generate favicon content as base64-encoded ICO."""
+        # This is a minimal 16x16 favicon encoded as base64
+        # In a real implementation, you might want to generate or use an actual icon
+        return '''data:image/x-icon;base64,AAABAAEAEBAAAAEACABoBQAAFgAAACgAAAAQAAAAIAAAAAEACAAAAAAAAAEAAAAAAAAAAAAAAAEAAAAAAAAAAAAAP4+uAP+TrwBchLAAUIGwAOCpxwAEaKoAAJW7AGKYuwBNlbsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBAAQQQQQQQQQQQQQQQQQQQAAEEEEEEEEEEEEEEEEEEEAABBBBBBBBBBBBBBBBBBAAQQQQQQQQQQQQQQQQQQAAAEEEEEEEEEEEEEEEEEAAABBBBBBBBBBBBBBBBBAAAAQQQQQQQQQQQQQQQQQAAAAEEEEEEEEEEEEEEEEEAAAABBBBBBBBBBBBBBBBBAAAAQQQQQQQQQQQQQQQQQAAAAEEEEEEEEEEEEEEEEEAAAABBBBBBBBBBBBBBBBBAAAAQQQQQQQQQQQQQQQQQAAAAEEEEEEEEEEEEEEEEEAAAAA'''
 
     # More template methods would be implemented following this pattern...

@@ -1,0 +1,13 @@
+# Collaborative Features Dependencies
+# This file contains all dependencies for real-time collaborative features
+
+# Redis for real-time data storage and messaging
+redis>=4.5.0, <6.0.0            # Redis client for real-time features
+
+# WebSocket and Real-time Communication
+flask-socketio>=5.3.0, <6.0.0   # WebSocket support for Flask
+python-socketio>=5.8.0, <6.0.0  # SocketIO client/server implementation
+python-engineio>=4.7.0, <5.0.0  # Engine.IO transport layer
+
+# Async Networking
+eventlet>=0.33.0, <1.0.0        # Async networking library for SocketIO

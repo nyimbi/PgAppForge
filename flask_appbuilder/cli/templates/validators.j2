@@ -1,0 +1,53 @@
+"""
+Custom Validators for Enhanced Models
+
+Generated: {{ timestamp }}
+"""
+
+import re
+from typing import Any
+from sqlalchemy.orm import validates
+
+
+def validate_email(email: str) -> bool:
+    """Validate email format."""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))
+
+
+def validate_phone(phone: str) -> bool:
+    """Validate phone number format."""
+    # Remove all non-digits
+    digits = re.sub(r'\D', '', phone)
+    return len(digits) >= 10
+
+
+def validate_url(url: str) -> bool:
+    """Validate URL format."""
+    pattern = r'^https?://(?:[-\w.])+(?::[0-9]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.]*))?(?:#(?:[\w.]*))?)?$'
+    return bool(re.match(pattern, url))
+
+
+class ValidationMixin:
+    """Mixin class for common validation methods."""
+
+    @validates('email')
+    def validate_email_field(self, key, value):
+        """Validate email fields."""
+        if value and not validate_email(value):
+            raise ValueError(f'Invalid email format: {value}')
+        return value
+
+    @validates('phone')
+    def validate_phone_field(self, key, value):
+        """Validate phone fields."""
+        if value and not validate_phone(value):
+            raise ValueError(f'Invalid phone format: {value}')
+        return value
+
+    @validates('url', 'website')
+    def validate_url_field(self, key, value):
+        """Validate URL fields."""
+        if value and not validate_url(value):
+            raise ValueError(f'Invalid URL format: {value}')
+        return value

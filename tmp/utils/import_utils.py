@@ -649,13 +649,21 @@ def optimize_imports(imports: List[str]) -> List[str]:
 
 def validate_imports(imports: List[str]) -> Tuple[List[str], List[str]]:
     """
-    Validate import statements and separate valid from invalid ones.
+    SECURITY FIX: Validate import statements safely without exec().
+
+    This function was updated to fix a critical security vulnerability where
+    exec() was used to validate imports, allowing arbitrary code execution.
 
     Args:
         imports: List of import statements
 
     Returns:
         Tuple[List[str], List[str]]: Valid and invalid imports
+
+    Security Notes:
+        - Replaced dangerous exec() with safe importlib validation
+        - Added security checks for malicious import patterns
+        - Uses AST parsing to validate syntax safely
 
     Examples:
         >>> valid, invalid = validate_imports(['import os', 'import nonexistent_module'])
@@ -667,23 +675,51 @@ def validate_imports(imports: List[str]) -> Tuple[List[str], List[str]]:
     valid = []
     invalid = []
 
+    # Security check patterns - reject dangerous imports
+    dangerous_patterns = [
+        r'exec\(',       # Exec calls
+        r'eval\(',       # Eval calls
+        r'__.*__\(',     # Dunder method calls
+        r'system\(',     # System calls
+        r'subprocess',   # Process execution
+        r'compile\(',    # Code compilation
+    ]
+
     for imp in imports:
+        # First check for security violations
+        is_dangerous = False
+        for pattern in dangerous_patterns:
+            if re.search(pattern, imp, re.IGNORECASE):
+                print(f"⚠️  Security: Rejected dangerous import pattern: {imp}")
+                invalid.append(imp)
+                is_dangerous = True
+                break
+
+        if is_dangerous:
+            continue
+
         parsed = parse_import(imp)
         if not parsed:
             invalid.append(imp)
             continue
 
-        if parsed.is_from:
-            try:
-                exec(imp)
-                valid.append(imp)
-            except ImportError:
-                invalid.append(imp)
-        else:
-            if check_import_exists(parsed.module):
-                valid.append(imp)
+        # Safe validation using importlib (no execution)
+        try:
+            if parsed.is_from:
+                # Validate the base module exists
+                spec = importlib.util.find_spec(parsed.module)
+                if spec is not None:
+                    valid.append(imp)
+                else:
+                    invalid.append(imp)
             else:
-                invalid.append(imp)
+                if check_import_exists(parsed.module):
+                    valid.append(imp)
+                else:
+                    invalid.append(imp)
+        except Exception as e:
+            print(f"⚠️  Error validating import '{imp}': {e}")
+            invalid.append(imp)
 
     return valid, invalid
 

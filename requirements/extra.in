@@ -17,3 +17,8 @@ eth-keys>=0.4.0
 python-mpesa>=1.2.0
 # Security dependencies
 bleach>=6.0.0
+# PostgreSQL extensions support
+geoalchemy2>=0.14.0
+shapely>=2.0.0
+# Vector database support
+pgvector>=0.2.0

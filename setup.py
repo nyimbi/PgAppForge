@@ -98,6 +98,37 @@ setup(
         "oauth": ["Authlib>=0.14, <2.0.0"],
         "openid": ["Flask-OpenID>=1.2.5, <2"],
         "talisman": ["flask-talisman>=1.0.0, <2.0"],
+        "ai": [
+            "openai>=1.0.0, <2.0.0",           # OpenAI GPT models
+            "anthropic>=0.7.0, <1.0.0",        # Anthropic Claude models
+            "google-generativeai>=0.3.0, <1.0.0",  # Google Gemini models
+            "groq>=0.4.0, <1.0.0",             # Groq fast inference
+            "ollama-python>=0.1.0, <1.0.0",    # Ollama local models
+            "huggingface-hub>=0.17.0, <1.0.0", # HuggingFace models
+            "transformers>=4.21.0, <5.0.0",    # Transformers for speech processing
+            "speechrecognition>=3.10.0, <4.0.0",  # Speech-to-text
+            "pydub>=0.25.0, <1.0.0",           # Audio processing
+            "torch>=1.13.0, <3.0.0",           # PyTorch for local AI models
+            "soundfile>=0.12.0, <1.0.0",       # Audio file handling
+        ],
+        "collaborative": [
+            "redis>=4.5.0, <6.0.0",            # Redis for real-time features
+            "flask-socketio>=5.3.0, <6.0.0",   # WebSocket support
+            "python-socketio>=5.8.0, <6.0.0",  # SocketIO client/server
+            "python-engineio>=4.7.0, <5.0.0",  # Engine.IO transport
+            "eventlet>=0.33.0, <1.0.0",        # Async networking for SocketIO
+        ],
+        "dev": [
+            "nose2==0.14.0",                   # Testing framework
+            "mockldap>=0.3.0",                 # LDAP testing
+            "hiro>=0.5.1",                     # Time mocking for tests
+            "flake8>=6.0.0, <7.0.0",          # Code linting
+            "black>=23.0.0, <24.0.0",         # Code formatting
+            "mypy>=1.0.0, <2.0.0",            # Type checking
+            "pytest>=7.0.0, <8.0.0",          # Alternative testing framework
+            "pytest-cov>=4.0.0, <5.0.0",      # Coverage reporting
+            "pre-commit>=3.0.0, <4.0.0",      # Git hooks
+        ],
     },
     tests_require=["nose2==0.14.0", "mockldap>=0.3.0", "hiro>=0.5.1"],
     classifiers=[

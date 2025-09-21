@@ -39,7 +39,7 @@ class RelationshipType(Enum):
 
 
 class ColumnType(Enum):
-    """Enhanced column type categories."""
+    """Enhanced column type categories with PostgreSQL + PostGIS + pgVector support."""
     PRIMARY_KEY = "primary_key"
     FOREIGN_KEY = "foreign_key"
     UNIQUE = "unique"
@@ -47,12 +47,39 @@ class ColumnType(Enum):
     NULLABLE = "nullable"
     ENUM = "enum"
     JSON = "json"
+    JSONB = "jsonb"
     ARRAY = "array"
     BINARY = "binary"
     TEXT = "text"
     NUMERIC = "numeric"
     DATE_TIME = "date_time"
     BOOLEAN = "boolean"
+    UUID = "uuid"
+
+    # PostgreSQL advanced types
+    HSTORE = "hstore"
+    LTREE = "ltree"
+    INET = "inet"
+    CIDR = "cidr"
+    MACADDR = "macaddr"
+    TSVECTOR = "tsvector"
+    TSQUERY = "tsquery"
+
+    # PostGIS spatial types
+    GEOMETRY = "geometry"
+    GEOGRAPHY = "geography"
+    RASTER = "raster"
+
+    # pgVector types
+    VECTOR = "vector"
+
+    # PostgreSQL range types
+    INT4RANGE = "int4range"
+    INT8RANGE = "int8range"
+    NUMRANGE = "numrange"
+    TSRANGE = "tsrange"
+    TSTZRANGE = "tstzrange"
+    DATERANGE = "daterange"
 
 
 @dataclass
@@ -536,15 +563,73 @@ class EnhancedDatabaseInspector:
         return RelationshipType.MANY_TO_ONE
 
     def _categorize_column(self, column: Column, table_name: str) -> ColumnType:
-        """Categorize a column based on its properties."""
+        """Categorize a column based on its properties with PostgreSQL + PostGIS + pgVector support."""
+        # Get the type name for PostgreSQL-specific type detection
+        type_name = str(column.type).lower()
+
         if column.primary_key:
             return ColumnType.PRIMARY_KEY
         elif column.foreign_keys:
             return ColumnType.FOREIGN_KEY
-        elif isinstance(column.type, types.JSON):
-            return ColumnType.JSON
-        elif isinstance(column.type, types.ARRAY):
+
+        # CRITICAL: Check for arrays FIRST before specific types
+        # This ensures INET[] is detected as ARRAY, not INET
+        elif isinstance(column.type, types.ARRAY) or '[]' in type_name:
             return ColumnType.ARRAY
+
+        # PostgreSQL UUID type
+        elif 'uuid' in type_name:
+            return ColumnType.UUID
+
+        # PostgreSQL JSONB (before regular JSON check)
+        elif 'jsonb' in type_name:
+            return ColumnType.JSONB
+        elif isinstance(column.type, types.JSON) or 'json' in type_name:
+            return ColumnType.JSON
+
+        # PostgreSQL advanced types
+        elif 'hstore' in type_name:
+            return ColumnType.HSTORE
+        elif 'ltree' in type_name:
+            return ColumnType.LTREE
+        elif 'inet' in type_name:
+            return ColumnType.INET
+        elif 'cidr' in type_name:
+            return ColumnType.CIDR
+        elif 'macaddr' in type_name:
+            return ColumnType.MACADDR
+        elif 'tsvector' in type_name:
+            return ColumnType.TSVECTOR
+        elif 'tsquery' in type_name:
+            return ColumnType.TSQUERY
+
+        # PostGIS spatial types
+        elif 'geometry' in type_name:
+            return ColumnType.GEOMETRY
+        elif 'geography' in type_name:
+            return ColumnType.GEOGRAPHY
+        elif 'raster' in type_name:
+            return ColumnType.RASTER
+
+        # pgVector types
+        elif 'vector' in type_name:
+            return ColumnType.VECTOR
+
+        # PostgreSQL range types
+        elif 'int4range' in type_name:
+            return ColumnType.INT4RANGE
+        elif 'int8range' in type_name:
+            return ColumnType.INT8RANGE
+        elif 'numrange' in type_name:
+            return ColumnType.NUMRANGE
+        elif 'tsrange' in type_name:
+            return ColumnType.TSRANGE
+        elif 'tstzrange' in type_name:
+            return ColumnType.TSTZRANGE
+        elif 'daterange' in type_name:
+            return ColumnType.DATERANGE
+
+        # Standard SQLAlchemy types (arrays already handled above)
         elif isinstance(column.type, types.Enum):
             return ColumnType.ENUM
         elif isinstance(column.type, (types.LargeBinary, types.BLOB)):
@@ -561,28 +646,59 @@ class EnhancedDatabaseInspector:
             return ColumnType.TEXT  # Default
 
     def _suggest_widget_type(self, column: Column, category: ColumnType) -> str:
-        """Suggest the appropriate widget type for a column."""
+        """Suggest the appropriate widget type for a column with proper priority."""
+        
+        # PRIORITY 1: Type-based widgets (most specific) - PostgreSQL advanced types
+        if category == ColumnType.GEOMETRY or category == ColumnType.GEOGRAPHY:
+            return 'PostGISMapWidget'  # PostGIS spatial data with map interface
+        elif category == ColumnType.RASTER:
+            return 'RasterImageWidget'  # PostGIS raster data
+        elif category == ColumnType.VECTOR:
+            return 'VectorSimilarityWidget'  # pgVector similarity search
+        elif category == ColumnType.UUID:
+            return 'UUIDFieldWidget'
+        elif category == ColumnType.JSONB:
+            return 'JSONEditorWidget'  # PostgreSQL binary JSON
+        elif category == ColumnType.HSTORE:
+            return 'HStoreEditorWidget'  # PostgreSQL key-value store
+        elif category == ColumnType.LTREE:
+            return 'TreeHierarchyWidget'  # PostgreSQL tree structure
+        elif category == ColumnType.INET or category == ColumnType.CIDR:
+            return 'NetworkAddressWidget'  # Network address input
+        elif category == ColumnType.MACADDR:
+            return 'MACAddressWidget'  # MAC address input
+        elif category == ColumnType.TSVECTOR:
+            return 'FullTextSearchWidget'  # PostgreSQL full-text search
+        elif category == ColumnType.TSQUERY:
+            return 'SearchQueryWidget'  # PostgreSQL search query
+        elif category in [ColumnType.INT4RANGE, ColumnType.INT8RANGE, ColumnType.NUMRANGE]:
+            return 'NumericRangeWidget'  # PostgreSQL numeric ranges
+        elif category in [ColumnType.TSRANGE, ColumnType.TSTZRANGE]:
+            return 'TimestampRangeWidget'  # PostgreSQL timestamp ranges
+        elif category == ColumnType.DATERANGE:
+            return 'DateRangeWidget'  # PostgreSQL date ranges
+
+        # PRIORITY 2: Special name-based widgets (only for generic types)
         column_name = column.name.lower()
+        if category in [ColumnType.TEXT, ColumnType.NUMERIC]:  # Only apply to generic types
+            if 'password' in column_name:
+                return 'BS3PasswordFieldWidget'
+            elif 'email' in column_name:
+                return 'BS3TextFieldWidget'
+            elif 'color' in column_name:
+                return 'ColorPickerWidget'
+            elif any(word in column_name for word in ['photo', 'image', 'picture']):
+                return 'FileUploadWidget'
+            elif 'code' in column_name and isinstance(column.type, types.Text):
+                return 'CodeEditorWidget'
+            elif 'chart' in column_name or 'graph' in column_name:
+                return 'AdvancedChartsWidget'
+            elif 'location' in column_name or 'gps' in column_name:
+                return 'GPSTrackerWidget'  # Only for non-spatial columns
+            elif 'qr' in column_name:
+                return 'QrCodeWidget'
 
-        # Special name-based widgets
-        if 'password' in column_name:
-            return 'BS3PasswordFieldWidget'
-        elif 'email' in column_name:
-            return 'BS3TextFieldWidget'
-        elif 'color' in column_name:
-            return 'ColorPickerWidget'
-        elif any(word in column_name for word in ['photo', 'image', 'picture']):
-            return 'FileUploadWidget'
-        elif 'code' in column_name and isinstance(column.type, types.Text):
-            return 'CodeEditorWidget'
-        elif 'chart' in column_name or 'graph' in column_name:
-            return 'AdvancedChartsWidget'
-        elif 'location' in column_name or 'gps' in column_name:
-            return 'GPSTrackerWidget'
-        elif 'qr' in column_name:
-            return 'QrCodeWidget'
-
-        # Type-based widgets
+        # PRIORITY 3: Standard type-based widgets
         if category == ColumnType.JSON:
             return 'JSONEditorWidget'
         elif category == ColumnType.ARRAY:
@@ -614,22 +730,50 @@ class EnhancedDatabaseInspector:
             return 'BS3TextFieldWidget'  # Default
 
     def _generate_validation_rules(self, column: Column, category: ColumnType) -> List[str]:
-        """Generate validation rules for a column."""
+        """Generate validation rules for a column with PostgreSQL/PostGIS/pgVector support."""
         rules = []
 
         if not column.nullable:
             rules.append('DataRequired()')
 
+        # Standard text length validation
         if category == ColumnType.TEXT and hasattr(column.type, 'length') and column.type.length:
             rules.append(f'Length(max={column.type.length})')
 
+        # Name-based validation
         column_name = column.name.lower()
         if 'email' in column_name:
             rules.append('Email()')
         elif 'url' in column_name:
             rules.append('URL()')
-        elif category == ColumnType.NUMERIC:
+        
+        # Type-specific validation rules
+        if category == ColumnType.NUMERIC:
             rules.append('NumberRange()')
+        elif category == ColumnType.UUID:
+            rules.append('UUIDValidator()')  # PostgreSQL UUID validation
+        elif category == ColumnType.INET:
+            rules.append('IPAddressValidator()')  # PostgreSQL inet type
+        elif category == ColumnType.CIDR:
+            rules.append('CIDRValidator()')  # PostgreSQL CIDR network notation
+        elif category == ColumnType.MACADDR:
+            rules.append('MACAddressValidator()')  # PostgreSQL MAC address
+        elif category == ColumnType.JSON or category == ColumnType.JSONB:
+            rules.append('JSONValidator()')  # PostgreSQL JSON/JSONB validation
+        elif category == ColumnType.GEOMETRY or category == ColumnType.GEOGRAPHY:
+            rules.append('PostGISGeometryValidator()')  # PostGIS spatial validation
+        elif category == ColumnType.VECTOR:
+            rules.append('VectorDimensionValidator()')  # pgVector dimension validation
+        elif category == ColumnType.LTREE:
+            rules.append('LTreePathValidator()')  # PostgreSQL ltree path validation
+        elif category == ColumnType.TSVECTOR:
+            rules.append('FullTextValidator()')  # PostgreSQL full-text search
+        elif category in [ColumnType.INT4RANGE, ColumnType.INT8RANGE, ColumnType.NUMRANGE]:
+            rules.append('NumericRangeValidator()')  # PostgreSQL numeric ranges
+        elif category in [ColumnType.TSRANGE, ColumnType.TSTZRANGE]:
+            rules.append('TimestampRangeValidator()')  # PostgreSQL timestamp ranges
+        elif category == ColumnType.DATERANGE:
+            rules.append('DateRangeValidator()')  # PostgreSQL date ranges
 
         return rules
 
@@ -721,11 +865,11 @@ class EnhancedDatabaseInspector:
         return icon_map.get(category, 'fa-table')
 
     def _estimate_table_rows(self, table_name: str) -> int:
-        """Estimate the number of rows in a table safely."""
+        """Estimate the number of rows in a table with specific error handling."""
         try:
-            # Use SQLAlchemy 2.x compatible syntax with proper SQL identifier handling
             from sqlalchemy import text, select, func
             from sqlalchemy.sql import table
+            from sqlalchemy.exc import SQLAlchemyError, DatabaseError, ProgrammingError
             
             # Create a table reference for safe SQL generation
             table_ref = table(table_name)
@@ -735,8 +879,21 @@ class EnhancedDatabaseInspector:
                 result = conn.execute(stmt)
                 return result.scalar() or 0
                 
+        except ProgrammingError as e:
+            # Table doesn't exist or syntax error
+            logger.warning(f"Table {table_name} may not exist or has syntax issues: {e}")
+            return 0
+        except DatabaseError as e:
+            # Database connection or execution error
+            logger.warning(f"Database error estimating rows for {table_name}: {e}")
+            return 0
+        except SQLAlchemyError as e:
+            # General SQLAlchemy error
+            logger.warning(f"SQLAlchemy error estimating rows for {table_name}: {e}")
+            return 0
         except Exception as e:
-            logger.warning(f"Could not estimate rows for table {table_name}: {e}")
+            # Unexpected error
+            logger.error(f"Unexpected error estimating rows for {table_name}: {e}")
             return 0
 
     def _suggest_view_types(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo], is_association: bool) -> List[str]:

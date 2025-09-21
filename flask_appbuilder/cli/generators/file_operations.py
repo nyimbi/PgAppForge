@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from contextlib import contextmanager
 
+from ...security.path_validation import SecurePathValidator, PathTraversalError, InvalidPathError
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,11 +34,12 @@ class AtomicFileWriter:
     def __init__(self, base_path: Union[str, Path]):
         """
         Initialize atomic file writer.
-        
+
         Args:
             base_path: Base directory for file operations
         """
         self.base_path = Path(base_path).resolve()
+        self.path_validator = SecurePathValidator([self.base_path])
         self.pending_files: Dict[Path, str] = {}
         self.temp_files: List[Path] = []
         self.created_directories: List[Path] = []
@@ -46,13 +49,21 @@ class AtomicFileWriter:
     def add_file(self, relative_path: Union[str, Path], content: str):
         """
         Add a file to be written atomically.
-        
+
         Args:
             relative_path: Path relative to base_path
             content: File content to write
+
+        Raises:
+            PathTraversalError: If relative_path contains directory traversal attempts
+            InvalidPathError: If relative_path format is invalid
         """
-        full_path = self.base_path / relative_path
-        self.pending_files[full_path] = content
+        try:
+            # Validate the relative path for security issues
+            safe_path = self.path_validator.safe_join(self.base_path, relative_path)
+            self.pending_files[safe_path] = content
+        except (PathTraversalError, InvalidPathError) as e:
+            raise FileOperationError(f"Insecure path rejected: {relative_path} - {e}") from e
         
     def add_files(self, files: Dict[Union[str, Path], str]):
         """

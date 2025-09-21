@@ -1,0 +1,86 @@
+{% if config.include_documentation %}
+"""
+{{ table_info.display_name }} Model
+
+{{ table_info.description }}
+
+Category: {{ table_info.category }}
+Security Level: {{ table_info.security_level }}
+Generated: {{ timestamp }}
+"""
+{% endif %}
+
+{% if config.use_dataclasses %}
+@dataclass
+{% endif %}
+class {{ class_name }}({{ base_class }}):
+    """{{ table_info.display_name }} model{% if table_info.comment %} - {{ table_info.comment }}{% endif %}"""
+
+    __tablename__ = '{{ table_info.name }}'
+    {% if table_info.comment %}
+    __table_args__ = {'comment': '{{ table_info.comment }}'}
+    {% endif %}
+
+    # Columns
+    {% for column in columns %}
+    {{ column.name }}{% if config.use_type_hints and column.python_type %}: {{ column.python_type }}{% endif %} = Column({{ column.type }}{% if column.constraints %}, {{ column.constraints|join(', ') }}{% endif %}){% if column.comment %} # {{ column.comment }}{% endif %}
+    {% endfor %}
+
+    # Relationships
+    {% for relationship in relationships %}
+    {{ relationship.name }} = relationship(
+        '{{ relationship.remote_class }}',
+        {% if relationship.association_table %}secondary='{{ relationship.association_table }}',{% endif %}
+        back_populates='{{ relationship.back_populates }}'{% if relationship.cascade %},
+        cascade=[{{ relationship.cascade }}]{% endif %},
+        lazy='{{ relationship.lazy }}'
+    ) # {{ relationship.description }}
+    {% endfor %}
+
+    {% if hybrid_properties %}
+    # Hybrid Properties
+    {% for prop in hybrid_properties %}
+    @hybrid_property
+    def {{ prop.name }}(self):
+        """{{ prop.name|title }} hybrid property."""
+        return {{ prop.expression }}
+    {% if prop.setter %}
+    {{ prop.setter }}
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
+    {% if validation_methods %}
+    # Validation Methods
+    {% for validation in validation_methods %}
+    {{ validation.code }}
+    {% endfor %}
+    {% endif %}
+
+    {% if utility_methods %}
+    # Utility Methods
+    {% for method in utility_methods %}
+    {{ method.code }}
+    {% endfor %}
+    {% endif %}
+
+    {% if config.generate_repr %}
+    def __repr__(self):
+        """String representation of {{ class_name }}."""
+        {% set display_cols = columns[:2] %}
+        return f"<{{ class_name }}({% for col in display_cols %}{{ col.name }}={getattr(self, '{{ col.name }}', 'None')}{% if not loop.last %}, {% endif %}{% endfor %})>"
+    {% endif %}
+
+    {% if config.generate_str %}
+    def __str__(self):
+        """Human-readable string representation."""
+        {% if 'name' in columns|map(attribute='name') %}
+        return self.name or f"{{ class_name }} #{self.id}"
+        {% else %}
+        return f"{{ class_name }} #{self.id}"
+        {% endif %}
+    {% endif %}
+
+{% for listener in event_listeners %}
+{{ listener.code.format(class_name=class_name, table_name=table_info.name) }}
+{% endfor %}
