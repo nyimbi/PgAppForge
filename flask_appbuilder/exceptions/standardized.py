@@ -223,7 +223,7 @@ class StandardizedFABException(FABException):
         security_event = {
             'event_type': 'security_exception',
             'error_code': self.error_code,
-            'message': self.message,
+            'error_message': self.message,
             'user_id': self.context.user_id if self.context else None,
             'timestamp': datetime.utcnow().isoformat(),
             'severity': self.severity.value,
