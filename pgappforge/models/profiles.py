@@ -195,7 +195,7 @@ class UserProfile(Model, AuditMixin, ExtendedProfileMixin):
     
     # Link to the User model
     user_id = Column(Integer, ForeignKey('ab_user.id'), unique=True, nullable=False)
-    user = relationship("User", backref="profile", uselist=False)
+    user = relationship("User", backref="profile", uselist=False, foreign_keys=[user_id])
     
     # Profile type for categorization
     profile_type = Column(Enum(ProfileType), default=ProfileType.BASIC)

@@ -12,6 +12,7 @@ Strategy
 - No Flask app context is required; the engine is purely session-level.
 """
 from __future__ import annotations
+import os
 
 from datetime import datetime, timedelta, timezone
 from typing import Any

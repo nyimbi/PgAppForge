@@ -386,6 +386,15 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         limiter.init_app(app)
         return limiter
 
+    def load_user(self, pk):
+        """Flask-Login user_loader callback — load a user by primary key."""
+        return self.get_user_by_id(int(pk))
+
+    def load_user_jwt(self, _jwt_header, jwt_data):
+        """Flask-JWT-Extended user_lookup_loader callback."""
+        identity = jwt_data.get("sub")
+        return self.get_user_by_id(int(identity)) if identity else None
+
     def create_login_manager(self, app) -> LoginManager:
         """
         Override to implement your custom login manager instance

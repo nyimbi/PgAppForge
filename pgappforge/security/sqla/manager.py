@@ -136,10 +136,25 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             self.appbuilder.add_view_no_menu(self.mfa_setup_view)
             self.appbuilder.add_view_no_menu(self.mfa_verification_view)
 
+    def _get_engine(self):
+        """Return the SQLAlchemy engine compatible with SA 2.x."""
+        from sqlalchemy import inspect as sa_inspect
+        # Flask-SQLAlchemy 3.x stores the extension under 'sqlalchemy'
+        ext = self.appbuilder.app.extensions.get('sqlalchemy')
+        if ext is not None:
+            return ext.engine
+        # Fallback: derive from session bind (SA 2.x compatible)
+        return self.get_session.get_bind()
+
     def create_db(self):
+        with self.appbuilder.app.app_context():
+            self._create_db_tables()
+
+    def _create_db_tables(self):
         try:
-            engine = self.get_session.get_bind(mapper=None, clause=None)
-            inspector = Inspector.from_engine(engine)
+            from sqlalchemy import inspect as sa_inspect
+            engine = self._get_engine()
+            inspector = sa_inspect(engine)
             existing_tables = inspector.get_table_names()
             if "ab_user" not in existing_tables or "ab_group" not in existing_tables:
                 log.info(c.LOGMSG_INF_SEC_NO_DB)
@@ -157,7 +172,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             super(SecurityManager, self).create_db()
         except Exception as e:
             log.error(c.LOGMSG_ERR_SEC_CREATE_DB, e)
-            exit(1)
+            raise RuntimeError(f"DB creation failed: {e}") from e
 
     def find_register_user(self, registration_hash):
         return (

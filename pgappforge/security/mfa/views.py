@@ -1227,3 +1227,5 @@ __all__ = [
     'PasskeyRegistrationForm',
     'PasskeyAuthenticationForm'
 ]
+# Alias for backward compatibility
+MFAVerificationView = MFAView

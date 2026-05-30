@@ -312,7 +312,7 @@ class TenantUser(AuditMixin, Model):
     
     # Relationships
     tenant = relationship("Tenant", back_populates="users")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     
     def __repr__(self):
         return f'<TenantUser {self.user_id}@{self.tenant_id} ({self.role_within_tenant})>'

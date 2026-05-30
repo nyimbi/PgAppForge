@@ -14,7 +14,7 @@ TESTING = True
 WTF_CSRF_ENABLED = False
 
 # Database configuration - use in-memory SQLite for speed
-SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or "sqlite:///:memory:"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SQLALCHEMY_ECHO = False  # Set to True for debugging SQL queries
 

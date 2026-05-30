@@ -123,7 +123,7 @@ class UserWallet(AuditMixin, Model):
     last_transaction_date = Column(DateTime, nullable=True)
     
     # Relationships
-    user = relationship("User", backref="wallets")
+    user = relationship("User", backref="wallets", foreign_keys=[user_id])
     user_profile = relationship("UserProfile", back_populates="wallets")
     transactions = relationship("WalletTransaction", back_populates="wallet", 
                               cascade="all, delete-orphan")
@@ -1279,7 +1279,7 @@ class TransactionCategory(AuditMixin, Model):
     
     # Relationships
     parent = relationship("TransactionCategory", remote_side=[id], backref="children")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     
     @hybrid_property
     def full_name(self):
@@ -1492,7 +1492,7 @@ class PaymentMethod(AuditMixin, Model):
     verification_method = Column(String(50), nullable=True)  # sms, email, biometric
     
     # Relationships
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     
     @validates('method_type')
     def validate_method_type(self, key, method_type):
@@ -1612,7 +1612,7 @@ class RecurringTransaction(AuditMixin, Model):
     
     # Relationships
     wallet = relationship("UserWallet")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     category = relationship("TransactionCategory")
     payment_method = relationship("PaymentMethod")
     
@@ -1758,7 +1758,7 @@ class WalletAudit(AuditMixin, Model):
     
     # Relationships
     wallet = relationship("UserWallet")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     transaction = relationship("WalletTransaction")
     
     @hybrid_property

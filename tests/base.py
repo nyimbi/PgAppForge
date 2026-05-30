@@ -183,6 +183,12 @@ class BaseMVCTestCase(FABTestCase):
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.create_default_users(self.appbuilder)
 
+    def tearDown(self):
+        with self.app.app_context():
+            from pgappforge.models.sqla import Base
+            self.db.session.remove()
+            Base.metadata.drop_all(self.db.engine)
+
     @property
     def registered_endpoints(self) -> Set:
         return {item.endpoint for item in self.app.url_map.iter_rules()}

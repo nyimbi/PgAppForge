@@ -300,7 +300,7 @@ class UserProfile(Model):
     changed_on = Column(DateTime, default=lambda: datetime.datetime.now(), nullable=True)
     
     # Relationships
-    user = relationship("User", back_populates="profile")
+    user = relationship("User", back_populates="profile", foreign_keys=[user_id])
     # wallet and mpesa_accounts relationships removed: wallet models have a SQLAlchemy
     # naming conflict (metadata hybrid_property) that prevents mapper configuration.
     

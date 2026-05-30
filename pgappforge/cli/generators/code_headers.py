@@ -16246,7 +16246,7 @@ class AuditManager:
     if enable_user_tracking:
         header += """
             user_id = Column(Integer, ForeignKey('ab_user.id'))
-            user = relationship('User')
+            user = relationship('User', foreign_keys=[user_id])
             username = Column(String(128))
 """
 

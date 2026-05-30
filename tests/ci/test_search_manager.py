@@ -10,6 +10,7 @@ Strategy
 - No Flask app is required for most tests; init_app() is exercised separately.
 """
 from __future__ import annotations
+import os
 
 from unittest.mock import MagicMock, patch, PropertyMock
 from types import SimpleNamespace

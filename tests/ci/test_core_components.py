@@ -1,3 +1,4 @@
+import os
 """
 Comprehensive unit tests for PgAppForge core components.
 
@@ -51,7 +52,7 @@ class TestCoreAppBuilderInitialization(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
@@ -152,7 +153,7 @@ class TestCoreModelView(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
@@ -223,7 +224,7 @@ class TestCoreDataModel(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
@@ -269,7 +270,7 @@ class TestCoreSecurity(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         

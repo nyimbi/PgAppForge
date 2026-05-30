@@ -234,7 +234,8 @@ def create_db(app, appbuilder):
     from pgappforge.models.sqla import Base
 
     _appbuilder = import_application(app, appbuilder)
-    engine = _appbuilder.get_session.get_bind(mapper=None, clause=None)
+    ext = _appbuilder.app.extensions.get('sqlalchemy')
+    engine = ext.engine if ext else _appbuilder.get_session.get_bind()
     Base.metadata.create_all(engine)
     click.echo(click.style("DB objects created", fg="green"))
 

@@ -242,7 +242,7 @@ class DynamicRoleAssignment(TenantAwareMixin, AuditMixin, Model):
     assignment_metadata = Column(JSONB, default=lambda: {})
 
     # Relationships
-    user = relationship("User", backref="dynamic_role_assignments")
+    user = relationship("User", backref="dynamic_role_assignments", foreign_keys=[user_id])
     role = relationship("Role", backref="dynamic_assignments")
     workflow_role = relationship("WorkflowRole", backref="assignments")
     workflow_state = relationship("WorkflowState", backref="role_assignments")

@@ -137,7 +137,7 @@ class WorkflowState(TenantAwareMixin, AuditMixin, Model):
     ip_address = Column(String(45))
 
     # Relationships
-    user = relationship("User", backref="workflow_states")
+    user = relationship("User", backref="workflow_states", foreign_keys=[user_id])
 
     @hybrid_property
     def is_completed(self):

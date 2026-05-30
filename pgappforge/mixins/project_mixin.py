@@ -352,7 +352,7 @@ class ProjectMixin:
 				foreign_keys=[project_id],
 				backref=f"{tn}_assignments",
 			)
-			user = relationship("User", backref=f"{tn}_project_assignments")
+			user = relationship("User", backref=f"{tn}_project_assignments", foreign_keys=[user_id])
 
 			def __repr__(self) -> str:
 				return f"<ProjectAssignment {self.user.username} — {self.role}>"

@@ -61,7 +61,7 @@ def test_db(tmp_path_factory):
 @pytest.fixture(scope="module")
 def inspector(test_db):
     from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
-    with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
+    with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
         yield insp
 
 
@@ -136,7 +136,7 @@ class TestFullAppGenerator:
         from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
         from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
-        with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
+        with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
             config = AppGenerationConfig(
                 app_name="TestApp",
                 enable_docker=False,
@@ -153,7 +153,7 @@ class TestFullAppGenerator:
         from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
         out = tmp_path / "app"
-        with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
+        with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
             config = AppGenerationConfig(app_name="SyntaxTest", enable_docker=False)
             FullAppGenerator(insp, config, str(out)).generate_complete_app()
 
@@ -173,7 +173,7 @@ class TestFullAppGenerator:
         from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
         from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
-        with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
+        with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
             config = AppGenerationConfig(app_name="FileTest", enable_docker=False)
             FullAppGenerator(insp, config, str(tmp_path)).generate_complete_app()
 

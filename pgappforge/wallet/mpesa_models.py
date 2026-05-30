@@ -83,7 +83,7 @@ class MPESAAccount(AuditMixin, Model):
     metadata = Column(Text, nullable=True)  # JSON metadata
     
     # Relationships
-    user = relationship("User", back_populates="mpesa_accounts")
+    user = relationship("User", back_populates="mpesa_accounts", foreign_keys=[user_id])
     wallet = relationship("UserWallet", back_populates="mpesa_accounts")
     transactions = relationship("MPESATransaction", back_populates="mpesa_account")
     

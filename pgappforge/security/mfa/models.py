@@ -91,7 +91,7 @@ class MFACredential(Model):
     last_used_user_agent = Column(String(500))
     
     # Relationships
-    user = relationship("User", backref=backref("mfa_credentials", cascade="all, delete-orphan"))
+    user = relationship("User", backref=backref("mfa_credentials", cascade="all, delete-orphan", foreign_keys=[user_id]))
     
     # Database constraints
     __table_args__ = (
@@ -283,7 +283,7 @@ class WebAuthnCredential(Model):
     last_used_user_agent = Column(String(500))
     
     # Relationships
-    user = relationship("User", backref=backref("webauthn_credentials", cascade="all, delete-orphan"))
+    user = relationship("User", backref=backref("webauthn_credentials", cascade="all, delete-orphan", foreign_keys=[user_id]))
     
     # Database constraints
     __table_args__ = (
@@ -383,7 +383,7 @@ class MFAChallenge(Model):
     user_agent = Column(String(500))
     
     # Relationships
-    user = relationship("User", backref=backref("mfa_challenges", cascade="all, delete-orphan"))
+    user = relationship("User", backref=backref("mfa_challenges", cascade="all, delete-orphan", foreign_keys=[user_id]))
     
     # Database constraints
     __table_args__ = (
@@ -474,7 +474,7 @@ class BackupCode(Model):
     used_user_agent = Column(String(500))
     
     # Relationships
-    user = relationship("User", backref=backref("backup_codes", cascade="all, delete-orphan"))
+    user = relationship("User", backref=backref("backup_codes", cascade="all, delete-orphan", foreign_keys=[user_id]))
     
     # Database constraints
     __table_args__ = (
@@ -583,7 +583,7 @@ class MFAAuditLog(Model):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
-    user = relationship("User", backref=backref("mfa_audit_logs"))
+    user = relationship("User", backref=backref("mfa_audit_logs", foreign_keys=[user_id]))
     
     # Database constraints
     __table_args__ = (
