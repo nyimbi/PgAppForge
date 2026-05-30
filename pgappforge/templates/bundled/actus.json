@@ -1,0 +1,167 @@
+{
+  "name": "actus",
+  "label": "ACTUS (Financial Contracts)",
+  "description": "Algorithmic Contract Types Unified Standards",
+  "color": "#2c3e50",
+  "icon": "fa-file-contract",
+  "version": "2.0",
+  "source_url": "https://www.actusfrf.org/",
+  "tags": [
+    "finance",
+    "contracts",
+    "regulatory",
+    "eu"
+  ],
+  "tables": {
+    "actus_counterparty": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "lei",
+        "type": "VARCHAR(20)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "counterparty_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "credit_rating",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "default_probability",
+        "type": "NUMERIC(8,6)"
+      }
+    ],
+    "actus_contract": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "contract_id",
+        "type": "VARCHAR(100)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "contract_type",
+        "type": "VARCHAR(10)",
+        "nullable": false
+      },
+      {
+        "name": "contract_role",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "counterparty_id",
+        "type": "UUID",
+        "fk": "actus_counterparty.id"
+      },
+      {
+        "name": "settlement_currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "notional_principal",
+        "type": "NUMERIC(22,6)"
+      },
+      {
+        "name": "nominal_interest_rate",
+        "type": "NUMERIC(12,8)"
+      },
+      {
+        "name": "day_count_convention",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "initial_exchange_date",
+        "type": "DATE"
+      },
+      {
+        "name": "maturity_date",
+        "type": "DATE"
+      },
+      {
+        "name": "contract_terms",
+        "type": "JSONB"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "actus_contract_event": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "contract_id",
+        "type": "UUID",
+        "fk": "actus_contract.id"
+      },
+      {
+        "name": "scheduled_time",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR(4)",
+        "nullable": false
+      },
+      {
+        "name": "payoff",
+        "type": "NUMERIC(22,6)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "state_after",
+        "type": "JSONB"
+      }
+    ],
+    "actus_risk_factor": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "market_object_code",
+        "type": "VARCHAR(50)",
+        "unique": true
+      },
+      {
+        "name": "risk_factor_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "base_value",
+        "type": "NUMERIC(18,8)"
+      }
+    ]
+  }
+}

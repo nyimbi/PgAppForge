@@ -1,0 +1,76 @@
+{
+  "name": "dbt-semantic",
+  "label": "dbt Semantic Layer / OLAP",
+  "description": "Modern data stack — dbt metrics, semantic models, OLAP cube definitions for BI",
+  "color": "#ff694b",
+  "icon": "fa-cubes",
+  "version": "dbt-1.8",
+  "source_url": "https://docs.getdbt.com/docs/build/semantic-models",
+  "tags": ["analytics", "dbt", "olap", "bi", "data-stack"],
+  "tables": {
+    "dbt_project": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "name", "type": "VARCHAR(255)", "unique": true, "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "database", "type": "VARCHAR(100)"},
+      {"name": "schema", "type": "VARCHAR(100)"},
+      {"name": "created_at", "type": "TIMESTAMPTZ", "default": "NOW()"}
+    ],
+    "dbt_model": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "project_id", "type": "INTEGER", "fk": "dbt_project.id"},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "schema", "type": "VARCHAR(100)"},
+      {"name": "materialization", "type": "VARCHAR(20)", "default": "'view'"},
+      {"name": "depends_on", "type": "JSONB"},
+      {"name": "columns", "type": "JSONB"},
+      {"name": "tags", "type": "JSONB"},
+      {"name": "meta", "type": "JSONB"},
+      {"name": "last_compiled_at", "type": "TIMESTAMPTZ"}
+    ],
+    "dbt_semantic_model": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "project_id", "type": "INTEGER", "fk": "dbt_project.id"},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "model_id", "type": "INTEGER", "fk": "dbt_model.id"},
+      {"name": "entities", "type": "JSONB"},
+      {"name": "dimensions", "type": "JSONB"},
+      {"name": "measures", "type": "JSONB"}
+    ],
+    "dbt_metric": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "project_id", "type": "INTEGER", "fk": "dbt_project.id"},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "label", "type": "VARCHAR(255)"},
+      {"name": "type", "type": "VARCHAR(30)"},
+      {"name": "type_params", "type": "JSONB"},
+      {"name": "filter", "type": "TEXT"},
+      {"name": "dimensions", "type": "JSONB"},
+      {"name": "meta", "type": "JSONB"}
+    ],
+    "olap_dimension": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false},
+      {"name": "label", "type": "VARCHAR(255)"},
+      {"name": "dimension_type", "type": "VARCHAR(30)"},
+      {"name": "source_table", "type": "VARCHAR(255)"},
+      {"name": "key_column", "type": "VARCHAR(100)"},
+      {"name": "label_column", "type": "VARCHAR(100)"},
+      {"name": "hierarchies", "type": "JSONB"},
+      {"name": "attributes", "type": "JSONB"}
+    ],
+    "olap_cube": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "fact_table", "type": "VARCHAR(255)"},
+      {"name": "measures", "type": "JSONB"},
+      {"name": "dimension_ids", "type": "JSONB"},
+      {"name": "refresh_schedule", "type": "VARCHAR(100)"},
+      {"name": "last_refreshed_at", "type": "TIMESTAMPTZ"}
+    ]
+  }
+}

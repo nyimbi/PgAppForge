@@ -1,0 +1,46 @@
+{
+  "name": "snomed-ct",
+  "label": "SNOMED CT (Schema)",
+  "description": "SNOMED Clinical Terms — 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
+  "color": "#9b59b6",
+  "icon": "fa-stethoscope",
+  "version": "Int-20240901",
+  "source_url": "https://www.snomed.org/",
+  "tags": ["healthcare", "terminology", "hl7", "clinical", "requires-license"],
+  "tables": {
+    "snomed_concept": [
+      {"name": "id", "type": "BIGINT", "pk": true},
+      {"name": "effective_time", "type": "DATE", "nullable": false},
+      {"name": "active", "type": "BOOLEAN", "nullable": false},
+      {"name": "module_id", "type": "BIGINT", "nullable": false},
+      {"name": "definition_status_id", "type": "BIGINT"}
+    ],
+    "snomed_description": [
+      {"name": "id", "type": "BIGINT", "pk": true},
+      {"name": "effective_time", "type": "DATE"},
+      {"name": "active", "type": "BOOLEAN"},
+      {"name": "module_id", "type": "BIGINT"},
+      {"name": "concept_id", "type": "BIGINT", "fk": "snomed_concept.id"},
+      {"name": "language_code", "type": "CHAR(2)"},
+      {"name": "type_id", "type": "BIGINT"},
+      {"name": "term", "type": "VARCHAR(1000)", "nullable": false},
+      {"name": "case_significance_id", "type": "BIGINT"},
+      {"name": "search_vector", "type": "TSVECTOR"}
+    ],
+    "snomed_relationship": [
+      {"name": "id", "type": "BIGINT", "pk": true},
+      {"name": "effective_time", "type": "DATE"},
+      {"name": "active", "type": "BOOLEAN"},
+      {"name": "source_id", "type": "BIGINT", "fk": "snomed_concept.id"},
+      {"name": "destination_id", "type": "BIGINT", "fk": "snomed_concept.id"},
+      {"name": "relationship_group", "type": "INTEGER"},
+      {"name": "type_id", "type": "BIGINT"},
+      {"name": "characteristic_type_id", "type": "BIGINT"}
+    ],
+    "snomed_transitive_closure": [
+      {"name": "id", "type": "BIGSERIAL", "pk": true},
+      {"name": "super_type_id", "type": "BIGINT", "fk": "snomed_concept.id"},
+      {"name": "sub_type_id", "type": "BIGINT", "fk": "snomed_concept.id"}
+    ]
+  }
+}

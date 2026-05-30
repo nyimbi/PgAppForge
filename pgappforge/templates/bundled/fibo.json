@@ -1,0 +1,190 @@
+{
+  "name": "fibo",
+  "label": "FIBO (Financial Ontology)",
+  "description": "Financial Industry Business Ontology \u2014 EDM Council + OMG standard",
+  "color": "#1a252f",
+  "icon": "fa-chart-bar",
+  "version": "Q3-2024",
+  "source_url": "https://spec.edmcouncil.org/fibo/",
+  "tags": [
+    "finance",
+    "ontology",
+    "edm-council"
+  ],
+  "tables": {
+    "fibo_legal_entity": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "lei",
+        "type": "VARCHAR(20)",
+        "unique": true
+      },
+      {
+        "name": "legal_name",
+        "type": "VARCHAR(500)",
+        "nullable": false
+      },
+      {
+        "name": "entity_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "jurisdiction",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "parent_lei",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "headquarters_address",
+        "type": "JSONB"
+      }
+    ],
+    "fibo_currency": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "iso_code",
+        "type": "CHAR(3)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "minor_unit",
+        "type": "SMALLINT",
+        "default": "2"
+      },
+      {
+        "name": "issuing_country",
+        "type": "CHAR(2)"
+      }
+    ],
+    "fibo_financial_instrument": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "isin",
+        "type": "CHAR(12)",
+        "unique": true
+      },
+      {
+        "name": "cusip",
+        "type": "CHAR(9)"
+      },
+      {
+        "name": "instrument_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "issuer_lei",
+        "type": "VARCHAR(20)",
+        "fk": "fibo_legal_entity.lei"
+      },
+      {
+        "name": "currency_code",
+        "type": "CHAR(3)",
+        "fk": "fibo_currency.iso_code"
+      },
+      {
+        "name": "issue_date",
+        "type": "DATE"
+      },
+      {
+        "name": "maturity_date",
+        "type": "DATE"
+      },
+      {
+        "name": "face_value",
+        "type": "NUMERIC(22,6)"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      }
+    ],
+    "fibo_market": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "mic",
+        "type": "CHAR(4)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "city",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "fibo_price": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "instrument_id",
+        "type": "UUID",
+        "fk": "fibo_financial_instrument.id"
+      },
+      {
+        "name": "market_mic",
+        "type": "CHAR(4)",
+        "fk": "fibo_market.mic"
+      },
+      {
+        "name": "price_type",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "price",
+        "type": "NUMERIC(22,8)"
+      },
+      {
+        "name": "currency_code",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "price_date",
+        "type": "DATE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      }
+    ]
+  }
+}

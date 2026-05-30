@@ -1,0 +1,64 @@
+{
+  "name": "dcat",
+  "label": "DCAT v3 (Data Catalog)",
+  "description": "W3C Data Catalog Vocabulary — used by US/UK/EU government open data portals",
+  "color": "#27ae60",
+  "icon": "fa-database",
+  "version": "3.0",
+  "source_url": "https://www.w3.org/TR/vocab-dcat-3/",
+  "tags": ["government", "open-data", "w3c", "eu", "us-mandate"],
+  "tables": {
+    "dcat_catalog": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "title", "type": "VARCHAR(1000)", "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "publisher_name", "type": "VARCHAR(500)"},
+      {"name": "publisher_url", "type": "TEXT"},
+      {"name": "language", "type": "CHAR(5)", "default": "'en'"},
+      {"name": "license_url", "type": "TEXT"},
+      {"name": "issued", "type": "TIMESTAMPTZ"},
+      {"name": "modified", "type": "TIMESTAMPTZ"}
+    ],
+    "dcat_dataset": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "catalog_id", "type": "UUID", "fk": "dcat_catalog.id"},
+      {"name": "title", "type": "VARCHAR(1000)", "nullable": false},
+      {"name": "description", "type": "TEXT"},
+      {"name": "identifier", "type": "VARCHAR(500)"},
+      {"name": "keywords", "type": "JSONB"},
+      {"name": "themes", "type": "JSONB"},
+      {"name": "publisher_name", "type": "VARCHAR(500)"},
+      {"name": "contact_point", "type": "JSONB"},
+      {"name": "spatial_coverage", "type": "GEOGRAPHY(GEOMETRY, 4326)"},
+      {"name": "temporal_start", "type": "DATE"},
+      {"name": "temporal_end", "type": "DATE"},
+      {"name": "update_frequency", "type": "VARCHAR(100)"},
+      {"name": "license_url", "type": "TEXT"},
+      {"name": "issued", "type": "TIMESTAMPTZ"},
+      {"name": "modified", "type": "TIMESTAMPTZ"},
+      {"name": "landing_page_url", "type": "TEXT"},
+      {"name": "version", "type": "VARCHAR(50)"}
+    ],
+    "dcat_distribution": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "dataset_id", "type": "UUID", "fk": "dcat_dataset.id"},
+      {"name": "title", "type": "VARCHAR(500)"},
+      {"name": "access_url", "type": "TEXT"},
+      {"name": "download_url", "type": "TEXT"},
+      {"name": "media_type", "type": "VARCHAR(100)"},
+      {"name": "format", "type": "VARCHAR(50)"},
+      {"name": "byte_size", "type": "BIGINT"},
+      {"name": "issued", "type": "TIMESTAMPTZ"},
+      {"name": "modified", "type": "TIMESTAMPTZ"}
+    ],
+    "dcat_data_service": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "catalog_id", "type": "UUID", "fk": "dcat_catalog.id"},
+      {"name": "title", "type": "VARCHAR(500)", "nullable": false},
+      {"name": "endpoint_url", "type": "TEXT", "nullable": false},
+      {"name": "endpoint_description", "type": "TEXT"},
+      {"name": "serves_dataset", "type": "JSONB"},
+      {"name": "contact_point", "type": "JSONB"}
+    ]
+  }
+}

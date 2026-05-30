@@ -1,0 +1,56 @@
+{
+  "name": "loinc",
+  "label": "HL7 LOINC (Schema)",
+  "description": "Logical Observation Identifiers Names and Codes — 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
+  "color": "#3498db",
+  "icon": "fa-vials",
+  "version": "2.78",
+  "source_url": "https://loinc.org/",
+  "tags": ["healthcare", "terminology", "hl7", "laboratory", "free-registration"],
+  "tables": {
+    "loinc_code": [
+      {"name": "loinc_num", "type": "VARCHAR(10)", "pk": true},
+      {"name": "component", "type": "VARCHAR(255)"},
+      {"name": "property", "type": "VARCHAR(30)"},
+      {"name": "time_aspct", "type": "VARCHAR(15)"},
+      {"name": "system", "type": "VARCHAR(100)"},
+      {"name": "scale_typ", "type": "VARCHAR(20)"},
+      {"name": "method_typ", "type": "VARCHAR(50)"},
+      {"name": "class", "type": "VARCHAR(20)"},
+      {"name": "long_common_name", "type": "VARCHAR(500)"},
+      {"name": "short_name", "type": "VARCHAR(100)"},
+      {"name": "status", "type": "VARCHAR(20)"},
+      {"name": "order_obs", "type": "VARCHAR(15)"},
+      {"name": "common_test_rank", "type": "INTEGER"},
+      {"name": "example_ucum_units", "type": "VARCHAR(50)"},
+      {"name": "definition_description", "type": "TEXT"},
+      {"name": "consumer_name", "type": "VARCHAR(255)"},
+      {"name": "search_vector", "type": "TSVECTOR"}
+    ],
+    "loinc_hierarchy": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "path", "type": "LTREE", "nullable": false},
+      {"name": "code", "type": "VARCHAR(10)"},
+      {"name": "level", "type": "INTEGER"},
+      {"name": "code_text", "type": "VARCHAR(255)"},
+      {"name": "is_leaf", "type": "BOOLEAN"},
+      {"name": "loinc_num", "type": "VARCHAR(10)", "fk": "loinc_code.loinc_num"}
+    ],
+    "loinc_answer_list": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "answer_list_id", "type": "VARCHAR(10)"},
+      {"name": "answer_string_id", "type": "VARCHAR(10)"},
+      {"name": "answer_code", "type": "VARCHAR(50)"},
+      {"name": "display_text", "type": "VARCHAR(500)"},
+      {"name": "answer_rank", "type": "INTEGER"},
+      {"name": "loinc_num", "type": "VARCHAR(10)", "fk": "loinc_code.loinc_num"}
+    ],
+    "loinc_linguistic_variant": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "loinc_num", "type": "VARCHAR(10)", "fk": "loinc_code.loinc_num"},
+      {"name": "language", "type": "CHAR(5)"},
+      {"name": "long_common_name", "type": "VARCHAR(500)"},
+      {"name": "linguistic_rank", "type": "INTEGER"}
+    ]
+  }
+}

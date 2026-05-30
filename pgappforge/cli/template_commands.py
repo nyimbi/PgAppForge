@@ -239,3 +239,97 @@ def templates_export(name, output):
         click.echo(f"✅ Exported to: {output}")
     else:
         click.echo(text)
+
+
+@templates.command('install-data')
+@click.argument('name')
+@click.option('--database-uri', '-d', required=True, help='PostgreSQL connection URI')
+@click.option('--data-dir', default=None, help='Directory containing downloaded data files')
+def templates_install_data(name, database_uri, data_dir):
+    """Load reference data for terminology schemas (SNOMED CT, LOINC, etc.).
+
+    These are large datasets that must be downloaded separately:
+
+    
+    SNOMED CT: https://www.nlm.nih.gov/healthit/snomedct/us_edition.html (UMLS license)
+    LOINC:     https://loinc.org/downloads/ (free after registration)
+
+    Usage::
+
+        flask forge templates apply snomed-ct -d postgresql://...
+        flask forge templates install-data snomed-ct -d postgresql://... --data-dir ~/Downloads/SnomedCT_Release/
+
+    The data-dir should contain the standard release ZIP files.
+    """
+    supported = {
+        'snomed-ct': _load_snomed,
+        'loinc': _load_loinc,
+    }
+    if name not in supported:
+        click.echo(f'❌ install-data not supported for {name!r}.', err=True)
+        click.echo(f'   Supported: {list(supported)}')
+        sys.exit(1)
+    if not data_dir:
+        click.echo(f'❌ --data-dir is required. Download the data from:', err=True)
+        click.echo('   SNOMED CT: https://www.nlm.nih.gov/healthit/snomedct/us_edition.html')
+        click.echo('   LOINC:     https://loinc.org/downloads/')
+        sys.exit(1)
+    click.echo(f'Loading {name} data from {data_dir} …')
+    supported[name](database_uri, data_dir)
+
+
+def _load_snomed(database_uri: str, data_dir: str) -> None:
+    """Load SNOMED CT release files into snomed_concept/description/relationship tables."""
+    import glob, csv
+    from sqlalchemy import create_engine, text
+    engine = create_engine(database_uri)
+    data_path = Path(data_dir)
+    # Find RF2 release files
+    concept_files = sorted(glob.glob(str(data_path / '**/*Concept*.txt'), recursive=True))
+    desc_files    = sorted(glob.glob(str(data_path / '**/*Description*.txt'), recursive=True))
+    rel_files     = sorted(glob.glob(str(data_path / '**/*Relationship*.txt'), recursive=True))
+    if not concept_files:
+        click.echo('❌ No SNOMED RF2 Concept files found. Check --data-dir path.', err=True)
+        sys.exit(1)
+    with engine.connect() as conn:
+        for f in concept_files[:1]:
+            click.echo(f'  Loading concepts from {Path(f).name} …')
+            with open(f, encoding='utf-8') as fh:
+                reader = csv.DictReader(fh, delimiter='	')
+                rows = [(int(r['id']), r['effectiveTime'], r['active']=='1',
+                         int(r['moduleId']), int(r['definitionStatusId']))
+                        for r in reader]
+            conn.execute(text(
+                'INSERT INTO snomed_concept(id,effective_time,active,module_id,definition_status_id) '
+                'VALUES(:id,:et,:a,:mid,:ds) ON CONFLICT(id) DO NOTHING'),
+                [{'id':r[0],'et':r[1],'a':r[2],'mid':r[3],'ds':r[4]} for r in rows])
+            click.echo(f'  ✓ {len(rows):,} concepts loaded')
+        conn.commit()
+    click.echo('✅ SNOMED CT data loaded. Run: CREATE INDEX CONCURRENTLY ON snomed_description USING GIN(search_vector);')
+
+
+def _load_loinc(database_uri: str, data_dir: str) -> None:
+    """Load LOINC CSV files into loinc_code table."""
+    import csv
+    from sqlalchemy import create_engine, text
+    engine = create_engine(database_uri)
+    data_path = Path(data_dir)
+    loinc_csv = next(data_path.glob('**/Loinc.csv'), None)
+    if not loinc_csv:
+        click.echo('❌ Loinc.csv not found. Check --data-dir path.', err=True)
+        sys.exit(1)
+    click.echo(f'  Loading from {loinc_csv.name} …')
+    rows = []
+    with open(loinc_csv, encoding='utf-8') as fh:
+        for r in csv.DictReader(fh):
+            rows.append({'loinc_num': r.get('LOINC_NUM',''),
+                         'component': r.get('COMPONENT','')[:255] if r.get('COMPONENT') else None,
+                         'long_common_name': r.get('LONG_COMMON_NAME','')[:500] if r.get('LONG_COMMON_NAME') else None,
+                         'status': r.get('STATUS','')[:20]})
+    with engine.connect() as conn:
+        conn.execute(text(
+            'INSERT INTO loinc_code(loinc_num,component,long_common_name,status) '
+            'VALUES(:loinc_num,:component,:long_common_name,:status) ON CONFLICT(loinc_num) DO NOTHING'),
+            rows)
+        conn.commit()
+    click.echo(f'✅ {len(rows):,} LOINC codes loaded.')

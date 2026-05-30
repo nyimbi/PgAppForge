@@ -1,0 +1,52 @@
+{
+  "name": "gs1-product",
+  "label": "GS1 Product Ontology",
+  "description": "GS1 product identification — used by Google Shopping, Amazon, major retailers",
+  "color": "#e74c3c",
+  "icon": "fa-tag",
+  "version": "2024",
+  "source_url": "https://www.gs1.org/standards/gs1-smartsearch",
+  "tags": ["ecommerce", "gs1", "google-shopping", "amazon", "seo"],
+  "tables": {
+    "gs1_product": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "gtin", "type": "VARCHAR(14)", "unique": true, "nullable": false},
+      {"name": "product_name", "type": "JSONB"},
+      {"name": "brand_name", "type": "VARCHAR(255)"},
+      {"name": "gpc_category_code", "type": "VARCHAR(8)"},
+      {"name": "gpc_category_name", "type": "VARCHAR(255)"},
+      {"name": "description", "type": "JSONB"},
+      {"name": "net_content", "type": "NUMERIC(12,4)"},
+      {"name": "net_content_uom", "type": "VARCHAR(20)"},
+      {"name": "gross_weight_kg", "type": "NUMERIC(10,4)"},
+      {"name": "country_of_origin", "type": "CHAR(2)"},
+      {"name": "target_market", "type": "CHAR(3)"},
+      {"name": "certifications", "type": "JSONB"},
+      {"name": "images", "type": "JSONB"},
+      {"name": "linked_data_uri", "type": "TEXT"},
+      {"name": "created_at", "type": "TIMESTAMPTZ", "default": "NOW()"}
+    ],
+    "gs1_product_attribute": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "gtin", "type": "VARCHAR(14)", "fk": "gs1_product.gtin"},
+      {"name": "attribute_name", "type": "VARCHAR(200)"},
+      {"name": "attribute_value", "type": "TEXT"},
+      {"name": "uom", "type": "VARCHAR(20)"},
+      {"name": "language", "type": "CHAR(5)"}
+    ],
+    "gs1_product_image": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "gtin", "type": "VARCHAR(14)", "fk": "gs1_product.gtin"},
+      {"name": "image_url", "type": "TEXT", "nullable": false},
+      {"name": "image_type", "type": "VARCHAR(50)"},
+      {"name": "facing", "type": "VARCHAR(30)"},
+      {"name": "is_planogram", "type": "BOOLEAN"}
+    ],
+    "gs1_allergen_declaration": [
+      {"name": "id", "type": "SERIAL", "pk": true},
+      {"name": "gtin", "type": "VARCHAR(14)", "fk": "gs1_product.gtin"},
+      {"name": "allergen_type", "type": "VARCHAR(50)"},
+      {"name": "level_of_containment", "type": "VARCHAR(30)"}
+    ]
+  }
+}

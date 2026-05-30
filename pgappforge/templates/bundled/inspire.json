@@ -1,0 +1,65 @@
+{
+  "name": "inspire",
+  "label": "INSPIRE (EU Spatial)",
+  "description": "EU spatial data infrastructure directive — mandatory for EU government geospatial applications",
+  "color": "#3498db",
+  "icon": "fa-globe-europe",
+  "version": "2021",
+  "source_url": "https://inspire.ec.europa.eu/",
+  "tags": ["eu-mandate", "spatial", "government", "gis", "postgis"],
+  "tables": {
+    "inspire_administrative_unit": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "local_id", "type": "VARCHAR(100)", "unique": true},
+      {"name": "national_code", "type": "VARCHAR(50)"},
+      {"name": "name", "type": "JSONB"},
+      {"name": "country_code", "type": "CHAR(2)"},
+      {"name": "administrative_level", "type": "INTEGER"},
+      {"name": "upper_level_unit", "type": "UUID", "fk": "inspire_administrative_unit.id"},
+      {"name": "geometry", "type": "GEOGRAPHY(MULTIPOLYGON, 4326)"},
+      {"name": "validity_begin", "type": "DATE"},
+      {"name": "validity_end", "type": "DATE"}
+    ],
+    "inspire_address": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "local_id", "type": "VARCHAR(100)", "unique": true},
+      {"name": "locator_designator", "type": "VARCHAR(50)"},
+      {"name": "thoroughfare_name", "type": "VARCHAR(255)"},
+      {"name": "postcode", "type": "VARCHAR(20)"},
+      {"name": "post_name", "type": "VARCHAR(255)"},
+      {"name": "admin_unit_id", "type": "UUID", "fk": "inspire_administrative_unit.id"},
+      {"name": "country_code", "type": "CHAR(2)"},
+      {"name": "position", "type": "GEOGRAPHY(POINT, 4326)"},
+      {"name": "status", "type": "VARCHAR(30)"},
+      {"name": "validity_begin", "type": "DATE"}
+    ],
+    "inspire_building": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "local_id", "type": "VARCHAR(100)", "unique": true},
+      {"name": "current_use", "type": "VARCHAR(100)"},
+      {"name": "number_of_floors", "type": "INTEGER"},
+      {"name": "number_of_dwellings", "type": "INTEGER"},
+      {"name": "date_of_construction", "type": "DATE"},
+      {"name": "geometry_2d", "type": "GEOGRAPHY(POLYGON, 4326)"},
+      {"name": "height_above_ground", "type": "NUMERIC(8,2)"},
+      {"name": "address_id", "type": "UUID", "fk": "inspire_address.id"}
+    ],
+    "inspire_protected_site": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "local_id", "type": "VARCHAR(100)", "unique": true},
+      {"name": "site_name", "type": "VARCHAR(500)"},
+      {"name": "designation_scheme", "type": "VARCHAR(100)"},
+      {"name": "designation_code", "type": "VARCHAR(50)"},
+      {"name": "site_area_ha", "type": "NUMERIC(12,4)"},
+      {"name": "geometry", "type": "GEOGRAPHY(MULTIPOLYGON, 4326)"}
+    ],
+    "inspire_transport_network": [
+      {"name": "id", "type": "UUID", "pk": true},
+      {"name": "local_id", "type": "VARCHAR(100)", "unique": true},
+      {"name": "transport_type", "type": "VARCHAR(30)"},
+      {"name": "name", "type": "VARCHAR(255)"},
+      {"name": "geometry", "type": "GEOGRAPHY(LINESTRING, 4326)"},
+      {"name": "begin_lifetime", "type": "DATE"}
+    ]
+  }
+}
