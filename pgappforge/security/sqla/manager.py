@@ -200,6 +200,26 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             log.error(c.LOGMSG_ERR_SEC_CREATE_DB, e)
             raise RuntimeError(f"DB creation failed: {e}") from e
 
+    def has_access(self, permission_name: str, view_name: str) -> bool:
+        """Check if the current user or Public role has a permission on a view."""
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return self.has_access_for_user(permission_name, view_name, current_user)
+        return self.is_item_public(permission_name, view_name)
+
+    def has_access_for_user(self, permission_name: str, view_name: str, user) -> bool:
+        """Check if a specific user has a permission on a view via their roles."""
+        try:
+            roles = getattr(user, 'roles', [])
+            for role in roles:
+                for pvm in getattr(role, 'permissions', []):
+                    if (getattr(pvm.permission, 'name', None) == permission_name
+                            and getattr(pvm.view_menu, 'name', None) == view_name):
+                        return True
+        except Exception:
+            pass
+        return self.is_item_public(permission_name, view_name)
+
     def auth_user_db(self, username: str, password: str):
         """Authenticate a user by username/password against the database."""
         from werkzeug.security import check_password_hash

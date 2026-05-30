@@ -602,7 +602,7 @@ class TestSQLAInterface(FABTestCase):
         with self.app.app_context():
             from pgappforge.models.sqla.filters import FilterEqual
             filters = self.article_interface.get_filters()
-            filters.add_filter(FilterEqual, 'published', True)
+            filters.add_filter('published', FilterEqual, True)
             count, published_articles = self.article_interface.query(filters=filters)
             for article in published_articles:
                 self.assertTrue(article.published)
@@ -772,7 +772,7 @@ class TestDataModelFilters(FABTestCase):
         """Test FilterEqual functionality"""
         with self.app.app_context():
             filters = self.interface.get_filters()
-            filters.add_filter(FilterEqual, 'published', True)
+            filters.add_filter('published', FilterEqual, True)
             count, articles = self.interface.query(filters=filters)
             for article in articles:
                 self.assertTrue(article.published)
@@ -781,7 +781,7 @@ class TestDataModelFilters(FABTestCase):
         """Test FilterNotEqual functionality"""
         with self.app.app_context():
             filters = self.interface.get_filters()
-            filters.add_filter(FilterNotEqual, 'published', True)
+            filters.add_filter('published', FilterNotEqual, True)
             count, articles = self.interface.query(filters=filters)
             for article in articles:
                 self.assertFalse(article.published)
@@ -799,7 +799,7 @@ class TestDataModelFilters(FABTestCase):
         """Test combining multiple filters"""
         with self.app.app_context():
             filters = self.interface.get_filters()
-            filters.add_filter(FilterEqual, 'published', True)
+            filters.add_filter('published', FilterEqual, True)
             count, articles = self.interface.query(filters=filters)
             
             self.assertEqual(count, 2)
