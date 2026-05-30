@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 from markupsafe import Markup
 from flask import render_template_string
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
+from flask_appbuilder.widgets_postgresql._cdn import LEAFLET_CDN as _LEAFLET_CDN
 from wtforms.widgets import TextArea, Input, Select
 from wtforms.widgets.core import html_params
 
@@ -896,8 +897,7 @@ class PostGISGeometryWidget(TextArea):
 			</div>
 		</div>
 		
-		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-		<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+		{_LEAFLET_CDN}
 		<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 		<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 		

@@ -12,6 +12,7 @@ from markupsafe import Markup
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from wtforms.widgets import TextArea, Input
 from wtforms.widgets.core import html_params
+from flask_appbuilder.widgets_postgresql._cdn import LEAFLET_CDN as _LEAFLET_CDN
 
 
 class HStoreEditorWidget(BS3TextFieldWidget):
@@ -481,10 +482,7 @@ class AddressSearchWidget(BS3TextFieldWidget):
 </div>
 
 <!-- Leaflet CSS/JS (loaded once) -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLEg=" crossorigin=""></script>
+{_LEAFLET_CDN}
 
 <script>
 (function() {{
@@ -597,8 +595,7 @@ class RouteWidget(BS3TextFieldWidget):
   <input type="hidden" name="{field.name}" id="{fid}" value='{wp_json}'>
 </div>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js" crossorigin=""></script>
+{_LEAFLET_CDN}
 <script>
 (function() {{
   document.addEventListener('DOMContentLoaded', function() {{

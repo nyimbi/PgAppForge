@@ -41,15 +41,14 @@ from markupsafe import Markup
 from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget
 
 
-# CDN refs — EasyMDE 2.x + marked.js 9.x
-_EASYMDE_CSS = """<link rel="stylesheet"
-  href="https://unpkg.com/easymde@2/dist/easymde.min.css" crossorigin="">"""
-_EASYMDE_JS = """<script
-  src="https://unpkg.com/easymde@2/dist/easymde.min.js" crossorigin=""></script>"""
-_MARKED_JS = """<script
-  src="https://unpkg.com/marked@9/marked.min.js" crossorigin=""></script>"""
-_DOMPURIFY_JS = """<script
-  src="https://unpkg.com/dompurify@3/dist/purify.min.js" crossorigin=""></script>"""
+# CDN references — imported from canonical _cdn module
+from flask_appbuilder.widgets_postgresql._cdn import (
+	EASYMDE_CDN as _EASYMDE_CSS,
+	MARKED_CDN as _MARKED_JS,
+	DOMPURIFY_CDN as _DOMPURIFY_JS,
+)
+# EasyMDE needs both CSS and JS
+_EASYMDE_JS = ''  # included in EASYMDE_CDN above
 
 
 class MarkdownEditorWidget(BS3TextAreaFieldWidget):
@@ -95,8 +94,9 @@ class MarkdownEditorWidget(BS3TextAreaFieldWidget):
 	def __call__(self, field, **kwargs) -> Markup:
 		fid = field.id
 		value = field.data or ""
-		# Escape value for safe JS string insertion
-		value_escaped = value.replace("\\", "\\\\").replace("`", "\\`")
+		# Serialise via JSON — safe against template-literal injection (${...})
+		import json as _json
+		value_json = _json.dumps(value)  # produces a quoted, escaped JSON string
 
 		min_h = self.min_height
 		max_h = self.max_height
@@ -125,6 +125,7 @@ class MarkdownEditorWidget(BS3TextAreaFieldWidget):
 </div>
 
 <script>
+var _mde_val_{fid} = {value_json};
 (function() {{
   function initEasyMDE() {{
     if (!window.EasyMDE) {{
@@ -133,7 +134,7 @@ class MarkdownEditorWidget(BS3TextAreaFieldWidget):
     }}
     var easyMde = new EasyMDE({{
       element: document.getElementById('{fid}'),
-      initialValue: `{value_escaped}`,
+      initialValue: _mde_val_{fid},
       placeholder: "{placeholder}",
       spellChecker: {spell_check},
       minHeight: "{min_h}px",

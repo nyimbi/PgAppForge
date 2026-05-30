@@ -42,6 +42,11 @@ import json
 from markupsafe import Markup
 from wtforms.widgets.core import html_params
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
+from flask_appbuilder.widgets_postgresql._cdn import (
+	LEAFLET_CDN as _LEAFLET_CDN,
+	LEAFLET_DRAW_CDN as _LEAFLET_DRAW_CDN,
+	H3_CDN as _H3_CDN,
+)
 
 try:
 	from sqlalchemy import TypeDecorator, String as _String
@@ -69,22 +74,7 @@ except ImportError:
 	H3IndexType = None  # type: ignore
 
 
-# ─── H3 CDN (h3-js) ─────────────────────────────────────────────────────────
-_H3_CDN = """
-<script>
-if (!window.h3) {
-  var s = document.createElement('script');
-  s.src = 'https://unpkg.com/h3-js@4/dist/h3-js.umd.js';
-  s.onload = function() { document.dispatchEvent(new Event('h3loaded')); };
-  document.head.appendChild(s);
-}
-</script>
-"""
 
-_LEAFLET_CDN = """
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js" crossorigin=""></script>
-"""
 
 
 class H3IndexWidget(BS3TextFieldWidget):
