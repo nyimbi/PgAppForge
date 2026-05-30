@@ -101,6 +101,9 @@ setup(
         "oauth": ["Authlib>=0.14, <2.0.0"],
         "openid": ["Flask-OpenID>=1.2.5, <2"],
         "talisman": ["flask-talisman>=1.0.0, <2.0"],
+        "age": [
+            "age>=0.0.2",  # Apache AGE Python client (if available)
+        ],
         "speech": [
             "faster-whisper>=1.0.0",           # Local STT — CTranslate2 Whisper
             "supertone-tts>=0.1.0",             # Supertonic neural TTS (optional)
