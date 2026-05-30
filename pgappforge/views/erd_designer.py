@@ -489,11 +489,20 @@ class ERDDesignerView(BaseView):
 	@expose("/")
 	@has_access
 	def index(self):
+		# Merge built-in ERP modules + installed templates from registry
+		all_modules = dict(ERP_MODULES)
+		try:
+			from pgappforge.templates import TemplateRegistry
+			for k, v in TemplateRegistry().load_all().items():
+				if k not in all_modules:
+					all_modules[k] = v
+		except Exception:
+			pass
 		module_list = [
 			{"key": k, "label": v["label"], "color": v["color"],
 			 "icon": v.get("icon", "fa-database"),
 			 "table_count": len(v["tables"]), "description": v.get("description", "")}
-			for k, v in ERP_MODULES.items()
+			for k, v in all_modules.items()
 		]
 		return self.render_template_string(_DESIGNER_HTML, modules=module_list)
 
