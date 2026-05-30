@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Column, DateTime, Index, String, Text, event
+from sqlalchemy import Boolean, Column, DateTime, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from pgappforge.models import Model
+from pgappforge import Model
 
 log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Built-in defaults — seeded on first reset_to_defaults() call or app init
+# Built-in defaults — 15+ sensible application settings across 4 categories
 # ---------------------------------------------------------------------------
 
 BUILT_IN_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -83,6 +84,22 @@ BUILT_IN_DEFAULTS: dict[str, dict[str, Any]] = {
 		"is_sensitive": False,
 		"is_readonly": False,
 	},
+	"SECURITY_PASSWORD_MIN_LENGTH": {
+		"value": 8,
+		"category": "security",
+		"label": "Minimum Password Length",
+		"description": "Minimum number of characters required for passwords.",
+		"is_sensitive": False,
+		"is_readonly": False,
+	},
+	"SECURITY_MFA_ENABLED": {
+		"value": False,
+		"category": "security",
+		"label": "Enable MFA",
+		"description": "Require multi-factor authentication for all users.",
+		"is_sensitive": False,
+		"is_readonly": False,
+	},
 	# features
 	"FEATURES_OFFLINE_MODE": {
 		"value": False,
@@ -116,6 +133,14 @@ BUILT_IN_DEFAULTS: dict[str, dict[str, Any]] = {
 		"is_sensitive": False,
 		"is_readonly": False,
 	},
+	"FEATURES_EXPORT_CSV": {
+		"value": True,
+		"category": "features",
+		"label": "CSV Export",
+		"description": "Allow users to export list views as CSV.",
+		"is_sensitive": False,
+		"is_readonly": False,
+	},
 	# email
 	"EMAIL_FROM_ADDRESS": {
 		"value": "noreply@example.com",
@@ -130,6 +155,14 @@ BUILT_IN_DEFAULTS: dict[str, dict[str, Any]] = {
 		"category": "email",
 		"label": "Support Address",
 		"description": "Address surfaced to users for help requests.",
+		"is_sensitive": False,
+		"is_readonly": False,
+	},
+	"EMAIL_SMTP_PORT": {
+		"value": 587,
+		"category": "email",
+		"label": "SMTP Port",
+		"description": "Port for outbound SMTP connections (typically 25, 465, or 587).",
 		"is_sensitive": False,
 		"is_readonly": False,
 	},
@@ -150,19 +183,23 @@ class AppConfig(Model):
 	"""
 
 	__tablename__ = "app_config"
+	__allow_unmapped__ = True
 
 	__table_args__ = (
-		# Fast lookup by category for the category view
 		Index("ix_app_config_category", "category"),
-		# GIN index on key accelerates prefix searches in the admin list view
-		Index("ix_app_config_key_gin", "key", postgresql_using="gin",
-			  postgresql_ops={"key": "gin_trgm_ops"}),
+		Index(
+			"ix_app_config_key_gin",
+			"key",
+			postgresql_using="gin",
+			postgresql_ops={"key": "gin_trgm_ops"},
+		),
+		{"extend_existing": True},
 	)
 
 	id = Column(
 		String(36),
 		primary_key=True,
-		default=lambda: _new_id(),
+		default=lambda: str(uuid.uuid4()),
 	)
 	key = Column(String(128), unique=True, nullable=False, index=True)
 	value = Column(JSONB, nullable=False)
@@ -189,20 +226,13 @@ class AppConfig(Model):
 		return self.value
 
 
-def _new_id() -> str:
-	"""UUID4 string id — uuid6 not required here, standard uuid is fine."""
-	import uuid
-	return str(uuid.uuid4())
-
-
 # ---------------------------------------------------------------------------
 # Manager
 # ---------------------------------------------------------------------------
 
 class AppConfigManager:
 	"""
-	Thin service layer over AppConfig.  Requires an active Flask app context
-	(uses current_app.extensions["sqlalchemy"].db.session internally).
+	Thin service layer over AppConfig.
 
 	Usage::
 
@@ -288,19 +318,49 @@ class AppConfigManager:
 		``value``, ``category``, ``label``, ``description``, ``is_sensitive``,
 		``is_readonly`` for richer metadata.
 		"""
-		for key, payload in config_dict.items():
-			if isinstance(payload, dict) and "value" in payload:
-				self.set(
-					key,
-					payload["value"],
-					category=payload.get("category", category),
-					label=payload.get("label"),
-					description=payload.get("description"),
-					is_sensitive=bool(payload.get("is_sensitive", False)),
-					is_readonly=bool(payload.get("is_readonly", False)),
-				)
-			else:
-				self.set(key, payload, category=category)
+		try:
+			for key, payload in config_dict.items():
+				if isinstance(payload, dict) and "value" in payload:
+					cat = payload.get("category", category)
+					label = payload.get("label")
+					description = payload.get("description")
+					is_sensitive = bool(payload.get("is_sensitive", False))
+					is_readonly = bool(payload.get("is_readonly", False))
+					val = payload["value"]
+				else:
+					cat = category
+					label = None
+					description = None
+					is_sensitive = False
+					is_readonly = False
+					val = payload
+
+				row = self._session.query(AppConfig).filter_by(key=key).one_or_none()
+				if row is not None:
+					if row.is_readonly:
+						continue
+					row.value = val
+					row.updated_at = datetime.utcnow()
+					if label is not None:
+						row.label = label
+					if description is not None:
+						row.description = description
+				else:
+					row = AppConfig(
+						key=key,
+						value=val,
+						category=cat,
+						label=label,
+						description=description,
+						is_sensitive=is_sensitive,
+						is_readonly=is_readonly,
+					)
+					self._session.add(row)
+
+			self._session.commit()
+		except Exception:
+			self._session.rollback()
+			raise
 
 	def reset_to_defaults(self) -> None:
 		"""
@@ -322,5 +382,9 @@ class AppConfigManager:
 
 	def _categories(self) -> list[str]:
 		from sqlalchemy import distinct
-		rows = self._session.query(distinct(AppConfig.category)).order_by(AppConfig.category).all()
+		rows = (
+			self._session.query(distinct(AppConfig.category))
+			.order_by(AppConfig.category)
+			.all()
+		)
 		return [r[0] for r in rows]

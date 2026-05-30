@@ -29,36 +29,43 @@ _BOOL_KEYS: frozenset[str] = frozenset({
 	"FEATURES_VOICE_INPUT",
 	"FEATURES_DARK_MODE",
 	"FEATURES_ANIMATIONS",
+	"FEATURES_EXPORT_CSV",
+	"SECURITY_MFA_ENABLED",
 })
 
 _NUMBER_KEYS: frozenset[str] = frozenset({
 	"SECURITY_SESSION_TIMEOUT",
 	"SECURITY_MAX_FAILED_LOGINS",
+	"SECURITY_PASSWORD_MIN_LENGTH",
+	"EMAIL_SMTP_PORT",
 })
-
-_APPEARANCE_CATEGORY = "appearance"
 
 
 def _infer_input_type(key: str, value: Any) -> str:
-	"""Return an HTML <input> type appropriate for *value*."""
+	"""Return an HTML <input> type string appropriate for *value*."""
 	if key in _COLOR_KEYS:
 		return "color"
-	if key in _NUMBER_KEYS or isinstance(value, (int, float)):
+	if key in _NUMBER_KEYS or (not isinstance(value, bool) and isinstance(value, (int, float))):
 		return "number"
 	if key in _BOOL_KEYS or isinstance(value, bool):
 		return "checkbox"
 	return "text"
 
 
-def _coerce_value(key: str, raw: str) -> Any:
+def _coerce_value(key: str, raw: str | None) -> Any:
 	"""
 	Convert the raw form string back to the correct Python type.
-	Booleans come through as "on" / absent from POST data.
+	Booleans come through as "on" when checked, absent when unchecked.
 	"""
 	if key in _BOOL_KEYS:
 		return raw == "on"
+	if raw is None:
+		return None
 	if key in _NUMBER_KEYS:
-		return int(raw) if raw.isdigit() else float(raw)
+		try:
+			return int(raw)
+		except ValueError:
+			return float(raw)
 	# Attempt JSON decode for complex stored types; fall back to plain string.
 	try:
 		return json.loads(raw)
@@ -76,148 +83,154 @@ class AppConfigView(BaseView):
 
 	Routes
 	------
-	GET  /app-config/                      — category index with search
-	GET  /app-config/category/<name>       — configs for one category
-	GET/POST /app-config/edit/<key>        — edit a single config entry
-	GET  /app-config/preview               — live appearance preview panel
+	GET  /app-config/                    — category index with edit links
+	GET  /app-config/category/<cat>      — form for all keys in category
+	POST /app-config/save                — save submitted key/value pairs
+	GET  /app-config/reset               — confirm reset page
+	POST /app-config/reset               — execute reset to defaults
 	"""
 
 	route_base = "/app-config"
 	default_view = "index"
 
 	# ------------------------------------------------------------------
-	# Index — category summary + search
+	# Index — category summary
 	# ------------------------------------------------------------------
 
 	@expose("/", methods=("GET",))
 	@has_access
 	def index(self) -> str:
-		"""List all categories; honour ?q= for a simple key/label search."""
-		session = self._db_session()
+		"""List all categories with entry counts and edit links."""
+		session = self.appbuilder.get_session
 		mgr = AppConfigManager(session)
 
-		query = request.args.get("q", "").strip().lower()
-
 		rows = mgr._all_rows()
-		if query:
-			rows = [
-				r for r in rows
-				if query in r.key.lower()
-				or (r.label and query in r.label.lower())
-				or query in r.category.lower()
-			]
 
-		# Group by category for the template
+		# Group by category
 		categories: dict[str, list[AppConfig]] = {}
 		for row in rows:
 			categories.setdefault(row.category, []).append(row)
 
+		# Seed defaults if the table is empty so the UI is never blank
+		if not categories:
+			mgr.reset_to_defaults()
+			rows = mgr._all_rows()
+			for row in rows:
+				categories.setdefault(row.category, []).append(row)
+
 		return self.render_template(
 			"appbuilder/config/index.html",
 			categories=categories,
-			query=query,
 			title=_("Application Configuration"),
 		)
 
 	# ------------------------------------------------------------------
-	# Category view
+	# Category form — all keys in a category on one page
 	# ------------------------------------------------------------------
 
 	@expose("/category/<string:name>", methods=("GET",))
 	@has_access
 	def category(self, name: str) -> str:
-		session = self._db_session()
-		rows = (
+		"""Render an inline form for every config key in *name*."""
+		session = self.appbuilder.get_session
+		rows: list[AppConfig] = (
 			session.query(AppConfig)
 			.filter_by(category=name)
 			.order_by(AppConfig.key)
 			.all()
 		)
+
+		# Enrich each row with its inferred input type so the template is simple
+		fields = [
+			{
+				"row": row,
+				"input_type": _infer_input_type(row.key, row.value),
+			}
+			for row in rows
+		]
+
 		return self.render_template(
 			"appbuilder/config/category.html",
-			rows=rows,
+			fields=fields,
 			category_name=name,
 			title=_(f"Configuration — {name.title()}"),
 		)
 
 	# ------------------------------------------------------------------
-	# Edit single key
+	# Save — POST target for the category form
 	# ------------------------------------------------------------------
 
-	@expose("/edit/<path:key>", methods=("GET", "POST"))
+	@expose("/save", methods=("POST",))
 	@has_access
-	def edit(self, key: str) -> Any:
-		session = self._db_session()
-		row = session.query(AppConfig).filter_by(key=key).one_or_none()
+	def save(self) -> Any:
+		"""
+		Persist submitted key/value pairs from the category form.
 
-		if row is None:
-			flash(_(f"Config key '{key}' not found."), "danger")
-			return redirect(url_for("AppConfigView.index"))
+		The form sends:
+		  - hidden ``category`` field
+		  - one field per config key named after the key itself
+		  - checkboxes absent from POST data when unchecked
+		"""
+		session = self.appbuilder.get_session
+		category_name = request.form.get("category", "general")
 
-		if row.is_readonly:
-			flash(_(f"'{key}' is read-only and cannot be edited."), "warning")
-			return redirect(url_for("AppConfigView.category", name=row.category))
+		rows: list[AppConfig] = (
+			session.query(AppConfig)
+			.filter_by(category=category_name)
+			.order_by(AppConfig.key)
+			.all()
+		)
 
-		if request.method == "POST":
-			raw = request.form.get("value", "")
-			# Checkboxes are absent from POST data when unchecked
-			if key in _BOOL_KEYS:
-				raw = request.form.get("value", "")
+		errors: list[str] = []
+		for row in rows:
+			if row.is_readonly:
+				continue
+			raw = request.form.get(row.key)
+			# Checkboxes: absent from POST when unchecked
+			if _infer_input_type(row.key, row.value) == "checkbox":
+				raw = request.form.get(row.key, "off")
 			try:
-				new_value = _coerce_value(key, raw)
-				mgr = AppConfigManager(session)
-				mgr.set(
-					key,
-					new_value,
-					category=row.category,
-					label=row.label,
-					description=row.description,
-					is_sensitive=row.is_sensitive,
-					is_readonly=row.is_readonly,
-				)
-				flash(_(f"'{row.label or key}' saved successfully."), "success")
-				return redirect(url_for("AppConfigView.category", name=row.category))
+				new_value = _coerce_value(row.key, raw)
+				row.value = new_value
 			except Exception as exc:
-				log.exception("Failed to save config key %r", key)
+				errors.append(f"{row.key}: {exc}")
+
+		if errors:
+			for msg in errors:
+				flash(msg, "danger")
+		else:
+			try:
+				session.commit()
+				flash(_("Configuration saved."), "success")
+			except Exception as exc:
+				session.rollback()
+				log.exception("Failed to save config for category %r", category_name)
 				flash(str(exc), "danger")
 
-		input_type = _infer_input_type(key, row.value)
-		is_appearance = row.category == _APPEARANCE_CATEGORY
-
-		return self.render_template(
-			"appbuilder/config/edit.html",
-			row=row,
-			input_type=input_type,
-			is_appearance=is_appearance,
-			title=_(f"Edit — {row.label or key}"),
-		)
+		return redirect(url_for("AppConfigView.category", name=category_name))
 
 	# ------------------------------------------------------------------
-	# Appearance live preview (GET only, returns partial JSON payload
-	# suitable for an AJAX refresh of the preview panel)
+	# Reset to defaults — GET shows confirm page, POST executes
 	# ------------------------------------------------------------------
 
-	@expose("/preview", methods=("GET",))
+	@expose("/reset", methods=("GET", "POST"))
 	@has_access
-	def preview(self) -> Any:
-		"""
-		Renders a self-contained preview panel showing the current
-		appearance settings applied to a dummy Bootstrap 3 card.
-		"""
-		session = self._db_session()
-		mgr = AppConfigManager(session)
-		appearance = mgr.get_category(_APPEARANCE_CATEGORY)
+	def reset(self) -> Any:
+		"""GET: render confirmation page.  POST: reset all to built-in defaults."""
+		if request.method == "POST":
+			session = self.appbuilder.get_session
+			mgr = AppConfigManager(session)
+			try:
+				mgr.reset_to_defaults()
+				flash(_("Configuration reset to defaults."), "success")
+			except Exception as exc:
+				log.exception("Failed to reset config to defaults")
+				flash(str(exc), "danger")
+			return redirect(url_for("AppConfigView.index"))
 
+		# GET — confirm page
 		return self.render_template(
-			"appbuilder/config/preview.html",
-			appearance=appearance,
-			title=_("Appearance Preview"),
+			"appbuilder/config/reset_confirm.html",
+			title=_("Reset Configuration"),
+			defaults=BUILT_IN_DEFAULTS,
 		)
-
-	# ------------------------------------------------------------------
-	# Internal helpers
-	# ------------------------------------------------------------------
-
-	def _db_session(self) -> Any:
-		"""Retrieve the SQLAlchemy session from the appbuilder context."""
-		return self.appbuilder.get_session
