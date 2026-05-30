@@ -22,7 +22,7 @@
     "geonames_country": "Country-level metadata including ISO codes, FIPS, population, area, capital, languages, and continent. One row per country/territory.",
     "geonames_admin1": "First-level administrative divisions (states, provinces, regions). 3,900+ entries worldwide. Hierarchical code matches geonames_feature.admin1_code.",
     "geonames_admin2": "Second-level administrative divisions (counties, districts, departments). 45,000+ entries. Hierarchical code matches geonames_feature.admin2_code.",
-    "geonames_postal_code": "15M+ postal codes with geographic coordinates. Essential for postcode-to-location lookups and delivery zone queries.",
+    "geonames_postal_code": "15M+ postal codes with geographic coordinates. Essential for postcode-to-location lookups and delivery zone queries. Add unique index: CREATE UNIQUE INDEX ON geonames_postal_code(country_code, postal_code, place_name) for idempotent loads.",
     "geonames_feature_code": "Reference table of all 645 GeoNames feature class/code combinations (e.g. P/PPL = populated place, T/MT = mountain).",
     "geonames_timezone": "Timezone definitions referenced by geographic features. Includes UTC offsets for current time and DST calculations."
   },
