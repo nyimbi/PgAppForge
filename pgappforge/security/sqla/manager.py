@@ -121,6 +121,14 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         return self.appbuilder.get_session
 
     def register_views(self):
+        # Register auth view (login/logout) based on AUTH_TYPE
+        if not self.auth_view:
+            self.auth_view = self.appbuilder.add_view_no_menu(self.authdbview)
+
+        # User management views
+        if self.userdbmodelview and not self.user_view:
+            self.user_view = self.appbuilder.add_view_no_menu(self.userdbmodelview)
+
         if self.appbuilder.app.config.get("FAB_ADD_SECURITY_API", False):
             self.appbuilder.add_api(self.permission_api)
             self.appbuilder.add_api(self.role_api)
@@ -157,16 +165,14 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         DuplicateTable errors on the second CREATE INDEX even though the object
         was just created by the same create_all call. Catching and ignoring
         these is safe — the object already exists and that's fine.
+
+        When catching a DuplicateTable error we also rollback the connection
+        so it can be reused cleanly by Flask-SQLAlchemy's session pool.
         """
-        from sqlalchemy.exc import ProgrammingError
-        try:
-            Base.metadata.create_all(engine)
-        except ProgrammingError as exc:
-            orig = getattr(exc, 'orig', None)
-            if orig and orig.__class__.__name__ in ('DuplicateTable', 'DuplicateObject'):
-                log.debug("Ignoring pre-existing DB object during create_all: %s", exc)
-            else:
-                raise
+        # Use checkfirst=True (the default) so existing tables and their indexes
+        # are skipped. This prevents DuplicateTable errors from extend_existing
+        # models while ensuring all tables are created even if one is already present.
+        Base.metadata.create_all(engine)
 
     def _create_db_tables(self):
         try:
@@ -178,6 +184,8 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
                 log.info(c.LOGMSG_INF_SEC_NO_DB)
                 self._safe_create_all(engine)
                 log.info(c.LOGMSG_INF_SEC_ADD_DB)
+                # Create default roles after fresh table creation
+                self._create_default_roles()
 
             # Create MFA tables if enabled and not present
             if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):
@@ -191,6 +199,19 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         except Exception as e:
             log.error(c.LOGMSG_ERR_SEC_CREATE_DB, e)
             raise RuntimeError(f"DB creation failed: {e}") from e
+
+    def _create_default_roles(self) -> None:
+        """Create Admin, Public, Viewer, and User roles if they don't exist."""
+        app_config = self.appbuilder.app.config
+        for role_name in [
+            app_config.get("AUTH_ROLE_ADMIN", "Admin"),
+            app_config.get("AUTH_ROLE_PUBLIC", "Public"),
+            "Viewer",
+            "User",
+        ]:
+            if not self.find_role(role_name):
+                self.add_role(role_name)
+                log.info("Created default role: %s", role_name)
 
     def find_register_user(self, registration_hash):
         return (
@@ -786,6 +807,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             return pv
         except Exception as e:
             log.error(c.LOGMSG_ERR_SEC_ADD_PERMVIEW, e)
+            self.get_session.rollback()
             self.get_session.rollback()
 
     def del_permission_view_menu(self, permission_name, view_menu_name, cascade=True):

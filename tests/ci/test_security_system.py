@@ -437,6 +437,7 @@ class TestSecurityDecorators(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-decorators'
         
         self.db = SQLA(self.app)
@@ -553,6 +554,7 @@ class TestSecurityAuditing(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-auditing'
         
         self.db = SQLA(self.app)

@@ -106,6 +106,7 @@ class TestBaseViewFunctionality(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-views'
         
         self.db = SQLA(self.app)
@@ -168,7 +169,7 @@ class TestModelViewFunctionality(FABTestCase):
             # Create test model table
             ViewsTestModel.__table__.create(self.db.engine, checkfirst=True)
             self.db.create_all()
-            self.appbuilder.security_manager.create_db()
+            self.appbuilder.sm.create_db()
             
             # Create test ModelView
             self.model_view = TestModelView()
@@ -260,6 +261,7 @@ class TestSimpleFormViewFunctionality(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-simpleform'
         self.app.config['WTF_CSRF_ENABLED'] = False
         
@@ -439,6 +441,7 @@ class TestViewPermissions(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-permissions'
         
         self.db = SQLA(self.app)
@@ -537,6 +540,7 @@ class TestViewErrorHandling(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-errors'
         
         self.db = SQLA(self.app)
@@ -569,6 +573,7 @@ class TestViewCustomization(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-customization'
         
         self.db = SQLA(self.app)

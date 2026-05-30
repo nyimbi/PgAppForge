@@ -242,12 +242,13 @@ class AppBuilder:
         self._add_global_static()
         self._add_global_filters()
         app.before_request(self.sm.before_request)
-        self._add_admin_views()
-        self._add_addon_views()
-        if self.app:
-            self._add_menu_permissions()
-        else:
-            self.post_init()
+        with app.app_context():
+            self._add_admin_views()
+            self._add_addon_views()
+            if self.app:
+                self._add_menu_permissions()
+            else:
+                self.post_init()
         self._init_extension(app)
 
     def _init_extension(self, app: Flask) -> None:
@@ -889,6 +890,12 @@ class AppBuilder:
             except Exception as e:
                 log.exception(e)
                 log.error(LOGMSG_ERR_FAB_ADD_PERMISSION_VIEW, e)
+                # Rollback the session so subsequent permission registrations
+                # aren't blocked by an aborted transaction.
+                try:
+                    self.sm.get_session.rollback()
+                except Exception:
+                    pass
 
     def _add_permissions_menu(self, name: str, update_perms: bool = False) -> None:
         if self.update_perms or update_perms:
@@ -896,6 +903,10 @@ class AppBuilder:
                 self.sm.add_permissions_menu(name)
             except Exception as e:
                 log.exception(e)
+                try:
+                    self.sm.get_session.rollback()
+                except Exception:
+                    pass
                 log.error(LOGMSG_ERR_FAB_ADD_PERMISSION_MENU, e)
 
     def _add_menu_permissions(self, update_perms: bool = False) -> None:

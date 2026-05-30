@@ -386,6 +386,14 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         limiter.init_app(app)
         return limiter
 
+    def hash_password(self, password: str) -> str:
+        """Hash a plaintext password using werkzeug's PBKDF2-HMAC-SHA256."""
+        return generate_password_hash(password)
+
+    def check_password(self, password: str, hashed: str) -> bool:
+        """Verify a plaintext password against a stored hash."""
+        return check_password_hash(hashed, password)
+
     def add_limit_view(self, baseview) -> None:
         """Apply view-level rate limits defined on the view's ``limits`` attribute."""
         if not hasattr(self, "limiter") or self.limiter is None:

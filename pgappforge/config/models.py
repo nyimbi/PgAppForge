@@ -193,7 +193,6 @@ class AppConfig(Model):
 			postgresql_using="gin",
 			postgresql_ops={"key": "gin_trgm_ops"},
 		),
-		{"extend_existing": True},
 	)
 
 	id = Column(
@@ -203,7 +202,7 @@ class AppConfig(Model):
 	)
 	key = Column(String(128), unique=True, nullable=False, index=True)
 	value = Column(JSONB, nullable=False)
-	category = Column(String(64), nullable=False, default="general", index=True)
+	category = Column(String(64), nullable=False, default="general")
 	label = Column(String(256), nullable=True)
 	description = Column(Text, nullable=True)
 	is_sensitive = Column(Boolean, nullable=False, default=False)

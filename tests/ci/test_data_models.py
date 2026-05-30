@@ -226,7 +226,7 @@ class TestDataModelCreation(FABTestCase):
     def test_model_table_creation(self):
         """Test that model tables are created correctly"""
         with self.app.app_context():
-            tables = self.db.engine.table_names()
+            tables = self.__import__("sqlalchemy", fromlist=["inspect"]).inspect(db.engine).get_table_names()
             
             expected_tables = [
                 'test_articles', 'test_categories', 'test_authors',

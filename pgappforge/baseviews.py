@@ -893,7 +893,13 @@ class BaseCRUDView(BaseModelView):
         for attr_name in dir(self):
             func = getattr(self, attr_name)
             if hasattr(func, "_action"):
-                action = ActionItem(*func._action, func=func)
+                _a = func._action
+                # _action may be an ActionItem already or a tuple of ctor args
+                if isinstance(_a, ActionItem):
+                    action = _a
+                    action.func = func
+                else:
+                    action = ActionItem(*_a, func=func)
                 permission_name = action.name
                 # Infer previous if not declared
                 if self.method_permission_name.get(attr_name):

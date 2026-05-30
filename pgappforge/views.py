@@ -181,13 +181,13 @@ class PublicFormView(BaseFormView):
 
 
 class RestCRUDView(BaseCRUDView):
+    """Exposes REST methods (api_read, api_get, etc.) for CRUD operations on models.
+
+    Will eventually be deprecated in favour of ModelRestApi.
     """
-    This class view exposes REST method for CRUD operations on you models
 
     disable_api_route_methods: bool = False
-    Flag to disable this class exposed methods, note that this class
-    will eventually get deprecated
-    """
+    """Set True to remove the legacy REST route methods from this view."""
 
     def __init__(self, **kwargs):
         if self.disable_api_route_methods:

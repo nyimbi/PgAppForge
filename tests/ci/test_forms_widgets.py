@@ -528,6 +528,7 @@ class TestFormWidgets(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-widgets'
         
         self.db = SQLA(self.app)
@@ -594,6 +595,7 @@ class TestFormWidgetRendering(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-rendering'
         
         self.db = SQLA(self.app)
@@ -691,6 +693,7 @@ class TestFormCustomization(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-customization'
         
         self.db = SQLA(self.app)
@@ -770,6 +773,7 @@ class TestViewWidgets(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-view-widgets'
         
         self.db = SQLA(self.app)
