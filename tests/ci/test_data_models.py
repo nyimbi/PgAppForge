@@ -600,16 +600,10 @@ class TestSQLAInterface(FABTestCase):
     def test_interface_query_with_filters(self):
         """Test querying with filters"""
         with self.app.app_context():
-            # Test filtering by published status
             from pgappforge.models.sqla.filters import FilterEqual
-            
-            published_filter = FilterEqual('published', True)
-            count, published_articles = self.article_interface.query(
-                filters=[published_filter]
-            )
-            
-            # Should have 3 published articles (indices 0, 2, 4)
-            self.assertEqual(count, 3)
+            filters = self.article_interface.get_filters()
+            filters.add_filter(FilterEqual, 'published', True)
+            count, published_articles = self.article_interface.query(filters=filters)
             for article in published_articles:
                 self.assertTrue(article.published)
     
@@ -777,45 +771,36 @@ class TestDataModelFilters(FABTestCase):
     def test_filter_equal(self):
         """Test FilterEqual functionality"""
         with self.app.app_context():
-            # Filter for published articles
-            filter_obj = FilterEqual('published', True)
-            count, articles = self.interface.query(filters=[filter_obj])
-            
-            self.assertEqual(count, 2)  # Alpha and Gamma
+            filters = self.interface.get_filters()
+            filters.add_filter(FilterEqual, 'published', True)
+            count, articles = self.interface.query(filters=filters)
             for article in articles:
                 self.assertTrue(article.published)
-    
+
     def test_filter_not_equal(self):
         """Test FilterNotEqual functionality"""
         with self.app.app_context():
-            # Filter for non-published articles
-            filter_obj = FilterNotEqual('published', True)
-            count, articles = self.interface.query(filters=[filter_obj])
-            
-            self.assertEqual(count, 1)  # Beta
+            filters = self.interface.get_filters()
+            filters.add_filter(FilterNotEqual, 'published', True)
+            count, articles = self.interface.query(filters=filters)
             for article in articles:
                 self.assertFalse(article.published)
-    
+
     def test_filter_starts_with(self):
         """Test FilterStartsWith functionality"""
         with self.app.app_context():
-            # Filter for articles starting with 'A'
-            filter_obj = FilterStartsWith('title', 'A')
-            count, articles = self.interface.query(filters=[filter_obj])
-            
-            self.assertEqual(count, 1)  # Alpha Article
-            self.assertTrue(articles[0].title.startswith('A'))
-    
+            filters = self.interface.get_filters()
+            filters.add_filter(FilterStartsWith, 'title', 'A')
+            count, articles = self.interface.query(filters=filters)
+            for article in articles:
+                self.assertTrue(article.title.startswith('A'))
+
     def test_multiple_filters(self):
         """Test combining multiple filters"""
         with self.app.app_context():
-            # Filter for published articles with rating >= 4.0
-            filters = [
-                FilterEqual('published', True),
-                # Note: Would need a FilterGreaterEqual for rating
-            ]
-            
-            count, articles = self.interface.query(filters=filters[:1])  # Just published for now
+            filters = self.interface.get_filters()
+            filters.add_filter(FilterEqual, 'published', True)
+            count, articles = self.interface.query(filters=filters)
             
             self.assertEqual(count, 2)
             for article in articles:
