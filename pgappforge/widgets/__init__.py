@@ -251,3 +251,51 @@ def get_widget_compatibility_info():
         'modular_widgets_available': MODULAR_WIDGETS_AVAILABLE,
         'total_widgets': len(__all__)
     }
+
+# ─── New widget modules ────────────────────────────────────────────────────────
+try:
+    from .display_widgets import (
+        StatCardWidget, SparklineWidget, HeatmapCalendarWidget, EmbeddedChartWidget,
+    )
+except ImportError:
+    pass
+
+try:
+    from .action_widgets import (
+        ApprovalButtonWidget, BulkActionWidget, DiffViewerWidget, TimelineWidget,
+    )
+except ImportError:
+    pass
+
+try:
+    from .advanced_input_widgets import (
+        RecurringScheduleWidget, MentionWidget, CurrencyConverterWidget,
+        PhoneDialWidget, DocumentPreviewWidget, ConversationWidget,
+    )
+except ImportError:
+    pass
+
+try:
+    from .data_widgets import (
+        DataGridWidget, DataImportWidget, EmbeddedMapWidget, RelationshipGraphWidget,
+    )
+except ImportError:
+    pass
+
+try:
+    from .dev_widgets import SQLEditorWidget, APITesterWidget
+except ImportError:
+    pass
+
+try:
+    from .project_widgets import (
+        GanttWidget, KanbanWidget, ResourceCalendarWidget,
+        SprintBurndownWidget, MilestoneTimelineWidget, WBSWidget, PERTWidget,
+    )
+except ImportError:
+    pass
+
+try:
+    from .markdown_widget import MarkdownEditorWidget, MarkdownDisplayWidget, MarkdownPreviewWidget
+except ImportError:
+    pass

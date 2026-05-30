@@ -285,11 +285,10 @@ class HeatmapCalendarWidget:
 			return colors[idx]
 
 		# Generate the 52×7 grid
-		import datetime as dt
-		year_start = dt.date(self.year, 1, 1)
+		year_start = date(self.year, 1, 1)
 		# Pad to Monday start
 		start_dow = year_start.weekday()  # 0=Mon
-		year_end = dt.date(self.year, 12, 31)
+		year_end = date(self.year, 12, 31)
 
 		cells_by_week: list[list[tuple[str, float]]] = []
 		current: list[tuple[str, float]] = []
@@ -305,7 +304,7 @@ class HeatmapCalendarWidget:
 			if len(current) == 7:
 				cells_by_week.append(current)
 				current = []
-			cur += dt.timedelta(days=1)
+			cur += timedelta(days=1)
 
 		if current:
 			while len(current) < 7:
