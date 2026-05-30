@@ -9,23 +9,9 @@ from .security.decorators import permission_name, protect
 
 
 class MenuItem(object):
-    """Represents a menu item in the Flask-AppBuilder navigation menu."""
-    
     def __init__(
         self, name, href="", icon="", label="", childs=None, baseview=None, cond=None
     ):
-        """
-        Initialize a menu item.
-        
-        Args:
-            name: Name or title of this menu item
-            href: URL link for the menu item
-            icon: CSS class for the menu icon
-            label: Display label for the menu item
-            childs: List of child menu items
-            baseview: Associated base view class
-            cond: Conditional function to determine if item should be shown
-        """
         self.name = name
         self.href = href
         self.icon = icon
@@ -34,33 +20,28 @@ class MenuItem(object):
         self.baseview = baseview
         self.cond = cond
 
-    def get_url(self):
-        """
-        Get the URL for this menu item.
-        
-        Returns:
-            URL string for the menu item
-        """
-        if not self.href:
-            if self.baseview:
-                return url_for(f"{self.baseview.endpoint}.{self.baseview.default_view}")
-        return self.href
-
     def should_render(self) -> bool:
-        """
-        Check if this menu item should be rendered.
-        
-        Returns:
-            True if menu item should be displayed, False otherwise
-        """
-        if self.cond and not self.cond():
-            return False
-        return True
+        return bool(self.cond()) if self.cond is not None else True
+
+    def get_url(self):
+        if not self.href:
+            if not self.baseview:
+                return ""
+            else:
+                return url_for(f"{self.baseview.endpoint}.{self.baseview.default_view}")
+        else:
+            try:
+                return url_for(self.href)
+            except Exception:
+                return self.href
+
+    def __repr__(self):
+        return self.name
 
     def get_list(self):
         """
         Get list of child menu items.
-        
+
         Returns:
             List of child MenuItem objects
         """
@@ -68,147 +49,203 @@ class MenuItem(object):
 
 
 class Menu(object):
-    """Manages the application's navigation menu structure."""
-    
-    def __init__(self, reverse: bool = True, extra_classes: str = ""):
-        """
-        Initialize the menu manager.
-        
-        Args:
-            reverse: Whether to reverse menu order
-            extra_classes: Additional CSS classes for menu styling
-        """
-        self.reverse = reverse
-        self.extra_classes = extra_classes
+    def __init__(self, reverse=True, extra_classes=""):
         self.menu = []
+        if reverse:
+            extra_classes = extra_classes + "navbar-inverse"
+        self.extra_classes = extra_classes
 
-    def get_data(self, menu):
-        """
-        Get menu data for rendering.
-        
-        Args:
-            menu: Menu items to process
-            
-        Returns:
-            Processed menu data
-        """
-        return menu
+    @property
+    def reverse(self):
+        return "navbar-inverse" in self.extra_classes
 
     def get_list(self):
-        """
-        Get the main menu list.
-        
-        Returns:
-            List of menu items
-        """
         return self.menu
 
-    def get_flat_name_list(self, menu, result):
-        """
-        Get flattened list of menu names.
-        
-        Args:
-            menu: Menu structure to flatten
-            result: List to append results to
-            
-        Returns:
-            Flattened list of menu names
-        """
+    def get_flat_name_list(self, menu: "Menu" = None, result: List = None) -> List:
+        menu = menu or self.menu
+        result = result or []
         for item in menu:
             result.append(item.name)
             if item.childs:
-                self.get_flat_name_list(item.childs, result)
+                result.extend(self.get_flat_name_list(menu=item.childs, result=result))
         return result
 
+    def get_data(self, menu=None):
+        menu = menu or self.menu
+        ret_list = []
+
+        allowed_menus = current_app.appbuilder.sm.get_user_menu_access(
+            self.get_flat_name_list()
+        )
+
+        for i, item in enumerate(menu):
+            if not item.should_render():
+                continue
+
+            if item.name == "-" and not i == len(menu) - 1:
+                ret_list.append("-")
+            elif item.name not in allowed_menus:
+                continue
+            elif item.childs:
+                ret_list.append(
+                    {
+                        "name": item.name,
+                        "icon": item.icon,
+                        "label": __(str(item.label)),
+                        "childs": self.get_data(menu=item.childs),
+                    }
+                )
+            else:
+                ret_list.append(
+                    {
+                        "name": item.name,
+                        "icon": item.icon,
+                        "label": __(str(item.label)),
+                        "url": item.get_url(),
+                    }
+                )
+        return ret_list
+
+    def find(self, name, menu=None):
+        """
+        Finds a menu item by name and returns it.
+
+        :param name:
+            The menu item name.
+        """
+        menu = menu or self.menu
+        for i in menu:
+            if i.name == name:
+                return i
+            else:
+                if i.childs:
+                    ret_item = self.find(name, menu=i.childs)
+                    if ret_item:
+                        return ret_item
+
     def add_category(self, category, icon="", label="", parent_category=""):
-        """
-        Add a menu category.
-        
-        Args:
-            category: Category name
-            icon: Category icon CSS class
-            label: Category display label
-            parent_category: Parent category name
-        """
-        menu_item = MenuItem(
-            name=category,
-            icon=icon,
-            label=label or category
-        )
-        
-        if parent_category:
-            parent = self._find_menu_item(parent_category)
-            if parent:
-                parent.childs.append(menu_item)
+        label = label or category
+        if parent_category == "":
+            self.menu.append(MenuItem(name=category, icon=icon, label=label))
         else:
-            self.menu.append(menu_item)
+            self.find(category).childs.append(
+                MenuItem(name=category, icon=icon, label=label)
+            )
 
-    def add_link(self, name, href, icon="", label="", category="", category_icon="", 
-                 category_label="", baseview=None, cond=None):
-        """
-        Add a menu link.
-        
-        Args:
-            name: Link name
-            href: Link URL
-            icon: Link icon CSS class
-            label: Link display label
-            category: Category to add link to
-            category_icon: Category icon if category doesn't exist
-            category_label: Category label if category doesn't exist
-            baseview: Associated base view
-            cond: Conditional function for rendering
-        """
-        menu_item = MenuItem(
-            name=name,
-            href=href,
-            icon=icon,
-            label=label or name,
-            baseview=baseview,
-            cond=cond
-        )
-        
-        if category:
-            category_item = self._find_menu_item(category)
-            if not category_item:
-                self.add_category(category, category_icon, category_label)
-                category_item = self._find_menu_item(category)
-            
-            if category_item:
-                category_item.childs.append(menu_item)
+    def add_link(
+        self,
+        name,
+        href="",
+        icon="",
+        label="",
+        category="",
+        category_icon="",
+        category_label="",
+        baseview=None,
+        cond=None,
+    ):
+        label = label or name
+        category_label = category_label or category
+        if category == "":
+            self.menu.append(
+                MenuItem(
+                    name=name,
+                    href=href,
+                    icon=icon,
+                    label=label,
+                    baseview=baseview,
+                    cond=cond,
+                )
+            )
         else:
-            self.menu.append(menu_item)
+            menu_item = self.find(category)
+            if menu_item:
+                new_menu_item = MenuItem(
+                    name=name,
+                    href=href,
+                    icon=icon,
+                    label=label,
+                    baseview=baseview,
+                    cond=cond,
+                )
+                menu_item.childs.append(new_menu_item)
+            else:
+                self.add_category(
+                    category=category, icon=category_icon, label=category_label
+                )
+                new_menu_item = MenuItem(
+                    name=name,
+                    href=href,
+                    icon=icon,
+                    label=label,
+                    baseview=baseview,
+                    cond=cond,
+                )
+                self.find(category).childs.append(new_menu_item)
 
-    def _find_menu_item(self, name):
-        """
-        Find a menu item by name.
-        
-        Args:
-            name: Name of menu item to find
-            
-        Returns:
-            MenuItem instance or None if not found
-        """
-        for item in self.menu:
-            if item.name == name:
-                return item
-        return None
+    def add_separator(self, category="", cond=None):
+        menu_item = self.find(category)
+        if menu_item:
+            menu_item.childs.append(MenuItem("-", cond=cond))
+        else:
+            raise Exception(
+                "Menu separator does not have correct category {}".format(category)
+            )
 
 
 class MenuApi(BaseApi):
-    """RESTful API endpoints for menu operations."""
-    
     resource_name = "menu"
+    openapi_spec_tag = "Menu"
 
-    @expose('/menu/', methods=['GET'])
-    @protect()
-    @permission_name('read')
-    def get_menu(self):
+    @expose("/", methods=["GET"])
+    @protect(allow_browser_login=True)
+    @permission_name("get")
+    def get_menu_data(self):
+        """An endpoint for retreiving the menu.
+        ---
+        get:
+          description: >-
+            Get the menu data structure.
+            Returns a forest like structure with the menu the user has access to
+          responses:
+            200:
+              description: Get menu data
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      result:
+                        description: Menu items in a forest like data structure
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              description: >-
+                                The internal menu item name, maps to permission_name
+                              type: string
+                            label:
+                              description: Pretty name for the menu item
+                              type: string
+                            icon:
+                              description: Icon name to show for this menu item
+                              type: string
+                            url:
+                              description: The URL for the menu item
+                              type: string
+                            childs:
+                              type: array
+                              items:
+                                type: object
+            401:
+              $ref: '#/components/responses/401'
         """
-        Get the application menu structure.
-        
-        Returns:
-            JSON representation of the menu
-        """
-        menu = current_app.appbuilder.menu
-        return self.response(200, menu_data=menu.get_data(menu.get_list()))
+        return self.response(200, result=current_app.appbuilder.menu.get_data())
+
+
+class MenuApiManager(BaseManager):
+    def register_views(self):
+        if current_app.config.get("FAB_ADD_MENU_API", True):
+            self.appbuilder.add_api(MenuApi)

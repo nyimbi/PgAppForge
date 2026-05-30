@@ -262,12 +262,12 @@ class FullAppGenerator:
             self.generated_files['app/models/validators.py'] = models['validators.py']
 
     def _generate_views(self):
-        """Generate view files — writes directly via BeautifulViewGenerator."""
-        import os
-        views_dir = self.output_dir / 'views'
-        views_dir.mkdir(parents=True, exist_ok=True)
+        """Generate view files into app/ subdirectory via BeautifulViewGenerator."""
+        app_dir = self.output_dir / 'app'
+        app_dir.mkdir(parents=True, exist_ok=True)
+        (app_dir / 'views').mkdir(parents=True, exist_ok=True)
         try:
-            self.view_generator.generate_all_views(str(self.output_dir))
+            self.view_generator.generate_all_views(str(app_dir))
         except Exception as e:
             logger.warning(f"View generation partial failure: {e}")
 
@@ -1724,12 +1724,6 @@ self.addEventListener('fetch', event => {
         }, indent=2)
 
     # ─── Templates ───────────────────────────────────────────────────────────
-
-    def _generate_templates(self):
-        """Generate HTML template files."""
-        self.generated_files['app/templates/base.html'] = self._generate_base_template()
-        self.generated_files['app/templates/dashboard.html'] = self._generate_dashboard_template()
-        self.generated_files['app/templates/login.html'] = self._generate_login_template()
 
     def _generate_base_template(self) -> str:
         return f'''<!DOCTYPE html>

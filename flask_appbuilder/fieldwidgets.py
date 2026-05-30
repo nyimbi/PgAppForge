@@ -82,20 +82,13 @@ class BS3TextFieldWidget(widgets.TextInput):
 
 class BS3TextAreaFieldWidget(widgets.TextArea):
     """Bootstrap 3 textarea widget with form-control styling."""
-    
+
+    def __init__(self, rows=3):
+        self.rows = rows
+
     def __call__(self, field, **kwargs):
-        """
-        Render the textarea widget with Bootstrap 3 styling.
-        
-        Args:
-            field: The form field to render
-            **kwargs: Additional HTML attributes
-            
-        Returns:
-            Rendered HTML markup for the textarea field
-        """
         kwargs["class"] = "form-control"
-        kwargs["rows"] = 3
+        kwargs["rows"] = self.rows
         if field.label:
             kwargs["placeholder"] = field.label.text
         return super(BS3TextAreaFieldWidget, self).__call__(field, **kwargs)
@@ -119,6 +112,23 @@ class BS3PasswordFieldWidget(widgets.PasswordInput):
         if field.label:
             kwargs["placeholder"] = field.label.text
         return super(BS3PasswordFieldWidget, self).__call__(field, **kwargs)
+
+
+class BS3SelectFieldWidget(widgets.Select):
+    """Bootstrap 3 select field widget with form-control styling."""
+
+    def __call__(self, field, **kwargs):
+        kwargs["class"] = "form-control"
+        return super(BS3SelectFieldWidget, self).__call__(field, **kwargs)
+
+
+class BS3SelectMultipleFieldWidget(widgets.Select):
+    """Bootstrap 3 multiple-select field widget with form-control styling."""
+
+    def __call__(self, field, **kwargs):
+        kwargs["class"] = "form-control"
+        kwargs["multiple"] = True
+        return super(BS3SelectMultipleFieldWidget, self).__call__(field, **kwargs)
 
 
 class Select2AJAXWidget:
