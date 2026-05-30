@@ -2,8 +2,14 @@
 PgForge Configuration Package
 
 Configuration classes and utilities for PgForge components.
+
+Runtime application config (database-backed key/value store):
+
+    from pgappforge.config import AppConfig, AppConfigManager, AppConfigView, BUILT_IN_DEFAULTS
 """
 
+from .models import AppConfig, AppConfigManager, BUILT_IN_DEFAULTS
+from .views import AppConfigView
 from .wizard import (
     WizardConfig,
     WizardUIConfig, 
@@ -24,6 +30,12 @@ from .wizard import (
 )
 
 __all__ = [
+    # Runtime app config
+    'AppConfig',
+    'AppConfigManager',
+    'AppConfigView',
+    'BUILT_IN_DEFAULTS',
+    # Wizard config
     'WizardConfig',
     'WizardUIConfig',
     'WizardBehaviorConfig', 
