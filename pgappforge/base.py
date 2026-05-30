@@ -354,8 +354,10 @@ class AppBuilder:
         self.get_app.register_blueprint(bp)
 
     def _add_admin_views(self) -> None:
-        """
-        Registers indexview, utilview (back function), babel views and Security views.
+        """Register the core framework views: IndexView, UtilView, Babel, Security.
+
+        Called during init_app inside an app_context so permission registration
+        has access to the database session.
         """
         if self.indexview:
             self._indexview = self.add_view_no_menu(self.indexview)
@@ -433,7 +435,11 @@ class AppBuilder:
         self._process_plugins()
 
     def _process_legacy_addons(self) -> None:
-        """Process legacy ADDON_MANAGERS for backward compatibility."""
+        """Process legacy ADDON_MANAGERS config for backward compatibility.
+
+        Iterates the ADDON_MANAGERS list, dynamically imports each class,
+        instantiates it, and calls register_views/pre_process/post_process.
+        """
         for addon in self._addon_managers:
             addon_class_ = dynamic_class_import(addon)
             addon_class = cast(Type["BaseManager"], addon_class_)
@@ -469,7 +475,11 @@ class AppBuilder:
                     log.error(LOGMSG_ERR_FAB_ADDON_PROCESS, addon, e)
 
     def _process_plugins(self) -> None:
-        """Process new plugin system configurations."""
+        """Process the new plugin system configurations.
+
+        Loads plugins registered via entry_points or FAB_PLUGINS config,
+        wires them into the HookRegistry, and calls each plugin's setup().
+        """
         if not self.plugin_manager:
             return
 

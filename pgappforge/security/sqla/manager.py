@@ -184,8 +184,8 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
                 log.info(c.LOGMSG_INF_SEC_NO_DB)
                 self._safe_create_all(engine)
                 log.info(c.LOGMSG_INF_SEC_ADD_DB)
-                # Create default roles after fresh table creation
-                self._create_default_roles()
+            # Always ensure default roles exist (handles TRUNCATE in tests)
+            self._create_default_roles()
 
             # Create MFA tables if enabled and not present
             if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):

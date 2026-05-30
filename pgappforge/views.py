@@ -29,8 +29,10 @@ log = logging.getLogger(__name__)
 
 
 class IndexView(BaseView):
-    """
-    A simple view that implements the index for the site
+    """The default landing page view registered at route ``/``.
+
+    Override ``index_template`` to use a custom Jinja2 template, or subclass
+    this view and pass it to AppBuilder as ``indexview``.
     """
 
     route_base = ""
@@ -44,9 +46,10 @@ class IndexView(BaseView):
 
 
 class UtilView(BaseView):
-    """
-    A simple view that implements special util routes.
-    At the moment it only supports the back special endpoint.
+    """Utility view that provides the ``back`` endpoint used by the breadcrumb navigation.
+
+    Mounted at ``/util/`` by default. The ``back`` endpoint updates the redirect
+    history so the framework can navigate the user back to the previous page.
     """
 
     route_base = ""
@@ -1072,8 +1075,10 @@ class MultipleView(BaseView):
 
 
 class CompactCRUDMixin(BaseCRUDView):
-    """
-    Mix with ModelView to implement a list with add and edit on the same page.
+    """Mix with ModelView to display list, add, and edit forms on the same page.
+
+    Reduces page navigation by embedding the add/edit form inline with the list
+    view. Useful for small, frequently-edited reference tables.
     """
 
     @classmethod

@@ -387,12 +387,20 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         return limiter
 
     def before_request(self):
-        """Flask before_request hook — set g.user from the current authenticated user."""
+        """Flask before_request hook registered by AppBuilder.
+
+        Sets ``g.user`` from the Flask-Login ``current_user`` proxy so that
+        view code can access ``g.user`` without importing ``current_user``.
+        """
         from flask import g
         g.user = current_user
 
     def login_user(self, user, remember: bool = False) -> bool:
-        """Wrap Flask-Login's login_user and update g.user."""
+        """Log in a user via Flask-Login and update g.user.
+
+        Delegates to flask_login.login_user then refreshes the g.user proxy.
+        Returns True on success (same as flask_login.login_user).
+        """
         from flask import g
         from flask_login import login_user as _flask_login_user
         result = _flask_login_user(user, remember=remember)
