@@ -300,11 +300,11 @@ def create_app():
     }
     
     # Enable PostgreSQL-specific features
-    app.config['FAB_ENABLE_POSTGRESQL_EXTENSIONS'] = True
-    app.config['FAB_POSTGRESQL_WIDGETS_ENABLED'] = True
+    app.config['PGAF_ENABLE_POSTGRESQL_EXTENSIONS'] = True
+    app.config['PGAF_POSTGRESQL_WIDGETS_ENABLED'] = True
     
     # Optional: Configure extensions
-    app.config['FAB_POSTGRESQL_EXTENSIONS'] = [
+    app.config['PGAF_POSTGRESQL_EXTENSIONS'] = [
         'postgis',      # Spatial data support
         'vector',       # pgvector extension
         'ltree',        # Hierarchical data

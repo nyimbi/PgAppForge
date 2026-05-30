@@ -65,7 +65,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             # PgAppForge configuration
             'APP_NAME': 'Collaborative Test App',
             'APP_THEME': 'bootstrap3.css',
-            'FAB_UPDATE_PERMS': True,
+            'PGAF_UPDATE_PERMS': True,
         })
         
         # Initialize database

@@ -176,8 +176,8 @@ def _get_engine() -> BillingEngine:
 	"""Return (or lazily create) the BillingEngine stored on the app."""
 	app = current_app._get_current_object()
 	if not hasattr(app, "_billing_engine"):
-		key = app.config.get("FAB_BILLING_STRIPE_SECRET_KEY")
-		currency = app.config.get("FAB_BILLING_CURRENCY", "USD")
+		key = app.config.get("PGAF_BILLING_STRIPE_SECRET_KEY")
+		currency = app.config.get("PGAF_BILLING_CURRENCY", "USD")
 		app._billing_engine = BillingEngine(
 			stripe_secret_key=key,
 			default_currency=currency,
@@ -1102,10 +1102,10 @@ class StripeWebhookView(BaseView):
 			log.warning("StripeWebhookView: stripe package not installed")
 			return Response("stripe not installed", status=503)
 
-		secret = current_app.config.get("FAB_BILLING_STRIPE_WEBHOOK_SECRET")
+		secret = current_app.config.get("PGAF_BILLING_STRIPE_WEBHOOK_SECRET")
 		if not secret:
 			log.error(
-				"StripeWebhookView: FAB_BILLING_STRIPE_WEBHOOK_SECRET not configured"
+				"StripeWebhookView: PGAF_BILLING_STRIPE_WEBHOOK_SECRET not configured"
 			)
 			return Response("webhook secret not configured", status=400)
 

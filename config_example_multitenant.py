@@ -46,8 +46,8 @@ STRIPE_PROFESSIONAL_PRICE_ID = os.environ.get('STRIPE_PROFESSIONAL_PRICE_ID', 'p
 STRIPE_ENTERPRISE_PRICE_ID = os.environ.get('STRIPE_ENTERPRISE_PRICE_ID', 'price_enterprise_monthly')
 
 # Configuration encryption settings (IMPORTANT for production security)
-FAB_CONFIG_MASTER_KEY = os.environ.get('FAB_CONFIG_MASTER_KEY')  # Required for sensitive config encryption
-FAB_CONFIG_SALT = os.environ.get('FAB_CONFIG_SALT', 'fab-tenant-config-salt-v1')  # Optional custom salt
+PGAF_CONFIG_MASTER_KEY = os.environ.get('PGAF_CONFIG_MASTER_KEY')  # Required for sensitive config encryption
+PGAF_CONFIG_SALT = os.environ.get('PGAF_CONFIG_SALT', 'fab-tenant-config-salt-v1')  # Optional custom salt
 
 # Dynamic plan configuration (optional - overrides defaults)
 TENANT_PLAN_CONFIGS = {

@@ -67,7 +67,7 @@ class OpenApi(BaseApi):
     @staticmethod
     def _create_api_spec(version):
         servers = current_app.config.get(
-            "FAB_OPENAPI_SERVERS", [{"url": request.host_url}]
+            "PGAF_OPENAPI_SERVERS", [{"url": request.host_url}]
         )
         return APISpec(
             title=current_app.appbuilder.app_name,
@@ -89,7 +89,7 @@ class SwaggerView(BaseView):
     def show(self, version):
         return self.render_template(
             self.appbuilder.app.config.get(
-                "FAB_API_SWAGGER_TEMPLATE", "appbuilder/swagger/swagger.html"
+                "PGAF_API_SWAGGER_TEMPLATE", "appbuilder/swagger/swagger.html"
             ),
             openapi_uri=self.openapi_uri.format(version),
         )
@@ -97,8 +97,8 @@ class SwaggerView(BaseView):
 
 class OpenApiManager(BaseManager):
     def register_views(self):
-        if not self.appbuilder.app.config.get("FAB_ADD_OPENAPI_VIEWS", True):
+        if not self.appbuilder.app.config.get("PGAF_ADD_OPENAPI_VIEWS", True):
             return
-        if self.appbuilder.get_app.config.get("FAB_API_SWAGGER_UI", False):
+        if self.appbuilder.get_app.config.get("PGAF_API_SWAGGER_UI", False):
             self.appbuilder.add_api(OpenApi)
             self.appbuilder.add_view_no_menu(SwaggerView)

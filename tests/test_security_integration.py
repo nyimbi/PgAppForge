@@ -100,7 +100,7 @@ class TestSecurityIntegration:
         """Test plugin security validation integration."""
         with self.app.app_context():
             # Configure strict plugin security
-            self.app.config['FAB_PLUGIN_SECURITY_STRICT'] = True
+            self.app.config['PGAF_PLUGIN_SECURITY_STRICT'] = True
             appbuilder = AppBuilder(self.app)
 
             # Test plugin registration with security validation
@@ -276,10 +276,10 @@ class TestSecurityIntegration:
         with self.app.app_context():
             # Enable all security features
             self.app.config.update({
-                'FAB_PLUGIN_SECURITY_STRICT': True,
+                'PGAF_PLUGIN_SECURITY_STRICT': True,
                 'SECURITY_HEADERS_ENABLED': True,
                 'RATE_LIMITING_ENABLED': True,
-                'FAB_UPDATE_PERMS': True
+                'PGAF_UPDATE_PERMS': True
             })
 
             # Mock external dependencies
@@ -363,7 +363,7 @@ class TestSecurityIntegration:
         """Test that security configurations are properly isolated."""
         with self.app.app_context():
             # Test plugin configuration isolation
-            self.app.config['FAB_PLUGINS'] = [
+            self.app.config['PGAF_PLUGINS'] = [
                 {
                     'name': 'test_plugin',
                     'module': 'fake.module',

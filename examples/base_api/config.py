@@ -22,7 +22,7 @@ BABEL_DEFAULT_LOCALE = "en"
 # ------------------------------
 # GLOBALS FOR APP Builder
 # ------------------------------
-FAB_API_SWAGGER_UI = True
+PGAF_API_SWAGGER_UI = True
 
 BABEL_DEFAULT_LOCALE = "en"
 BABEL_DEFAULT_FOLDER = "translations"

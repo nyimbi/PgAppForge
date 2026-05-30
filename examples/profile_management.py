@@ -59,7 +59,7 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # PgAppForge configuration
-    app.config['FAB_ROLES'] = {
+    app.config['PGAF_ROLES'] = {
         'Admin': [
             ['.*', 'can_add'],
             ['.*', 'can_edit'],

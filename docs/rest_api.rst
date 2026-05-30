@@ -244,7 +244,7 @@ validate your Rison arguments, this way you can implement a very strict API easi
 Finally to properly handle all possible exceptions use the ``safe`` decorator,
 that will catch all uncaught exceptions for you and return a proper error response.
 You can enable or disable stack trace response using the
-``FAB_API_SHOW_STACKTRACE`` configuration key::
+``PGAF_API_SHOW_STACKTRACE`` configuration key::
 
         from pgforge.api import BaseApi, expose, rison, safe
 
@@ -320,7 +320,7 @@ So our spec for a method that accepts two HTTP verbs::
         return self.response(201, message="Hello (POST)")
 
 
-To access Swagger UI you must enable ``FAB_API_SWAGGER_UI = True`` on your config file
+To access Swagger UI you must enable ``PGAF_API_SWAGGER_UI = True`` on your config file
 then goto ``http://localhost:8080/swagger/v1`` for OpenAPI **v1** definitions
 On Swagger UI our example API looks like:
 

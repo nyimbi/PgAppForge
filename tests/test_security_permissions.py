@@ -11,7 +11,7 @@ class SecurityPermissionsTestCase(FABTestCase):
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_security")
-        self.app.config["FAB_ADD_SECURITY_VIEWS"] = False
+        self.app.config["PGAF_ADD_SECURITY_VIEWS"] = False
 
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -26,7 +26,7 @@ class SecurityPermissionsTestCase(FABTestCase):
         self.appbuilder.sm.add_permission_role(self._db_role_1, self._pvm1)
         self.appbuilder.sm.add_permission_role(self._db_role_1, self._pvm2)
 
-        self._builtin_role = self.appbuilder.sm.find_role("FAB_ROLE1")
+        self._builtin_role = self.appbuilder.sm.find_role("PGAF_ROLE1")
         self._group_db_role = self.appbuilder.sm.add_group(
             "group_db_role",
             "group_db_role",
@@ -55,7 +55,7 @@ class SecurityPermissionsTestCase(FABTestCase):
             first_name="user01",
             last_name="user",
             email="user01@fab.org",
-            role_names=["FAB_ROLE1", "DB_ROLE1"],
+            role_names=["PGAF_ROLE1", "DB_ROLE1"],
         )
 
         self._user02 = self.create_user(
@@ -77,7 +77,7 @@ class SecurityPermissionsTestCase(FABTestCase):
             first_name="user03",
             last_name="user",
             email="user03@fab.org",
-            role_names=["FAB_ROLE2"],
+            role_names=["PGAF_ROLE2"],
         )
 
         self._user04 = self.create_user(
@@ -88,7 +88,7 @@ class SecurityPermissionsTestCase(FABTestCase):
             first_name="user04",
             last_name="user",
             email="user04@fab.org",
-            role_names=["FAB_ROLE1", "FAB_ROLE2"],
+            role_names=["PGAF_ROLE1", "PGAF_ROLE2"],
         )
 
         self._user_group_mix_roles = self.create_user(
@@ -301,7 +301,7 @@ class SecurityPermissionsTestCase(FABTestCase):
         """
         Security Permissions: Get role permissions builtin
         """
-        role = self.appbuilder.sm.find_role("FAB_ROLE1")
+        role = self.appbuilder.sm.find_role("PGAF_ROLE1")
         assert {
             ("can_list", "Model2View"),
             ("can_list", "Model1View"),
@@ -324,17 +324,17 @@ class SecurityPermissionsTestCase(FABTestCase):
 
     def test_get_user_roles_permissions_mixed_roles(self):
         assert {
-            "FAB_ROLE1": [("can_list", "Model1View"), ("can_list", "Model2View")],
+            "PGAF_ROLE1": [("can_list", "Model1View"), ("can_list", "Model2View")],
             "DB_ROLE1": [("can_show", "ModelDBView"), ("can_delete", "ModelDBView")],
         } == self.appbuilder.sm.get_user_roles_permissions(self._user01)
 
     def test_get_user_roles_permissions_one_builtin_roles(self):
         assert {
-            "FAB_ROLE2": [("can_list", "Model3View"), ("can_list", "Model4View")]
+            "PGAF_ROLE2": [("can_list", "Model3View"), ("can_list", "Model4View")]
         } == self.appbuilder.sm.get_user_roles_permissions(self._user03)
 
     def test_get_user_roles_permissions_mul_builtin_roles(self):
         assert {
-            "FAB_ROLE1": [("can_list", "Model1View"), ("can_list", "Model2View")],
-            "FAB_ROLE2": [("can_list", "Model3View"), ("can_list", "Model4View")],
+            "PGAF_ROLE1": [("can_list", "Model1View"), ("can_list", "Model2View")],
+            "PGAF_ROLE2": [("can_list", "Model3View"), ("can_list", "Model4View")],
         } == self.appbuilder.sm.get_user_roles_permissions(self._user04)

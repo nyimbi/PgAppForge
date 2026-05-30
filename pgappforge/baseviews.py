@@ -1422,7 +1422,7 @@ class BaseCRUDView(BaseModelView):
         Check is mutations on HTTP GET methods are allowed.
         Always called on a request
         """
-        if current_app.config.get("FAB_ALLOW_GET_UNSAFE_MUTATIONS", False):
+        if current_app.config.get("PGAF_ALLOW_GET_UNSAFE_MUTATIONS", False):
             return True
         return not (request.method == "GET" and current_app.extensions.get("csrf"))
 

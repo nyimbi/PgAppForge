@@ -416,7 +416,7 @@ sudo ufw allow 3000/tcp
 # Create security settings file
 cat > security_config.py << EOF
 # Security Manager Configuration
-FAB_SECURITY_MANAGER_CLASS = 'pgappforge.security.manager.SecurityManager'
+PGAF_SECURITY_MANAGER_CLASS = 'pgappforge.security.manager.SecurityManager'
 
 # Password complexity requirements
 AUTH_PASSWORD_COMPLEXITY_ENABLED = True

@@ -7,12 +7,12 @@ SQLALCHEMY_DATABASE_URI = (
     or "postgresql+psycopg2://pguser:pguserpassword@127.0.0.1:5432/app"
 )
 
-FAB_ADD_SECURITY_API = True
+PGAF_ADD_SECURITY_API = True
 SECRET_KEY = "thisismyscretkey"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 WTF_CSRF_ENABLED = False
-FAB_API_SWAGGER_UI = True
-FAB_ROLES = {
+PGAF_API_SWAGGER_UI = True
+PGAF_ROLES = {
     "ReadOnly": [
         [".*", "can_get"],
         [".*", "can_info"],

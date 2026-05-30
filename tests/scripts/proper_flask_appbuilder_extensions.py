@@ -190,10 +190,10 @@ class SearchManager(BaseManager, DatabaseMixin):
         """Initialize search configuration from Flask config."""
         config = self.appbuilder.get_app.config
         self.search_config = {
-            'default_limit': config.get('FAB_SEARCH_DEFAULT_LIMIT', 50),
-            'max_limit': config.get('FAB_SEARCH_MAX_LIMIT', 500),
-            'min_rank': config.get('FAB_SEARCH_MIN_RANK', 0.1),
-            'enable_full_text': config.get('FAB_SEARCH_ENABLE_FULL_TEXT', True),
+            'default_limit': config.get('PGAF_SEARCH_DEFAULT_LIMIT', 50),
+            'max_limit': config.get('PGAF_SEARCH_MAX_LIMIT', 500),
+            'min_rank': config.get('PGAF_SEARCH_MIN_RANK', 0.1),
+            'enable_full_text': config.get('PGAF_SEARCH_ENABLE_FULL_TEXT', True),
         }
         log.info(f"SearchManager initialized with config: {self.search_config}")
     
@@ -649,13 +649,13 @@ class GeocodingManager(BaseManager, DatabaseMixin):
         """Load geocoding configuration from Flask config."""
         config = self.appbuilder.get_app.config
         return {
-            'nominatim_url': config.get('FAB_NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
-            'nominatim_user_agent': config.get('FAB_NOMINATIM_USER_AGENT', 'PgAppForge-Geocoding/1.0'),
-            'mapquest_api_key': config.get('FAB_MAPQUEST_API_KEY'),
-            'google_api_key': config.get('FAB_GOOGLE_MAPS_API_KEY'),
-            'timeout': config.get('FAB_GEOCODING_TIMEOUT', 30),
-            'rate_limit': config.get('FAB_GEOCODING_RATE_LIMIT', 1.0),
-            'cache_ttl': config.get('FAB_GEOCODING_CACHE_TTL', 86400),  # 24 hours
+            'nominatim_url': config.get('PGAF_NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
+            'nominatim_user_agent': config.get('PGAF_NOMINATIM_USER_AGENT', 'PgAppForge-Geocoding/1.0'),
+            'mapquest_api_key': config.get('PGAF_MAPQUEST_API_KEY'),
+            'google_api_key': config.get('PGAF_GOOGLE_MAPS_API_KEY'),
+            'timeout': config.get('PGAF_GEOCODING_TIMEOUT', 30),
+            'rate_limit': config.get('PGAF_GEOCODING_RATE_LIMIT', 1.0),
+            'cache_ttl': config.get('PGAF_GEOCODING_CACHE_TTL', 86400),  # 24 hours
         }
     
     def _setup_providers(self):
@@ -916,7 +916,7 @@ class ApprovalWorkflowManager(BaseManager, DatabaseMixin):
     def _load_workflow_configs(self):
         """Load workflow configurations from Flask config."""
         config = self.appbuilder.get_app.config
-        self.workflow_configs = config.get('FAB_APPROVAL_WORKFLOWS', {
+        self.workflow_configs = config.get('PGAF_APPROVAL_WORKFLOWS', {
             # Default workflow configuration
             'default': {
                 'steps': [
@@ -2042,11 +2042,11 @@ class CommentManager(BaseManager, DatabaseMixin):
         """Load comment configuration from Flask config."""
         config = self.appbuilder.get_app.config
         return {
-            'enable_comments': config.get('FAB_COMMENTS_ENABLED', True),
-            'require_moderation': config.get('FAB_COMMENTS_REQUIRE_MODERATION', True),
-            'max_comment_length': config.get('FAB_COMMENTS_MAX_LENGTH', 2000),
-            'allow_anonymous': config.get('FAB_COMMENTS_ALLOW_ANONYMOUS', False),
-            'enable_threading': config.get('FAB_COMMENTS_ENABLE_THREADING', True),
+            'enable_comments': config.get('PGAF_COMMENTS_ENABLED', True),
+            'require_moderation': config.get('PGAF_COMMENTS_REQUIRE_MODERATION', True),
+            'max_comment_length': config.get('PGAF_COMMENTS_MAX_LENGTH', 2000),
+            'allow_anonymous': config.get('PGAF_COMMENTS_ALLOW_ANONYMOUS', False),
+            'enable_threading': config.get('PGAF_COMMENTS_ENABLE_THREADING', True),
         }
     
     def _setup_comment_system(self):
@@ -2478,17 +2478,17 @@ class SecureConfig:
     SECRET_KEY = 'your-secret-key-here-minimum-20-characters'
     
     # Search configuration with security
-    FAB_SEARCH_DEFAULT_LIMIT = 50
-    FAB_SEARCH_MAX_LIMIT = 500  # Prevent resource exhaustion
-    FAB_SEARCH_ENABLE_FULL_TEXT = True
+    PGAF_SEARCH_DEFAULT_LIMIT = 50
+    PGAF_SEARCH_MAX_LIMIT = 500  # Prevent resource exhaustion
+    PGAF_SEARCH_ENABLE_FULL_TEXT = True
     
     # Geocoding configuration  
-    FAB_MAPQUEST_API_KEY = "your_mapquest_key"
-    FAB_GOOGLE_MAPS_API_KEY = "your_google_key"
-    FAB_GEOCODING_TIMEOUT = 30  # Prevent hanging requests
+    PGAF_MAPQUEST_API_KEY = "your_mapquest_key"
+    PGAF_GOOGLE_MAPS_API_KEY = "your_google_key"
+    PGAF_GEOCODING_TIMEOUT = 30  # Prevent hanging requests
     
     # SECURE Approval workflow configuration
-    FAB_APPROVAL_WORKFLOWS = {
+    PGAF_APPROVAL_WORKFLOWS = {
         'document_approval': {
             'steps': [
                 {'name': 'manager_review', 'required_role': 'Manager', 'required_approvals': 1},
@@ -2501,10 +2501,10 @@ class SecureConfig:
     }
     
     # Comment system configuration with security
-    FAB_COMMENTS_ENABLED = True
-    FAB_COMMENTS_REQUIRE_MODERATION = True
-    FAB_COMMENTS_MAX_LENGTH = 2000  # Prevent abuse
-    FAB_COMMENTS_ALLOW_ANONYMOUS = False  # Require authentication
+    PGAF_COMMENTS_ENABLED = True
+    PGAF_COMMENTS_REQUIRE_MODERATION = True
+    PGAF_COMMENTS_MAX_LENGTH = 2000  # Prevent abuse
+    PGAF_COMMENTS_ALLOW_ANONYMOUS = False  # Require authentication
     
     # Security logging configuration
     LOGGING = {

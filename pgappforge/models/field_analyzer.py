@@ -76,7 +76,7 @@ except ImportError:
 try:
     # Custom PostgreSQL types (if available)
     from pgappforge.models.postgresql import (
-        Vector, Geometry, Geography, LTREE, HSTORE as FAB_HSTORE
+        Vector, Geometry, Geography, LTREE, HSTORE as PGAF_HSTORE
     )
     HAS_FAB_POSTGRESQL = True
 except ImportError:
@@ -211,11 +211,11 @@ class FieldTypeAnalyzer:
         
         # Key-value stores
         HSTORE if HAS_POSTGRESQL else None,
-        FAB_HSTORE if HAS_FAB_POSTGRESQL else None,
+        PGAF_HSTORE if HAS_FAB_POSTGRESQL else None,
     }
     
     # PgAppForge specific unsupported types
-    FAB_UNSUPPORTED_TYPES = {
+    PGAF_UNSUPPORTED_TYPES = {
         ImageColumn if HAS_FAB_WIDGETS else None,
         FileColumn if HAS_FAB_WIDGETS else None,
     }
@@ -237,7 +237,7 @@ class FieldTypeAnalyzer:
         self.filterable_only = {t for t in self.FILTERABLE_ONLY_TYPES if t is not None}
         self.limited_support = {t for t in self.LIMITED_SUPPORT_TYPES if t is not None}
         self.unsupported = {t for t in self.UNSUPPORTED_TYPES if t is not None}
-        self.fab_unsupported = {t for t in self.FAB_UNSUPPORTED_TYPES if t is not None}
+        self.fab_unsupported = {t for t in self.PGAF_UNSUPPORTED_TYPES if t is not None}
         
         # Add database-specific type mappings
         self._add_database_specific_mappings()
@@ -468,7 +468,7 @@ class FieldTypeAnalyzer:
         
         # Key-value store types
         if (HAS_POSTGRESQL and type_class == HSTORE) or \
-           (HAS_FAB_POSTGRESQL and type_class == FAB_HSTORE):
+           (HAS_FAB_POSTGRESQL and type_class == PGAF_HSTORE):
             return UnsupportedReason.COMPLEX_STRUCTURE
         
         # MySQL specific types

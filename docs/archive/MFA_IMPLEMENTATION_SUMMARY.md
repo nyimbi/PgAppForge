@@ -116,30 +116,30 @@ class EmailMFAService:
 ### Basic Configuration
 ```python
 # Enable MFA
-FAB_MFA_ENABLED = True
-FAB_MFA_TOTP_ISSUER = "Your App Name"
+PGAF_MFA_ENABLED = True
+PGAF_MFA_TOTP_ISSUER = "Your App Name"
 
 # Provider Configuration
-FAB_MFA_SMS_PROVIDER = "twilio"      # or "aws_sns"
-FAB_MFA_EMAIL_PROVIDER = "flask_mail" # or "sendgrid", "ses"
+PGAF_MFA_SMS_PROVIDER = "twilio"      # or "aws_sns"
+PGAF_MFA_EMAIL_PROVIDER = "flask_mail" # or "sendgrid", "ses"
 
 # Security Settings
-FAB_MFA_MAX_ATTEMPTS = 5
-FAB_MFA_LOCKOUT_DURATION = 30        # minutes
-FAB_MFA_SMS_CODE_EXPIRES = 300       # seconds
-FAB_MFA_EMAIL_CODE_EXPIRES = 600     # seconds
+PGAF_MFA_MAX_ATTEMPTS = 5
+PGAF_MFA_LOCKOUT_DURATION = 30        # minutes
+PGAF_MFA_SMS_CODE_EXPIRES = 300       # seconds
+PGAF_MFA_EMAIL_CODE_EXPIRES = 600     # seconds
 ```
 
 ### Provider-Specific Settings
 ```python
 # Twilio SMS
-FAB_TWILIO_ACCOUNT_SID = "your_sid"
-FAB_TWILIO_AUTH_TOKEN = "your_token"
-FAB_TWILIO_FROM_NUMBER = "+1234567890"
+PGAF_TWILIO_ACCOUNT_SID = "your_sid"
+PGAF_TWILIO_AUTH_TOKEN = "your_token"
+PGAF_TWILIO_FROM_NUMBER = "+1234567890"
 
 # SendGrid Email
-FAB_SENDGRID_API_KEY = "your_api_key"
-FAB_SENDGRID_FROM_EMAIL = "noreply@yourdomain.com"
+PGAF_SENDGRID_API_KEY = "your_api_key"
+PGAF_SENDGRID_FROM_EMAIL = "noreply@yourdomain.com"
 
 # Flask-Mail SMTP
 MAIL_SERVER = "smtp.gmail.com"
@@ -218,8 +218,8 @@ pip install pyotp qrcode[pil] Pillow twilio sendgrid boto3
 2. **Configure Your App**
 ```python
 app.config.update({
-    'FAB_MFA_ENABLED': True,
-    'FAB_MFA_TOTP_ISSUER': 'Your App Name',
+    'PGAF_MFA_ENABLED': True,
+    'PGAF_MFA_TOTP_ISSUER': 'Your App Name',
     # Add provider configs...
 })
 ```

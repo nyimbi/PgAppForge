@@ -277,11 +277,11 @@ def encryption_status():
 			
 			# Check for master key
 			import os
-			master_key = os.environ.get('FAB_CONFIG_MASTER_KEY')
+			master_key = os.environ.get('PGAF_CONFIG_MASTER_KEY')
 			if master_key:
 				click.echo("✅ Master key: Configured via environment")
 			else:
-				click.echo("⚠️  Master key: Using development key (set FAB_CONFIG_MASTER_KEY for production)")
+				click.echo("⚠️  Master key: Using development key (set PGAF_CONFIG_MASTER_KEY for production)")
 			
 		except ConfigEncryptionError as e:
 			click.echo(f"❌ Encryption system: Failed to initialize - {e}")
@@ -305,7 +305,7 @@ def encryption_status():
 				click.echo(f"💡 Run 'flask fab config encrypt-sensitive' to encrypt them")
 		
 		click.echo("\n🎯 Recommended Actions:")
-		click.echo("1. Set FAB_CONFIG_MASTER_KEY environment variable for production")
+		click.echo("1. Set PGAF_CONFIG_MASTER_KEY environment variable for production")
 		click.echo("2. Run 'flask fab config audit-config-security' to check for unmarked sensitive configs") 
 		click.echo("3. Run 'flask fab config encrypt-sensitive' to encrypt all sensitive configs")
 		click.echo("4. Run 'flask fab config verify-encryption' to verify encryption status")

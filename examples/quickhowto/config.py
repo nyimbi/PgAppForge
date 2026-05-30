@@ -38,7 +38,7 @@ LANGUAGES = {
     "ja_JP": {"flag": "jp", "name": "Japanese"},
 }
 
-FAB_API_MAX_PAGE_SIZE = 100
+PGAF_API_MAX_PAGE_SIZE = 100
 
 
 def custom_password_validator(password: str) -> None:
@@ -49,9 +49,9 @@ def custom_password_validator(password: str) -> None:
         raise PasswordComplexityValidationError("Must have at least 8 characters")
 
 
-# FAB_PASSWORD_COMPLEXITY_VALIDATOR = custom_password_validator
+# PGAF_PASSWORD_COMPLEXITY_VALIDATOR = custom_password_validator
 
-FAB_PASSWORD_COMPLEXITY_ENABLED = True
+PGAF_PASSWORD_COMPLEXITY_ENABLED = True
 
 # ------------------------------
 # GLOBALS FOR GENERAL APP's

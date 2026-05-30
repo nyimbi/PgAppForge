@@ -156,7 +156,7 @@ def test_mfa_config():
         print(f"✓ Configuration template has {len(config_template)} settings")
         
         # Test validation
-        test_config = {'FAB_MFA_ENABLED': False}
+        test_config = {'PGAF_MFA_ENABLED': False}
         is_valid, errors = validate_mfa_config(test_config)
         print(f"✓ Configuration validation: {'PASS' if is_valid else 'FAIL'}")
         

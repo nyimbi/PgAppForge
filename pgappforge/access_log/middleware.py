@@ -9,11 +9,11 @@ Usage::
 
 Configuration keys (read from app.config)::
 
-    FAB_ACCESS_LOG_ENABLED        = True
-    FAB_ACCESS_LOG_EXCLUDE_PATHS  = ['/static/', '/health']
-    FAB_ACCESS_LOG_EXCLUDE_METHODS= ['OPTIONS']
-    FAB_ACCESS_LOG_BATCH_SIZE     = 50     # flush every N requests
-    FAB_ACCESS_LOG_HASH_SESSION   = True   # hash session id for privacy
+    PGAF_ACCESS_LOG_ENABLED        = True
+    PGAF_ACCESS_LOG_EXCLUDE_PATHS  = ['/static/', '/health']
+    PGAF_ACCESS_LOG_EXCLUDE_METHODS= ['OPTIONS']
+    PGAF_ACCESS_LOG_BATCH_SIZE     = 50     # flush every N requests
+    PGAF_ACCESS_LOG_HASH_SESSION   = True   # hash session id for privacy
 """
 from __future__ import annotations
 
@@ -61,13 +61,13 @@ class AccessLogMiddleware:
 		    batch_size: Flush the buffer after this many requests.
 		"""
 		self._exclude_paths = exclude_paths or app.config.get(
-			"FAB_ACCESS_LOG_EXCLUDE_PATHS", ["/static/", "/favicon.ico"]
+			"PGAF_ACCESS_LOG_EXCLUDE_PATHS", ["/static/", "/favicon.ico"]
 		)
 		self._exclude_methods = exclude_methods or app.config.get(
-			"FAB_ACCESS_LOG_EXCLUDE_METHODS", ["OPTIONS"]
+			"PGAF_ACCESS_LOG_EXCLUDE_METHODS", ["OPTIONS"]
 		)
-		self._batch_size = batch_size or app.config.get("FAB_ACCESS_LOG_BATCH_SIZE", 50)
-		self._hash_session = app.config.get("FAB_ACCESS_LOG_HASH_SESSION", True)
+		self._batch_size = batch_size or app.config.get("PGAF_ACCESS_LOG_BATCH_SIZE", 50)
+		self._hash_session = app.config.get("PGAF_ACCESS_LOG_HASH_SESSION", True)
 
 		# Store session factory — prefer the explicit one, fall back to FAB's
 		if db_session is not None:
@@ -80,7 +80,7 @@ class AccessLogMiddleware:
 		app.teardown_appcontext(self._teardown)
 
 	def _should_skip(self) -> bool:
-		if not current_app.config.get("FAB_ACCESS_LOG_ENABLED", True):
+		if not current_app.config.get("PGAF_ACCESS_LOG_ENABLED", True):
 			return True
 		if request.method in self._exclude_methods:
 			return True

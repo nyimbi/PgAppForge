@@ -259,84 +259,84 @@ The configuration remains the same, but you'll benefit from improved performance
 +----------------------------------------+--------------------------------------------+-----------+
 | LOGOUT_REDIRECT_URL                    | The location to redirect to after logout   |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_API_SHOW_STACKTRACE                | Sends api stack trace on uncaught          |   No      |
+| PGAF_API_SHOW_STACKTRACE                | Sends api stack trace on uncaught          |   No      |
 |                                        | exceptions. (Boolean)                      |           |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_API_MAX_PAGE_SIZE                  | Sets a limit for FAB Model Api page size   |   No      |
+| PGAF_API_MAX_PAGE_SIZE                  | Sets a limit for FAB Model Api page size   |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_API_SWAGGER_UI                     | Enables a Swagger UI view (Boolean)        |   No      |
+| PGAF_API_SWAGGER_UI                     | Enables a Swagger UI view (Boolean)        |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_API_SWAGGER_TEMPLATE               | Path of your custom Swagger Template       |   No      |
+| PGAF_API_SWAGGER_TEMPLATE               | Path of your custom Swagger Template       |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_API_ALLOW_JSON_QS                  | Allow query string parameters to be JSON   |           |
+| PGAF_API_ALLOW_JSON_QS                  | Allow query string parameters to be JSON   |           |
 |                                        | Default is True (Boolean)                  |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_UPDATE_PERMS                       | Enables or disables update permissions     |           |
+| PGAF_UPDATE_PERMS                       | Enables or disables update permissions     |           |
 |                                        | Default is True (Boolean)                  |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_SECURITY_MANAGER_CLASS             | Declare a new custom SecurityManager       |           |
+| PGAF_SECURITY_MANAGER_CLASS             | Declare a new custom SecurityManager       |           |
 |                                        | class                                      |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ADD_SECURITY_API                   | [Beta] Adds a CRUD REST API for users,     |           |
+| PGAF_ADD_SECURITY_API                   | [Beta] Adds a CRUD REST API for users,     |           |
 |                                        | roles, permissions, view_menus.            |   No      |
 |                                        | Further details on /swagger/v1             |           |
 |                                        | All endpoints are under /api/v1/sercurity/ |           |
 |                                        | [Note]: This feature is still in beta      |           |
 |                                        | breaking changes are likely to occur       |           |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ADD_SECURITY_VIEWS                 | Enables or disables registering all        |           |
+| PGAF_ADD_SECURITY_VIEWS                 | Enables or disables registering all        |           |
 |                                        | security views (boolean default:True)      |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ADD_SECURITY_PERMISSION_VIEW       | Enables or disables registering the        |           |
+| PGAF_ADD_SECURITY_PERMISSION_VIEW       | Enables or disables registering the        |           |
 |                                        | permission view (boolean default:True)     |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ADD_SECURITY_VIEW_MENU_VIEW        | Enables or disables registering the        |           |
+| PGAF_ADD_SECURITY_VIEW_MENU_VIEW        | Enables or disables registering the        |           |
 |                                        | view_menu view (boolean default:True)      |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ADD_SECURITY_PERMISSION_VIEWS_VIEW | Enables or disables registering the        |           |
+| PGAF_ADD_SECURITY_PERMISSION_VIEWS_VIEW | Enables or disables registering the        |           |
 |                                        | pmv views (boolean default:True)           |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ADD_OPENAPI_VIEWS                  | Enables or disables registering all        |           |
+| PGAF_ADD_OPENAPI_VIEWS                  | Enables or disables registering all        |           |
 |                                        | OPENAPI views (boolean default:True)       |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_OPENAPI_SERVERS                    | Used for setting OpenApi Swagger UI        |           |
+| PGAF_OPENAPI_SERVERS                    | Used for setting OpenApi Swagger UI        |           |
 |                                        | servers if not set Swagger will use the    |           |
 |                                        | current request host URL                   |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_ROLES                              | Configure builtin roles see Security       |           |
+| PGAF_ROLES                              | Configure builtin roles see Security       |           |
 |                                        | chapter for further detail                 |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_INDEX_VIEW                         | Path of your custom IndexView class        |           |
+| PGAF_INDEX_VIEW                         | Path of your custom IndexView class        |           |
 |                                        | (str)                                      |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_MENU                               | Path of your custom Menu class             |           |
+| PGAF_MENU                               | Path of your custom Menu class             |           |
 |                                        | (str)                                      |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_BASE_TEMPLATE                      | Path of your custom base template          |           |
+| PGAF_BASE_TEMPLATE                      | Path of your custom base template          |           |
 |                                        |                                            |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_STATIC_FOLDER                      | Path to override default static folder     |           |
+| PGAF_STATIC_FOLDER                      | Path to override default static folder     |           |
 |                                        |                                            |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_STATIC_URL_PATH                    | Path to override default static folder     |           |
+| PGAF_STATIC_URL_PATH                    | Path to override default static folder     |           |
 |                                        |                                            |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_PASSWORD_COMPLEXITY_VALIDATOR      | Hook for your own custom password          |           |
+| PGAF_PASSWORD_COMPLEXITY_VALIDATOR      | Hook for your own custom password          |           |
 |                                        | validator function.                        |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_PASSWORD_COMPLEXITY_ENABLED        | Enables the password complexity            |           |
+| PGAF_PASSWORD_COMPLEXITY_ENABLED        | Enables the password complexity            |           |
 |                                        | validation for AUTH database users.        |   No      |
 |                                        | Default is False.                          |           |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_PASSWORD_HASH_METHOD               | Sets the password hashing method. For the  |           |
+| PGAF_PASSWORD_HASH_METHOD               | Sets the password hashing method. For the  |           |
 |                                        | supported parameters see                   |           |
 |                                        | `generate_password_hash`_.                 |   No      |
 |                                        | Default: ``'scrypt'``.                     |           |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_SAFE_REDIRECT_HOSTS                | A List[str] with allowed domains to check  |           |
+| PGAF_SAFE_REDIRECT_HOSTS                | A List[str] with allowed domains to check  |           |
 |                                        | when validating safe redirect              |   No      |
 +----------------------------------------+--------------------------------------------+-----------+
-| FAB_PASSWORD_HASH_SALT_LENGTH          | Sets the password hashing salt length.     |   No      |
+| PGAF_PASSWORD_HASH_SALT_LENGTH          | Sets the password hashing salt length.     |   No      |
 |                                        | Default: ``16``.                           |           |
 +----------------------------------------+--------------------------------------------+-----------+
 

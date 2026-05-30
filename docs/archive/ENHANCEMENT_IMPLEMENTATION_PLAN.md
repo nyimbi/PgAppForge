@@ -287,9 +287,9 @@ These enhancements will transform PgAppForge into a more secure, user-friendly, 
 2. **Configuration System**
    ```python
    # Configuration options
-   FAB_FILTER_EXCLUDE_TYPES = ['JSONB', 'BLOB', 'IMAGE']
-   FAB_SEARCH_EXCLUDE_TYPES = ['JSONB', 'BLOB', 'BINARY']
-   FAB_AUTO_EXCLUDE_ENABLED = True
+   PGAF_FILTER_EXCLUDE_TYPES = ['JSONB', 'BLOB', 'IMAGE']
+   PGAF_SEARCH_EXCLUDE_TYPES = ['JSONB', 'BLOB', 'BINARY']
+   PGAF_AUTO_EXCLUDE_ENABLED = True
    ```
 
 ### Phase 2.2: Filter System Enhancement
@@ -837,12 +837,12 @@ These enhancements will transform PgAppForge into a more secure, user-friendly, 
 3. **Configuration Updates**
    ```python
    # config.py additions
-   FAB_MFA_ENABLED = True
-   FAB_MFA_TOTP_ISSUER = "PgAppForge"
-   FAB_TWILIO_ACCOUNT_SID = "your_sid"
-   FAB_SENDGRID_API_KEY = "your_key"
-   FAB_WIDGET_ASSETS_URL = "/static/widgets/"
-   FAB_WALLET_DEFAULT_CURRENCY = "USD"
+   PGAF_MFA_ENABLED = True
+   PGAF_MFA_TOTP_ISSUER = "PgAppForge"
+   PGAF_TWILIO_ACCOUNT_SID = "your_sid"
+   PGAF_SENDGRID_API_KEY = "your_key"
+   PGAF_WIDGET_ASSETS_URL = "/static/widgets/"
+   PGAF_WALLET_DEFAULT_CURRENCY = "USD"
    ```
 
 ### Production Deployment

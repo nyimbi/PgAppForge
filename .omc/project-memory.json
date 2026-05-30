@@ -19,7 +19,7 @@
   },
   "build": {
     "buildCommand": "make build",
-    "testCommand": "VENV=/Users/nyimbiodero/src/pjs/fab-ext/.venv\n$VENV/bin/python -m pytest tests/ci/test_codegen_pipeline.py -q 2>&1 | tail -3",
+    "testCommand": "PGAPPFORGE_DB=postgresql:///pgaf_test SQLALCHEMY_DATABASE_URI=postgresql:///pgaf_test .venv/bin/python -m pytest tests/ci/ -q --tb=no 2>&1 | tail -3",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {}
@@ -286,15 +286,39 @@
   },
   "hotPaths": [
     {
+      "path": "pgappforge/security/sqla/manager.py",
+      "accessCount": 35,
+      "lastAccessed": 1780179253461,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/base.py",
+      "accessCount": 27,
+      "lastAccessed": 1780180851025,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/baseviews.py",
+      "accessCount": 26,
+      "lastAccessed": 1780177646648,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/manager.py",
+      "accessCount": 18,
+      "lastAccessed": 1780179919230,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/base_plugin.py",
       "accessCount": 13,
       "lastAccessed": 1780163429157,
       "type": "file"
     },
     {
-      "path": "pgappforge/baseviews.py",
-      "accessCount": 12,
-      "lastAccessed": 1780164006626,
+      "path": "pgappforge/config/models.py",
+      "accessCount": 9,
+      "lastAccessed": 1780176464188,
       "type": "file"
     },
     {
@@ -364,12 +388,6 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/config/models.py",
-      "accessCount": 3,
-      "lastAccessed": 1780158550078,
-      "type": "file"
-    },
-    {
       "path": "pgappforge/config/views.py",
       "accessCount": 3,
       "lastAccessed": 1780158581035,
@@ -400,6 +418,12 @@
       "type": "file"
     },
     {
+      "path": "pgappforge/models/tenant_models.py",
+      "accessCount": 3,
+      "lastAccessed": 1780172560154,
+      "type": "file"
+    },
+    {
       "path": "docs/FEATURE_IMPLEMENTATION_MATRIX.md",
       "accessCount": 2,
       "lastAccessed": 1780127562772,
@@ -409,12 +433,6 @@
       "path": "docs/CODE_REVIEW_REPORT.md",
       "accessCount": 2,
       "lastAccessed": 1780128008937,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/manager.py",
-      "accessCount": 2,
-      "lastAccessed": 1780157683379,
       "type": "file"
     },
     {
@@ -433,12 +451,6 @@
       "path": "pgappforge/security/sqla/models.py",
       "accessCount": 2,
       "lastAccessed": 1780157949211,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/sqla/manager.py",
-      "accessCount": 2,
-      "lastAccessed": 1780157957300,
       "type": "file"
     },
     {
@@ -466,9 +478,9 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/base.py",
+      "path": "pgappforge/security/views.py",
       "accessCount": 2,
-      "lastAccessed": 1780163425295,
+      "lastAccessed": 1780175560354,
       "type": "file"
     },
     {
@@ -538,12 +550,6 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/models/tenant_models.py",
-      "accessCount": 1,
-      "lastAccessed": 1780156509712,
-      "type": "file"
-    },
-    {
       "path": "pgappforge/models/dashboard_models.py",
       "accessCount": 1,
       "lastAccessed": 1780156510907,
@@ -577,12 +583,6 @@
       "path": "pgappforge/security/integrations/__init__.py",
       "accessCount": 1,
       "lastAccessed": 1780157814953,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/views.py",
-      "accessCount": 1,
-      "lastAccessed": 1780157923010,
       "type": "file"
     }
   ],

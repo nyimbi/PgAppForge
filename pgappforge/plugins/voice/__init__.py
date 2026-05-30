@@ -5,7 +5,7 @@ FABVoicePlugin — integrates browser Web Speech API (SpeechRecognition +
 SpeechSynthesis) into every PgAppForge page.
 
 Feature flag:
-    app.config['FAB_VOICE_ENABLED'] = True   # default: False
+    app.config['PGAF_VOICE_ENABLED'] = True   # default: False
 
 Per-view opt-in (without global flag):
     @FABVoicePlugin.enable_view
@@ -249,10 +249,10 @@ _VOICE_JS = r"""\
   }
 
   // ------------------------------------------------------------------
-  // Internal logger (silent unless FAB_VOICE_DEBUG=true on window)
+  // Internal logger (silent unless PGAF_VOICE_DEBUG=true on window)
   // ------------------------------------------------------------------
   function log(msg) {
-    if (window.FAB_VOICE_DEBUG) console.log('[FAB voice]', msg);
+    if (window.PGAF_VOICE_DEBUG) console.log('[FAB voice]', msg);
   }
 
   // Expose for external use / testing
@@ -313,7 +313,7 @@ class FABVoicePlugin:
 
 		from pgappforge.plugins.voice import FABVoicePlugin
 
-		app.config['FAB_VOICE_ENABLED'] = True
+		app.config['PGAF_VOICE_ENABLED'] = True
 		voice = FABVoicePlugin()
 		voice.init_app(app, appbuilder)
 
@@ -342,11 +342,11 @@ class FABVoicePlugin:
 		"""
 		Bind the plugin to *app* and *appbuilder*.
 
-		If ``FAB_VOICE_ENABLED`` is False (the default) this is a no-op, so
+		If ``PGAF_VOICE_ENABLED`` is False (the default) this is a no-op, so
 		you can safely call it unconditionally and toggle via config.
 		"""
-		if not app.config.get("FAB_VOICE_ENABLED", False):
-			log.debug("FABVoicePlugin: FAB_VOICE_ENABLED is False — skipping init")
+		if not app.config.get("PGAF_VOICE_ENABLED", False):
+			log.debug("FABVoicePlugin: PGAF_VOICE_ENABLED is False — skipping init")
 			return
 
 		self._app = app
@@ -405,7 +405,7 @@ class FABVoicePlugin:
 		"""
 		Class decorator: mark a specific view as voice-enabled.
 
-		When ``FAB_VOICE_ENABLED`` is False globally the plugin's
+		When ``PGAF_VOICE_ENABLED`` is False globally the plugin's
 		``after_request`` hook is not registered, so this decorator acts as
 		documentation / future hook point.  When the global flag is True,
 		*all* pages get voice; this decorator is then purely semantic.

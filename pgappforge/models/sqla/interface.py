@@ -779,9 +779,9 @@ class SQLAInterface(BaseInterface):
         """Check if column is an HSTORE type (PostgreSQL key-value store)."""
         try:
             from sqlalchemy.dialects.postgresql import HSTORE
-            from pgappforge.models.postgresql import HSTORE as FAB_HSTORE
+            from pgappforge.models.postgresql import HSTORE as PGAF_HSTORE
             column_type = self.list_columns[col_name].type
-            return isinstance(column_type, (HSTORE, FAB_HSTORE))
+            return isinstance(column_type, (HSTORE, PGAF_HSTORE))
         except (KeyError, ImportError):
             return False
     

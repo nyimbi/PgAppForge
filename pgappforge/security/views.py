@@ -470,10 +470,10 @@ class UserDBModelView(UserModelView):
         item.password = generate_password_hash(
             password=item.password,
             method=self.appbuilder.get_app.config.get(
-                "FAB_PASSWORD_HASH_METHOD", "scrypt"
+                "PGAF_PASSWORD_HASH_METHOD", "scrypt"
             ),
             salt_length=self.appbuilder.get_app.config.get(
-                "FAB_PASSWORD_HASH_SALT_LENGTH", 16
+                "PGAF_PASSWORD_HASH_SALT_LENGTH", 16
             ),
         )
 

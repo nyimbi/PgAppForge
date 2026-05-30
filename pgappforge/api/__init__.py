@@ -114,7 +114,7 @@ def get_error_msg() -> str:
     (inspired on Superset code)
     :return: (str)
     """
-    if current_app.config.get("FAB_API_SHOW_STACKTRACE"):
+    if current_app.config.get("PGAF_API_SHOW_STACKTRACE"):
         return traceback.format_exc()
     return "Fatal error"
 
@@ -179,7 +179,7 @@ def rison(
                 try:
                     kwargs["rison"] = prison.loads(value)
                 except prison.decoder.ParserException:
-                    if current_app.config.get("FAB_API_ALLOW_JSON_QS", True):
+                    if current_app.config.get("PGAF_API_ALLOW_JSON_QS", True):
                         # Rison failed try json encoded content
                         try:
                             kwargs["rison"] = json.loads(
@@ -1763,7 +1763,7 @@ class ModelRestApi(BaseModelApi):
         
         Helper function to handle rison page
         arguments, sets defaults and impose
-        FAB_API_MAX_PAGE_SIZE
+        PGAF_API_MAX_PAGE_SIZE
 
         :param rison_args:
         :return: (tuple) page, page_size
@@ -1778,7 +1778,7 @@ class ModelRestApi(BaseModelApi):
         page_ = page or 0
         page_size_ = page_size or self.page_size
         max_page_size = self.max_page_size or current_app.config.get(
-            "FAB_API_MAX_PAGE_SIZE"
+            "PGAF_API_MAX_PAGE_SIZE"
         )
         # Accept special -1 to uncap the page size
         if max_page_size == -1:

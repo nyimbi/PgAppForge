@@ -21,7 +21,7 @@ class FlaskTestCase(FABTestCase):
         self.basedir = os.path.abspath(os.path.dirname(__file__))
         self.app.config.from_object("tests.config_api")
         self.app.config[
-            "FAB_INDEX_VIEW"
+            "PGAF_INDEX_VIEW"
         ] = "tests.test_custom_indexview.CustomIndexView"
 
         self.db = SQLA(self.app)

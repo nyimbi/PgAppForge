@@ -367,7 +367,7 @@ def handle_fab_exception(error):
 # Example API response:
 {
     "error": {
-        "code": "FAB_VALIDATION_20241201123456_a1b2c3d4",
+        "code": "PGAF_VALIDATION_20241201123456_a1b2c3d4",
         "message": "Please check your input and try again.",
         "technical_message": "Email field is required",
         "category": "validation",

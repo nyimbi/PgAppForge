@@ -721,7 +721,7 @@ class TestPluginIntegration:
         """Test plugin configuration through Flask config."""
         with self.app.app_context():
             # Configure plugins
-            self.app.config['FAB_PLUGINS'] = [
+            self.app.config['PGAF_PLUGINS'] = [
                 {
                     'name': 'test_plugin',
                     'module': 'fake.module',

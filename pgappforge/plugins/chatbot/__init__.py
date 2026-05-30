@@ -8,11 +8,11 @@ REST endpoint the JS widget calls.
 
 Configuration (app.config)::
 
-    FAB_CHATBOT_ENABLED = True
-    FAB_CHATBOT_PROVIDER = "ollama"          # any ModelProvider value
-    FAB_CHATBOT_MODEL = "llama3.2:3b"
-    FAB_CHATBOT_EXCLUDE_PATHS = ["/static/", "/auth/"]
-    FAB_CHATBOT_PER_PAGE_CONFIG = {
+    PGAF_CHATBOT_ENABLED = True
+    PGAF_CHATBOT_PROVIDER = "ollama"          # any ModelProvider value
+    PGAF_CHATBOT_MODEL = "llama3.2:3b"
+    PGAF_CHATBOT_EXCLUDE_PATHS = ["/static/", "/auth/"]
+    PGAF_CHATBOT_PER_PAGE_CONFIG = {
         "/employee/": "You are an HR assistant...",
     }
 
@@ -340,9 +340,9 @@ class ChatbotPlugin:
 
 		from pgappforge.plugins.chatbot import ChatbotPlugin
 
-		app.config['FAB_CHATBOT_ENABLED'] = True
-		app.config['FAB_CHATBOT_PROVIDER'] = 'ollama'
-		app.config['FAB_CHATBOT_MODEL']    = 'llama3.2:3b'
+		app.config['PGAF_CHATBOT_ENABLED'] = True
+		app.config['PGAF_CHATBOT_PROVIDER'] = 'ollama'
+		app.config['PGAF_CHATBOT_MODEL']    = 'llama3.2:3b'
 
 		chatbot = ChatbotPlugin()
 		chatbot.init_app(app, appbuilder)
@@ -363,9 +363,9 @@ class ChatbotPlugin:
 	# ------------------------------------------------------------------
 
 	def init_app(self, app: Flask, appbuilder: AppBuilder) -> None:
-		"""Bind plugin to *app*. No-op if FAB_CHATBOT_ENABLED is False."""
-		if not app.config.get("FAB_CHATBOT_ENABLED", False):
-			log.debug("ChatbotPlugin: FAB_CHATBOT_ENABLED is False — skipping init")
+		"""Bind plugin to *app*. No-op if PGAF_CHATBOT_ENABLED is False."""
+		if not app.config.get("PGAF_CHATBOT_ENABLED", False):
+			log.debug("ChatbotPlugin: PGAF_CHATBOT_ENABLED is False — skipping init")
 			return
 
 		self._app = app
@@ -391,7 +391,7 @@ class ChatbotPlugin:
 
 		# ---- after_request: inject <script> tag into HTML responses ----
 		exclude_paths: list[str] = app.config.get(
-			"FAB_CHATBOT_EXCLUDE_PATHS", []
+			"PGAF_CHATBOT_EXCLUDE_PATHS", []
 		) + _DEFAULT_EXCLUDE
 
 		@app.after_request
@@ -421,9 +421,9 @@ def _handle_message(app: Flask) -> Response:
 			{"Content-Type": "application/json"},
 		)
 
-	provider_name: str = app.config.get("FAB_CHATBOT_PROVIDER", "ollama")
-	model_name:    str = app.config.get("FAB_CHATBOT_MODEL", "llama3.2:3b")
-	per_page_cfg:  dict[str, str] = app.config.get("FAB_CHATBOT_PER_PAGE_CONFIG", {})
+	provider_name: str = app.config.get("PGAF_CHATBOT_PROVIDER", "ollama")
+	model_name:    str = app.config.get("PGAF_CHATBOT_MODEL", "llama3.2:3b")
+	per_page_cfg:  dict[str, str] = app.config.get("PGAF_CHATBOT_PER_PAGE_CONFIG", {})
 	app_name:      str = app.config.get("APP_NAME", "PgAppForge")
 
 	# Build system prompt

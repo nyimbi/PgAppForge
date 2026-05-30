@@ -249,7 +249,7 @@ class MVCSecurityTestCase(BaseMVCTestCase):
         """
         Ensure a spoofed Host header does not allow redirection to an untrusted domain
         """
-        self.app.config["FAB_SAFE_REDIRECT_HOSTS"] = ["localhost"]  # trusted dev host
+        self.app.config["PGAF_SAFE_REDIRECT_HOSTS"] = ["localhost"]  # trusted dev host
         self.browser_logout(self.client)
 
         response = self.browser_login(
@@ -268,7 +268,7 @@ class MVCSecurityTestCase(BaseMVCTestCase):
         """
         Ensure a spoofed Host header does not allow redirection to an untrusted domain
         """
-        self.app.config["FAB_SAFE_REDIRECT_HOSTS"] = ["localhost"]  # trusted dev host
+        self.app.config["PGAF_SAFE_REDIRECT_HOSTS"] = ["localhost"]  # trusted dev host
         self.browser_logout(self.client)
 
         response = self.browser_login(
@@ -287,7 +287,7 @@ class MVCSecurityTestCase(BaseMVCTestCase):
         """
         Ensure a spoofed Host header does not allow redirection to an untrusted domain
         """
-        self.app.config["FAB_SAFE_REDIRECT_HOSTS"] = ["*.localhost"]  # trusted dev host
+        self.app.config["PGAF_SAFE_REDIRECT_HOSTS"] = ["*.localhost"]  # trusted dev host
         self.browser_logout(self.client)
 
         response = self.browser_login(
@@ -431,7 +431,7 @@ class MVCSecurityTestCase(BaseMVCTestCase):
         Test Security reset password with default complexity
         """
         client = self.app.test_client()
-        self.app.config["FAB_PASSWORD_COMPLEXITY_ENABLED"] = True
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_ENABLED"] = True
 
         # Reset My password
         _ = self.browser_login(client, USERNAME_ADMIN, PASSWORD_ADMIN)
@@ -457,7 +457,7 @@ class MVCSecurityTestCase(BaseMVCTestCase):
         self.assertNotIn(PASSWORD_COMPLEXITY_ERROR, data)
 
         # Revert changes
-        self.app.config["FAB_PASSWORD_COMPLEXITY_ENABLED"] = False
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_ENABLED"] = False
         _ = client.post(
             "/resetmypassword/form",
             data=dict(password="password", conf_password="password"),
@@ -471,8 +471,8 @@ class MVCSecurityTestCase(BaseMVCTestCase):
         Test Security reset password with custom complexity
         """
         client = self.app.test_client()
-        self.app.config["FAB_PASSWORD_COMPLEXITY_ENABLED"] = True
-        self.app.config["FAB_PASSWORD_COMPLEXITY_VALIDATOR"] = custom_password_validator
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_ENABLED"] = True
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_VALIDATOR"] = custom_password_validator
 
         # Reset My password
         _ = self.browser_login(client, USERNAME_ADMIN, PASSWORD_ADMIN)

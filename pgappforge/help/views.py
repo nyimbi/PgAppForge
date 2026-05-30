@@ -36,7 +36,7 @@ Key config variables
   SQLALCHEMY_DATABASE_URI  - database connection string (required)
   SECRET_KEY               - Flask secret key, minimum 20 characters (required)
   APP_NAME                 - displayed in the navbar (default "F.A.B.")
-  FAB_UPDATE_PERMS         - auto-sync permissions on startup (default True)
+  PGAF_UPDATE_PERMS         - auto-sync permissions on startup (default True)
 """,
 	},
 	"crud-operations": {
@@ -108,7 +108,7 @@ Roles
 
 Permissions
   Every view method (list, show, add, edit, delete) gets a permission tuple
-  (can_<method>, <ViewClassName>) generated at startup when FAB_UPDATE_PERMS
+  (can_<method>, <ViewClassName>) generated at startup when PGAF_UPDATE_PERMS
   is True.
 
   Assigning permissions to roles is done through Security → Roles → Edit.
@@ -121,7 +121,7 @@ Decorators
 Custom security manager
   Subclass SecurityManager and point FAB at it:
 
-    FAB_SECURITY_MANAGER_CLASS = "app.security.MySecurityManager"
+    PGAF_SECURITY_MANAGER_CLASS = "app.security.MySecurityManager"
 """,
 	},
 	"database-codegen": {
@@ -473,8 +473,8 @@ flask fab deploy gunicorn       # scaffold gunicorn / systemd config</pre>
 SECRET_KEY               = "at-least-20-random-characters"
 AUTH_TYPE                = AUTH_OAUTH          # AUTH_DB | AUTH_LDAP | AUTH_OAUTH
 WTF_CSRF_ENABLED         = True
-FAB_UPDATE_PERMS         = True
-FAB_SECURITY_MANAGER_CLASS = "app.security.MySecurityManager"
+PGAF_UPDATE_PERMS         = True
+PGAF_SECURITY_MANAGER_CLASS = "app.security.MySecurityManager"
 ADDON_MANAGERS           = ["app.addons.MyAddon"]
 APP_NAME                 = "My Application"
 APP_THEME                = "bootstrap-3.3.7.min.css"</pre>

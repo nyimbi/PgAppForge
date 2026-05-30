@@ -22,21 +22,21 @@ Or instantiate manually::
 
 Config keys
 -----------
-``FAB_BILLING_STRIPE_SECRET_KEY``
+``PGAF_BILLING_STRIPE_SECRET_KEY``
     Stripe secret key (``sk_live_…`` or ``sk_test_…``).
     Optional — omit to operate in local-only mode.
 
-``FAB_BILLING_STRIPE_WEBHOOK_SECRET``
+``PGAF_BILLING_STRIPE_WEBHOOK_SECRET``
     Stripe webhook signing secret (``whsec_…``).
     Required for ``POST /billing/webhooks/stripe`` to validate signatures.
 
-``FAB_BILLING_CURRENCY``
+``PGAF_BILLING_CURRENCY``
     ISO-4217 default currency code (default: ``"USD"``).
 
-``FAB_BILLING_TRIAL_DAYS``
+``PGAF_BILLING_TRIAL_DAYS``
     Default trial length when a plan does not specify its own (default: ``14``).
 
-``FAB_BILLING_TRIAL_WARN_DAYS``
+``PGAF_BILLING_TRIAL_WARN_DAYS``
     Days before trial expiry at which to emit warnings in ``on_user_login``
     (default: ``3``).
 """
@@ -159,11 +159,11 @@ class BillingPlugin(BasePlugin):
 			],
 			safe_mode_compatible=False,
 			example_config={
-				"FAB_BILLING_STRIPE_SECRET_KEY": "sk_test_...",
-				"FAB_BILLING_STRIPE_WEBHOOK_SECRET": "whsec_...",
-				"FAB_BILLING_CURRENCY": "USD",
-				"FAB_BILLING_TRIAL_DAYS": 14,
-				"FAB_BILLING_TRIAL_WARN_DAYS": 3,
+				"PGAF_BILLING_STRIPE_SECRET_KEY": "sk_test_...",
+				"PGAF_BILLING_STRIPE_WEBHOOK_SECRET": "whsec_...",
+				"PGAF_BILLING_CURRENCY": "USD",
+				"PGAF_BILLING_TRIAL_DAYS": 14,
+				"PGAF_BILLING_TRIAL_WARN_DAYS": 3,
 			},
 		)
 
@@ -188,14 +188,14 @@ class BillingPlugin(BasePlugin):
 		def _cfg(key: str, default: Any = None) -> Any:
 			return self.config.get(key) or app_config.get(key) or default
 
-		stripe_key: str | None = _cfg("FAB_BILLING_STRIPE_SECRET_KEY")
-		self._currency: str = str(_cfg("FAB_BILLING_CURRENCY", "USD")).upper()
-		self._default_trial_days: int = int(_cfg("FAB_BILLING_TRIAL_DAYS", 14))
-		self._trial_warn_days: int = int(_cfg("FAB_BILLING_TRIAL_WARN_DAYS", 3))
+		stripe_key: str | None = _cfg("PGAF_BILLING_STRIPE_SECRET_KEY")
+		self._currency: str = str(_cfg("PGAF_BILLING_CURRENCY", "USD")).upper()
+		self._default_trial_days: int = int(_cfg("PGAF_BILLING_TRIAL_DAYS", 14))
+		self._trial_warn_days: int = int(_cfg("PGAF_BILLING_TRIAL_WARN_DAYS", 3))
 
 		if stripe_key and not _HAS_STRIPE:
 			log.warning(
-				"BillingPlugin: FAB_BILLING_STRIPE_SECRET_KEY is set but the "
+				"BillingPlugin: PGAF_BILLING_STRIPE_SECRET_KEY is set but the "
 				"`stripe` package is not installed — Stripe features disabled. "
 				"Install with: pip install stripe"
 			)
@@ -366,31 +366,31 @@ class BillingPlugin(BasePlugin):
 			"title": "BillingPlugin configuration",
 			"type": "object",
 			"properties": {
-				"FAB_BILLING_STRIPE_SECRET_KEY": {
+				"PGAF_BILLING_STRIPE_SECRET_KEY": {
 					"type": "string",
 					"description": "Stripe secret key (sk_live_… or sk_test_…).",
 					"pattern": "^sk_(live|test)_[A-Za-z0-9]+$",
 				},
-				"FAB_BILLING_STRIPE_WEBHOOK_SECRET": {
+				"PGAF_BILLING_STRIPE_WEBHOOK_SECRET": {
 					"type": "string",
 					"description": "Stripe webhook signing secret (whsec_…).",
 					"pattern": "^whsec_",
 				},
-				"FAB_BILLING_CURRENCY": {
+				"PGAF_BILLING_CURRENCY": {
 					"type": "string",
 					"description": "ISO-4217 default billing currency.",
 					"default": "USD",
 					"minLength": 3,
 					"maxLength": 3,
 				},
-				"FAB_BILLING_TRIAL_DAYS": {
+				"PGAF_BILLING_TRIAL_DAYS": {
 					"type": "integer",
 					"description": "Default trial period in days when not set on a plan.",
 					"default": 14,
 					"minimum": 0,
 					"maximum": 365,
 				},
-				"FAB_BILLING_TRIAL_WARN_DAYS": {
+				"PGAF_BILLING_TRIAL_WARN_DAYS": {
 					"type": "integer",
 					"description": "Days before trial expiry at which to show login warning.",
 					"default": 3,
@@ -415,7 +415,7 @@ def create_plugin(
 
 	Args:
 		appbuilder: PgAppForge / AppBuilder instance.
-		config: Optional plugin config dict.  Keys are the ``FAB_BILLING_*``
+		config: Optional plugin config dict.  Keys are the ``PGAF_BILLING_*``
 		        names but passed directly here rather than read from
 		        ``app.config``.  Values take precedence over app config.
 
@@ -425,8 +425,8 @@ def create_plugin(
 	Example::
 
 		plugin = create_plugin(appbuilder, config={
-		    "FAB_BILLING_CURRENCY": "EUR",
-		    "FAB_BILLING_TRIAL_DAYS": 30,
+		    "PGAF_BILLING_CURRENCY": "EUR",
+		    "PGAF_BILLING_TRIAL_DAYS": 30,
 		})
 		plugin.activate()
 	"""

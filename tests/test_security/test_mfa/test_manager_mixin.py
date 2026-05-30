@@ -552,7 +552,7 @@ class TestMFASecurityManagerMixin:
         app = Flask(__name__)
         app.config.update({
             'SECRET_KEY': 'test-secret-key',
-            'FAB_ADD_SECURITY_VIEWS': True,
+            'PGAF_ADD_SECURITY_VIEWS': True,
             'TESTING': True
         })
         return app

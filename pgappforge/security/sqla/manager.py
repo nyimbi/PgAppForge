@@ -81,7 +81,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         super(SecurityManager, self).__init__(appbuilder)
         
         # Override auth views with MFA-enabled versions if MFA is enabled
-        if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):
+        if self.appbuilder.app.config.get('PGAF_MFA_ENABLED', False):
             self.authdbview = MFAEnabledAuthDBView
         
         user_datamodel = SQLAInterface(self.user_model)
@@ -113,7 +113,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         self.create_db()
 
         # Initialize MFA if enabled
-        if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):
+        if self.appbuilder.app.config.get('PGAF_MFA_ENABLED', False):
             self._init_mfa()
 
     @property
@@ -129,7 +129,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         if self.userdbmodelview and not self.user_view:
             self.user_view = self.appbuilder.add_view_no_menu(self.userdbmodelview)
 
-        if self.appbuilder.app.config.get("FAB_ADD_SECURITY_API", False):
+        if self.appbuilder.app.config.get("PGAF_ADD_SECURITY_API", False):
             self.appbuilder.add_api(self.permission_api)
             self.appbuilder.add_api(self.role_api)
             self.appbuilder.add_api(self.user_api)
@@ -138,7 +138,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             self.appbuilder.add_api(self.group_api)
 
         # Register MFA views if enabled
-        if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):
+        if self.appbuilder.app.config.get('PGAF_MFA_ENABLED', False):
             self.appbuilder.add_view_no_menu(self.mfa_setup_view)
             self.appbuilder.add_view_no_menu(self.mfa_verification_view)
 
@@ -188,7 +188,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             self._create_default_roles()
 
             # Create MFA tables if enabled and not present
-            if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):
+            if self.appbuilder.app.config.get('PGAF_MFA_ENABLED', False):
                 mfa_tables = ['ab_user_mfa', 'ab_mfa_backup_codes',
                               'ab_mfa_verification_attempts', 'ab_mfa_policies']
                 missing = [t for t in mfa_tables if t not in existing_tables]
@@ -297,10 +297,10 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             register_user.password = generate_password_hash(
                 password=password,
                 method=self.appbuilder.get_app.config.get(
-                    "FAB_PASSWORD_HASH_METHOD", "scrypt"
+                    "PGAF_PASSWORD_HASH_METHOD", "scrypt"
                 ),
                 salt_length=self.appbuilder.get_app.config.get(
-                    "FAB_PASSWORD_HASH_SALT_LENGTH", 16
+                    "PGAF_PASSWORD_HASH_SALT_LENGTH", 16
                 ),
             )
         register_user.registration_hash = str(uuid.uuid1())
@@ -401,10 +401,10 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
                 user.password = generate_password_hash(
                     password=password,
                     method=self.appbuilder.get_app.config.get(
-                        "FAB_PASSWORD_HASH_METHOD", "scrypt"
+                        "PGAF_PASSWORD_HASH_METHOD", "scrypt"
                     ),
                     salt_length=self.appbuilder.get_app.config.get(
-                        "FAB_PASSWORD_HASH_SALT_LENGTH", 16
+                        "PGAF_PASSWORD_HASH_SALT_LENGTH", 16
                     ),
                 )
             self.get_session.add(user)

@@ -1438,7 +1438,7 @@ class Config:
     WTF_CSRF_ENABLED = True
     APP_NAME = "{name}"
     APP_ICON = ""
-    FAB_UPDATE_PERMS = True
+    PGAF_UPDATE_PERMS = True
 '''
 
     def _generate_dev_config(self) -> str:
@@ -1673,8 +1673,8 @@ from app.models.models import *  # noqa: F401,F403
     def _generate_swagger_config(self) -> str:
         return f'''"""OpenAPI/Swagger configuration."""
 SWAGGER_UI = True
-FAB_API_SWAGGER_UI = True
-FAB_API_MAX_PAGE_SIZE = 100
+PGAF_API_SWAGGER_UI = True
+PGAF_API_MAX_PAGE_SIZE = 100
 
 OPENAPI_SPEC = {{
     "info": {{

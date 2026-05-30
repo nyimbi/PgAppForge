@@ -18,8 +18,8 @@ SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'postgresql://scott:tiger@localhost:5432/myapp'
 # SQLALCHEMY_ECHO = True
 
-FAB_SECURITY_MANAGER_CLASS = "app.sec.MySecurityManager"
-FAB_UPDATE_PERMS = False
+PGAF_SECURITY_MANAGER_CLASS = "app.sec.MySecurityManager"
+PGAF_UPDATE_PERMS = False
 
 BABEL_DEFAULT_LOCALE = "en"
 BABEL_DEFAULT_FOLDER = "translations"

@@ -185,7 +185,7 @@ class NotificationService:
         ]
         
         # Check app config for custom transitions
-        custom_transitions = current_app.config.get('FAB_NOTIFICATION_TRANSITIONS', [])
+        custom_transitions = current_app.config.get('PGAF_NOTIFICATION_TRANSITIONS', [])
         all_transitions = notify_transitions + custom_transitions
         
         return (old_status, new_status) in all_transitions

@@ -583,7 +583,7 @@ Configure PostgreSQL-specific settings:
 SQLALCHEMY_DATABASE_URI = 'postgresql://user:pass@localhost/dbname'
 
 # Enable PostgreSQL extensions
-FAB_ENABLE_POSTGRESQL_EXTENSIONS = True
+PGAF_ENABLE_POSTGRESQL_EXTENSIONS = True
 
 # pgvector configuration
 PGVECTOR_DEFAULT_DIMENSION = 768

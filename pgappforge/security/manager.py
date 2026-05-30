@@ -365,16 +365,16 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         self.limiter = self.create_limiter(app)
         
         # Setup Security Headers with PgAppForge configuration patterns
-        app.config.setdefault('FAB_SECURITY_FORCE_HTTPS', True)
-        app.config.setdefault('FAB_SECURITY_HSTS_MAX_AGE', 31536000)  # 1 year
-        app.config.setdefault('FAB_SECURITY_CSP_ENABLED', True)
-        app.config.setdefault('FAB_SECURITY_HEADERS_ENABLED', True)
+        app.config.setdefault('PGAF_SECURITY_FORCE_HTTPS', True)
+        app.config.setdefault('PGAF_SECURITY_HSTS_MAX_AGE', 31536000)  # 1 year
+        app.config.setdefault('PGAF_SECURITY_CSP_ENABLED', True)
+        app.config.setdefault('PGAF_SECURITY_HEADERS_ENABLED', True)
         
         # Map FAB config to SecurityHeaders config
-        if app.config.get('FAB_SECURITY_HEADERS_ENABLED', True):
-            app.config['SECURITY_HEADERS_FORCE_HTTPS'] = app.config.get('FAB_SECURITY_FORCE_HTTPS', True)
-            app.config['SECURITY_HEADERS_HSTS_MAX_AGE'] = app.config.get('FAB_SECURITY_HSTS_MAX_AGE', 31536000)
-            app.config['SECURITY_HEADERS_CSP_ENABLED'] = app.config.get('FAB_SECURITY_CSP_ENABLED', True)
+        if app.config.get('PGAF_SECURITY_HEADERS_ENABLED', True):
+            app.config['SECURITY_HEADERS_FORCE_HTTPS'] = app.config.get('PGAF_SECURITY_FORCE_HTTPS', True)
+            app.config['SECURITY_HEADERS_HSTS_MAX_AGE'] = app.config.get('PGAF_SECURITY_HSTS_MAX_AGE', 31536000)
+            app.config['SECURITY_HEADERS_CSP_ENABLED'] = app.config.get('PGAF_SECURITY_CSP_ENABLED', True)
             self.security_headers = SecurityHeaders(app)
         else:
             self.security_headers = None
@@ -473,7 +473,7 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         return jwt_manager
 
     def create_builtin_roles(self):
-        return self.appbuilder.get_app.config.get("FAB_ROLES", {})
+        return self.appbuilder.get_app.config.get("PGAF_ROLES", {})
 
     def get_roles_from_keys(self, role_keys: List[str]) -> Set[role_model]:
         """

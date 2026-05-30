@@ -64,7 +64,7 @@ ADDON_MANAGERS = [
 # ===========================
 
 # Configure approval workflows for different transaction types
-FAB_APPROVAL_WORKFLOWS = {
+PGAF_APPROVAL_WORKFLOWS = {
     'default': {
         'steps': [
             {'name': 'manager_review', 'required_role': 'Manager', 'required_approvals': 1, 'timeout_hours': 72},

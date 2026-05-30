@@ -163,7 +163,7 @@ class StandardizedFABException(FABException):
         class_name = self.__class__.__name__.replace('Exception', '').replace('Error', '')
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
-        return f"FAB_{class_name.upper()}_{timestamp}_{unique_id}"
+        return f"PGAF_{class_name.upper()}_{timestamp}_{unique_id}"
 
     def _generate_user_message(self) -> str:
         """Generate user-friendly error message based on category."""

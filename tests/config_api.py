@@ -11,8 +11,8 @@ SQLALCHEMY_DATABASE_URI = (
 SECRET_KEY = "thisismyscretkey"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 WTF_CSRF_ENABLED = False
-FAB_API_SWAGGER_UI = True
-FAB_ROLES = {
+PGAF_API_SWAGGER_UI = True
+PGAF_ROLES = {
     "ReadOnly": [
         [".*", "can_get"],
         [".*", "can_info"],

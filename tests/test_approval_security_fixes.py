@@ -43,7 +43,7 @@ class TestApprovalSecurityFixes(unittest.TestCase):
         self.mock_appbuilder.sm = self.mock_sm
         self.mock_appbuilder.get_app.config = {
             'APP_NAME': 'TestApp',
-            'FAB_APPROVAL_WORKFLOWS': {
+            'PGAF_APPROVAL_WORKFLOWS': {
                 'test_workflow': {
                     'steps': [
                         {'name': 'manager_review', 'required_role': 'Manager', 'required_approvals': 1},
@@ -423,7 +423,7 @@ class TestSecurityEdgeCases(unittest.TestCase):
         """Set up edge case test fixtures."""
         self.mock_appbuilder = Mock()
         self.mock_appbuilder.get_app.config = {
-            'FAB_APPROVAL_WORKFLOWS': {
+            'PGAF_APPROVAL_WORKFLOWS': {
                 'default': {
                     'steps': [{'name': 'review', 'required_role': 'Manager'}],
                     'initial_state': 'draft',

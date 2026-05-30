@@ -60,9 +60,9 @@ class PasswordComplexityValidator:
     """
 
     def __call__(self, form: Form, field: Field) -> None:
-        if current_app.config.get("FAB_PASSWORD_COMPLEXITY_ENABLED", False):
+        if current_app.config.get("PGAF_PASSWORD_COMPLEXITY_ENABLED", False):
             password_complexity_validator = current_app.config.get(
-                "FAB_PASSWORD_COMPLEXITY_VALIDATOR", None
+                "PGAF_PASSWORD_COMPLEXITY_VALIDATOR", None
             )
             if password_complexity_validator is not None:
                 try:
@@ -79,7 +79,7 @@ class PasswordComplexityValidator:
 def default_password_complexity(password: str) -> None:
     """
     Enhanced FAB password complexity validator with security improvements.
-    Set FAB_PASSWORD_COMPLEXITY_ENABLED to True to enable it.
+    Set PGAF_PASSWORD_COMPLEXITY_ENABLED to True to enable it.
     """
     if not password:
         raise PasswordComplexityValidationError(gettext("Password is required"))

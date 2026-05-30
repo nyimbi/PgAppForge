@@ -258,8 +258,8 @@ class MenuApi(BaseApi):
 
 
 class MenuApiManager(BaseManager):
-    """Registers the MenuApi blueprint when FAB_ADD_MENU_API is enabled (default: True)."""
+    """Registers the MenuApi blueprint when PGAF_ADD_MENU_API is enabled (default: True)."""
 
     def register_views(self):
-        if self.appbuilder.app.config.get("FAB_ADD_MENU_API", True):
+        if self.appbuilder.app.config.get("PGAF_ADD_MENU_API", True):
             self.appbuilder.add_api(MenuApi)

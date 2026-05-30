@@ -53,25 +53,25 @@ class ConfigEncryption:
 		"""Set up encryption key from environment or generate new one."""
 		try:
 			# Get master key from environment
-			master_key = os.environ.get('FAB_CONFIG_MASTER_KEY')
+			master_key = os.environ.get('PGAF_CONFIG_MASTER_KEY')
 			if not master_key:
-				master_key = self.app.config.get('FAB_CONFIG_MASTER_KEY')
+				master_key = self.app.config.get('PGAF_CONFIG_MASTER_KEY')
 			
 			if not master_key:
 				# In development, generate a key and warn
 				if self.app.debug:
 					master_key = Fernet.generate_key().decode()
 					log.warning(
-						"No FAB_CONFIG_MASTER_KEY found. Generated temporary key for development. "
-						"Set FAB_CONFIG_MASTER_KEY environment variable for production."
+						"No PGAF_CONFIG_MASTER_KEY found. Generated temporary key for development. "
+						"Set PGAF_CONFIG_MASTER_KEY environment variable for production."
 					)
 				else:
 					raise ConfigEncryptionError(
-						"FAB_CONFIG_MASTER_KEY not found. This is required for production deployment."
+						"PGAF_CONFIG_MASTER_KEY not found. This is required for production deployment."
 					)
 			
 			# Get or generate salt
-			self._salt = os.environ.get('FAB_CONFIG_SALT', 'fab-tenant-config-salt-v1').encode()
+			self._salt = os.environ.get('PGAF_CONFIG_SALT', 'fab-tenant-config-salt-v1').encode()
 			
 			# Derive encryption key using PBKDF2
 			kdf = PBKDF2HMAC(

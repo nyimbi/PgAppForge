@@ -879,9 +879,9 @@ IMG_UPLOAD_URL = '/uploads/images'
 IMG_SIZE = (300, 200, True)
 
 # UI settings
-FAB_PAGINATION_SIZE = 20
-FAB_THEME_SWITCHER = True
-FAB_ICON_SIZE = 16
+PGAF_PAGINATION_SIZE = 20
+PGAF_THEME_SWITCHER = True
+PGAF_ICON_SIZE = 16
 ```
 
 ### View Configuration

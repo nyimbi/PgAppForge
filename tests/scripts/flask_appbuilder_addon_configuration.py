@@ -55,35 +55,35 @@ class FlaskAppBuilderConfig:
     # Enhanced Search Configuration (integrated with FAB config)
     # =============================================================================
     
-    # Search system configuration - uses FAB_ prefix to avoid conflicts
-    FAB_SEARCH_DEFAULT_LIMIT = 50
-    FAB_SEARCH_MAX_LIMIT = 500
-    FAB_SEARCH_MIN_RANK = 0.1
-    FAB_SEARCH_ENABLE_FULL_TEXT = True
+    # Search system configuration - uses PGAF_ prefix to avoid conflicts
+    PGAF_SEARCH_DEFAULT_LIMIT = 50
+    PGAF_SEARCH_MAX_LIMIT = 500
+    PGAF_SEARCH_MIN_RANK = 0.1
+    PGAF_SEARCH_ENABLE_FULL_TEXT = True
     
     # =============================================================================
     # Enhanced Geocoding Configuration (integrated with FAB config)
     # =============================================================================
     
     # Geocoding service configuration
-    FAB_NOMINATIM_URL = 'https://nominatim.openstreetmap.org'
-    FAB_NOMINATIM_USER_AGENT = 'PgAppForge-Enhanced/1.0 (contact@yourdomain.com)'
+    PGAF_NOMINATIM_URL = 'https://nominatim.openstreetmap.org'
+    PGAF_NOMINATIM_USER_AGENT = 'PgAppForge-Enhanced/1.0 (contact@yourdomain.com)'
     
     # API keys for premium geocoding services (optional)
-    FAB_MAPQUEST_API_KEY = None  # Set in environment or here
-    FAB_GOOGLE_MAPS_API_KEY = None  # Set in environment or here
+    PGAF_MAPQUEST_API_KEY = None  # Set in environment or here
+    PGAF_GOOGLE_MAPS_API_KEY = None  # Set in environment or here
     
     # Geocoding behavior configuration
-    FAB_GEOCODING_TIMEOUT = 30
-    FAB_GEOCODING_RATE_LIMIT = 1.0  # seconds between requests
-    FAB_GEOCODING_CACHE_TTL = 86400  # 24 hours
+    PGAF_GEOCODING_TIMEOUT = 30
+    PGAF_GEOCODING_RATE_LIMIT = 1.0  # seconds between requests
+    PGAF_GEOCODING_CACHE_TTL = 86400  # 24 hours
     
     # =============================================================================
     # Enhanced Approval Workflow Configuration (integrated with FAB config)
     # =============================================================================
     
     # Approval workflow definitions
-    FAB_APPROVAL_WORKFLOWS = {
+    PGAF_APPROVAL_WORKFLOWS = {
         # Simple document approval workflow
         'document_approval': {
             'steps': [
@@ -138,16 +138,16 @@ class FlaskAppBuilderConfig:
     # =============================================================================
     
     # Comment system behavior
-    FAB_COMMENTS_ENABLED = True
-    FAB_COMMENTS_REQUIRE_MODERATION = True
-    FAB_COMMENTS_MAX_LENGTH = 2000
-    FAB_COMMENTS_ALLOW_ANONYMOUS = False
-    FAB_COMMENTS_ENABLE_THREADING = True
-    FAB_COMMENTS_MAX_DEPTH = 5  # Maximum comment thread depth
+    PGAF_COMMENTS_ENABLED = True
+    PGAF_COMMENTS_REQUIRE_MODERATION = True
+    PGAF_COMMENTS_MAX_LENGTH = 2000
+    PGAF_COMMENTS_ALLOW_ANONYMOUS = False
+    PGAF_COMMENTS_ENABLE_THREADING = True
+    PGAF_COMMENTS_MAX_DEPTH = 5  # Maximum comment thread depth
     
     # Comment notification settings
-    FAB_COMMENTS_NOTIFY_MODERATORS = True
-    FAB_COMMENTS_NOTIFY_PARTICIPANTS = True
+    PGAF_COMMENTS_NOTIFY_MODERATORS = True
+    PGAF_COMMENTS_NOTIFY_PARTICIPANTS = True
     
     # =============================================================================
     # Integration with existing PgAppForge security
@@ -159,7 +159,7 @@ class FlaskAppBuilderConfig:
     AUTH_ROLE_PUBLIC = 'Public'
     
     # Enhanced roles for new functionality - integrates with FAB's role system
-    FAB_CUSTOM_ROLES = [
+    PGAF_CUSTOM_ROLES = [
         {'name': 'Manager', 'permissions': ['can_approve', 'can_moderate_comments']},
         {'name': 'Legal', 'permissions': ['can_approve_legal', 'can_view_contracts']},
         {'name': 'Finance', 'permissions': ['can_approve_finance', 'can_view_budgets']},
@@ -475,7 +475,7 @@ def create_complete_enhanced_app():
         appbuilder.sm.sync_role_from_db()
         
         # Create custom roles defined in config
-        for role_config in FlaskAppBuilderConfig.FAB_CUSTOM_ROLES:
+        for role_config in FlaskAppBuilderConfig.PGAF_CUSTOM_ROLES:
             role = appbuilder.sm.find_role(role_config['name'])
             if not role:
                 role = appbuilder.sm.add_role(role_config['name'])

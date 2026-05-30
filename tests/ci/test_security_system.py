@@ -423,7 +423,7 @@ class TestAuthenticationViews(FABTestCase):
             json=login_data
         )
         
-        # 404 = API not enabled (FAB_ADD_SECURITY_API not set); 200/401 = enabled
+        # 404 = API not enabled (PGAF_ADD_SECURITY_API not set); 200/401 = enabled
         self.assertIn(response.status_code, [200, 302, 401, 404])
 
 

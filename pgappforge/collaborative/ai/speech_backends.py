@@ -14,14 +14,14 @@ Installation::
 
 Configuration (in app.config or ModelConfig)::
 
-    FAB_SPEECH_STT_BACKEND    = "faster-whisper"  # "faster-whisper" | "whisper" | "openai"
-    FAB_SPEECH_TTS_BACKEND    = "supertonic"       # "supertonic" | "coqui" | "gtts" | "openai"
-    FAB_SPEECH_WHISPER_MODEL  = "base"             # tiny|base|small|medium|large-v3
-    FAB_SPEECH_WHISPER_DEVICE = "auto"             # "auto"|"cpu"|"cuda"
-    FAB_SPEECH_WHISPER_COMPUTE= "int8"             # "int8"|"float16"|"float32"
-    FAB_SPEECH_TTS_MODEL      = "tts_models/en/ljspeech/tacotron2-DDC"
-    FAB_SPEECH_TTS_SPEAKER    = None               # speaker name/id for multi-speaker models
-    FAB_SPEECH_TTS_LANGUAGE   = "en"
+    PGAF_SPEECH_STT_BACKEND    = "faster-whisper"  # "faster-whisper" | "whisper" | "openai"
+    PGAF_SPEECH_TTS_BACKEND    = "supertonic"       # "supertonic" | "coqui" | "gtts" | "openai"
+    PGAF_SPEECH_WHISPER_MODEL  = "base"             # tiny|base|small|medium|large-v3
+    PGAF_SPEECH_WHISPER_DEVICE = "auto"             # "auto"|"cpu"|"cuda"
+    PGAF_SPEECH_WHISPER_COMPUTE= "int8"             # "int8"|"float16"|"float32"
+    PGAF_SPEECH_TTS_MODEL      = "tts_models/en/ljspeech/tacotron2-DDC"
+    PGAF_SPEECH_TTS_SPEAKER    = None               # speaker name/id for multi-speaker models
+    PGAF_SPEECH_TTS_LANGUAGE   = "en"
 """
 from __future__ import annotations
 
@@ -338,7 +338,7 @@ class SpeechProcessor:
 	    from pgappforge.collaborative.ai.speech_backends import SpeechProcessor
 
 	    speech = SpeechProcessor()
-	    speech.init_app(app)  # reads FAB_SPEECH_* config keys
+	    speech.init_app(app)  # reads PGAF_SPEECH_* config keys
 
 	    # Or pass backends directly
 	    speech = SpeechProcessor(
@@ -358,23 +358,23 @@ class SpeechProcessor:
 	def init_app(self, app) -> None:
 		"""Configure from Flask app config."""
 		cfg = app.config
-		stt_backend = cfg.get("FAB_SPEECH_STT_BACKEND", "faster-whisper")
-		tts_backend = cfg.get("FAB_SPEECH_TTS_BACKEND", "supertonic")
+		stt_backend = cfg.get("PGAF_SPEECH_STT_BACKEND", "faster-whisper")
+		tts_backend = cfg.get("PGAF_SPEECH_TTS_BACKEND", "supertonic")
 
 		if stt_backend == "faster-whisper":
 			self._stt = FasterWhisperSTT(
-				model_size=cfg.get("FAB_SPEECH_WHISPER_MODEL", "base"),
-				device=cfg.get("FAB_SPEECH_WHISPER_DEVICE", "auto"),
-				compute_type=cfg.get("FAB_SPEECH_WHISPER_COMPUTE", "int8"),
-				language=cfg.get("FAB_SPEECH_TTS_LANGUAGE"),
+				model_size=cfg.get("PGAF_SPEECH_WHISPER_MODEL", "base"),
+				device=cfg.get("PGAF_SPEECH_WHISPER_DEVICE", "auto"),
+				compute_type=cfg.get("PGAF_SPEECH_WHISPER_COMPUTE", "int8"),
+				language=cfg.get("PGAF_SPEECH_TTS_LANGUAGE"),
 			)
 		# else: whisper / openai handled by existing adapters
 
 		if tts_backend in ("supertonic", "coqui", "pyttsx3"):
 			self._tts = SupertonicTTS(
-				model_name=cfg.get("FAB_SPEECH_TTS_MODEL"),
-				speaker=cfg.get("FAB_SPEECH_TTS_SPEAKER"),
-				language=cfg.get("FAB_SPEECH_TTS_LANGUAGE", "en"),
+				model_name=cfg.get("PGAF_SPEECH_TTS_MODEL"),
+				speaker=cfg.get("PGAF_SPEECH_TTS_SPEAKER"),
+				language=cfg.get("PGAF_SPEECH_TTS_LANGUAGE", "en"),
 			)
 
 		app.extensions["fab_speech_processor"] = self
@@ -387,7 +387,7 @@ class SpeechProcessor:
 		"""Transcribe audio bytes to text."""
 		if self._stt is None:
 			raise RuntimeError(
-				"STT backend not configured. Set FAB_SPEECH_STT_BACKEND."
+				"STT backend not configured. Set PGAF_SPEECH_STT_BACKEND."
 			)
 		return await self._stt.transcribe(audio_data, **kwargs)
 
@@ -395,7 +395,7 @@ class SpeechProcessor:
 		"""Synthesise text to audio bytes."""
 		if self._tts is None:
 			raise RuntimeError(
-				"TTS backend not configured. Set FAB_SPEECH_TTS_BACKEND."
+				"TTS backend not configured. Set PGAF_SPEECH_TTS_BACKEND."
 			)
 		return await self._tts.synthesize(text, **kwargs)
 

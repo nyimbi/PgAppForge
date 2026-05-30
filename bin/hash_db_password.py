@@ -40,8 +40,8 @@ for user in users:
     log.info("Hashing password for {0}".format(user.username))
     user.password = generate_password_hash(
         password=user.password,
-        method=app.config.get('FAB_PASSWORD_HASH_METHOD', 'scrypt'),
-        salt_length=app.config.get('FAB_PASSWORD_HASH_SALT_LENGTH', 16),
+        method=app.config.get('PGAF_PASSWORD_HASH_METHOD', 'scrypt'),
+        salt_length=app.config.get('PGAF_PASSWORD_HASH_SALT_LENGTH', 16),
     )
     try:
         db.session.merge(user)

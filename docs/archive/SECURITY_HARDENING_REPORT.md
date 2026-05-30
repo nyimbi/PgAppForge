@@ -136,7 +136,7 @@ export REDIS_URL="<redis connection for rate limiting>"  # Optional
 ```
 
 #### Security Configuration Verification
-- [ ] `FAB_PASSWORD_COMPLEXITY_ENABLED = True`
+- [ ] `PGAF_PASSWORD_COMPLEXITY_ENABLED = True`
 - [ ] `CSRF_ENABLED = True` 
 - [ ] `SESSION_COOKIE_SECURE = True`
 - [ ] `SESSION_COOKIE_HTTPONLY = True`

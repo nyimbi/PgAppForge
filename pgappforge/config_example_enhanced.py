@@ -464,7 +464,7 @@ def create_app():
     app.config.from_object(get_config())
     
     # Initialize PgAppForge with enhanced features
-    appbuilder = AppBuilder(app, update_perms=app.config.get('FAB_UPDATE_PERMS', True))
+    appbuilder = AppBuilder(app, update_perms=app.config.get('PGAF_UPDATE_PERMS', True))
     
     # Register enhanced views
     from .public_index_view import PublicIndexView, PublicMediaAPIView

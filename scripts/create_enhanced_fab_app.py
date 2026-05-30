@@ -586,7 +586,7 @@ SECURITY_RATE_LIMITS = {{
 }}
 
 # Enhanced Password Complexity
-FAB_PASSWORD_COMPLEXITY_ENABLED = True
+PGAF_PASSWORD_COMPLEXITY_ENABLED = True
 
 # Database settings
 SQLALCHEMY_DATABASE_URI = '{db_uri}'

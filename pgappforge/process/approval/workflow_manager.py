@@ -71,7 +71,7 @@ class ApprovalWorkflowManager(BaseManager):
             
         # Load from Flask config
         config = self.appbuilder.get_app.config
-        self.workflow_configs = config.get('FAB_APPROVAL_WORKFLOWS', {
+        self.workflow_configs = config.get('PGAF_APPROVAL_WORKFLOWS', {
             # Default secure workflow configuration
             'default': {
                 'steps': [

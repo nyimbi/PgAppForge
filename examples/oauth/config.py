@@ -226,4 +226,4 @@ IMG_UPLOAD_URL = "/static/uploads/"
 # APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
 
-FAB_SECURITY_MANAGER_CLASS = "app.security.MySecurityManager"
+PGAF_SECURITY_MANAGER_CLASS = "app.security.MySecurityManager"

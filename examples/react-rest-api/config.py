@@ -18,7 +18,7 @@ SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'postgresql://scott:tiger@localhost:5432/myapp'
 # SQLALCHEMY_ECHO = True
 SQLALCHEMY_POOL_RECYCLE = 3
-FAB_BASE_TEMPLATE = 'base.html'
+PGAF_BASE_TEMPLATE = 'base.html'
 BABEL_DEFAULT_LOCALE = "en"
 BABEL_DEFAULT_FOLDER = "translations"
 LANGUAGES = {
@@ -39,7 +39,7 @@ LANGUAGES = {
 # ------------------------------
 # GLOBALS FOR GENERAL APP's
 # ------------------------------
-FAB_API_SWAGGER_UI = True
+PGAF_API_SWAGGER_UI = True
 
 UPLOAD_FOLDER = basedir + "/app/static/uploads/"
 IMG_UPLOAD_FOLDER = basedir + "/app/static/uploads/"
@@ -68,7 +68,7 @@ APP_THEME = ""  # default
 # APP_THEME = "solar.css"
 # APP_THEME = "superhero.css"
 
-#FAB_ROLES = {
+#PGAF_ROLES = {
 #    "ReadOnly": [
 #        [".*", "can_list"],
 #        [".*", "can_show"],

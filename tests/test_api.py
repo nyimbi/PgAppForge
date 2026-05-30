@@ -122,7 +122,7 @@ class APIDisableSecViewTestCase(FABTestCase):
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_ADD_SECURITY_VIEWS"] = False
+        self.app.config["PGAF_ADD_SECURITY_VIEWS"] = False
 
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -144,7 +144,7 @@ class APIDisableOpenApiViewTestCase(FABTestCase):
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_ADD_OPENAPI_VIEWS"] = False
+        self.app.config["PGAF_ADD_OPENAPI_VIEWS"] = False
 
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -175,7 +175,7 @@ class APITestCase(FABTestCase):
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_API_MAX_PAGE_SIZE"] = MAX_PAGE_SIZE
+        self.app.config["PGAF_API_MAX_PAGE_SIZE"] = MAX_PAGE_SIZE
 
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)

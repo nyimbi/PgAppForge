@@ -388,8 +388,8 @@ You can give FlaskAppBuilder roles based on Oauth groups::
 
     # a mapping from the values of `userinfo["role_keys"]` to a list of FAB roles
     AUTH_ROLES_MAPPING = {
-        "FAB_USERS": ["User"],
-        "FAB_ADMINS": ["Admin"],
+        "PGAF_USERS": ["User"],
+        "PGAF_ADMINS": ["Admin"],
     }
 
     # if we should replace ALL the user's roles each login, or only on registration
@@ -471,9 +471,9 @@ support regex for views/API and permissions, this simplifies security management
 improve performance since the many to many permissions between a role and it's permissions
 does not need to be fetched from the backend.
 
-Builtin roles are defined on the config using ``FAB_ROLES`` key and respect the following data structure::
+Builtin roles are defined on the config using ``PGAF_ROLES`` key and respect the following data structure::
 
-    FAB_ROLES = {
+    PGAF_ROLES = {
         "<ROLE NAME>": [
             ["<VIEW/MENU/API NAME>", "PERMISSION NAME"],
             ....
@@ -483,7 +483,7 @@ Builtin roles are defined on the config using ``FAB_ROLES`` key and respect the 
 
 So for example a **Read Only** role might look like::
 
-    FAB_ROLES = {
+    PGAF_ROLES = {
         "ReadOnly": [
             [".*", "can_list"],
             [".*", "can_show"],
@@ -498,7 +498,7 @@ can be associated to users just like a "normal"/user defined role.
 
 If you want to later on change the name of these roles, you can map these roles by their backend id::
 
-    FAB_ROLES = {
+    PGAF_ROLES = {
         "ReadOnly_Altered": [
             [".*", "can_list"],
             [".*", "can_show"],
@@ -508,7 +508,7 @@ If you want to later on change the name of these roles, you can map these roles 
         ]
     }
 
-    FAB_ROLES_MAPPING = {
+    PGAF_ROLES_MAPPING = {
         1: "ReadOnly_Altered"
     }
 
@@ -705,7 +705,7 @@ An example for compressing permissions using MVC Model Views::
 
 Note that if your changing an already existing application, you need to migrate the old permission names to the new
 ones. Before doing that you should disable the boot automatic create/delete permissions,
-so set ``FAB_UPDATE_PERMS = False``. Then run the following FAB cli command::
+so set ``PGAF_UPDATE_PERMS = False``. Then run the following FAB cli command::
 
     $ flask fab security-converge
 
@@ -792,7 +792,7 @@ Password complexity validation
 ------------------------------
 
 This feature only makes sense when using AUTH database.
-By default you can enable password complexity validation by setting `FAB_PASSWORD_COMPLEXITY_ENABLED = True`.
+By default you can enable password complexity validation by setting `PGAF_PASSWORD_COMPLEXITY_ENABLED = True`.
 
 This default enforces:
 
@@ -817,8 +817,8 @@ Example on your config::
         if len(password) < 8:
             raise PasswordComplexityValidationError("Must have at least 8 characters")
 
-    FAB_PASSWORD_COMPLEXITY_VALIDATOR = custom_password_validator
-    FAB_PASSWORD_COMPLEXITY_ENABLED = True
+    PGAF_PASSWORD_COMPLEXITY_VALIDATOR = custom_password_validator
+    PGAF_PASSWORD_COMPLEXITY_ENABLED = True
 
 
 Your Custom Security
@@ -855,7 +855,7 @@ Then on the __init__.py initialize AppBuilder with you own security class::
 Alternatively since 1.13.1 you can declare your custom **SecurityManager** on the config.
 This is a must have if your using the factory app pattern, on the config declare you class the following way::
 
-    FAB_SECURITY_MANAGER_CLASS='app.security.MySecurityManager'
+    PGAF_SECURITY_MANAGER_CLASS='app.security.MySecurityManager'
 
 F.A.B. uses a different user view for each authentication method
 

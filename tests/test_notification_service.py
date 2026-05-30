@@ -116,7 +116,7 @@ class MockApp:
         }
         self.config = {
             'MAIL_DEFAULT_SENDER': 'noreply@example.com',
-            'FAB_NOTIFICATION_TRANSITIONS': [
+            'PGAF_NOTIFICATION_TRANSITIONS': [
                 ('custom_status', 'custom_new_status')
             ]
         }

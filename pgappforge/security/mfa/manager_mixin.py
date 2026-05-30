@@ -595,7 +595,7 @@ class MFASecurityManagerMixin:
         try:
             from .views import MFAView, MFASetupView
             
-            if not self.appbuilder.get_app.config.get('FAB_ADD_SECURITY_VIEWS', True):
+            if not self.appbuilder.get_app.config.get('PGAF_ADD_SECURITY_VIEWS', True):
                 return
             
             # Register MFA views

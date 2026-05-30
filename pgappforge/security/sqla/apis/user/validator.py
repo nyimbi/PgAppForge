@@ -9,9 +9,9 @@ class PasswordComplexityValidator(Validator):
     """Validator for password."""
 
     def __call__(self, value: str) -> str:
-        if current_app.config.get("FAB_PASSWORD_COMPLEXITY_ENABLED", False):
+        if current_app.config.get("PGAF_PASSWORD_COMPLEXITY_ENABLED", False):
             password_complexity_validator = current_app.config.get(
-                "FAB_PASSWORD_COMPLEXITY_VALIDATOR", None
+                "PGAF_PASSWORD_COMPLEXITY_VALIDATOR", None
             )
             if password_complexity_validator is not None:
                 try:

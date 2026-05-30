@@ -100,7 +100,7 @@ CACHE_DEFAULT_TIMEOUT = 300
 # =============================================================================
 
 # Pagination
-FAB_ADMIN_SWATCH = 'united'
+PGAF_ADMIN_SWATCH = 'united'
 PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 

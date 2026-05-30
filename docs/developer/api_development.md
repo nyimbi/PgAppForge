@@ -777,8 +777,8 @@ SWAGGER_CONFIG = {
 }
 
 # Add to your config.py
-FAB_API_SWAGGER_UI = True
-FAB_API_SWAGGER_TEMPLATE = "appbuilder/swagger/swagger.html"
+PGAF_API_SWAGGER_UI = True
+PGAF_API_SWAGGER_TEMPLATE = "appbuilder/swagger/swagger.html"
 
 class DocumentedEmployeeApi(ModelRestApi):
     """Employee API with comprehensive documentation."""

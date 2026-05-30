@@ -227,7 +227,7 @@ def validate_pgappforge_integration():
             ('ModelView' in str(analysis.get('class_definitions', [])), "Extends ModelView"),
             ('ADDON_MANAGERS' in open(file_path, 'r').read(), "Uses ADDON_MANAGERS pattern"),
             ('appbuilder' in open(file_path, 'r').read(), "References appbuilder instance"),
-            ('FAB_' in open(file_path, 'r').read(), "Uses PgAppForge config prefixes"),
+            ('PGAF_' in open(file_path, 'r').read(), "Uses PgAppForge config prefixes"),
         ]
         
         file_passed = True

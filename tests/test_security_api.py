@@ -54,10 +54,10 @@ class UserAPITestCase(FABTestCase):
         user.password = generate_password_hash(
             password=password,
             method=self.appbuilder.get_app.config.get(
-                "FAB_PASSWORD_HASH_METHOD", "scrypt"
+                "PGAF_PASSWORD_HASH_METHOD", "scrypt"
             ),
             salt_length=self.appbuilder.get_app.config.get(
-                "FAB_PASSWORD_HASH_SALT_LENGTH", 16
+                "PGAF_PASSWORD_HASH_SALT_LENGTH", 16
             ),
         )
         self.session.commit()
@@ -560,7 +560,7 @@ class RolePermissionAPITestCase(FABTestCase):
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_ADD_SECURITY_API"] = True
+        self.app.config["PGAF_ADD_SECURITY_API"] = True
         self.db = SQLA(self.app)
         self.session = self.db.session
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -1379,9 +1379,9 @@ class UserCustomPasswordComplexityValidatorTestCase(FABTestCase):
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_ADD_SECURITY_API"] = True
-        self.app.config["FAB_PASSWORD_COMPLEXITY_ENABLED"] = True
-        self.app.config["FAB_PASSWORD_COMPLEXITY_VALIDATOR"] = passwordValidator
+        self.app.config["PGAF_ADD_SECURITY_API"] = True
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_ENABLED"] = True
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_VALIDATOR"] = passwordValidator
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.user_model = User
@@ -1439,8 +1439,8 @@ class UserDefaultPasswordComplexityValidatorTestCase(FABTestCase):
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_ADD_SECURITY_API"] = True
-        self.app.config["FAB_PASSWORD_COMPLEXITY_ENABLED"] = True
+        self.app.config["PGAF_ADD_SECURITY_API"] = True
+        self.app.config["PGAF_PASSWORD_COMPLEXITY_ENABLED"] = True
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.user_model = User
@@ -1492,7 +1492,7 @@ class GroupAPITestCase(FABTestCase):
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
         self.app.config.from_object("tests.config_api")
-        self.app.config["FAB_ADD_SECURITY_API"] = True
+        self.app.config["PGAF_ADD_SECURITY_API"] = True
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.session = self.db.session

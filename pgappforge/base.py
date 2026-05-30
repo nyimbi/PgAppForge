@@ -125,7 +125,7 @@ class AppBuilder:
             optional, pass your own security manager class
         :param update_perms:
             optional, update permissions flag (Boolean) you can use
-            FAB_UPDATE_PERMS config key also
+            PGAF_UPDATE_PERMS config key also
         """
         self.baseviews: List[Union[Type["AbstractViewApi"], "AbstractViewApi"]] = []
 
@@ -165,31 +165,49 @@ class AppBuilder:
         :param session: The SQLAlchemy session
 
         """
+        # Backward-compat: copy legacy FAB_* keys to the new PGAF_* prefix.
+        # Apps migrating from flask_appbuilder can keep their existing config
+        # unchanged — PGAF_ takes precedence if both are set.
+        import warnings as _warnings
+        _migrated = []
+        for _k, _v in list(app.config.items()):
+            if _k.startswith("FAB_"):
+                _new_k = "PGAF_" + _k[4:]
+                if _new_k not in app.config:
+                    app.config[_new_k] = _v
+                    _migrated.append(_k)
+        if _migrated:
+            _warnings.warn(
+                f"Deprecated config keys (rename FAB_ → PGAF_): {', '.join(_migrated)}",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         app.config.setdefault("APP_NAME", "F.A.B.")
         app.config.setdefault("APP_THEME", "")
         app.config.setdefault("APP_ICON", "")
         app.config.setdefault("LANGUAGES", {"en": {"flag": "gb", "name": "English"}})
         app.config.setdefault("ADDON_MANAGERS", [])
         app.config.setdefault("RATELIMIT_ENABLED", False)
-        app.config.setdefault("FAB_API_MAX_PAGE_SIZE", 100)
-        app.config.setdefault("FAB_BASE_TEMPLATE", self.base_template)
-        app.config.setdefault("FAB_STATIC_FOLDER", self.static_folder)
-        app.config.setdefault("FAB_STATIC_URL_PATH", self.static_url_path)
+        app.config.setdefault("PGAF_API_MAX_PAGE_SIZE", 100)
+        app.config.setdefault("PGAF_BASE_TEMPLATE", self.base_template)
+        app.config.setdefault("PGAF_STATIC_FOLDER", self.static_folder)
+        app.config.setdefault("PGAF_STATIC_URL_PATH", self.static_url_path)
 
         self.app = app
 
-        self.base_template = app.config.get("FAB_BASE_TEMPLATE", self.base_template)
-        self.static_folder = app.config.get("FAB_STATIC_FOLDER", self.static_folder)
+        self.base_template = app.config.get("PGAF_BASE_TEMPLATE", self.base_template)
+        self.static_folder = app.config.get("PGAF_STATIC_FOLDER", self.static_folder)
         self.static_url_path = app.config.get(
-            "FAB_STATIC_URL_PATH", self.static_url_path
+            "PGAF_STATIC_URL_PATH", self.static_url_path
         )
-        _index_view = app.config.get("FAB_INDEX_VIEW", None)
+        _index_view = app.config.get("PGAF_INDEX_VIEW", None)
         if _index_view:
             self.indexview = dynamic_class_import(_index_view)  # type: ignore
         else:
             self.indexview = self.indexview or IndexView
 
-        _menu = app.config.get("FAB_MENU", None)
+        _menu = app.config.get("PGAF_MENU", None)
 
         # Setup Menu
         if _menu is not None:
@@ -200,9 +218,9 @@ class AppBuilder:
             self.menu = self.menu or Menu()
 
         if self.update_perms:  # default is True, if False takes precedence from config
-            self.update_perms = app.config.get("FAB_UPDATE_PERMS", True)
+            self.update_perms = app.config.get("PGAF_UPDATE_PERMS", True)
         _security_manager_class_name = app.config.get(
-            "FAB_SECURITY_MANAGER_CLASS", None
+            "PGAF_SECURITY_MANAGER_CLASS", None
         )
         if _security_manager_class_name is not None:
             security_manager_class = dynamic_class_import(_security_manager_class_name)
@@ -375,14 +393,14 @@ class AppBuilder:
             app: Flask application instance
         """
         # Set up plugin configuration
-        app.config.setdefault("FAB_PLUGINS", [])
-        app.config.setdefault("FAB_PLUGIN_SECURITY_STRICT", True)
-        app.config.setdefault("FAB_PLUGIN_PATHS", [])
+        app.config.setdefault("PGAF_PLUGINS", [])
+        app.config.setdefault("PGAF_PLUGIN_SECURITY_STRICT", True)
+        app.config.setdefault("PGAF_PLUGIN_PATHS", [])
 
         # Initialize plugin loader based on security settings
         # SECURITY: Default to strict security (was False, now True)
-        strict_security = app.config.get("FAB_PLUGIN_SECURITY_STRICT", True)
-        plugin_paths = app.config.get("FAB_PLUGIN_PATHS", [])
+        strict_security = app.config.get("PGAF_PLUGIN_SECURITY_STRICT", True)
+        plugin_paths = app.config.get("PGAF_PLUGIN_PATHS", [])
 
         # SECURITY: Prevent disabling plugin security in production
         if not strict_security:
@@ -390,11 +408,11 @@ class AppBuilder:
                 from ..exceptions import FABConfigurationError
                 raise FABConfigurationError(
                     "Plugin security cannot be disabled in production environment. "
-                    "Set FAB_PLUGIN_SECURITY_STRICT=True or remove the setting."
+                    "Set PGAF_PLUGIN_SECURITY_STRICT=True or remove the setting."
                 )
             # Warn about insecure configuration in non-production
             log.warning(
-                "Plugin security is disabled (FAB_PLUGIN_SECURITY_STRICT=False). "
+                "Plugin security is disabled (PGAF_PLUGIN_SECURITY_STRICT=False). "
                 "This is unsafe for production environments."
             )
 
@@ -462,7 +480,7 @@ class AppBuilder:
                     log.info(LOGMSG_INF_FAB_ADDON_ADDED, addon)
 
                     # Optionally wrap legacy manager in plugin adapter
-                    if hasattr(self.get_app.config, 'FAB_AUTO_WRAP_LEGACY') and self.get_app.config['FAB_AUTO_WRAP_LEGACY']:
+                    if hasattr(self.get_app.config, 'PGAF_AUTO_WRAP_LEGACY') and self.get_app.config['PGAF_AUTO_WRAP_LEGACY']:
                         try:
                             adapter_class = self.plugin_loader.load_legacy_manager(addon_class)
                             self.plugin_manager.register_plugin_class(adapter_class)
@@ -477,14 +495,14 @@ class AppBuilder:
     def _process_plugins(self) -> None:
         """Process the new plugin system configurations.
 
-        Loads plugins registered via entry_points or FAB_PLUGINS config,
+        Loads plugins registered via entry_points or PGAF_PLUGINS config,
         wires them into the HookRegistry, and calls each plugin's setup().
         """
         if not self.plugin_manager:
             return
 
         # Get plugin configurations from Flask config
-        plugin_configs = self.get_app.config.get("FAB_PLUGINS", [])
+        plugin_configs = self.get_app.config.get("PGAF_PLUGINS", [])
 
         for plugin_config in plugin_configs:
             try:

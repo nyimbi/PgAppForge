@@ -43,12 +43,12 @@ class MFAIntegrationTest(unittest.TestCase):
             'WTF_CSRF_ENABLED': False,  # Disable CSRF for testing
             
             # MFA Configuration
-            'FAB_MFA_ENABLED': True,
-            'FAB_MFA_TOTP_ISSUER': 'Test App',
-            'FAB_MFA_MAX_ATTEMPTS': 3,
-            'FAB_MFA_LOCKOUT_DURATION': 5,
-            'FAB_MFA_SMS_CODE_EXPIRES': 300,
-            'FAB_MFA_EMAIL_CODE_EXPIRES': 600,
+            'PGAF_MFA_ENABLED': True,
+            'PGAF_MFA_TOTP_ISSUER': 'Test App',
+            'PGAF_MFA_MAX_ATTEMPTS': 3,
+            'PGAF_MFA_LOCKOUT_DURATION': 5,
+            'PGAF_MFA_SMS_CODE_EXPIRES': 300,
+            'PGAF_MFA_EMAIL_CODE_EXPIRES': 600,
         })
         
         # Initialize PgAppForge
@@ -64,7 +64,7 @@ class MFAIntegrationTest(unittest.TestCase):
             print(f"Warning: Could not initialize AppBuilder with MFA: {e}")
             print("This may indicate missing MFA dependencies or integration issues")
             # Try without MFA for basic testing
-            self.app.config['FAB_MFA_ENABLED'] = False
+            self.app.config['PGAF_MFA_ENABLED'] = False
             self.appbuilder = AppBuilder(self.app, self.db.session)
             self.mfa_available = False
             return
@@ -202,9 +202,9 @@ class MFAIntegrationTest(unittest.TestCase):
             self.skipTest("MFA not available - skipping configuration tests")
             
         # Check that MFA configuration is loaded
-        self.assertTrue(self.app.config.get('FAB_MFA_ENABLED'))
-        self.assertEqual(self.app.config.get('FAB_MFA_TOTP_ISSUER'), 'Test App')
-        self.assertEqual(self.app.config.get('FAB_MFA_MAX_ATTEMPTS'), 3)
+        self.assertTrue(self.app.config.get('PGAF_MFA_ENABLED'))
+        self.assertEqual(self.app.config.get('PGAF_MFA_TOTP_ISSUER'), 'Test App')
+        self.assertEqual(self.app.config.get('PGAF_MFA_MAX_ATTEMPTS'), 3)
         
         print("✓ MFA configuration loaded correctly")
 

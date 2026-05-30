@@ -117,7 +117,7 @@ class TestStandardizedFABException:
         assert exception.category == ErrorCategory.SYSTEM
         assert exception.severity == ErrorSeverity.MEDIUM
         assert exception.recovery_action == RecoveryAction.ABORT
-        assert exception.error_code.startswith("FAB_STANDARDIZEDFAB_")
+        assert exception.error_code.startswith("PGAF_STANDARDIZEDFAB_")
         assert exception.user_message is not None
 
     def test_exception_with_all_parameters(self):

@@ -41,7 +41,7 @@ ADDON_MANAGERS = [
 # Approval Workflow Configuration
 # ===========================
 
-FAB_APPROVAL_WORKFLOWS = {
+PGAF_APPROVAL_WORKFLOWS = {
     # Default workflow for standard approval processes
     'default': {
         'steps': [

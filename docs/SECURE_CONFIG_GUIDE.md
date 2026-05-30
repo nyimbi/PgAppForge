@@ -28,10 +28,10 @@ Set the master encryption key in your environment:
 
 ```bash
 # Production - use a strong, randomly generated key
-export FAB_CONFIG_MASTER_KEY="your-secure-master-key-here"
+export PGAF_CONFIG_MASTER_KEY="your-secure-master-key-here"
 
 # Optional: custom salt (defaults to built-in salt)
-export FAB_CONFIG_SALT="your-custom-salt"
+export PGAF_CONFIG_SALT="your-custom-salt"
 ```
 
 **Important**: The master key should be:
@@ -328,8 +328,8 @@ echo "Configuration encryption monitoring: OK"
 
 ### Common Issues
 
-1. **"FAB_CONFIG_MASTER_KEY not found"**
-   - Set the `FAB_CONFIG_MASTER_KEY` environment variable
+1. **"PGAF_CONFIG_MASTER_KEY not found"**
+   - Set the `PGAF_CONFIG_MASTER_KEY` environment variable
    - Check that your deployment scripts include the key
 
 2. **"Invalid encryption token"**
