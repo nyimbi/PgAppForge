@@ -17,6 +17,9 @@ import logging
 from collections import defaultdict
 import gc
 
+import logging
+logger = logging.getLogger(__name__)
+
 try:
     import websockets
     from websockets.exceptions import ConnectionClosed, WebSocketException
