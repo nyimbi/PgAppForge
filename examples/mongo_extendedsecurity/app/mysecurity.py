@@ -12,9 +12,9 @@ from mongoengine import (
     BooleanField,
     IntField,
 )
-from flask_appbuilder.security.mongoengine.manager import SecurityManager
-from flask_appbuilder.security.mongoengine.models import User
-from flask_appbuilder.security.views import UserDBModelView
+from pgappforge.security.mongoengine.manager import SecurityManager
+from pgappforge.security.mongoengine.models import User
+from pgappforge.security.views import UserDBModelView
 from flask_babel import lazy_gettext
 
 

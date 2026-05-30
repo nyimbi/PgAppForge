@@ -11,7 +11,7 @@ Tests edge cases, boundary conditions, and integration scenarios:
 6. Memory pressure conditions
 7. Large dataset handling
 
-Environment: Flask-AppBuilder with fault injection testing
+Environment: PgAppForge with fault injection testing
 """
 
 import pytest
@@ -27,12 +27,12 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from flask_appbuilder.process.approval.views import ApprovalWorkflowView
-from flask_appbuilder.process.approval.chain_manager import ApprovalChainManager
-from flask_appbuilder.process.approval.workflow_engine import (
+from pgappforge.process.approval.views import ApprovalWorkflowView
+from pgappforge.process.approval.chain_manager import ApprovalChainManager
+from pgappforge.process.approval.workflow_engine import (
     ApprovalWorkflowEngine, ApprovalTransactionError
 )
-from flask_appbuilder.process.security.approval_security_config import (
+from pgappforge.process.security.approval_security_config import (
     ApprovalSecurityConfig, SecurityError
 )
 
@@ -109,7 +109,7 @@ class TestApprovalWorkflowEdgeCases(unittest.TestCase):
         # Test workflow with missing steps
         malformed_config = {'approved_state': 'approved'}  # Missing 'steps'
         
-        with patch('flask_appbuilder.process.approval.workflow_engine.log') as mock_log:
+        with patch('pgappforge.process.approval.workflow_engine.log') as mock_log:
             result = self.workflow_engine.register_model_workflow(
                 Mock, 'malformed', {'malformed': malformed_config}
             )
@@ -288,7 +288,7 @@ class TestApprovalWorkflowEdgeCases(unittest.TestCase):
         current_timestamp = datetime.utcnow()
         
         for timestamp in [old_timestamp, future_timestamp, current_timestamp]:
-            with patch('flask_appbuilder.process.approval.workflow_engine.datetime') as mock_datetime:
+            with patch('pgappforge.process.approval.workflow_engine.datetime') as mock_datetime:
                 mock_datetime.utcnow.return_value = timestamp
                 
                 mock_instance = Mock()

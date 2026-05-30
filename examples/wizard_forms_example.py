@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Flask-AppBuilder Wizard Forms Example
+PgAppForge Wizard Forms Example
 
 This example demonstrates comprehensive wizard form functionality including:
 - Multi-step forms with automatic field organization
 - Custom step definitions and validation
 - Session persistence and resumption
 - Complex form types (registration, surveys, applications)
-- Integration with Flask-AppBuilder views and models
+- Integration with PgAppForge views and models
 
 Prerequisites:
-- Flask-AppBuilder
+- PgAppForge
 - WTForms
 - Flask-Login (for user persistence)
 
@@ -21,9 +21,9 @@ Usage:
 import os
 from datetime import datetime
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.security.sqla.models import User
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Model
+from pgappforge.security.sqla.models import User
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Date
 from wtforms import (
     StringField, TextAreaField, SelectField, BooleanField, 
@@ -36,8 +36,8 @@ from wtforms.validators import (
 )
 
 # Import wizard components
-from flask_appbuilder.forms.wizard import WizardForm, WizardStep
-from flask_appbuilder.views.wizard import WizardFormView
+from pgappforge.forms.wizard import WizardForm, WizardStep
+from pgappforge.views.wizard import WizardFormView
 
 
 # Example 1: Employee Registration Wizard
@@ -403,7 +403,7 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "wizard_demo.db")}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    # Flask-AppBuilder configuration
+    # PgAppForge configuration
     app.config['WTF_CSRF_ENABLED'] = True
     
     db = SQLA(app)
@@ -482,7 +482,7 @@ def demonstrate_wizard_features():
     print("✅ Keyboard navigation shortcuts")
     print("✅ Draft saving and form resumption")
     print("✅ Final submission processing")
-    print("✅ Integration with Flask-AppBuilder")
+    print("✅ Integration with PgAppForge")
 
 
 if __name__ == '__main__':
@@ -498,7 +498,7 @@ if __name__ == '__main__':
             # Demonstrate features
             demonstrate_wizard_features()
             
-            print(f"\n🚀 Starting Flask-AppBuilder Wizard Demo Server...")
+            print(f"\n🚀 Starting PgAppForge Wizard Demo Server...")
             print(f"📱 Open http://localhost:5000 in your browser")
             print(f"👤 Login with: admin / admin")
             print(f"🧙‍♂️ Navigate to 'Wizards' menu to try the forms")
@@ -508,7 +508,7 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"❌ Error starting application: {e}")
             print("\n📋 Troubleshooting:")
-            print("  1. Ensure Flask-AppBuilder is installed")
+            print("  1. Ensure PgAppForge is installed")
             print("  2. Check database permissions")
             print("  3. Verify all dependencies are available")
             print("  4. Check for port conflicts")

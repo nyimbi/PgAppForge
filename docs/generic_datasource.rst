@@ -18,7 +18,7 @@ override the all method you will implement the data generation at it's heart.
 
 On our example you must first define the **Model** you will represent::
 
-    from flask_appbuilder.models.generic import GenericModel, GenericSession, GenericColumn
+    from pgforge.models.generic import GenericModel, GenericSession, GenericColumn
 
     class PSModel(GenericModel):
         UID = GenericColumn(str)
@@ -93,6 +93,6 @@ Finally you can use it on the framework like this::
 And then register it like a normal ModelView.
 
 
-You can try this example on `quickhowto2 example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickhowto2>`
+You can try this example on `quickhowto2 example <https://github.com/dpgaspar/PgForge/tree/master/examples/quickhowto2>`
 
 I know this is still a short doc for such a complex feature, any doubts you may have just open an issue.

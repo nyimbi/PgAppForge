@@ -15,7 +15,7 @@ from typing import Dict, List, Any, Callable
 from contextlib import contextmanager
 
 # Add project root to path for imports
-sys.path.insert(0, './flask_appbuilder/collaborative/utils')
+sys.path.insert(0, './pgappforge/collaborative/utils')
 
 # Import collaborative utilities
 from validation import (

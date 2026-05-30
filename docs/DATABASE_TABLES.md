@@ -1,8 +1,8 @@
-# Flask-AppBuilder Enhancement Database Tables
+# PgAppForge Enhancement Database Tables
 
-## Flask-AppBuilder Standard Tables (ab_ prefix)
+## PgAppForge Standard Tables (ab_ prefix)
 
-All tables created by our enhancement follow the Flask-AppBuilder standard naming convention with the `ab_` prefix.
+All tables created by our enhancement follow the PgAppForge standard naming convention with the `ab_` prefix.
 
 ## Multi-Factor Authentication Tables
 
@@ -30,7 +30,7 @@ All tables created by our enhancement follow the Flask-AppBuilder standard namin
 ### MFA System Foreign Keys
 - `ab_mfa_backup_codes.user_mfa_id` → `ab_user_mfa.id`
 - `ab_mfa_verifications.user_mfa_id` → `ab_user_mfa.id`
-- All user references → `ab_user.id` (Flask-AppBuilder standard user table)
+- All user references → `ab_user.id` (PgAppForge standard user table)
 
 ### Wallet System Foreign Keys
 - `ab_wallet_transactions.wallet_id` → `ab_user_wallets.id`
@@ -43,7 +43,7 @@ All tables created by our enhancement follow the Flask-AppBuilder standard namin
 - `ab_recurring_transactions.payment_method_id` → `ab_payment_methods.id`
 - `ab_wallet_audits.wallet_id` → `ab_user_wallets.id`
 - `ab_wallet_audits.transaction_id` → `ab_wallet_transactions.id`
-- All user references → `ab_user.id` (Flask-AppBuilder standard user table)
+- All user references → `ab_user.id` (PgAppForge standard user table)
 
 ## Indexes and Constraints
 
@@ -61,9 +61,9 @@ All tables created by our enhancement follow the Flask-AppBuilder standard namin
 
 ## Migration Support
 
-- **MFA Migration**: `flask_appbuilder/migrations/mfa_001_add_mfa_tables.py`
-- **Wallet Migration**: `flask_appbuilder/migrations/wallet_001_add_wallet_tables.py`
-- **Alembic compatible**: Standard Flask-AppBuilder migration pattern
+- **MFA Migration**: `pgappforge/migrations/mfa_001_add_mfa_tables.py`
+- **Wallet Migration**: `pgappforge/migrations/wallet_001_add_wallet_tables.py`
+- **Alembic compatible**: Standard PgAppForge migration pattern
 - **Rollback support**: Complete downgrade functionality
 
 ## Compliance Features
@@ -72,7 +72,7 @@ All tables created by our enhancement follow the Flask-AppBuilder standard namin
 - **Encryption**: Sensitive fields encrypted with Fernet
 - **Audit trails**: Complete operation logging
 - **Risk scoring**: Suspicious activity detection
-- **Access control**: Flask-AppBuilder permission integration
+- **Access control**: PgAppForge permission integration
 
 ### Performance
 - **Optimized queries**: Strategic indexing for common operations
@@ -83,4 +83,4 @@ All tables created by our enhancement follow the Flask-AppBuilder standard namin
 ---
 *Generated on: January 12, 2025*  
 *Total Tables: 11 (4 MFA + 7 Wallet)*  
-*Naming Convention: Flask-AppBuilder Standard (ab_ prefix)*
+*Naming Convention: PgAppForge Standard (ab_ prefix)*

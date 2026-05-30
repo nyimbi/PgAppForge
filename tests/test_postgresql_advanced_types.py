@@ -14,7 +14,7 @@ from sqlalchemy.engine import create_engine
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql.sqltypes import TypeDecorator
 
-from flask_appbuilder.cli.generators.database_inspector import (
+from pgappforge.cli.generators.database_inspector import (
     EnhancedDatabaseInspector,
     ColumnType
 )

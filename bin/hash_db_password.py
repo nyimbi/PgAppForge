@@ -3,7 +3,7 @@ import sys
 
 from werkzeug.security import generate_password_hash
 
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.security.sqla.models import User
 
 
 try:

@@ -13,10 +13,10 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 from contextlib import contextmanager
 
-from flask_appbuilder.process.approval.workflow_engine import (
+from pgappforge.process.approval.workflow_engine import (
     ApprovalWorkflowEngine, ApprovalTransactionError
 )
-from flask_appbuilder.process.approval.connection_pool_manager import (
+from pgappforge.process.approval.connection_pool_manager import (
     ConnectionPoolManager, ConnectionConfig, 
     ConnectionPoolExhaustionError, ConnectionTimeoutError
 )

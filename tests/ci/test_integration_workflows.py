@@ -1,7 +1,7 @@
 """
-Integration tests for Flask-AppBuilder major workflows.
+Integration tests for PgForge major workflows.
 
-This module provides comprehensive integration testing for Flask-AppBuilder's
+This module provides comprehensive integration testing for PgForge's
 core workflows including user registration, authentication, CRUD operations,
 and administrative workflows.
 """
@@ -115,7 +115,7 @@ class TestUserRegistrationWorkflow(unittest.TestCase):
         mock_registration.username = self.user_data['username']
         mock_registration.email = self.user_data['email']
         
-        # Mock email service directly (avoiding Flask-AppBuilder import issues)
+        # Mock email service directly (avoiding PgForge import issues)
         mock_email_service = Mock()
         mock_email_service.send_verification_email.return_value = True
         

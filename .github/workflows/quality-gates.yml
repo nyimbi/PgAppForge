@@ -1,4 +1,4 @@
-name: Flask-AppBuilder Quality Gates
+name: PgAppForge Quality Gates
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
       id: syntax
       run: |
         echo "::group::Syntax Validation"
-        python tests/validation/fix_syntax_errors.py flask_appbuilder --analyze-only
+        python tests/validation/fix_syntax_errors.py pgappforge --analyze-only
         echo "::endgroup::"
         echo "syntax_passed=true" >> $GITHUB_OUTPUT
       continue-on-error: false
@@ -60,7 +60,7 @@ jobs:
         import sys
         sys.path.append('tests/ci')
         from test_documentation_validation import DocumentationValidator
-        validator = DocumentationValidator('flask_appbuilder')
+        validator = DocumentationValidator('pgappforge')
         results = validator.analyze_directory(['__pycache__', '.git', 'tests', 'examples'])
         coverage = results['summary']['documentation_coverage_percentage']
         print(f'Documentation Coverage: {coverage:.1f}%')
@@ -76,7 +76,7 @@ jobs:
       id: pipeline
       run: |
         echo "::group::Comprehensive Quality Validation"
-        python tests/validation/quality_validation_pipeline.py flask_appbuilder
+        python tests/validation/quality_validation_pipeline.py pgappforge
         pipeline_exit_code=$?
         echo "::endgroup::"
         
@@ -114,9 +114,9 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ steps.pipeline.outputs.pipeline_passed }}" == "true" ]; then
-          echo "🎉 **Flask-AppBuilder meets production quality standards!**" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **PgAppForge meets production quality standards!**" >> $GITHUB_STEP_SUMMARY
         else
-          echo "📋 **Flask-AppBuilder needs improvements for production readiness.**" >> $GITHUB_STEP_SUMMARY
+          echo "📋 **PgAppForge needs improvements for production readiness.**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Please review the quality validation report and address identified issues." >> $GITHUB_STEP_SUMMARY
         fi
@@ -141,8 +141,8 @@ jobs:
     - name: Run Bandit Security Scan
       run: |
         echo "::group::Security Vulnerability Scan"
-        bandit -r flask_appbuilder -f json -o bandit-report.json || true
-        bandit -r flask_appbuilder -f txt
+        bandit -r pgappforge -f json -o bandit-report.json || true
+        bandit -r pgappforge -f txt
         echo "::endgroup::"
       continue-on-error: true
     
@@ -192,7 +192,7 @@ jobs:
         
         # Measure import performance
         start_time = time.time()
-        import flask_appbuilder
+        import pgappforge
         import_time = time.time() - start_time
         
         # Memory usage
@@ -200,7 +200,7 @@ jobs:
         memory_mb = process.memory_info().rss / 1024 / 1024
         
         # File size analysis
-        fab_path = Path('flask_appbuilder')
+        fab_path = Path('pgappforge')
         total_size = sum(f.stat().st_size for f in fab_path.rglob('*.py')) / 1024 / 1024
         
         print(f'📊 Performance Metrics:')

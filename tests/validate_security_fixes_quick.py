@@ -2,7 +2,7 @@
 Quick Security Validation Script for ApprovalWorkflowManager
 
 Validates that all critical security fixes have been implemented
-without requiring full Flask-AppBuilder context initialization.
+without requiring full PgAppForge context initialization.
 """
 
 import os
@@ -32,7 +32,7 @@ def validate_security_implementation():
     
     try:
         # Import the security-enhanced classes
-        from proper_flask_appbuilder_extensions import ApprovalWorkflowManager, ApprovalModelView
+        from proper_pgappforge_extensions import ApprovalWorkflowManager, ApprovalModelView
         
         # Test 1: Self-approval prevention
         log.info("🛡️  Validating Security Fix 1: Self-Approval Prevention")
@@ -94,7 +94,7 @@ def validate_security_implementation():
         
         # Test 6: Database transaction management
         log.info("🛡️  Validating Database Security: Transaction Management")
-        from proper_flask_appbuilder_extensions import DatabaseMixin
+        from proper_pgappforge_extensions import DatabaseMixin
         if hasattr(DatabaseMixin, 'execute_in_transaction'):
             validation_results['security_fixes_validated'].append('✅ Secure transaction management exists')
         else:

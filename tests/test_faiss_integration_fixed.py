@@ -21,15 +21,15 @@ print("=" * 50)
 # Test 1: Core Imports
 print("\n1️⃣ Testing Core Imports...")
 try:
-    from flask_appbuilder.collaborative.ai.rag_engine import (
+    from pgappforge.collaborative.ai.rag_engine import (
         RAGEngine, VectorStore, DocumentProcessor, DocumentType, ChunkingStrategy
     )
     print("✅ RAG engine components imported successfully")
 
-    from flask_appbuilder.collaborative.ai.rag_factory import RAGFactory, RAGConfig
+    from pgappforge.collaborative.ai.rag_factory import RAGFactory, RAGConfig
     print("✅ RAG factory components imported successfully")
 
-    from flask_appbuilder.collaborative.ai.ai_models import AIModelAdapter, ModelConfig
+    from pgappforge.collaborative.ai.ai_models import AIModelAdapter, ModelConfig
     print("✅ AI model components imported successfully")
 
 except ImportError as e:
@@ -39,7 +39,7 @@ except ImportError as e:
 # Test 2: FAISS Components
 print("\n2️⃣ Testing FAISS Components...")
 try:
-    from flask_appbuilder.collaborative.ai.faiss_vector_store import (
+    from pgappforge.collaborative.ai.faiss_vector_store import (
         FAISSVectorStore, FAISSIntegratedVectorStore, IndexConfig, FAISS_AVAILABLE
     )
     print(f"✅ FAISS components imported successfully (FAISS Available: {FAISS_AVAILABLE})")
@@ -89,7 +89,7 @@ try:
     print("✅ Document processor created successfully")
 
     # Test document processing
-    test_content = "Flask-AppBuilder is a rapid application development framework. It provides comprehensive features for building modern web applications with security and collaboration."
+    test_content = "PgAppForge is a rapid application development framework. It provides comprehensive features for building modern web applications with security and collaboration."
 
     chunks = processor.process_document(
         content=test_content,
@@ -141,7 +141,7 @@ print("\n6️⃣ Testing RAG Factory...")
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from flask_appbuilder.models.sqla import Base
+    from pgappforge.models.sqla import Base
 
     # Create temporary database for testing
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_file:
@@ -222,7 +222,7 @@ print("\n📊 Key Capabilities:")
 print("   • High-performance vector similarity search")
 print("   • Multiple document processing strategies")
 print("   • Flexible deployment configurations")
-print("   • Database integration with Flask-AppBuilder")
+print("   • Database integration with PgAppForge")
 print("   • Comprehensive error handling and fallbacks")
 
 if FAISS_AVAILABLE:

@@ -1,10 +1,10 @@
 Version Migration
 =================
 
-Migrating to SQLAlchemy 2.x (Flask-AppBuilder 4.8.1+)
+Migrating to SQLAlchemy 2.x (PgForge 4.8.1+)
 ------------------------------------------------------
 
-Flask-AppBuilder has been updated to support **SQLAlchemy 2.x** and **Flask-SQLAlchemy 3.x** for improved performance and modern ORM features.
+PgForge has been updated to support **SQLAlchemy 2.x** and **Flask-SQLAlchemy 3.x** for improved performance and modern ORM features.
 
 **Compatibility Notes:**
 
@@ -45,7 +45,7 @@ Flask-AppBuilder has been updated to support **SQLAlchemy 2.x** and **Flask-SQLA
 
 - If you have custom SQLAlchemy code in your application, you may need to update it to SQLAlchemy 2.x patterns
 - See the `SQLAlchemy 2.0 Migration Guide <https://docs.sqlalchemy.org/en/20/changelog/migration_20.html>`_ for custom code migration
-- Flask-AppBuilder framework code has been fully updated and tested
+- PgForge framework code has been fully updated and tested
 
 Migrating to 1.9.0
 ------------------
@@ -149,30 +149,30 @@ are common to all of them. Change:
 
 from::
 
-    from flask_appbuilder.security.sqla.views import UserDBModelView
-    from flask_appbuilder.security.manager import SecurityManager
+    from pgforge.security.sqla.views import UserDBModelView
+    from pgforge.security.manager import SecurityManager
 
 
 to::
 
-    from flask_appbuilder.security.views import UserDBModelView
-    from flask_appbuilder.security.sqla.manager import SecurityManager
+    from pgforge.security.views import UserDBModelView
+    from pgforge.security.sqla.manager import SecurityManager
 
 3 - SQLAInteface, SQLAModel. If you were importing like the following, change:
 
 from::
 
-    from flask_appbuilder.models import SQLAInterface
+    from pgforge.models import SQLAInterface
 
 to::
 
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge.models.sqla.interface import SQLAInterface
 
 4 - Filters, filters import moved::
 
 to::
 
-    from flask_appbuilder.models.sqla.filters import FilterStartsWith, FilterEqualFunction, FilterEqual
+    from pgforge.models.sqla.filters import FilterStartsWith, FilterEqualFunction, FilterEqual
 
 5 - Filters, filtering relationship fields (rendered with select2) changed:
 
@@ -197,13 +197,13 @@ There is a breaking feature, change your filters imports like this:
 
 from::
 
-    flask_appbuilder.models.base import Filters, BaseFilter, BaseFilterConverter
-    flask_appbuilder.models.filters import FilterEqual, FilterRelation ....
+    pgforge.models.base import Filters, BaseFilter, BaseFilterConverter
+    pgforge.models.filters import FilterEqual, FilterRelation ....
 
 to::
 
-    flask_appbuilder.models.filters import Filters, BaseFilter, BaseFilterConverter
-    flask_appbuilder.models.sqla.filter import FilterEqual, FilterRelation ....
+    pgforge.models.filters import Filters, BaseFilter, BaseFilterConverter
+    pgforge.models.sqla.filter import FilterEqual, FilterRelation ....
 
 
 Migrating from 0.9.X to 0.10.X
@@ -216,12 +216,12 @@ But, to keep up with the changes, you should change these:
 
 ::
 
-    from flask_appbuilder.models.datamodel import SQLAModel
-    from flask_appbuilder.models.filters import FilterEqual, FilterContains
+    from pgforge.models.datamodel import SQLAModel
+    from pgforge.models.filters import FilterEqual, FilterContains
 to::
 
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
-    from flask_appbuilder.models.sqla.filters import FilterEqual, FilterContains
+    from pgforge.models.sqla.interface import SQLAInterface
+    from pgforge.models.sqla.filters import FilterEqual, FilterContains
 
 
 
@@ -270,7 +270,7 @@ Use F.A.B. SQLA class instead, read the docs to know why.
 
         from flask import Flask
         from flask.ext.sqlalchemy import SQLAlchemy
-        from flask_appbuilder.baseapp import BaseApp
+        from pgforge.baseapp import BaseApp
 
 
         app = Flask(__name__)
@@ -281,7 +281,7 @@ Use F.A.B. SQLA class instead, read the docs to know why.
     to (__init__.py)::
 
         from flask import Flask
-        from flask_appbuilder import SQLA, AppBuilder
+        from pgforge import SQLA, AppBuilder
 
         app = Flask(__name__)
         app.config.from_object('config')
@@ -306,9 +306,9 @@ This new version has some breaking features. You don't have to change any code, 
         3 - Issue the following commands, on your project folder where config.py exists::
 
             cd /your-main-project-folder/
-            wget https://raw.github.com/dpgaspar/Flask-AppBuilder/master/bin/migrate_db_0.7.py
+            wget https://raw.github.com/dpgaspar/PgForge/master/bin/migrate_db_0.7.py
             python migrate_db_0.7.py
-            wget https://raw.github.com/dpgaspar/Flask-AppBuilder/master/bin/hash_db_password.py
+            wget https://raw.github.com/dpgaspar/PgForge/master/bin/hash_db_password.py
             python hash_db_password.py
 
         4 - Test and Run (if you have a run.py for development) ::
@@ -341,13 +341,13 @@ This new version has some breaking features. You don't have to change any code, 
 
         4 - Then hash your passwords::
 
-            wget https://raw.github.com/dpgaspar/Flask-AppBuilder/master/bin/hash_db_password.py
+            wget https://raw.github.com/dpgaspar/PgForge/master/bin/hash_db_password.py
             python hash_db_password.py
 
  - All passwords are kept on the database hashed, so all your passwords will be hashed by the framework.
 
  - Please *backup* your DB before altering the schema,  if you feel lost please post an issue on github
-    https://github.com/dpgaspar/Flask-AppBuilder/issues?state=open
+    https://github.com/dpgaspar/PgForge/issues?state=open
 
 
 Migrating from 0.5.X to 0.6.X
@@ -355,7 +355,7 @@ Migrating from 0.5.X to 0.6.X
 
 This new version has some breaking features, that I hope will be easily changeable on your code.
 
-If you feel lost please post an issue on github: https://github.com/dpgaspar/Flask-AppBuilder/issues?state=open
+If you feel lost please post an issue on github: https://github.com/dpgaspar/PgForge/issues?state=open
 
 If you're using the **related_views** attribute on ModelView classes, you must not instantiate the related classes. This is the correct form, it will be less memory and cpu resource consuming.
 
@@ -379,7 +379,7 @@ Migrating from 0.2.X to 0.3.X
 -----------------------------
 
 This new version (0.3.X) has many internal changes, if you feel lost please post an issue on github
-https://github.com/dpgaspar/Flask-AppBuilder/issues?state=open
+https://github.com/dpgaspar/PgForge/issues?state=open
 
 All direct imports from your 'app' directory were removed, so there is no obligation in using the base AppBuilder-Skeleton.
 

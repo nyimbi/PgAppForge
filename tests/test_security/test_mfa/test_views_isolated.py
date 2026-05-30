@@ -36,7 +36,7 @@ class MockMFAValidationError(Exception):
 
 
 class TestFormValidationLogic:
-    """Test form validation logic without Flask-AppBuilder dependencies."""
+    """Test form validation logic without PgForge dependencies."""
     
     def test_phone_number_validation_logic(self):
         """Test phone number validation logic."""
@@ -124,7 +124,7 @@ class TestFormValidationLogic:
 
 
 class TestViewLogicIsolated:
-    """Test view logic without Flask-AppBuilder integration."""
+    """Test view logic without PgForge integration."""
     
     def test_mfa_view_route_configuration(self):
         """Test MFA view route configuration."""

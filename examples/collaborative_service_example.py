@@ -10,28 +10,28 @@ from typing import Dict, List, Optional, Any
 from flask import request, current_app
 
 # Import collaborative utilities
-from flask_appbuilder.collaborative.interfaces.base_interfaces import (
+from pgappforge.collaborative.interfaces.base_interfaces import (
     BaseCollaborativeService,
 )
-from flask_appbuilder.collaborative.utils.validation import (
+from pgappforge.collaborative.utils.validation import (
     ValidationResult,
     FieldValidator,
     UserValidator,
     DataValidator,
     validate_complete_message,
 )
-from flask_appbuilder.collaborative.utils.error_handling import (
+from pgappforge.collaborative.utils.error_handling import (
     ErrorHandlingMixin,
     ValidationError,
     AuthorizationError,
     ConcurrencyError,
     create_error_response,
 )
-from flask_appbuilder.collaborative.utils.audit_logging import (
+from pgappforge.collaborative.utils.audit_logging import (
     CollaborativeAuditMixin,
     AuditEventType,
 )
-from flask_appbuilder.collaborative.utils.transaction_manager import (
+from pgappforge.collaborative.utils.transaction_manager import (
     TransactionMixin,
     TransactionScope,
     transaction_required,
@@ -508,7 +508,7 @@ class ProjectCollaborationService(
 def example_usage():
     """Example of how to use the ProjectCollaborationService."""
 
-    # Initialize service (normally done by Flask-AppBuilder)
+    # Initialize service (normally done by PgAppForge)
     service = ProjectCollaborationService(app_builder=None, service_registry=None)
     service.initialize()
 

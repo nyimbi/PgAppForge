@@ -1,10 +1,10 @@
 # Multi-Factor Authentication Configuration
 
-Complete guide to configuring and customizing Flask-AppBuilder's Multi-Factor Authentication system with TOTP, SMS, email, and WebAuthn/Passkeys support.
+Complete guide to configuring and customizing PgAppForge's Multi-Factor Authentication system with TOTP, SMS, email, and WebAuthn/Passkeys support.
 
 ## 🔐 Overview
 
-Flask-AppBuilder's MFA system provides enterprise-grade second-factor authentication with support for:
+PgAppForge's MFA system provides enterprise-grade second-factor authentication with support for:
 
 - **TOTP (Time-based OTP)** - Google Authenticator, Authy, etc.
 - **SMS Verification** - Text message codes via Twilio, AWS SNS
@@ -82,7 +82,7 @@ MFA_PROGRESSIVE_LOCKOUT = True  # Increase lockout time with repeated failures
 
 ```python
 # MFA-related database models are automatically created
-from flask_appbuilder.security.mfa.models import (
+from pgappforge.security.mfa.models import (
     MFAUser, TOTPDevice, SMSDevice, EmailDevice,
     WebAuthnCredential, BackupCode, TrustedDevice
 )
@@ -143,7 +143,7 @@ class TOTPSetupView(BaseView):
         # Create TOTP URI for QR code
         totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
             name=g.user.email,
-            issuer_name=current_app.config.get('MFA_TOTP_ISSUER', 'Flask-AppBuilder')
+            issuer_name=current_app.config.get('MFA_TOTP_ISSUER', 'PgAppForge')
         )
 
         # Generate QR code

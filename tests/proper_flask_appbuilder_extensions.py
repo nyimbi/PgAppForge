@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Proper Flask-AppBuilder Extensions
+Proper PgAppForge Extensions
 
-This implementation follows Flask-AppBuilder architectural patterns by:
-1. Extending existing Flask-AppBuilder classes instead of reimplementing
-2. Using Flask-AppBuilder's addon manager system
-3. Leveraging Flask-AppBuilder's security, configuration, and database patterns
+This implementation follows PgAppForge architectural patterns by:
+1. Extending existing PgAppForge classes instead of reimplementing
+2. Using PgAppForge's addon manager system
+3. Leveraging PgAppForge's security, configuration, and database patterns
 4. Actually implementing business logic instead of sophisticated placeholders
 
 FIXES CRITICAL ISSUES:
 - ✅ Implementation Completeness: Real business logic, not placeholders
-- ✅ Architectural Issues: Extends Flask-AppBuilder instead of parallel infrastructure  
-- ✅ Flask-AppBuilder Integration: Uses proper patterns and existing infrastructure
+- ✅ Architectural Issues: Extends PgAppForge instead of parallel infrastructure  
+- ✅ PgAppForge Integration: Uses proper patterns and existing infrastructure
 """
 
 import json
@@ -24,13 +24,13 @@ import secrets
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union, Tuple
 
-# PROPER Flask-AppBuilder imports - extending existing infrastructure
+# PROPER PgAppForge imports - extending existing infrastructure
 from flask import current_app, request, flash, redirect, url_for, session
-from flask_appbuilder import ModelView, BaseView, expose, has_access, action
-from flask_appbuilder.basemanager import BaseManager
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import protect
-from flask_appbuilder.widgets import ListWidget
+from pgappforge import ModelView, BaseView, expose, has_access, action
+from pgappforge.basemanager import BaseManager
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import protect
+from pgappforge.widgets import ListWidget
 from flask_babel import lazy_gettext as _
 from sqlalchemy import and_, or_, func, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -64,7 +64,7 @@ class DatabaseMixin:
     
     def get_db_session(self):
         """
-        Get database session using Flask-AppBuilder pattern.
+        Get database session using PgAppForge pattern.
         
         Returns:
             SQLAlchemy session object
@@ -168,14 +168,14 @@ class DatabaseMixin:
             raise
 
 # =============================================================================
-# 1. SEARCH MANAGER - Extends Flask-AppBuilder instead of reimplementing
+# 1. SEARCH MANAGER - Extends PgAppForge instead of reimplementing
 # =============================================================================
 
 class SearchManager(BaseManager, DatabaseMixin):
     """
-    Flask-AppBuilder addon manager for enhanced search functionality.
+    PgAppForge addon manager for enhanced search functionality.
     
-    Extends Flask-AppBuilder's BaseManager to provide enhanced search
+    Extends PgAppForge's BaseManager to provide enhanced search
     capabilities while leveraging existing infrastructure and consistent
     database session management.
     """
@@ -576,9 +576,9 @@ class SearchManager(BaseManager, DatabaseMixin):
 
 class EnhancedModelView(ModelView):
     """
-    Enhanced ModelView that extends Flask-AppBuilder's ModelView with search.
+    Enhanced ModelView that extends PgAppForge's ModelView with search.
     
-    Proper Flask-AppBuilder extension pattern - enhances existing functionality
+    Proper PgAppForge extension pattern - enhances existing functionality
     rather than reimplementing it.
     """
     
@@ -598,7 +598,7 @@ class EnhancedModelView(ModelView):
             searchable_fields = self._detect_searchable_fields()
             if searchable_fields:
                 search_manager.register_searchable_model(self.datamodel.obj, searchable_fields)
-                # Update Flask-AppBuilder's search_columns
+                # Update PgAppForge's search_columns
                 self.search_columns = list(searchable_fields.keys())
     
     def _detect_searchable_fields(self) -> Dict[str, float]:
@@ -623,20 +623,20 @@ class EnhancedModelView(ModelView):
     @action("enhanced_search", "Enhanced Search", "Perform enhanced search", "fa-search")
     def enhanced_search_action(self, items):
         """Enhanced search action available in the UI."""
-        # This integrates with Flask-AppBuilder's action system
+        # This integrates with PgAppForge's action system
         return redirect(url_for('EnhancedSearchView.search'))
 
 
 # =============================================================================
-# 2. GEOCODING MANAGER - Proper Flask-AppBuilder addon manager
+# 2. GEOCODING MANAGER - Proper PgAppForge addon manager
 # =============================================================================
 
 class GeocodingManager(BaseManager, DatabaseMixin):
     """
-    Flask-AppBuilder addon manager for geocoding functionality.
+    PgAppForge addon manager for geocoding functionality.
     
     Provides geocoding services to models while integrating properly
-    with Flask-AppBuilder's architecture.
+    with PgAppForge's architecture.
     """
     
     def __init__(self, appbuilder):
@@ -650,7 +650,7 @@ class GeocodingManager(BaseManager, DatabaseMixin):
         config = self.appbuilder.get_app.config
         return {
             'nominatim_url': config.get('FAB_NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
-            'nominatim_user_agent': config.get('FAB_NOMINATIM_USER_AGENT', 'Flask-AppBuilder-Geocoding/1.0'),
+            'nominatim_user_agent': config.get('FAB_NOMINATIM_USER_AGENT', 'PgAppForge-Geocoding/1.0'),
             'mapquest_api_key': config.get('FAB_MAPQUEST_API_KEY'),
             'google_api_key': config.get('FAB_GOOGLE_MAPS_API_KEY'),
             'timeout': config.get('FAB_GEOCODING_TIMEOUT', 30),
@@ -679,8 +679,8 @@ class GeocodingManager(BaseManager, DatabaseMixin):
         Unlike previous implementations, this:
         1. Actually calls real geocoding APIs
         2. Properly persists results to the database
-        3. Uses Flask-AppBuilder's database session management
-        4. Integrates with Flask-AppBuilder's caching system
+        3. Uses PgAppForge's database session management
+        4. Integrates with PgAppForge's caching system
         
         Args:
             instance: Model instance to geocode
@@ -897,14 +897,14 @@ class GeocodingManager(BaseManager, DatabaseMixin):
 
 
 # =============================================================================
-# 3. APPROVAL WORKFLOW MANAGER - Proper Flask-AppBuilder integration
+# 3. APPROVAL WORKFLOW MANAGER - Proper PgAppForge integration
 # =============================================================================
 
 class ApprovalWorkflowManager(BaseManager, DatabaseMixin):
     """
-    Flask-AppBuilder addon manager for approval workflows.
+    PgAppForge addon manager for approval workflows.
     
-    Integrates with Flask-AppBuilder's security system and uses proper
+    Integrates with PgAppForge's security system and uses proper
     permission decorators instead of reimplementing security.
     """
     
@@ -1110,7 +1110,7 @@ class ApprovalWorkflowManager(BaseManager, DatabaseMixin):
                 'ip_address': request.remote_addr if request else 'unknown'
             })
             
-            # Log success using Flask-AppBuilder's logging
+            # Log success using PgAppForge's logging
             self.appbuilder.sm.log.info(
                 f"SECURE APPROVAL: {current_user.username} approved {instance.__class__.__name__} "
                 f"step {step} ({step_config['name']}) with enhanced security validation"
@@ -1596,13 +1596,13 @@ class ApprovalWorkflowManager(BaseManager, DatabaseMixin):
             enhanced_data = {
                 'event_type': event_type,
                 'timestamp': datetime.utcnow().isoformat(),
-                'app_name': current_app.config.get('APP_NAME', 'Flask-AppBuilder'),
+                'app_name': current_app.config.get('APP_NAME', 'PgAppForge'),
                 'security_version': '1.0',
                 **event_data
             }
             
             # Log to application security log
-            security_logger = logging.getLogger('flask_appbuilder.security')
+            security_logger = logging.getLogger('pgappforge.security')
             security_logger.warning(f"SECURITY_EVENT: {json.dumps(enhanced_data)}")
             
             # Also log to main application log for visibility
@@ -1844,8 +1844,8 @@ class ApprovalModelView(ModelView):
     """
     ModelView with approval workflow integration.
     
-    Extends Flask-AppBuilder's ModelView with approval actions
-    using proper Flask-AppBuilder patterns.
+    Extends PgAppForge's ModelView with approval actions
+    using proper PgAppForge patterns.
     """
     
     def __init__(self, *args, **kwargs):
@@ -1858,13 +1858,13 @@ class ApprovalModelView(ModelView):
     @action("approve_step_0", "Approve Step 1", "Approve selected items (Step 1)?", "fa-check")
     @has_access
     def approve_step_0_action(self, items):
-        """Approval action for step 0 - integrates with Flask-AppBuilder's action system."""
+        """Approval action for step 0 - integrates with PgAppForge's action system."""
         return self._approve_items(items, 0)
     
     @action("approve_step_1", "Approve Step 2", "Approve selected items (Step 2)?", "fa-check-circle")
     @has_access
     def approve_step_1_action(self, items):
-        """Approval action for step 1 - integrates with Flask-AppBuilder's action system."""
+        """Approval action for step 1 - integrates with PgAppForge's action system."""
         return self._approve_items(items, 1)
     
     def _approve_items(self, items, step: int):
@@ -2027,7 +2027,7 @@ class ApprovalModelView(ModelView):
 
 class CommentManager(BaseManager, DatabaseMixin):
     """
-    Flask-AppBuilder addon manager for comment system.
+    PgAppForge addon manager for comment system.
     
     Provides real comment functionality with actual database storage
     instead of simulation.
@@ -2224,7 +2224,7 @@ class CommentModelView(ModelView):
     """
     ModelView with comment system integration.
     
-    Extends Flask-AppBuilder's ModelView with comment functionality.
+    Extends PgAppForge's ModelView with comment functionality.
     """
     
     def __init__(self, *args, **kwargs):
@@ -2254,7 +2254,7 @@ class CommentModelView(ModelView):
     @action("view_comments", "View Comments", "View comments for selected items", "fa-comments")
     @has_access
     def view_comments_action(self, items):
-        """Action to view comments - integrates with Flask-AppBuilder's action system."""
+        """Action to view comments - integrates with PgAppForge's action system."""
         if len(items) != 1:
             flash("Please select exactly one item to view comments", "warning")
             return redirect(self.get_redirect())
@@ -2266,19 +2266,19 @@ class CommentModelView(ModelView):
 # 5. FLASK-APPBUILDER INTEGRATION - Proper addon registration
 # =============================================================================
 
-# Flask-AppBuilder addon manager registration
+# PgAppForge addon manager registration
 ADDON_MANAGERS = [
-    'tests.proper_flask_appbuilder_extensions.SearchManager',
-    'tests.proper_flask_appbuilder_extensions.GeocodingManager',
-    'tests.proper_flask_appbuilder_extensions.ApprovalWorkflowManager', 
-    'tests.proper_flask_appbuilder_extensions.CommentManager',
+    'tests.proper_pgappforge_extensions.SearchManager',
+    'tests.proper_pgappforge_extensions.GeocodingManager',
+    'tests.proper_pgappforge_extensions.ApprovalWorkflowManager', 
+    'tests.proper_pgappforge_extensions.CommentManager',
 ]
 
 def init_enhanced_mixins(appbuilder):
     """
-    Initialize all enhanced mixins with Flask-AppBuilder.
+    Initialize all enhanced mixins with PgAppForge.
     
-    This function should be called during Flask-AppBuilder initialization
+    This function should be called during PgAppForge initialization
     to register all the managers properly.
     """
     # Register SearchManager
@@ -2297,7 +2297,7 @@ def init_enhanced_mixins(appbuilder):
     comment_manager = CommentManager(appbuilder)
     appbuilder.cm = comment_manager  # cm = CommentManager
     
-    log.info("Enhanced mixins initialized successfully with Flask-AppBuilder")
+    log.info("Enhanced mixins initialized successfully with PgAppForge")
     
     return {
         'search_manager': search_manager,
@@ -2458,8 +2458,8 @@ SECURE USAGE EXAMPLE:
 
 # In your app.py:
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from .proper_flask_appbuilder_extensions import init_enhanced_mixins, EnhancedModelView, generate_security_report
+from pgappforge import AppBuilder, SQLA
+from .proper_pgappforge_extensions import init_enhanced_mixins, EnhancedModelView, generate_security_report
 
 app = Flask(__name__)
 db = SQLA(app)
@@ -2474,7 +2474,7 @@ app.logger.info(f"Security Implementation Report:\n{security_report}")
 
 # Configuration in config.py:
 class SecureConfig:
-    # Basic Flask-AppBuilder security
+    # Basic PgAppForge security
     SECRET_KEY = 'your-secret-key-here-minimum-20-characters'
     
     # Search configuration with security
@@ -2524,7 +2524,7 @@ class SecureConfig:
             }
         },
         'loggers': {
-            'flask_appbuilder.security': {
+            'pgappforge.security': {
                 'handlers': ['security_file'],
                 'level': 'WARNING',
                 'propagate': True
@@ -2534,7 +2534,7 @@ class SecureConfig:
 
 # In your models.py (example secure model):
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey
-from flask_appbuilder import Model
+from pgappforge import Model
 from datetime import datetime
 
 class SecureDocument(Model):
@@ -2565,8 +2565,8 @@ class SecureDocument(Model):
         return f'<SecureDocument {self.title}>'
 
 # In your views.py:
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from .proper_flask_appbuilder_extensions import ApprovalModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from .proper_pgappforge_extensions import ApprovalModelView
 
 class SecureDocumentView(ApprovalModelView):
     datamodel = SQLAInterface(SecureDocument)
@@ -2598,7 +2598,7 @@ class SecureDocumentView(ApprovalModelView):
             'timestamp': datetime.utcnow().isoformat()
         })
 
-# Register with Flask-AppBuilder
+# Register with PgAppForge
 appbuilder.add_view(SecureDocumentView, "Secure Documents", category="Content")
 
 # Security monitoring endpoint (admin only)
@@ -2617,12 +2617,12 @@ if __name__ == "__main__":
     print("✅ SECURE FLASK-APPBUILDER EXTENSIONS IMPLEMENTED")
     print("")
     print("🔧 KEY IMPROVEMENTS:")
-    print("  - Extends Flask-AppBuilder classes instead of reimplementing")
-    print("  - Uses Flask-AppBuilder's addon manager system") 
+    print("  - Extends PgAppForge classes instead of reimplementing")
+    print("  - Uses PgAppForge's addon manager system") 
     print("  - Actual business logic instead of sophisticated placeholders")
     print("  - Proper database persistence with transaction management")
-    print("  - Integration with Flask-AppBuilder's security system")
-    print("  - Uses Flask-AppBuilder's configuration patterns")
+    print("  - Integration with PgAppForge's security system")
+    print("  - Uses PgAppForge's configuration patterns")
     print("")
     print("🛡️  CRITICAL SECURITY FIXES IMPLEMENTED:")
     print("  ✅ Self-Approval Prevention - Users cannot approve their own submissions")

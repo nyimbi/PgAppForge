@@ -1,20 +1,20 @@
 """
-Example Flask-AppBuilder configuration with ProcessManager.
+Example PgAppForge configuration with ProcessManager.
 
 Shows how to properly integrate the Intelligent Business Process Engine
-with Flask-AppBuilder using the addon manager pattern.
+with PgAppForge using the addon manager pattern.
 """
 
 import os
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 # Import the ProcessManager
-from flask_appbuilder.process import ProcessManager
+from pgappforge.process import ProcessManager
 
-# Flask-AppBuilder configuration
+# PgAppForge configuration
 class Config(object):
-    """Base Flask-AppBuilder configuration."""
+    """Base PgAppForge configuration."""
     
     # Flask settings
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key-here-change-in-production'
@@ -44,7 +44,7 @@ class Config(object):
     
     # Register ProcessManager as an addon
     ADDON_MANAGERS = [
-        'flask_appbuilder.process.manager.ProcessManager'
+        'pgappforge.process.manager.ProcessManager'
     ]
 
 
@@ -56,7 +56,7 @@ def create_app():
     # Initialize SQLAlchemy
     db = SQLA(app)
     
-    # Initialize Flask-AppBuilder
+    # Initialize PgAppForge
     appbuilder = AppBuilder(app, db.session)
     
     # The ProcessManager will be automatically initialized due to ADDON_MANAGERS
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     
     # Optional: Create admin user if it doesn't exist
     with app.app_context():
-        from flask_appbuilder.security.sqla.models import User
+        from pgappforge.security.sqla.models import User
         
         if not app.appbuilder.sm.find_user('admin'):
             app.appbuilder.sm.add_user(

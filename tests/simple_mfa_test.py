@@ -2,7 +2,7 @@
 """
 Simple MFA Component Test
 
-Tests individual MFA components without full Flask-AppBuilder integration.
+Tests individual MFA components without full PgAppForge integration.
 This verifies that the MFA code works independently.
 """
 
@@ -18,7 +18,7 @@ def test_mfa_services():
     
     try:
         # Test TOTP Service
-        from flask_appbuilder.security.mfa.services import TOTPService
+        from pgappforge.security.mfa.services import TOTPService
         
         # Generate secret
         secret = TOTPService.generate_secret()
@@ -52,7 +52,7 @@ def test_mfa_models():
     print("\nTesting MFA Models...")
     
     try:
-        from flask_appbuilder.security.mfa.models import (
+        from pgappforge.security.mfa.models import (
             UserMFA, MFABackupCodes, MFAVerificationAttempt, MFAPolicy
         )
         
@@ -82,7 +82,7 @@ def test_mfa_manager_mixin():
     print("\nTesting MFA Manager Mixin...")
     
     try:
-        from flask_appbuilder.security.mfa.manager_mixin import MFASecurityManagerMixin
+        from pgappforge.security.mfa.manager_mixin import MFASecurityManagerMixin
         
         # Test class definition
         mixin = MFASecurityManagerMixin()
@@ -117,8 +117,8 @@ def test_mfa_views():
     print("\nTesting MFA Views...")
     
     try:
-        from flask_appbuilder.security.mfa.views import MFASetupView, MFAVerificationView
-        from flask_appbuilder.security.mfa.auth_views import MFAEnabledAuthDBView
+        from pgappforge.security.mfa.views import MFASetupView, MFAVerificationView
+        from pgappforge.security.mfa.auth_views import MFAEnabledAuthDBView
         
         print("✓ MFASetupView imported")
         print("✓ MFAVerificationView imported")
@@ -145,7 +145,7 @@ def test_mfa_config():
     print("\nTesting MFA Configuration...")
     
     try:
-        from flask_appbuilder.security.mfa.config import (
+        from pgappforge.security.mfa.config import (
             get_mfa_config_template,
             validate_mfa_config,
             get_required_packages
@@ -213,7 +213,7 @@ def main():
         print("\nNext Steps:")
         print("1. Install required dependencies if needed")
         print("2. Configure MFA settings in your app")
-        print("3. Test with a live Flask-AppBuilder application")
+        print("3. Test with a live PgAppForge application")
     else:
         print("⚠ SOME MFA COMPONENTS HAVE ISSUES")
         print("\nMFA Integration Status: PARTIAL")

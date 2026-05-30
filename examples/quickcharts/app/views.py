@@ -1,12 +1,12 @@
 import calendar
 import logging
 
-from flask_appbuilder.charts.views import (
+from pgappforge.charts.views import (
     DirectByChartView, DirectChartView, GroupByChartView
 )
-from flask_appbuilder.models.group import aggregate_avg, aggregate_sum
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.views import ModelView
+from pgappforge.models.group import aggregate_avg, aggregate_sum
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.views import ModelView
 
 from . import appbuilder
 from .models import Country, CountryStats, PoliticalType

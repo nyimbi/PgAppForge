@@ -1,11 +1,11 @@
-# Flask-AppBuilder Interactive Tutorials
+# PgForge Interactive Tutorials
 
 ![Implementation Status](https://img.shields.io/badge/Features-✅%20100%25%20Validated-brightgreen)
 ![Tutorial Status](https://img.shields.io/badge/Runtime%20Testing-✅%20Complete-brightgreen)
 ![Code Examples](https://img.shields.io/badge/Code%20Examples-1000%2B-blue)
 ![Test Coverage](https://img.shields.io/badge/Test%20Coverage-95%25%2B-brightgreen)
 
-Welcome to the Flask-AppBuilder tutorial series! These hands-on tutorials will guide you through building modern web applications with AI capabilities, real-time collaboration, and advanced features.
+Welcome to the PgForge tutorial series! These hands-on tutorials will guide you through building modern web applications with AI capabilities, real-time collaboration, and advanced features.
 
 > **✅ Status Update**: All documented features have been **validated as implemented** and **runtime tested**. Tutorial code examples have been thoroughly tested with comprehensive test suites and automated validation to ensure they work correctly in practice.
 
@@ -15,7 +15,7 @@ Welcome to the Flask-AppBuilder tutorial series! These hands-on tutorials will g
 **Duration:** 30-45 minutes
 **Level:** Beginner
 
-Learn the fundamentals of Flask-AppBuilder with enhanced features:
+Learn the fundamentals of PgForge with enhanced features:
 - Set up your first application with AI integration
 - Create models with intelligent data validation
 - Build views with automated CRUD operations
@@ -70,8 +70,8 @@ Master AI integration with multiple providers:
 
 ```bash
 # Clone the repository
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/dpgaspar/PgForge.git
+cd PgForge
 
 # Create virtual environment
 python -m venv venv
@@ -151,7 +151,7 @@ Open `http://localhost:8080` and start learning!
 4. Experiment with AI content generation
 
 ### For Web Developers
-1. Start with **Getting Started** for Flask-AppBuilder basics
+1. Start with **Getting Started** for PgForge basics
 2. Jump to **Collaborative Features** for real-time functionality
 3. Implement custom WebSocket handlers
 4. Add advanced UI components
@@ -267,7 +267,7 @@ After completing these tutorials, you'll be ready to:
    - Add advanced features and integrations
    - Deploy to cloud platforms
 
-2. **Extend Flask-AppBuilder**
+2. **Extend PgForge**
    - Create custom widgets and components
    - Develop plugins and extensions
    - Contribute to the open-source project
@@ -377,6 +377,6 @@ The testing system includes:
 
 ---
 
-**Ready to start building?** Choose your first tutorial and begin your Flask-AppBuilder journey!
+**Ready to start building?** Choose your first tutorial and begin your PgForge journey!
 
 🚀 **[Start with Getting Started →](01_getting_started.md)**

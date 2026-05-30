@@ -4,7 +4,7 @@ import logging
 from flask import Flask
 from sqlalchemy import create_engine
 
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.security.sqla.models import User
 
 
 logging.basicConfig(format='%(levelname)s:%(name)s:%(message)s')
@@ -47,7 +47,7 @@ def add_column(conn, table, column):
     This function was updated to fix critical SQL injection vulnerabilities
     where string formatting was used directly in SQL statements.
     """
-    from flask_appbuilder.security.sql_utils import SecureDDLExecutor
+    from pgappforge.security.sql_utils import SecureDDLExecutor
 
     table_name = table.__tablename__
     column_name = column.key
@@ -74,7 +74,7 @@ def alter_column(conn, table, column):
     This function was updated to fix critical SQL injection vulnerabilities
     where string formatting was used directly in SQL statements.
     """
-    from flask_appbuilder.security.sql_utils import SecureDDLExecutor
+    from pgappforge.security.sql_utils import SecureDDLExecutor
 
     table_name = table.__tablename__
     column_name = column.key

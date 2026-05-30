@@ -30,9 +30,9 @@ attach it to a menu or link it from any point to your site.
 Decorate your url routing methods with **@expose**.
 Additionally add **@has_access** decorator to tell flask that this is a security protected method.
 
-Using the Flask-AppBuilder-Skeleton (take a look at the :doc:`installation` chapter). Edit views.py file and add::
+Using the PgForge-Skeleton (take a look at the :doc:`installation` chapter). Edit views.py file and add::
 
-    from flask_appbuilder import AppBuilder, expose, BaseView
+    from pgforge import AppBuilder, expose, BaseView
     from app import appbuilder
 
     class MyView(BaseView):
@@ -54,7 +54,7 @@ Using the Flask-AppBuilder-Skeleton (take a look at the :doc:`installation` chap
     appbuilder.add_view_no_menu(MyView())
     
     
-You can find this example on `SimpleView1 <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/simpleview1>`_
+You can find this example on `SimpleView1 <https://github.com/dpgaspar/PgForge/tree/master/examples/simpleview1>`_
 look at the file app/views.py
 
 This simple example will register your view with two routing urls on:
@@ -78,7 +78,7 @@ http://localhost:8080/myview/method2/john
 
 As you can see, those methods are public. So let's secure them. Change views.py to::
 
-    from flask_appbuilder import AppBuilder, BaseView, expose, has_access
+    from pgforge import AppBuilder, BaseView, expose, has_access
     from app import appbuilder
 
 
@@ -105,14 +105,14 @@ As you can see, those methods are public. So let's secure them. Change views.py 
     appbuilder.add_link("Method2", href='/myview/method2/john', category='My View')
 
 
-You can find this example on `SimpleView2 <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/simpleview2>`_.
+You can find this example on `SimpleView2 <https://github.com/dpgaspar/PgForge/tree/master/examples/simpleview2>`_.
 Take a look at their definition:
 
-.. automodule:: flask_appbuilder.baseviews
+.. automodule:: pgforge.baseviews
 
     .. autofunction:: expose
 
-.. automodule:: flask_appbuilder.security.decorators
+.. automodule:: pgforge.security.decorators
 
     .. autofunction:: has_access
 
@@ -186,8 +186,8 @@ fields and inherit them from F.A.B. *DynamicForm*.
 
     from wtforms import Form, StringField
     from wtforms.validators import DataRequired
-    from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
-    from flask_appbuilder.forms import DynamicForm
+    from pgforge.fieldwidgets import BS3TextFieldWidget
+    from pgforge.forms import DynamicForm
 
 
     class MyForm(DynamicForm):
@@ -210,7 +210,7 @@ On your form_post method, you can also return None, or a Flask response to rende
 ::
 
     from flask import flash
-    from flask_appbuilder import SimpleFormView
+    from pgforge import SimpleFormView
     from flask_babel import lazy_gettext as _
 
 
@@ -239,5 +239,5 @@ Most important Base Properties:
 :form_columns: The form column names to include
 :form: Your form class (`WTForm <https://wtforms.readthedocs.org/en/latest/>`_) (this is mandatory) 
     
-You can find this example on `SimpleForm <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/simpleform>`_.
+You can find this example on `SimpleForm <https://github.com/dpgaspar/PgForge/tree/master/examples/simpleform>`_.
 

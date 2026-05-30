@@ -1,5 +1,5 @@
 """
-Comprehensive unit tests for Flask-AppBuilder data models and interfaces.
+Comprehensive unit tests for PgAppForge data models and interfaces.
 
 This module provides thorough testing coverage for SQLAlchemy models,
 data interfaces, relationships, and database operations.
@@ -13,11 +13,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.mixins import AuditMixin, FileColumn, ImageColumn
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.filters import FilterEqual, FilterNotEqual, FilterStartsWith
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.mixins import AuditMixin, FileColumn, ImageColumn
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.filters import FilterEqual, FilterNotEqual, FilterStartsWith
+from pgappforge.models.sqla.interface import SQLAInterface
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Float, ForeignKey,
     Table, UniqueConstraint, Index, CheckConstraint
@@ -594,7 +594,7 @@ class TestSQLAInterface(FABTestCase):
         """Test querying with filters"""
         with self.app.app_context():
             # Test filtering by published status
-            from flask_appbuilder.models.sqla.filters import FilterEqual
+            from pgappforge.models.sqla.filters import FilterEqual
             
             published_filter = FilterEqual('published', True)
             count, published_articles = self.article_interface.query(

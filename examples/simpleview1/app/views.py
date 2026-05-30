@@ -1,4 +1,4 @@
-from flask_appbuilder.baseviews import BaseView, expose
+from pgappforge.baseviews import BaseView, expose
 
 from . import appbuilder
 

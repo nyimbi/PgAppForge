@@ -5,7 +5,7 @@ On this chapter we are going to show how to setup model relationships and their
 view integration on the framework
 
 And the source code for this chapter on
-`examples <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/employees>`_
+`examples <https://github.com/dpgaspar/PgForge/tree/master/examples/employees>`_
 
 
 Many to One
@@ -28,7 +28,7 @@ Let's define our models (models.py)::
     import datetime
     from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text
     from sqlalchemy.orm import relationship
-    from flask_appbuilder import Model
+    from pgforge import Model
 
 
     class Department(Model):
@@ -76,8 +76,8 @@ This has two, one to many relations:
 
 Now let's define ours views (views.py)::
 
-    from flask_appbuilder import ModelView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge import ModelView
+    from pgforge.models.sqla.interface import SQLAInterface
     from .models import Employee,Department, Function, EmployeeHistory
     from app import appbuilder
 
@@ -216,7 +216,7 @@ on the employee detail view::
     appbuilder.add_view_no_menu(EmployeeHistoryView, "EmployeeHistoryView")
 
 
-Take a look and run the example on `Employees example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/employees>`_
+Take a look and run the example on `Employees example <https://github.com/dpgaspar/PgForge/tree/master/examples/employees>`_
 It includes extra functionality like readonly fields, pre and post update logic, etc...
 
 Composite Keys
@@ -224,7 +224,7 @@ Composite Keys
 
 Composite keys is supported for SQLAlchemy only, you can reference them using SQLAlchemy 'relationship',
 and use them on combo boxes and/or related views, take a look at the
-`example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/composite_keys>`_
+`example <https://github.com/dpgaspar/PgForge/tree/master/examples/composite_keys>`_
 
 Notice the use of composite keys to prevent that and Item (server or whatever)
 can be on more then a Rack/Datacenter at the same time, and that a Datacenter can't have two racks with the same number

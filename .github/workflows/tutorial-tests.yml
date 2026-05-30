@@ -104,7 +104,7 @@ jobs:
 
     - name: Verify installation
       run: |
-        python -c "import flask_appbuilder; print(f'Flask-AppBuilder version: {flask_appbuilder.__version__}')"
+        python -c "import pgappforge; print(f'PgAppForge version: {pgappforge.__version__}')"
         python scripts/check_dependencies.py --quick
 
     - name: Run dependency validation

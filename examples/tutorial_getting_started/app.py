@@ -1,7 +1,7 @@
 """
-Flask-AppBuilder Getting Started Tutorial - Main Application
+PgAppForge Getting Started Tutorial - Main Application
 
-This is a complete, working Flask-AppBuilder application demonstrating:
+This is a complete, working PgAppForge application demonstrating:
 - Task management with AI features
 - Interactive dashboard with statistics
 - Modern UI components
@@ -13,8 +13,8 @@ Run with: python app.py
 import os
 import logging
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.menu import Menu
+from pgappforge import AppBuilder, SQLA
+from pgappforge.menu import Menu
 
 # Configure logging
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
@@ -22,7 +22,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 def create_app(config_name='config'):
     """
-    Application factory for creating Flask-AppBuilder application.
+    Application factory for creating PgAppForge application.
     
     Args:
         config_name: Configuration module name
@@ -43,7 +43,7 @@ def create_app(config_name='config'):
     # Initialize SQLAlchemy
     db = SQLA(app)
     
-    # Initialize Flask-AppBuilder
+    # Initialize PgAppForge
     appbuilder = AppBuilder(app, db.session)
     
     # Import models to ensure they're registered
@@ -109,7 +109,7 @@ def create_app(config_name='config'):
     
     # Add external links
     appbuilder.add_link(
-        "Flask-AppBuilder Docs",
+        "PgAppForge Docs",
         href="https://flask-appbuilder.readthedocs.io/",
         icon="fa-external-link",
         category="Help"
@@ -150,26 +150,26 @@ def validate_environment():
     for provider, status in ai_providers.items():
         print(f"  {provider}: {status}")
     
-    # Check Flask-AppBuilder features
+    # Check PgAppForge features
     print("\nFeature Availability:")
     
     # Check AI features
     try:
-        from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+        from pgappforge.collaborative.ai.ai_models import AIModelManager
         print("  AI Integration: ✅ Available")
     except ImportError:
         print("  AI Integration: ❌ Not Available")
     
     # Check collaborative features
     try:
-        from flask_appbuilder.collaborative.realtime.websocket_manager import WebSocketManager
+        from pgappforge.collaborative.realtime.websocket_manager import WebSocketManager
         print("  Collaborative Features: ✅ Available")
     except ImportError:
         print("  Collaborative Features: ❌ Not Available")
     
     # Check MFA features
     try:
-        from flask_appbuilder.security.mfa.models import MFACredential
+        from pgappforge.security.mfa.models import MFACredential
         print("  MFA Security: ✅ Available")
     except ImportError:
         print("  MFA Security: ❌ Not Available")
@@ -251,7 +251,7 @@ def setup_database(app, appbuilder):
             try:
                 work_category = appbuilder.session.query(TaskCategory).filter_by(name='Work').first()
                 sample_task = Task(
-                    title='Welcome to Flask-AppBuilder!',
+                    title='Welcome to PgAppForge!',
                     description='This is a sample task demonstrating the capabilities of your new task management system. You can edit this task, create new ones, and explore all the features including AI-powered content generation.',
                     category=work_category,
                     priority=Priority.MEDIUM,
@@ -272,7 +272,7 @@ def main():
     """
     Main application entry point.
     """
-    print("🚀 Starting Flask-AppBuilder Tutorial Application")
+    print("🚀 Starting PgAppForge Tutorial Application")
     print("=" * 60)
     
     # Validate environment

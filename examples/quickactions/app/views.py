@@ -1,7 +1,7 @@
 from flask import redirect
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.actions import action
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.actions import action
 
 from app import appbuilder
 from .models import ContactGroup

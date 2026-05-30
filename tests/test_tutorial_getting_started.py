@@ -336,7 +336,7 @@ class TutorialIntegrationTest(unittest.TestCase):
                 self.assertIsNotNone(flask_app)
 
                 # Test database initialization
-                from flask_appbuilder.models.sqla import Model
+                from pgappforge.models.sqla import Model
                 from models import Task, TaskCategory
 
                 # Create tables (in real scenario, this would be done by migrations)

@@ -1,13 +1,13 @@
 """
-Example Flask-AppBuilder configuration with MFA enabled.
+Example PgAppForge configuration with MFA enabled.
 
 This file demonstrates how to configure Multi-Factor Authentication
-in your Flask-AppBuilder application.
+in your PgAppForge application.
 
 Copy the relevant settings to your config.py file and modify as needed.
 """
 
-# Flask-AppBuilder MFA Configuration
+# PgAppForge MFA Configuration
 # =================================
 
 # Enable MFA
@@ -107,20 +107,20 @@ pip install pyotp qrcode[pil] Pillow twilio boto3 sendgrid Flask-Mail
 """
 
 
-# Sample Flask-AppBuilder App with MFA
+# Sample PgAppForge App with MFA
 # ===================================
 
 if __name__ == "__main__":
     """
-    Sample Flask-AppBuilder application with MFA enabled.
+    Sample PgAppForge application with MFA enabled.
     
-    This demonstrates how to create a basic Flask-AppBuilder app
+    This demonstrates how to create a basic PgAppForge app
     with MFA functionality.
     """
     
     from flask import Flask
-    from flask_appbuilder import AppBuilder, SQLA
-    from flask_appbuilder.security.sqla.models import User
+    from pgappforge import AppBuilder, SQLA
+    from pgappforge.security.sqla.models import User
     
     # Create Flask app
     app = Flask(__name__)
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    # Initialize Flask-AppBuilder
+    # Initialize PgAppForge
     db = SQLA(app)
     appbuilder = AppBuilder(app, db.session)
     

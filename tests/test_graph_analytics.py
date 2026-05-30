@@ -12,21 +12,21 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, AsyncMock
 
 from flask import Flask
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 from flask_login import login_user
 
 from tests.base import FABTestCase
-from flask_appbuilder.database.graph_manager import GraphManager
-from flask_appbuilder.database.multi_graph_manager import GraphRegistry
-from flask_appbuilder.database.query_builder import AdvancedQueryBuilder
-from flask_appbuilder.database.graph_streaming import GraphStreamingManager
-from flask_appbuilder.database.graph_ml import GraphMLSuite
-from flask_appbuilder.database.performance_optimizer import PerformanceOptimizer
-from flask_appbuilder.database.import_export_pipeline import ImportExportPipeline
-from flask_appbuilder.database.collaboration_system import CollaborationSystem
-from flask_appbuilder.database.ai_analytics_assistant import AIAnalyticsAssistant
-from flask_appbuilder.database.advanced_visualization import AdvancedVisualizationEngine
-from flask_appbuilder.database.enterprise_integration import EnterpriseIntegrationSuite
+from pgappforge.database.graph_manager import GraphManager
+from pgappforge.database.multi_graph_manager import GraphRegistry
+from pgappforge.database.query_builder import AdvancedQueryBuilder
+from pgappforge.database.graph_streaming import GraphStreamingManager
+from pgappforge.database.graph_ml import GraphMLSuite
+from pgappforge.database.performance_optimizer import PerformanceOptimizer
+from pgappforge.database.import_export_pipeline import ImportExportPipeline
+from pgappforge.database.collaboration_system import CollaborationSystem
+from pgappforge.database.ai_analytics_assistant import AIAnalyticsAssistant
+from pgappforge.database.advanced_visualization import AdvancedVisualizationEngine
+from pgappforge.database.enterprise_integration import EnterpriseIntegrationSuite
 
 
 class TestGraphAnalytics(FABTestCase):

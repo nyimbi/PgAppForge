@@ -32,7 +32,7 @@ class DocumentationFixer:
         Initialize the documentation fixer.
         
         Args:
-            base_path: Root path to the Flask-AppBuilder source code
+            base_path: Root path to the PgAppForge source code
         """
         self.base_path = Path(base_path)
         self.fixes_applied = 0
@@ -67,7 +67,7 @@ class DocumentationFixer:
             lines.append(f"This is a private method used internally by {class_name or 'the module'}.")
         else:
             lines.append(f"This method provides functionality for {node.name.replace('_', ' ')}.")
-            lines.append("Implementation follows Flask-AppBuilder patterns and standards.")
+            lines.append("Implementation follows PgAppForge patterns and standards.")
         lines.append("")
         
         # Add parameters section if parameters exist
@@ -116,7 +116,7 @@ class DocumentationFixer:
         # Add note for important methods
         if node.name in ['register_views', 'pre_process', 'post_process', 'initialize']:
             lines.append("Note:")
-            lines.append("    This method is part of the Flask-AppBuilder lifecycle and")
+            lines.append("    This method is part of the PgAppForge lifecycle and")
             lines.append("    should be implemented by subclasses as needed.")
             lines.append("")
         
@@ -146,7 +146,7 @@ class DocumentationFixer:
         # Add detailed description
         lines.append(f"The {node.name} class provides comprehensive functionality for")
         lines.append(f"{node.name.replace('Manager', ' management').replace('View', ' view operations').lower()}.")
-        lines.append("It integrates with the Flask-AppBuilder framework to provide")
+        lines.append("It integrates with the PgAppForge framework to provide")
         lines.append("enterprise-grade features and capabilities.")
         lines.append("")
         
@@ -185,7 +185,7 @@ class DocumentationFixer:
         # Add note for manager classes
         if 'Manager' in node.name:
             lines.append("Note:")
-            lines.append("    This manager class follows the Flask-AppBuilder manager pattern")
+            lines.append("    This manager class follows the PgAppForge manager pattern")
             lines.append("    and integrates with the application lifecycle and security system.")
             lines.append("")
         
@@ -312,7 +312,7 @@ class DocumentationFixer:
             Description of the attribute
         """
         if attr_name == 'appbuilder':
-            return "Reference to the Flask-AppBuilder instance"
+            return "Reference to the PgAppForge instance"
         elif attr_name.endswith('_uri'):
             return f"Database URI for {attr_name.replace('_uri', '')} connection"
         elif attr_name.endswith('_engine'):
@@ -337,7 +337,7 @@ class DocumentationFixer:
         if class_name.endswith('Manager'):
             return f"Comprehensive management system for {class_name.replace('Manager', '').lower()} operations."
         elif class_name.endswith('View'):
-            return f"Flask-AppBuilder view for {class_name.replace('View', '').lower()} interface operations."
+            return f"PgAppForge view for {class_name.replace('View', '').lower()} interface operations."
         elif class_name.endswith('API') or class_name.endswith('Api'):
             return f"RESTful API endpoints for {class_name.replace('API', '').replace('Api', '').lower()} operations."
         elif class_name.endswith('Builder'):
@@ -526,12 +526,12 @@ class DocumentationFixer:
 
 def main():
     """Main function to run the documentation fixing process."""
-    flask_appbuilder_path = Path(__file__).parent.parent.parent / "flask_appbuilder"
+    pgappforge_path = Path(__file__).parent.parent.parent / "pgappforge"
     
     print("Starting automated documentation enhancement...")
     print("=" * 60)
     
-    fixer = DocumentationFixer(str(flask_appbuilder_path))
+    fixer = DocumentationFixer(str(pgappforge_path))
     results = fixer.process_directory()
     
     print("\n" + "=" * 60)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Truly Functional Flask-AppBuilder Approval System
+Truly Functional PgAppForge Approval System
 
 ADDRESSES ALL REMAINING CRITICAL ISSUES IDENTIFIED BY CODE-REVIEW-EXPERT:
 
@@ -9,7 +9,7 @@ ADDRESSES ALL REMAINING CRITICAL ISSUES IDENTIFIED BY CODE-REVIEW-EXPERT:
 🔴 FIXED: Notification theater → Real email/notification implementation
 🔴 FIXED: Archival pass statements → Real database archival logic
 🔴 FIXED: Over-engineered architecture → Simplified, focused implementation
-🔴 FIXED: Mock model registry → Real Flask-AppBuilder model integration
+🔴 FIXED: Mock model registry → Real PgAppForge model integration
 🔴 FIXED: Metadata-only tracking → System that actually approves business objects
 
 CORE PRINCIPLE: REAL FUNCTIONALITY, NOT SOPHISTICATED APPEARANCE
@@ -23,13 +23,13 @@ from enum import Enum
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Flask-AppBuilder imports - REAL integration
+# PgAppForge imports - REAL integration
 from flask import current_app, flash, request
-from flask_appbuilder import ModelView, BaseView, has_access, action
-from flask_appbuilder.basemanager import BaseManager
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.exceptions import FABException
+from pgappforge import ModelView, BaseView, has_access, action
+from pgappforge.basemanager import BaseManager
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.exceptions import FABException
 from flask_babel import lazy_gettext as _
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Index, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship, sessionmaker
@@ -147,13 +147,13 @@ class RealApprovalEngine:
         """
         REAL MODEL REGISTRY INTEGRATION - Fixes the critical None return issue.
         
-        Actually finds and returns Flask-AppBuilder model classes.
+        Actually finds and returns PgAppForge model classes.
         """
         if model_name in self._model_registry:
             return self._model_registry[model_name]
         
         try:
-            # Method 1: Search through Flask-AppBuilder's registered models
+            # Method 1: Search through PgAppForge's registered models
             for view in self.appbuilder.baseviews:
                 if hasattr(view, 'datamodel') and hasattr(view.datamodel, 'obj'):
                     model_class = view.datamodel.obj
@@ -709,7 +709,7 @@ def usage_example():
     
     # Configuration example
     """
-    # In your Flask-AppBuilder app config:
+    # In your PgAppForge app config:
     ADDON_MANAGERS = ['truly_functional_approval_system.FunctionalApprovalAddonManager']
     
     # Email configuration for real notifications
@@ -747,4 +747,4 @@ def usage_example():
     """
 
 if __name__ == '__main__':
-    log.info("Truly Functional Flask-AppBuilder Approval System - REAL FUNCTIONALITY ENABLED")
+    log.info("Truly Functional PgAppForge Approval System - REAL FUNCTIONALITY ENABLED")

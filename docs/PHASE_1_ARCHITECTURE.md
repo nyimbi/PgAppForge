@@ -4,12 +4,12 @@
 ## 🏗️ Overall Phase 1 Architecture
 
 ### System Overview
-Phase 1 establishes the foundational capabilities that enable all future enhancements. The architecture follows a modular, event-driven design that integrates seamlessly with the existing Flask-AppBuilder framework.
+Phase 1 establishes the foundational capabilities that enable all future enhancements. The architecture follows a modular, event-driven design that integrates seamlessly with the existing PgAppForge framework.
 
 ```mermaid
 graph TB
-    subgraph "Existing Flask-AppBuilder"
-        FAB[Flask-AppBuilder Core]
+    subgraph "Existing PgAppForge"
+        FAB[PgAppForge Core]
         VG[View Generator]
         DI[Database Inspector]
     end
@@ -420,7 +420,7 @@ class TestPerformanceCriticalPaths(unittest.TestCase):
 ```python
 class TestGenerator:
     """
-    Master test generation orchestrator for Flask-AppBuilder applications.
+    Master test generation orchestrator for PgAppForge applications.
     
     This class coordinates the generation of comprehensive test suites including
     unit tests, integration tests, end-to-end tests, performance tests, and
@@ -488,7 +488,7 @@ class TestGenerator:
 ```
 flask-appbuilder-evolution/
 ├── src/
-│   ├── flask_appbuilder/              # Existing FAB code
+│   ├── pgappforge/              # Existing FAB code
 │   │   ├── cli/
 │   │   │   └── generators/            # Enhanced generators
 │   │   └── ...

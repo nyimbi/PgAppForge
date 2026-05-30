@@ -3,7 +3,7 @@
 Comprehensive Implementation Validation Script
 
 Validates that all 25 features are complete, functional, and production-ready.
-This script performs systematic checks across all components of the Flask-AppBuilder
+This script performs systematic checks across all components of the PgAppForge
 Apache AGE graph analytics platform.
 """
 
@@ -58,7 +58,7 @@ class ImplementationValidator:
         """Validate all database modules are complete"""
         logger.info("📊 Validating database modules...")
         
-        database_path = self.base_path / 'flask_appbuilder' / 'database'
+        database_path = self.base_path / 'pgappforge' / 'database'
         expected_modules = [
             'erd_manager.py',
             'graph_manager.py', 
@@ -101,7 +101,7 @@ class ImplementationValidator:
         """Validate all Flask view modules are complete"""
         logger.info("🌐 Validating view modules...")
         
-        views_path = self.base_path / 'flask_appbuilder' / 'views'
+        views_path = self.base_path / 'pgappforge' / 'views'
         expected_views = [
             'erd_view.py',
             'graph_view.py',
@@ -139,7 +139,7 @@ class ImplementationValidator:
         """Validate HTML template files exist"""
         logger.info("🎨 Validating template files...")
         
-        templates_path = self.base_path / 'flask_appbuilder' / 'templates'
+        templates_path = self.base_path / 'pgappforge' / 'templates'
         expected_template_dirs = [
             'erd', 'graph', 'query_builder', 'analytics', 'streaming',
             'ml', 'ai_assistant', 'performance', 'enterprise', 'monitoring',
@@ -279,21 +279,21 @@ class ImplementationValidator:
             
             # Check database module
             if components['database_module']:
-                db_path = self.base_path / 'flask_appbuilder' / 'database' / components['database_module']
+                db_path = self.base_path / 'pgappforge' / 'database' / components['database_module']
                 if not db_path.exists():
                     feature_status['complete'] = False
                     feature_status['missing_components'].append(f"Database module: {components['database_module']}")
             
             # Check view module
             if components['view_module']:
-                view_path = self.base_path / 'flask_appbuilder' / 'views' / components['view_module']
+                view_path = self.base_path / 'pgappforge' / 'views' / components['view_module']
                 if not view_path.exists():
                     feature_status['complete'] = False
                     feature_status['missing_components'].append(f"View module: {components['view_module']}")
             
             # Check templates
             for template_dir in components['templates']:
-                template_path = self.base_path / 'flask_appbuilder' / 'templates' / template_dir
+                template_path = self.base_path / 'pgappforge' / 'templates' / template_dir
                 if not template_path.exists():
                     feature_status['complete'] = False
                     feature_status['missing_components'].append(f"Template directory: {template_dir}")
@@ -305,7 +305,7 @@ class ImplementationValidator:
         logger.info("📚 Validating documentation coverage...")
         
         # This is a simplified check - in practice would be more comprehensive
-        database_path = self.base_path / 'flask_appbuilder' / 'database'
+        database_path = self.base_path / 'pgappforge' / 'database'
         
         total_files = 0
         documented_files = 0
@@ -333,7 +333,7 @@ class ImplementationValidator:
         """Validate API endpoint completeness"""
         logger.info("🔌 Validating API endpoints...")
         
-        views_path = self.base_path / 'flask_appbuilder' / 'views'
+        views_path = self.base_path / 'pgappforge' / 'views'
         
         total_api_endpoints = 0
         complete_endpoints = 0
@@ -368,7 +368,7 @@ class ImplementationValidator:
             'authentication_required': 0
         }
         
-        views_path = self.base_path / 'flask_appbuilder' / 'views'
+        views_path = self.base_path / 'pgappforge' / 'views'
         
         for view_file in views_path.glob('*_view.py'):
             with open(view_file, 'r', encoding='utf-8') as f:
@@ -400,7 +400,7 @@ class ImplementationValidator:
         }
         
         # Check for caching
-        perf_optimizer_path = self.base_path / 'flask_appbuilder' / 'database' / 'performance_optimizer.py'
+        perf_optimizer_path = self.base_path / 'pgappforge' / 'database' / 'performance_optimizer.py'
         if perf_optimizer_path.exists():
             with open(perf_optimizer_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -408,7 +408,7 @@ class ImplementationValidator:
                     performance_features['caching_implemented'] = True
         
         # Check for background processing
-        database_path = self.base_path / 'flask_appbuilder' / 'database'
+        database_path = self.base_path / 'pgappforge' / 'database'
         for py_file in database_path.glob('*.py'):
             with open(py_file, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -421,7 +421,7 @@ class ImplementationValidator:
             performance_features['database_optimization'] = True
         
         # Check for monitoring
-        monitoring_path = self.base_path / 'flask_appbuilder' / 'database' / 'monitoring_system.py'
+        monitoring_path = self.base_path / 'pgappforge' / 'database' / 'monitoring_system.py'
         if monitoring_path.exists():
             performance_features['monitoring_enabled'] = True
         
@@ -513,7 +513,7 @@ class ImplementationValidator:
 🏆 IMPLEMENTATION SUMMARY
 {'='*80}
 
-The Flask-AppBuilder Apache AGE Graph Analytics Platform implementation is:
+The PgAppForge Apache AGE Graph Analytics Platform implementation is:
 
 ✅ {complete_features/total_features*100:.0f}% FEATURE COMPLETE
 ✅ {existing_db_modules/total_db_modules*100:.0f}% DATABASE MODULES IMPLEMENTED

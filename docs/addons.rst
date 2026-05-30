@@ -47,7 +47,7 @@ A very simple manager would look something like this::
 
    import logging
 
-   from flask_appbuilder.basemanager import BaseManager
+   from pgforge.basemanager import BaseManager
    from flask_babel import lazy_gettext as _
 
    from .model import MyModel

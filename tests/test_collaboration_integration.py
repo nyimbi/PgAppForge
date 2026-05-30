@@ -1,5 +1,5 @@
 """
-Comprehensive Integration Tests for Flask-AppBuilder Collaboration Engine
+Comprehensive Integration Tests for PgAppForge Collaboration Engine
 
 Tests the complete collaboration system including WebSocket communication,
 session management, conflict resolution, and security integration.
@@ -10,24 +10,24 @@ import json
 import time
 from unittest.mock import Mock, patch, MagicMock
 from flask import Flask, g
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.security.sqla.models import User, Role
+from pgappforge import AppBuilder, SQLA
+from pgappforge.security.sqla.models import User, Role
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIOTestClient
 
 # Import collaboration components
-from flask_appbuilder.collaboration.collaboration_manager import CollaborationManager
-from flask_appbuilder.collaboration.security_integration import (
+from pgappforge.collaboration.collaboration_manager import CollaborationManager
+from pgappforge.collaboration.security_integration import (
     CollaborationSecurityManager, 
     CollaborationSecuritySession,
     CollaborationParticipant,
     COLLABORATION_PERMISSIONS,
     COLLABORATION_ROLES
 )
-from flask_appbuilder.collaboration.websocket_manager import create_websocket_manager
-from flask_appbuilder.collaboration.session_manager import CollaborationSessionManager
-from flask_appbuilder.collaboration.conflict_resolver import ConflictResolutionEngine
-from flask_appbuilder.collaboration.sync_engine import RealtimeDataSyncEngine
+from pgappforge.collaboration.websocket_manager import create_websocket_manager
+from pgappforge.collaboration.session_manager import CollaborationSessionManager
+from pgappforge.collaboration.conflict_resolver import ConflictResolutionEngine
+from pgappforge.collaboration.sync_engine import RealtimeDataSyncEngine
 
 
 class TestCollaborationIntegration(unittest.TestCase):
@@ -314,7 +314,7 @@ class TestCollaborationIntegration(unittest.TestCase):
         self.assertIn('resolved_value', resolution)
         self.assertIn('resolution_method', resolution)
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_websocket_integration(self, mock_socketio):
         """Test WebSocket manager integration"""
         # Mock SocketIO instance
@@ -384,7 +384,7 @@ class TestCollaborationIntegration(unittest.TestCase):
     
     def test_collaboration_widget_integration(self):
         """Test collaboration widgets integration"""
-        from flask_appbuilder.collaboration.widgets import (
+        from pgappforge.collaboration.widgets import (
             CollaborativeFormWidget,
             PresenceIndicatorWidget,
             ConflictResolutionWidget
@@ -417,7 +417,7 @@ class TestCollaborationIntegration(unittest.TestCase):
     
     def test_collaboration_mixins(self):
         """Test collaboration mixins for ModelView"""
-        from flask_appbuilder.collaboration.mixins import CollaborativeModelViewMixin
+        from pgappforge.collaboration.mixins import CollaborativeModelViewMixin
         
         # Create test class with mixin
         class TestCollaborativeView(CollaborativeModelViewMixin):

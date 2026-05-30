@@ -23,22 +23,22 @@ import time
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.security.sqla.manager import SecurityManager
+from pgappforge import AppBuilder
+from pgappforge.security.sqla.manager import SecurityManager
 
 # Import the MFA components to test
 try:
-    from flask_appbuilder.security.mfa.services import (
+    from pgappforge.security.mfa.services import (
         TOTPService, SMSService, EmailService, BackupCodeService,
         MFAPolicyService, TokenGenerationService, MFAOrchestrationService,
         WebAuthnService, ValidationError, ServiceUnavailableError
     )
-    from flask_appbuilder.security.mfa.models import (
+    from pgappforge.security.mfa.models import (
         UserMFA, MFABackupCode, MFAVerification, MFAPolicy,
         WebAuthnCredential, MFAChallenge
     )
-    from flask_appbuilder.security.mfa.manager_mixin import MFASessionState
-    from flask_appbuilder.process.approval.security_validator import ApprovalSecurityValidator
+    from pgappforge.security.mfa.manager_mixin import MFASessionState
+    from pgappforge.process.approval.security_validator import ApprovalSecurityValidator
     HAS_MFA = True
 except ImportError:
     HAS_MFA = False
@@ -72,7 +72,7 @@ class TestTOTPService:
             secrets = [self.totp_service.generate_secret() for _ in range(10)]
             assert len(set(secrets)) == 10  # All unique
     
-    @patch('flask_appbuilder.security.mfa.services.HAS_QRCODE', True)
+    @patch('pgappforge.security.mfa.services.HAS_QRCODE', True)
     @patch('qrcode.QRCode')
     def test_generate_qr_code(self, mock_qrcode):
         """Test QR code generation for TOTP setup."""
@@ -157,8 +157,8 @@ class TestWebAuthnService:
         self.mock_user.last_name = 'User'
         self.mock_user.email = 'test@example.com'
     
-    @patch('flask_appbuilder.security.mfa.services.HAS_WEBAUTHN', True)
-    @patch('flask_appbuilder.security.mfa.services.generate_registration_options')
+    @patch('pgappforge.security.mfa.services.HAS_WEBAUTHN', True)
+    @patch('pgappforge.security.mfa.services.generate_registration_options')
     def test_generate_registration_options(self, mock_generate_options):
         """Test WebAuthn registration options generation."""
         # Mock the WebAuthn library response
@@ -176,7 +176,7 @@ class TestWebAuthnService:
         mock_generate_options.return_value = mock_options
         
         with self.app.app_context():
-            with patch('flask_appbuilder.db.session') as mock_db:
+            with patch('pgappforge.db.session') as mock_db:
                 webauthn_service = WebAuthnService()
                 options = webauthn_service.generate_registration_options(self.mock_user)
                 
@@ -185,8 +185,8 @@ class TestWebAuthnService:
                 assert options['publicKey']['rp']['id'] == 'localhost'
                 mock_generate_options.assert_called_once()
     
-    @patch('flask_appbuilder.security.mfa.services.HAS_WEBAUTHN', True)
-    @patch('flask_appbuilder.security.mfa.services.generate_authentication_options')
+    @patch('pgappforge.security.mfa.services.HAS_WEBAUTHN', True)
+    @patch('pgappforge.security.mfa.services.generate_authentication_options')
     def test_generate_authentication_options(self, mock_generate_options):
         """Test WebAuthn authentication options generation."""
         mock_options = Mock()
@@ -197,7 +197,7 @@ class TestWebAuthnService:
         mock_generate_options.return_value = mock_options
         
         with self.app.app_context():
-            with patch('flask_appbuilder.db.session') as mock_db:
+            with patch('pgappforge.db.session') as mock_db:
                 # Mock credentials query
                 mock_db.query().filter_by().all.return_value = []
                 
@@ -209,7 +209,7 @@ class TestWebAuthnService:
     def test_webauthn_not_available(self):
         """Test WebAuthn service when library is not available."""
         with self.app.app_context():
-            with patch('flask_appbuilder.security.mfa.services.HAS_WEBAUTHN', False):
+            with patch('pgappforge.security.mfa.services.HAS_WEBAUTHN', False):
                 with pytest.raises(RuntimeError, match="WebAuthn support requires py-webauthn"):
                     WebAuthnService()
 
@@ -283,7 +283,7 @@ class TestMFAOrchestrationService:
         self.mock_user.username = 'testuser'
         self.mock_user.email = 'test@example.com'
     
-    @patch('flask_appbuilder.db.session')
+    @patch('pgappforge.db.session')
     def test_initiate_mfa_setup(self, mock_db):
         """Test MFA setup initiation."""
         with self.app.app_context():
@@ -333,13 +333,13 @@ class TestApprovalSecurityIntegration:
             
             assert validator.mfa_enabled is True
     
-    @patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState.is_verified_and_valid')
+    @patch('pgappforge.security.mfa.manager_mixin.MFASessionState.is_verified_and_valid')
     def test_mfa_validation_for_critical_approval(self, mock_mfa_verified):
         """Test MFA validation for critical-level approvals."""
         mock_mfa_verified.return_value = True
         
         with self.app.app_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState.get_verification_method', return_value='webauthn'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFASessionState.get_verification_method', return_value='webauthn'):
                 validator = ApprovalSecurityValidator(self.mock_appbuilder)
                 
                 # Mock user MFA setup
@@ -358,8 +358,8 @@ class TestApprovalSecurityIntegration:
     def test_mfa_validation_insufficient_method(self):
         """Test MFA validation with insufficient method for approval level."""
         with self.app.app_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState.is_verified_and_valid', return_value=True):
-                with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState.get_verification_method', return_value='sms'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFASessionState.is_verified_and_valid', return_value=True):
+                with patch('pgappforge.security.mfa.manager_mixin.MFASessionState.get_verification_method', return_value='sms'):
                     validator = ApprovalSecurityValidator(self.mock_appbuilder)
                     
                     # Mock user MFA setup
@@ -425,7 +425,7 @@ class TestErrorHandling:
     def test_email_service_without_flask_mail(self):
         """Test email service behavior when Flask-Mail is not available."""
         with self.app.app_context():
-            with patch('flask_appbuilder.security.mfa.services.HAS_FLASK_MAIL', False):
+            with patch('pgappforge.security.mfa.services.HAS_FLASK_MAIL', False):
                 email_service = EmailService()
                 
                 with pytest.raises(RuntimeError, match="Email MFA requires Flask-Mail"):
@@ -442,7 +442,7 @@ class TestErrorHandling:
     def test_invalid_email_format(self):
         """Test email service with invalid email format."""
         with self.app.app_context():
-            with patch('flask_appbuilder.security.mfa.services.HAS_FLASK_MAIL', True):
+            with patch('pgappforge.security.mfa.services.HAS_FLASK_MAIL', True):
                 email_service = EmailService()
                 
                 with pytest.raises(ValidationError, match="Invalid email address format"):
@@ -476,7 +476,7 @@ class TestPerformanceAndScalability:
         app.config['SECRET_KEY'] = 'test-secret-key'
         
         with app.app_context():
-            with patch('flask_appbuilder.db.session') as mock_db:
+            with patch('pgappforge.db.session') as mock_db:
                 backup_service = BackupCodeService()
                 
                 start_time = time.time()
@@ -485,7 +485,7 @@ class TestPerformanceAndScalability:
                 mock_db.query().get.return_value = Mock()
                 mock_db.commit = Mock()
                 
-                with patch('flask_appbuilder.security.mfa.models.MFABackupCode.generate_codes') as mock_generate:
+                with patch('pgappforge.security.mfa.models.MFABackupCode.generate_codes') as mock_generate:
                     mock_generate.return_value = ['12345678'] * 8
                     
                     codes = backup_service.generate_codes_for_user(1, count=8)
@@ -516,7 +516,7 @@ class TestIntegrationFlows:
         self.mock_user.username = 'testuser'
         self.mock_user.email = 'test@example.com'
     
-    @patch('flask_appbuilder.db.session')
+    @patch('pgappforge.db.session')
     def test_complete_mfa_setup_flow(self, mock_db):
         """Test complete MFA setup flow from initiation to completion."""
         with self.app.app_context():
@@ -553,7 +553,7 @@ class TestIntegrationFlows:
                     assert result['setup_completed'] is True
                     assert len(result['backup_codes']) == 8
     
-    @patch('flask_appbuilder.db.session')
+    @patch('pgappforge.db.session')
     def test_approval_with_mfa_requirement(self, mock_db):
         """Test approval flow with MFA requirement."""
         with self.app.app_context():
@@ -567,8 +567,8 @@ class TestIntegrationFlows:
             mock_user_mfa.setup_completed = True
             
             with patch.object(validator, '_get_user_mfa', return_value=mock_user_mfa):
-                with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState.is_verified_and_valid', return_value=True):
-                    with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState.get_verification_method', return_value='totp'):
+                with patch('pgappforge.security.mfa.manager_mixin.MFASessionState.is_verified_and_valid', return_value=True):
+                    with patch('pgappforge.security.mfa.manager_mixin.MFASessionState.get_verification_method', return_value='totp'):
                         
                         approval_data = {
                             'workflow_type': 'test',

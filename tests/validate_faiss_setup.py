@@ -3,7 +3,7 @@
 FAISS Setup Validation Script
 
 Quick validation script to verify FAISS integration is working correctly
-with the Flask-AppBuilder RAG system.
+with the PgAppForge RAG system.
 
 Usage:
     python validate_faiss_setup.py
@@ -20,21 +20,21 @@ from typing import List, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import RAG components
-from flask_appbuilder.collaborative.ai.rag_engine import (
+from pgappforge.collaborative.ai.rag_engine import (
     RAGEngine, VectorStore, DocumentProcessor, DocumentType, ChunkingStrategy
 )
-from flask_appbuilder.collaborative.ai.rag_factory import RAGFactory, RAGConfig
-from flask_appbuilder.collaborative.ai.ai_models import AIModelAdapter, ChatMessage, ModelResponse
+from pgappforge.collaborative.ai.rag_factory import RAGFactory, RAGConfig
+from pgappforge.collaborative.ai.ai_models import AIModelAdapter, ChatMessage, ModelResponse
 
 # SQLAlchemy setup
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from flask_appbuilder.models.sqla import Base
+from pgappforge.models.sqla import Base
 
 
 # Test FAISS availability
 try:
-    from flask_appbuilder.collaborative.ai.faiss_vector_store import (
+    from pgappforge.collaborative.ai.faiss_vector_store import (
         FAISSVectorStore, FAISSIntegratedVectorStore, IndexConfig, FAISS_AVAILABLE
     )
     HAS_FAISS = True
@@ -228,7 +228,7 @@ async def validate_faiss_integration():
             print("✅ Created FAISS-integrated vector store")
 
             # Test document addition
-            test_content = "Flask-AppBuilder is a rapid application development framework."
+            test_content = "PgAppForge is a rapid application development framework."
             chunks = await store.add_document(
                 content=test_content,
                 document_id="validation_doc",
@@ -295,7 +295,7 @@ async def validate_rag_end_to_end():
 
             # Add test documents
             test_documents = [
-                "Flask-AppBuilder provides automatic CRUD generation for web applications.",
+                "PgAppForge provides automatic CRUD generation for web applications.",
                 "FAISS is a library for efficient similarity search and clustering of dense vectors.",
                 "Vector databases enable semantic search by storing high-dimensional embeddings.",
             ]
@@ -311,7 +311,7 @@ async def validate_rag_end_to_end():
             print(f"✅ Added {len(test_documents)} documents to RAG system")
 
             # Test query and response generation
-            query = "How does Flask-AppBuilder help with web development?"
+            query = "How does PgAppForge help with web development?"
             response = await rag_engine.query(
                 query=query,
                 max_results=3,
@@ -353,7 +353,7 @@ def print_system_info():
 
 async def main():
     """Main validation function."""
-    print("🚀 Flask-AppBuilder FAISS Integration Validation")
+    print("🚀 PgAppForge FAISS Integration Validation")
     print("=" * 60)
 
     print_system_info()

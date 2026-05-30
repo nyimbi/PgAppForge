@@ -1,8 +1,8 @@
 import unittest
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.const import AUTH_REMOTE_USER
+from pgappforge import AppBuilder, SQLA
+from pgappforge.const import AUTH_REMOTE_USER
 
 
 class AuthRemoteUserTestCase(unittest.TestCase):
@@ -24,7 +24,7 @@ class AuthRemoteUserTestCase(unittest.TestCase):
         # stop Flask
         self.app = None
 
-        # stop Flask-AppBuilder
+        # stop PgAppForge
         self.appbuilder = None
 
         # stop Database

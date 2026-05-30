@@ -7,8 +7,8 @@ from unittest.mock import ANY, patch
 
 from click.testing import CliRunner
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.cli import (
+from pgappforge import AppBuilder, SQLA
+from pgappforge.cli import (
     cast_int_like_to_int,
     create_app,
     create_permissions,

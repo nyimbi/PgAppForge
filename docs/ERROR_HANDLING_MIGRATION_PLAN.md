@@ -53,7 +53,7 @@
 ```bash
 # Analyze a file for migration opportunities
 python -c "
-from flask_appbuilder.utils.error_migration import ErrorHandlingMigrator
+from pgappforge.utils.error_migration import ErrorHandlingMigrator
 migrator = ErrorHandlingMigrator('.')
 report = migrator.analyze_file('path/to/file.py')
 print(report)
@@ -163,7 +163,7 @@ raise FABSecurityError("File type not allowed")
 
 ### Migration Analyzer
 ```python
-from flask_appbuilder.utils.error_migration import ErrorHandlingMigrator
+from pgappforge.utils.error_migration import ErrorHandlingMigrator
 
 # Analyze entire project
 migrator = ErrorHandlingMigrator('/path/to/project')
@@ -176,7 +176,7 @@ migrator.generate_migration_script('migrate_errors.py')
 ### Testing Framework
 ```python
 import pytest
-from flask_appbuilder.exceptions import FABValidationError
+from pgappforge.exceptions import FABValidationError
 
 def test_error_migration():
     """Test that old and new error patterns work."""

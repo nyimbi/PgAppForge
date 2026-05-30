@@ -1,14 +1,14 @@
-# Flask-AppBuilder Database Introspection & Application Creation Analysis
+# PgAppForge Database Introspection & Application Creation Analysis
 
 ## 🔍 **Executive Summary**
 
-Flask-AppBuilder features a sophisticated **database introspection and reverse engineering system** that can analyze existing database schemas and generate complete, production-ready Flask-AppBuilder applications. This analysis examines the comprehensive capabilities for creating applications from databases with minimal manual coding.
+PgAppForge features a sophisticated **database introspection and reverse engineering system** that can analyze existing database schemas and generate complete, production-ready PgAppForge applications. This analysis examines the comprehensive capabilities for creating applications from databases with minimal manual coding.
 
 ---
 
 ## 🏗️ **Core Architecture**
 
-### **EnhancedDatabaseInspector** (`flask_appbuilder/cli/generators/database_inspector.py`)
+### **EnhancedDatabaseInspector** (`pgappforge/cli/generators/database_inspector.py`)
 
 The cornerstone of the introspection system with **1,259 lines** of sophisticated analysis code:
 
@@ -58,7 +58,7 @@ class EnhancedDatabaseInspector:
 
 ## 🚀 **Code Generation Pipeline**
 
-### **1. Model Generation** (`flask_appbuilder/cli/generators/model_generator.py`)
+### **1. Model Generation** (`pgappforge/cli/generators/model_generator.py`)
 
 Generates modern SQLAlchemy models with advanced features:
 
@@ -83,9 +83,9 @@ class ModelGenerationConfig:
 - Performance optimizations (lazy loading, indexing)
 - Security features (encryption, validation)
 
-### **2. View Generation** (`flask_appbuilder/cli/generators/view_generator.py`)
+### **2. View Generation** (`pgappforge/cli/generators/view_generator.py`)
 
-Creates sophisticated Flask-AppBuilder views:
+Creates sophisticated PgAppForge views:
 
 ```python
 @dataclass
@@ -109,7 +109,7 @@ class ViewGenerationConfig:
 - **LookupView**: Reference data management
 - **ReportView**: Automated reporting interfaces
 
-### **3. Full Application Generation** (`flask_appbuilder/cli/generators/app_generator.py`)
+### **3. Full Application Generation** (`pgappforge/cli/generators/app_generator.py`)
 
 Creates complete, production-ready applications:
 
@@ -138,7 +138,7 @@ class AppGenerationConfig:
 
 ---
 
-## 🖥️ **CLI Commands** (`flask_appbuilder/cli/generators/cli_commands.py`)
+## 🖥️ **CLI Commands** (`pgappforge/cli/generators/cli_commands.py`)
 
 ### **Command Structure**
 ```bash
@@ -216,7 +216,7 @@ flask fab gen all postgresql://user:pass@host/db \
 
 3. **Code Generation**
    - SQLAlchemy models with relationships
-   - Flask-AppBuilder views with appropriate widgets
+   - PgAppForge views with appropriate widgets
    - REST API endpoints with OpenAPI documentation
    - HTML templates with responsive layouts
 
@@ -387,7 +387,7 @@ def _generate_recommendations(self) -> List[str]:
 
     if stats['regular_tables'] > 20:
         recommendations.append(
-            "Consider using multiple Flask-AppBuilder blueprints to organize views"
+            "Consider using multiple PgAppForge blueprints to organize views"
         )
 
     if stats['association_tables'] > 5:
@@ -425,13 +425,13 @@ The full application generator creates production-ready deployment configuration
    ```dockerfile
    # Generated Dockerfile with multi-stage builds
    FROM python:3.11-slim as builder
-   # Optimized for Flask-AppBuilder applications
+   # Optimized for PgAppForge applications
    ```
 
 2. **CI/CD Pipeline**
    ```yaml
    # Generated GitHub Actions workflow
-   name: Flask-AppBuilder Application CI/CD
+   name: PgAppForge Application CI/CD
    on: [push, pull_request]
    jobs:
      test: # Automated testing
@@ -449,7 +449,7 @@ The full application generator creates production-ready deployment configuration
 
 ## 📈 **Migration Tools Integration**
 
-### **Multi-Tenant Migration Support** (`flask_appbuilder/cli/migration_tools.py`)
+### **Multi-Tenant Migration Support** (`pgappforge/cli/migration_tools.py`)
 
 Advanced migration capabilities for existing applications:
 
@@ -494,7 +494,7 @@ class TenantMigrationEngine:
 
 ## 🎯 **Conclusion**
 
-Flask-AppBuilder's database introspection and application creation capabilities represent a **sophisticated reverse engineering system** that rivals dedicated database-to-application tools. The system provides:
+PgAppForge's database introspection and application creation capabilities represent a **sophisticated reverse engineering system** that rivals dedicated database-to-application tools. The system provides:
 
 ✅ **Comprehensive Analysis**: Advanced relationship detection, constraint analysis, and metadata extraction
 ✅ **Intelligent Generation**: Smart widget selection, validation rule creation, and UI optimization
@@ -503,7 +503,7 @@ Flask-AppBuilder's database introspection and application creation capabilities 
 ✅ **Enterprise Features**: Security assessment, performance optimization, and migration support
 
 The combination of database introspection with workflow generation creates a **powerful development paradigm** where developers can:
-1. **Reverse engineer** existing databases into modern Flask-AppBuilder applications
+1. **Reverse engineer** existing databases into modern PgAppForge applications
 2. **Enhance** with sophisticated business process workflows
 3. **Deploy** production-ready systems with minimal manual coding
 

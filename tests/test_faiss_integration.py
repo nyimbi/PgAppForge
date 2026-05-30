@@ -2,7 +2,7 @@
 Comprehensive tests for FAISS integration with RAG system.
 
 Tests cover performance benchmarks, index types, GPU acceleration,
-persistence, and compatibility with the existing Flask-AppBuilder framework.
+persistence, and compatibility with the existing PgAppForge framework.
 """
 
 import os
@@ -13,24 +13,24 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 from typing import List, Dict, Any
 
-# Flask-AppBuilder imports
+# PgAppForge imports
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.models.sqla import Base
+from pgappforge import AppBuilder
+from pgappforge.models.sqla import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # RAG system imports
-from flask_appbuilder.collaborative.ai.rag_engine import (
+from pgappforge.collaborative.ai.rag_engine import (
     RAGEngine, VectorStore, DocumentProcessor, DocumentChunk,
     DocumentType, ChunkingStrategy, MemoryMonitor, ConnectionPool, LRUCache
 )
-from flask_appbuilder.collaborative.ai.rag_factory import RAGFactory, RAGConfig
-from flask_appbuilder.collaborative.ai.ai_models import AIModelAdapter, ChatMessage, ModelResponse
+from pgappforge.collaborative.ai.rag_factory import RAGFactory, RAGConfig
+from pgappforge.collaborative.ai.ai_models import AIModelAdapter, ChatMessage, ModelResponse
 
 # Test if FAISS is available
 try:
-    from flask_appbuilder.collaborative.ai.faiss_vector_store import (
+    from pgappforge.collaborative.ai.faiss_vector_store import (
         FAISSVectorStore, FAISSIntegratedVectorStore, IndexConfig, FAISS_AVAILABLE
     )
     HAS_FAISS = True
@@ -98,10 +98,10 @@ class TestFAISSIntegration(unittest.TestCase):
         # Test data
         cls.test_documents = [
             {
-                "content": "Flask-AppBuilder is a rapid application development framework built on Flask.",
+                "content": "PgAppForge is a rapid application development framework built on Flask.",
                 "document_id": "doc1",
                 "document_type": DocumentType.TEXT,
-                "metadata": {"title": "Flask-AppBuilder Overview"}
+                "metadata": {"title": "PgAppForge Overview"}
             },
             {
                 "content": "FAISS (Facebook AI Similarity Search) is a library for efficient similarity search and clustering of dense vectors.",
@@ -217,7 +217,7 @@ class TestFAISSIntegration(unittest.TestCase):
         found_flask_doc = any(
             result.chunk.document_id == "doc1" for result in results
         )
-        self.assertTrue(found_flask_doc, "Should find Flask-AppBuilder document")
+        self.assertTrue(found_flask_doc, "Should find PgAppForge document")
 
     @unittest.skipUnless(HAS_FAISS, "FAISS not available")
     def test_rag_factory_faiss_configurations(self):
@@ -397,7 +397,7 @@ class TestFAISSIntegration(unittest.TestCase):
 
         # Run benchmark
         test_queries = [
-            "What is Flask-AppBuilder?",
+            "What is PgAppForge?",
             "How does FAISS work?",
             "Vector database applications",
             "Python similarity calculation",
@@ -581,7 +581,7 @@ class TestFAISSIntegration(unittest.TestCase):
         os.environ["RAG_CHUNK_SIZE"] = "800"
 
         try:
-            from flask_appbuilder.collaborative.ai.rag_factory import create_rag_from_environment
+            from pgappforge.collaborative.ai.rag_factory import create_rag_from_environment
 
             rag_engine = create_rag_from_environment(
                 session_factory=self.session_factory,

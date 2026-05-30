@@ -1,8 +1,8 @@
 from flask import g
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.filters import BaseFilter
-from flask_appbuilder.models.sqla.filters import get_field_setup_query
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.models.filters import BaseFilter
+from pgappforge.models.sqla.filters import get_field_setup_query
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from . import appbuilder, db
 from .models import Company, Contact, ContactGroup

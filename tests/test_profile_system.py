@@ -1,5 +1,5 @@
 """
-Test suite for Flask-AppBuilder Profile Management System
+Test suite for PgAppForge Profile Management System
 
 Tests cover models, views, API endpoints, validation, and security features.
 """
@@ -9,16 +9,16 @@ from unittest.mock import patch
 
 import pytest
 from flask import g, url_for
-from flask_appbuilder import SQLA
-from flask_appbuilder.const import API_RESULT_RES_KEY
+from pgappforge import SQLA
+from pgappforge.const import API_RESULT_RES_KEY
 
-from flask_appbuilder.models.profiles import (
+from pgappforge.models.profiles import (
     ProfileField,
     ProfileFieldValue,
     ProfileType,
     UserProfile,
 )
-from flask_appbuilder.security.profile_validators import (
+from pgappforge.security.profile_validators import (
     ProfileAuditLogger,
     ProfileSecurityManager,
     ProfileValidator,
@@ -560,7 +560,7 @@ class TestDynamicProfileFields:
 def app():
     """Create Flask app for testing"""
     from flask import Flask
-    from flask_appbuilder import AppBuilder, SQLA
+    from pgappforge import AppBuilder, SQLA
     
     app = Flask(__name__)
     app.config['TESTING'] = True

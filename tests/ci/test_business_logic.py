@@ -1,5 +1,5 @@
 """
-Comprehensive business logic tests for Flask-AppBuilder.
+Comprehensive business logic tests for PgForge.
 
 This module tests business logic, data processing, validation rules,
 and complex functionality without requiring full Flask imports.

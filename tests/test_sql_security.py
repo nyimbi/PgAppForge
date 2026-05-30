@@ -11,7 +11,7 @@ import tempfile
 import os
 from unittest.mock import Mock, patch, MagicMock
 
-from flask_appbuilder.security.sql_utils import (
+from pgappforge.security.sql_utils import (
     SQLIdentifierValidator,
     SecureDDLExecutor,
     SQLSecurityError
@@ -427,7 +427,7 @@ class TestSQLSecurityIntegration:
 
     def test_security_logging(self):
         """Test security event logging."""
-        with patch('flask_appbuilder.security.sql_utils.logger') as mock_logger:
+        with patch('pgappforge.security.sql_utils.logger') as mock_logger:
             validator = SQLIdentifierValidator()
 
             # Attempt invalid operation

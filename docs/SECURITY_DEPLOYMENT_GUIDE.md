@@ -1,8 +1,8 @@
-# Flask-AppBuilder Security Deployment Guide
+# PgAppForge Security Deployment Guide
 
 ## Overview
 
-This guide provides comprehensive security configuration for production deployment of Flask-AppBuilder with enhanced security features.
+This guide provides comprehensive security configuration for production deployment of PgAppForge with enhanced security features.
 
 ## Critical Security Configuration
 
@@ -186,7 +186,7 @@ LOGGING = {
         }
     },
     'loggers': {
-        'flask_appbuilder.security': {
+        'pgappforge.security': {
             'handlers': ['security'],
             'level': 'INFO'
         }
@@ -284,13 +284,13 @@ AUDIT_EVENTS = [
 pytest tests/security/
 
 # Check for SQL injection vulnerabilities
-python -m flask_appbuilder.security.scanner
+python -m pgappforge.security.scanner
 
 # Validate XSS protection
-python -m flask_appbuilder.security.xss_test
+python -m pgappforge.security.xss_test
 
 # Test rate limiting
-python -m flask_appbuilder.security.rate_limit_test
+python -m pgappforge.security.rate_limit_test
 ```
 
 ### 2. Penetration Testing
@@ -338,6 +338,6 @@ redis-cli KEYS "rate_limit:*"
 
 ## Conclusion
 
-This security deployment guide provides comprehensive configuration for production Flask-AppBuilder deployments. Regular review and updates of security configurations are essential for maintaining a secure environment.
+This security deployment guide provides comprehensive configuration for production PgAppForge deployments. Regular review and updates of security configurations are essential for maintaining a secure environment.
 
-For additional support, contact the security team or refer to the Flask-AppBuilder security documentation.
+For additional support, contact the security team or refer to the PgAppForge security documentation.

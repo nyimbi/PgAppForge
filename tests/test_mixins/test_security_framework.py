@@ -10,7 +10,7 @@ import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 
-from flask_appbuilder.mixins.security_framework import (
+from pgappforge.mixins.security_framework import (
     # Exceptions
     MixinSecurityError, MixinPermissionError, MixinValidationError,
     MixinDataError, MixinConfigurationError, MixinExternalServiceError,
@@ -68,8 +68,8 @@ class TestSecurityExceptions:
 class TestSecurityValidator:
     """Test SecurityValidator functionality."""
     
-    @patch('flask_appbuilder.mixins.security_framework.current_user')
-    @patch('flask_appbuilder.mixins.security_framework.db')
+    @patch('pgappforge.mixins.security_framework.current_user')
+    @patch('pgappforge.mixins.security_framework.db')
     def test_validate_user_context_current_user(self, mock_db, mock_current_user):
         """Test validating current user context."""
         # Setup mocks
@@ -83,7 +83,7 @@ class TestSecurityValidator:
         
         assert result == mock_user
     
-    @patch('flask_appbuilder.mixins.security_framework.db')
+    @patch('pgappforge.mixins.security_framework.db')
     def test_validate_user_context_by_id(self, mock_db):
         """Test validating user by ID."""
         # Setup mocks
@@ -98,7 +98,7 @@ class TestSecurityValidator:
         assert result == mock_user
         mock_db.session.query.assert_called_once()
     
-    @patch('flask_appbuilder.mixins.security_framework.db')
+    @patch('pgappforge.mixins.security_framework.db')
     def test_validate_user_context_inactive_user(self, mock_db):
         """Test validation fails for inactive user."""
         # Setup inactive user
@@ -114,7 +114,7 @@ class TestSecurityValidator:
         assert "not active" in str(exc_info.value)
         assert exc_info.value.details['active'] is False
     
-    @patch('flask_appbuilder.mixins.security_framework.db')
+    @patch('pgappforge.mixins.security_framework.db')
     def test_validate_user_context_locked_account(self, mock_db):
         """Test validation fails for locked account."""
         # Setup locked user
@@ -144,7 +144,7 @@ class TestSecurityValidator:
         assert result is True
         mock_user.has_permission.assert_called_once_with("can_approve")
     
-    @patch('flask_appbuilder.mixins.security_framework.SecurityAuditor')
+    @patch('pgappforge.mixins.security_framework.SecurityAuditor')
     def test_validate_permission_denied(self, mock_auditor):
         """Test permission validation failure with audit logging."""
         # Setup user without permission
@@ -268,8 +268,8 @@ class TestInputValidator:
 class TestSecurityAuditor:
     """Test SecurityAuditor functionality."""
     
-    @patch('flask_appbuilder.mixins.security_framework.request')
-    @patch('flask_appbuilder.mixins.security_framework.logging')
+    @patch('pgappforge.mixins.security_framework.request')
+    @patch('pgappforge.mixins.security_framework.logging')
     def test_log_security_event_with_request_context(self, mock_logging, mock_request):
         """Test security event logging with request context."""
         # Setup request mock
@@ -298,8 +298,8 @@ class TestSecurityAuditor:
         assert "192.168.1.100" in log_call_args
         assert "TestBot/1.0" in log_call_args
     
-    @patch('flask_appbuilder.mixins.security_framework.request', None)
-    @patch('flask_appbuilder.mixins.security_framework.logging')
+    @patch('pgappforge.mixins.security_framework.request', None)
+    @patch('pgappforge.mixins.security_framework.logging')
     def test_log_security_event_no_request_context(self, mock_logging):
         """Test security event logging without request context."""
         mock_logger = Mock()
@@ -379,7 +379,7 @@ class TestErrorRecovery:
 class TestSecurityDecorators:
     """Test security decorator functionality."""
     
-    @patch('flask_appbuilder.mixins.security_framework.SecurityValidator')
+    @patch('pgappforge.mixins.security_framework.SecurityValidator')
     def test_secure_operation_decorator(self, mock_validator):
         """Test secure_operation decorator with permissions."""
         # Setup mocks
@@ -404,7 +404,7 @@ class TestSecurityDecorators:
         mock_validator.validate_user_context.assert_called_once()
         mock_validator.validate_permission.assert_called_once_with(mock_user, 'can_edit')
     
-    @patch('flask_appbuilder.mixins.security_framework.db')
+    @patch('pgappforge.mixins.security_framework.db')
     def test_database_operation_decorator_success(self, mock_db):
         """Test database_operation decorator with successful transaction."""
         @database_operation(transaction=True)
@@ -417,7 +417,7 @@ class TestSecurityDecorators:
         mock_db.session.commit.assert_called_once()
         mock_db.session.rollback.assert_not_called()
     
-    @patch('flask_appbuilder.mixins.security_framework.db')
+    @patch('pgappforge.mixins.security_framework.db')
     def test_database_operation_decorator_rollback(self, mock_db):
         """Test database_operation decorator with transaction rollback."""
         @database_operation(transaction=True)
@@ -434,8 +434,8 @@ class TestSecurityDecorators:
 class TestIntegrationScenarios:
     """Test real-world integration scenarios."""
     
-    @patch('flask_appbuilder.mixins.security_framework.SecurityValidator')
-    @patch('flask_appbuilder.mixins.security_framework.SecurityAuditor')
+    @patch('pgappforge.mixins.security_framework.SecurityValidator')
+    @patch('pgappforge.mixins.security_framework.SecurityAuditor')
     def test_approval_workflow_security_integration(self, mock_auditor, mock_validator):
         """Test complete approval workflow with security integration."""
         # Setup security mocks

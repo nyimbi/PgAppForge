@@ -1,6 +1,6 @@
 # Real-Time Collaboration
 
-Flask-AppBuilder's real-time collaboration system enables multiple users to work together seamlessly with live updates, conflict resolution, and comprehensive activity tracking.
+PgAppForge's real-time collaboration system enables multiple users to work together seamlessly with live updates, conflict resolution, and comprehensive activity tracking.
 
 ## 🌟 Overview
 
@@ -73,10 +73,10 @@ graph TB
 
 Handles all real-time WebSocket connections and message routing.
 
-**Location:** `flask_appbuilder/collaborative/realtime/websocket_manager.py`
+**Location:** `pgappforge/collaborative/realtime/websocket_manager.py`
 
 ```python
-from flask_appbuilder.collaborative.realtime.websocket_manager import WebSocketManager
+from pgappforge.collaborative.realtime.websocket_manager import WebSocketManager
 
 # Initialize WebSocket manager
 ws_manager = WebSocketManager(app)
@@ -120,10 +120,10 @@ Send message to specific user.
 
 Core collaboration logic with operational transforms.
 
-**Location:** `flask_appbuilder/collaborative/core/collaboration_engine.py`
+**Location:** `pgappforge/collaborative/core/collaboration_engine.py`
 
 ```python
-from flask_appbuilder.collaborative.core.collaboration_engine import CollaborationEngine
+from pgappforge.collaborative.core.collaboration_engine import CollaborationEngine
 
 # Initialize collaboration engine
 collab_engine = CollaborationEngine(ws_manager, db.session)
@@ -282,7 +282,7 @@ Track and display user presence in real-time.
 ### Presence Service
 
 ```python
-from flask_appbuilder.collaborative.realtime.presence_service import PresenceService
+from pgappforge.collaborative.realtime.presence_service import PresenceService
 
 presence_service = PresenceService(redis_client)
 
@@ -327,7 +327,7 @@ active_users = await presence_service.get_workspace_presence('workspace_456')
 Integrated chat for workspace communication.
 
 ```python
-from flask_appbuilder.collaborative.communication.chat_manager import ChatManager
+from pgappforge.collaborative.communication.chat_manager import ChatManager
 
 chat_manager = ChatManager(ws_manager, db.session)
 
@@ -358,7 +358,7 @@ await chat_manager.send_message(
 Contextual comments linked to specific content.
 
 ```python
-from flask_appbuilder.collaborative.communication.comment_manager import CommentManager
+from pgappforge.collaborative.communication.comment_manager import CommentManager
 
 comment_manager = CommentManager(ws_manager, db.session)
 
@@ -404,7 +404,7 @@ ACTIVITY_TYPES = {
 ### Activity Logger
 
 ```python
-from flask_appbuilder.collaborative.utils.activity_logger import ActivityLogger
+from pgappforge.collaborative.utils.activity_logger import ActivityLogger
 
 activity_logger = ActivityLogger(ws_manager, db.session)
 

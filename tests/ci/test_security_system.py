@@ -1,5 +1,5 @@
 """
-Comprehensive unit tests for Flask-AppBuilder security system.
+Comprehensive unit tests for PgAppForge security system.
 
 This module provides thorough testing coverage for authentication, authorization,
 user management, role-based access control, and security features.
@@ -13,16 +13,16 @@ from unittest.mock import Mock, patch
 
 import pytest
 from flask import Flask, g, request, session
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.const import (
+from pgappforge import AppBuilder, SQLA
+from pgappforge.const import (
     AUTH_DB, AUTH_LDAP, AUTH_OAUTH, AUTH_OID, AUTH_REMOTE_USER,
     API_SECURITY_PASSWORD_KEY, API_SECURITY_USERNAME_KEY, API_SECURITY_VERSION
 )
-from flask_appbuilder.security.decorators import has_access, protect
-from flask_appbuilder.security.manager import BaseSecurityManager
-from flask_appbuilder.security.sqla.manager import SecurityManager
-from flask_appbuilder.security.sqla.models import User, Role, Permission, ViewMenu
-from flask_appbuilder.security.views import AuthDBView, UserDBModelView
+from pgappforge.security.decorators import has_access, protect
+from pgappforge.security.manager import BaseSecurityManager
+from pgappforge.security.sqla.manager import SecurityManager
+from pgappforge.security.sqla.models import User, Role, Permission, ViewMenu
+from pgappforge.security.views import AuthDBView, UserDBModelView
 from werkzeug.security import generate_password_hash
 
 from tests.base import FABTestCase
@@ -575,7 +575,7 @@ class TestSecurityAuditing(FABTestCase):
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
     
-    @patch('flask_appbuilder.security.manager.log')
+    @patch('pgappforge.security.manager.log')
     def test_security_logging(self, mock_log):
         """Test security events are logged"""
         with self.app.app_context():

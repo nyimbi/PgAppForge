@@ -1,7 +1,7 @@
 """
 Comprehensive API endpoint tests for collaborative services.
 
-Tests the integration of collaborative utilities with Flask-AppBuilder API endpoints,
+Tests the integration of collaborative utilities with PgAppForge API endpoints,
 validating request handling, response formats, error handling, and audit logging.
 """
 
@@ -26,7 +26,7 @@ except ImportError:
 # Import collaborative utilities
 import sys
 
-sys.path.insert(0, "./flask_appbuilder/collaborative/utils")
+sys.path.insert(0, "./pgappforge/collaborative/utils")
 
 from validation import ValidationResult, FieldValidator, UserValidator
 from error_handling import (

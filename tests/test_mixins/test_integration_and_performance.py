@@ -1,5 +1,5 @@
 """
-Integration and Performance Tests for Flask-AppBuilder Mixins.
+Integration and Performance Tests for PgAppForge Mixins.
 
 Tests real-world scenarios, performance characteristics, database operations,
 security integration, and production readiness across all mixin categories.
@@ -13,12 +13,12 @@ from decimal import Decimal
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 
-from flask_appbuilder import Model
-from flask_appbuilder.mixins.enhanced_mixins import EnhancedSoftDeleteMixin, MetadataMixin
-from flask_appbuilder.mixins.content_mixins import CommentableMixin, SearchableMixin  
-from flask_appbuilder.mixins.business_mixins import ApprovalWorkflowMixin, MultiTenancyMixin
-from flask_appbuilder.mixins.specialized_mixins import CurrencyMixin, GeoLocationMixin
-from flask_appbuilder.mixins.security_framework import (
+from pgappforge import Model
+from pgappforge.mixins.enhanced_mixins import EnhancedSoftDeleteMixin, MetadataMixin
+from pgappforge.mixins.content_mixins import CommentableMixin, SearchableMixin  
+from pgappforge.mixins.business_mixins import ApprovalWorkflowMixin, MultiTenancyMixin
+from pgappforge.mixins.specialized_mixins import CurrencyMixin, GeoLocationMixin
+from pgappforge.mixins.security_framework import (
     SecurityValidator, SecurityAuditor, ErrorRecovery
 )
 
@@ -84,8 +84,8 @@ class TestMixinIntegration:
     
     def test_document_approval_workflow_with_comments(self):
         """Test complete document approval workflow with commenting."""
-        with patch('flask_appbuilder.mixins.business_mixins.SecurityValidator') as mock_validator:
-            with patch('flask_appbuilder.mixins.content_mixins.Comment') as mock_comment:
+        with patch('pgappforge.mixins.business_mixins.SecurityValidator') as mock_validator:
+            with patch('pgappforge.mixins.content_mixins.Comment') as mock_comment:
                 # Setup security validation
                 mock_user = Mock()
                 mock_user.id = 789
@@ -113,7 +113,7 @@ class TestMixinIntegration:
     
     def test_soft_delete_with_metadata_preservation(self):
         """Test soft delete preserves metadata and allows recovery."""
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 456
             
             # Set metadata before deletion
@@ -163,7 +163,7 @@ class TestMixinIntegration:
     
     def test_multi_tenant_location_with_currency_conversion(self):
         """Test multi-tenant location with currency operations."""
-        with patch('flask_appbuilder.mixins.business_mixins.g') as mock_g:
+        with patch('pgappforge.mixins.business_mixins.g') as mock_g:
             # Setup tenant context
             mock_g.tenant_id = 'tenant_123'
             
@@ -186,8 +186,8 @@ class TestMixinIntegration:
     
     def test_security_audit_trail_across_operations(self):
         """Test security audit logging across multiple operations."""
-        with patch('flask_appbuilder.mixins.security_framework.SecurityAuditor') as mock_auditor:
-            with patch('flask_appbuilder.mixins.business_mixins.SecurityValidator') as mock_validator:
+        with patch('pgappforge.mixins.security_framework.SecurityAuditor') as mock_auditor:
+            with patch('pgappforge.mixins.business_mixins.SecurityValidator') as mock_validator:
                 # Setup security mocks
                 mock_user = Mock()
                 mock_user.id = 999
@@ -223,7 +223,7 @@ class TestPerformanceCharacteristics:
             doc.metadata_json = json.dumps({"index": i, "category": f"cat_{i % 10}"})
             self.documents.append(doc)
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.db')
+    @patch('pgappforge.mixins.enhanced_mixins.db')
     def test_bulk_soft_delete_performance(self, mock_db):
         """Test performance of bulk soft delete operations."""
         # Setup database mock
@@ -232,7 +232,7 @@ class TestPerformanceCharacteristics:
         mock_query.filter.return_value = mock_query  
         mock_query.update.return_value = 100  # 100 records updated
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 123
             
             start_time = time.time()
@@ -277,13 +277,13 @@ class TestPerformanceCharacteristics:
             doc.received_approvals = 0
             doc.workflow_data = '{}'
             
-            with patch('flask_appbuilder.mixins.business_mixins.SecurityValidator') as mock_validator:
+            with patch('pgappforge.mixins.business_mixins.SecurityValidator') as mock_validator:
                 mock_user = Mock()
                 mock_user.id = user_id
                 mock_validator.validate_user_context.return_value = mock_user
                 mock_validator.validate_permission.return_value = True
                 
-                with patch('flask_appbuilder.mixins.business_mixins.db'):
+                with patch('pgappforge.mixins.business_mixins.db'):
                     try:
                         result = doc.approve_step(user_id=user_id)
                         return (doc_id, user_id, result)
@@ -309,10 +309,10 @@ class TestPerformanceCharacteristics:
             errors = [r for r in results if isinstance(r[2], str)]
             assert len(errors) == 0, f"Concurrent operations failed: {errors}"
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
     def test_geocoding_retry_performance(self, mock_requests):
         """Test performance of geocoding with retry logic."""
-        from flask_appbuilder.mixins.specialized_mixins import ErrorRecovery
+        from pgappforge.mixins.specialized_mixins import ErrorRecovery
         import requests
         
         # Setup request to fail twice then succeed
@@ -340,7 +340,7 @@ class TestPerformanceCharacteristics:
     
     def test_currency_conversion_cache_performance(self):
         """Test currency conversion caching performance."""
-        with patch('flask_appbuilder.mixins.specialized_mixins.current_app') as mock_app:
+        with patch('pgappforge.mixins.specialized_mixins.current_app') as mock_app:
             # Setup cache
             cached_rates = {'EUR': 0.85, 'GBP': 0.73}
             mock_cache = Mock()
@@ -373,7 +373,7 @@ class TestErrorRecoveryScenarios:
     
     def test_database_connection_recovery(self):
         """Test recovery from database connection issues."""
-        from flask_appbuilder.mixins.security_framework import ErrorRecovery
+        from pgappforge.mixins.security_framework import ErrorRecovery
         from sqlalchemy.exc import OperationalError
         
         # Mock operation that fails twice then succeeds
@@ -424,9 +424,9 @@ class TestErrorRecoveryScenarios:
             {"name": "Valid Item 2", "value": 200},  # Valid
         ]
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.db') as mock_db:
+        with patch('pgappforge.mixins.enhanced_mixins.db') as mock_db:
             # Test bulk import with partial failures
-            from flask_appbuilder.mixins.enhanced_mixins import ImportExportMixin
+            from pgappforge.mixins.enhanced_mixins import ImportExportMixin
             
             class TestModel(ImportExportMixin, Model):
                 __tablename__ = 'test_partial'
@@ -468,13 +468,13 @@ class TestSecurityIntegrationScenarios:
     
     def test_permission_enforcement_across_mixins(self):
         """Test that permissions are enforced across all mixin operations."""
-        with patch('flask_appbuilder.mixins.security_framework.SecurityValidator') as mock_validator:
+        with patch('pgappforge.mixins.security_framework.SecurityValidator') as mock_validator:
             
             # Test admin user can perform restricted operations
             mock_validator.validate_user_context.return_value = self.admin_user
             mock_validator.validate_permission.return_value = True
             
-            with patch('flask_appbuilder.mixins.business_mixins.db'):
+            with patch('pgappforge.mixins.business_mixins.db'):
                 # Admin should be able to approve
                 result = self.document.approve_step(user_id=1, comments="Admin approval")
                 assert result is True
@@ -485,8 +485,8 @@ class TestSecurityIntegrationScenarios:
                 self.regular_user, 'can_approve'
             )
             
-            with patch('flask_appbuilder.mixins.business_mixins.db'):
-                from flask_appbuilder.mixins.security_framework import MixinPermissionError
+            with patch('pgappforge.mixins.business_mixins.db'):
+                from pgappforge.mixins.security_framework import MixinPermissionError
                 
                 # Regular user should be denied
                 with pytest.raises(MixinPermissionError):
@@ -494,8 +494,8 @@ class TestSecurityIntegrationScenarios:
     
     def test_audit_logging_comprehensive(self):
         """Test comprehensive audit logging across operations."""
-        with patch('flask_appbuilder.mixins.security_framework.SecurityAuditor') as mock_auditor:
-            with patch('flask_appbuilder.mixins.business_mixins.SecurityValidator') as mock_validator:
+        with patch('pgappforge.mixins.security_framework.SecurityAuditor') as mock_auditor:
+            with patch('pgappforge.mixins.business_mixins.SecurityValidator') as mock_validator:
                 mock_validator.validate_user_context.return_value = self.admin_user
                 mock_validator.validate_permission.return_value = True
                 
@@ -506,7 +506,7 @@ class TestSecurityIntegrationScenarios:
                     ('approval_grant', lambda: self.document.approve_step(user_id=1, comments="Approved"))
                 ]
                 
-                with patch('flask_appbuilder.mixins.business_mixins.db'):
+                with patch('pgappforge.mixins.business_mixins.db'):
                     for op_name, operation in operations:
                         try:
                             operation()
@@ -528,7 +528,7 @@ class TestSecurityIntegrationScenarios:
     
     def test_input_validation_comprehensive(self):
         """Test input validation across all mixins."""
-        from flask_appbuilder.mixins.security_framework import MixinValidationError
+        from pgappforge.mixins.security_framework import MixinValidationError
         
         test_cases = [
             # Currency validation

@@ -5,13 +5,13 @@ On this chapter we are going to describe how you can define a RESTful API
 using almost the same concept as defining your MVC views.
 
 :note:
-    Follow this example on Flask-AppBuilder project ./examples/base_api/
+    Follow this example on PgForge project ./examples/base_api/
 
 First let's see a basic example on how you can define your own
 custom API endpoints::
 
 
-    from flask_appbuilder.api import BaseApi, expose
+    from pgforge.api import BaseApi, expose
     from . import appbuilder
 
 
@@ -46,7 +46,7 @@ So we can make a request to our method using::
 To override the base route class blueprint, override the ``route_base`` property,
 so on our previous example::
 
-    from flask_appbuilder.api import BaseApi, expose
+    from pgforge.api import BaseApi, expose
     from . import appbuilder
 
 
@@ -68,7 +68,7 @@ Now our endpoint will be::
 We can also just override the version and/or resource name,
 using ``version`` and ``resource_name`` properties::
 
-    from flask_appbuilder.api import BaseApi, expose
+    from pgforge.api import BaseApi, expose
     from . import appbuilder
 
 
@@ -92,7 +92,7 @@ The other HTTP methods (PUT, POST, DELETE, ...) can be defined just like
 a Flask route signature::
 
     from flask import request
-    from flask_appbuilder.api import BaseApi, expose
+    from pgforge.api import BaseApi, expose
 
     class ExampleApi(BaseApi):
 
@@ -126,7 +126,7 @@ complex HTTP GET arguments in a human readable and predictable way.
 Rison still expresses exactly the same set of data structures as JSON,
 so data can be translated back and forth without loss or guesswork::
 
-    from flask_appbuilder.api import BaseApi, expose, rison
+    from pgforge.api import BaseApi, expose, rison
 
     class ExampleApi(BaseApi):
 
@@ -246,7 +246,7 @@ that will catch all uncaught exceptions for you and return a proper error respon
 You can enable or disable stack trace response using the
 ``FAB_API_SHOW_STACKTRACE`` configuration key::
 
-        from flask_appbuilder.api import BaseApi, expose, rison, safe
+        from pgforge.api import BaseApi, expose, rison, safe
 
         ...
 
@@ -416,8 +416,8 @@ using JSON Web Tokens (JWT).
 Next, let's see how to create a private method::
 
     from flask import request
-    from flask_appbuilder.api import BaseApi, expose, rison
-    from flask_appbuilder.security.decorators import protect
+    from pgforge.api import BaseApi, expose, rison
+    from pgforge.security.decorators import protect
     from . import appbuilder
 
 
@@ -553,7 +553,7 @@ To automatically create a RESTfull CRUD Api from a database *Model*, use ``Model
 define it almost like an MVC ``ModelView``. This class will expose the following REST endpoints
 
 :note:
-    Follow this example on Flask-AppBuilder project ./examples/crud_rest_api/
+    Follow this example on PgForge project ./examples/crud_rest_api/
 
     .. cssclass:: table-bordered table-hover
 
@@ -589,8 +589,8 @@ so each Contact belongs to a Group.
 
 First let's define a CRUD REST Api for our Group model resource::
 
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
-    from flask_appbuilder.api import ModelRestApi
+    from pgforge.models.sqla.interface import SQLAInterface
+    from pgforge.api import ModelRestApi
     from . import appbuilder
 
 
@@ -1321,7 +1321,7 @@ And we get an HTTP 422 (Unprocessable Entity).
 How to add custom validation? On our next example we only allow
 group names that start with a capital "A"::
 
-    from flask_appbuilder.api.schemas import BaseModelSchema
+    from pgforge.api.schemas import BaseModelSchema
 
 
     def validate_name(n):
@@ -1453,7 +1453,7 @@ Pre and Post processing
 ``ModelRestApi`` offers several methods that you can override to perform pre processing or post processing
 on all HTTP methods. These methods are nice places to change data before submission or retrieval:
 
-.. automodule:: flask_appbuilder.api
+.. automodule:: pgforge.api
 
     .. autoclass:: ModelRestApi
         :members: pre_get, pre_get_list, pre_update, post_update, pre_add, post_add, pre_delete, post_delete

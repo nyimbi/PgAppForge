@@ -1,8 +1,8 @@
-# Flask-AppBuilder Enhanced Features - Implementation Plan
+# PgAppForge Enhanced Features - Implementation Plan
 
 ## Project Overview
 
-This implementation plan details the systematic development of comprehensive Flask-AppBuilder enhancements including Multi-Factor Authentication, field analysis, widget expansion, mixin integration, and wallet system functionality.
+This implementation plan details the systematic development of comprehensive PgAppForge enhancements including Multi-Factor Authentication, field analysis, widget expansion, mixin integration, and wallet system functionality.
 
 ## Scope Definition
 
@@ -18,12 +18,12 @@ This implementation plan details the systematic development of comprehensive Fla
 - Complete documentation with Google-style docstrings
 - ≥95% test coverage with comprehensive edge case handling
 - Production-ready error handling and validation
-- Full Flask-AppBuilder integration compatibility
+- Full PgAppForge integration compatibility
 
 ## Architecture Overview
 
 ```
-flask_appbuilder/
+pgappforge/
 ├── security/
 │   └── mfa/                    # Multi-Factor Authentication
 ├── models/
@@ -41,8 +41,8 @@ flask_appbuilder/
 ### Phase 1: Multi-Factor Authentication System
 
 #### 1.1 Core MFA Models
-**File**: `flask_appbuilder/security/mfa/models.py`
-**Dependencies**: SQLAlchemy, Flask-AppBuilder security models
+**File**: `pgappforge/security/mfa/models.py`
+**Dependencies**: SQLAlchemy, PgAppForge security models
 **Estimated Effort**: 4 hours
 
 **Sub-tasks**:
@@ -59,7 +59,7 @@ flask_appbuilder/
 **Potential Pitfalls**: Secret storage security, backup code generation entropy
 
 #### 1.2 MFA Service Layer
-**File**: `flask_appbuilder/security/mfa/services.py`
+**File**: `pgappforge/security/mfa/services.py`
 **Dependencies**: pyotp, qrcode, cryptography
 **Estimated Effort**: 6 hours
 
@@ -77,8 +77,8 @@ flask_appbuilder/
 **Potential Pitfalls**: Rate limiting, external service failures, time synchronization
 
 #### 1.3 Security Manager Integration
-**File**: `flask_appbuilder/security/mfa/manager_mixin.py`
-**Dependencies**: Flask-AppBuilder SecurityManager
+**File**: `pgappforge/security/mfa/manager_mixin.py`
+**Dependencies**: PgAppForge SecurityManager
 **Estimated Effort**: 3 hours
 
 **Sub-tasks**:
@@ -94,8 +94,8 @@ flask_appbuilder/
 **Potential Pitfalls**: Backward compatibility, session security
 
 #### 1.4 MFA Views and Forms
-**File**: `flask_appbuilder/security/mfa/views.py`
-**Dependencies**: Flask-AppBuilder views, WTForms
+**File**: `pgappforge/security/mfa/views.py`
+**Dependencies**: PgAppForge views, WTForms
 **Estimated Effort**: 4 hours
 
 **Sub-tasks**:
@@ -114,7 +114,7 @@ flask_appbuilder/
 ### Phase 2: Field Type Analysis System
 
 #### 2.1 Core Field Analyzer
-**File**: `flask_appbuilder/models/field_analyzer.py`
+**File**: `pgappforge/models/field_analyzer.py`
 **Dependencies**: SQLAlchemy inspection, database dialects
 **Estimated Effort**: 5 hours
 
@@ -132,8 +132,8 @@ flask_appbuilder/
 **Potential Pitfalls**: Database-specific type variations, performance impact
 
 #### 2.2 Integration with ModelView
-**File**: `flask_appbuilder/models/enhanced_modelview.py`
-**Dependencies**: Flask-AppBuilder ModelView
+**File**: `pgappforge/models/enhanced_modelview.py`
+**Dependencies**: PgAppForge ModelView
 **Estimated Effort**: 2 hours
 
 **Sub-tasks**:
@@ -151,7 +151,7 @@ flask_appbuilder/
 ### Phase 3: Widget Library Expansion
 
 #### 3.1 Modern UI Widgets
-**File**: `flask_appbuilder/widgets/modern_ui.py`
+**File**: `pgappforge/widgets/modern_ui.py`
 **Dependencies**: Bootstrap 4/5, JavaScript libraries
 **Estimated Effort**: 8 hours
 
@@ -170,7 +170,7 @@ flask_appbuilder/
 **Potential Pitfalls**: Browser compatibility, JavaScript dependencies
 
 #### 3.2 Advanced Form Components
-**File**: `flask_appbuilder/widgets/advanced_forms.py`
+**File**: `pgappforge/widgets/advanced_forms.py`
 **Dependencies**: JSONEditor, advanced JavaScript components
 **Estimated Effort**: 6 hours
 
@@ -188,8 +188,8 @@ flask_appbuilder/
 **Potential Pitfalls**: Performance with large datasets, validation complexity
 
 #### 3.3 Widget Gallery System
-**File**: `flask_appbuilder/widgets/widget_gallery.py`
-**Dependencies**: Flask-AppBuilder views, widget collection
+**File**: `pgappforge/widgets/widget_gallery.py`
+**Dependencies**: PgAppForge views, widget collection
 **Estimated Effort**: 4 hours
 
 **Sub-tasks**:
@@ -207,14 +207,14 @@ flask_appbuilder/
 ### Phase 4: Mixin Integration System
 
 #### 4.1 Mixin Registry and Discovery
-**File**: `flask_appbuilder/mixins/__init__.py`
-**Dependencies**: Appgen mixins, Flask-AppBuilder compatibility
+**File**: `pgappforge/mixins/__init__.py`
+**Dependencies**: Appgen mixins, PgAppForge compatibility
 **Estimated Effort**: 3 hours
 
 **Sub-tasks**:
 - [ ] Central mixin registry implementation
 - [ ] Mixin discovery and categorization
-- [ ] Flask-AppBuilder compatibility layer
+- [ ] PgAppForge compatibility layer
 - [ ] Version compatibility checking
 - [ ] Mixin dependency resolution
 
@@ -224,8 +224,8 @@ flask_appbuilder/
 **Potential Pitfalls**: Import conflicts, version incompatibilities
 
 #### 4.2 Enhanced Model Integration
-**File**: `flask_appbuilder/mixins/fab_integration.py`
-**Dependencies**: Flask-AppBuilder models, User model
+**File**: `pgappforge/mixins/fab_integration.py`
+**Dependencies**: PgAppForge models, User model
 **Estimated Effort**: 4 hours
 
 **Sub-tasks**:
@@ -241,8 +241,8 @@ flask_appbuilder/
 **Potential Pitfalls**: Security implications, backward compatibility
 
 #### 4.3 View Enhancement System
-**File**: `flask_appbuilder/mixins/view_mixins.py`
-**Dependencies**: Flask-AppBuilder views, mixin capabilities
+**File**: `pgappforge/mixins/view_mixins.py`
+**Dependencies**: PgAppForge views, mixin capabilities
 **Estimated Effort**: 5 hours
 
 **Sub-tasks**:
@@ -258,7 +258,7 @@ flask_appbuilder/
 **Potential Pitfalls**: Performance impact, complexity management
 
 #### 4.4 Widget Mapping System
-**File**: `flask_appbuilder/mixins/widget_integration.py`
+**File**: `pgappforge/mixins/widget_integration.py`
 **Dependencies**: Widget library, mixin analysis
 **Estimated Effort**: 4 hours
 
@@ -275,7 +275,7 @@ flask_appbuilder/
 **Potential Pitfalls**: Widget conflicts, mapping accuracy
 
 #### 4.5 Migration Tools
-**File**: `flask_appbuilder/mixins/migration_tools.py`
+**File**: `pgappforge/mixins/migration_tools.py`
 **Dependencies**: Alembic, database inspection
 **Estimated Effort**: 6 hours
 
@@ -294,7 +294,7 @@ flask_appbuilder/
 ### Phase 5: Wallet System Implementation
 
 #### 5.1 Wallet Data Models
-**File**: `flask_appbuilder/wallet/models.py`
+**File**: `pgappforge/wallet/models.py`
 **Dependencies**: SQLAlchemy, enhanced mixins
 **Estimated Effort**: 8 hours
 
@@ -313,7 +313,7 @@ flask_appbuilder/
 **Potential Pitfalls**: Data consistency, currency precision, security
 
 #### 5.2 Business Logic Services
-**File**: `flask_appbuilder/wallet/services.py`
+**File**: `pgappforge/wallet/services.py`
 **Dependencies**: Wallet models, external APIs
 **Estimated Effort**: 10 hours
 
@@ -330,9 +330,9 @@ flask_appbuilder/
 **Side Effects**: External API calls, balance updates
 **Potential Pitfalls**: External service failures, data consistency
 
-#### 5.3 Flask-AppBuilder Views
-**File**: `flask_appbuilder/wallet/views.py`
-**Dependencies**: Flask-AppBuilder views, wallet services
+#### 5.3 PgAppForge Views
+**File**: `pgappforge/wallet/views.py`
+**Dependencies**: PgAppForge views, wallet services
 **Estimated Effort**: 8 hours
 
 **Sub-tasks**:
@@ -349,7 +349,7 @@ flask_appbuilder/
 **Potential Pitfalls**: Security vulnerabilities, performance issues
 
 #### 5.4 Financial Widgets
-**File**: `flask_appbuilder/wallet/widgets.py`
+**File**: `pgappforge/wallet/widgets.py`
 **Dependencies**: Widget framework, financial libraries
 **Estimated Effort**: 6 hours
 
@@ -419,7 +419,7 @@ flask_appbuilder/
 4. **External Service Dependencies**: Circuit breaker patterns and fallback mechanisms
 
 ### Integration Risks
-1. **Flask-AppBuilder Compatibility**: Comprehensive compatibility testing
+1. **PgAppForge Compatibility**: Comprehensive compatibility testing
 2. **Backward Compatibility**: Version migration testing
 3. **Third-party Library Updates**: Dependency version pinning and testing
 4. **Database Migration Failures**: Rollback procedures and data backup
@@ -436,7 +436,7 @@ flask_appbuilder/
 - [ ] All specified features implemented and tested
 - [ ] No placeholder or mock implementations
 - [ ] Complete integration between all components
-- [ ] Full Flask-AppBuilder compatibility
+- [ ] Full PgAppForge compatibility
 
 ### Quality Standards
 - [ ] ≥95% test coverage with no failing tests
@@ -498,4 +498,4 @@ flask_appbuilder/
 - [ ] Performance requirements met
 - [ ] Security requirements satisfied
 
-This implementation plan provides the foundation for systematic, high-quality development of the Flask-AppBuilder enhancements with complete traceability and verification at each step.
+This implementation plan provides the foundation for systematic, high-quality development of the PgAppForge enhancements with complete traceability and verification at each step.

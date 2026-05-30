@@ -1,5 +1,5 @@
 """
-Comprehensive unit tests for Flask-AppBuilder views system.
+Comprehensive unit tests for PgAppForge views system.
 
 This module provides thorough testing coverage for ModelView, SimpleFormView,
 BaseView, and all view-related functionality including CRUD operations,
@@ -14,13 +14,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 from flask import Flask, request
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.baseviews import BaseView, BaseModelView, expose
-from flask_appbuilder.forms import DynamicForm
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.views import ModelView, SimpleFormView
-from flask_appbuilder.widgets import ListWidget, FormWidget, ShowWidget
+from pgappforge import AppBuilder, SQLA
+from pgappforge.baseviews import BaseView, BaseModelView, expose
+from pgappforge.forms import DynamicForm
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.views import ModelView, SimpleFormView
+from pgappforge.widgets import ListWidget, FormWidget, ShowWidget
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from wtforms import StringField, TextAreaField, BooleanField
 from wtforms.validators import DataRequired, Length

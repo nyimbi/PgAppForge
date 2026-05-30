@@ -1,5 +1,5 @@
 """
-Field Type Analyzer Implementation for Flask-AppBuilder
+Field Type Analyzer Implementation for PgAppForge
 
 This module provides the REAL implementation of the field type analysis capabilities 
 that were expected by test_field_exclusion.py but were never actually created.
@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 # =============================================================================
 
 class FieldSupportLevel(Enum):
-    """Real enum defining field support levels for Flask-AppBuilder operations."""
+    """Real enum defining field support levels for PgAppForge operations."""
     FULLY_SUPPORTED = "fully_supported"      # Full search, filter, display support
     LIMITED_SUPPORT = "limited_support"      # Display only, limited search
     UNSUPPORTED = "unsupported"              # Should be excluded from operations
@@ -82,7 +82,7 @@ class FieldAnalysisResult:
 
 class FieldTypeAnalyzer:
     """
-    REAL FIELD TYPE ANALYZER - Comprehensive field analysis for Flask-AppBuilder.
+    REAL FIELD TYPE ANALYZER - Comprehensive field analysis for PgAppForge.
     
     This is NOT a placeholder implementation. It actually:
     1. Analyzes SQLAlchemy column types using real type inspection
@@ -512,7 +512,7 @@ def get_model_filterable_fields(model_class: Type, strict_mode: bool = True) -> 
 class ModelValidationMixin:
     """
     Model validation mixin that provides comprehensive field validation
-    capabilities for Flask-AppBuilder models.
+    capabilities for PgAppForge models.
     
     This addresses Phase 1.2 requirements for model validation and field handling.
     """
@@ -649,7 +649,7 @@ def enhance_search_manager_with_field_analysis():
     This integrates the field analyzer with the SearchManager created in Phase 1.1.
     """
     try:
-        from proper_flask_appbuilder_extensions import SearchManager
+        from proper_pgappforge_extensions import SearchManager
         
         def _get_model_searchable_fields(self, model_class):
             """Enhanced method to get searchable fields using field analyzer."""

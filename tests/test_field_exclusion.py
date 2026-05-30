@@ -18,7 +18,7 @@ try:
     from sqlalchemy import Column, Integer, String, DateTime, Boolean, create_engine
     from sqlalchemy.orm import declarative_base, sessionmaker
     from sqlalchemy.dialects.postgresql import JSONB, ARRAY, UUID, INET, TSVECTOR
-    from flask_appbuilder.models.field_analyzer import (
+    from pgappforge.models.field_analyzer import (
         FieldTypeAnalyzer, FieldSupportLevel, UnsupportedReason,
         analyze_model_fields
     )
@@ -27,7 +27,7 @@ except ImportError as e:
     print(f"Missing requirements for field exclusion tests: {e}")
     HAS_REQUIREMENTS = False
 
-# Mock Flask-AppBuilder types if not available
+# Mock PgAppForge types if not available
 if not HAS_REQUIREMENTS:
     # Create mock classes for testing without actual dependencies
     class MockColumn:
@@ -235,7 +235,7 @@ class TestSmartExclusionMixin(unittest.TestCase):
     def setUp(self):
         """Set up mock view with smart exclusion."""
         # This would test the mixin integration
-        # Due to complexity of mocking Flask-AppBuilder, we'll test the logic
+        # Due to complexity of mocking PgAppForge, we'll test the logic
         pass
         
     def test_exclusion_caching(self):
@@ -262,10 +262,10 @@ class TestFieldExclusionIntegration(unittest.TestCase):
         
         # Test that the enhanced method exists and works
         try:
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             # Test would go here if we had a full Flask app context
         except ImportError:
-            self.skipTest("Flask-AppBuilder not available for integration testing")
+            self.skipTest("PgAppForge not available for integration testing")
     
     def test_performance_impact(self):
         """Test that field exclusion doesn't significantly impact performance."""
@@ -361,7 +361,7 @@ def run_field_exclusion_tests():
         print("• MySQL and SQLite compatibility")
         print("• Configurable strictness modes")
         print("• Performance optimization")
-        print("• Integration with Flask-AppBuilder")
+        print("• Integration with PgAppForge")
         
     else:
         print("\n❌ SOME FIELD EXCLUSION TESTS FAILED")

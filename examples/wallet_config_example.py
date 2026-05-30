@@ -1,16 +1,16 @@
 """
-Example Flask-AppBuilder configuration with Wallet Integration
+Example PgAppForge configuration with Wallet Integration
 
 This example shows how to enable cryptocurrency wallet integration
-in your Flask-AppBuilder application.
+in your PgAppForge application.
 """
 
 import os
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
-# Flask-AppBuilder configuration
-APP_NAME = "Flask-AppBuilder with Wallet Integration"
+# PgAppForge configuration
+APP_NAME = "PgAppForge with Wallet Integration"
 APP_ICON = "static/img/logo.jpg"
 
 # Database configuration
@@ -25,7 +25,7 @@ AUTH_ROLE_PUBLIC = 'Public'
 
 # Enable wallet integration
 ADDON_MANAGERS = [
-    'flask_appbuilder.security.wallet.WalletManager'
+    'pgappforge.security.wallet.WalletManager'
 ]
 
 # Wallet-specific configuration (optional)
@@ -57,7 +57,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(__name__)
     
-    # Initialize Flask-AppBuilder
+    # Initialize PgAppForge
     db = SQLA(app)
     appbuilder = AppBuilder(app, db.session)
     

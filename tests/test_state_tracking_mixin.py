@@ -1,7 +1,7 @@
 """
 Test StateTrackingMixin functionality.
 
-Tests the state tracking capabilities and integration with Flask-AppBuilder patterns.
+Tests the state tracking capabilities and integration with PgAppForge patterns.
 """
 
 import unittest
@@ -9,13 +9,13 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Model
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Model
 from flask_login import current_user
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.orm import sessionmaker
 
-from flask_appbuilder.mixins.fab_integration import StateTrackingMixin
+from pgappforge.mixins.fab_integration import StateTrackingMixin
 
 
 class TestModel(StateTrackingMixin, Model):

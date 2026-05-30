@@ -17,7 +17,7 @@ from typing import Dict, List, Any, Optional, Union
 from urllib.parse import urlencode
 
 from flask import current_app, g
-from flask_appbuilder import db
+from pgappforge import db
 from flask_login import current_user
 from sqlalchemy import and_, or_, func, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -313,7 +313,7 @@ class GeoLocationMixin:
         }
         
         headers = {
-            'User-Agent': 'Flask-AppBuilder-Mixin/1.0 (contact: admin@example.com)'  # Required by Nominatim
+            'User-Agent': 'PgAppForge-Mixin/1.0 (contact: admin@example.com)'  # Required by Nominatim
         }
         
         # Rate limiting for Nominatim (1 request per second)
@@ -450,7 +450,7 @@ class GeoLocationMixin:
             }
             
             headers = {
-                'User-Agent': 'Flask-AppBuilder-Mixin/1.0 (contact: admin@example.com)'
+                'User-Agent': 'PgAppForge-Mixin/1.0 (contact: admin@example.com)'
             }
             
             time.sleep(1)  # Rate limiting
@@ -498,7 +498,7 @@ class ApprovalWorkflowMixin:
             MixinPermissionError: If user lacks approval permission
             MixinValidationError: If approval violates workflow rules
         """
-        from flask_appbuilder.mixins.security_framework import (
+        from pgappforge.mixins.security_framework import (
             MixinPermissionError, MixinValidationError, SecurityValidator, SecurityAuditor
         )
         
@@ -590,7 +590,7 @@ class ApprovalWorkflowMixin:
         
         NO MORE AUTOMATIC RETURN TRUE - Actually validates permissions!
         """
-        from flask_appbuilder.mixins.security_framework import SecurityValidator
+        from pgappforge.mixins.security_framework import SecurityValidator
         
         try:
             # Get user object
@@ -727,7 +727,7 @@ class CommentableMixin:
         """
         try:
             # Import Comment model (assume it exists or create minimal version)
-            from flask_appbuilder.mixins.comment_models import Comment
+            from pgappforge.mixins.comment_models import Comment
             
             # Get base query for this object
             comments_query = db.session.query(Comment).filter(
@@ -798,7 +798,7 @@ class CommentableMixin:
         Returns:
             Comment data dictionary
         """
-        from flask_appbuilder.mixins.security_framework import (
+        from pgappforge.mixins.security_framework import (
             MixinPermissionError, SecurityValidator, SecurityAuditor
         )
         
@@ -819,7 +819,7 @@ class CommentableMixin:
             raise MixinPermissionError("User lacks permission to comment on this object")
         
         try:
-            from flask_appbuilder.mixins.comment_models import Comment
+            from pgappforge.mixins.comment_models import Comment
             
             # Validate parent comment if specified
             parent_comment = None
@@ -893,7 +893,7 @@ class CommentableMixin:
     
     def _can_comment(self, user_id: int) -> bool:
         """Check if user can comment on this object."""
-        from flask_appbuilder.mixins.security_framework import SecurityValidator
+        from pgappforge.mixins.security_framework import SecurityValidator
         
         # Check configuration
         allow_anonymous = getattr(self.__class__, '__allow_anonymous_comments__', False)

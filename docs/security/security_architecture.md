@@ -1,10 +1,10 @@
 # Security Architecture
 
-Comprehensive security architecture for Flask-AppBuilder with advanced authentication, authorization, and protection features.
+Comprehensive security architecture for PgAppForge with advanced authentication, authorization, and protection features.
 
 ## 🛡️ Overview
 
-Flask-AppBuilder provides enterprise-grade security with multiple layers of protection:
+PgAppForge provides enterprise-grade security with multiple layers of protection:
 
 - **Multi-Factor Authentication (MFA)** with TOTP, SMS, and WebAuthn/Passkeys
 - **Role-Based Access Control (RBAC)** with fine-grained permissions
@@ -405,7 +405,7 @@ BUILTIN_PERMISSIONS = [
 ]
 
 # Custom Permission Decorators
-from flask_appbuilder.security.decorators import has_access, protect
+from pgappforge.security.decorators import has_access, protect
 
 @has_access
 def protected_view(self):
@@ -574,7 +574,7 @@ SECURITY_HEADERS = {
 
 ```python
 # Encrypted fields for sensitive data
-from flask_appbuilder.models.mixins import EncryptedFieldMixin
+from pgappforge.models.mixins import EncryptedFieldMixin
 
 class User(Model, EncryptedFieldMixin):
     __tablename__ = 'ab_user'

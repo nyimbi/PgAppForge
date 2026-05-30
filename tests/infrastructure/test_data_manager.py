@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test data management infrastructure for Flask-AppBuilder tutorial testing.
+Test data management infrastructure for PgForge tutorial testing.
 
 This module provides comprehensive test data generation, seeding, and
 management capabilities for reliable and reproducible testing.
@@ -406,7 +406,7 @@ class TestDataSeeder:
         user_map = {}
 
         with self.app.app_context():
-            # Note: User seeding depends on Flask-AppBuilder's user model
+            # Note: User seeding depends on PgForge's user model
             # This is a simplified version
             for user_data in users:
                 # In real implementation, would use appbuilder.sm.add_user()

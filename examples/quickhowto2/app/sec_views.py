@@ -1,4 +1,4 @@
-from flask_appbuilder.security.views import UserDBModelView
+from pgappforge.security.views import UserDBModelView
 from flask_babel import lazy_gettext
 
 

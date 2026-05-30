@@ -1,10 +1,10 @@
 # API Development Guide
 
-Complete guide for developing REST APIs with Flask-AppBuilder, including automatic API generation, custom endpoints, authentication, and best practices.
+Complete guide for developing REST APIs with PgAppForge, including automatic API generation, custom endpoints, authentication, and best practices.
 
 ## 🚀 Overview
 
-Flask-AppBuilder provides powerful API capabilities including:
+PgAppForge provides powerful API capabilities including:
 
 - **Automatic REST API generation** from models
 - **OpenAPI/Swagger integration** with interactive documentation
@@ -57,9 +57,9 @@ graph TB
 
 ```python
 """Automatic REST API generation from models."""
-from flask_appbuilder import ModelRestApi
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.api import BaseApi, expose
+from pgappforge import ModelRestApi
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.api import BaseApi, expose
 
 from app import appbuilder, db
 from app.models import Employee, Department
@@ -413,7 +413,7 @@ appbuilder.add_api(ApiKeyManagementApi)
 ```python
 """Custom API endpoints for specialized functionality."""
 from flask import request, g
-from flask_appbuilder.api import BaseApi, expose, safe
+from pgappforge.api import BaseApi, expose, safe
 from marshmallow import Schema, fields, validate
 from sqlalchemy import func, and_, or_
 
@@ -743,7 +743,7 @@ appbuilder.add_api(EmployeeCustomApi)
 
 ```python
 """OpenAPI/Swagger documentation setup."""
-from flask_appbuilder.api import BaseApi
+from pgappforge.api import BaseApi
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 

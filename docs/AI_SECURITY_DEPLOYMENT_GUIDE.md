@@ -2,7 +2,7 @@
 
 ## Overview
 
-The enhanced AI security system provides comprehensive security controls, rate limiting, and monitoring for AI operations in Flask-AppBuilder. This guide covers deployment and configuration.
+The enhanced AI security system provides comprehensive security controls, rate limiting, and monitoring for AI operations in PgAppForge. This guide covers deployment and configuration.
 
 ## Key Features Implemented
 
@@ -71,7 +71,7 @@ class Config:
 ### Securing AI Operations with Decorators
 
 ```python
-from flask_appbuilder.collaborative.ai.enhanced_security import ai_rate_limited
+from pgappforge.collaborative.ai.enhanced_security import ai_rate_limited
 
 @ai_rate_limited('chat_request', estimated_tokens=500)
 def process_chat_request(prompt: str):
@@ -89,7 +89,7 @@ def generate_embeddings(text: str):
 ### Manual Security Enforcement
 
 ```python
-from flask_appbuilder.collaborative.ai.enhanced_security import get_enhanced_security_manager
+from pgappforge.collaborative.ai.enhanced_security import get_enhanced_security_manager
 
 security_manager = get_enhanced_security_manager()
 
@@ -126,7 +126,7 @@ The system automatically logs security events to:
 
 ### Accessing Monitoring Data
 ```python
-from flask_appbuilder.collaborative.ai.enhanced_security import get_enhanced_security_manager
+from pgappforge.collaborative.ai.enhanced_security import get_enhanced_security_manager
 
 security_manager = get_enhanced_security_manager()
 monitor = security_manager.security_monitor
@@ -195,7 +195,7 @@ For production deployments, Redis is required for:
 ### Debugging
 ```python
 # Enable debug logging
-logging.getLogger('flask_appbuilder.collaborative.ai.enhanced_security').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.collaborative.ai.enhanced_security').setLevel(logging.DEBUG)
 
 # Check current rate limit status
 rate_limiter = get_enhanced_security_manager().rate_limiter
@@ -214,7 +214,7 @@ The enhanced AI security system provides:
 
 ## Upgrade Path
 
-When upgrading existing Flask-AppBuilder installations:
+When upgrading existing PgAppForge installations:
 
 1. Install Redis if not already available
 2. Add configuration variables to your config file

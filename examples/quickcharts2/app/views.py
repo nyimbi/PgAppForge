@@ -3,14 +3,14 @@ import datetime
 import logging
 import random
 
-from flask_appbuilder.charts.views import (
+from pgappforge.charts.views import (
     DirectByChartView,
     DirectChartView,
     GroupByChartView,
 )
-from flask_appbuilder.models.datamodel import SQLAModel
-from flask_appbuilder.models.group import aggregate_avg, aggregate_sum
-from flask_appbuilder.views import ModelView
+from pgappforge.models.datamodel import SQLAModel
+from pgappforge.models.group import aggregate_avg, aggregate_sum
+from pgappforge.views import ModelView
 
 from . import appbuilder, db
 from .models import Country, CountryStats, PoliticalType

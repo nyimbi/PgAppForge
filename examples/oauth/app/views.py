@@ -1,6 +1,6 @@
 from flask import session, flash
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder import ModelView, SimpleFormView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView, SimpleFormView
 from .forms import TweetForm
 from app import appbuilder, db
 
@@ -15,7 +15,7 @@ class SendTweet(SimpleFormView):
         provider = session["oauth_provider"]
         if not provider == "twitter":
             flash("You must login with Twitter, this will not work", "warning")
-        form.message.data = "Flask-AppBuilder now supports OAuth!"
+        form.message.data = "PgAppForge now supports OAuth!"
 
     def form_post(self, form):
         remote_app = self.appbuilder.sm.oauth_remotes["twitter"]

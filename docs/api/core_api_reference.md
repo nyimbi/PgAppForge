@@ -1,25 +1,25 @@
 # Core API Reference
 
-Complete API reference for Flask-AppBuilder's core modules and components.
+Complete API reference for PgAppForge's core modules and components.
 
 ## 📚 Module Overview
 
 | Module | Description | Primary Classes |
 |--------|-------------|----------------|
-| `flask_appbuilder.base` | Core AppBuilder class and application setup | `AppBuilder` |
-| `flask_appbuilder.views` | Base views and ModelView functionality | `ModelView`, `BaseView` |
-| `flask_appbuilder.baseviews` | Foundation view classes | `BaseView`, `BaseCRUDView` |
-| `flask_appbuilder.models.sqla` | SQLAlchemy model interfaces | `Model`, `SQLA` |
-| `flask_appbuilder.security` | Security and authentication system | `SecurityManager`, `BaseSecurityManager` |
-| `flask_appbuilder.forms` | Form handling and validation | `DynamicForm` |
-| `flask_appbuilder.widgets` | UI widgets and components | `ListWidget`, `ShowWidget`, `FormWidget` |
-| `flask_appbuilder.charts` | Chart and visualization views | `ChartView`, `GroupByChartView` |
+| `pgappforge.base` | Core AppBuilder class and application setup | `AppBuilder` |
+| `pgappforge.views` | Base views and ModelView functionality | `ModelView`, `BaseView` |
+| `pgappforge.baseviews` | Foundation view classes | `BaseView`, `BaseCRUDView` |
+| `pgappforge.models.sqla` | SQLAlchemy model interfaces | `Model`, `SQLA` |
+| `pgappforge.security` | Security and authentication system | `SecurityManager`, `BaseSecurityManager` |
+| `pgappforge.forms` | Form handling and validation | `DynamicForm` |
+| `pgappforge.widgets` | UI widgets and components | `ListWidget`, `ShowWidget`, `FormWidget` |
+| `pgappforge.charts` | Chart and visualization views | `ChartView`, `GroupByChartView` |
 
 ## 🏗️ Core Classes
 
 ### AppBuilder
 
-Central class that manages the entire Flask-AppBuilder application.
+Central class that manages the entire PgAppForge application.
 
 ```python
 class AppBuilder:
@@ -136,7 +136,7 @@ logout_url = appbuilder.get_url_for_logout()
 
 ### BaseView
 
-Foundation class for all views in Flask-AppBuilder.
+Foundation class for all views in PgAppForge.
 
 ```python
 class BaseView:
@@ -195,7 +195,7 @@ class MyView(BaseView):
 
 ##### `render_template(template: str, **kwargs) -> str`
 
-Render a Jinja2 template with Flask-AppBuilder context.
+Render a Jinja2 template with PgAppForge context.
 
 ```python
 def my_method(self):
@@ -393,10 +393,10 @@ class EmployeeView(ModelView):
 
 ### Model (SQLAlchemy)
 
-Base model class with Flask-AppBuilder enhancements.
+Base model class with PgAppForge enhancements.
 
 ```python
-from flask_appbuilder.models.mixins import AuditMixin, FileColumn, ImageColumn
+from pgappforge.models.mixins import AuditMixin, FileColumn, ImageColumn
 
 class Model(DeclarativeBase):
     """Base model class."""
@@ -657,8 +657,8 @@ class CustomSearchWidget(SearchWidget):
 Base class for chart views.
 
 ```python
-from flask_appbuilder.charts.views import ChartView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge.charts.views import ChartView
+from pgappforge.models.sqla.interface import SQLAInterface
 
 class MyChartView(ChartView):
     datamodel = SQLAInterface(MyModel)
@@ -697,7 +697,7 @@ class SalesGroupByChart(GroupByChartView):
 Dynamic form generation with validation.
 
 ```python
-from flask_appbuilder.forms import DynamicForm
+from pgappforge.forms import DynamicForm
 from wtforms import StringField, IntegerField, validators
 
 class CustomForm(DynamicForm):
@@ -805,7 +805,7 @@ class CustomSecurityManager(SecurityManager):
 ### Decorators
 
 ```python
-from flask_appbuilder.security.decorators import has_access, protect
+from pgappforge.security.decorators import has_access, protect
 
 @has_access
 def protected_view():
@@ -838,7 +838,7 @@ def inject_vars():
 ### Custom Filters
 
 ```python
-from flask_appbuilder.basefilters import BaseFilter
+from pgappforge.basefilters import BaseFilter
 
 class CustomFilter(BaseFilter):
     name = 'Custom Filter'

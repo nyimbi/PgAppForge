@@ -12,12 +12,12 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from flask import Flask
 
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.plugins import (
+from pgappforge import AppBuilder
+from pgappforge.plugins import (
     BasePlugin, PluginManager, PluginRegistry, PluginLoader, SecurePluginLoader,
     PluginValidator, PluginMetadata, PluginDependency, PluginPriority, PluginStatus
 )
-from flask_appbuilder.plugins.exceptions import (
+from pgappforge.plugins.exceptions import (
     PluginError, PluginLoadError, PluginValidationError, PluginSecurityError
 )
 
@@ -565,7 +565,7 @@ class TestPluginValidator:
         # Create temporary plugin file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
             f.write("""
-from flask_appbuilder.plugins import BasePlugin, PluginMetadata
+from pgappforge.plugins import BasePlugin, PluginMetadata
 
 class FileTestPlugin(BasePlugin):
     @property
@@ -754,7 +754,7 @@ class TestPluginIntegration:
             # Configure legacy addon
             self.app.config['ADDON_MANAGERS'] = ['test.LegacyAddon']
 
-            with patch('flask_appbuilder.base.dynamic_class_import', return_value=LegacyAddon):
+            with patch('pgappforge.base.dynamic_class_import', return_value=LegacyAddon):
                 appbuilder = AppBuilder(self.app)
 
                 # Should handle legacy addons gracefully

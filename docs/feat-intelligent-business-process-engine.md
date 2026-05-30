@@ -1,4 +1,4 @@
-# Flask-AppBuilder: Business Process Enhancements
+# PgAppForge: Business Process Enhancements
 
 ## Status
 Draft
@@ -7,20 +7,20 @@ Draft
 Claude Code Assistant - September 2025
 
 ## Overview
-Four focused enhancements that add basic business process capabilities to Flask-AppBuilder by building on existing components like ModelView, AuditMixin, and the security system.
+Four focused enhancements that add basic business process capabilities to PgAppForge by building on existing components like ModelView, AuditMixin, and the security system.
 
 ## Features
 
 ### F1: Model State Tracking (1 week)
-Add state management to existing Flask-AppBuilder models using a new mixin.
+Add state management to existing PgAppForge models using a new mixin.
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.models.mixins import AuditMixin
+from pgappforge.models.mixins import AuditMixin
 from sqlalchemy import Column, String, Text
 
 class StateTrackingMixin(AuditMixin):
-    """Add state management to Flask-AppBuilder models"""
+    """Add state management to PgAppForge models"""
     
     status = Column(String(50), default='draft')
     status_reason = Column(Text)
@@ -60,15 +60,15 @@ class TestStateTrackingMixin(FABTestCase):
 ```
 
 ### F2: Approval Workflow Widget (1 week)
-A widget that adds simple approval functionality to existing Flask-AppBuilder forms.
+A widget that adds simple approval functionality to existing PgAppForge forms.
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.widgets import FormWidget
-from flask_appbuilder.security.decorators import has_access, permission_name
+from pgappforge.widgets import FormWidget
+from pgappforge.security.decorators import has_access, permission_name
 
 class ApprovalWidget(FormWidget):
-    """Simple approval widget for Flask-AppBuilder forms"""
+    """Simple approval widget for PgAppForge forms"""
     
     template = 'appbuilder/widgets/approval.html'
     
@@ -115,7 +115,7 @@ class ApprovalModelView(ModelView):
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder security system
+- Existing PgAppForge security system
 - Existing widget infrastructure
 
 #### Testing
@@ -132,8 +132,8 @@ A chart widget that extends BaseChartView to display process status distribution
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.charts.views import BaseChartView
-from flask_appbuilder.models.group import GroupByProcessData
+from pgappforge.charts.views import BaseChartView
+from pgappforge.models.group import GroupByProcessData
 
 class ProcessStatusChartView(BaseChartView):
     """Chart showing process status distribution"""
@@ -150,7 +150,7 @@ class ProcessStatusChartView(BaseChartView):
     def chart(self):
         """Render process status chart using existing chart infrastructure"""
         
-        # Use existing Flask-AppBuilder chart patterns
+        # Use existing PgAppForge chart patterns
         group_by = GroupByProcessData(
             self.datamodel,
             ['status'],
@@ -185,7 +185,7 @@ class ProcessDashboardView(BaseView):
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder chart system (`flask_appbuilder.charts.views`)
+- Existing PgAppForge chart system (`pgappforge.charts.views`)
 - Existing widget infrastructure
 
 #### Testing
@@ -203,7 +203,7 @@ Simple notification system using existing Flask-Mail integration.
 #### Technical Implementation
 ```python
 from flask_mail import Message
-from flask_appbuilder.hooks import before_model_update
+from pgappforge.hooks import before_model_update
 from flask import current_app
 
 class NotificationService:
@@ -272,7 +272,7 @@ def notify_on_status_change(mapper, connection, target):
 
 #### Dependencies
 - Existing Flask-Mail integration (already in setup.py)
-- Existing Flask-AppBuilder hook system
+- Existing PgAppForge hook system
 
 #### Testing
 ```python
@@ -312,11 +312,11 @@ class TestNotificationService(FABTestCase):
 - Test notification delivery
 
 ## Success Metrics
-- All four features integrate seamlessly with existing Flask-AppBuilder patterns
+- All four features integrate seamlessly with existing PgAppForge patterns
 - No breaking changes to existing applications
 - Test coverage > 90% for new components
 - Features can be adopted independently
-- Documentation covers integration with existing Flask-AppBuilder components
+- Documentation covers integration with existing PgAppForge components
 
 ## Migration Strategy
 These features are designed as additive enhancements:
@@ -325,4 +325,4 @@ These features are designed as additive enhancements:
 - ProcessStatusChart is a new view that doesn't modify existing functionality
 - NotificationService is opt-in via configuration
 
-Existing Flask-AppBuilder applications can adopt these features incrementally without disruption.
+Existing PgAppForge applications can adopt these features incrementally without disruption.

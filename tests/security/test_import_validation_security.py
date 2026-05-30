@@ -11,7 +11,7 @@ import os
 from unittest.mock import patch
 
 # Import the fixed utilities
-from flask_appbuilder.cli.utils.import_utils import (
+from pgappforge.cli.utils.import_utils import (
     validate_imports_secure,
     validate_import_security,
     parse_import,
@@ -81,7 +81,7 @@ class ImportValidationSecurityTest(unittest.TestCase):
             "import sys",
             "from typing import List, Dict",
             "from flask import Flask",
-            "from flask_appbuilder import ModelView",
+            "from pgappforge import ModelView",
             "import json",
             "from datetime import datetime",
             "from os import path",  # Legitimate os import
@@ -184,7 +184,7 @@ class ImportValidationSecurityTest(unittest.TestCase):
 
     def test_security_logging(self):
         """Test that security violations are properly logged."""
-        with patch('flask_appbuilder.cli.utils.import_utils.logger') as mock_logger:
+        with patch('pgappforge.cli.utils.import_utils.logger') as mock_logger:
             malicious_import = "exec('malicious code')"
 
             # This should trigger security logging

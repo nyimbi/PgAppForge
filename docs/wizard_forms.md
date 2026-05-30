@@ -1,4 +1,4 @@
-# Flask-AppBuilder Wizard Forms
+# PgAppForge Wizard Forms
 
 Comprehensive multi-step form functionality for handling large forms by breaking them into manageable steps with session persistence and resumption capabilities.
 
@@ -59,7 +59,7 @@ The Wizard Forms system automatically converts large, complex forms into multi-s
 ### Prerequisites
 
 ```bash
-pip install Flask-AppBuilder>=4.0.0
+pip install PgAppForge>=4.0.0
 pip install WTForms>=3.0.0
 pip install Flask-Login>=0.6.0
 ```
@@ -68,9 +68,9 @@ pip install Flask-Login>=0.6.0
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.forms.wizard import WizardForm
-from flask_appbuilder.views.wizard import WizardFormView
+from pgappforge import AppBuilder, SQLA
+from pgappforge.forms.wizard import WizardForm
+from pgappforge.views.wizard import WizardFormView
 ```
 
 ### Configuration
@@ -95,7 +95,7 @@ WIZARD_STORAGE_BACKEND = 'session'  # 'session', 'database', or 'cache'
 ```python
 from wtforms import StringField, EmailField, TextAreaField, SelectField
 from wtforms.validators import DataRequired, Email, Length
-from flask_appbuilder.forms.wizard import WizardForm
+from pgappforge.forms.wizard import WizardForm
 
 class CustomerRegistrationForm(WizardForm):
     # Personal Information (Step 1)
@@ -131,7 +131,7 @@ class CustomerRegistrationForm(WizardForm):
 ### 2. Create a Wizard View
 
 ```python
-from flask_appbuilder.views.wizard import WizardFormView
+from pgappforge.views.wizard import WizardFormView
 
 class CustomerRegistrationView(WizardFormView):
     wizard_form_class = CustomerRegistrationForm
@@ -161,7 +161,7 @@ class CustomerRegistrationView(WizardFormView):
         return True  # Success
 ```
 
-### 3. Register with Flask-AppBuilder
+### 3. Register with PgAppForge
 
 ```python
 # In your app.py
@@ -260,7 +260,7 @@ form.cleanup_wizard_data()   # Clean up after successful submission
 ### Basic WizardStep
 
 ```python
-from flask_appbuilder.forms.wizard import WizardStep
+from pgappforge.forms.wizard import WizardStep
 
 step = WizardStep(
     name='personal_info',                    # Unique step identifier
@@ -452,7 +452,7 @@ storage_backend = 'cache'
 ### Persistence Configuration
 
 ```python
-from flask_appbuilder.forms.wizard import WizardFormPersistence
+from pgappforge.forms.wizard import WizardFormPersistence
 
 # Custom persistence setup
 persistence = WizardFormPersistence('database')
@@ -489,7 +489,7 @@ if form.wizard_data and form.wizard_data.is_expired():
 ### Define Custom Steps
 
 ```python
-from flask_appbuilder.forms.wizard import WizardStep
+from pgappforge.forms.wizard import WizardStep
 
 # Define custom steps
 custom_steps = [
@@ -946,10 +946,10 @@ class MultiLangWizardForm(WizardForm):
         ]
 ```
 
-### Integration with Flask-AppBuilder ModelView
+### Integration with PgAppForge ModelView
 
 ```python
-from flask_appbuilder.models.mixins import AuditMixin
+from pgappforge.models.mixins import AuditMixin
 
 class WizardEnabledModelView(ModelView):
     # Enable wizard for forms with many fields
@@ -1329,8 +1329,8 @@ celery.conf.beat_schedule = {
 import logging
 
 # Enable wizard debug logging
-logging.getLogger('flask_appbuilder.forms.wizard').setLevel(logging.DEBUG)
-logging.getLogger('flask_appbuilder.views.wizard').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.forms.wizard').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.views.wizard').setLevel(logging.DEBUG)
 
 # Custom debug information
 class DebugWizardView(WizardFormView):
@@ -1360,7 +1360,7 @@ console.log('Wizard State:', {
 
 ## Conclusion
 
-The Flask-AppBuilder Wizard Forms system provides a comprehensive solution for handling large, complex forms by automatically breaking them into manageable steps with session persistence and user-friendly navigation.
+The PgAppForge Wizard Forms system provides a comprehensive solution for handling large, complex forms by automatically breaking them into manageable steps with session persistence and user-friendly navigation.
 
 ### Key Benefits:
 - 🚀 **Improved User Experience**: Break complex forms into digestible steps

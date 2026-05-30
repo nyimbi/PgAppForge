@@ -1,4 +1,4 @@
-# Flask-AppBuilder Enhancement - Technical Decisions Log
+# PgForge Enhancement - Technical Decisions Log
 
 ## Decision Log Format
 Each decision entry includes: Timestamp, Decision ID, Context, Decision, Alternatives Considered, Rationale, Impact, and Status.
@@ -7,7 +7,7 @@ Each decision entry includes: Timestamp, Decision ID, Context, Decision, Alterna
 
 ## DEC-001: Project Architecture and Structure
 **Timestamp**: 2025-01-11 15:30:00 UTC  
-**Context**: Defining overall project structure and architectural approach for Flask-AppBuilder enhancements  
+**Context**: Defining overall project structure and architectural approach for PgForge enhancements  
 **Decision**: Adopt modular architecture with clear separation of concerns across security, models, widgets, mixins, and wallet subsystems  
 **Alternatives Considered**:
 - Single monolithic module approach
@@ -16,7 +16,7 @@ Each decision entry includes: Timestamp, Decision ID, Context, Decision, Alterna
 
 **Rationale**: 
 - Modular structure allows independent development and testing of components
-- Follows Flask-AppBuilder's existing architectural patterns
+- Follows PgForge's existing architectural patterns
 - Enables selective feature adoption by end users
 - Facilitates maintenance and future extensions
 
@@ -130,7 +130,7 @@ Each decision entry includes: Timestamp, Decision ID, Context, Decision, Alterna
 
 ## DEC-006: Widget Architecture and Component Design
 **Timestamp**: 2025-01-11 15:55:00 UTC  
-**Context**: Designing modern UI widget system for Flask-AppBuilder  
+**Context**: Designing modern UI widget system for PgForge  
 **Decision**: Create component-based widget system with Bootstrap compatibility and progressive enhancement  
 **Alternatives Considered**:
 - Custom CSS framework approach
@@ -155,7 +155,7 @@ Each decision entry includes: Timestamp, Decision ID, Context, Decision, Alterna
 
 ## DEC-007: Mixin Integration Strategy
 **Timestamp**: 2025-01-11 16:00:00 UTC  
-**Context**: Integrating appgen mixins with Flask-AppBuilder architecture  
+**Context**: Integrating appgen mixins with PgForge architecture  
 **Decision**: Create intelligent integration layer with automatic capability detection and widget mapping  
 **Alternatives Considered**:
 - Manual configuration for each mixin
@@ -197,7 +197,7 @@ Each decision entry includes: Timestamp, Decision ID, Context, Decision, Alterna
 - Enterprise-grade financial management capabilities
 - Enhanced security and compliance posture
 - Increased complexity in implementation and testing
-- Significant value addition to Flask-AppBuilder ecosystem
+- Significant value addition to PgForge ecosystem
 
 **Status**: ✅ Approved - Implementation Pending
 

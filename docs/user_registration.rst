@@ -55,7 +55,7 @@ Configuration
 You can configure the default behaviour and UI on many different ways. The easiest one is making your own RegisterUser
 class and inherit from RegisterUserDBView (when using auth db). Let's take a look at a practical example::
 
-    from flask_appbuilder.security.registerviews import RegisterUserDBView
+    from pgforge.security.registerviews import RegisterUserDBView
 
     class MyRegisterUserDBView(RegisterUserDBView):
         email_template = 'register_mail.html'
@@ -69,7 +69,7 @@ class and inherit from RegisterUserDBView (when using auth db). Let's take a loo
 This class will override:
 
  - The template used to generate the email sent by the user. Take a look at the default template to get a simple
-   starting point `Mail template <https://github.com/dpgaspar/Flask-AppBuilder/blob/master/flask_appbuilder/templates/appbuilder/general/security/register_mail.html>`_.
+   starting point `Mail template <https://github.com/dpgaspar/PgForge/blob/master/pgforge/templates/appbuilder/general/security/register_mail.html>`_.
    Your template will receive the following parameters:
 
     - first_name
@@ -80,7 +80,7 @@ This class will override:
  - The email subject
 
  - The activation template. This the page shown to the user when he/she finishes the activation. Take a look at the default template to get a simple
-   starting point `Activation Template <https://github.com/dpgaspar/Flask-AppBuilder/blob/master/flask_appbuilder/templates/appbuilder/general/security/activation.html>`_.
+   starting point `Activation Template <https://github.com/dpgaspar/PgForge/blob/master/pgforge/templates/appbuilder/general/security/activation.html>`_.
 
  - The form title. The title that is presented on the registration form.
 

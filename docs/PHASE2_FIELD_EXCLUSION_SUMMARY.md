@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 2 has been successfully implemented with a comprehensive smart field exclusion system that automatically excludes unsupported field types from search and filter operations in Flask-AppBuilder.
+Phase 2 has been successfully implemented with a comprehensive smart field exclusion system that automatically excludes unsupported field types from search and filter operations in PgAppForge.
 
 ## What Was Implemented
 
@@ -11,7 +11,7 @@ Phase 2 has been successfully implemented with a comprehensive smart field exclu
 - **PostgreSQL Support** - Full support for JSONB, Arrays, UUID, INET, MACADDR, TSVECTOR, HSTORE, LTREE, and more  
 - **MySQL Support** - Handles MySQL-specific types including JSON, ENUM, SET, and specialized text types
 - **SQLite Support** - Compatible with SQLite date/time and JSON types
-- **Flask-AppBuilder Types** - Detects ImageColumn, FileColumn, and custom PostgreSQL extensions
+- **PgAppForge Types** - Detects ImageColumn, FileColumn, and custom PostgreSQL extensions
 
 ### 🛡️ **Smart Exclusion Logic**
 - **Automatic Exclusion** - Automatically removes problematic field types from search/filter operations
@@ -30,16 +30,16 @@ Phase 2 has been successfully implemented with a comprehensive smart field exclu
 ### Core Components
 
 ```
-flask_appbuilder/models/
+pgappforge/models/
 ├── field_analyzer.py              # Core field type analysis engine
 └── sqla/
     └── interface.py               # Enhanced SQLAlchemy interface
 
-flask_appbuilder/views/
+pgappforge/views/
 ├── smart_exclusion_mixin.py       # View mixin for automatic exclusion
 └── field_exclusion_demo.py       # Administrative demo and tools
 
-flask_appbuilder/templates/
+pgappforge/templates/
 └── field_exclusion_demo/
     └── demo.html                  # Demo interface and documentation
 ```
@@ -82,7 +82,7 @@ class FieldSupportLevel(Enum):
 
 ### Simple Integration
 ```python
-from flask_appbuilder.views.smart_exclusion_mixin import SmartExclusionMixin
+from pgappforge.views.smart_exclusion_mixin import SmartExclusionMixin
 
 class MyModelView(SmartExclusionMixin, ModelView):
     datamodel = SQLAInterface(MyModel)
@@ -91,7 +91,7 @@ class MyModelView(SmartExclusionMixin, ModelView):
 
 ### Decorator Usage
 ```python
-from flask_appbuilder.views.smart_exclusion_mixin import apply_smart_exclusion
+from pgappforge.views.smart_exclusion_mixin import apply_smart_exclusion
 
 @apply_smart_exclusion(strict_mode=True, show_warnings=True)
 class MyEnhancedView(ModelView):
@@ -236,7 +236,7 @@ Phase 2 is **COMPLETE** and ready for production use. The smart field exclusion 
 ✅ **Professional user experience** with clean, functional interfaces
 ✅ **Zero configuration** required for basic usage
 ✅ **Comprehensive administrative tools** for management and analysis
-✅ **Full backward compatibility** with existing Flask-AppBuilder applications
+✅ **Full backward compatibility** with existing PgAppForge applications
 
 **Status**: Ready to proceed with Phase 3 (Dramatically expand widget library) when requested.
 
@@ -244,11 +244,11 @@ Phase 2 is **COMPLETE** and ready for production use. The smart field exclusion 
 
 ## Quick Start
 
-To enable smart field exclusion in your Flask-AppBuilder application:
+To enable smart field exclusion in your PgAppForge application:
 
 ```python
 # 1. Import the mixin
-from flask_appbuilder.views.smart_exclusion_mixin import SmartExclusionMixin
+from pgappforge.views.smart_exclusion_mixin import SmartExclusionMixin
 
 # 2. Add to your view
 class MyModelView(SmartExclusionMixin, ModelView):

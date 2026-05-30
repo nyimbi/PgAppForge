@@ -24,19 +24,19 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 # Import multi-tenant components
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.tenant_models import (
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.tenant_models import (
     Tenant, TenantUser, TenantConfig, TenantSubscription, TenantUsage, TenantAwareMixin
 )
-from flask_appbuilder.models.tenant_context import tenant_context, get_current_tenant_id
-from flask_appbuilder.tenants.billing import get_billing_service
-from flask_appbuilder.tenants.usage_tracking import get_usage_tracker
-from flask_appbuilder.tenants.branding import get_branding_manager
-from flask_appbuilder.tenants.performance import get_db_optimizer, get_cache_manager
-from flask_appbuilder.tenants.resource_isolation import (
+from pgappforge.models.tenant_context import tenant_context, get_current_tenant_id
+from pgappforge.tenants.billing import get_billing_service
+from pgappforge.tenants.usage_tracking import get_usage_tracker
+from pgappforge.tenants.branding import get_branding_manager
+from pgappforge.tenants.performance import get_db_optimizer, get_cache_manager
+from pgappforge.tenants.resource_isolation import (
     get_resource_monitor, get_resource_limiter, ResourceType, LimitAction
 )
-from flask_appbuilder.tenants.scalability import get_distribution_manager
+from pgappforge.tenants.scalability import get_distribution_manager
 
 
 class MultiTenantTestCase(TestCase):
@@ -93,7 +93,7 @@ class MultiTenantTestCase(TestCase):
     
     def create_tenant_admin(self, tenant: Tenant, email: str):
         """Create admin user for tenant."""
-        from flask_appbuilder.security.sqla.models import User
+        from pgappforge.security.sqla.models import User
         
         user = User(
             first_name='Admin',
@@ -133,7 +133,7 @@ class MultiTenantTestCase(TestCase):
     
     def create_tenant_aware_model(self, tenant_id: int, **kwargs):
         """Create a tenant-aware model instance for testing."""
-        from flask_appbuilder.models.tenant_examples import CustomerMT
+        from pgappforge.models.tenant_examples import CustomerMT
         
         customer = CustomerMT(
             tenant_id=tenant_id,
@@ -150,7 +150,7 @@ class TestTenantIsolation(MultiTenantTestCase):
     
     def test_tenant_aware_query_isolation(self):
         """Test that tenant-aware queries properly isolate data."""
-        from flask_appbuilder.models.tenant_examples import CustomerMT
+        from pgappforge.models.tenant_examples import CustomerMT
         
         # Create customers for each tenant
         with self.tenant_context_manager(self.tenant1):
@@ -183,7 +183,7 @@ class TestTenantIsolation(MultiTenantTestCase):
     
     def test_cross_tenant_access_prevention(self):
         """Test that direct access to other tenant's data is prevented."""
-        from flask_appbuilder.models.tenant_examples import CustomerMT
+        from pgappforge.models.tenant_examples import CustomerMT
         
         # Create customer in tenant 1
         customer1 = self.create_tenant_aware_model(
@@ -382,7 +382,7 @@ class TestResourceIsolationAndLimiting(MultiTenantTestCase):
         super().setUp()
         
         # Set up resource limits for tenants
-        from flask_appbuilder.tenants.resource_isolation import (
+        from pgappforge.tenants.resource_isolation import (
             ResourceLimit, setup_default_tenant_limits
         )
         
@@ -512,7 +512,7 @@ class TestPerformanceAndScaling(MultiTenantTestCase):
         distribution_manager = get_distribution_manager()
         
         # Register mock application instances
-        from flask_appbuilder.tenants.scalability import ApplicationInstance
+        from pgappforge.tenants.scalability import ApplicationInstance
         
         instance1 = ApplicationInstance(
             instance_id='app-1',
@@ -643,7 +643,7 @@ class LoadTestRunner:
             self.db.session.commit()
             
             # Create users for each tenant
-            from flask_appbuilder.security.sqla.models import User
+            from pgappforge.security.sqla.models import User
             
             for tenant in self.tenants:
                 for j in range(self.num_users_per_tenant):
@@ -696,7 +696,7 @@ class LoadTestRunner:
                             )
                             
                             # Create test data
-                            from flask_appbuilder.models.tenant_examples import CustomerMT
+                            from pgappforge.models.tenant_examples import CustomerMT
                             customer = CustomerMT(
                                 tenant_id=tenant.id,
                                 name=f'Customer {thread_id}-{i}',
@@ -753,7 +753,7 @@ class LoadTestRunner:
         
         with self.app.app_context():
             # Clean up tenant-aware models
-            from flask_appbuilder.models.tenant_examples import CustomerMT
+            from pgappforge.models.tenant_examples import CustomerMT
             CustomerMT.query.filter(
                 CustomerMT.tenant_id.in_([t.id for t in self.tenants])
             ).delete(synchronize_session=False)
@@ -764,7 +764,7 @@ class LoadTestRunner:
             ).delete(synchronize_session=False)
             
             # Clean up users
-            from flask_appbuilder.security.sqla.models import User
+            from pgappforge.security.sqla.models import User
             user_emails = [u[1].email for u in self.users]
             User.query.filter(User.email.in_(user_emails)).delete(synchronize_session=False)
             

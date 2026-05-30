@@ -1,6 +1,6 @@
-# Flask-AppBuilder Workflow System
+# PgAppForge Workflow System
 
-A comprehensive workflow management system that extends Flask-AppBuilder with powerful form sequencing, AI optimization, real-time collaboration, and intelligent automation capabilities.
+A comprehensive workflow management system that extends PgAppForge with powerful form sequencing, AI optimization, real-time collaboration, and intelligent automation capabilities.
 
 ## 🌟 Features
 
@@ -14,7 +14,7 @@ A comprehensive workflow management system that extends Flask-AppBuilder with po
 - **Performance Optimization**: Redis caching, query optimization, and batch processing
 - **State Persistence**: Robust backup, recovery, and disaster management
 
-### Integration with Flask-AppBuilder
+### Integration with PgAppForge
 - **WorkflowMixin**: Makes any model workflow-aware
 - **WorkflowModelView**: Enhanced CRUD operations with workflow support
 - **Workflow-aware Widgets**: Smart UI components that adapt to workflow state
@@ -26,8 +26,8 @@ A comprehensive workflow management system that extends Flask-AppBuilder with po
 ### 1. Enable Workflow for a Model
 
 ```python
-from flask_appbuilder.workflow.mixins import WorkflowMixin
-from flask_appbuilder import Model
+from pgappforge.workflow.mixins import WorkflowMixin
+from pgappforge import Model
 
 class Employee(WorkflowMixin, Model):
     __tablename__ = 'employee'
@@ -46,8 +46,8 @@ class Employee(WorkflowMixin, Model):
 ### 2. Create Workflow-Enabled View
 
 ```python
-from flask_appbuilder.workflow.views import WorkflowModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge.workflow.views import WorkflowModelView
+from pgappforge.models.sqla.interface import SQLAInterface
 
 class EmployeeView(WorkflowModelView):
     datamodel = SQLAInterface(Employee)
@@ -187,7 +187,7 @@ ENABLE_EXTERNAL_AI_PROVIDERS = False  # Use Ollama only
 ### Automatic Insights
 
 ```python
-from flask_appbuilder.workflow.ai_optimization import get_workflow_insights
+from pgappforge.workflow.ai_optimization import get_workflow_insights
 
 # Get AI-generated optimization suggestions
 insights = await get_workflow_insights('employee_onboarding')
@@ -203,7 +203,7 @@ for insight in insights:
 ### Performance Analytics
 
 ```python
-from flask_appbuilder.workflow.ai_optimization import analyze_workflow
+from pgappforge.workflow.ai_optimization import analyze_workflow
 
 # Analyze workflow performance
 metrics = await analyze_workflow('employee_onboarding')
@@ -219,7 +219,7 @@ print(f"Bottleneck steps: {metrics.bottleneck_steps}")
 
 ```python
 from flask_socketio import SocketIO
-from flask_appbuilder.workflow.collaboration import setup_socketio_handlers
+from pgappforge.workflow.collaboration import setup_socketio_handlers
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -259,7 +259,7 @@ socket.emit('form_field_update', {
 ### Conflict Resolution
 
 ```python
-from flask_appbuilder.workflow.collaboration import get_collaboration_manager
+from pgappforge.workflow.collaboration import get_collaboration_manager
 
 manager = get_collaboration_manager()
 
@@ -277,7 +277,7 @@ success = manager.resolve_conflict(
 ### From Model Schema
 
 ```python
-from flask_appbuilder.workflow.auto_generation import generate_workflow_for_model
+from pgappforge.workflow.auto_generation import generate_workflow_for_model
 
 # Generate workflow automatically from model
 workflow_def = generate_workflow_for_model(
@@ -294,7 +294,7 @@ engine.register_workflow(workflow_def)
 ### Custom Templates
 
 ```python
-from flask_appbuilder.workflow.auto_generation import WorkflowTemplate
+from pgappforge.workflow.auto_generation import WorkflowTemplate
 
 # Create custom template
 template = WorkflowTemplate(
@@ -318,7 +318,7 @@ template = WorkflowTemplate(
 )
 
 # Register template
-from flask_appbuilder.workflow.auto_generation import register_workflow_template
+from pgappforge.workflow.auto_generation import register_workflow_template
 register_workflow_template(template)
 ```
 
@@ -334,7 +334,7 @@ flask generate-workflow Employee --template employee_onboarding --type ai_sugges
 ### Automatic Snapshots
 
 ```python
-from flask_appbuilder.workflow.persistence import auto_snapshot
+from pgappforge.workflow.persistence import auto_snapshot
 
 @auto_snapshot('checkpoint')
 def update_workflow_step(workflow_state, form_data):
@@ -345,7 +345,7 @@ def update_workflow_step(workflow_state, form_data):
 ### Manual Backup & Recovery
 
 ```python
-from flask_appbuilder.workflow.persistence import (
+from pgappforge.workflow.persistence import (
     create_workflow_snapshot, recover_workflow
 )
 
@@ -359,7 +359,7 @@ success = recover_workflow(workflow_state.id, snapshot_id)
 ### Transaction Safety
 
 ```python
-from flask_appbuilder.workflow.persistence import safe_workflow_operation
+from pgappforge.workflow.persistence import safe_workflow_operation
 
 # Safe operations with automatic rollback
 with safe_workflow_operation(workflow_state.id) as state:
@@ -388,7 +388,7 @@ WORKFLOW_BATCH_SIZE = 100
 ### Optimized Queries
 
 ```python
-from flask_appbuilder.workflow.performance import get_query_optimizer
+from pgappforge.workflow.performance import get_query_optimizer
 
 # Apply database optimizations
 optimizer = get_query_optimizer()
@@ -398,7 +398,7 @@ optimizer.optimize_workflow_queries()
 ### Batch Processing
 
 ```python
-from flask_appbuilder.workflow.performance import batched
+from pgappforge.workflow.performance import batched
 
 @batched('analytics_insert')
 def record_workflow_event(event_data):
@@ -409,7 +409,7 @@ def record_workflow_event(event_data):
 ### Async Processing
 
 ```python
-from flask_appbuilder.workflow.performance import async_task
+from pgappforge.workflow.performance import async_task
 
 @async_task('ai_analysis')
 def generate_insights(workflow_name):
@@ -422,7 +422,7 @@ def generate_insights(workflow_name):
 ### Dynamic Permissions
 
 ```python
-from flask_appbuilder.workflow.security import workflow_permission_required
+from pgappforge.workflow.security import workflow_permission_required
 
 @workflow_permission_required('can_edit_step', 'employee_onboarding')
 def edit_employment_details():
@@ -433,7 +433,7 @@ def edit_employment_details():
 ### Role-based Workflow Access
 
 ```python
-from flask_appbuilder.workflow.security import DynamicRoleManager
+from pgappforge.workflow.security import DynamicRoleManager
 
 # Automatic role assignment based on workflow progression
 manager = DynamicRoleManager()
@@ -461,7 +461,7 @@ manager.assign_workflow_role(
 ### Smart Widgets
 
 ```python
-from flask_appbuilder.workflow.widgets import get_workflow_widget
+from pgappforge.workflow.widgets import get_workflow_widget
 
 # Progress widget
 progress_widget = get_workflow_widget(
@@ -484,7 +484,7 @@ conditional_widget = get_workflow_widget(
 ### Custom Widget Creation
 
 ```python
-from flask_appbuilder.workflow.widgets import workflow_aware
+from pgappforge.workflow.widgets import workflow_aware
 
 @workflow_aware
 class CustomWidget(BaseWidget):
@@ -499,7 +499,7 @@ class CustomWidget(BaseWidget):
 ### Built-in Analytics
 
 ```python
-from flask_appbuilder.workflow.ai_optimization import get_ai_optimizer
+from pgappforge.workflow.ai_optimization import get_ai_optimizer
 
 optimizer = get_ai_optimizer()
 
@@ -516,7 +516,7 @@ optimizer.record_workflow_event(
 ### Performance Metrics
 
 ```python
-from flask_appbuilder.workflow.performance import get_workflow_cache
+from pgappforge.workflow.performance import get_workflow_cache
 
 cache = get_workflow_cache()
 stats = cache.get_stats()
@@ -530,7 +530,7 @@ print(f"Average query time: {stats['avg_query_time']:.3f}s")
 ### Unit Tests
 
 ```python
-from flask_appbuilder.workflow.core import WorkflowEngine, WorkflowDefinition
+from pgappforge.workflow.core import WorkflowEngine, WorkflowDefinition
 
 def test_workflow_creation():
     engine = WorkflowEngine()
@@ -596,7 +596,7 @@ OPENAI_API_KEY = 'your-openai-key'  # If external providers enabled
 ### Custom Workflow Engine
 
 ```python
-from flask_appbuilder.workflow.core import WorkflowEngine
+from pgappforge.workflow.core import WorkflowEngine
 
 class CustomWorkflowEngine(WorkflowEngine):
     def _validate_step_transition(self, workflow_state, from_step, to_step, form_data=None):
@@ -604,14 +604,14 @@ class CustomWorkflowEngine(WorkflowEngine):
         return super()._validate_step_transition(workflow_state, from_step, to_step, form_data)
 
 # Use custom engine
-from flask_appbuilder.workflow import core
+from pgappforge.workflow import core
 core._workflow_engine = CustomWorkflowEngine()
 ```
 
 ### Workflow Events
 
 ```python
-from flask_appbuilder.workflow.core import WorkflowEngine
+from pgappforge.workflow.core import WorkflowEngine
 
 engine = get_workflow_engine()
 
@@ -662,10 +662,10 @@ def handle_workflow_completion(workflow_state):
 
 ## 📄 License
 
-This workflow system is part of Flask-AppBuilder and follows the same BSD license.
+This workflow system is part of PgAppForge and follows the same BSD license.
 
 ## 🆘 Support
 
-- Documentation: [Flask-AppBuilder Docs](https://flask-appbuilder.readthedocs.io/)
-- Issues: [GitHub Issues](https://github.com/dpgaspar/Flask-AppBuilder/issues)
-- Discussions: [GitHub Discussions](https://github.com/dpgaspar/Flask-AppBuilder/discussions)
+- Documentation: [PgAppForge Docs](https://flask-appbuilder.readthedocs.io/)
+- Issues: [GitHub Issues](https://github.com/dpgaspar/PgAppForge/issues)
+- Discussions: [GitHub Discussions](https://github.com/dpgaspar/PgAppForge/discussions)

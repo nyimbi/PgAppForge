@@ -14,18 +14,18 @@ from unittest.mock import Mock, patch, MagicMock
 from flask import Flask
 from flask_testing import TestCase
 
-from flask_appbuilder.process.security.validation import (
+from pgappforge.process.security.validation import (
     ProcessValidator, ProcessAuthorization, TenantIsolationValidator,
     ProcessAuditLogger, RateLimiter, ProcessSecurityManager,
     ValidationError, AuthorizationError, TenantIsolationError, RateLimitExceededError
 )
-from flask_appbuilder.process.security.integration import (
+from pgappforge.process.security.integration import (
     secure_api_endpoint, secure_view_method, init_process_security
 )
-from flask_appbuilder.process.models.process_models import (
+from pgappforge.process.models.process_models import (
     ProcessDefinition, ProcessInstance
 )
-from flask_appbuilder.process.models.audit_models import (
+from pgappforge.process.models.audit_models import (
     ProcessAuditLog, ProcessSecurityEvent
 )
 
@@ -155,7 +155,7 @@ class TestProcessValidator(ProcessSecurityTestCase):
 class TestProcessAuthorization(ProcessSecurityTestCase):
     """Test process authorization."""
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.current_user')
     def test_check_permission_authenticated_user(self, mock_user):
         """Test permission check for authenticated user."""
         mock_user.is_authenticated = True
@@ -164,7 +164,7 @@ class TestProcessAuthorization(ProcessSecurityTestCase):
         result = ProcessAuthorization.check_permission('create')
         self.assertTrue(result)
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.current_user')
     def test_check_permission_unauthenticated_user(self, mock_user):
         """Test permission check for unauthenticated user."""
         mock_user = None
@@ -172,7 +172,7 @@ class TestProcessAuthorization(ProcessSecurityTestCase):
         result = ProcessAuthorization.check_permission('create')
         self.assertFalse(result)
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.current_user')
     def test_check_permission_insufficient_rights(self, mock_user):
         """Test permission check with insufficient rights."""
         mock_user.is_authenticated = True
@@ -187,7 +187,7 @@ class TestProcessAuthorization(ProcessSecurityTestCase):
         def protected_function():
             return "success"
         
-        with patch('flask_appbuilder.process.security.validation.current_user') as mock_user:
+        with patch('pgappforge.process.security.validation.current_user') as mock_user:
             mock_user.is_authenticated = True
             mock_user.has_permission.return_value = True
             
@@ -200,7 +200,7 @@ class TestProcessAuthorization(ProcessSecurityTestCase):
         def protected_function():
             return "success"
         
-        with patch('flask_appbuilder.process.security.validation.current_user') as mock_user:
+        with patch('pgappforge.process.security.validation.current_user') as mock_user:
             mock_user.is_authenticated = True
             mock_user.has_permission.return_value = False
             
@@ -211,7 +211,7 @@ class TestProcessAuthorization(ProcessSecurityTestCase):
 class TestTenantIsolationValidator(ProcessSecurityTestCase):
     """Test tenant isolation validation."""
     
-    @patch('flask_appbuilder.process.security.validation.get_current_tenant_id')
+    @patch('pgappforge.process.security.validation.get_current_tenant_id')
     def test_validate_tenant_access_valid(self, mock_tenant_id):
         """Test valid tenant access validation."""
         mock_tenant_id.return_value = 1
@@ -224,7 +224,7 @@ class TestTenantIsolationValidator(ProcessSecurityTestCase):
             result = TenantIsolationValidator.validate_tenant_access(ProcessDefinition, 1)
             self.assertTrue(result)
     
-    @patch('flask_appbuilder.process.security.validation.get_current_tenant_id')
+    @patch('pgappforge.process.security.validation.get_current_tenant_id')
     def test_validate_tenant_access_invalid(self, mock_tenant_id):
         """Test invalid tenant access validation."""
         mock_tenant_id.return_value = 1
@@ -305,8 +305,8 @@ class TestRateLimiter(ProcessSecurityTestCase):
         def limited_function():
             return "success"
         
-        with patch('flask_appbuilder.process.security.validation.current_user') as mock_user, \
-             patch('flask_appbuilder.process.security.validation.request') as mock_request:
+        with patch('pgappforge.process.security.validation.current_user') as mock_user, \
+             patch('pgappforge.process.security.validation.request') as mock_request:
             
             mock_user.id = 1
             mock_request.endpoint = 'test_endpoint'
@@ -326,9 +326,9 @@ class TestRateLimiter(ProcessSecurityTestCase):
 class TestProcessAuditLogger(ProcessSecurityTestCase):
     """Test audit logging."""
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
-    @patch('flask_appbuilder.process.security.validation.request')
-    @patch('flask_appbuilder.process.security.validation.get_current_tenant_id')
+    @patch('pgappforge.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.request')
+    @patch('pgappforge.process.security.validation.get_current_tenant_id')
     def test_log_operation(self, mock_tenant_id, mock_request, mock_user):
         """Test audit log operation recording."""
         mock_user.id = 1
@@ -338,7 +338,7 @@ class TestProcessAuditLogger(ProcessSecurityTestCase):
         mock_tenant_id.return_value = 1
         
         # Mock database operations
-        with patch('flask_appbuilder.process.security.validation.log') as mock_log:
+        with patch('pgappforge.process.security.validation.log') as mock_log:
             ProcessAuditLogger.log_operation(
                 operation='test_operation',
                 resource_type='process',
@@ -356,9 +356,9 @@ class TestProcessAuditLogger(ProcessSecurityTestCase):
         def audited_function():
             return "success"
         
-        with patch('flask_appbuilder.process.security.validation.current_user'), \
-             patch('flask_appbuilder.process.security.validation.request'), \
-             patch('flask_appbuilder.process.security.validation.get_current_tenant_id'), \
+        with patch('pgappforge.process.security.validation.current_user'), \
+             patch('pgappforge.process.security.validation.request'), \
+             patch('pgappforge.process.security.validation.get_current_tenant_id'), \
              patch.object(ProcessAuditLogger, 'log_operation') as mock_log:
             
             result = audited_function()
@@ -372,9 +372,9 @@ class TestProcessAuditLogger(ProcessSecurityTestCase):
         def failing_function():
             raise ValueError("Test error")
         
-        with patch('flask_appbuilder.process.security.validation.current_user'), \
-             patch('flask_appbuilder.process.security.validation.request'), \
-             patch('flask_appbuilder.process.security.validation.get_current_tenant_id'), \
+        with patch('pgappforge.process.security.validation.current_user'), \
+             patch('pgappforge.process.security.validation.request'), \
+             patch('pgappforge.process.security.validation.get_current_tenant_id'), \
              patch.object(ProcessAuditLogger, 'log_operation') as mock_log:
             
             with self.assertRaises(ValueError):
@@ -389,8 +389,8 @@ class TestProcessAuditLogger(ProcessSecurityTestCase):
 class TestProcessSecurityManager(ProcessSecurityTestCase):
     """Test the main security manager."""
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
-    @patch('flask_appbuilder.process.security.validation.request')
+    @patch('pgappforge.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.request')
     def test_validate_and_secure_operation_success(self, mock_request, mock_user):
         """Test successful security validation."""
         mock_user.is_authenticated = True
@@ -410,7 +410,7 @@ class TestProcessSecurityManager(ProcessSecurityTestCase):
             
             self.assertIsInstance(result, dict)
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.current_user')
     def test_validate_and_secure_operation_unauthorized(self, mock_user):
         """Test unauthorized access."""
         mock_user = None  # Unauthenticated
@@ -421,8 +421,8 @@ class TestProcessSecurityManager(ProcessSecurityTestCase):
                 resource_id=1
             )
     
-    @patch('flask_appbuilder.process.security.validation.current_user')
-    @patch('flask_appbuilder.process.security.validation.request')
+    @patch('pgappforge.process.security.validation.current_user')
+    @patch('pgappforge.process.security.validation.request')
     def test_rate_limit_check(self, mock_request, mock_user):
         """Test rate limiting in security manager."""
         mock_user.is_authenticated = True
@@ -447,10 +447,10 @@ class TestSecurityIntegrationDecorators(ProcessSecurityTestCase):
         def test_api_endpoint():
             return {'status': 'success'}
         
-        with patch('flask_appbuilder.process.security.integration.security_manager') as mock_manager:
+        with patch('pgappforge.process.security.integration.security_manager') as mock_manager:
             mock_manager.validate_and_secure_operation.return_value = {}
             
-            with patch('flask_appbuilder.process.security.integration.ProcessAuditLogger') as mock_audit:
+            with patch('pgappforge.process.security.integration.ProcessAuditLogger') as mock_audit:
                 result = test_api_endpoint()
                 
                 self.assertEqual(result, {'status': 'success'})
@@ -463,10 +463,10 @@ class TestSecurityIntegrationDecorators(ProcessSecurityTestCase):
         def test_view_method(self):
             return "success"
         
-        with patch('flask_appbuilder.process.security.integration.security_manager') as mock_manager:
+        with patch('pgappforge.process.security.integration.security_manager') as mock_manager:
             mock_manager.validate_and_secure_operation.return_value = {}
             
-            with patch('flask_appbuilder.process.security.integration.ProcessAuditLogger') as mock_audit:
+            with patch('pgappforge.process.security.integration.ProcessAuditLogger') as mock_audit:
                 result = test_view_method(None)
                 
                 self.assertEqual(result, "success")
@@ -523,7 +523,7 @@ class TestSecurityHeaders(ProcessSecurityTestCase):
     
     def test_add_security_headers(self):
         """Test security headers are added to responses."""
-        from flask_appbuilder.process.security.integration import SecurityHeaders
+        from pgappforge.process.security.integration import SecurityHeaders
         
         with self.app.test_client() as client:
             with patch('flask.Response') as mock_response:

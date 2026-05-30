@@ -1,7 +1,7 @@
 """
 Isolated tests for Export Enhancement functionality.
 
-Tests the export system without complex Flask-AppBuilder imports.
+Tests the export system without complex PgAppForge imports.
 """
 
 import unittest
@@ -13,10 +13,10 @@ from datetime import datetime, date
 from decimal import Decimal
 
 # Import the classes we're testing directly
-from flask_appbuilder.export.export_manager import ExportManager, ExportFormat
-from flask_appbuilder.export.csv_exporter import CSVExporter
-from flask_appbuilder.export.excel_exporter import ExcelExporter
-from flask_appbuilder.export.pdf_exporter import PDFExporter
+from pgappforge.export.export_manager import ExportManager, ExportFormat
+from pgappforge.export.csv_exporter import CSVExporter
+from pgappforge.export.excel_exporter import ExcelExporter
+from pgappforge.export.pdf_exporter import PDFExporter
 
 
 class TestExportManagerIsolated(unittest.TestCase):
@@ -135,7 +135,7 @@ class TestExportManagerIsolated(unittest.TestCase):
         """Test metadata preparation."""
         user_metadata = {'custom': 'value'}
         
-        with patch('flask_appbuilder.export.export_manager.current_user') as mock_user:
+        with patch('pgappforge.export.export_manager.current_user') as mock_user:
             mock_user.username = 'testuser'
             mock_user.is_authenticated = True
             
@@ -325,8 +325,8 @@ class TestExcelExporterIsolated(unittest.TestCase):
         self.assertIsInstance(self.excel_exporter, ExcelExporter)
         self.assertIn('sheet_name', self.excel_exporter.default_options)
     
-    @patch('flask_appbuilder.export.excel_exporter.OPENPYXL_AVAILABLE', True)
-    @patch('flask_appbuilder.export.excel_exporter.Workbook')
+    @patch('pgappforge.export.excel_exporter.OPENPYXL_AVAILABLE', True)
+    @patch('pgappforge.export.excel_exporter.Workbook')
     def test_export_basic(self, mock_workbook):
         """Test basic Excel export."""
         # Mock workbook and worksheet
@@ -352,7 +352,7 @@ class TestExcelExporterIsolated(unittest.TestCase):
     
     def test_export_without_openpyxl(self):
         """Test Excel export without openpyxl available."""
-        with patch('flask_appbuilder.export.excel_exporter.OPENPYXL_AVAILABLE', False):
+        with patch('pgappforge.export.excel_exporter.OPENPYXL_AVAILABLE', False):
             with self.assertRaises(ImportError) as context:
                 self.excel_exporter.export(
                     data=self.sample_data,
@@ -420,8 +420,8 @@ class TestPDFExporterIsolated(unittest.TestCase):
         self.assertIn('page_size', self.pdf_exporter.default_options)
         self.assertEqual(self.pdf_exporter.default_options['page_size'], 'letter')
     
-    @patch('flask_appbuilder.export.pdf_exporter.REPORTLAB_AVAILABLE', True)
-    @patch('flask_appbuilder.export.pdf_exporter.SimpleDocTemplate')
+    @patch('pgappforge.export.pdf_exporter.REPORTLAB_AVAILABLE', True)
+    @patch('pgappforge.export.pdf_exporter.SimpleDocTemplate')
     def test_export_basic(self, mock_document):
         """Test basic PDF export."""
         # Mock document
@@ -444,7 +444,7 @@ class TestPDFExporterIsolated(unittest.TestCase):
     
     def test_export_without_reportlab(self):
         """Test PDF export without reportlab available."""
-        with patch('flask_appbuilder.export.pdf_exporter.REPORTLAB_AVAILABLE', False):
+        with patch('pgappforge.export.pdf_exporter.REPORTLAB_AVAILABLE', False):
             with self.assertRaises(ImportError) as context:
                 self.pdf_exporter.export(
                     data=self.sample_data,
@@ -476,8 +476,8 @@ class TestPDFExporterIsolated(unittest.TestCase):
     def test_get_page_size(self):
         """Test page size selection."""
         # Test different page sizes
-        with patch('flask_appbuilder.export.pdf_exporter.letter', 'letter_size'):
-            with patch('flask_appbuilder.export.pdf_exporter.A4', 'a4_size'):
+        with patch('pgappforge.export.pdf_exporter.letter', 'letter_size'):
+            with patch('pgappforge.export.pdf_exporter.A4', 'a4_size'):
                 # Test letter
                 result = self.pdf_exporter._get_page_size('letter')
                 self.assertEqual(result, 'letter_size')

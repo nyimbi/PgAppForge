@@ -1,12 +1,12 @@
-# Flask-AppBuilder Enhancement Implementation Plan
+# PgAppForge Enhancement Implementation Plan
 
-**Project**: Major Feature Enhancements for Flask-AppBuilder  
+**Project**: Major Feature Enhancements for PgAppForge  
 **Date**: August 11, 2025  
 **Status**: Planning Phase  
 
 ## 🎯 Executive Summary
 
-This document outlines the implementation plan for five major enhancements to Flask-AppBuilder:
+This document outlines the implementation plan for five major enhancements to PgAppForge:
 
 1. **Multi-Factor Authentication (MFA) Support**
 2. **Automatic exclusion of unsupported field types from filters/search**
@@ -14,7 +14,7 @@ This document outlines the implementation plan for five major enhancements to Fl
 4. **Integration and extension of appgen mixins**
 5. **User wallet system for expenditure and income tracking**
 
-These enhancements will transform Flask-AppBuilder into a more secure, user-friendly, and feature-rich framework suitable for modern enterprise applications.
+These enhancements will transform PgAppForge into a more secure, user-friendly, and feature-rich framework suitable for modern enterprise applications.
 
 ## 📋 Requirements Analysis
 
@@ -23,8 +23,8 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Objective**: Implement comprehensive MFA capabilities to enhance security
 
 **Current State Analysis**:
-- Flask-AppBuilder has robust authentication with multiple providers (DB, LDAP, OAuth, OpenID)
-- Security manager in `/flask_appbuilder/security/manager.py` handles authentication flows
+- PgAppForge has robust authentication with multiple providers (DB, LDAP, OAuth, OpenID)
+- Security manager in `/pgappforge/security/manager.py` handles authentication flows
 - User models support various auth types
 - Session management is well-established
 
@@ -42,7 +42,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Objective**: Automatically exclude field types that don't support filtering/searching
 
 **Current State Analysis**:
-- Filter system in `/flask_appbuilder/filters.py` handles basic filtering
+- Filter system in `/pgappforge/filters.py` handles basic filtering
 - Field widgets support various data types
 - No automatic exclusion logic exists
 
@@ -68,7 +68,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Objective**: Provide modern, comprehensive UI widgets
 
 **Current State Analysis**:
-- Basic widget system in `/flask_appbuilder/widgets.py`
+- Basic widget system in `/pgappforge/widgets.py`
 - Limited widget types available
 - Template-based rendering system
 
@@ -153,9 +153,9 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 - `rate_limit_mixin.py` - Rate limiting capabilities
 
 **Integration Strategy**:
-- Adapt mixins to Flask-AppBuilder's architecture
+- Adapt mixins to PgAppForge's architecture
 - Ensure SQLAlchemy compatibility (1.x and 2.x)
-- Add Flask-AppBuilder specific enhancements
+- Add PgAppForge specific enhancements
 - Create view integration for mixin functionality
 - Add admin interfaces for mixin management
 
@@ -193,7 +193,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **MFA Models**
    ```python
-   # flask_appbuilder/security/models.py additions
+   # pgappforge/security/models.py additions
    class UserMFA(Model):
        id = Column(Integer, primary_key=True)
        user_id = Column(Integer, ForeignKey('ab_user.id'))
@@ -208,7 +208,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 
 2. **MFA Service Classes**
    ```python
-   # flask_appbuilder/security/mfa.py
+   # pgappforge/security/mfa.py
    class TOTPService:
        def generate_secret(self)
        def generate_qr_code(self, secret, user)
@@ -272,7 +272,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Field Type Detector**
    ```python
-   # flask_appbuilder/models/field_analyzer.py
+   # pgappforge/models/field_analyzer.py
    class FieldTypeAnalyzer:
        UNSUPPORTED_TYPES = {
            'JSONB', 'JSON', 'BLOB', 'BYTEA', 'IMAGE',
@@ -337,7 +337,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Enhanced Widget Base Classes**
    ```python
-   # flask_appbuilder/widgets/base.py
+   # pgappforge/widgets/base.py
    class AdvancedWidget(RenderTemplateWidget):
        js_dependencies = []
        css_dependencies = []
@@ -350,7 +350,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 
 2. **Widget Registration System**
    ```python
-   # flask_appbuilder/widgets/registry.py
+   # pgappforge/widgets/registry.py
    class WidgetRegistry:
        def register_widget(self, widget_class)
        def get_widget_by_type(self, widget_type)
@@ -449,9 +449,9 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Adapted Base Mixins**
    ```python
-   # flask_appbuilder/models/mixins/audit.py
+   # pgappforge/models/mixins/audit.py
    class AuditMixin(BaseModelMixin):
-       """Enhanced audit mixin with Flask-AppBuilder integration"""
+       """Enhanced audit mixin with PgAppForge integration"""
        created_on = Column(DateTime, default=datetime.datetime.utcnow)
        changed_on = Column(DateTime, default=datetime.datetime.utcnow)
        created_by_fk = Column(Integer, ForeignKey('ab_user.id'))
@@ -460,7 +460,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 
 2. **Advanced Audit System**
    ```python
-   # flask_appbuilder/models/mixins/audit_log.py
+   # pgappforge/models/mixins/audit_log.py
    class AuditLogMixin:
        """Detailed change tracking with before/after states"""
        def create_audit_entry(self, action, changes)
@@ -469,7 +469,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 
 3. **Soft Delete Enhancement**
    ```python
-   # flask_appbuilder/models/mixins/soft_delete.py
+   # pgappforge/models/mixins/soft_delete.py
    class SoftDeleteMixin:
        deleted_on = Column(DateTime)
        deleted_by_fk = Column(Integer, ForeignKey('ab_user.id'))
@@ -483,7 +483,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Workflow Systems**
    ```python
-   # flask_appbuilder/models/mixins/workflow.py
+   # pgappforge/models/mixins/workflow.py
    class WorkflowMixin:
        current_state = Column(String(50))
        workflow_data = Column(JSON)
@@ -574,7 +574,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Core Wallet Models**
    ```python
-   # flask_appbuilder/contrib/wallet/models.py
+   # pgappforge/contrib/wallet/models.py
    class Wallet(Model, AuditMixin, CurrencyMixin):
        id = Column(Integer, primary_key=True)
        user_id = Column(Integer, ForeignKey('ab_user.id'))
@@ -631,7 +631,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Wallet Service Classes**
    ```python
-   # flask_appbuilder/contrib/wallet/services.py
+   # pgappforge/contrib/wallet/services.py
    class WalletService:
        def create_wallet(self, user, name, currency='USD')
        def get_user_wallets(self, user)
@@ -671,7 +671,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Deliverables**:
 1. **Wallet Management Views**
    ```python
-   # flask_appbuilder/contrib/wallet/views.py
+   # pgappforge/contrib/wallet/views.py
    class WalletModelView(ModelView):
        datamodel = SQLAInterface(Wallet)
        list_columns = ['name', 'balance', 'currency_code', 'wallet_type']
@@ -838,7 +838,7 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
    ```python
    # config.py additions
    FAB_MFA_ENABLED = True
-   FAB_MFA_TOTP_ISSUER = "Flask-AppBuilder"
+   FAB_MFA_TOTP_ISSUER = "PgAppForge"
    FAB_TWILIO_ACCOUNT_SID = "your_sid"
    FAB_SENDGRID_API_KEY = "your_key"
    FAB_WIDGET_ASSETS_URL = "/static/widgets/"
@@ -935,4 +935,4 @@ These enhancements will transform Flask-AppBuilder into a more secure, user-frie
 **Last Updated**: August 11, 2025  
 **Next Review**: September 11, 2025
 
-> 🎯 **Objective**: Transform Flask-AppBuilder into a comprehensive, secure, and user-friendly framework suitable for modern enterprise applications with advanced financial management capabilities.
+> 🎯 **Objective**: Transform PgAppForge into a comprehensive, secure, and user-friendly framework suitable for modern enterprise applications with advanced financial management capabilities.

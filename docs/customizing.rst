@@ -18,7 +18,7 @@ F.A.B comes with bootswatch themes ready to use, to change bootstrap default the
 
 	app.config['APP_THEME'] = "spacelab.css"
  
-You can choose from the following `themes <https://github.com/dpgaspar/Flask-AppBuilder-Skeleton/blob/master/config.py.tpl>`_  
+You can choose from the following `themes <https://github.com/dpgaspar/PgForge-Skeleton/blob/master/config.py.tpl>`_  
 
 
 Changing the index
@@ -55,7 +55,7 @@ So that we can use Babel to translate our index text
 
 Define a special and simple view inherit from IndexView, don't define this view on views.py, put it on a separate file like index.py::
 
-    from flask_appbuilder import IndexView
+    from pgforge import IndexView
 
 
     class MyIndexView(IndexView):
@@ -196,7 +196,7 @@ You have the following widgets already available
 - ListBlock
 
 If you want to develop your own widgets just look at the 
-`code <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/flask_appbuilder/templates/appbuilder/general/widgets>`_
+`code <https://github.com/dpgaspar/PgForge/tree/master/pgforge/templates/appbuilder/general/widgets>`_
 
 Read the docs for developing your own template widgets :doc:`templates`
 
@@ -213,8 +213,8 @@ If you want to have Add, edit and list on the same page, this can be done. This 
 
 All you have to do is to mix *CompactCRUDMixin* class with the *ModelView* class.::
 
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
-    from flask_appbuilder.views import ModelView, CompactCRUDMixin
+    from pgforge.models.sqla.interface import SQLAInterface
+    from pgforge.views import ModelView, CompactCRUDMixin
 
     from . import appbuilder
     from .models import Project, ProjectFiles

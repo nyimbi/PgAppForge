@@ -16,12 +16,12 @@ from unittest.mock import Mock, patch, MagicMock
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
-# Flask-AppBuilder imports
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.security.sqla.manager import SecurityManager
+# PgAppForge imports
+from pgappforge import AppBuilder
+from pgappforge.security.sqla.manager import SecurityManager
 
 # Collaborative feature imports
-from flask_appbuilder.collaborative.utils.validation import (
+from pgappforge.collaborative.utils.validation import (
     ValidationResult,
     FieldValidator,
     UserValidator,
@@ -29,31 +29,31 @@ from flask_appbuilder.collaborative.utils.validation import (
     MessageValidator,
     validate_complete_message,
 )
-from flask_appbuilder.collaborative.utils.audit_logging import (
+from pgappforge.collaborative.utils.audit_logging import (
     AuditLogger,
     AuditEvent,
     AuditEventType,
     CollaborativeAuditMixin,
 )
-from flask_appbuilder.collaborative.utils.transaction_manager import (
+from pgappforge.collaborative.utils.transaction_manager import (
     TransactionManager,
     TransactionScope,
     transaction_required,
 )
-from flask_appbuilder.collaborative.utils.error_handling import (
+from pgappforge.collaborative.utils.error_handling import (
     CollaborativeError,
     ValidationError,
     AuthenticationError,
     ErrorHandlingMixin,
     create_error_response,
 )
-from flask_appbuilder.collaborative.interfaces.service_registry import ServiceRegistry
-from flask_appbuilder.collaborative.interfaces.service_factory import ServiceFactory
-from flask_appbuilder.collaborative.interfaces.base_interfaces import (
+from pgappforge.collaborative.interfaces.service_registry import ServiceRegistry
+from pgappforge.collaborative.interfaces.service_factory import ServiceFactory
+from pgappforge.collaborative.interfaces.base_interfaces import (
     ICollaborationService,
     BaseCollaborativeService,
 )
-from flask_appbuilder.collaborative.addon_manager import CollaborativeAddonManager
+from pgappforge.collaborative.addon_manager import CollaborativeAddonManager
 
 
 class MockUser:

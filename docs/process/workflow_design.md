@@ -1,6 +1,6 @@
 # Workflow Design Guide
 
-Complete guide to designing and implementing approval workflows and business processes using Flask-AppBuilder's Process Engine.
+Complete guide to designing and implementing approval workflows and business processes using PgAppForge's Process Engine.
 
 ## 🌟 Overview
 
@@ -77,7 +77,7 @@ graph TB
 Linear approval chain where each step must complete before the next.
 
 ```python
-from flask_appbuilder.process.workflow import WorkflowBuilder
+from pgappforge.process.workflow import WorkflowBuilder
 
 # Build sequential approval workflow
 workflow = WorkflowBuilder() \
@@ -362,7 +362,7 @@ approver_rule = {
 ### Rule Engine
 
 ```python
-from flask_appbuilder.process.rules import RuleEngine
+from pgappforge.process.rules import RuleEngine
 
 rule_engine = RuleEngine()
 
@@ -386,7 +386,7 @@ def evaluate_approval_rule(context, rule_config):
 ### Starting a Process
 
 ```python
-from flask_appbuilder.process.engine import ProcessEngine
+from pgappforge.process.engine import ProcessEngine
 
 process_engine = ProcessEngine(db.session)
 
@@ -507,7 +507,7 @@ WORKFLOW_TEMPLATES = {
 ### Custom Templates
 
 ```python
-from flask_appbuilder.process.templates import WorkflowTemplateManager
+from pgappforge.process.templates import WorkflowTemplateManager
 
 template_manager = WorkflowTemplateManager()
 
@@ -598,7 +598,7 @@ escalation_rules = {
 ### Process Analytics
 
 ```python
-from flask_appbuilder.process.analytics import ProcessAnalytics
+from pgappforge.process.analytics import ProcessAnalytics
 
 analytics = ProcessAnalytics(db.session)
 

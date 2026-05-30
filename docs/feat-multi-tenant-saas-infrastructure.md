@@ -1,4 +1,4 @@
-# Flask-AppBuilder: Multi-Tenant SaaS Enhancements
+# PgAppForge: Multi-Tenant SaaS Enhancements
 
 ## Status
 Draft
@@ -7,7 +7,7 @@ Draft
 Claude Code Assistant - September 2025
 
 ## Overview
-Four focused enhancements that extend Flask-AppBuilder's existing MultiTenancyMixin to provide basic SaaS capabilities by building on current tenant isolation, security patterns, and existing infrastructure.
+Four focused enhancements that extend PgAppForge's existing MultiTenancyMixin to provide basic SaaS capabilities by building on current tenant isolation, security patterns, and existing infrastructure.
 
 ## Features
 
@@ -16,9 +16,9 @@ Create a management interface for tenant administration using existing ModelView
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.views import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.mixins.fab_integration import MultiTenancyMixin
+from pgappforge.views import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.mixins.fab_integration import MultiTenancyMixin
 from sqlalchemy import Column, String, Boolean, DateTime
 
 class Tenant(AuditMixin, Model):
@@ -66,7 +66,7 @@ class TenantModelView(ModelView):
         session['current_tenant_id'] = tenant_id
         session['current_tenant_name'] = tenant.name
         
-        # Update Flask-AppBuilder global context
+        # Update PgAppForge global context
         from flask import g
         g.tenant_id = tenant_id
         
@@ -108,7 +108,7 @@ class TenantUserModelView(ModelView):
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder ModelView system
+- Existing PgAppForge ModelView system
 - Existing AuditMixin for audit trails
 - Existing MultiTenancyMixin for tenant isolation
 - Current Flask session management
@@ -194,22 +194,22 @@ class TenantMiddleware:
     def _get_tenant_by_subdomain(self, subdomain):
         """Get tenant by subdomain using existing database patterns"""
         
-        # Use existing Flask-AppBuilder database session
-        from flask_appbuilder import db
+        # Use existing PgAppForge database session
+        from pgappforge import db
         
         return db.session.query(Tenant).filter(
             Tenant.subdomain == subdomain,
             Tenant.status == 'active'
         ).first()
 
-# Integration with existing Flask-AppBuilder initialization
+# Integration with existing PgAppForge initialization
 def create_app():
     """App factory with tenant middleware"""
     
     app = Flask(__name__)
     
-    # Initialize Flask-AppBuilder as usual
-    from flask_appbuilder import AppBuilder
+    # Initialize PgAppForge as usual
+    from pgappforge import AppBuilder
     appbuilder = AppBuilder(app, db.session)
     
     # Add tenant middleware
@@ -266,7 +266,7 @@ Configuration interface for tenant-specific settings using existing form pattern
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.views import SimpleFormView
+from pgappforge.views import SimpleFormView
 from wtforms import StringField, SelectField, IntegerField, BooleanField
 from wtforms.validators import DataRequired, URL, Email
 
@@ -435,11 +435,11 @@ class TenantConfigHelper:
         from flask import g
         if hasattr(g, 'tenant') and g.tenant:
             return TenantConfigHelper.get_tenant_config('branding.company_name', g.tenant.name)
-        return 'Flask-AppBuilder'
+        return 'PgAppForge'
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder SimpleFormView
+- Existing PgAppForge SimpleFormView
 - WTForms for form handling
 - JSON storage in existing database
 - Flask template system for configuration UI
@@ -470,8 +470,8 @@ Simple usage tracking that integrates with existing analytics infrastructure.
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.charts.views import BaseChartView
-from flask_appbuilder.views.analytics_view import WizardAnalyticsView
+from pgappforge.charts.views import BaseChartView
+from pgappforge.views.analytics_view import WizardAnalyticsView
 from datetime import datetime, timedelta
 
 class TenantUsageMetrics:
@@ -496,7 +496,7 @@ class TenantUsageMetrics:
             'metadata': json.dumps(metadata or {})
         }
         
-        # Could use existing Flask-AppBuilder audit tables or simple usage table
+        # Could use existing PgAppForge audit tables or simple usage table
         self._store_usage_record(usage_record)
     
     def get_tenant_usage_summary(self, tenant_id, days=30):
@@ -668,7 +668,7 @@ def track_user_activity():
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder analytics infrastructure
+- Existing PgAppForge analytics infrastructure
 - Existing BaseChartView for usage charts
 - Database for usage tracking
 - Existing WizardAnalyticsView patterns
@@ -718,7 +718,7 @@ class TestTenantUsageMetrics(FABTestCase):
 - Integrate with existing WizardAnalyticsView
 
 ## Success Metrics
-- All features build on existing Flask-AppBuilder MultiTenancyMixin
+- All features build on existing PgAppForge MultiTenancyMixin
 - No breaking changes to existing tenant isolation
 - Tenant switching works with existing security model
 - Usage metrics integrate with existing analytics infrastructure
@@ -731,4 +731,4 @@ These features enhance existing multi-tenant capabilities:
 - Configuration system uses existing form and database patterns  
 - Usage metrics build on existing analytics infrastructure
 
-Existing Flask-AppBuilder applications using MultiTenancyMixin can adopt these features incrementally without disrupting current tenant isolation functionality.
+Existing PgAppForge applications using MultiTenancyMixin can adopt these features incrementally without disrupting current tenant isolation functionality.

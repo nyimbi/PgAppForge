@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Automated Quality Validation Pipeline for Flask-AppBuilder.
+Automated Quality Validation Pipeline for PgForge.
 
 This module provides a comprehensive quality validation system that combines
 syntax validation, test execution, documentation analysis, and production
@@ -61,7 +61,7 @@ class PipelineReport:
 
 class QualityValidationPipeline:
     """
-    Automated quality validation pipeline for Flask-AppBuilder.
+    Automated quality validation pipeline for PgForge.
     
     This class orchestrates comprehensive quality validation including
     syntax checks, test execution, documentation analysis, and production
@@ -73,7 +73,7 @@ class QualityValidationPipeline:
         Initialize the quality validation pipeline.
         
         Args:
-            source_directory: Path to the Flask-AppBuilder source directory
+            source_directory: Path to the PgForge source directory
         """
         self.source_directory = Path(source_directory)
         self.project_root = self.source_directory.parent
@@ -749,10 +749,10 @@ def main():
     
     # Exit with appropriate code
     if report.production_ready:
-        print(f"\n🎉 SUCCESS: Flask-AppBuilder is production ready!")
+        print(f"\n🎉 SUCCESS: PgForge is production ready!")
         sys.exit(0)
     else:
-        print(f"\n⚠️  WARNING: Flask-AppBuilder needs improvements before production deployment")
+        print(f"\n⚠️  WARNING: PgForge needs improvements before production deployment")
         sys.exit(1)
 
 

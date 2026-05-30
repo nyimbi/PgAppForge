@@ -1,9 +1,9 @@
 import calendar
 from flask import g
-from flask_appbuilder import ModelView
-from flask_appbuilder.charts.views import GroupByChartView
-from flask_appbuilder.models.group import aggregate_count
-from flask_appbuilder.models.mongoengine.interface import MongoEngineInterface
+from pgappforge import ModelView
+from pgappforge.charts.views import GroupByChartView
+from pgappforge.models.group import aggregate_count
+from pgappforge.models.mongoengine.interface import MongoEngineInterface
 
 from . import appbuilder
 from .models import ContactGroup, Contact, Tags

@@ -4,7 +4,7 @@ import logging
 from flask import Flask
 from sqlalchemy import create_engine
 
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.security.sqla.models import User
 
 
 logging.basicConfig(format='%(levelname)s:%(name)s:%(message)s')

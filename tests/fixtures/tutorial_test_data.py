@@ -362,7 +362,7 @@ class TutorialTestEnvironment:
 
 
 class MockFlaskAppBuilder:
-    """Mock Flask-AppBuilder for isolated testing."""
+    """Mock PgForge for isolated testing."""
 
     def __init__(self):
         self.sm = Mock()

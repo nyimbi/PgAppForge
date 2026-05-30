@@ -1,6 +1,6 @@
 # Workflow Generation API Reference
 
-This document provides detailed API reference for the Flask-AppBuilder Workflow Generation system.
+This document provides detailed API reference for the PgAppForge Workflow Generation system.
 
 ## 🏗️ Core Components
 
@@ -9,7 +9,7 @@ This document provides detailed API reference for the Flask-AppBuilder Workflow 
 The main class responsible for workflow-to-code generation.
 
 ```python
-from flask_appbuilder.workflow.generators.wdl_generator import WDLGenerator
+from pgappforge.workflow.generators.wdl_generator import WDLGenerator
 
 generator = WDLGenerator(app_name="my_app")
 ```
@@ -21,14 +21,14 @@ WDLGenerator(app_name: str, output_dir: Optional[Path] = None)
 ```
 
 **Parameters:**
-- `app_name` (str): Name of the Flask-AppBuilder application
+- `app_name` (str): Name of the PgAppForge application
 - `output_dir` (Optional[Path]): Output directory for generated files (default: current directory)
 
 #### Methods
 
 ##### `generate_from_file(workflow_file: str) -> List[str]`
 
-Generate Flask-AppBuilder code from a workflow definition file.
+Generate PgAppForge code from a workflow definition file.
 
 **Parameters:**
 - `workflow_file` (str): Path to the workflow definition file (.yaml, .yml, or .wdl)
@@ -45,7 +45,7 @@ print(f"Generated {len(files)} files")
 
 ##### `generate_from_yaml_data(workflow_data: Dict[str, Any]) -> List[str]`
 
-Generate Flask-AppBuilder code from parsed workflow data.
+Generate PgAppForge code from parsed workflow data.
 
 **Parameters:**
 - `workflow_data` (Dict[str, Any]): Parsed workflow definition dictionary
@@ -110,7 +110,7 @@ When rendering templates, the following variables are available:
 | Template | Purpose | Output |
 |----------|---------|--------|
 | `models/model.py.j2` | SQLAlchemy models | `models/{entity}_model.py` |
-| `views/view.py.j2` | Flask-AppBuilder views | `views/{step}_view.py` |
+| `views/view.py.j2` | PgAppForge views | `views/{step}_view.py` |
 | `forms/form.py.j2` | WTForms | `forms/{step}_form.py` |
 | `templates/template.html.j2` | Bootstrap templates | `templates/{step}.html` |
 | `api/api.py.j2` | RESTful APIs | `api/workflow_api.py` |
@@ -346,7 +346,7 @@ generator.template_dirs = [
 Define custom field types by extending the field type mapping:
 
 ```python
-from flask_appbuilder.workflow.generators.wdl_generator import WDLGenerator
+from pgappforge.workflow.generators.wdl_generator import WDLGenerator
 
 class CustomWDLGenerator(WDLGenerator):
     def __init__(self, app_name: str):
@@ -402,7 +402,7 @@ fields:
 The generated code includes workflow state management:
 
 ```python
-from flask_appbuilder.workflow.core import WorkflowState
+from pgappforge.workflow.core import WorkflowState
 
 # Create workflow instance
 workflow_state = WorkflowState(
@@ -523,7 +523,7 @@ class TestWorkflowAPI:
 Extend generated views with custom functionality:
 
 ```python
-from flask_appbuilder.workflow.views import WorkflowModelView
+from pgappforge.workflow.views import WorkflowModelView
 
 class AuditMixin:
     def pre_add(self, item):
@@ -546,7 +546,7 @@ class CustomPersonalInfoView(AuditMixin, PersonalInfoView):
 Create custom form widgets:
 
 ```python
-from flask_appbuilder.workflow.widgets import WorkflowFormWidget
+from pgappforge.workflow.widgets import WorkflowFormWidget
 
 class SignaturePadWidget(WorkflowFormWidget):
     template = 'widgets/signature_pad.html'
@@ -661,7 +661,7 @@ class ManagerApprovalView(ModelView):
 Sensitive fields are automatically encrypted:
 
 ```python
-from flask_appbuilder.workflow.security import encrypt_field, decrypt_field
+from pgappforge.workflow.security import encrypt_field, decrypt_field
 
 # Automatic encryption for marked fields
 class Employee(Model):
@@ -676,4 +676,4 @@ class Employee(Model):
 
 ---
 
-This API reference provides comprehensive documentation for developers working with the Flask-AppBuilder Workflow Generation system. For additional examples and advanced usage patterns, see the main documentation and example workflows.
+This API reference provides comprehensive documentation for developers working with the PgAppForge Workflow Generation system. For additional examples and advanced usage patterns, see the main documentation and example workflows.

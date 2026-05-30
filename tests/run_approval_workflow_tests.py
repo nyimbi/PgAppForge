@@ -247,7 +247,7 @@ class ApprovalWorkflowTestRunner:
 
 def main():
     """Main entry point for test execution."""
-    print("🚀 Flask-AppBuilder Approval Workflow - Comprehensive Test Suite")
+    print("🚀 PgForge Approval Workflow - Comprehensive Test Suite")
     print(f"   Test execution started at: {datetime.utcnow().isoformat()}")
     
     runner = ApprovalWorkflowTestRunner()

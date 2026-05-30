@@ -1,8 +1,8 @@
 """
-Flask-AppBuilder Approval Workflow Configuration Example
+PgAppForge Approval Workflow Configuration Example
 
 This configuration demonstrates how to set up the approval workflow system
-for Flask-AppBuilder applications. The approval workflow system provides
+for PgAppForge applications. The approval workflow system provides
 secure, auditable multi-step approval processes for transactions and other
 business processes.
 
@@ -11,19 +11,19 @@ Features demonstrated:
 - MFA requirements for high-value approvals  
 - Database-level locking for financial transactions
 - Comprehensive audit logging and security monitoring
-- Flask-AppBuilder integration with proper permission management
+- PgAppForge integration with proper permission management
 
 To use this configuration:
 1. Copy this file to your application's config directory
 2. Modify the workflows to match your business requirements
-3. Ensure you have the required roles configured in your Flask-AppBuilder application
+3. Ensure you have the required roles configured in your PgAppForge application
 4. Start your application - the approval workflow views will be automatically registered
 """
 
 import os
 from datetime import timedelta
 
-# Flask-AppBuilder Basic Configuration
+# PgAppForge Basic Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key-change-in-production'
 SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///app.db'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -34,7 +34,7 @@ WTF_CSRF_TIME_LIMIT = None
 
 # Register the Approval Workflow Addon Manager
 ADDON_MANAGERS = [
-    'flask_appbuilder.process.approval.addon_manager.ApprovalWorkflowAddonManager',
+    'pgappforge.process.approval.addon_manager.ApprovalWorkflowAddonManager',
 ]
 
 # ===========================
@@ -121,7 +121,7 @@ FAB_APPROVAL_WORKFLOWS = {
 }
 
 # ===========================
-# Flask-AppBuilder Security Configuration
+# PgAppForge Security Configuration
 # ===========================
 
 # Authentication Type
@@ -155,7 +155,7 @@ AUTH_USER_REGISTRATION_ROLE = "Public"
 
 def create_app():
     """
-    Create and configure the Flask-AppBuilder application with approval workflows.
+    Create and configure the PgAppForge application with approval workflows.
     
     The ApprovalWorkflowAddonManager will be automatically loaded via ADDON_MANAGERS
     and will register:
@@ -165,7 +165,7 @@ def create_app():
     - Database models for approval tracking
     """
     from flask import Flask
-    from flask_appbuilder import AppBuilder, SQLA
+    from pgappforge import AppBuilder, SQLA
 
     app = Flask(__name__)
     app.config.from_object(__name__)

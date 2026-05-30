@@ -1,16 +1,16 @@
 # Models and Database API Reference
 
-Complete API reference for Flask-AppBuilder's model interfaces, database integration, and ORM functionality.
+Complete API reference for PgAppForge's model interfaces, database integration, and ORM functionality.
 
 ## 📚 Module Overview
 
 | Module | Description | Primary Classes |
 |--------|-------------|----------------|
-| `flask_appbuilder.models.sqla` | SQLAlchemy integration | `Model`, `SQLA` |
-| `flask_appbuilder.models.sqla.interface` | SQLAlchemy interface | `SQLAInterface` |
-| `flask_appbuilder.models.mixins` | Model mixins and utilities | `AuditMixin`, `FileColumn`, `ImageColumn` |
-| `flask_appbuilder.models.filters` | Database filters | `FilterEqual`, `FilterNotEqual`, `FilterLike` |
-| `flask_appbuilder.models.datamodel` | Data model abstraction | `SQLAModel` |
+| `pgappforge.models.sqla` | SQLAlchemy integration | `Model`, `SQLA` |
+| `pgappforge.models.sqla.interface` | SQLAlchemy interface | `SQLAInterface` |
+| `pgappforge.models.mixins` | Model mixins and utilities | `AuditMixin`, `FileColumn`, `ImageColumn` |
+| `pgappforge.models.filters` | Database filters | `FilterEqual`, `FilterNotEqual`, `FilterLike` |
+| `pgappforge.models.datamodel` | Data model abstraction | `SQLAModel` |
 
 ## 🗄️ Database Integration
 
@@ -19,7 +19,7 @@ Complete API reference for Flask-AppBuilder's model interfaces, database integra
 Main SQLAlchemy integration class.
 
 ```python
-from flask_appbuilder.models.sqla import SQLA
+from pgappforge.models.sqla import SQLA
 
 class SQLA:
     def __init__(self, app: Flask = None):
@@ -54,8 +54,8 @@ class SQLA:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.models.sqla import SQLA
+from pgappforge import AppBuilder
+from pgappforge.models.sqla import SQLA
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
@@ -69,10 +69,10 @@ db.create_all()
 
 ### Model Base Class
 
-Enhanced SQLAlchemy declarative base with Flask-AppBuilder features.
+Enhanced SQLAlchemy declarative base with PgAppForge features.
 
 ```python
-from flask_appbuilder.models.sqla import Model
+from pgappforge.models.sqla import Model
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
@@ -126,7 +126,7 @@ class Employee(Model):
 Interface class that connects models to views.
 
 ```python
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge.models.sqla.interface import SQLAInterface
 
 class SQLAInterface:
     def __init__(self, obj: Model, session: Session = None):
@@ -195,7 +195,7 @@ Build filtered and paginated query.
 query = interface.query()
 
 # Filtered query
-from flask_appbuilder.models.sqla.filters import FilterEqual
+from pgappforge.models.sqla.filters import FilterEqual
 filters = FilterSet([FilterEqual('is_active', True)])
 query = interface.query(filters=filters)
 
@@ -310,7 +310,7 @@ class OptimizedEmployeeInterface(SQLAInterface):
 Adds audit trail functionality to models.
 
 ```python
-from flask_appbuilder.models.mixins import AuditMixin
+from pgappforge.models.mixins import AuditMixin
 from datetime import datetime
 
 class AuditMixin:
@@ -363,7 +363,7 @@ class Employee(Model, AuditMixin):
 Handle file uploads and storage.
 
 ```python
-from flask_appbuilder.models.mixins import FileColumn
+from pgappforge.models.mixins import FileColumn
 
 class FileColumn(TypeDecorator):
     """Column type for file uploads."""
@@ -413,7 +413,7 @@ class Document(Model):
 Handle image uploads with resizing and thumbnails.
 
 ```python
-from flask_appbuilder.models.mixins import ImageColumn
+from pgappforge.models.mixins import ImageColumn
 
 class ImageColumn(FileColumn):
     """Column type for image uploads with resizing."""
@@ -471,7 +471,7 @@ class Profile(Model):
 Foundation classes for database filtering.
 
 ```python
-from flask_appbuilder.models.filters import BaseFilter
+from pgappforge.models.filters import BaseFilter
 
 class BaseFilter:
     """Base class for all filters."""
@@ -495,7 +495,7 @@ class BaseFilter:
 Exact match filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterEqual
+from pgappforge.models.filters import FilterEqual
 
 class FilterEqual(BaseFilter):
     name = 'Equal to'
@@ -510,7 +510,7 @@ class FilterEqual(BaseFilter):
 Not equal filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterNotEqual
+from pgappforge.models.filters import FilterNotEqual
 
 class FilterNotEqual(BaseFilter):
     name = 'Not Equal to'
@@ -525,7 +525,7 @@ class FilterNotEqual(BaseFilter):
 Text search filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterLike
+from pgappforge.models.filters import FilterLike
 
 class FilterLike(BaseFilter):
     name = 'Contains'
@@ -542,7 +542,7 @@ class FilterLike(BaseFilter):
 Starts with text filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterStartsWith
+from pgappforge.models.filters import FilterStartsWith
 
 class FilterStartsWith(BaseFilter):
     name = 'Starts with'
@@ -559,7 +559,7 @@ class FilterStartsWith(BaseFilter):
 Ends with text filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterEndsWith
+from pgappforge.models.filters import FilterEndsWith
 
 class FilterEndsWith(BaseFilter):
     name = 'Ends with'
@@ -576,7 +576,7 @@ class FilterEndsWith(BaseFilter):
 Greater than filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterGreater
+from pgappforge.models.filters import FilterGreater
 
 class FilterGreater(BaseFilter):
     name = 'Greater than'
@@ -591,7 +591,7 @@ class FilterGreater(BaseFilter):
 Less than filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterSmaller
+from pgappforge.models.filters import FilterSmaller
 
 class FilterSmaller(BaseFilter):
     name = 'Smaller than'
@@ -608,7 +608,7 @@ class FilterSmaller(BaseFilter):
 Date/time range filter.
 
 ```python
-from flask_appbuilder.models.filters import FilterDateTimeRange
+from pgappforge.models.filters import FilterDateTimeRange
 
 class FilterDateTimeRange(BaseFilter):
     name = 'Date/Time Range'
@@ -625,7 +625,7 @@ class FilterDateTimeRange(BaseFilter):
 Filter by year.
 
 ```python
-from flask_appbuilder.models.filters import FilterYear
+from pgappforge.models.filters import FilterYear
 from sqlalchemy import extract
 
 class FilterYear(BaseFilter):
@@ -642,7 +642,7 @@ class FilterYear(BaseFilter):
 #### Creating Custom Filters
 
 ```python
-from flask_appbuilder.models.filters import BaseFilter
+from pgappforge.models.filters import BaseFilter
 from sqlalchemy import func
 
 class FilterFullTextSearch(BaseFilter):

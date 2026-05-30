@@ -9,8 +9,8 @@ Define your model (models.py)
 
 ::
 
-    from flask_appbuilder import Model
-    from flask_appbuilder.models.mixins import ImageColumn
+    from pgforge import Model
+    from pgforge.models.mixins import ImageColumn
 
     class Person(Model):
         id = Column(Integer, primary_key=True)
@@ -45,21 +45,21 @@ url for the images, each image is saved on the filesystem using the global confi
 Each image will have two files with different sizes, images are saved as <uuid>_sep_<filename>, and <uuid>_sep_<filename>_thumb
 
 .. note::
-    The "ImageColumn" type, is an extended type from Flask-AppBuilder.
+    The "ImageColumn" type, is an extended type from PgForge.
 
 Later reference this method like it's a column on your view.
 
 To implement image or file support using GridFS from MongoDB is even easier, take a look at the example:
 
-https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/mongoimages
+https://github.com/dpgaspar/PgForge/tree/master/examples/mongoimages
 
 Define your Views (views.py)
 ----------------------------
 
 ::
 
-    from flask_appbuilder import ModelView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge import ModelView
+    from pgforge.models.sqla.interface import SQLAInterface
 
     class PersonModelView(ModelView):
         datamodel = SQLAInterface(Person)
@@ -91,9 +91,9 @@ Next step
 
 Take a look at the example:
 
-https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickimages
+https://github.com/dpgaspar/PgForge/tree/master/examples/quickimages
 
-https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickfiles
+https://github.com/dpgaspar/PgForge/tree/master/examples/quickfiles
 
 Some images:
 

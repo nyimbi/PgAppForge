@@ -1,6 +1,6 @@
 from flask import request
-from flask_appbuilder.api import BaseApi, expose, rison, safe
-from flask_appbuilder.security.decorators import protect
+from pgappforge.api import BaseApi, expose, rison, safe
+from pgappforge.security.decorators import protect
 
 from . import appbuilder
 

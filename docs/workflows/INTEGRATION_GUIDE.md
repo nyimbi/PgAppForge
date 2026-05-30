@@ -1,10 +1,10 @@
-# Flask-AppBuilder Workflow Integration Guide
+# PgAppForge Workflow Integration Guide
 
-Complete guide for integrating the workflow system into existing Flask-AppBuilder applications.
+Complete guide for integrating the workflow system into existing PgAppForge applications.
 
 ## 🎯 Overview
 
-The Flask-AppBuilder Workflow System provides seamless integration with existing applications through:
+The PgAppForge Workflow System provides seamless integration with existing applications through:
 
 - **Minimal Code Changes**: Add workflow capabilities without refactoring existing code
 - **Backward Compatibility**: Existing views and models continue to work unchanged
@@ -15,7 +15,7 @@ The Flask-AppBuilder Workflow System provides seamless integration with existing
 
 ### Prerequisites
 
-- Flask-AppBuilder 4.8.0+
+- PgAppForge 4.8.0+
 - Python 3.8+
 - SQLAlchemy 2.0+
 - Redis (optional, for caching and collaboration)
@@ -60,15 +60,15 @@ flask db upgrade
 ```python
 # app.py
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 # Import workflow components
-from flask_appbuilder.workflow.performance import initialize_performance_system
-from flask_appbuilder.workflow.auto_generation import register_workflow_cli_commands
+from pgappforge.workflow.performance import initialize_performance_system
+from pgappforge.workflow.auto_generation import register_workflow_cli_commands
 
 app = Flask(__name__)
 
-# Standard Flask-AppBuilder setup
+# Standard PgAppForge setup
 db = SQLA(app)
 appbuilder = AppBuilder(app, db.session)
 
@@ -79,7 +79,7 @@ register_workflow_cli_commands(app)
 # Optional: WebSocket support for collaboration
 if app.config.get('ENABLE_COLLABORATION'):
     from flask_socketio import SocketIO
-    from flask_appbuilder.workflow.collaboration import setup_socketio_handlers
+    from pgappforge.workflow.collaboration import setup_socketio_handlers
     
     socketio = SocketIO(app, cors_allowed_origins="*")
     setup_socketio_handlers(socketio)
@@ -134,7 +134,7 @@ class Employee(Model):
     department = Column(String(100))
 
 # workflow_models.py (new)
-from flask_appbuilder.workflow.mixins import WorkflowMixin
+from pgappforge.workflow.mixins import WorkflowMixin
 from .models import Employee as BaseEmployee
 
 class WorkflowEmployee(WorkflowMixin, BaseEmployee):
@@ -152,7 +152,7 @@ Modify existing models to add workflow capabilities:
 
 ```python
 # models.py (modified)
-from flask_appbuilder.workflow.mixins import WorkflowMixin
+from pgappforge.workflow.mixins import WorkflowMixin
 
 class Employee(WorkflowMixin, Model):
     __tablename__ = 'employee'
@@ -183,7 +183,7 @@ class EmployeeView(ModelView):
     # ... existing configuration
 
 # workflow_views.py (new)
-from flask_appbuilder.workflow.views import WorkflowModelView
+from pgappforge.workflow.views import WorkflowModelView
 
 class EmployeeWorkflowView(WorkflowModelView):
     datamodel = SQLAInterface(WorkflowEmployee)
@@ -223,7 +223,7 @@ Gradually replace existing views with workflow-enabled versions:
 
 ```python
 # views.py (modified)
-from flask_appbuilder.workflow.views import WorkflowModelView
+from pgappforge.workflow.views import WorkflowModelView
 
 class EmployeeView(WorkflowModelView):  # Changed parent class
     datamodel = SQLAInterface(Employee)
@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
 import unittest
 from unittest.mock import patch
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 class TestWorkflowIntegration(unittest.TestCase):
     def setUp(self):
@@ -686,8 +686,8 @@ def test_complete_user_journey():
 
 ```python
 # monitoring.py
-from flask_appbuilder.workflow.performance import get_workflow_cache
-from flask_appbuilder.workflow.ai_optimization import get_ai_optimizer
+from pgappforge.workflow.performance import get_workflow_cache
+from pgappforge.workflow.ai_optimization import get_ai_optimizer
 
 def get_workflow_health_metrics():
     """Get workflow system health metrics."""
@@ -716,7 +716,7 @@ def workflow_metrics():
 import logging
 
 # Configure workflow-specific logging
-workflow_logger = logging.getLogger('flask_appbuilder.workflow')
+workflow_logger = logging.getLogger('pgappforge.workflow')
 workflow_logger.setLevel(logging.INFO)
 
 # Add workflow metrics to existing log aggregation
@@ -742,7 +742,7 @@ flask db migrate -m "Add workflow tables"
 flask db upgrade
 
 # Or create tables manually
-from flask_appbuilder.workflow.core import WorkflowState
+from pgappforge.workflow.core import WorkflowState
 db.create_all()
 ```
 
@@ -787,7 +787,7 @@ ENABLE_EXTERNAL_AI_PROVIDERS = True  # Use external APIs as fallback
 **Solution**:
 ```python
 # Grant workflow permissions
-from flask_appbuilder.security.sqla.models import Role, Permission
+from pgappforge.security.sqla.models import Role, Permission
 
 # Create workflow permissions
 workflow_permissions = [
@@ -816,7 +816,7 @@ db.session.commit()
 **Solution**:
 ```python
 # Enable query optimization
-from flask_appbuilder.workflow.performance import get_query_optimizer
+from pgappforge.workflow.performance import get_query_optimizer
 optimizer = get_query_optimizer()
 optimizer.optimize_workflow_queries()
 
@@ -908,4 +908,4 @@ Track these metrics to measure integration success:
 - Report bugs and issues
 - Participate in discussions
 
-This integration guide provides a comprehensive roadmap for successfully implementing the Flask-AppBuilder Workflow System in your existing applications. Follow the step-by-step process, monitor the success metrics, and continuously optimize based on real-world usage patterns.
+This integration guide provides a comprehensive roadmap for successfully implementing the PgAppForge Workflow System in your existing applications. Follow the step-by-step process, monitor the success metrics, and continuously optimize based on real-world usage patterns.

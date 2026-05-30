@@ -1,8 +1,8 @@
 """
-Examples of using Flask-AppBuilder collaborative validation utilities.
+Examples of using PgAppForge collaborative validation utilities.
 
 This file demonstrates various validation patterns and how to integrate
-them into Flask-AppBuilder applications for robust input validation.
+them into PgAppForge applications for robust input validation.
 """
 
 from datetime import datetime
@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from flask import request, jsonify
 
 # Import validation utilities
-from flask_appbuilder.collaborative.utils.validation import (
+from pgappforge.collaborative.utils.validation import (
     ValidationResult,
     FieldValidator,
     UserValidator,
@@ -304,7 +304,7 @@ def create_flask_validation_decorators():
     """
     Example: Create Flask route decorators using validation utilities.
 
-    Shows how to integrate validation into Flask-AppBuilder views.
+    Shows how to integrate validation into PgAppForge views.
     """
     from functools import wraps
     from flask import request, jsonify
@@ -456,7 +456,7 @@ def validate_bulk_user_import(users_data: List[Dict[str, Any]]) -> Dict[str, Any
 def run_validation_examples():
     """Run examples to demonstrate validation utilities."""
 
-    print("🔍 Flask-AppBuilder Collaborative Validation Examples")
+    print("🔍 PgAppForge Collaborative Validation Examples")
     print("=" * 60)
 
     # Example 1: User registration validation

@@ -1,7 +1,7 @@
 from flask import Markup, url_for
-from flask_appbuilder import Model
-from flask_appbuilder.filemanager import ImageManager
-from flask_appbuilder.models.mixins import ImageColumn
+from pgappforge import Model
+from pgappforge.filemanager import ImageManager
+from pgappforge.models.mixins import ImageColumn
 from sqlalchemy import Column, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 

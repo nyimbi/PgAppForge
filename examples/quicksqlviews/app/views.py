@@ -1,9 +1,9 @@
 import calendar
 
-from flask_appbuilder import ModelView
-from flask_appbuilder.charts.views import GroupByChartView
-from flask_appbuilder.models.group import aggregate_count
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.charts.views import GroupByChartView
+from pgappforge.models.group import aggregate_count
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from . import appbuilder, db
 from .models import Contact, ContactGroup, ContactGroupView, Gender

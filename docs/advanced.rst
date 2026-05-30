@@ -26,7 +26,7 @@ and then use the **@renders** decorator to tell the framework to map you class m
 with a certain Model property::
 
     
-    from flask_appbuilder.models.decorators import renders
+    from pgforge.models.decorators import renders
 
     class MyModel(Model):
         id = Column(Integer, primary_key=True)
@@ -59,11 +59,11 @@ On this next example we are filtering a view by the logged in user and with colu
 
 
     from flask import g
-    from flask_appbuilder import ModelView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
-    from flask_appbuilder.models.sqla.filters import FilterEqualFunction, FilterStartsWith
+    from pgforge import ModelView
+    from pgforge.models.sqla.interface import SQLAInterface
+    from pgforge.models.sqla.filters import FilterEqualFunction, FilterStartsWith
     # If you're using Mongo Engine you should import filters like this, everything else is exactly the same
-    # from flask_appbuilder.models.mongoengine.filters import FilterStartsWith, FilterEqualFunction
+    # from pgforge.models.mongoengine.filters import FilterStartsWith, FilterEqualFunction
 
     from .models import MyTable
 
@@ -80,7 +80,7 @@ On this next example we are filtering a view by the logged in user and with colu
 Since version 1.5.0 you can use base_filter with dotted notation, necessary joins will be handled for you on
 the background. Study the following example to see how:
 
-https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/extendsecurity
+https://github.com/dpgaspar/PgForge/tree/master/examples/extendsecurity
 
 
 Default Order
@@ -144,7 +144,7 @@ Forms - Readonly fields
 
 Define/override readonly fields like this, first define a new **Readonly** field::
 
-    from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
+    from pgforge.fieldwidgets import BS3TextFieldWidget
 
 
     class BS3TextFieldROWidget(BS3TextFieldWidget):
@@ -201,7 +201,7 @@ Forms - Custom query on related fields
 
 You can create a custom query filter for all related columns like this::
 
-    from flask_appbuilder.models.sqla.filters import FilterStartsWith
+    from pgforge.models.sqla.filters import FilterStartsWith
 
 
     class ContactModelView(ModelView):

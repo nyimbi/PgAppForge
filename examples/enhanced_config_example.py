@@ -1,7 +1,7 @@
 """
-Enhanced Flask-AppBuilder Configuration Example
+Enhanced PgAppForge Configuration Example
 
-This example shows how to configure a Flask-AppBuilder application to use
+This example shows how to configure a PgAppForge application to use
 the new advanced features including:
 - Advanced Analytics BI Platform (MetricCardWidget, Dashboard Layout Manager)
 - Export Enhancement System (CSV/Excel/PDF exports)
@@ -27,7 +27,7 @@ SQLALCHEMY_ENGINE_OPTIONS = {
     'pool_pre_ping': True
 }
 
-# Flask-AppBuilder Configuration
+# PgAppForge Configuration
 APP_NAME = "Enhanced Analytics Platform"
 APP_THEME = "bootstrap4"  # or "cerulean", "cosmo", "cyborg", "darkly", "flatly", etc.
 APP_ICON = "fa-dashboard"
@@ -47,13 +47,13 @@ WTF_CSRF_TIME_LIMIT = None
 # Enhanced Features: Register the new addon managers
 ADDON_MANAGERS = [
     # Alerting System Manager
-    'flask_appbuilder.alerting.manager.AlertingManager',
+    'pgappforge.alerting.manager.AlertingManager',
     
     # Export Enhancement Manager  
-    'flask_appbuilder.export.manager.ExportManager',
+    'pgappforge.export.manager.ExportManager',
     
     # Approval Workflow System Manager
-    'flask_appbuilder.process.approval.addon_manager.ApprovalWorkflowAddonManager',
+    'pgappforge.process.approval.addon_manager.ApprovalWorkflowAddonManager',
     
     # Add other existing managers here if you have them
     # 'your_app.custom_manager.CustomManager',
@@ -244,12 +244,12 @@ LOGGING_CONFIG = {
         'handlers': ['wsgi']
     },
     'loggers': {
-        'flask_appbuilder': {
+        'pgappforge': {
             'level': 'INFO',
             'handlers': ['wsgi'],
             'propagate': False
         },
-        'flask_appbuilder.alerting': {
+        'pgappforge.alerting': {
             'level': 'DEBUG',
             'handlers': ['wsgi', 'file'],
             'propagate': False

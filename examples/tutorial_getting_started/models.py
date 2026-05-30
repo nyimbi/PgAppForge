@@ -1,12 +1,12 @@
 """
-Database Models for Flask-AppBuilder Getting Started Tutorial
+Database Models for PgAppForge Getting Started Tutorial
 
 This module defines the data models for the task management application,
 including Task and TaskCategory models with AI and collaborative features.
 """
 
 from datetime import datetime, date
-from flask_appbuilder import Model
+from pgappforge import Model
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, 
     ForeignKey, Date, Enum as SQLEnum

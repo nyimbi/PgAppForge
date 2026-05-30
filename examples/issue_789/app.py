@@ -1,10 +1,10 @@
 import sys
-from flask_appbuilder import SQLA, AppBuilder, ModelView, Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import SQLA, AppBuilder, ModelView, Model
+from pgappforge.models.sqla.interface import SQLAInterface
 from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from flask import Flask
-from flask_appbuilder.actions import action
+from pgappforge.actions import action
 
 config = {
     'SQLALCHEMY_DATABASE_URI': 'sqlite:///test.db',

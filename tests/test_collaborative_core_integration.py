@@ -12,7 +12,7 @@ from datetime import datetime
 from unittest.mock import Mock, MagicMock
 
 # Test core collaborative utilities
-from flask_appbuilder.collaborative.utils.validation import (
+from pgappforge.collaborative.utils.validation import (
     ValidationResult,
     FieldValidator,
     UserValidator,
@@ -21,14 +21,14 @@ from flask_appbuilder.collaborative.utils.validation import (
     DataValidator,
     validate_complete_message,
 )
-from flask_appbuilder.collaborative.utils.audit_logging import (
+from pgappforge.collaborative.utils.audit_logging import (
     AuditLogger,
     AuditEvent,
     AuditEventType,
     ErrorCategory,
     ErrorSeverity,
 )
-from flask_appbuilder.collaborative.utils.error_handling import (
+from pgappforge.collaborative.utils.error_handling import (
     CollaborativeError,
     ValidationError,
     AuthenticationError,
@@ -400,7 +400,7 @@ class CoreIntegrationTest(unittest.TestCase):
         """Test that all imports work correctly and modules are structured properly."""
 
         # Test that we can import all main utilities
-        from flask_appbuilder.collaborative.utils import (
+        from pgappforge.collaborative.utils import (
             ValidationResult,
             FieldValidator,
             UserValidator,

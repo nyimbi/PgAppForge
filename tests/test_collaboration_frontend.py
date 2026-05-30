@@ -1,5 +1,5 @@
 """
-Frontend JavaScript Tests for Flask-AppBuilder Collaboration Engine
+Frontend JavaScript Tests for PgAppForge Collaboration Engine
 
 Tests JavaScript components including collaboration manager, presence indicators,
 conflict resolution UI, and browser-based functionality.
@@ -10,7 +10,7 @@ import os
 import json
 from unittest.mock import Mock, patch, MagicMock
 from flask import Flask, render_template_string
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 
 class TestCollaborationFrontend(unittest.TestCase):
@@ -52,9 +52,9 @@ class TestCollaborationFrontend(unittest.TestCase):
     def test_javascript_files_exist(self):
         """Test that required JavaScript files exist"""
         js_files = [
-            'flask_appbuilder/static/appbuilder/js/collaboration/collaboration-manager.js',
-            'flask_appbuilder/static/appbuilder/js/collaboration/presence-manager.js',
-            'flask_appbuilder/static/appbuilder/js/collaboration/conflict-resolver.js'
+            'pgappforge/static/appbuilder/js/collaboration/collaboration-manager.js',
+            'pgappforge/static/appbuilder/js/collaboration/presence-manager.js',
+            'pgappforge/static/appbuilder/js/collaboration/conflict-resolver.js'
         ]
         
         for js_file in js_files:
@@ -64,7 +64,7 @@ class TestCollaborationFrontend(unittest.TestCase):
     def test_css_files_exist(self):
         """Test that required CSS files exist"""
         css_files = [
-            'flask_appbuilder/static/appbuilder/css/collaboration.css'
+            'pgappforge/static/appbuilder/css/collaboration.css'
         ]
         
         for css_file in css_files:
@@ -74,10 +74,10 @@ class TestCollaborationFrontend(unittest.TestCase):
     def test_template_files_exist(self):
         """Test that required template files exist"""
         template_files = [
-            'flask_appbuilder/templates/appbuilder/collaboration/widgets/collaborative_form.html',
-            'flask_appbuilder/templates/appbuilder/collaboration/widgets/presence_indicator.html',
-            'flask_appbuilder/templates/appbuilder/collaboration/widgets/conflict_resolution.html',
-            'flask_appbuilder/templates/appbuilder/collaboration/widgets/collaboration_toolbar.html'
+            'pgappforge/templates/appbuilder/collaboration/widgets/collaborative_form.html',
+            'pgappforge/templates/appbuilder/collaboration/widgets/presence_indicator.html',
+            'pgappforge/templates/appbuilder/collaboration/widgets/conflict_resolution.html',
+            'pgappforge/templates/appbuilder/collaboration/widgets/collaboration_toolbar.html'
         ]
         
         for template_file in template_files:
@@ -261,8 +261,8 @@ class TestCollaborationFrontend(unittest.TestCase):
             self.assertIn('"can_collaborate", "can_comment"', rendered)
     
     def test_widget_template_integration(self):
-        """Test widget template integration with Flask-AppBuilder"""
-        from flask_appbuilder.collaboration.widgets import (
+        """Test widget template integration with PgAppForge"""
+        from pgappforge.collaboration.widgets import (
             CollaborativeFormWidget,
             PresenceIndicatorWidget,
             ConflictResolutionWidget,
@@ -544,7 +544,7 @@ class TestJavaScriptModules(unittest.TestCase):
         """Set up test environment"""
         self.js_base_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
-            'flask_appbuilder/static/appbuilder/js/collaboration'
+            'pgappforge/static/appbuilder/js/collaboration'
         )
     
     def test_javascript_module_exports(self):

@@ -1,8 +1,8 @@
 import datetime
 
 from flask import g
-from flask_appbuilder import Model
-from flask_appbuilder.security.sqla.models import User
+from pgappforge import Model
+from pgappforge.security.sqla.models import User
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship

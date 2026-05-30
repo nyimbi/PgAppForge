@@ -1,5 +1,5 @@
 # 📋 SYSTEM REQUIREMENTS
-## **Flask-AppBuilder Apache AGE Graph Analytics Platform**
+## **PgForge Apache AGE Graph Analytics Platform**
 
 > **Complete hardware, software, and infrastructure requirements**  
 > For optimal performance and production deployment
@@ -205,7 +205,7 @@ tcp-keepalive 300
 ### **Python Dependencies** *(Core)*
 ```txt
 Flask==2.3.3
-Flask-AppBuilder==4.3.11
+PgForge==4.3.11
 SQLAlchemy==1.4.53
 psycopg2-binary==2.9.9
 redis==5.0.1
@@ -524,10 +524,10 @@ iperf3 -c target_server -t 60
 
 ---
 
-**🎯 This comprehensive requirements document ensures your Flask-AppBuilder Apache AGE Graph Analytics Platform deployment is optimally configured for performance, security, and scalability.**
+**🎯 This comprehensive requirements document ensures your PgForge Apache AGE Graph Analytics Platform deployment is optimally configured for performance, security, and scalability.**
 
 ---
 
-*System Requirements v1.0 - Flask-AppBuilder Apache AGE Graph Analytics Platform*  
+*System Requirements v1.0 - PgForge Apache AGE Graph Analytics Platform*  
 *Last Updated: $(date +%Y-%m-%d)*  
 *For technical support: support@graph-analytics.local*

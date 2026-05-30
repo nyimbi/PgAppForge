@@ -1,5 +1,5 @@
 """
-Comprehensive security integration tests for Flask-AppBuilder security fixes.
+Comprehensive security integration tests for PgAppForge security fixes.
 
 These tests ensure all security improvements work together correctly and
 provide comprehensive protection against security vulnerabilities.
@@ -14,10 +14,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, Mock
 from flask import Flask
 
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.plugins import BasePlugin, PluginMetadata, PluginPriority
-from flask_appbuilder.cli.utils.import_utils import validate_imports_secure
-from flask_appbuilder.security.sql_utils import SQLIdentifierValidator, SecureDDLExecutor
+from pgappforge import AppBuilder
+from pgappforge.plugins import BasePlugin, PluginMetadata, PluginPriority
+from pgappforge.cli.utils.import_utils import validate_imports_secure
+from pgappforge.security.sql_utils import SQLIdentifierValidator, SecureDDLExecutor
 
 
 class TestSecurityIntegration:
@@ -37,7 +37,7 @@ class TestSecurityIntegration:
         weak_app.config['SECRET_KEY'] = 'dev'
 
         # Should log warning about weak secret key
-        with patch('flask_appbuilder.base.log') as mock_log:
+        with patch('pgappforge.base.log') as mock_log:
             try:
                 appbuilder = AppBuilder(weak_app)
                 # Check if warning was logged about weak secret key
@@ -130,7 +130,7 @@ class TestSecurityIntegration:
             self.app.config['SECURITY_HEADERS_ENABLED'] = True
 
             # Mock the security headers module
-            with patch('flask_appbuilder.base.init_security_headers') as mock_init:
+            with patch('pgappforge.base.init_security_headers') as mock_init:
                 appbuilder = AppBuilder(self.app)
                 # Security headers should be initialized
                 mock_init.assert_called_once_with(self.app)
@@ -141,7 +141,7 @@ class TestSecurityIntegration:
             self.app.config['RATE_LIMITING_ENABLED'] = True
 
             # Mock the rate limiting module
-            with patch('flask_appbuilder.base.init_rate_limiting') as mock_init:
+            with patch('pgappforge.base.init_rate_limiting') as mock_init:
                 mock_init.return_value = Mock()  # Mock rate limiter
                 appbuilder = AppBuilder(self.app)
                 # Rate limiting should be initialized
@@ -162,9 +162,9 @@ class TestSecurityIntegration:
 
     def test_logging_security_events(self):
         """Test security event logging across all components."""
-        with patch('flask_appbuilder.cli.utils.import_utils.logger') as mock_import_logger, \
-             patch('flask_appbuilder.security.sql_utils.logger') as mock_sql_logger, \
-             patch('flask_appbuilder.plugins.plugin_validator.logger') as mock_plugin_logger:
+        with patch('pgappforge.cli.utils.import_utils.logger') as mock_import_logger, \
+             patch('pgappforge.security.sql_utils.logger') as mock_sql_logger, \
+             patch('pgappforge.plugins.plugin_validator.logger') as mock_plugin_logger:
 
             # Trigger security events
 
@@ -283,8 +283,8 @@ class TestSecurityIntegration:
             })
 
             # Mock external dependencies
-            with patch('flask_appbuilder.base.init_security_headers'), \
-                 patch('flask_appbuilder.base.init_rate_limiting') as mock_rate_limit:
+            with patch('pgappforge.base.init_security_headers'), \
+                 patch('pgappforge.base.init_rate_limiting') as mock_rate_limit:
 
                 mock_rate_limit.return_value = Mock()
                 appbuilder = AppBuilder(self.app)
@@ -348,7 +348,7 @@ class TestSecurityIntegration:
 
     def test_security_audit_trail(self):
         """Test that security events create proper audit trails."""
-        with patch('flask_appbuilder.cli.utils.import_utils.logger') as mock_logger:
+        with patch('pgappforge.cli.utils.import_utils.logger') as mock_logger:
 
             # Trigger security event
             malicious_imports = ["import subprocess"]

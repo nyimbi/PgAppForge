@@ -2,7 +2,7 @@
 """
 Simple FAISS Integration Test
 
-Direct test of FAISS components without full Flask-AppBuilder framework import.
+Direct test of FAISS components without full PgAppForge framework import.
 """
 
 import os
@@ -58,8 +58,8 @@ if faiss:
 print("\n🧪 Testing RAG components...")
 
 try:
-    # Import RAG components directly without Flask-AppBuilder framework
-    from flask_appbuilder.collaborative.ai.rag_engine import DocumentProcessor, DocumentType, ChunkingStrategy
+    # Import RAG components directly without PgAppForge framework
+    from pgappforge.collaborative.ai.rag_engine import DocumentProcessor, DocumentType, ChunkingStrategy
     print("✅ DocumentProcessor imported successfully")
 
     # Test document processing
@@ -71,7 +71,7 @@ try:
     )
 
     test_content = """
-    Flask-AppBuilder is a rapid application development framework built on Flask.
+    PgAppForge is a rapid application development framework built on Flask.
     It provides automatic CRUD generation, detailed security, and comprehensive API support.
     The framework includes advanced features like collaborative tools and AI integration.
     """
@@ -98,7 +98,7 @@ except Exception as e:
 print("\n🧪 Testing FAISS integration components...")
 
 try:
-    from flask_appbuilder.collaborative.ai.faiss_vector_store import (
+    from pgappforge.collaborative.ai.faiss_vector_store import (
         FAISSVectorStore, IndexConfig, FAISS_AVAILABLE
     )
     print(f"✅ FAISS integration components imported successfully")
@@ -134,7 +134,7 @@ except Exception as e:
 print("\n🧪 Testing RAG factory components...")
 
 try:
-    from flask_appbuilder.collaborative.ai.rag_factory import RAGConfig
+    from pgappforge.collaborative.ai.rag_factory import RAGConfig
     print("✅ RAGFactory components imported successfully")
 
     # Test configuration

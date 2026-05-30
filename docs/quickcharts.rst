@@ -40,8 +40,8 @@ we must create a function to calculate the *college_perc*::
 
 Now we are ready to define our view::
 
-    from flask_appbuilder.charts.views import DirectByChartView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge.charts.views import DirectByChartView
+    from pgforge.models.sqla.interface import SQLAInterface
 
     class CountryDirectChartView(DirectByChartView):
         datamodel = SQLAInterface(CountryStats)
@@ -75,8 +75,8 @@ The **definitions** property respects the following grammar::
 Where 'label' and 'formatter' are optional parameters.
 So on the same view you can have multiple direct chart definitions, like this::
 
-    from flask_appbuilder.charts.views import DirectByChartView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge.charts.views import DirectByChartView
+    from pgforge.models.sqla.interface import SQLAInterface
 
     class CountryDirectChartView(DirectByChartView):
         datamodel = SQLAInterface(CountryStats)
@@ -129,7 +129,7 @@ support has many countries has we like.
 The goal is to display a chart showing the unemployment
 versus the percentage of the population with higher education per country::
 
-    from flask_appbuilder import Model
+    from pgforge import Model
 
     class Country(Model):
         id = Column(Integer, primary_key=True)
@@ -161,9 +161,9 @@ versus the percentage of the population with higher education per country::
 
 Now we are ready to define our view::
 
-    from flask_appbuilder.charts.views import GroupByChartView
-    from flask_appbuilder.models.group import aggregate_count, aggregate_sum, aggregate_avg
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge.charts.views import GroupByChartView
+    from pgforge.models.group import aggregate_count, aggregate_sum, aggregate_avg
+    from pgforge.models.sqla.interface import SQLAInterface
 
 
     class CountryGroupByChartView(GroupByChartView):
@@ -193,9 +193,9 @@ A different and interesting example is to group data monthly from all countries,
 **formater** property::
 
     import calendar
-    from flask_appbuilder.charts.views import GroupByChartView
-    from flask_appbuilder.models.group import aggregate_count, aggregate_sum, aggregate_avg
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge.charts.views import GroupByChartView
+    from pgforge.models.group import aggregate_count, aggregate_sum, aggregate_avg
+    from pgforge.models.sqla.interface import SQLAInterface
 
     def pretty_month_year(value):
         return calendar.month_name[value.month] + ' ' + str(value.year)
@@ -290,7 +290,7 @@ This dictionary is composed by key and a tuple: {'KEY LABEL FOR X COL':('X COL',
 
 Remember 'X COL', 'Ys COL' are identifying columns from the data model.
 
-Take look at a more detailed example on `quickcharts <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickcharts>`_.
+Take look at a more detailed example on `quickcharts <https://github.com/dpgaspar/PgForge/tree/master/examples/quickcharts>`_.
 
 Register (views.py)
 -------------------
@@ -300,7 +300,7 @@ Register everything, to present your charts and create the menu::
     appbuilder.add_view(ContactTimeChartView, "Contacts Birth Chart", icon="fa-envelope", category="Contacts")
     appbuilder.add_view(ContactChartView, "Contacts Chart", icon="fa-dashboard", category="Contacts")
 
-You can find this example at: https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickhowto
+You can find this example at: https://github.com/dpgaspar/PgForge/tree/master/examples/quickhowto
 
 Take a look at the :doc:`api`. For additional customization
 

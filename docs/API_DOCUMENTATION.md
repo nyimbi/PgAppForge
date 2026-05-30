@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides comprehensive API documentation for the enterprise-grade graph analytics platform built on Flask-AppBuilder with Apache AGE integration. The platform provides 10 major feature suites with over 100 API endpoints for graph management, analysis, and visualization.
+This document provides comprehensive API documentation for the enterprise-grade graph analytics platform built on PgForge with Apache AGE integration. The platform provides 10 major feature suites with over 100 API endpoints for graph management, analysis, and visualization.
 
 ## Base URL
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-End-to-end integration tests for Flask-AppBuilder tutorials.
+End-to-end integration tests for PgAppForge tutorials.
 
 This test suite validates complete tutorial workflows, ensuring that
 all examples work together correctly and provide the expected user experience.
@@ -114,7 +114,7 @@ class TutorialWorkflowTest(unittest.TestCase):
 
             # Test 2: Database models are properly registered
             from models import Task, TaskCategory, Priority, Status
-            from flask_appbuilder.models.sqla import Model
+            from pgappforge.models.sqla import Model
 
             # Create database tables
             Model.metadata.create_all(bind=flask_app.appbuilder.get_session.bind)
@@ -236,7 +236,7 @@ class TutorialWorkflowTest(unittest.TestCase):
 
             with self.tutorial_app_context() as flask_app:
                 from models import Task, TaskCategory
-                from flask_appbuilder.models.sqla import Model
+                from pgappforge.models.sqla import Model
 
                 # Create database
                 Model.metadata.create_all(bind=flask_app.appbuilder.get_session.bind)
@@ -281,7 +281,7 @@ class TutorialWorkflowTest(unittest.TestCase):
             with self.tutorial_app_context() as flask_app:
                 from models import Task, TaskCategory, Status, Priority
                 from views import TaskDashboardView
-                from flask_appbuilder.models.sqla import Model
+                from pgappforge.models.sqla import Model
 
                 # Create database
                 Model.metadata.create_all(bind=flask_app.appbuilder.get_session.bind)
@@ -387,7 +387,7 @@ class TutorialWorkflowTest(unittest.TestCase):
                 # Test that permissions are created for our models
                 from models import Task, TaskCategory
 
-                # The permissions should be automatically created by Flask-AppBuilder
+                # The permissions should be automatically created by PgAppForge
                 task_permissions = sm.get_all_permissions()
                 permission_names = [perm.name for perm in task_permissions]
 
@@ -458,7 +458,7 @@ class TutorialWorkflowTest(unittest.TestCase):
 
             with self.tutorial_app_context() as flask_app:
                 from models import Task, TaskCategory
-                from flask_appbuilder.models.sqla import Model
+                from pgappforge.models.sqla import Model
 
                 # Create database
                 Model.metadata.create_all(bind=flask_app.appbuilder.get_session.bind)
@@ -530,7 +530,7 @@ class TutorialPerformanceTest(unittest.TestCase):
 
         with flask_app.app_context():
             from models import Task, TaskCategory
-            from flask_appbuilder.models.sqla import Model
+            from pgappforge.models.sqla import Model
 
             # Create database
             Model.metadata.create_all(bind=flask_app.appbuilder.get_session.bind)

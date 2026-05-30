@@ -11,7 +11,7 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-from flask_appbuilder.process.approval.workflow_engine import ApprovalWorkflowEngine
+from pgappforge.process.approval.workflow_engine import ApprovalWorkflowEngine
 
 
 class TestPerformanceFix(unittest.TestCase):

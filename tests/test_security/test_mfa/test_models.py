@@ -18,12 +18,12 @@ from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Base
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Base
 from werkzeug.security import check_password_hash
 from cryptography.fernet import Fernet
 
-from flask_appbuilder.security.mfa.models import (
+from pgappforge.security.mfa.models import (
     MFAEncryptionMixin, UserMFA, MFABackupCode, 
     MFAVerification, MFAPolicy
 )
@@ -71,7 +71,7 @@ class TestMFAEncryptionMixin:
         app.config['DEBUG'] = True
         
         with app.app_context():
-            with patch('flask_appbuilder.security.mfa.models.log') as mock_log:
+            with patch('pgappforge.security.mfa.models.log') as mock_log:
                 key = encryption_mixin._get_encryption_key()
                 assert key is not None
                 mock_log.warning.assert_called_once()
@@ -130,7 +130,7 @@ class TestUserMFA:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture
@@ -324,7 +324,7 @@ class TestMFABackupCode:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture
@@ -476,7 +476,7 @@ class TestMFAVerification:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture
@@ -603,7 +603,7 @@ class TestMFAPolicy:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture
@@ -776,7 +776,7 @@ class TestMFAEventListeners:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     def test_setup_token_generation_on_insert(self, app, db):
@@ -793,7 +793,7 @@ class TestMFAEventListeners:
             assert mfa.setup_token is not None
             assert len(mfa.setup_token) > 0
     
-    @patch('flask_appbuilder.security.mfa.models.log')
+    @patch('pgappforge.security.mfa.models.log')
     def test_mfa_status_change_logging(self, mock_log, app, db):
         """Test logging of MFA status changes."""
         with app.app_context():

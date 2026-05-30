@@ -19,9 +19,9 @@ print("🚀 FAISS Integration Working Demo")
 print("=" * 40)
 
 # Import the now-working components
-from flask_appbuilder.collaborative.ai.rag_engine import DocumentType, DocumentProcessor, ChunkingStrategy
-from flask_appbuilder.collaborative.ai.rag_factory import RAGConfig
-from flask_appbuilder.collaborative.ai.faiss_vector_store import FAISSVectorStore, IndexConfig, FAISS_AVAILABLE
+from pgappforge.collaborative.ai.rag_engine import DocumentType, DocumentProcessor, ChunkingStrategy
+from pgappforge.collaborative.ai.rag_factory import RAGConfig
+from pgappforge.collaborative.ai.faiss_vector_store import FAISSVectorStore, IndexConfig, FAISS_AVAILABLE
 
 # Simple mock embedding model
 class MockEmbeddingModel:
@@ -77,7 +77,7 @@ async def demo_similarity_search():
 
     # Test documents with different topics
     documents = [
-        ("doc1", "Flask-AppBuilder is a rapid application development framework for Python web applications."),
+        ("doc1", "PgAppForge is a rapid application development framework for Python web applications."),
         ("doc2", "FAISS provides efficient similarity search and clustering of dense vectors."),
         ("doc3", "Machine learning models require large datasets for training and validation."),
         ("doc4", "Vector databases enable semantic search capabilities for modern applications."),
@@ -143,7 +143,7 @@ async def demo_document_processing():
 
     # Test with different document types
     test_docs = [
-        ("Flask-AppBuilder provides rapid application development. It includes security features. The framework supports database integration.", DocumentType.TEXT),
+        ("PgAppForge provides rapid application development. It includes security features. The framework supports database integration.", DocumentType.TEXT),
         ("<h1>Vector Search</h1><p>FAISS enables <strong>fast</strong> similarity search for machine learning applications.</p>", DocumentType.HTML),
         ("# Machine Learning\n\nML models process **large datasets**.\n\n## Training\n\nRequires significant computational resources.", DocumentType.MARKDOWN),
         ("def similarity_search(query, vectors):\n    '''Find most similar vectors.'''\n    distances = compute_distances(query, vectors)\n    return sorted_indices(distances)", DocumentType.CODE)
@@ -190,7 +190,7 @@ async def main():
         print("   • No more circular import issues")
         print("   • All components can be imported")
         print("   • FAISS integration is functional")
-        print("   • Ready for Flask-AppBuilder deployment")
+        print("   • Ready for PgAppForge deployment")
 
         print(f"\n💡 FAISS Version: {FAISS_AVAILABLE}")
         if FAISS_AVAILABLE:

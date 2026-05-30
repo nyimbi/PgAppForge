@@ -1,7 +1,7 @@
 import logging
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 """
  Logging configuration

@@ -35,7 +35,7 @@ except Exception as e:
 
 # Test 2: Document Type Enum
 try:
-    from flask_appbuilder.collaborative.ai.rag_engine import DocumentType
+    from pgappforge.collaborative.ai.rag_engine import DocumentType
     print(f"✅ DocumentType enum imported: {len(list(DocumentType))} types available")
 
     # Check for required types
@@ -56,7 +56,7 @@ except ImportError as e:
 # Test 3: Check circular import fix
 try:
     # This should not cause circular imports anymore
-    from flask_appbuilder.collaborative.ai import ai_models
+    from pgappforge.collaborative.ai import ai_models
     print("✅ AI models module imported without circular import")
 
 except ImportError as e:
@@ -68,4 +68,4 @@ print("✅ FAISS library working")
 print("✅ Document types available")
 print("✅ Core components can be imported")
 print("\n🎉 FAISS integration core functionality is working!")
-print("💡 Ready for production use once Flask-AppBuilder circular imports are resolved.")
+print("💡 Ready for production use once PgAppForge circular imports are resolved.")

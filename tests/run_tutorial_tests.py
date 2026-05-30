@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive test runner for Flask-AppBuilder tutorial tests.
+Comprehensive test runner for PgForge tutorial tests.
 
 This script runs all tutorial tests, generates reports, and validates
 that the tutorial examples work correctly without runtime errors.
@@ -315,7 +315,7 @@ class TutorialTestRunner:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flask-AppBuilder Tutorial Test Report</title>
+    <title>PgForge Tutorial Test Report</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 40px; }}
         .header {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }}
@@ -333,7 +333,7 @@ class TutorialTestRunner:
 </head>
 <body>
     <div class="header">
-        <h1>Flask-AppBuilder Tutorial Test Report</h1>
+        <h1>PgForge Tutorial Test Report</h1>
         <p>Generated: {results.get('start_time', 'Unknown')}</p>
         <p>Duration: {results.get('total_duration', 0):.2f} seconds</p>
     </div>
@@ -434,7 +434,7 @@ class TutorialTestRunner:
 
 def main():
     """Main function for test runner."""
-    parser = argparse.ArgumentParser(description='Run Flask-AppBuilder tutorial tests')
+    parser = argparse.ArgumentParser(description='Run PgForge tutorial tests')
     parser.add_argument('--output-dir', '-o', help='Output directory for test reports')
     parser.add_argument('--verbosity', '-v', type=int, default=2, help='Test verbosity level (0-2)')
     parser.add_argument('--category', '-c', help='Run specific test category only')

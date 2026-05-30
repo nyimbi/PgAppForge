@@ -59,7 +59,7 @@ def check_import_availability(module_name: str) -> Dict[str, bool]:
         
         # Check Flask-related modules
         flask_modules = [
-            'flask', 'flask_appbuilder', 'flask_login', 'sqlalchemy', 'werkzeug'
+            'flask', 'pgappforge', 'flask_login', 'sqlalchemy', 'werkzeug'
         ]
         
         if any(module_name.startswith(fm) for fm in flask_modules):
@@ -121,8 +121,8 @@ def validate_implementation_file(file_path: str) -> Dict:
             
             # Check if this is a problematic fictional module
             fictional_modules = [
-                'flask_appbuilder.mixins.security_framework',
-                'flask_appbuilder.mixins.comment_models'
+                'pgappforge.mixins.security_framework',
+                'pgappforge.mixins.comment_models'
             ]
             
             if module_name in fictional_modules:
@@ -287,7 +287,7 @@ def main():
     if comparison_success:
         print("✅ INFRASTRUCTURE INTEGRATION: FIXED")
         print("   - No more fictional imports")
-        print("   - All modules are available in real Flask-AppBuilder")
+        print("   - All modules are available in real PgAppForge")
     else:
         print("❌ INFRASTRUCTURE INTEGRATION: Issues remain")
     

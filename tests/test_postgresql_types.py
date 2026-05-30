@@ -9,22 +9,22 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID, INET, BIT
 from wtforms import Form
 
-from flask_appbuilder.models.postgresql import (
+from pgappforge.models.postgresql import (
     JSONBField, PostgreSQLArrayField, PostGISGeometryField, PgVectorField,
     PostgreSQLUUIDField, PostgreSQLBitStringField, PostgreSQLTreeField,
     Vector, Geometry, LTREE, HSTORE,
     PostgreSQLProfileMixin, PostGISProfileMixin, PgVectorProfileMixin
 )
-from flask_appbuilder.widgets_postgresql.postgresql import (
+from pgappforge.widgets_postgresql.postgresql import (
     JSONBWidget, PostgreSQLArrayWidget, PostGISGeometryWidget,
     PgVectorWidget, PostgreSQLUUIDWidget, PostgreSQLBitStringWidget
 )
-from flask_appbuilder.widgets_postgresql.tree_widget import (
+from pgappforge.widgets_postgresql.tree_widget import (
     PostgreSQLTreeWidget
 )
 

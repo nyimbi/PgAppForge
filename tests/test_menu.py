@@ -1,8 +1,8 @@
 import logging
 import os
 
-from flask_appbuilder import SQLA
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import SQLA
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from .base import FABTestCase
 from .const import MAX_PAGE_SIZE, PASSWORD_ADMIN, USERNAME_ADMIN
@@ -14,8 +14,8 @@ log = logging.getLogger(__name__)
 class FlaskTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
-        from flask_appbuilder.views import ModelView
+        from pgappforge import AppBuilder
+        from pgappforge.views import ModelView
 
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))

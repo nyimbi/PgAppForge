@@ -1,14 +1,14 @@
-# Flask-AppBuilder Collaborative Features Guide
+# PgAppForge Collaborative Features Guide
 
 ## Overview
 
-Flask-AppBuilder's collaborative features provide a comprehensive framework for building real-time, multi-user applications with robust validation, error handling, audit logging, and transaction management.
+PgAppForge's collaborative features provide a comprehensive framework for building real-time, multi-user applications with robust validation, error handling, audit logging, and transaction management.
 
 ## Architecture
 
 The collaborative features are built around four core utility modules:
 
-### 1. Validation Utilities (`flask_appbuilder.collaborative.utils.validation`)
+### 1. Validation Utilities (`pgappforge.collaborative.utils.validation`)
 
 Provides comprehensive data validation with consistent error reporting:
 
@@ -18,7 +18,7 @@ Provides comprehensive data validation with consistent error reporting:
 - **DataValidator**: JSON serialization and data structure validation
 - **MessageValidator**: Message object validation combining multiple patterns
 
-### 2. Error Handling (`flask_appbuilder.collaborative.utils.error_handling`)
+### 2. Error Handling (`pgappforge.collaborative.utils.error_handling`)
 
 Structured exception hierarchy with context and user-friendly messages:
 
@@ -26,7 +26,7 @@ Structured exception hierarchy with context and user-friendly messages:
 - **Specialized Errors**: ValidationError, AuthenticationError, AuthorizationError, etc.
 - **ErrorHandlingMixin**: Mixin for consistent error handling across services
 
-### 3. Audit Logging (`flask_appbuilder.collaborative.utils.audit_logging`)
+### 3. Audit Logging (`pgappforge.collaborative.utils.audit_logging`)
 
 Centralized audit logging with structured events:
 
@@ -34,7 +34,7 @@ Centralized audit logging with structured events:
 - **AuditEvent**: Structured audit event data
 - **CollaborativeAuditMixin**: Mixin for adding audit capabilities
 
-### 4. Transaction Management (`flask_appbuilder.collaborative.utils.transaction_manager`)
+### 4. Transaction Management (`pgappforge.collaborative.utils.transaction_manager`)
 
 Framework-wide transaction handling with deadlock detection:
 
@@ -48,8 +48,8 @@ Framework-wide transaction handling with deadlock detection:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.collaborative.addon_manager import CollaborativeAddonManager
+from pgappforge import AppBuilder
+from pgappforge.collaborative.addon_manager import CollaborativeAddonManager
 
 # Create Flask app
 app = Flask(__name__)
@@ -61,14 +61,14 @@ appbuilder = AppBuilder(app, db.session)
 
 # Add collaborative features addon
 app.config['ADDON_MANAGERS'] = [
-    'flask_appbuilder.collaborative.addon_manager.CollaborativeAddonManager'
+    'pgappforge.collaborative.addon_manager.CollaborativeAddonManager'
 ]
 ```
 
 ### Using Validation Utilities
 
 ```python
-from flask_appbuilder.collaborative.utils.validation import (
+from pgappforge.collaborative.utils.validation import (
     FieldValidator, UserValidator, MessageValidator
 )
 
@@ -91,7 +91,7 @@ if not result.is_valid:
 ### Using Error Handling
 
 ```python
-from flask_appbuilder.collaborative.utils.error_handling import (
+from pgappforge.collaborative.utils.error_handling import (
     ErrorHandlingMixin, ValidationError, create_error_response
 )
 
@@ -125,7 +125,7 @@ class MyService(ErrorHandlingMixin):
 ### Using Audit Logging
 
 ```python
-from flask_appbuilder.collaborative.utils.audit_logging import (
+from pgappforge.collaborative.utils.audit_logging import (
     CollaborativeAuditMixin, AuditEventType
 )
 
@@ -167,7 +167,7 @@ class TeamService(CollaborativeAuditMixin):
 ### Using Transaction Management
 
 ```python
-from flask_appbuilder.collaborative.utils.transaction_manager import (
+from pgappforge.collaborative.utils.transaction_manager import (
     TransactionMixin, TransactionScope, transaction_required
 )
 
@@ -233,8 +233,8 @@ class WorkspaceService(TransactionMixin):
 ### Service Integration Pattern
 
 ```python
-from flask_appbuilder.collaborative.interfaces.base_interfaces import BaseCollaborativeService
-from flask_appbuilder.collaborative.utils import *
+from pgappforge.collaborative.interfaces.base_interfaces import BaseCollaborativeService
+from pgappforge.collaborative.utils import *
 
 class ComprehensiveService(
     BaseCollaborativeService,
@@ -298,7 +298,7 @@ class ComprehensiveService(
 ### Custom Validation Patterns
 
 ```python
-from flask_appbuilder.collaborative.utils.validation import ValidationResult
+from pgappforge.collaborative.utils.validation import ValidationResult
 
 def validate_team_membership(user_id, team_id):
     """Custom validation function following the ValidationResult pattern."""
@@ -450,8 +450,8 @@ app.config.update({
 
 ```python
 import unittest
-from flask_appbuilder.collaborative.utils.validation import ValidationResult
-from flask_appbuilder.collaborative.utils.error_handling import ValidationError
+from pgappforge.collaborative.utils.validation import ValidationResult
+from pgappforge.collaborative.utils.error_handling import ValidationError
 
 class TestMyService(unittest.TestCase):
     def test_validation(self):
@@ -496,4 +496,4 @@ If you're upgrading from previous collaborative feature implementations:
 - **Error sanitization**: Sensitive data filtering in error responses
 - **Transaction isolation**: Proper isolation levels prevent data corruption
 
-This guide provides a comprehensive overview of Flask-AppBuilder's collaborative features. For specific implementation details, refer to the API documentation and example applications.
+This guide provides a comprehensive overview of PgAppForge's collaborative features. For specific implementation details, refer to the API documentation and example applications.

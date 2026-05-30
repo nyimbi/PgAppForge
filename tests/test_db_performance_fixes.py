@@ -10,7 +10,7 @@ import time
 from unittest.mock import Mock, patch, MagicMock
 from flask import Flask
 
-from flask_appbuilder.utils.db_performance import (
+from pgappforge.utils.db_performance import (
     QueryOptimizer, PaginationHelper, QueryLimits,
     DatabasePerformanceError, performance_monitor
 )
@@ -295,7 +295,7 @@ class TestPerformanceMonitoring:
 
     def test_monitor_query_performance_decorator(self):
         """Test the query performance monitoring decorator."""
-        from flask_appbuilder.utils.db_performance import monitor_query_performance
+        from pgappforge.utils.db_performance import monitor_query_performance
 
         @monitor_query_performance("decorated_query")
         def test_query_function():
@@ -369,7 +369,7 @@ class TestPerformanceOptimizationIntegration:
 
     def test_approval_views_use_optimization(self):
         """Test that approval views use performance optimization."""
-        from flask_appbuilder.utils.db_performance import QueryOptimizer
+        from pgappforge.utils.db_performance import QueryOptimizer
 
         # Test that QueryOptimizer is properly imported and used
         optimizer = QueryOptimizer()

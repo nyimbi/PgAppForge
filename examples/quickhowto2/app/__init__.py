@@ -1,8 +1,8 @@
 import logging
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.menu import Menu
+from pgappforge import AppBuilder, SQLA
+from pgappforge.menu import Menu
 
 from .indexview import MyIndexView
 from .sec import MySecurityManager

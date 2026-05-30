@@ -1,12 +1,12 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Date
 from sqlalchemy.orm import relationship
-from flask_appbuilder.models.mixins import (
+from pgappforge.models.mixins import (
     AuditMixin,
     BaseMixin,
     FileColumn,
     ImageColumn,
 )
-from flask_appbuilder import Model
+from pgappforge import Model
 
 
 class Group(Model):

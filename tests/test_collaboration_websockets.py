@@ -1,5 +1,5 @@
 """
-WebSocket Tests for Flask-AppBuilder Collaboration Engine
+WebSocket Tests for PgAppForge Collaboration Engine
 
 Tests WebSocket functionality including connection management, real-time messaging,
 presence tracking, and event handling.
@@ -10,10 +10,10 @@ import json
 import time
 from unittest.mock import Mock, patch, MagicMock, call
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 from flask_socketio import SocketIOTestClient
 
-from flask_appbuilder.collaboration.websocket_manager import (
+from pgappforge.collaboration.websocket_manager import (
     create_websocket_manager,
     CollaborationWebSocketManager
 )
@@ -57,7 +57,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
         self.db.drop_all()
         self.app_context.pop()
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_websocket_manager_creation(self, mock_socketio):
         """Test WebSocket manager initialization"""
         mock_socketio_instance = Mock()
@@ -97,7 +97,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
         for event in expected_events:
             mock_socketio_instance.on.assert_any_call(event, namespace='/collaboration')
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_websocket_connection_handling(self, mock_socketio):
         """Test WebSocket connection and disconnection handling"""
         mock_socketio_instance = Mock()
@@ -128,7 +128,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                     str(self.test_user.id)
                 )
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_session_management(self, mock_socketio):
         """Test joining and leaving collaboration sessions"""
         mock_socketio_instance = Mock()
@@ -167,7 +167,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                 # Should emit user left event
                 self.assertTrue(mock_socketio_instance.emit.called)
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_field_change_broadcasting(self, mock_socketio):
         """Test broadcasting field changes to other users"""
         mock_socketio_instance = Mock()
@@ -208,7 +208,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                 include_self=False
             )
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_cursor_tracking(self, mock_socketio):
         """Test live cursor position tracking"""
         mock_socketio_instance = Mock()
@@ -248,7 +248,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                 include_self=False
             )
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_field_focus_tracking(self, mock_socketio):
         """Test field focus and blur event tracking"""
         mock_socketio_instance = Mock()
@@ -308,7 +308,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                 include_self=False
             )
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_comment_system(self, mock_socketio):
         """Test real-time commenting system"""
         mock_socketio_instance = Mock()
@@ -348,7 +348,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                 self.assertEqual(actual_call[0][0], 'new_comment')
                 self.assertEqual(actual_call[1]['room'], 'session_test-session')
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_conflict_resolution_messaging(self, mock_socketio):
         """Test conflict resolution WebSocket messaging"""
         mock_socketio_instance = Mock()
@@ -390,7 +390,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
                 namespace='/collaboration'
             )
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_connection_statistics(self, mock_socketio):
         """Test WebSocket connection statistics"""
         mock_socketio_instance = Mock()
@@ -421,7 +421,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
         self.assertEqual(stats['active_sessions'], 2)
         self.assertEqual(stats['total_participants'], 3)  # User 1 in 2 sessions, user 2 in 1
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_error_handling(self, mock_socketio):
         """Test WebSocket error handling"""
         mock_socketio_instance = Mock()
@@ -463,7 +463,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
             except Exception as e:
                 self.fail(f"Unexpected exception: {e}")
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_rate_limiting(self, mock_socketio):
         """Test WebSocket rate limiting"""
         mock_socketio_instance = Mock()
@@ -498,7 +498,7 @@ class TestCollaborationWebSockets(unittest.TestCase):
             emit_call_count = mock_socketio_instance.emit.call_count
             self.assertGreater(emit_call_count, 0)
     
-    @patch('flask_appbuilder.collaboration.websocket_manager.SocketIO')
+    @patch('pgappforge.collaboration.websocket_manager.SocketIO')
     def test_namespace_isolation(self, mock_socketio):
         """Test namespace isolation between different collaboration instances"""
         mock_socketio_instance = Mock()

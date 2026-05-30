@@ -13,11 +13,11 @@ from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 from cryptography.fernet import Fernet
 
-from flask_appbuilder import Model
-from flask_appbuilder.mixins.specialized_mixins import (
+from pgappforge import Model
+from pgappforge.mixins.specialized_mixins import (
     CurrencyMixin, GeoLocationMixin, EncryptionMixin, VersioningMixin
 )
-from flask_appbuilder.mixins.security_framework import (
+from pgappforge.mixins.security_framework import (
     MixinExternalServiceError, MixinValidationError, MixinDataError,
     MixinConfigurationError
 )
@@ -63,8 +63,8 @@ class TestCurrencyMixin:
         self.model.amount = Decimal('100.00')
         self.model.currency = 'USD'
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_get_exchange_rates_success(self, mock_app, mock_requests):
         """Test successful exchange rate fetching."""
         # Setup mocks
@@ -89,7 +89,7 @@ class TestCurrencyMixin:
         # Verify caching
         mock_app.cache.set.assert_called_once()
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
     def test_get_exchange_rates_api_failure(self, mock_requests):
         """Test exchange rate API failure handling."""
         # Setup request failure
@@ -230,7 +230,7 @@ class TestGeoLocationMixin:
         assert self.model._validate_coordinates(0, 181) is False
         assert self.model._validate_coordinates(0, -181) is False
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
     @patch('time.sleep')  # Mock sleep to speed up tests
     def test_geocode_with_nominatim_success(self, mock_sleep, mock_requests):
         """Test successful geocoding with Nominatim."""
@@ -262,7 +262,7 @@ class TestGeoLocationMixin:
         assert self.model.city == 'Mountain View'
         assert self.model.state == 'California'
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
     @patch('time.sleep')
     def test_geocode_nominatim_no_results(self, mock_sleep, mock_requests):
         """Test geocoding with no results from Nominatim."""
@@ -311,7 +311,7 @@ class TestGeoLocationMixin:
         
         assert result is False
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
     @patch('time.sleep')
     def test_reverse_geocode_success(self, mock_sleep, mock_requests):
         """Test successful reverse geocoding."""
@@ -414,7 +414,7 @@ class TestEncryptionMixin:
         # Generate a test encryption key
         self.test_key = Fernet.generate_key()
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_encrypt_field_success(self, mock_app):
         """Test successful field encryption."""
         # Setup app config
@@ -427,7 +427,7 @@ class TestEncryptionMixin:
         assert result != sensitive_data  # Should be encrypted
         assert isinstance(result, bytes)  # Encrypted data is bytes
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_decrypt_field_success(self, mock_app):
         """Test successful field decryption."""
         # Setup app config
@@ -445,7 +445,7 @@ class TestEncryptionMixin:
     
     def test_encrypt_field_no_encryption_key(self):
         """Test encryption without encryption key configured."""
-        with patch('flask_appbuilder.mixins.specialized_mixins.current_app') as mock_app:
+        with patch('pgappforge.mixins.specialized_mixins.current_app') as mock_app:
             mock_app.config = {}  # No encryption key
             
             with pytest.raises(MixinConfigurationError) as exc_info:
@@ -455,7 +455,7 @@ class TestEncryptionMixin:
     
     def test_decrypt_field_invalid_data(self):
         """Test decryption of invalid/corrupted data."""
-        with patch('flask_appbuilder.mixins.specialized_mixins.current_app') as mock_app:
+        with patch('pgappforge.mixins.specialized_mixins.current_app') as mock_app:
             mock_app.config = {'ENCRYPTION_KEY': self.test_key}
             
             invalid_data = b"this_is_not_encrypted_data"
@@ -465,7 +465,7 @@ class TestEncryptionMixin:
             
             assert "Failed to decrypt" in str(exc_info.value)
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_is_field_encrypted(self, mock_app):
         """Test checking if field is encrypted."""
         mock_app.config = {'ENCRYPTION_KEY': self.test_key}
@@ -477,7 +477,7 @@ class TestEncryptionMixin:
         assert self.model.is_field_encrypted(original_data) is False
         assert self.model.is_field_encrypted("plain text") is False
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_rotate_encryption_key(self, mock_app):
         """Test encryption key rotation."""
         # Setup original key
@@ -527,8 +527,8 @@ class TestVersioningMixin:
         self.model.version_number = 1
         self.model.version_history = '[]'
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_user')
-    @patch('flask_appbuilder.mixins.specialized_mixins.db')
+    @patch('pgappforge.mixins.specialized_mixins.current_user')
+    @patch('pgappforge.mixins.specialized_mixins.db')
     def test_create_version_basic(self, mock_db, mock_user):
         """Test basic version creation."""
         mock_user.id = 456
@@ -587,7 +587,7 @@ class TestVersioningMixin:
         assert result[1]['version'] == 4
         assert result[2]['version'] == 3
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.db')
+    @patch('pgappforge.mixins.specialized_mixins.db')
     def test_rollback_to_version(self, mock_db):
         """Test rolling back to previous version."""
         # Setup version history
@@ -724,7 +724,7 @@ class TestMixinCombinations:
             assert converted_amount == Decimal('85.00')
             assert self.model.latitude == 40.7128
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_encryption_with_location_data(self, mock_app):
         """Test encrypting location-sensitive data."""
         mock_app.config = {'ENCRYPTION_KEY': Fernet.generate_key()}
@@ -742,7 +742,7 @@ class TestMixinCombinations:
 class TestPerformanceScenarios:
     """Test performance-critical scenarios."""
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.requests.get')
+    @patch('pgappforge.mixins.specialized_mixins.requests.get')
     def test_geocoding_timeout_handling(self, mock_requests):
         """Test geocoding with network timeouts."""
         import requests
@@ -760,7 +760,7 @@ class TestPerformanceScenarios:
         
         assert result is False
     
-    @patch('flask_appbuilder.mixins.specialized_mixins.current_app')
+    @patch('pgappforge.mixins.specialized_mixins.current_app')
     def test_currency_rate_caching(self, mock_app):
         """Test that currency rates are properly cached."""
         # Setup cache mock
@@ -769,7 +769,7 @@ class TestPerformanceScenarios:
         
         # First call - should fetch from API and cache
         mock_cache.get.return_value = None
-        with patch('flask_appbuilder.mixins.specialized_mixins.requests.get') as mock_requests:
+        with patch('pgappforge.mixins.specialized_mixins.requests.get') as mock_requests:
             mock_response = Mock()
             mock_response.json.return_value = {'rates': {'EUR': 0.85}}
             mock_requests.return_value = mock_response

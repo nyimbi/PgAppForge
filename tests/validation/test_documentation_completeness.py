@@ -3,7 +3,7 @@
 Documentation Completeness Validation Tests
 
 Comprehensive tests to validate documentation completeness across the entire
-Flask-AppBuilder codebase, ensuring all public methods, classes, and modules
+PgAppForge codebase, ensuring all public methods, classes, and modules
 have appropriate documentation.
 """
 
@@ -438,7 +438,7 @@ class DocumentationAnalyzer:
 
 class TestDocumentationCompleteness(unittest.TestCase):
     """
-    Test suite to validate documentation completeness across the Flask-AppBuilder codebase.
+    Test suite to validate documentation completeness across the PgAppForge codebase.
     
     These tests ensure that all public methods, classes, and modules have appropriate
     documentation to meet production quality standards.
@@ -447,8 +447,8 @@ class TestDocumentationCompleteness(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test fixtures for documentation analysis."""
-        cls.flask_appbuilder_path = Path(__file__).parent.parent.parent / "flask_appbuilder"
-        cls.analyzer = DocumentationAnalyzer(str(cls.flask_appbuilder_path))
+        cls.pgappforge_path = Path(__file__).parent.parent.parent / "pgappforge"
+        cls.analyzer = DocumentationAnalyzer(str(cls.pgappforge_path))
         cls.analysis = cls.analyzer.analyze_directory()
     
     def test_overall_documentation_coverage_target(self):

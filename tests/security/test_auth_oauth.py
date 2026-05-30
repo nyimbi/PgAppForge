@@ -4,11 +4,11 @@ from unittest.mock import MagicMock
 
 from authlib.jose.errors import BadSignatureError
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder import SQLA
-from flask_appbuilder.const import AUTH_OAUTH
-from flask_appbuilder.exceptions import InvalidLoginAttempt
-from flask_appbuilder.exceptions import OAuthProviderUnknown
+from pgappforge import AppBuilder
+from pgappforge import SQLA
+from pgappforge.const import AUTH_OAUTH
+from pgappforge.exceptions import InvalidLoginAttempt
+from pgappforge.exceptions import OAuthProviderUnknown
 import jinja2
 import jwt
 from tests.const import USERNAME_ADMIN
@@ -78,7 +78,7 @@ class OAuthRegistrationRoleTestCase(unittest.TestCase):
         # stop Flask
         self.app = None
 
-        # stop Flask-AppBuilder
+        # stop PgAppForge
         self.appbuilder = None
 
         # stop Database
@@ -743,7 +743,7 @@ class OAuthAuthentikTestCase(unittest.TestCase):
         # stop Flask
         self.app = None
 
-        # stop Flask-AppBuilder
+        # stop PgAppForge
         self.appbuilder = None
 
         # stop Database

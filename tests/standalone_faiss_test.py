@@ -2,7 +2,7 @@
 """
 Standalone FAISS Integration Test
 
-Tests FAISS components in isolation without Flask-AppBuilder dependencies
+Tests FAISS components in isolation without PgForge dependencies
 to validate the core FAISS integration functionality.
 """
 
@@ -32,7 +32,7 @@ except ImportError as e:
     FAISS_AVAILABLE = False
     sys.exit(1)
 
-# Define minimal required types to avoid Flask-AppBuilder imports
+# Define minimal required types to avoid PgForge imports
 class DocumentType(Enum):
     """Document types for testing."""
     TEXT = "text"
@@ -265,7 +265,7 @@ async def test_rag_pipeline():
 
         # Test documents
         documents = [
-            "Flask-AppBuilder is a rapid application development framework.",
+            "PgForge is a rapid application development framework.",
             "FAISS provides efficient similarity search for dense vectors.",
             "Vector databases enable semantic search capabilities.",
             "Machine learning embeddings capture semantic relationships.",
@@ -449,7 +449,7 @@ async def main():
         print("🚨 All tests failed. FAISS integration has issues.")
 
     print("\nNote: This validates core FAISS functionality.")
-    print("Full Flask-AppBuilder integration requires resolving circular import issues.")
+    print("Full PgForge integration requires resolving circular import issues.")
 
 if __name__ == "__main__":
     import asyncio

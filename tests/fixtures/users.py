@@ -1,4 +1,4 @@
-from flask_appbuilder.security.sqla.models import Role, User
+from pgappforge.security.sqla.models import Role, User
 from sqlalchemy.orm import Session
 from tests.const import USERNAME_ADMIN, USERNAME_READONLY
 

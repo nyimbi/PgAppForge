@@ -1,11 +1,11 @@
 import calendar
 
 from flask import make_response, Response
-from flask_appbuilder import expose, has_access, permission_name
-from flask_appbuilder import ModelView
-from flask_appbuilder.charts.views import GroupByChartView
-from flask_appbuilder.models.group import aggregate_count
-from flask_appbuilder.models.mongoengine.interface import MongoEngineInterface
+from pgappforge import expose, has_access, permission_name
+from pgappforge import ModelView
+from pgappforge.charts.views import GroupByChartView
+from pgappforge.models.group import aggregate_count
+from pgappforge.models.mongoengine.interface import MongoEngineInterface
 
 
 from . import appbuilder

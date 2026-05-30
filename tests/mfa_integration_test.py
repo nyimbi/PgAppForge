@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Basic integration test for Flask-AppBuilder MFA functionality.
+Basic integration test for PgAppForge MFA functionality.
 
 This test verifies that:
 1. MFA models are created correctly
@@ -21,11 +21,11 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 
 class MFAIntegrationTest(unittest.TestCase):
-    """Test MFA integration with Flask-AppBuilder."""
+    """Test MFA integration with PgAppForge."""
 
     def setUp(self):
         """Set up test Flask app with MFA enabled."""
@@ -51,7 +51,7 @@ class MFAIntegrationTest(unittest.TestCase):
             'FAB_MFA_EMAIL_CODE_EXPIRES': 600,
         })
         
-        # Initialize Flask-AppBuilder
+        # Initialize PgAppForge
         self.db = SQLA(self.app)
         
         # Create application context for testing
@@ -98,7 +98,7 @@ class MFAIntegrationTest(unittest.TestCase):
             self.skipTest("MFA not available - skipping model tests")
             
         try:
-            from flask_appbuilder.security.mfa.models import (
+            from pgappforge.security.mfa.models import (
                 UserMFA, MFABackupCodes, MFAVerificationAttempt, MFAPolicy
             )
             
@@ -126,7 +126,7 @@ class MFAIntegrationTest(unittest.TestCase):
             self.skipTest("MFA not available - skipping service tests")
             
         try:
-            from flask_appbuilder.security.mfa.services import (
+            from pgappforge.security.mfa.services import (
                 TOTPService, SMSMFAService, EmailMFAService
             )
             
@@ -270,7 +270,7 @@ class MFAIntegrationTest(unittest.TestCase):
 
 def run_integration_test():
     """Run the MFA integration test."""
-    print("Running Flask-AppBuilder MFA Integration Test...")
+    print("Running PgAppForge MFA Integration Test...")
     print("="*60)
     
     # Create test suite

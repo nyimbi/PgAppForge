@@ -42,8 +42,8 @@ class TestAnalyticsModel(Base):
 
 
 # Import the classes we're testing
-from flask_appbuilder.charts.metric_widgets import MetricCardWidget, TrendChartView
-from flask_appbuilder.views.analytics_dashboard import EnhancedDashboardView, MetricsDashboardView
+from pgappforge.charts.metric_widgets import MetricCardWidget, TrendChartView
+from pgappforge.views.analytics_dashboard import EnhancedDashboardView, MetricsDashboardView
 
 
 class TestMetricCardWidget(unittest.TestCase):
@@ -209,7 +209,7 @@ class TestMetricCardWidget(unittest.TestCase):
         self.assertIn("fa-arrow-up", html)
         self.assertIn("trend-up", html)
     
-    @patch('flask_appbuilder.charts.metric_widgets.render_template_string')
+    @patch('pgappforge.charts.metric_widgets.render_template_string')
     def test_render_metric_card_template_error(self, mock_render):
         """Test metric card rendering with template error."""
         mock_render.side_effect = Exception("Template error")
@@ -337,7 +337,7 @@ class TestTrendChartView(unittest.TestCase):
         trend = self.chart_view.calculate_trend_percentage(data)
         self.assertIsNone(trend)
     
-    @patch('flask_appbuilder.charts.metric_widgets.GroupByProcessData')
+    @patch('pgappforge.charts.metric_widgets.GroupByProcessData')
     def test_get_trend_data_success(self, mock_group_by_class):
         """Test successful trend data retrieval."""
         # Mock GroupByProcessData behavior
@@ -368,7 +368,7 @@ class TestTrendChartView(unittest.TestCase):
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
     
-    @patch('flask_appbuilder.charts.metric_widgets.GroupByProcessData')
+    @patch('pgappforge.charts.metric_widgets.GroupByProcessData')
     def test_get_trend_data_error(self, mock_group_by_class):
         """Test trend data retrieval with error."""
         mock_group_by_class.side_effect = Exception("Database error")
@@ -424,7 +424,7 @@ class TestTrendChartView(unittest.TestCase):
         # Should handle errors gracefully - some items may be skipped
         self.assertIsInstance(formatted, list)
     
-    @patch('flask_appbuilder.charts.metric_widgets.TrendChartView.get_trend_data')
+    @patch('pgappforge.charts.metric_widgets.TrendChartView.get_trend_data')
     def test_get_metric_summary_success(self, mock_get_trend_data):
         """Test successful metric summary generation."""
         # Mock trend data
@@ -451,7 +451,7 @@ class TestTrendChartView(unittest.TestCase):
         self.assertEqual(summary['time_range_label'], 'Last 7 Days')
         self.assertEqual(summary['data_points'], 3)
     
-    @patch('flask_appbuilder.charts.metric_widgets.TrendChartView.get_trend_data')
+    @patch('pgappforge.charts.metric_widgets.TrendChartView.get_trend_data')
     def test_get_metric_summary_no_data(self, mock_get_trend_data):
         """Test metric summary with no data."""
         mock_get_trend_data.return_value = []
@@ -464,7 +464,7 @@ class TestTrendChartView(unittest.TestCase):
         self.assertEqual(summary['chart_data'], [])
         self.assertEqual(summary['time_range_label'], 'Last 30 Days')
     
-    @patch('flask_appbuilder.charts.metric_widgets.TrendChartView.get_trend_data')
+    @patch('pgappforge.charts.metric_widgets.TrendChartView.get_trend_data')
     def test_get_metric_summary_error(self, mock_get_trend_data):
         """Test metric summary with error."""
         mock_get_trend_data.side_effect = Exception("Data error")

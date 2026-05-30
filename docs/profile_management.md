@@ -1,6 +1,6 @@
 # User Profile Management System
 
-Flask-AppBuilder now includes a comprehensive, extensible user profile management system that allows for flexible customization while maintaining security and performance.
+PgAppForge now includes a comprehensive, extensible user profile management system that allows for flexible customization while maintaining security and performance.
 
 ## Overview
 
@@ -20,8 +20,8 @@ The profile system provides:
 Add basic profile functionality to your User model:
 
 ```python
-from flask_appbuilder.models.profiles import ProfileMixin
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.models.profiles import ProfileMixin
+from pgappforge.security.sqla.models import User
 
 class MyUser(User, ProfileMixin):
     pass
@@ -32,8 +32,8 @@ class MyUser(User, ProfileMixin):
 For comprehensive profile features:
 
 ```python
-from flask_appbuilder.models.profiles import ExtendedProfileMixin
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.models.profiles import ExtendedProfileMixin
+from pgappforge.security.sqla.models import User
 
 class MyUser(User, ExtendedProfileMixin):
     pass
@@ -44,8 +44,8 @@ class MyUser(User, ExtendedProfileMixin):
 Use the standalone profile model (recommended):
 
 ```python
-from flask_appbuilder.models.profiles import UserProfile
-from flask_appbuilder.security.profile_views import MyProfileView, UserProfileView
+from pgappforge.models.profiles import UserProfile
+from pgappforge.security.profile_views import MyProfileView, UserProfileView
 
 # Register views
 appbuilder.add_view(MyProfileView, "My Profile", icon="fa-user")
@@ -92,7 +92,7 @@ The system supports multiple profile types:
 Users can edit their own profiles through a comprehensive form interface:
 
 ```python
-from flask_appbuilder.security.profile_views import MyProfileView
+from pgappforge.security.profile_views import MyProfileView
 
 appbuilder.add_view(MyProfileView, "My Profile", icon="fa-user")
 ```
@@ -101,7 +101,7 @@ appbuilder.add_view(MyProfileView, "My Profile", icon="fa-user")
 Display public user profiles:
 
 ```python
-from flask_appbuilder.security.profile_views import PublicProfileView
+from pgappforge.security.profile_views import PublicProfileView
 
 appbuilder.add_view(PublicProfileView, "Public Profiles", icon="fa-users")
 ```
@@ -110,7 +110,7 @@ appbuilder.add_view(PublicProfileView, "Public Profiles", icon="fa-users")
 For profile management:
 
 ```python
-from flask_appbuilder.security.profile_views import UserProfileView, ProfileFieldView
+from pgappforge.security.profile_views import UserProfileView, ProfileFieldView
 
 appbuilder.add_view(UserProfileView, "Manage Profiles", category="Admin")
 appbuilder.add_view(ProfileFieldView, "Profile Fields", category="Admin")
@@ -121,7 +121,7 @@ appbuilder.add_view(ProfileFieldView, "Profile Fields", category="Admin")
 The profile system includes comprehensive REST API endpoints:
 
 ```python
-from flask_appbuilder.api.profiles import UserProfileApi
+from pgappforge.api.profiles import UserProfileApi
 
 appbuilder.add_api(UserProfileApi)
 ```
@@ -160,7 +160,7 @@ response = requests.put('/api/v1/profiles/my-profile',
 Control who can view and edit specific profile fields:
 
 ```python
-from flask_appbuilder.security.profile_validators import ProfileSecurityManager
+from pgappforge.security.profile_validators import ProfileSecurityManager
 
 # Check if user can edit a field
 can_edit = ProfileSecurityManager.can_edit_field('employee_id', profile, user)
@@ -173,7 +173,7 @@ can_view = ProfileSecurityManager.can_view_field('phone', profile, viewer)
 Automatic validation and sanitization of profile data:
 
 ```python
-from flask_appbuilder.security.profile_validators import ProfileValidator
+from pgappforge.security.profile_validators import ProfileValidator
 
 # Validate profile data
 errors = ProfileValidator.validate_profile_data(profile, form_data)
@@ -183,7 +183,7 @@ errors = ProfileValidator.validate_profile_data(profile, form_data)
 Track profile changes and access:
 
 ```python
-from flask_appbuilder.security.profile_validators import ProfileAuditLogger
+from pgappforge.security.profile_validators import ProfileAuditLogger
 
 # Log profile changes
 ProfileAuditLogger.log_profile_change(profile, changed_fields, editor_user)
@@ -197,7 +197,7 @@ ProfileAuditLogger.log_profile_access(profile, viewer_user, fields_accessed)
 Add custom fields without code changes:
 
 ```python
-from flask_appbuilder.models.profiles import ProfileField
+from pgappforge.models.profiles import ProfileField
 
 # Create a custom field
 custom_field = ProfileField(
@@ -245,7 +245,7 @@ Override the default templates to match your application's design:
 `templates/appbuilder/profile/public_profile.html`
 
 ### Edit Profile Template
-Use the standard Flask-AppBuilder form templates or create custom ones.
+Use the standard PgAppForge form templates or create custom ones.
 
 ## Migration from Existing Systems
 
@@ -356,8 +356,8 @@ Enable debug logging for profile operations:
 ```python
 import logging
 
-logging.getLogger('flask_appbuilder.models.profiles').setLevel(logging.DEBUG)
-logging.getLogger('flask_appbuilder.security.profile_validators').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.models.profiles').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.security.profile_validators').setLevel(logging.DEBUG)
 ```
 
 ## Examples

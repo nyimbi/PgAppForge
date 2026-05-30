@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide documents the critical security fixes made to address hardcoded secret keys in Flask-AppBuilder and provides best practices for secure key management.
+This guide documents the critical security fixes made to address hardcoded secret keys in PgForge and provides best practices for secure key management.
 
 ## Security Issue Fixed
 

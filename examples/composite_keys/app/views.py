@@ -1,5 +1,5 @@
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from . import appbuilder, db
 from .models import Datacenter, Inventory, Item, Rack

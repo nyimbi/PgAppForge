@@ -3,7 +3,7 @@
 Test Database Session Management with DatabaseMixin
 
 This script tests the DatabaseMixin class to ensure it properly implements
-the Flask-AppBuilder database session patterns identified in Phase 1.1 of
+the PgAppForge database session patterns identified in Phase 1.1 of
 the remediation plan.
 """
 
@@ -17,7 +17,7 @@ from contextlib import contextmanager
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from tests.proper_flask_appbuilder_extensions import DatabaseMixin
+    from tests.proper_pgappforge_extensions import DatabaseMixin
     HAS_MAIN_MODULE = True
 except ImportError as e:
     print(f"Could not import DatabaseMixin: {e}")
@@ -33,7 +33,7 @@ class TestDatabaseMixin(unittest.TestCase):
         
         self.mixin = DatabaseMixin()
         
-        # Mock Flask-AppBuilder session
+        # Mock PgAppForge session
         self.mock_session = MagicMock()
         self.mock_appbuilder = MagicMock()
         self.mock_appbuilder.get_session = self.mock_session
@@ -146,7 +146,7 @@ class TestManagerIntegration(unittest.TestCase):
     
     def test_search_manager_inherits_database_mixin(self):
         """Test that SearchManager inherits from DatabaseMixin."""
-        from tests.proper_flask_appbuilder_extensions import SearchManager
+        from tests.proper_pgappforge_extensions import SearchManager
         
         # Check inheritance
         self.assertTrue(issubclass(SearchManager, DatabaseMixin))
@@ -162,7 +162,7 @@ class TestManagerIntegration(unittest.TestCase):
     
     def test_geocoding_manager_inherits_database_mixin(self):
         """Test that GeocodingManager inherits from DatabaseMixin."""
-        from tests.proper_flask_appbuilder_extensions import GeocodingManager
+        from tests.proper_pgappforge_extensions import GeocodingManager
         
         # Check inheritance
         self.assertTrue(issubclass(GeocodingManager, DatabaseMixin))
@@ -176,7 +176,7 @@ class TestManagerIntegration(unittest.TestCase):
     
     def test_approval_workflow_manager_inherits_database_mixin(self):
         """Test that ApprovalWorkflowManager inherits from DatabaseMixin."""
-        from tests.proper_flask_appbuilder_extensions import ApprovalWorkflowManager
+        from tests.proper_pgappforge_extensions import ApprovalWorkflowManager
         
         # Check inheritance
         self.assertTrue(issubclass(ApprovalWorkflowManager, DatabaseMixin))
@@ -190,7 +190,7 @@ class TestManagerIntegration(unittest.TestCase):
     
     def test_comment_manager_inherits_database_mixin(self):
         """Test that CommentManager inherits from DatabaseMixin.""" 
-        from tests.proper_flask_appbuilder_extensions import CommentManager
+        from tests.proper_pgappforge_extensions import CommentManager
         
         # Check inheritance
         self.assertTrue(issubclass(CommentManager, DatabaseMixin))
@@ -258,7 +258,7 @@ def run_database_mixin_tests():
         print("• Proper transaction management with automatic rollback")
         print("• Safe database operations with error handling")
         print("• Manager classes updated to use DatabaseMixin")
-        print("• Flask-AppBuilder integration patterns maintained")
+        print("• PgAppForge integration patterns maintained")
         
     else:
         print("\n❌ SOME DATABASE MIXIN TESTS FAILED")

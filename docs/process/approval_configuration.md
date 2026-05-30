@@ -1,6 +1,6 @@
 # Approval System Configuration
 
-Comprehensive guide to configuring and customizing Flask-AppBuilder's multi-level approval system.
+Comprehensive guide to configuring and customizing PgAppForge's multi-level approval system.
 
 ## 🎯 Overview
 
@@ -71,7 +71,7 @@ APPROVAL_EXTERNAL_APPROVAL_API = None  # Optional external system
 
 ```python
 # Initialize approval tables
-from flask_appbuilder.process.approval.models import (
+from pgappforge.process.approval.models import (
     ApprovalChain, ApprovalLevel, ApprovalRequest, ApprovalDecision
 )
 
@@ -83,7 +83,7 @@ from flask_appbuilder.process.approval.models import (
 ### Simple Linear Chain
 
 ```python
-from flask_appbuilder.process.approval import ApprovalChainBuilder
+from pgappforge.process.approval import ApprovalChainBuilder
 
 # Create a simple 3-level approval chain
 chain = ApprovalChainBuilder("expense_approval") \
@@ -409,7 +409,7 @@ conditional_chain = ApprovalChainBuilder("conditional_routing") \
 
 ## 🔧 Integration Examples
 
-### Flask-AppBuilder Model Integration
+### PgAppForge Model Integration
 
 ```python
 # Automatic approval for model changes
@@ -447,7 +447,7 @@ class ExpenseReport(Model):
 ### Custom Approval Views
 
 ```python
-from flask_appbuilder.process.views import ApprovalBaseView
+from pgappforge.process.views import ApprovalBaseView
 
 class ExpenseApprovalView(ApprovalBaseView):
     """Custom view for expense approvals."""

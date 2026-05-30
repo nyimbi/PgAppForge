@@ -1,6 +1,6 @@
 # Multi-Tenant SaaS Setup Guide
 
-This guide provides step-by-step instructions for setting up the multi-tenant SaaS infrastructure in your Flask-AppBuilder application.
+This guide provides step-by-step instructions for setting up the multi-tenant SaaS infrastructure in your PgAppForge application.
 
 ## 🚀 Quick Start
 
@@ -8,7 +8,7 @@ This guide provides step-by-step instructions for setting up the multi-tenant Sa
 
 ```bash
 # Install with multi-tenant dependencies
-pip install "Flask-AppBuilder[export,analytics,billing,mfa]"
+pip install "PgAppForge[export,analytics,billing,mfa]"
 
 # Or install development version
 pip install -e ".[export,analytics,billing,mfa]"
@@ -30,7 +30,7 @@ SQLALCHEMY_DATABASE_URI = 'postgresql://user:pass@localhost/dbname'
 
 # Enable multi-tenant features
 ENABLE_MULTI_TENANT = True
-ADDON_MANAGERS = ['flask_appbuilder.tenants.manager.TenantManager']
+ADDON_MANAGERS = ['pgappforge.tenants.manager.TenantManager']
 ```
 
 ### 3. Application Setup
@@ -39,7 +39,7 @@ Update your main application file:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 # Create Flask app
 app = Flask(__name__)
@@ -48,7 +48,7 @@ app.config.from_object('config')
 # Initialize database
 db = SQLA(app)
 
-# Initialize Flask-AppBuilder (will auto-load TenantManager from ADDON_MANAGERS)
+# Initialize PgAppForge (will auto-load TenantManager from ADDON_MANAGERS)
 appbuilder = AppBuilder(app, db.session)
 
 if __name__ == '__main__':
@@ -181,8 +181,8 @@ if os.environ.get('FLASK_ENV') == 'development':
 After setting up your app, create a development tenant:
 
 ```python
-from flask_appbuilder.models.tenant_models import Tenant, TenantUser
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.models.tenant_models import Tenant, TenantUser
+from pgappforge.security.sqla.models import User
 
 # Create development tenant
 dev_tenant = Tenant(
@@ -224,8 +224,8 @@ Test tenant isolation in development:
 ```python
 # Create test script
 from your_app import app, db
-from flask_appbuilder.models.tenant_models import Tenant
-from flask_appbuilder.models.tenant_examples import CustomerMT
+from pgappforge.models.tenant_models import Tenant
+from pgappforge.models.tenant_examples import CustomerMT
 
 with app.app_context():
     # Create test tenants
@@ -239,7 +239,7 @@ with app.app_context():
     db.session.commit()
     
     # Verify isolation
-    from flask_appbuilder.models.tenant_context import tenant_context
+    from pgappforge.models.tenant_context import tenant_context
     
     with tenant_context.with_tenant_context(tenant1):
         customers = CustomerMT.current_tenant().all()
@@ -266,8 +266,8 @@ with app.app_context():
 Create tenant-aware versions of your models:
 
 ```python
-from flask_appbuilder.models.tenant_models import TenantAwareMixin
-from flask_appbuilder import Model
+from pgappforge.models.tenant_models import TenantAwareMixin
+from pgappforge import Model
 from sqlalchemy import Column, Integer, String
 
 class MyModel(TenantAwareMixin, Model):
@@ -284,9 +284,9 @@ class MyModel(TenantAwareMixin, Model):
 Create tenant-aware views:
 
 ```python
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.models.tenant_context import require_tenant_context
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.models.tenant_context import require_tenant_context
 
 class MyModelView(ModelView):
     datamodel = SQLAInterface(MyModel)
@@ -302,7 +302,7 @@ class MyModelView(ModelView):
 Set up tenant branding programmatically:
 
 ```python
-from flask_appbuilder.tenants.branding import get_branding_manager
+from pgappforge.tenants.branding import get_branding_manager
 
 branding_manager = get_branding_manager()
 
@@ -325,7 +325,7 @@ branding_manager.update_tenant_branding(tenant_id, branding_data)
 Track usage programmatically:
 
 ```python
-from flask_appbuilder.tenants.usage_tracking import track_api_call, track_storage
+from pgappforge.tenants.usage_tracking import track_api_call, track_storage
 
 # Track API usage
 track_api_call('/api/data', 'GET')
@@ -339,7 +339,7 @@ track_storage(file_size_bytes, operation='upload', file_type='pdf')
 Monitor tenant health:
 
 ```python
-from flask_appbuilder.tenants.billing import get_billing_service
+from pgappforge.tenants.billing import get_billing_service
 
 billing_service = get_billing_service()
 metrics = billing_service.get_usage_metrics(tenant)
@@ -357,7 +357,7 @@ for metric in metrics:
 
 1. **"TenantManager not found"**
    - Ensure `ADDON_MANAGERS` is set in config
-   - Check that Flask-AppBuilder version supports addons
+   - Check that PgAppForge version supports addons
 
 2. **"No tenant context"**
    - Verify subdomain setup
@@ -380,7 +380,7 @@ Enable debug logging:
 
 ```python
 import logging
-logging.getLogger('flask_appbuilder.tenants').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.tenants').setLevel(logging.DEBUG)
 ```
 
 ### Development Tools
@@ -389,7 +389,7 @@ Useful management commands:
 
 ```bash
 # List all tenants
-flask shell -c "from flask_appbuilder.models.tenant_models import Tenant; print([t.slug for t in Tenant.query.all()])"
+flask shell -c "from pgappforge.models.tenant_models import Tenant; print([t.slug for t in Tenant.query.all()])"
 
 # Create test tenant
 flask shell -c "from create_test_tenant import create_tenant; create_tenant('test')"
@@ -409,7 +409,7 @@ flask shell -c "from test_isolation import run_tests; run_tests()"
 
 ## 🔗 Resources
 
-- [Flask-AppBuilder Documentation](http://flask-appbuilder.readthedocs.io/)
+- [PgAppForge Documentation](http://flask-appbuilder.readthedocs.io/)
 - [Stripe Documentation](https://stripe.com/docs)
 - [Multi-Tenant Architecture Patterns](https://docs.microsoft.com/en-us/azure/architecture/guide/multitenant/)
 - [Flask-Mail Documentation](https://pythonhosted.org/Flask-Mail/)

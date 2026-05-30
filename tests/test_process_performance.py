@@ -16,12 +16,12 @@ from unittest.mock import Mock, patch
 import pytest
 from flask import Flask
 
-from flask_appbuilder.process.models.process_models import (
+from pgappforge.process.models.process_models import (
     ProcessDefinition, ProcessInstance, ProcessStep, ProcessInstanceStatus
 )
-from flask_appbuilder.process.engine.process_engine import ProcessEngine
-from flask_appbuilder.process.analytics.dashboard import ProcessAnalytics
-from flask_appbuilder.process.async.task_monitor import TaskMonitor
+from pgappforge.process.engine.process_engine import ProcessEngine
+from pgappforge.process.analytics.dashboard import ProcessAnalytics
+from pgappforge.process.async.task_monitor import TaskMonitor
 
 
 class TestProcessEnginePerformance(unittest.TestCase):
@@ -38,7 +38,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
         }
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
             
@@ -47,7 +47,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
     
     def create_test_definitions(self):
         """Create test process definitions for performance testing."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         # Simple linear process
         self.simple_definition = ProcessDefinition(
@@ -101,7 +101,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
         db.session.add_all([self.simple_definition, self.complex_definition])
         db.session.commit()
     
-    @patch('flask_appbuilder.process.engine.executors.ServiceExecutor.execute')
+    @patch('pgappforge.process.engine.executors.ServiceExecutor.execute')
     def test_single_process_execution_time(self, mock_execute):
         """Test execution time for single process instance."""
         with self.app.app_context():
@@ -125,7 +125,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
             self.assertLess(execution_time, 1.0, "Single process execution took too long")
             self.assertIsNotNone(instance)
     
-    @patch('flask_appbuilder.process.engine.executors.ServiceExecutor.execute')
+    @patch('pgappforge.process.engine.executors.ServiceExecutor.execute')
     def test_concurrent_process_creation(self, mock_execute):
         """Test concurrent process instance creation."""
         with self.app.app_context():
@@ -164,7 +164,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
             print(f"Created {num_processes} processes in {total_time:.3f}s "
                   f"(avg: {avg_time_per_process:.3f}s per process)")
     
-    @patch('flask_appbuilder.process.engine.executors.ServiceExecutor.execute')
+    @patch('pgappforge.process.engine.executors.ServiceExecutor.execute')
     def test_complex_process_performance(self, mock_execute):
         """Test performance of complex branching processes."""
         with self.app.app_context():
@@ -213,7 +213,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
                 )
                 instances.append(instance)
             
-            from flask_appbuilder import db
+            from pgappforge import db
             db.session.add_all(instances)
             db.session.commit()
             
@@ -229,7 +229,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
     def test_database_connection_pooling(self):
         """Test database connection handling under load."""
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             
             def create_and_query_instance():
                 """Create instance and query database."""
@@ -267,7 +267,7 @@ class TestProcessEnginePerformance(unittest.TestCase):
     def test_analytics_performance(self):
         """Test performance of analytics calculations."""
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             
             # Create test data
             instances = []
@@ -312,7 +312,7 @@ class TestProcessEngineStress(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
             
@@ -321,7 +321,7 @@ class TestProcessEngineStress(unittest.TestCase):
     
     def create_stress_test_definition(self):
         """Create process definition for stress testing."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         # Process with many steps for stress testing
         nodes = [{"id": "start", "type": "event", "subtype": "start", "name": "Start"}]
@@ -357,7 +357,7 @@ class TestProcessEngineStress(unittest.TestCase):
         db.session.add(self.stress_definition)
         db.session.commit()
     
-    @patch('flask_appbuilder.process.engine.executors.ServiceExecutor.execute')
+    @patch('pgappforge.process.engine.executors.ServiceExecutor.execute')
     def test_high_volume_process_creation(self, mock_execute):
         """Test creating large numbers of process instances."""
         with self.app.app_context():
@@ -404,7 +404,7 @@ class TestProcessEngineStress(unittest.TestCase):
     def test_long_running_process_stability(self):
         """Test stability with long-running processes."""
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             
             # Create long-running process instances
             long_running_instances = []
@@ -459,15 +459,15 @@ class TestProcessEngineLoadTesting(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
     
     def test_task_monitor_load(self):
         """Test task monitor under high load."""
         with self.app.app_context():
-            from flask_appbuilder.process.async.task_monitor import Base
-            from flask_appbuilder import db
+            from pgappforge.process.async.task_monitor import Base
+            from pgappforge import db
             
             # Create task monitoring tables
             Base.metadata.create_all(db.engine)
@@ -510,7 +510,7 @@ class TestProcessEngineLoadTesting(unittest.TestCase):
     def test_concurrent_analytics_requests(self):
         """Test analytics system under concurrent load."""
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             
             # Create test data
             instances = []

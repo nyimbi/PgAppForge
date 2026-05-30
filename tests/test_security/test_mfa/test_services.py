@@ -20,12 +20,12 @@ from unittest.mock import patch, MagicMock, call
 from contextlib import contextmanager
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Base
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Base
 from cryptography.fernet import Fernet
 
-from flask_appbuilder.security.mfa.models import UserMFA, MFABackupCode, MFAPolicy
-from flask_appbuilder.security.mfa.services import (
+from pgappforge.security.mfa.models import UserMFA, MFABackupCode, MFAPolicy
+from pgappforge.security.mfa.services import (
     TOTPService, SMSService, EmailService, BackupCodeService,
     MFAPolicyService, MFAOrchestrationService, CircuitBreaker,
     CircuitBreakerState, MFAServiceError, ServiceUnavailableError,
@@ -271,7 +271,7 @@ class TestSMSService:
     def sms_service(self, app):
         """Create SMS service instance with mocked providers."""
         with app.app_context():
-            with patch('flask_appbuilder.security.mfa.services.TwilioClient') as mock_twilio:
+            with patch('pgappforge.security.mfa.services.TwilioClient') as mock_twilio:
                 mock_client = MagicMock()
                 mock_twilio.return_value = mock_client
                 
@@ -281,7 +281,7 @@ class TestSMSService:
     def test_sms_service_initialization_twilio(self, app):
         """Test SMS service initialization with Twilio."""
         with app.app_context():
-            with patch('flask_appbuilder.security.mfa.services.TwilioClient'):
+            with patch('pgappforge.security.mfa.services.TwilioClient'):
                 service = SMSService()
                 assert 'twilio' in service.providers
                 assert service.providers['twilio']['from_number'] == '+15551234567'
@@ -309,7 +309,7 @@ class TestSMSService:
             # 4th attempt should fail
             assert service._check_rate_limit(phone) is False
     
-    @patch('flask_appbuilder.security.mfa.services.TwilioClient')
+    @patch('pgappforge.security.mfa.services.TwilioClient')
     def test_send_via_twilio_success(self, mock_twilio_class, app):
         """Test successful SMS sending via Twilio."""
         mock_client = MagicMock()
@@ -325,7 +325,7 @@ class TestSMSService:
             assert result is True
             mock_client.messages.create.assert_called_once()
     
-    @patch('flask_appbuilder.security.mfa.services.TwilioClient')
+    @patch('pgappforge.security.mfa.services.TwilioClient')
     def test_send_via_twilio_failure(self, mock_twilio_class, app):
         """Test SMS sending failure via Twilio."""
         from twilio.base.exceptions import TwilioException
@@ -340,7 +340,7 @@ class TestSMSService:
             with pytest.raises(ServiceUnavailableError):
                 service._send_via_twilio("+15551234567", "Test message")
     
-    @patch('flask_appbuilder.security.mfa.services.TwilioClient')
+    @patch('pgappforge.security.mfa.services.TwilioClient')
     def test_send_mfa_code_success(self, mock_twilio_class, app):
         """Test successful MFA code sending."""
         mock_client = MagicMock()
@@ -511,7 +511,7 @@ class TestBackupCodeService:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture
@@ -664,7 +664,7 @@ class TestMFAPolicyService:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture
@@ -820,7 +820,7 @@ class TestMFAOrchestrationService:
     def db(self, app):
         """Get database session."""
         with app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             return db
     
     @pytest.fixture

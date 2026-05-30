@@ -1,6 +1,6 @@
 # Installation Guide
 
-Complete installation guide for Flask-AppBuilder v4.8.0-enhanced with all advanced features including AI integration, collaborative tools, and process automation.
+Complete installation guide for PgAppForge v4.8.0-enhanced with all advanced features including AI integration, collaborative tools, and process automation.
 
 ## 🎯 Quick Start
 
@@ -11,7 +11,7 @@ Get up and running in 5 minutes with the basic installation:
 python -m venv fab-env
 source fab-env/bin/activate  # On Windows: fab-env\Scripts\activate
 
-# Install Flask-AppBuilder Enhanced
+# Install PgAppForge Enhanced
 pip install flask-appbuilder[mfa,export,analytics]
 
 # Create your first app
@@ -88,8 +88,8 @@ For contributors and advanced developers:
 
 ```bash
 # Clone repository
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/dpgaspar/PgAppForge.git
+cd PgAppForge
 
 # Create development environment
 python -m venv venv
@@ -206,7 +206,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Flask-AppBuilder Enhanced
+# Install PgAppForge Enhanced
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -276,13 +276,13 @@ docker-compose logs -f web
 
 ```python
 # test_installation.py
-import flask_appbuilder
+import pgappforge
 
-print(f"Flask-AppBuilder version: {flask_appbuilder.__version__}")
+print(f"PgAppForge version: {pgappforge.__version__}")
 
 # Test basic imports
-from flask_appbuilder import AppBuilder, ModelView
-from flask_appbuilder.models.sqla import Model
+from pgappforge import AppBuilder, ModelView
+from pgappforge.models.sqla import Model
 
 print("✅ Basic installation verified")
 ```
@@ -292,8 +292,8 @@ print("✅ Basic installation verified")
 ```python
 # test_ai_features.py
 try:
-    from flask_appbuilder.collaborative.ai.ai_models import ModelManager
-    from flask_appbuilder.collaborative.ai.chatbot_service import ChatbotService
+    from pgappforge.collaborative.ai.ai_models import ModelManager
+    from pgappforge.collaborative.ai.chatbot_service import ChatbotService
     print("✅ AI features available")
 except ImportError as e:
     print(f"❌ AI features not available: {e}")
@@ -305,8 +305,8 @@ except ImportError as e:
 ```python
 # test_collaboration.py
 try:
-    from flask_appbuilder.collaborative.realtime.websocket_manager import WebSocketManager
-    from flask_appbuilder.collaborative.core.team_manager import TeamManager
+    from pgappforge.collaborative.realtime.websocket_manager import WebSocketManager
+    from pgappforge.collaborative.core.team_manager import TeamManager
     print("✅ Collaboration features available")
 except ImportError as e:
     print(f"❌ Collaboration features not available: {e}")
@@ -318,8 +318,8 @@ except ImportError as e:
 ```python
 # test_process_features.py
 try:
-    from flask_appbuilder.process.engine import ProcessEngine
-    from flask_appbuilder.process.workflow import WorkflowBuilder
+    from pgappforge.process.engine import ProcessEngine
+    from pgappforge.process.workflow import WorkflowBuilder
     print("✅ Process automation features available")
 except ImportError as e:
     print(f"❌ Process features not available: {e}")
@@ -334,7 +334,7 @@ Create `config.py`:
 
 ```python
 import os
-from flask_appbuilder.security.manager import AUTH_DB
+from pgappforge.security.manager import AUTH_DB
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -343,11 +343,11 @@ SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key-here'
 SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
     f'sqlite:///{os.path.join(basedir, "app.db")}'
 
-# Flask-AppBuilder Configuration
+# PgAppForge Configuration
 AUTH_TYPE = AUTH_DB
 AUTH_ROLE_ADMIN = 'Admin'
 AUTH_ROLE_PUBLIC = 'Public'
-APP_NAME = "My Flask-AppBuilder App"
+APP_NAME = "My PgAppForge App"
 APP_THEME = ""  # Default Bootstrap theme
 
 # Upload Configuration
@@ -386,8 +386,8 @@ WEBAUTHN_ENABLED = False
 ```python
 # app.py
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Model
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Model
 from sqlalchemy import Column, Integer, String
 
 # Create Flask app
@@ -417,8 +417,8 @@ from app import views
 
 ```python
 # views.py
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
 from app import appbuilder, db
 from .models import Contact
 
@@ -549,7 +549,7 @@ sudo apt-get install -y \
     redis-server \
     postgresql
 
-# Install Flask-AppBuilder
+# Install PgAppForge
 pip install flask-appbuilder[mfa,export,analytics]
 ```
 
@@ -646,7 +646,7 @@ SLACK_API_TOKEN=your-slack-token
 ### Useful Resources
 
 - [Official Documentation](https://flask-appbuilder.readthedocs.io/)
-- [GitHub Repository](https://github.com/dpgaspar/Flask-AppBuilder)
+- [GitHub Repository](https://github.com/dpgaspar/PgAppForge)
 - [Community Examples](../examples/)
 - [API Reference](../api/)
 

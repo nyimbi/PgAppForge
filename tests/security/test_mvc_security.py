@@ -1,10 +1,10 @@
 from unittest.mock import patch
 
-from flask_appbuilder import ModelView
-from flask_appbuilder.exceptions import PasswordComplexityValidationError
-from flask_appbuilder.models.sqla.filters import FilterEqual
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.sqla.models import Group, User
+from pgappforge import ModelView
+from pgappforge.exceptions import PasswordComplexityValidationError
+from pgappforge.models.sqla.filters import FilterEqual
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.sqla.models import Group, User
 from tests.base import BaseMVCTestCase
 from tests.const import (
     INVALID_LOGIN_STRING,

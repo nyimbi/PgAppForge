@@ -1,14 +1,14 @@
 import calendar
 
 from flask import flash, Markup, redirect, url_for
-from flask_appbuilder import (
+from pgappforge import (
     action, aggregate_count, BaseView, expose, GroupByChartView, has_access, ModelView
 )
-from flask_appbuilder._compat import as_unicode
-from flask_appbuilder.models.sqla.filters import FilterStartsWith
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.views import MultipleView, SimpleFormView
-from flask_appbuilder.widgets import (
+from pgappforge._compat import as_unicode
+from pgappforge.models.sqla.filters import FilterStartsWith
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.views import MultipleView, SimpleFormView
+from pgappforge.widgets import (
     FormVerticalWidget, ListBlock, ListWidget, ShowBlockWidget
 )
 

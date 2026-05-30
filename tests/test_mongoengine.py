@@ -8,16 +8,16 @@ import tempfile
 import unittest
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, ModelView
-from flask_appbuilder.charts.views import (
+from pgappforge import AppBuilder, ModelView
+from pgappforge.charts.views import (
     DirectByChartView,
     DirectChartView,
     GroupByChartView,
 )
-from flask_appbuilder.cli import export_roles, import_roles
-from flask_appbuilder.models.group import aggregate_avg, aggregate_count, aggregate_sum
-from flask_appbuilder.models.mongoengine.filters import FilterEqual, FilterStartsWith
-from flask_appbuilder.views import CompactCRUDMixin, MasterDetailView
+from pgappforge.cli import export_roles, import_roles
+from pgappforge.models.group import aggregate_avg, aggregate_count, aggregate_sum
+from pgappforge.models.mongoengine.filters import FilterEqual, FilterStartsWith
+from pgappforge.views import CompactCRUDMixin, MasterDetailView
 import jinja2
 
 from .base import FABTestCase
@@ -27,8 +27,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 log = logging.getLogger(__name__)
 
 try:
-    from flask_appbuilder.models.mongoengine.interface import MongoEngineInterface
-    from flask_appbuilder.security.mongoengine.manager import SecurityManager
+    from pgappforge.models.mongoengine.interface import MongoEngineInterface
+    from pgappforge.security.mongoengine.manager import SecurityManager
     from mongoengine.connection import disconnect_all
     from flask_mongoengine import MongoEngine
     from .mongoengine.models import Model1, Model2
@@ -278,7 +278,7 @@ class FlaskTestCase(FABTestCase):
         """
         Test Security reset password
         """
-        from flask_appbuilder.security.mongoengine.models import User
+        from pgappforge.security.mongoengine.models import User
 
         client = self.app.test_client()
 

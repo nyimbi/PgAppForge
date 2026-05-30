@@ -1,6 +1,6 @@
 # Development Environment Setup
 
-This guide covers setting up a development environment for Flask-AppBuilder applications with all the enhanced features including AI integration, collaborative features, and process workflows.
+This guide covers setting up a development environment for PgAppForge applications with all the enhanced features including AI integration, collaborative features, and process workflows.
 
 ## Prerequisites
 
@@ -34,8 +34,8 @@ brew install python@3.11
 
 ```bash
 # Clone the repository
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/dpgaspar/PgAppForge.git
+cd PgAppForge
 
 # Create virtual environment
 python3.11 -m venv venv
@@ -217,7 +217,7 @@ npm install -g @babel/core @babel/cli
 
 ```bash
 # Watch and compile static assets during development
-cd flask_appbuilder/static/appbuilder
+cd pgappforge/static/appbuilder
 
 # Install dependencies
 npm install
@@ -351,7 +351,7 @@ import pytest
 import tempfile
 import os
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 @pytest.fixture
 def app():
@@ -399,7 +399,7 @@ def runner(app):
 pytest
 
 # Run with coverage
-pytest --cov=flask_appbuilder
+pytest --cov=pgappforge
 
 # Run specific test file
 pytest tests/test_security.py
@@ -443,16 +443,16 @@ pytest-watch
 
 ```bash
 # Format code
-black flask_appbuilder tests examples
+black pgappforge tests examples
 
 # Check style
-flake8 flask_appbuilder tests examples
+flake8 pgappforge tests examples
 
 # Type checking
-mypy flask_appbuilder
+mypy pgappforge
 
 # Security checks
-bandit -r flask_appbuilder
+bandit -r pgappforge
 
 # Check dependencies
 safety check
@@ -640,12 +640,12 @@ class DevelopmentConfig:
 # Debug configuration in app.py
 import logging
 from flask import Flask
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 
 # Configure logging for development
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
-logging.getLogger('flask_appbuilder').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge').setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 app.config.from_object('config_dev.DevelopmentConfig')
@@ -655,7 +655,7 @@ if app.debug:
     from werkzeug.debug import DebuggedApplication
     app.wsgi_app = DebuggedApplication(app.wsgi_app, evalex=True)
 
-# Initialize Flask-AppBuilder
+# Initialize PgAppForge
 db = SQLA(app)
 appbuilder = AppBuilder(app, db.session)
 
@@ -691,10 +691,10 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 ```python
 # AI debugging utilities
 import logging
-from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+from pgappforge.collaborative.ai.ai_models import AIModelManager
 
 # Enable detailed AI logging
-logging.getLogger('flask_appbuilder.collaborative.ai').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.collaborative.ai').setLevel(logging.DEBUG)
 
 # Debug AI responses
 def debug_ai_call(prompt, model_provider=None):
@@ -718,7 +718,7 @@ def debug_ai_call(prompt, model_provider=None):
 # Test AI connectivity
 def test_ai_providers():
     """Test all configured AI providers."""
-    from flask_appbuilder.collaborative.ai.ai_models import ModelProvider
+    from pgappforge.collaborative.ai.ai_models import ModelProvider
 
     manager = AIModelManager()
     test_prompt = "Hello, world!"
@@ -808,7 +808,7 @@ pip install -e ".[mfa,export,analytics]"
 python -c "import sys; print('\n'.join(sys.path))"
 
 # Verify installation
-python -c "import flask_appbuilder; print(flask_appbuilder.__version__)"
+python -c "import pgappforge; print(pgappforge.__version__)"
 ```
 
 ### Database Issues
@@ -855,4 +855,4 @@ response = requests.get('http://localhost:11434/api/tags')
 print(response.status_code, response.json())
 ```
 
-This development setup guide provides comprehensive instructions for setting up a productive development environment for Flask-AppBuilder with all enhanced features.
+This development setup guide provides comprehensive instructions for setting up a productive development environment for PgAppForge with all enhanced features.

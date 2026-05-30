@@ -1,11 +1,11 @@
-# Flask-AppBuilder Enhanced Documentation
+# PgForge Enhanced Documentation
 
 ![Implementation Status](https://img.shields.io/badge/Implementation-✅%20VALIDATED-brightgreen)
 ![Documentation Accuracy](https://img.shields.io/badge/Documentation%20Accuracy-100%25-brightgreen)
 ![Production Ready](https://img.shields.io/badge/Production%20Ready-98%25-brightgreen)
 ![Test Coverage](https://img.shields.io/badge/Test%20Coverage-95%25%2B-brightgreen)
 
-Welcome to the comprehensive documentation for Flask-AppBuilder Enhanced - a modern, AI-powered, collaborative web application framework built on Flask-AppBuilder.
+Welcome to the comprehensive documentation for PgForge Enhanced - a modern, AI-powered, collaborative web application framework built on PgForge.
 
 ## 🚀 Quick Links
 
@@ -112,9 +112,9 @@ Welcome to the comprehensive documentation for Flask-AppBuilder Enhanced - a mod
 ### Quick Installation
 
 ```bash
-# Clone the enhanced Flask-AppBuilder
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+# Clone the enhanced PgForge
+git clone https://github.com/dpgaspar/PgForge.git
+cd PgForge
 
 # Install with all features
 pip install -e ".[mfa,export,analytics,oauth,openid,talisman]"

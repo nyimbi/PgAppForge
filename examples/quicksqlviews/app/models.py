@@ -1,6 +1,6 @@
 import datetime
 
-from flask_appbuilder import Model
+from pgappforge import Model
 from sqlalchemy import Column, Date, ForeignKey, Integer, MetaData, String, Table
 from sqlalchemy.orm import relationship
 

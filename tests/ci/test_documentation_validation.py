@@ -1,5 +1,5 @@
 """
-Documentation validation tests for Flask-AppBuilder.
+Documentation validation tests for PgAppForge.
 
 This module provides comprehensive testing to ensure all classes and methods
 are properly documented according to production readiness standards.
@@ -262,12 +262,12 @@ class TestDocumentationValidation(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment for documentation validation"""
-        self.flask_appbuilder_path = '/Users/nyimbiodero/src/pjs/fab-ext/flask_appbuilder'
-        self.validator = DocumentationValidator(self.flask_appbuilder_path)
+        self.pgappforge_path = '/Users/nyimbiodero/src/pjs/fab-ext/pgappforge'
+        self.validator = DocumentationValidator(self.pgappforge_path)
         self.min_documentation_coverage = 60.0  # Minimum acceptable coverage percentage
     
     def test_core_module_documentation(self):
-        """Test that core Flask-AppBuilder modules have proper documentation"""
+        """Test that core PgAppForge modules have proper documentation"""
         core_modules = [
             'base.py',
             'views.py',
@@ -277,7 +277,7 @@ class TestDocumentationValidation(unittest.TestCase):
         ]
         
         for module in core_modules:
-            module_path = Path(self.flask_appbuilder_path) / module
+            module_path = Path(self.pgappforge_path) / module
             if module_path.exists():
                 analysis = self.validator.analyze_file(module_path)
                 
@@ -305,7 +305,7 @@ class TestDocumentationValidation(unittest.TestCase):
     
     def test_security_module_documentation(self):
         """Test that security modules have comprehensive documentation"""
-        security_path = Path(self.flask_appbuilder_path) / 'security'
+        security_path = Path(self.pgappforge_path) / 'security'
         security_modules = ['manager.py', 'views.py', 'registerviews.py']
         
         for module in security_modules:
@@ -339,7 +339,7 @@ class TestDocumentationValidation(unittest.TestCase):
         ]
         
         for module in view_modules:
-            module_path = Path(self.flask_appbuilder_path) / module
+            module_path = Path(self.pgappforge_path) / module
             if module_path.exists():
                 analysis = self.validator.analyze_file(module_path)
                 
@@ -355,7 +355,7 @@ class TestDocumentationValidation(unittest.TestCase):
                     )
     
     def test_overall_documentation_coverage(self):
-        """Test overall documentation coverage across the Flask-AppBuilder codebase"""
+        """Test overall documentation coverage across the PgAppForge codebase"""
         # Analyze the entire codebase
         exclude_patterns = ['__pycache__', '.git', 'tests', 'examples', 'node_modules']
         results = self.validator.analyze_directory(exclude_patterns)
@@ -399,7 +399,7 @@ class TestDocumentationValidation(unittest.TestCase):
         )
     
     def test_critical_class_documentation(self):
-        """Test that critical Flask-AppBuilder classes are properly documented"""
+        """Test that critical PgAppForge classes are properly documented"""
         critical_classes = [
             ('base.py', 'AppBuilder'),
             ('baseviews.py', 'BaseView'),
@@ -409,7 +409,7 @@ class TestDocumentationValidation(unittest.TestCase):
         ]
         
         for module_path, class_name in critical_classes:
-            full_path = Path(self.flask_appbuilder_path) / module_path
+            full_path = Path(self.pgappforge_path) / module_path
             if full_path.exists():
                 analysis = self.validator.analyze_file(full_path)
                 
@@ -426,7 +426,7 @@ class TestDocumentationValidation(unittest.TestCase):
         total_quality_issues = 0
         
         for module in key_modules:
-            module_path = Path(self.flask_appbuilder_path) / module
+            module_path = Path(self.pgappforge_path) / module
             if module_path.exists():
                 analysis = self.validator.analyze_file(module_path)
                 quality_issues = len(analysis['documentation_quality_issues'])
@@ -449,7 +449,7 @@ class TestDocumentationValidation(unittest.TestCase):
         public_api_modules = ['base.py', 'views.py', 'baseviews.py']
         
         for module in public_api_modules:
-            module_path = Path(self.flask_appbuilder_path) / module
+            module_path = Path(self.pgappforge_path) / module
             if module_path.exists():
                 analysis = self.validator.analyze_file(module_path)
                 
@@ -476,14 +476,14 @@ class TestDocumentationConsistency(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment for documentation consistency tests"""
-        self.flask_appbuilder_path = '/Users/nyimbiodero/src/pjs/fab-ext/flask_appbuilder'
+        self.pgappforge_path = '/Users/nyimbiodero/src/pjs/fab-ext/pgappforge'
     
     def test_docstring_format_consistency(self):
         """Test that docstrings follow consistent formatting standards"""
         sample_files = ['base.py', 'views.py', 'baseviews.py']
         
         for module in sample_files:
-            module_path = Path(self.flask_appbuilder_path) / module
+            module_path = Path(self.pgappforge_path) / module
             if module_path.exists():
                 with open(module_path, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -501,11 +501,11 @@ class TestDocumentationConsistency(unittest.TestCase):
     
     def test_class_docstring_structure(self):
         """Test that class docstrings follow proper structure"""
-        validator = DocumentationValidator(self.flask_appbuilder_path)
+        validator = DocumentationValidator(self.pgappforge_path)
         key_files = ['base.py', 'baseviews.py', 'views.py']
         
         for module in key_files:
-            module_path = Path(self.flask_appbuilder_path) / module
+            module_path = Path(self.pgappforge_path) / module
             if module_path.exists():
                 try:
                     with open(module_path, 'r', encoding='utf-8') as f:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mock services infrastructure for Flask-AppBuilder tutorial testing.
+Mock services infrastructure for PgForge tutorial testing.
 
 This module provides comprehensive mock implementations of external services
 to enable reliable, isolated testing of tutorial functionality.

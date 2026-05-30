@@ -1,10 +1,10 @@
-# JHipster-Inspired Workflow System for Flask-AppBuilder
+# JHipster-Inspired Workflow System for PgAppForge
 
-> **Revolutionary Code Generation**: Transform your Flask-AppBuilder development experience with JHipster's proven approach to rapid enterprise application development.
+> **Revolutionary Code Generation**: Transform your PgAppForge development experience with JHipster's proven approach to rapid enterprise application development.
 
 ## 🎯 Overview
 
-The JHipster-Inspired Workflow System brings the revolutionary development experience of JHipster to Flask-AppBuilder. Define your workflows in simple YAML or WDL files and generate complete, production-ready Flask-AppBuilder applications.
+The JHipster-Inspired Workflow System brings the revolutionary development experience of JHipster to PgAppForge. Define your workflows in simple YAML or WDL files and generate complete, production-ready PgAppForge applications.
 
 ### ✨ Key Features
 
@@ -132,13 +132,13 @@ EmployeeOnboarding:
     encryption: ["salary"]
 ```
 
-### 2. Generate Flask-AppBuilder Code
+### 2. Generate PgAppForge Code
 
 ```bash
 # Validate your workflow definition
 flask fab workflow validate employee_onboarding.yaml
 
-# Generate complete Flask-AppBuilder application
+# Generate complete PgAppForge application
 flask fab workflow generate employee_onboarding.yaml --app-name hr_system
 
 # View what would be generated (dry run)
@@ -147,17 +147,17 @@ flask fab workflow generate employee_onboarding.yaml --app-name hr_system --dry-
 
 ### 3. Generated Files
 
-The system generates a complete Flask-AppBuilder application:
+The system generates a complete PgAppForge application:
 
 ```
 📁 Generated Files (16 total):
 ├── 🏗️  models/
 │   └── document_model.py                    # SQLAlchemy model for Document entity
 ├── 📊 views/
-│   ├── personalinfo_view.py                # Flask-AppBuilder view for PersonalInfo step
-│   ├── documentupload_view.py              # Flask-AppBuilder view for DocumentUpload step
-│   ├── managerapproval_view.py             # Flask-AppBuilder view for ManagerApproval step
-│   └── hrprocessing_view.py                # Flask-AppBuilder view for HRProcessing step
+│   ├── personalinfo_view.py                # PgAppForge view for PersonalInfo step
+│   ├── documentupload_view.py              # PgAppForge view for DocumentUpload step
+│   ├── managerapproval_view.py             # PgAppForge view for ManagerApproval step
+│   └── hrprocessing_view.py                # PgAppForge view for HRProcessing step
 ├── 📝 forms/
 │   ├── personalinfo_form.py                # WTForms for PersonalInfo step
 │   ├── documentupload_form.py              # WTForms for DocumentUpload step
@@ -179,7 +179,7 @@ The system generates a complete Flask-AppBuilder application:
 ### 4. Integration
 
 ```python
-# In your Flask-AppBuilder application
+# In your PgAppForge application
 from your_app.models.document_model import Document
 from your_app.views.personalinfo_view import PersonalInfoView
 from your_app.views.documentupload_view import DocumentUploadView
@@ -197,13 +197,13 @@ appbuilder.add_view(HRProcessingView, "HR Processing", icon="fa-users", category
 
 ### `flask fab workflow generate`
 
-Generate Flask-AppBuilder code from workflow definition.
+Generate PgAppForge code from workflow definition.
 
 ```bash
 flask fab workflow generate <workflow_file> --app-name <app_name> [options]
 
 Options:
-  --app-name, -n          Name of the Flask-AppBuilder application (required)
+  --app-name, -n          Name of the PgAppForge application (required)
   --output-dir, -o        Output directory for generated code (default: current directory)
   --format                Input format: yaml or wdl (default: yaml)
   --force, -f             Overwrite existing files without confirmation
@@ -263,7 +263,7 @@ Workflow Definition (YAML/WDL)
            ↓
     Generated Components:
     ├── SQLAlchemy Models
-    ├── Flask-AppBuilder Views  
+    ├── PgAppForge Views  
     ├── WTForms with Validation
     ├── Bootstrap Templates
     ├── RESTful APIs
@@ -279,7 +279,7 @@ Workflow Definition (YAML/WDL)
 - Audit trails and timestamps
 - Security features (encryption, soft deletes)
 
-#### 2. **Flask-AppBuilder Views**
+#### 2. **PgAppForge Views**
 - ModelView classes with CRUD operations
 - Custom permissions and security
 - Workflow state management
@@ -577,7 +577,7 @@ flask db downgrade
 
 ## 🤝 Integration with Existing Applications
 
-### Adding to Existing Flask-AppBuilder App
+### Adding to Existing PgAppForge App
 
 1. **Generate workflow code**:
 ```bash
@@ -605,7 +605,7 @@ flask db upgrade
 
 ### Extending Generated Code
 
-The generated code follows Flask-AppBuilder patterns and can be easily extended:
+The generated code follows PgAppForge patterns and can be easily extended:
 
 ```python
 # Extend generated view
@@ -748,7 +748,7 @@ flask db merge  # Merge if necessary
 # Verify roles exist in database
 # Check role assignments for users
 # Ensure permission names match generated ones
-from flask_appbuilder.security.sqla.models import Role, Permission
+from pgappforge.security.sqla.models import Role, Permission
 ```
 
 ### Debug Mode
@@ -799,6 +799,6 @@ We welcome contributions! See `CONTRIBUTING.md` for guidelines.
 
 ---
 
-**🎉 Transform your Flask-AppBuilder development with JHipster's revolutionary approach!**
+**🎉 Transform your PgAppForge development with JHipster's revolutionary approach!**
 
-*Built with ❤️ by the Flask-AppBuilder Workflow Team*
+*Built with ❤️ by the PgAppForge Workflow Team*

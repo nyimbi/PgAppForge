@@ -2,12 +2,12 @@ import random
 import logging
 import datetime
 import calendar
-from flask_appbuilder.models.datamodel import SQLAModel
-from flask_appbuilder.views import ModelView
-from flask_appbuilder.charts.views import DirectChartView, DirectByChartView, GroupByChartView
+from pgappforge.models.datamodel import SQLAModel
+from pgappforge.views import ModelView
+from pgappforge.charts.views import DirectChartView, DirectByChartView, GroupByChartView
 from models import CountryStats, Country, PoliticalType
 from app import appbuilder, db
-from flask_appbuilder.models.group import aggregate_count, aggregate_sum, aggregate_avg
+from pgappforge.models.group import aggregate_count, aggregate_sum, aggregate_avg
 
 log = logging.getLogger(__name__)
 

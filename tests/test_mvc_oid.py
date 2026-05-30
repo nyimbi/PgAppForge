@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from flask_appbuilder import SQLA
+from pgappforge import SQLA
 from tests.base import FABTestCase
 
 
@@ -9,7 +9,7 @@ class MVCOIDTestCase(FABTestCase):
 
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_oid")

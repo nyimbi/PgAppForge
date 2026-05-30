@@ -1,5 +1,5 @@
-from flask_appbuilder.security.sqla.manager import SecurityManager
-from flask_appbuilder.security.views import UserInfoEditView
+from pgappforge.security.sqla.manager import SecurityManager
+from pgappforge.security.views import UserInfoEditView
 
 from .models import MyUser
 from .sec_forms import UserInfoEdit

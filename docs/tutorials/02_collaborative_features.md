@@ -4,7 +4,7 @@
 ![Runtime Testing](https://img.shields.io/badge/Runtime%20Testing-🔄%20Required-yellow)
 ![Tutorial Level](https://img.shields.io/badge/Level-Intermediate-orange)
 
-This tutorial builds on the Getting Started guide and shows you how to implement real-time collaborative editing, team management, and live updates in your Flask-AppBuilder application.
+This tutorial builds on the Getting Started guide and shows you how to implement real-time collaborative editing, team management, and live updates in your PgAppForge application.
 
 > **⚠️ Validation Status**: WebSocket infrastructure and collaborative features have been **confirmed implemented** with full production-ready code. Tutorial examples require runtime testing.
 
@@ -57,7 +57,7 @@ Modify `app.py`:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 from flask_socketio import SocketIO
 
 # Create Flask app
@@ -70,7 +70,7 @@ db = SQLA(app)
 # Initialize SocketIO for real-time features
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Initialize Flask-AppBuilder
+# Initialize PgAppForge
 appbuilder = AppBuilder(app, db.session)
 
 # Import collaborative models and views
@@ -241,8 +241,8 @@ Create `collaborative_views.py`:
 
 ```python
 from flask import request, render_template, jsonify, session
-from flask_appbuilder import BaseView, expose, has_access
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import BaseView, expose, has_access
+from pgappforge.models.sqla.interface import SQLAInterface
 from flask_socketio import emit, join_room, leave_room, rooms
 from datetime import datetime, timedelta
 import json

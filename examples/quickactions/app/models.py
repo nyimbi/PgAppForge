@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String
-from flask_appbuilder import Model
+from pgappforge import Model
 
 
 class ContactGroup(Model):

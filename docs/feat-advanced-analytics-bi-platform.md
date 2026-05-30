@@ -1,4 +1,4 @@
-# Flask-AppBuilder: Analytics Platform Enhancements
+# PgAppForge: Analytics Platform Enhancements
 
 ## Status
 Draft
@@ -7,7 +7,7 @@ Draft
 Claude Code Assistant - September 2025
 
 ## Overview
-Four focused enhancements that extend Flask-AppBuilder's existing analytics capabilities by building on the current chart system, dashboard infrastructure, and existing WizardAnalyticsView.
+Four focused enhancements that extend PgAppForge's existing analytics capabilities by building on the current chart system, dashboard infrastructure, and existing WizardAnalyticsView.
 
 ## Features
 
@@ -16,8 +16,8 @@ Extend the existing chart system with new widget types for better data visualiza
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.charts.widgets import ChartWidget
-from flask_appbuilder.charts.views import BaseChartView
+from pgappforge.charts.widgets import ChartWidget
+from pgappforge.charts.views import BaseChartView
 
 class MetricCardWidget(ChartWidget):
     """Widget for displaying key metrics as cards"""
@@ -54,7 +54,7 @@ class TrendChartView(BaseChartView):
     
     def get_trend_data(self, date_field, value_field, time_range='30d'):
         """Get trend data using existing GroupByProcessData patterns"""
-        from flask_appbuilder.models.group import GroupByProcessData
+        from pgappforge.models.group import GroupByProcessData
         
         # Build on existing chart data patterns
         group_by = GroupByProcessData(
@@ -94,7 +94,7 @@ class EnhancedDashboardView(BaseView):
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder chart system (`flask_appbuilder.charts.views`)
+- Existing PgAppForge chart system (`pgappforge.charts.views`)
 - Existing widget infrastructure
 - Builds on existing `WizardAnalyticsView` patterns
 
@@ -109,11 +109,11 @@ class TestMetricCardWidget(FABTestCase):
 ```
 
 ### F2: Dashboard Layout Manager (1 week)
-Simple dashboard customization using existing Flask-AppBuilder view patterns.
+Simple dashboard customization using existing PgAppForge view patterns.
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.views import BaseView, SimpleFormView
+from pgappforge.views import BaseView, SimpleFormView
 from wtforms import SelectField, BooleanField, TextAreaField
 
 class DashboardLayoutForm(DynamicForm):
@@ -174,7 +174,7 @@ class DashboardLayoutView(SimpleFormView):
     
     def _save_dashboard_config(self, config):
         """Save dashboard configuration using existing patterns"""
-        # Use existing Flask-AppBuilder user preferences or database
+        # Use existing PgAppForge user preferences or database
         from flask_login import current_user
         
         # Could extend existing user model or use settings table
@@ -200,7 +200,7 @@ class ConfigurableDashboardView(BaseView):
 ```
 
 #### Dependencies
-- Existing Flask-AppBuilder form system
+- Existing PgAppForge form system
 - Existing user/session management
 - JSON configuration storage
 
@@ -251,7 +251,7 @@ class AnalyticsExportView(BaseView):
     def _get_analytics_data(self):
         """Get analytics data using existing patterns"""
         # Build on existing WizardAnalyticsView data collection
-        from flask_appbuilder.views.analytics_view import wizard_analytics
+        from pgappforge.views.analytics_view import wizard_analytics
         
         return wizard_analytics.get_dashboard_data(
             date_range='30d',
@@ -352,7 +352,7 @@ Simple threshold-based alerts using existing Flask-Mail and form patterns.
 
 #### Technical Implementation
 ```python
-from flask_appbuilder.views import SimpleFormView
+from pgappforge.views import SimpleFormView
 from wtforms import SelectField, FloatField, StringField
 from flask_mail import Message
 
@@ -458,7 +458,7 @@ class AlertService:
     
     def _get_metric_value(self, metric_name):
         """Get current metric value using existing analytics"""
-        from flask_appbuilder.views.analytics_view import wizard_analytics
+        from pgappforge.views.analytics_view import wizard_analytics
         
         # Use existing analytics data collection
         data = wizard_analytics.get_metric_data(metric_name)
@@ -556,7 +556,7 @@ class TestMetricAlerts(FABTestCase):
 - Set up background task scheduling
 
 ## Success Metrics
-- All features integrate with existing Flask-AppBuilder analytics infrastructure
+- All features integrate with existing PgAppForge analytics infrastructure
 - No breaking changes to existing `WizardAnalyticsView`
 - Export functionality works with existing chart data
 - Alert system uses existing Flask-Mail configuration
@@ -569,4 +569,4 @@ These features build on existing analytics capabilities:
 - Export functionality works with current analytics data
 - Alert system integrates with existing notification infrastructure
 
-Existing Flask-AppBuilder applications with analytics can adopt these features without modifications to existing code.
+Existing PgAppForge applications with analytics can adopt these features without modifications to existing code.

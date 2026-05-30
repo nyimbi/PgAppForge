@@ -2,8 +2,8 @@ import json
 import logging
 import os
 
-from flask_appbuilder import ModelRestApi, SQLA
-from flask_appbuilder.const import (
+from pgappforge import ModelRestApi, SQLA
+from pgappforge.const import (
     API_ADD_COLUMNS_RES_KEY,
     API_ADD_COLUMNS_RIS_KEY,
     API_ADD_TITLE_RIS_KEY,
@@ -31,9 +31,9 @@ from flask_appbuilder.const import (
     API_SHOW_TITLE_RIS_KEY,
     API_URI_RIS_KEY,
 )
-from flask_appbuilder.hooks import before_request
-from flask_appbuilder.models.sqla.filters import FilterGreater, FilterSmaller
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge.hooks import before_request
+from pgappforge.models.sqla.filters import FilterGreater, FilterSmaller
+from pgappforge.models.sqla.interface import SQLAInterface
 import prison
 from sqlalchemy.sql.expression import func
 from tests.base import FABTestCase
@@ -80,7 +80,7 @@ class APICSRFTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
         from flask_wtf import CSRFProtect
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_api")
@@ -118,7 +118,7 @@ class APIDisableSecViewTestCase(FABTestCase):
 
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_api")
@@ -140,7 +140,7 @@ class APIDisableOpenApiViewTestCase(FABTestCase):
 
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_api")
@@ -160,10 +160,10 @@ class APIDisableOpenApiViewTestCase(FABTestCase):
 class APITestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
-        from flask_appbuilder.models.filters import BaseFilter
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
-        from flask_appbuilder.api import (
+        from pgappforge import AppBuilder
+        from pgappforge.models.filters import BaseFilter
+        from pgappforge.models.sqla.interface import SQLAInterface
+        from pgappforge.api import (
             BaseApi,
             ModelRestApi,
             protect,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Testing utilities and helpers for Flask-AppBuilder tutorial tests.
+Testing utilities and helpers for PgAppForge tutorial tests.
 
 This module provides reusable utilities for setting up test environments,
 generating test data, and managing test resources.
@@ -422,7 +422,7 @@ class TutorialTestValidator:
     def validate_dependencies() -> Dict[str, bool]:
         """Validate that required dependencies are available."""
         required_modules = [
-            'flask', 'flask_appbuilder', 'sqlalchemy', 'wtforms',
+            'flask', 'pgappforge', 'sqlalchemy', 'wtforms',
             'unittest', 'tempfile', 'pathlib', 'json'
         ]
 

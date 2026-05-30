@@ -1,12 +1,12 @@
-# Flask-AppBuilder Approval System Migration Guide
+# PgAppForge Approval System Migration Guide
 
 ## Overview
 
-This migration guide covers the comprehensive security and performance improvements made to the Flask-AppBuilder approval system. These changes address 8 critical security vulnerabilities (CVEs) and implement significant performance optimizations.
+This migration guide covers the comprehensive security and performance improvements made to the PgAppForge approval system. These changes address 8 critical security vulnerabilities (CVEs) and implement significant performance optimizations.
 
 ## Migration Version
-- **From**: Flask-AppBuilder 4.7.x and earlier  
-- **To**: Flask-AppBuilder 4.8.0+
+- **From**: PgAppForge 4.7.x and earlier  
+- **To**: PgAppForge 4.8.0+
 - **Migration Type**: Major security and performance update
 - **Backwards Compatibility**: Partial (see Breaking Changes section)
 
@@ -62,8 +62,8 @@ def validate_user_role(self, user, required_role: str, allow_admin_override: boo
 2. **Temporary**: Enable legacy admin override (with warnings)
 
 ```python
-# In your Flask-AppBuilder configuration
-from flask_appbuilder.process.approval.constants import SecurityConstants
+# In your PgAppForge configuration
+from pgappforge.process.approval.constants import SecurityConstants
 
 # DEPRECATED: For backwards compatibility only
 SecurityConstants.ENABLE_LEGACY_ADMIN_OVERRIDE = True
@@ -79,7 +79,7 @@ workflow_manager.approve_instance(
 #### Security Impact
 - **High**: Admin override bypasses role-based security
 - **Audit**: All override usage is logged for compliance
-- **Deprecation**: Feature will be removed in Flask-AppBuilder 5.0
+- **Deprecation**: Feature will be removed in PgAppForge 5.0
 
 ### 2. Rate Limiting Configuration
 
@@ -115,7 +115,7 @@ max_overflow = 30
 
 #### New Configuration
 ```python
-from flask_appbuilder.process.approval.constants import DatabaseConstants
+from pgappforge.process.approval.constants import DatabaseConstants
 
 # Centralized configuration with dynamic scaling
 connection_config = ConnectionConfig(
@@ -139,7 +139,7 @@ connection_config = ConnectionConfig(
 Comprehensive input validation and threat detection:
 
 ```python
-from flask_appbuilder.process.approval.validation_framework import (
+from pgappforge.process.approval.validation_framework import (
     validate_approval_request,
     validate_user_input,
     detect_security_threats
@@ -157,7 +157,7 @@ if result['threats']:
 Immutable audit trail with integrity protection:
 
 ```python
-from flask_appbuilder.process.approval.audit_logger import ApprovalAuditLogger
+from pgappforge.process.approval.audit_logger import ApprovalAuditLogger
 
 audit_logger = ApprovalAuditLogger()
 
@@ -178,7 +178,7 @@ is_valid = audit_logger.verify_approval_record_integrity(record)
 Connection pool and performance metrics:
 
 ```python
-from flask_appbuilder.process.approval.connection_pool_manager import ConnectionPoolManager
+from pgappforge.process.approval.connection_pool_manager import ConnectionPoolManager
 
 # Get real-time metrics
 manager = ConnectionPoolManager(appbuilder, config)
@@ -194,8 +194,8 @@ recommendations = manager.get_scaling_recommendations()
 
 #### 1. Security Constants
 ```python
-# Add to your Flask-AppBuilder configuration
-from flask_appbuilder.process.approval.constants import SecurityConstants
+# Add to your PgAppForge configuration
+from pgappforge.process.approval.constants import SecurityConstants
 
 # Cryptographic security
 SECRET_KEY_MIN_LENGTH = SecurityConstants.MIN_SECRET_KEY_LENGTH  # 32 chars
@@ -210,7 +210,7 @@ MAX_COMMENT_LENGTH = SecurityConstants.MAX_COMMENT_LENGTH  # 1000 chars
 
 #### 2. Database Configuration
 ```python
-from flask_appbuilder.process.approval.constants import DatabaseConstants
+from pgappforge.process.approval.constants import DatabaseConstants
 
 # Connection pooling
 SQLALCHEMY_ENGINE_OPTIONS = {
@@ -223,7 +223,7 @@ SQLALCHEMY_ENGINE_OPTIONS = {
 
 #### 3. Workflow Configuration
 ```python
-from flask_appbuilder.process.approval.constants import WorkflowConstants
+from pgappforge.process.approval.constants import WorkflowConstants
 
 # Workflow limits
 MAX_APPROVAL_CHAIN_STEPS = WorkflowConstants.MAX_CHAIN_STEPS  # 10
@@ -281,7 +281,7 @@ python -m tests.test_performance_benchmarks -v
 ### 1. Security Monitoring
 ```python
 # Monitor security events
-from flask_appbuilder.process.approval.security_validator import ApprovalSecurityValidator
+from pgappforge.process.approval.security_validator import ApprovalSecurityValidator
 
 validator = ApprovalSecurityValidator(appbuilder)
 
@@ -302,7 +302,7 @@ print(f"Failed Connections: {metrics['failed_connections']}")
 ### 3. Audit Monitoring
 ```python
 # Monitor audit trail integrity
-from flask_appbuilder.process.approval.audit_logger import ApprovalAuditLogger
+from pgappforge.process.approval.audit_logger import ApprovalAuditLogger
 
 audit_logger = ApprovalAuditLogger()
 integrity_status = audit_logger.verify_audit_trail_integrity()
@@ -408,11 +408,11 @@ CONNECTION_POOL_MONITORING = False
 - **Documentation**: This migration guide
 - **Testing**: Comprehensive test suite in `tests/integration/`
 - **Monitoring**: Built-in health checks and metrics
-- **Community**: Flask-AppBuilder GitHub issues
+- **Community**: PgAppForge GitHub issues
 
 ## Conclusion
 
-This migration brings significant security and performance improvements to the Flask-AppBuilder approval system. While some changes are breaking, the security benefits and performance gains justify the migration effort.
+This migration brings significant security and performance improvements to the PgAppForge approval system. While some changes are breaking, the security benefits and performance gains justify the migration effort.
 
 **Key Recommendations**:
 1. **Test thoroughly** in development environment

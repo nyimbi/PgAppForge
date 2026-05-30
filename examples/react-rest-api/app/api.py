@@ -1,5 +1,5 @@
-from flask_appbuilder import ModelRestApi, BaseView, has_access, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelRestApi, BaseView, has_access, expose
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from . import appbuilder, db
 from .models import Contact, ContactGroup, Gender

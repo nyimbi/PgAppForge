@@ -1,4 +1,4 @@
-from flask_appbuilder.security.sqla.models import User
+from pgappforge.security.sqla.models import User
 from sqlalchemy import Column, String
 
 

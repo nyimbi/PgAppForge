@@ -28,14 +28,14 @@ from typing import Dict, List, Any, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, current_app
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.security.sqla.models import User, Role
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Model
+from pgappforge.security.sqla.models import User, Role
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
 # Import the security-enhanced classes
-from proper_flask_appbuilder_extensions import (
+from proper_pgappforge_extensions import (
     ApprovalWorkflowManager, 
     ApprovalModelView,
     DatabaseMixin
@@ -67,13 +67,13 @@ class TestApprovalModel(Model):
 
 class SecurityPenetrationTestCase(unittest.TestCase):
     """
-    Comprehensive security penetration testing for Flask-AppBuilder approval system.
+    Comprehensive security penetration testing for PgAppForge approval system.
     
     Tests simulate real-world attack scenarios to validate security fixes.
     """
     
     def setUp(self):
-        """Set up test Flask-AppBuilder application with security context."""
+        """Set up test PgAppForge application with security context."""
         self.app = Flask(__name__)
         self.app.config['SECRET_KEY'] = 'test_secret_key_for_penetration_testing'
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
@@ -81,7 +81,7 @@ class SecurityPenetrationTestCase(unittest.TestCase):
         self.app.config['WTF_CSRF_ENABLED'] = False
         self.app.config['APP_NAME'] = 'Security Test App'
         
-        # Initialize Flask-AppBuilder
+        # Initialize PgAppForge
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
@@ -108,7 +108,7 @@ class SecurityPenetrationTestCase(unittest.TestCase):
             self.approver_user = self._create_test_user('approver_user', 'approver@test.com', [approver_role])
             self.reviewer_user = self._create_test_user('reviewer_user', 'reviewer@test.com', [reviewer_role])
             
-            # Initialize ApprovalWorkflowManager with proper Flask-AppBuilder context
+            # Initialize ApprovalWorkflowManager with proper PgAppForge context
             self.approval_manager = ApprovalWorkflowManager(self.appbuilder)
             
             # Create test workflow configuration
@@ -308,7 +308,7 @@ class SecurityPenetrationTestCase(unittest.TestCase):
             ]
             
             # Create mock ApprovalModelView for testing bulk operations
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             datamodel = SQLAInterface(TestApprovalModel)
             
             class TestApprovalView(ApprovalModelView):
@@ -343,7 +343,7 @@ class SecurityPenetrationTestCase(unittest.TestCase):
             test_instance = self._create_test_instance()
             
             # Capture log messages
-            with self.assertLogs('flask_appbuilder.security', level='WARNING') as log_capture:
+            with self.assertLogs('pgappforge.security', level='WARNING') as log_capture:
                 with patch.object(self.appbuilder.sm, 'current_user', self.regular_user):
                     # Trigger security events that should generate audit logs
                     self.approval_manager.approve_step(test_instance, 0, comments="Self approval")

@@ -152,9 +152,9 @@ class TestWidgetGalleryLogic:
         
         def generate_widget_code(category, widget_name, config, usage_type):
             widget_module = {
-                'modern_ui': 'flask_appbuilder.widgets.modern_ui',
-                'advanced_forms': 'flask_appbuilder.widgets.advanced_forms'
-            }.get(category, 'flask_appbuilder.widgets')
+                'modern_ui': 'pgappforge.widgets.modern_ui',
+                'advanced_forms': 'pgappforge.widgets.advanced_forms'
+            }.get(category, 'pgappforge.widgets')
             
             # Format config for Python code
             config_str = format_config_for_code(config)
@@ -176,7 +176,7 @@ class MyForm(FlaskForm):
             
             elif usage_type == 'form':
                 examples['form_usage'] = f'''# Form integration
-from flask_appbuilder.forms import DynamicForm
+from pgappforge.forms import DynamicForm
 from {widget_module} import {widget_name}
 
 class MyModelForm(DynamicForm):
@@ -214,7 +214,7 @@ class MyModelForm(DynamicForm):
         )
         
         assert 'basic_usage' in code_examples
-        assert 'from flask_appbuilder.widgets.modern_ui import ModernTextWidget' in code_examples['basic_usage']
+        assert 'from pgappforge.widgets.modern_ui import ModernTextWidget' in code_examples['basic_usage']
         assert 'icon_prefix="fa-user"' in code_examples['basic_usage']
         assert 'floating_label=True' in code_examples['basic_usage']
         
@@ -226,7 +226,7 @@ class MyModelForm(DynamicForm):
         )
         
         assert 'form_usage' in form_code
-        assert 'from flask_appbuilder.widgets.advanced_forms import ValidationWidget' in form_code['form_usage']
+        assert 'from pgappforge.widgets.advanced_forms import ValidationWidget' in form_code['form_usage']
         assert 'show_progress=True' in form_code['form_usage']
         assert 'debounce_delay=300' in form_code['form_usage']
 

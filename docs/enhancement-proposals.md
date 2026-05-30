@@ -1,6 +1,6 @@
-Below is a practitioner’s critique of **Flask-AppBuilder (FAB)** with concrete, production-grade extensions. I focus on correctness of the underlying abstractions, measurable impact on latency and developer throughput, and low-risk migration paths. Where relevant, I formalize models and include self-contained Python sketches that you can drop into an existing FAB project.
+Below is a practitioner’s critique of **PgAppForge (FAB)** with concrete, production-grade extensions. I focus on correctness of the underlying abstractions, measurable impact on latency and developer throughput, and low-risk migration paths. Where relevant, I formalize models and include self-contained Python sketches that you can drop into an existing FAB project.
 
-**Baseline and constraints.** FAB supplies declarative **ModelView** CRUD, a pluggable **SecurityManager** built around RBAC, and a **BaseApi** for REST endpoints on top of SQLAlchemy. Current docs show first-class SQLAlchemy integration, a built-in security UI, and a batteries-included REST API surface. The latest documentation indicates support for SQLAlchemy 1.4 and 2.x; FAB’s REST API is declarative via `BaseApi`; security is role and permission centric; and the documentation still references Google-Charts-style chart views. These are the ground truths I build on. ([Flask-AppBuilder][1])
+**Baseline and constraints.** FAB supplies declarative **ModelView** CRUD, a pluggable **SecurityManager** built around RBAC, and a **BaseApi** for REST endpoints on top of SQLAlchemy. Current docs show first-class SQLAlchemy integration, a built-in security UI, and a batteries-included REST API surface. The latest documentation indicates support for SQLAlchemy 1.4 and 2.x; FAB’s REST API is declarative via `BaseApi`; security is role and permission centric; and the documentation still references Google-Charts-style chart views. These are the ground truths I build on. ([PgAppForge][1])
 
 ### 1) Native async and ASGI correctness rather than “threaded asyncio”
 
@@ -9,7 +9,7 @@ Flask supports `async def` views, but under WSGI each request spins an event loo
 ```python
 # async_fab.py
 """
-Drop-in experimental AsyncModelRestApi for Flask-AppBuilder.
+Drop-in experimental AsyncModelRestApi for PgAppForge.
 Requires: Flask 3.x, SQLAlchemy 2.x asyncio, an ASGI server (uvicorn/hypercorn).
 This shows the core pattern; integrate with FAB routing as needed.
 """
@@ -48,7 +48,7 @@ async def list_projects():
 
 ### 2) First-class schemas, validation, and OpenAPI without boilerplate
 
-FAB’s `BaseApi` gives a clean imperative way to define endpoints, but it does not automatically produce a **complete OpenAPI schema** with request-body validation at the boundary. The fastest route is to introduce **Pydantic v2** models at the edge and generate a full OpenAPI document with a library such as `flask-smorest` or compatible tooling. This minimizes runtime bugs by enforcing (x \in \mathcal{D}) before any side effects, and enables SDK and client generation. Pydantic’s v2 validators and model validators provide linear-time checks on structured payloads and deterministic coercions. ([Flask-AppBuilder][3])
+FAB’s `BaseApi` gives a clean imperative way to define endpoints, but it does not automatically produce a **complete OpenAPI schema** with request-body validation at the boundary. The fastest route is to introduce **Pydantic v2** models at the edge and generate a full OpenAPI document with a library such as `flask-smorest` or compatible tooling. This minimizes runtime bugs by enforcing (x \in \mathcal{D}) before any side effects, and enables SDK and client generation. Pydantic’s v2 validators and model validators provide linear-time checks on structured payloads and deterministic coercions. ([PgAppForge][3])
 
 ```python
 # schemas.py
@@ -80,7 +80,7 @@ class ProjectOut(BaseModel):
 Integrate Pydantic at the boundary. If you use flask-smorest,
 you can annotate and auto-generate OpenAPI including auth schemes.
 """
-from flask_appbuilder.api import BaseApi, expose
+from pgappforge.api import BaseApi, expose
 from flask import request, jsonify
 from .schemas import ProjectIn, ProjectOut
 from . import appbuilder, db
@@ -103,7 +103,7 @@ appbuilder.add_api(ProjectApi)
 
 ### 3) Move from pure RBAC to provable ABAC and database-enforced RLS
 
-FAB’s security model is RBAC: a user (u\in U) is assigned roles (r\in R); roles grant permissions (p\in P) on view menus (v\in V). Access is allowed if (\exists r\in R(u): (r,p,v)\in \text{Grants}). This is necessary but not sufficient for complex domains. Introduce **ABAC** with a decision function (f: \mathcal{A}\times\mathcal{O}\times\mathcal{E}\to{\text{allow},\text{deny}}) where (\mathcal{A}) is a set of subject attributes, (\mathcal{O}) object attributes, and (\mathcal{E}) environment. At the storage layer, enforce **PostgreSQL Row-Level Security** so that policies are guaranteed by the database: enable RLS and define `USING` predicates keyed by `tenant_id` or ownership, then set a `current_setting('app.tenant_id')` per request. This gives defense in depth, eliminates ORM bypass classes of bugs, and simplifies proofs of non-interference between tenants. FAB’s documented RBAC machinery remains the control plane, while RLS becomes the data plane. ([Flask-AppBuilder][4])
+FAB’s security model is RBAC: a user (u\in U) is assigned roles (r\in R); roles grant permissions (p\in P) on view menus (v\in V). Access is allowed if (\exists r\in R(u): (r,p,v)\in \text{Grants}). This is necessary but not sufficient for complex domains. Introduce **ABAC** with a decision function (f: \mathcal{A}\times\mathcal{O}\times\mathcal{E}\to{\text{allow},\text{deny}}) where (\mathcal{A}) is a set of subject attributes, (\mathcal{O}) object attributes, and (\mathcal{E}) environment. At the storage layer, enforce **PostgreSQL Row-Level Security** so that policies are guaranteed by the database: enable RLS and define `USING` predicates keyed by `tenant_id` or ownership, then set a `current_setting('app.tenant_id')` per request. This gives defense in depth, eliminates ORM bypass classes of bugs, and simplifies proofs of non-interference between tenants. FAB’s documented RBAC machinery remains the control plane, while RLS becomes the data plane. ([PgAppForge][4])
 
 ```sql
 -- rls.sql
@@ -162,7 +162,7 @@ Many FAB screens suffer from accidental (N+1) queries because default ORM loadin
 ```python
 # views_loading.py
 from sqlalchemy.orm import selectinload, joinedload
-from flask_appbuilder.views import ModelView
+from pgappforge.views import ModelView
 
 class ProjectView(ModelView):
     datamodel = ...  # as usual
@@ -195,7 +195,7 @@ def require_perm(action, view_menu):
     def deco(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            from flask_appbuilder.security.decorators import has_access
+            from pgappforge.security.decorators import has_access
             # Defer to FAB's permission system
             if not has_access(action=action, permission=view_menu):
                 raise PermissionError("Forbidden")
@@ -227,7 +227,7 @@ Teams frequently struggle to combine FAB’s database bootstrap with **Alembic**
 
 ### 9) Accessibility and charts that meet modern practice
 
-The current chart views are based on Google-Charts-style helpers. Replace or augment with a front-end that satisfies **WCAG 2.2** AA criteria for focus visibility, keyboard operation, and contrast. Supply semantic table fallbacks for screen-readers and ARIA labeling. This is low risk since charts are a presentation layer; the measured benefit is lower abandonment for keyboard-first users and compliance in public sector deployments. ([Flask-AppBuilder][10])
+The current chart views are based on Google-Charts-style helpers. Replace or augment with a front-end that satisfies **WCAG 2.2** AA criteria for focus visibility, keyboard operation, and contrast. Supply semantic table fallbacks for screen-readers and ARIA labeling. This is low risk since charts are a presentation layer; the measured benefit is lower abandonment for keyboard-first users and compliance in public sector deployments. ([PgAppForge][10])
 
 ### 10) A real plugin system for FAB itself
 
@@ -245,7 +245,7 @@ Define a before-after experiment on three axes. First, tail latency (p_{95}) and
 
 ## Known doc mismatches worth tidying up
 
-The installation page notes that non-SQLAlchemy backends like MongoEngine were removed, whereas the project readme and package pages historically advertised partial MongoEngine support. Rationalize these references to reduce adopter confusion and clarify what “exclusively SQLAlchemy” means for the public API. ([Flask-AppBuilder][13])
+The installation page notes that non-SQLAlchemy backends like MongoEngine were removed, whereas the project readme and package pages historically advertised partial MongoEngine support. Rationalize these references to reduce adopter confusion and clarify what “exclusively SQLAlchemy” means for the public API. ([PgAppForge][13])
 
 ---
 
@@ -267,17 +267,17 @@ Prioritize the changes that maximize correctness and observability with minimal 
 
 If you want, I can generate a small branch layout that adds these pieces on top of a stock FAB scaffold and a test plan that measures p95 improvements and query counts before and after each change.
 
-[1]: https://flask-appbuilder.readthedocs.io/en/latest/versionmigration.html?utm_source=chatgpt.com "Version Migration - Flask-AppBuilder - Read the Docs"
+[1]: https://flask-appbuilder.readthedocs.io/en/latest/versionmigration.html?utm_source=chatgpt.com "Version Migration - PgAppForge - Read the Docs"
 [2]: https://flask.palletsprojects.com/en/stable/async-await/?utm_source=chatgpt.com "Using async and await"
-[3]: https://flask-appbuilder.readthedocs.io/en/latest/rest_api.html?utm_source=chatgpt.com "REST API - Flask-AppBuilder - Read the Docs"
-[4]: https://flask-appbuilder.readthedocs.io/en/latest/security.html?utm_source=chatgpt.com "Security - Flask-AppBuilder - Read the Docs"
+[3]: https://flask-appbuilder.readthedocs.io/en/latest/rest_api.html?utm_source=chatgpt.com "REST API - PgAppForge - Read the Docs"
+[4]: https://flask-appbuilder.readthedocs.io/en/latest/security.html?utm_source=chatgpt.com "Security - PgAppForge - Read the Docs"
 [5]: https://www.postgresql.org/docs/current/ddl-rowsecurity.html?utm_source=chatgpt.com "Documentation: 18: 5.9. Row Security Policies"
 [6]: https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/flask/flask.html?utm_source=chatgpt.com "OpenTelemetry Flask Instrumentation"
 [7]: https://docs.sqlalchemy.org/en/latest/orm/queryguide/relationships.html?utm_source=chatgpt.com "Relationship Loading Techniques — SQLAlchemy 2.0 ..."
 [8]: https://pypi.org/project/Flask-GraphQL/?utm_source=chatgpt.com "Flask-GraphQL"
 [9]: https://alembic.sqlalchemy.org/en/latest/autogenerate.html?utm_source=chatgpt.com "Auto Generating Migrations — Alembic 1.16.5 documentation"
-[10]: https://flask-appbuilder.readthedocs.io/en/latest/quickcharts.html?utm_source=chatgpt.com "Chart Views - Flask-AppBuilder - Read the Docs"
+[10]: https://flask-appbuilder.readthedocs.io/en/latest/quickcharts.html?utm_source=chatgpt.com "Chart Views - PgAppForge - Read the Docs"
 [11]: https://pluggy.readthedocs.io/?utm_source=chatgpt.com "pluggy — pluggy 0.1.dev96+gfd08ab5 documentation"
 [12]: https://opentelemetry.io/docs/languages/python/getting-started/?utm_source=chatgpt.com "Getting Started"
-[13]: https://flask-appbuilder.readthedocs.io/en/latest/installation.html?utm_source=chatgpt.com "Installation - Flask-AppBuilder - Read the Docs"
+[13]: https://flask-appbuilder.readthedocs.io/en/latest/installation.html?utm_source=chatgpt.com "Installation - PgAppForge - Read the Docs"
 [14]: https://www.speakeasy.com/openapi/frameworks/flask?utm_source=chatgpt.com "Generate an OpenAPI/Swagger document with Flask"

@@ -1,6 +1,6 @@
 # 🚀 QuickStart Tutorial: Build Your First Workflow in 10 Minutes
 
-Welcome to the JHipster-inspired Flask-AppBuilder Workflow System! This tutorial will guide you through creating your first complete workflow application in just 10 minutes.
+Welcome to the JHipster-inspired PgAppForge Workflow System! This tutorial will guide you through creating your first complete workflow application in just 10 minutes.
 
 ## 🎯 What We'll Build
 
@@ -14,19 +14,19 @@ We'll create a **Product Review Workflow** that demonstrates:
 ## 📋 Prerequisites
 
 - Python 3.8+ installed
-- Flask-AppBuilder knowledge (basic)
+- PgAppForge knowledge (basic)
 - 10 minutes of your time!
 
 ## 🏃‍♂️ Step 1: Setup (2 minutes)
 
-### Install Flask-AppBuilder
+### Install PgAppForge
 
 ```bash
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install Flask-AppBuilder (includes workflow system)
+# Install PgAppForge (includes workflow system)
 pip install flask-appbuilder
 ```
 
@@ -125,7 +125,7 @@ ProductReview:
 
 ## ⚡ Step 3: Generate Application Code (1 minute)
 
-Now let's generate our complete Flask-AppBuilder application:
+Now let's generate our complete PgAppForge application:
 
 ```bash
 # Validate our workflow first
@@ -137,7 +137,7 @@ flask fab workflow generate product_review.yaml --app-name review_app --verbose
 
 You should see output like:
 ```
-🚀 JHipster-inspired Flask-AppBuilder Workflow Generation
+🚀 JHipster-inspired PgAppForge Workflow Generation
 ============================================================
 📋 Workflow: Product review and approval workflow
 📦 Version: 1.0.0
@@ -151,7 +151,7 @@ You should see output like:
    • Tests: 1
    • Migrations: 1
 
-🏗️  Generating Flask-AppBuilder application...
+🏗️  Generating PgAppForge application...
 
 ✅ Generation completed successfully!
 📁 Generated 14 files:
@@ -174,9 +174,9 @@ You should see output like:
       • 001_product_review.py
 ```
 
-## 🔧 Step 4: Integration with Flask-AppBuilder (2 minutes)
+## 🔧 Step 4: Integration with PgAppForge (2 minutes)
 
-Now let's create a simple Flask-AppBuilder application and integrate our generated workflow:
+Now let's create a simple PgAppForge application and integrate our generated workflow:
 
 ### Create Basic App Structure
 
@@ -185,7 +185,7 @@ Now let's create a simple Flask-AppBuilder application and integrate our generat
 mkdir review_app
 cd review_app
 
-# Create basic Flask-AppBuilder structure
+# Create basic PgAppForge structure
 mkdir app
 mkdir app/static
 mkdir app/templates
@@ -195,7 +195,7 @@ mkdir app/templates
 
 ```python
 import os
-from flask_appbuilder.security.manager import AUTH_DB
+from pgappforge.security.manager import AUTH_DB
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -219,8 +219,8 @@ WTF_CSRF_ENABLED = True
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.menu import Menu
+from pgappforge import AppBuilder, SQLA
+from pgappforge.menu import Menu
 
 # Import generated models
 from .models.review_model import Review
@@ -260,8 +260,8 @@ from . import views
 ### Create `app/views.py`:
 
 ```python
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
 from . import appbuilder, db
 from .models.review_model import Review
 
@@ -343,7 +343,7 @@ In just 10 minutes, you created a complete workflow application with:
    - Validation and constraints
    - Relationships and indexes
 
-2. **📊 Flask-AppBuilder Views** (`views/`):
+2. **📊 PgAppForge Views** (`views/`):
    - `WriteReviewView`: Form for submitting reviews
    - `ModerateReviewView`: Interface for moderating reviews
    - Complete CRUD operations
@@ -498,7 +498,7 @@ In just 10 minutes, you created a complete workflow application with:
 You've successfully built a complete workflow application in just 10 minutes! 
 
 You now have:
-- ✅ A working Flask-AppBuilder application
+- ✅ A working PgAppForge application
 - ✅ Complete workflow with approval process
 - ✅ Role-based security
 - ✅ File upload capabilities
@@ -515,4 +515,4 @@ Explore more advanced features:
 - **Real-time collaboration**
 - **Advanced analytics**
 
-**Happy coding with JHipster-inspired Flask-AppBuilder workflows!** 🎉
+**Happy coding with JHipster-inspired PgAppForge workflows!** 🎉

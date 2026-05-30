@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Flask-AppBuilder Profile Management Example
+PgAppForge Profile Management Example
 
 This example demonstrates how to use the extensible user profile system
-with Flask-AppBuilder, including basic and extended profiles, custom fields,
+with PgAppForge, including basic and extended profiles, custom fields,
 and security features.
 """
 
 import datetime
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.security.sqla.models import User
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Model
+from pgappforge.security.sqla.models import User
 
 # Import the profile system
-from flask_appbuilder.models.profiles import (
+from pgappforge.models.profiles import (
     ProfileMixin,
     ExtendedProfileMixin,
     UserProfile,
@@ -22,13 +22,13 @@ from flask_appbuilder.models.profiles import (
     ProfileFieldValue,
     ProfileType,
 )
-from flask_appbuilder.security.profile_views import (
+from pgappforge.security.profile_views import (
     MyProfileView,
     PublicProfileView,
     UserProfileView,
     ProfileFieldView,
 )
-from flask_appbuilder.api.profiles import UserProfileApi
+from pgappforge.api.profiles import UserProfileApi
 
 
 # Example 1: Simple User Model with Profile Mixin
@@ -58,7 +58,7 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///profile_example.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    # Flask-AppBuilder configuration
+    # PgAppForge configuration
     app.config['FAB_ROLES'] = {
         'Admin': [
             ['.*', 'can_add'],

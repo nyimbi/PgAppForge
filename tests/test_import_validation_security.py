@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from flask_appbuilder.cli.utils.import_utils import (
+from pgappforge.cli.utils.import_utils import (
     validate_imports_secure,
     ValidationResult,
     ImportValidationError
@@ -106,7 +106,7 @@ class TestImportValidationSecurity:
     def test_complex_import_patterns(self):
         """Test complex but legitimate import patterns."""
         complex_imports = [
-            "from flask_appbuilder.security.sqla.manager import SecurityManager",
+            "from pgappforge.security.sqla.manager import SecurityManager",
             "from sqlalchemy.orm import sessionmaker, scoped_session",
             "import pkg_resources",
             "from collections.abc import Mapping"
@@ -242,7 +242,7 @@ class TestImportValidationSecurity:
 
     def test_security_headers_integration(self):
         """Test integration with security headers and logging."""
-        with patch('flask_appbuilder.cli.utils.import_utils.logger') as mock_logger:
+        with patch('pgappforge.cli.utils.import_utils.logger') as mock_logger:
             dangerous_imports = ["import subprocess"]
             result = validate_imports_secure(dangerous_imports)
 

@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 
-from flask_appbuilder.collaborative.ai.enhanced_security import (
+from pgappforge.collaborative.ai.enhanced_security import (
     AIRateLimiter, AIQuotaManager, AISecurityMonitor, EnhancedAISecurityManager,
     QuotaType, SecurityEvent, AIQuota, QuotaExceededError, RateLimitError, SecurityError,
     ai_rate_limited, get_enhanced_security_manager
@@ -95,7 +95,7 @@ class TestAIRateLimiter:
         assert is_allowed is False
         assert metadata['type'] == 'burst_limit'
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.logger')
+    @patch('pgappforge.collaborative.ai.enhanced_security.logger')
     def test_redis_fallback_on_error(self, mock_logger):
         """Test fallback to memory when Redis fails."""
         # Create rate limiter with mock Redis that fails
@@ -244,8 +244,8 @@ class TestAISecurityMonitor:
         self.redis_client = Mock()
         self.security_monitor = AISecurityMonitor(self.db_session, self.redis_client)
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.request')
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.logger')
+    @patch('pgappforge.collaborative.ai.enhanced_security.request')
+    @patch('pgappforge.collaborative.ai.enhanced_security.logger')
     def test_security_event_logging(self, mock_logger, mock_request):
         """Test security event logging."""
         mock_request.remote_addr = "192.168.1.1"
@@ -296,7 +296,7 @@ class TestAISecurityMonitor:
         # Should trigger security alert
         self.security_monitor._trigger_security_alert.assert_called_once()
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.logger')
+    @patch('pgappforge.collaborative.ai.enhanced_security.logger')
     def test_security_alert_triggering(self, mock_logger):
         """Test security alert triggering."""
         user_id = 123
@@ -340,7 +340,7 @@ class TestEnhancedAISecurityManager:
         assert config['quotas']['default_tokens_per_day'] == 50000
         assert config['monitoring']['log_all_requests'] is True
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.current_user')
+    @patch('pgappforge.collaborative.ai.enhanced_security.current_user')
     def test_security_enforcement_decorator(self, mock_current_user):
         """Test the AI security enforcement decorator."""
         mock_current_user.is_authenticated = True
@@ -362,7 +362,7 @@ class TestEnhancedAISecurityManager:
         self.security_manager.quota_manager.check_quota.assert_called_once()
         self.security_manager.quota_manager.record_usage.assert_called_once()
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.current_user')
+    @patch('pgappforge.collaborative.ai.enhanced_security.current_user')
     def test_rate_limit_enforcement(self, mock_current_user):
         """Test rate limit enforcement in decorator."""
         mock_current_user.is_authenticated = True
@@ -381,7 +381,7 @@ class TestEnhancedAISecurityManager:
 
         self.security_manager.security_monitor.log_security_event.assert_called_once()
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.current_user')
+    @patch('pgappforge.collaborative.ai.enhanced_security.current_user')
     def test_quota_enforcement(self, mock_current_user):
         """Test quota enforcement in decorator."""
         mock_current_user.is_authenticated = True
@@ -401,7 +401,7 @@ class TestEnhancedAISecurityManager:
 
         self.security_manager.security_monitor.log_security_event.assert_called_once()
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.current_user')
+    @patch('pgappforge.collaborative.ai.enhanced_security.current_user')
     def test_unauthenticated_user_rejection(self, mock_current_user):
         """Test that unauthenticated users are rejected."""
         mock_current_user.is_authenticated = False
@@ -417,7 +417,7 @@ class TestEnhancedAISecurityManager:
 class TestConvenienceDecorators:
     """Test convenience decorators for AI security."""
 
-    @patch('flask_appbuilder.collaborative.ai.enhanced_security.get_enhanced_security_manager')
+    @patch('pgappforge.collaborative.ai.enhanced_security.get_enhanced_security_manager')
     def test_ai_rate_limited_decorator(self, mock_get_manager):
         """Test the ai_rate_limited convenience decorator."""
         mock_manager = Mock()

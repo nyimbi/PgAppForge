@@ -11,7 +11,7 @@ from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Create a minimal Flask-AppBuilder compatible setup for testing
+# Create a minimal PgForge compatible setup for testing
 Base = declarative_base()
 
 
@@ -22,7 +22,7 @@ class AuditMixin:
 
 class StateTrackingMixin(AuditMixin):
     """
-    State tracking mixin for Flask-AppBuilder models.
+    State tracking mixin for PgForge models.
     
     Extends AuditMixin to add status field and state transition capabilities.
     """

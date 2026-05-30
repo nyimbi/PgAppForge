@@ -1,4 +1,4 @@
-from flask_appbuilder import IndexView
+from pgappforge import IndexView
 
 
 class MyIndexView(IndexView):

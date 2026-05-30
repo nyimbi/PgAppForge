@@ -5,7 +5,7 @@ import re
 from setuptools import find_packages, setup
 
 
-with io.open("flask_appbuilder/__init__.py", "rt", encoding="utf8") as f:
+with io.open("pgappforge/__init__.py", "rt", encoding="utf8") as f:
     version = re.search(r"__version__ = \"(.*?)\"", f.read()).group(1)
 
 
@@ -22,7 +22,7 @@ def desc():
 
 
 setup(
-    name="Flask-AppBuilder",
+    name="pgappforge",
     version=version,
     url="https://github.com/dpgaspar/flask-appbuilder/",
     license="BSD",
@@ -39,8 +39,8 @@ setup(
     packages=find_packages(exclude=["tests*"]),
     package_data={"": ["LICENSE"]},
     entry_points={
-        "flask.commands": ["fab=flask_appbuilder.cli:fab"],
-        "console_scripts": ["fabmanager = flask_appbuilder.console:cli"],
+        "flask.commands": ["forge=pgappforge.cli:fab"],
+        "console_scripts": ["pgappforge = pgappforge.console:cli"],
     },
     include_package_data=True,
     zip_safe=False,

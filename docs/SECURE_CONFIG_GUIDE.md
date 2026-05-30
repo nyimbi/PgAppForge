@@ -1,6 +1,6 @@
 # Secure Configuration Management
 
-This guide explains how to securely manage sensitive tenant configuration data in Flask-AppBuilder's multi-tenant system.
+This guide explains how to securely manage sensitive tenant configuration data in PgAppForge's multi-tenant system.
 
 ## Overview
 
@@ -55,7 +55,7 @@ print(f"Master key: {master_key}")
 ### Storing Sensitive Configuration
 
 ```python
-from flask_appbuilder.models.tenant_models import TenantConfig
+from pgappforge.models.tenant_models import TenantConfig
 
 # Store an API key securely
 TenantConfig.set_tenant_config(
@@ -91,7 +91,7 @@ theme = TenantConfig.get_tenant_config(1, 'app_theme', default='light')
 ### Using Configuration Objects
 
 ```python
-from flask_appbuilder.models.tenant_models import TenantConfig
+from pgappforge.models.tenant_models import TenantConfig
 
 # Get configuration object
 config = TenantConfig.query.filter_by(
@@ -181,9 +181,9 @@ If you have existing sensitive configurations stored in plain text:
 
 ```python
 # Check if user can access sensitive configs
-from flask_appbuilder import db
-from flask_appbuilder.models.tenant_models import TenantConfig
-from flask_appbuilder.security import current_user
+from pgappforge import db
+from pgappforge.models.tenant_models import TenantConfig
+from pgappforge.security import current_user
 
 def can_access_sensitive_config(tenant_id: int) -> bool:
     # Implement your access control logic
@@ -219,8 +219,8 @@ def get_sensitive_config(tenant_id: int, config_key: str):
 ### Views Integration
 
 ```python
-from flask_appbuilder.models.tenant_models import TenantConfig
-from flask_appbuilder.models.tenant_context import require_active_tenant
+from pgappforge.models.tenant_models import TenantConfig
+from pgappforge.models.tenant_context import require_active_tenant
 
 class TenantConfigView(ModelView):
     datamodel = SQLAInterface(TenantConfig)
@@ -241,8 +241,8 @@ class TenantConfigView(ModelView):
 ### REST API Integration
 
 ```python
-from flask_appbuilder.api import ModelRestApi
-from flask_appbuilder.models.tenant_models import TenantConfig
+from pgappforge.api import ModelRestApi
+from pgappforge.models.tenant_models import TenantConfig
 
 class TenantConfigApi(ModelRestApi):
     resource_name = 'tenantconfig'
@@ -265,7 +265,7 @@ class TenantConfigApi(ModelRestApi):
 ## Error Handling
 
 ```python
-from flask_appbuilder.security.config_encryption import ConfigEncryptionError
+from pgappforge.security.config_encryption import ConfigEncryptionError
 
 try:
     config_value = TenantConfig.get_tenant_config(1, 'api_key')
@@ -285,7 +285,7 @@ except ConfigEncryptionError as e:
 def check_encryption_health():
     """Health check for configuration encryption system"""
     try:
-        from flask_appbuilder.security.config_encryption import get_config_encryption
+        from pgappforge.security.config_encryption import get_config_encryption
         
         encryption = get_config_encryption()
         
@@ -347,7 +347,7 @@ echo "Configuration encryption monitoring: OK"
 ```python
 # Enable debug logging
 import logging
-logging.getLogger('flask_appbuilder.security.config_encryption').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.security.config_encryption').setLevel(logging.DEBUG)
 ```
 
 ### Recovery
@@ -379,7 +379,7 @@ This encryption system helps meet compliance requirements for:
 ### Custom Encryption Backend
 
 ```python
-from flask_appbuilder.security.config_encryption import ConfigEncryption
+from pgappforge.security.config_encryption import ConfigEncryption
 
 class CustomEncryption(ConfigEncryption):
     def encrypt_value(self, value):

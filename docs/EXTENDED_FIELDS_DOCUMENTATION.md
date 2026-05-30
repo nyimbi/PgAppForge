@@ -1,6 +1,6 @@
 # Extended Fields Documentation
 
-Comprehensive documentation for Flask-AppBuilder's extended field types, showcasing 24 advanced widgets for modern web applications.
+Comprehensive documentation for PgAppForge's extended field types, showcasing 24 advanced widgets for modern web applications.
 
 ## Table of Contents
 
@@ -537,7 +537,7 @@ DrawingField(
 ### Basic Usage
 
 ```python
-from flask_appbuilder.fields.extended_fields import (
+from pgappforge.fields.extended_fields import (
     RichTextEditorField, CodeEditorField, ColorPickerField
 )
 
@@ -574,7 +574,7 @@ class MyModelView(ModelView):
 ### Custom Validation
 
 ```python
-from flask_appbuilder.fields.extended_fields import (
+from pgappforge.fields.extended_fields import (
     RichTextValidator, CodeValidator, ColorValidator
 )
 
@@ -637,4 +637,4 @@ EXTENDED_FIELDS_CDN = {
 }
 ```
 
-This comprehensive documentation provides detailed information about each widget's capabilities, use cases, and integration methods. The fields offer professional-grade functionality that significantly enhances Flask-AppBuilder's capabilities for modern web applications.
+This comprehensive documentation provides detailed information about each widget's capabilities, use cases, and integration methods. The fields offer professional-grade functionality that significantly enhances PgAppForge's capabilities for modern web applications.

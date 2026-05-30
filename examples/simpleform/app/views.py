@@ -1,5 +1,5 @@
 from flask import flash, render_template
-from flask_appbuilder import SimpleFormView
+from pgappforge import SimpleFormView
 from flask_babel import lazy_gettext as _
 
 from . import appbuilder, db

@@ -1,7 +1,7 @@
 import logging
 import os
 
-from flask_appbuilder import SQLA
+from pgappforge import SQLA
 from tests.fixtures.addon_manager import DummyAddOnManager
 
 from .base import FABTestCase
@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 class FlaskTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))

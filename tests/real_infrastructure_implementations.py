@@ -3,11 +3,11 @@
 Real Infrastructure Implementations - PRODUCTION READY
 
 This file fixes the critical infrastructure integration issues by using
-REAL Flask-AppBuilder modules instead of fictional imports. These implementations
+REAL PgAppForge modules instead of fictional imports. These implementations
 will actually work when imported and don't depend on non-existent modules.
 
 FIXES:
-- ❌ Infrastructure Integration: Now uses real Flask-AppBuilder patterns
+- ❌ Infrastructure Integration: Now uses real PgAppForge patterns
 - ❌ Production Readiness: Will not crash on import  
 - ❌ Code Quality: Proper configuration, validation, and error handling
 """
@@ -21,9 +21,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Any, Optional, Union
 
-# REAL Flask-AppBuilder imports that actually exist
+# REAL PgAppForge imports that actually exist
 from flask import current_app, g, request
-from flask_appbuilder import db
+from pgappforge import db
 from flask_login import current_user
 from sqlalchemy import and_, or_, func, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -33,7 +33,7 @@ from werkzeug.security import safe_str_cmp
 log = logging.getLogger(__name__)
 
 
-# REAL Security Framework using actual Flask-AppBuilder infrastructure
+# REAL Security Framework using actual PgAppForge infrastructure
 class ProductionSecurityError(Exception):
     """Base exception for mixin security errors."""
     def __init__(self, message: str, details: Dict = None, user_id: int = None):
@@ -57,17 +57,17 @@ class ProductionValidationError(Exception):
 
 
 class SecurityValidator:
-    """Real security validation using Flask-Login and Flask-AppBuilder patterns."""
+    """Real security validation using Flask-Login and PgAppForge patterns."""
     
     @staticmethod
     def validate_user_context(user_id: int = None):
         """Validate user context using real Flask-Login current_user."""
         if user_id:
-            # In real Flask-AppBuilder, we would query the User model
+            # In real PgAppForge, we would query the User model
             # For now, we'll use a simple approach that works with existing infrastructure
             try:
                 # This is a simplified approach - in real usage, you'd import the actual User model
-                # from flask_appbuilder.models.sqla import User
+                # from pgappforge.models.sqla import User
                 # user = db.session.query(User).filter(User.id == user_id).first()
                 
                 # For now, validate against current_user if available
@@ -102,17 +102,17 @@ class SecurityValidator:
     
     @staticmethod
     def validate_permission(user, permission: str, resource: str = None) -> bool:
-        """Validate user permissions using Flask-AppBuilder patterns."""
+        """Validate user permissions using PgAppForge patterns."""
         if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
             return False
         
-        # In real Flask-AppBuilder, permissions are handled via security manager
+        # In real PgAppForge, permissions are handled via security manager
         # This is a production-ready fallback that works with basic Flask-Login
         if hasattr(user, 'has_permission'):
-            # If the user model has Flask-AppBuilder permissions
+            # If the user model has PgAppForge permissions
             return user.has_permission(permission)
         elif hasattr(user, 'roles'):
-            # Check if user has admin role (common Flask-AppBuilder pattern)
+            # Check if user has admin role (common PgAppForge pattern)
             user_roles = [role.name for role in user.roles] if user.roles else []
             if 'Admin' in user_roles:
                 return True
@@ -265,7 +265,7 @@ class Config:
         """Get geocoding service configuration."""
         return {
             'nominatim_url': Config.get('NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
-            'nominatim_user_agent': Config.get('NOMINATIM_USER_AGENT', 'Flask-AppBuilder-Mixin/1.0'),
+            'nominatim_user_agent': Config.get('NOMINATIM_USER_AGENT', 'PgAppForge-Mixin/1.0'),
             'mapquest_api_key': Config.get('MAPQUEST_API_KEY'),
             'google_maps_api_key': Config.get('GOOGLE_MAPS_API_KEY'),
             'geocoding_timeout': int(Config.get('GEOCODING_TIMEOUT', 30)),
@@ -284,7 +284,7 @@ class Config:
 
 class SearchableMixin:
     """
-    PRODUCTION-READY search functionality using real Flask-AppBuilder infrastructure.
+    PRODUCTION-READY search functionality using real PgAppForge infrastructure.
     
     Implements actual database-backed search with:
     - PostgreSQL full-text search (with proper parameterization)
@@ -759,7 +759,7 @@ class GeoLocationMixin:
 
 class ApprovalWorkflowMixin:
     """
-    PRODUCTION-READY approval workflow using real Flask-AppBuilder infrastructure.
+    PRODUCTION-READY approval workflow using real PgAppForge infrastructure.
     
     SECURITY FIX: No more automatic approval vulnerability!
     
@@ -1030,7 +1030,7 @@ class ApprovalWorkflowMixin:
 
 class CommentableMixin:
     """
-    PRODUCTION-READY comment system using real Flask-AppBuilder infrastructure.
+    PRODUCTION-READY comment system using real PgAppForge infrastructure.
     
     Implements actual comment functionality with:
     - Real permission checking via Flask-Login
@@ -1043,7 +1043,7 @@ class CommentableMixin:
         """
         PRODUCTION-READY comment retrieval using real infrastructure.
         
-        Since we don't have a Comment model in Flask-AppBuilder by default,
+        Since we don't have a Comment model in PgAppForge by default,
         this implementation provides a clean interface that can be extended
         when a Comment model is added.
         
@@ -1234,7 +1234,7 @@ class CommentableMixin:
 def update_todo_status():
     """Track implementation progress."""
     print("✅ INFRASTRUCTURE INTEGRATION FIXED:")
-    print("  - Replaced fictional imports with real Flask-AppBuilder patterns")
+    print("  - Replaced fictional imports with real PgAppForge patterns")
     print("  - Using Flask-Login current_user for authentication")
     print("  - Using Python logging instead of fictional SecurityAuditor")
     print("  - Using SQLAlchemy safe parameterization")

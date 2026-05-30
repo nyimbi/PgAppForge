@@ -60,7 +60,7 @@ def test_db(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def inspector(test_db):
-    from flask_appbuilder.cli.generators.database_inspector import EnhancedDatabaseInspector
+    from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
     with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
         yield insp
 
@@ -93,7 +93,7 @@ class TestDatabaseInspector:
 
 class TestModelGenerator:
     def test_generates_models(self, inspector):
-        from flask_appbuilder.cli.generators.model_generator import (
+        from pgappforge.cli.generators.model_generator import (
             EnhancedModelGenerator, ModelGenerationConfig
         )
         gen = EnhancedModelGenerator(inspector, ModelGenerationConfig(generate_pydantic=False))
@@ -103,7 +103,7 @@ class TestModelGenerator:
         assert "class Employees" in result["models.py"]
 
     def test_generated_models_syntax_valid(self, inspector):
-        from flask_appbuilder.cli.generators.model_generator import (
+        from pgappforge.cli.generators.model_generator import (
             EnhancedModelGenerator, ModelGenerationConfig
         )
         gen = EnhancedModelGenerator(inspector, ModelGenerationConfig(generate_pydantic=False))
@@ -119,7 +119,7 @@ class TestModelGenerator:
         assert "employee_projects" in analysis.get("association_tables", [])
 
     def test_pydantic_schemas_valid_syntax(self, inspector):
-        from flask_appbuilder.cli.generators.model_generator import (
+        from pgappforge.cli.generators.model_generator import (
             EnhancedModelGenerator, ModelGenerationConfig
         )
         gen = EnhancedModelGenerator(inspector, ModelGenerationConfig(generate_pydantic=True))
@@ -133,8 +133,8 @@ class TestModelGenerator:
 
 class TestFullAppGenerator:
     def test_generates_complete_app(self, test_db, tmp_path):
-        from flask_appbuilder.cli.generators.database_inspector import EnhancedDatabaseInspector
-        from flask_appbuilder.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
+        from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
+        from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
         with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
             config = AppGenerationConfig(
@@ -149,8 +149,8 @@ class TestFullAppGenerator:
         assert result["files_generated"] > 0
 
     def test_all_generated_python_valid_syntax(self, test_db, tmp_path):
-        from flask_appbuilder.cli.generators.database_inspector import EnhancedDatabaseInspector
-        from flask_appbuilder.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
+        from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
+        from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
         out = tmp_path / "app"
         with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
@@ -170,8 +170,8 @@ class TestFullAppGenerator:
         assert errors == [], f"Syntax errors in generated code:\n" + "\n".join(errors)
 
     def test_key_files_generated(self, test_db, tmp_path):
-        from flask_appbuilder.cli.generators.database_inspector import EnhancedDatabaseInspector
-        from flask_appbuilder.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
+        from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
+        from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
         with EnhancedDatabaseInspector(f"sqlite:///{test_db}") as insp:
             config = AppGenerationConfig(app_name="FileTest", enable_docker=False)

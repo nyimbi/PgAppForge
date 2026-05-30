@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Secure secret key generator for Flask-AppBuilder applications.
+Secure secret key generator for PgForge applications.
 
 This utility generates cryptographically secure secret keys suitable for
 production use with Flask applications.
@@ -109,7 +109,7 @@ def validate_existing_key(key):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate secure secret keys for Flask-AppBuilder applications",
+        description="Generate secure secret keys for PgForge applications",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )

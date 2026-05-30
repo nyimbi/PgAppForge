@@ -1,6 +1,6 @@
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.views import MasterDetailView
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.views import MasterDetailView
 from flask_babel import lazy_gettext as _
 
 from . import appbuilder, db

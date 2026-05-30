@@ -1,6 +1,6 @@
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.views import ModelView
-from flask_appbuilder.widgets import ListBlock, ShowBlockWidget
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.views import ModelView
+from pgappforge.widgets import ListBlock, ShowBlockWidget
 
 from . import appbuilder, db
 from .models import Product, ProductType

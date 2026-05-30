@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 app = Flask(__name__)
 

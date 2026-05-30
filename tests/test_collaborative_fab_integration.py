@@ -1,7 +1,7 @@
 """
-Real Flask-AppBuilder integration tests for collaborative features.
+Real PgAppForge integration tests for collaborative features.
 
-Tests collaborative features with actual Flask-AppBuilder components including
+Tests collaborative features with actual PgAppForge components including
 security manager, database models, view registration, and API endpoints.
 """
 
@@ -17,29 +17,29 @@ from flask import Flask, g
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.test import Client
 
-# Flask-AppBuilder imports
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.security.sqla.manager import SecurityManager
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.security.sqla.models import User, Role, Permission
+# PgAppForge imports
+from pgappforge import AppBuilder, SQLA
+from pgappforge.security.sqla.manager import SecurityManager
+from pgappforge.models.sqla import Model
+from pgappforge.security.sqla.models import User, Role, Permission
 
 # Collaborative feature imports
-from flask_appbuilder.collaborative.addon_manager import CollaborativeAddonManager
-from flask_appbuilder.collaborative.core.team_manager import Team, TeamInvitation
-from flask_appbuilder.collaborative.core.workspace_manager import Workspace, WorkspaceResource
-from flask_appbuilder.collaborative.communication.notification_manager import Notification
-from flask_appbuilder.collaborative.api.collaboration_api import CollaborationApi
-from flask_appbuilder.collaborative.api.communication_api import CommunicationApi
-from flask_appbuilder.collaborative.views.team_view import TeamModelView
-from flask_appbuilder.collaborative.views.workspace_view import WorkspaceModelView
-from flask_appbuilder.collaborative.utils.async_bridge import AsyncBridge
+from pgappforge.collaborative.addon_manager import CollaborativeAddonManager
+from pgappforge.collaborative.core.team_manager import Team, TeamInvitation
+from pgappforge.collaborative.core.workspace_manager import Workspace, WorkspaceResource
+from pgappforge.collaborative.communication.notification_manager import Notification
+from pgappforge.collaborative.api.collaboration_api import CollaborationApi
+from pgappforge.collaborative.api.communication_api import CommunicationApi
+from pgappforge.collaborative.views.team_view import TeamModelView
+from pgappforge.collaborative.views.workspace_view import WorkspaceModelView
+from pgappforge.collaborative.utils.async_bridge import AsyncBridge
 
 
 class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
-    """Integration tests for collaborative features with Flask-AppBuilder."""
+    """Integration tests for collaborative features with PgAppForge."""
 
     def setUp(self):
-        """Set up test environment with real Flask-AppBuilder."""
+        """Set up test environment with real PgAppForge."""
         # Create temporary database
         self.db_fd, self.db_path = tempfile.mkstemp()
         
@@ -62,7 +62,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             'COLLABORATIVE_MENU_CATEGORY': 'Collaboration',
             'COLLABORATIVE_MENU_ICON': 'fa-users',
             
-            # Flask-AppBuilder configuration
+            # PgAppForge configuration
             'APP_NAME': 'Collaborative Test App',
             'APP_THEME': 'bootstrap3.css',
             'FAB_UPDATE_PERMS': True,
@@ -151,7 +151,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             self.assertIn('collaborative', str(e).lower())
     
     def test_collaborative_models_creation(self):
-        """Test that collaborative models can be created with Flask-AppBuilder."""
+        """Test that collaborative models can be created with PgAppForge."""
         # Create a team
         team = Team(
             name='Test Team',
@@ -214,7 +214,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
         self.assertEqual(retrieved_resource.workspace_id, workspace.id)
     
     def test_collaborative_view_registration(self):
-        """Test that collaborative views can be registered with Flask-AppBuilder."""
+        """Test that collaborative views can be registered with PgAppForge."""
         # Create collaborative addon manager
         self.collaborative_manager = CollaborativeAddonManager(self.appbuilder)
         
@@ -249,7 +249,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             self.assertIsInstance(e, (ImportError, AttributeError))
     
     def test_collaborative_api_registration(self):
-        """Test that collaborative APIs can be registered with Flask-AppBuilder."""
+        """Test that collaborative APIs can be registered with PgAppForge."""
         # Create collaborative addon manager
         self.collaborative_manager = CollaborativeAddonManager(self.appbuilder)
         
@@ -271,7 +271,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             self.assertIsInstance(e, (ImportError, AttributeError))
     
     def test_collaborative_permissions_integration(self):
-        """Test that collaborative features integrate with Flask-AppBuilder permissions."""
+        """Test that collaborative features integrate with PgAppForge permissions."""
         # Login test user
         with self.client.session_transaction() as sess:
             sess['user_id'] = self.test_user.id
@@ -297,7 +297,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
                 self.assertIsNotNone(perm)
     
     def test_collaborative_async_bridge_integration(self):
-        """Test that async bridge works with Flask-AppBuilder context."""
+        """Test that async bridge works with PgAppForge context."""
         # Test async bridge in Flask application context
         with self.app.app_context():
             # Mock async service call
@@ -345,7 +345,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
         self.db.session.rollback()
     
     def test_collaborative_audit_integration(self):
-        """Test that audit fields work with Flask-AppBuilder."""
+        """Test that audit fields work with PgAppForge."""
         # Create team with audit fields
         team = Team(
             name='Audit Test Team',
@@ -380,7 +380,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
         self.assertEqual(updated_team.description, 'Updated description')
     
     def test_collaborative_service_registry_integration(self):
-        """Test service registry integration with Flask-AppBuilder."""
+        """Test service registry integration with PgAppForge."""
         # Create collaborative addon manager
         self.collaborative_manager = CollaborativeAddonManager(self.appbuilder)
         
@@ -409,11 +409,11 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             self.assertIn('collaborative', str(e).lower())
     
     def test_collaborative_error_handling_integration(self):
-        """Test error handling integration with Flask-AppBuilder."""
-        from flask_appbuilder.collaborative.utils.error_handling import (
+        """Test error handling integration with PgAppForge."""
+        from pgappforge.collaborative.utils.error_handling import (
             CollaborativeError, ValidationError, create_error_response
         )
-        from flask_appbuilder.collaborative.utils.error_patterns import (
+        from pgappforge.collaborative.utils.error_patterns import (
             ErrorPatternMixin, api_error_handler
         )
         
@@ -448,7 +448,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
         self.assertEqual(validation_error.field_name, 'test_field')
     
     def test_collaborative_notification_integration(self):
-        """Test notification system integration with Flask-AppBuilder."""
+        """Test notification system integration with PgAppForge."""
         # Create a notification
         notification = Notification(
             user_id=self.test_user.id,
@@ -484,7 +484,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
         self.assertIsNotNone(updated_notification.read_at)
     
     def test_collaborative_full_workflow_integration(self):
-        """Test a complete collaborative workflow with Flask-AppBuilder."""
+        """Test a complete collaborative workflow with PgAppForge."""
         # 1. Create a team
         team = Team(
             name='Integration Test Team',
@@ -577,7 +577,7 @@ class FlaskAppBuilderCollaborativeIntegrationTest(unittest.TestCase):
             self.assertEqual(item.created_by_id, self.test_user.id)
     
     def test_collaborative_configuration_integration(self):
-        """Test that collaborative configuration integrates with Flask-AppBuilder."""
+        """Test that collaborative configuration integrates with PgAppForge."""
         # Create collaborative addon manager
         self.collaborative_manager = CollaborativeAddonManager(self.appbuilder)
         

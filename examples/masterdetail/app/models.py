@@ -1,5 +1,5 @@
-from flask_appbuilder import Model
-from flask_appbuilder.models.mixins import BaseMixin
+from pgappforge import Model
+from pgappforge.models.mixins import BaseMixin
 from sqlalchemy import Column, Date, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 

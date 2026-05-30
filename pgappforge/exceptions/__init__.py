@@ -1,0 +1,149 @@
+"""
+PgForge Exceptions Package
+
+This package provides standardized exception handling for PgForge with
+backward compatibility for existing FABException classes.
+"""
+
+# Import existing exceptions for backward compatibility
+# These are re-exported from the base exceptions module
+from .base import FABException
+
+
+class InvalidColumnFilterFABException(FABException):
+    """Invalid column for filter"""
+    ...
+
+
+class InvalidOperationFilterFABException(FABException):
+    """Invalid operation for filter"""
+    ...
+
+
+class InvalidOrderByColumnFABException(FABException):
+    """Invalid order by column"""
+    ...
+
+
+class InvalidColumnArgsFABException(FABException):
+    """Invalid combination of column arguments"""
+    ...
+
+
+class InterfaceQueryWithoutSession(FABException):
+    """You need to setup a session on the interface to perform queries"""
+    ...
+
+
+class PasswordComplexityValidationError(FABException):
+    """Raise this when implementing your own password complexity function"""
+    ...
+
+
+class ApplyFilterException(FABException):
+    """When executing an apply filter a SQLAlchemy exception happens"""
+    ...
+
+
+class OAuthProviderUnknown(FABException):
+    """When an OAuth provider is not supported/unknown"""
+    ...
+
+
+class InvalidLoginAttempt(FABException):
+    """When the credentials entered could not be verified"""
+    ...
+
+
+class DeleteGroupWithUsersException(FABException):
+    """When trying to delete a group with users"""
+    ...
+
+
+class DeleteRoleWithUsersException(FABException):
+    """When trying to delete a role with users"""
+    ...
+
+
+class ValidationError(FABException):
+    """Profile validation error"""
+    ...
+
+# Import new standardized exceptions
+from .standardized import (
+    # Core classes
+    ErrorCategory,
+    ErrorSeverity,
+    RecoveryAction,
+    ErrorContext,
+    StandardizedFABException,
+
+    # Specific exception types
+    FABAuthenticationError,
+    FABAuthorizationError,
+    FABValidationError,
+    FABDatabaseError,
+    FABConfigurationError,
+    FABSecurityError,
+    FABPerformanceError,
+    FABAPIError,
+
+    # Error handling utilities
+    ErrorHandler,
+    fab_error_handler,
+    get_error_stats,
+
+    # Utility functions
+    create_validation_error,
+    create_security_error,
+    create_database_error,
+    create_api_error,
+    get_request_context,
+    add_user_context
+)
+
+# Maintain backward compatibility by creating aliases
+FABException = StandardizedFABException
+
+__all__ = [
+    # Legacy exceptions (backward compatibility)
+    'FABException',
+    'InvalidColumnFilterFABException',
+    'InvalidOperationFilterFABException',
+    'InvalidOrderByColumnFABException',
+    'InvalidColumnArgsFABException',
+    'InterfaceQueryWithoutSession',
+    'PasswordComplexityValidationError',
+    'ApplyFilterException',
+    'OAuthProviderUnknown',
+    'InvalidLoginAttempt',
+    'DeleteGroupWithUsersException',
+    'DeleteRoleWithUsersException',
+    'ValidationError',
+
+    # New standardized exceptions
+    'ErrorCategory',
+    'ErrorSeverity',
+    'RecoveryAction',
+    'ErrorContext',
+    'StandardizedFABException',
+    'FABAuthenticationError',
+    'FABAuthorizationError',
+    'FABValidationError',
+    'FABDatabaseError',
+    'FABConfigurationError',
+    'FABSecurityError',
+    'FABPerformanceError',
+    'FABAPIError',
+
+    # Error handling utilities
+    'ErrorHandler',
+    'fab_error_handler',
+    'get_error_stats',
+    'create_validation_error',
+    'create_security_error',
+    'create_database_error',
+    'create_api_error',
+    'get_request_context',
+    'add_user_context'
+]

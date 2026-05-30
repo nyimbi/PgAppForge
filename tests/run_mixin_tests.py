@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive Test Runner for Flask-AppBuilder Mixins
+Comprehensive Test Runner for PgAppForge Mixins
 
 Runs all mixin tests with detailed reporting, coverage analysis,
 and performance benchmarking.
@@ -145,7 +145,7 @@ class MixinTestRunner:
             cmd = [
                 "python", "-m", "pytest",
                 str(self.test_dir),
-                f"--cov={project_root}/flask_appbuilder/mixins",
+                f"--cov={project_root}/pgappforge/mixins",
                 "--cov-report=html",
                 "--cov-report=term",
                 "--cov-fail-under=80"
@@ -222,7 +222,7 @@ class MixinTestRunner:
         required_modules = [
             'pytest',
             'flask',
-            'flask_appbuilder',
+            'pgappforge',
             'sqlalchemy',
             'cryptography',
             'requests'
@@ -264,7 +264,7 @@ class MixinTestRunner:
 
 def main():
     """Main test runner entry point."""
-    parser = argparse.ArgumentParser(description="Run Flask-AppBuilder Mixin Tests")
+    parser = argparse.ArgumentParser(description="Run PgAppForge Mixin Tests")
     parser.add_argument("--fast", action="store_true", help="Skip slow tests")
     parser.add_argument("--security-only", action="store_true", help="Run only security tests")
     parser.add_argument("--performance", action="store_true", help="Run performance benchmarks")

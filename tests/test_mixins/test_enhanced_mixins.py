@@ -12,12 +12,12 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch, MagicMock
 
-from flask_appbuilder import Model
-from flask_appbuilder.mixins.enhanced_mixins import (
+from pgappforge import Model
+from pgappforge.mixins.enhanced_mixins import (
     EnhancedSoftDeleteMixin, MetadataMixin, StateTrackingMixin,
     CacheableMixin, ImportExportMixin
 )
-from flask_appbuilder.mixins.security_framework import (
+from pgappforge.mixins.security_framework import (
     MixinDataError, MixinValidationError
 )
 
@@ -83,7 +83,7 @@ class TestEnhancedSoftDeleteMixin:
     
     def test_soft_delete_basic(self):
         """Test basic soft delete functionality."""
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 456
             
             result = self.model.soft_delete()
@@ -97,7 +97,7 @@ class TestEnhancedSoftDeleteMixin:
         """Test soft delete with deletion reason."""
         deletion_reason = "Item no longer needed"
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 789
             
             result = self.model.soft_delete(reason=deletion_reason)
@@ -120,7 +120,7 @@ class TestEnhancedSoftDeleteMixin:
         self.model.deleted_on = datetime.utcnow()
         self.model.deleted_by_fk = 123
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 456
             
             result = self.model.restore()
@@ -140,7 +140,7 @@ class TestEnhancedSoftDeleteMixin:
         
         assert result is False
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.db')
+    @patch('pgappforge.mixins.enhanced_mixins.db')
     def test_purge_hard_delete(self, mock_db):
         """Test permanent deletion (purge)."""
         self.model.deleted = True
@@ -160,7 +160,7 @@ class TestEnhancedSoftDeleteMixin:
         
         assert "not soft-deleted" in str(exc_info.value)
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.db')
+    @patch('pgappforge.mixins.enhanced_mixins.db')
     def test_bulk_soft_delete(self, mock_db):
         """Test bulk soft delete operation."""
         # Setup query mock
@@ -169,7 +169,7 @@ class TestEnhancedSoftDeleteMixin:
         mock_query.filter.return_value = mock_query
         mock_query.update.return_value = 5  # 5 items updated
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 789
             
             result = TestSoftDeleteModel.bulk_soft_delete([1, 2, 3, 4, 5])
@@ -178,7 +178,7 @@ class TestEnhancedSoftDeleteMixin:
             mock_query.update.assert_called_once()
             mock_db.session.commit.assert_called_once()
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.db')
+    @patch('pgappforge.mixins.enhanced_mixins.db')
     def test_cascade_delete_relationships(self, mock_db):
         """Test cascade deletion to related objects."""
         # Mock related objects
@@ -186,7 +186,7 @@ class TestEnhancedSoftDeleteMixin:
         mock_related_item2 = Mock()
         self.model.related_items = [mock_related_item1, mock_related_item2]
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user'):
+        with patch('pgappforge.mixins.enhanced_mixins.current_user'):
             result = self.model.soft_delete(cascade=True)
             
             assert result is True
@@ -301,7 +301,7 @@ class TestStateTrackingMixin:
     
     def test_change_state_valid_transition(self):
         """Test valid state change."""
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 456
             
             result = self.model.change_state('pending', 'Ready for review')
@@ -381,7 +381,7 @@ class TestCacheableMixin:
         
         assert result == expected_key
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.current_app')
+    @patch('pgappforge.mixins.enhanced_mixins.current_app')
     def test_get_cached_existing(self, mock_app):
         """Test retrieving existing cached data."""
         # Setup cache mock
@@ -395,7 +395,7 @@ class TestCacheableMixin:
         cache_key = "TestCacheableModel:123:Test Item"
         mock_cache.get.assert_called_once_with(cache_key)
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.current_app')
+    @patch('pgappforge.mixins.enhanced_mixins.current_app')
     def test_get_cached_non_existent(self, mock_app):
         """Test retrieving non-existent cached data."""
         # Setup cache mock
@@ -407,7 +407,7 @@ class TestCacheableMixin:
         
         assert result is None
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.current_app')
+    @patch('pgappforge.mixins.enhanced_mixins.current_app')
     def test_set_cached(self, mock_app):
         """Test setting cached data."""
         # Setup cache mock
@@ -420,7 +420,7 @@ class TestCacheableMixin:
         cache_key = "TestCacheableModel:123:Test Item"
         mock_cache.set.assert_called_once_with(cache_key, test_data, timeout=300)
     
-    @patch('flask_appbuilder.mixins.enhanced_mixins.current_app')
+    @patch('pgappforge.mixins.enhanced_mixins.current_app')
     def test_invalidate_cache(self, mock_app):
         """Test cache invalidation."""
         # Setup cache mock
@@ -434,7 +434,7 @@ class TestCacheableMixin:
     
     def test_cache_without_cache_backend(self):
         """Test cache operations without cache backend."""
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_app') as mock_app:
+        with patch('pgappforge.mixins.enhanced_mixins.current_app') as mock_app:
             # No cache attribute
             del mock_app.cache
             
@@ -527,7 +527,7 @@ class TestImportExportMixin:
             {"name": "Item 2", "value": 20}
         ]
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.db') as mock_db:
+        with patch('pgappforge.mixins.enhanced_mixins.db') as mock_db:
             result = TestImportExportModel.bulk_import(import_data)
             
             assert result['success'] == 2
@@ -541,7 +541,7 @@ class TestImportExportMixin:
             {"name": 123, "value": "invalid"}  # Invalid
         ]
         
-        with patch('flask_appbuilder.mixins.enhanced_mixins.db'):
+        with patch('pgappforge.mixins.enhanced_mixins.db'):
             result = TestImportExportModel.bulk_import(import_data)
             
             assert result['success'] == 1
@@ -571,7 +571,7 @@ class TestMixinInteractions:
     
     def test_soft_delete_updates_state(self):
         """Test that soft delete also updates state."""
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 456
             
             # Soft delete should also change state
@@ -586,7 +586,7 @@ class TestMixinInteractions:
         self.model.set_metadata("config", {"important": True})
         
         # Change state
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user'):
+        with patch('pgappforge.mixins.enhanced_mixins.current_user'):
             self.model.change_state('inactive', 'Temporarily disabled')
         
         # Metadata should still be there
@@ -595,7 +595,7 @@ class TestMixinInteractions:
     
     def test_state_change_logs_in_metadata(self):
         """Test using metadata to store additional state change info."""
-        with patch('flask_appbuilder.mixins.enhanced_mixins.current_user') as mock_user:
+        with patch('pgappforge.mixins.enhanced_mixins.current_user') as mock_user:
             mock_user.id = 789
             
             # Store additional info in metadata during state change

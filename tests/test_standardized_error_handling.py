@@ -2,7 +2,7 @@
 Tests for standardized error handling system.
 
 These tests ensure that the new standardized error handling patterns work correctly,
-integrate properly with existing Flask-AppBuilder components, and maintain backward
+integrate properly with existing PgAppForge components, and maintain backward
 compatibility with existing FABException usage.
 """
 
@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 
-from flask_appbuilder.exceptions.standardized import (
+from pgappforge.exceptions.standardized import (
     ErrorCategory, ErrorSeverity, RecoveryAction, ErrorContext,
     StandardizedFABException, FABAuthenticationError, FABAuthorizationError,
     FABValidationError, FABDatabaseError, FABConfigurationError,
@@ -161,7 +161,7 @@ class TestStandardizedFABException:
         )
         assert "check your input" in validation_error.user_message.lower()
 
-    @patch('flask_appbuilder.exceptions.standardized.logger')
+    @patch('pgappforge.exceptions.standardized.logger')
     def test_auto_logging(self, mock_logger):
         """Test automatic logging based on severity."""
         # Test critical severity
@@ -444,8 +444,8 @@ class TestUtilityFunctions:
 class TestContextUtilities:
     """Test context utility functions."""
 
-    @patch('flask_appbuilder.exceptions.standardized.request')
-    @patch('flask_appbuilder.exceptions.standardized.g')
+    @patch('pgappforge.exceptions.standardized.request')
+    @patch('pgappforge.exceptions.standardized.g')
     def test_get_request_context_with_flask(self, mock_g, mock_request):
         """Test getting request context when Flask is available."""
         # Mock Flask request and g objects
@@ -476,7 +476,7 @@ class TestContextUtilities:
         assert context.user_id == 123
         assert context.session_id == "session_456"
 
-    @patch('flask_appbuilder.exceptions.standardized.current_user')
+    @patch('pgappforge.exceptions.standardized.current_user')
     def test_add_user_context_from_flask_login(self, mock_current_user):
         """Test adding user context from Flask-Login current_user."""
         mock_current_user.id = 789
@@ -493,7 +493,7 @@ class TestBackwardCompatibility:
 
     def test_standardized_exception_is_fab_exception(self):
         """Test that StandardizedFABException is compatible with FABException."""
-        from flask_appbuilder.exceptions import FABException
+        from pgappforge.exceptions import FABException
 
         error = StandardizedFABException("Test error")
 
@@ -503,7 +503,7 @@ class TestBackwardCompatibility:
 
     def test_existing_exception_handling_still_works(self):
         """Test that existing code using FABException still works."""
-        from flask_appbuilder.exceptions import FABException
+        from pgappforge.exceptions import FABException
 
         # This should work as before
         try:
@@ -532,7 +532,7 @@ class TestGlobalErrorStats:
 
 
 class TestIntegrationScenarios:
-    """Test integration scenarios with Flask-AppBuilder components."""
+    """Test integration scenarios with PgAppForge components."""
 
     def test_view_error_handling(self):
         """Test error handling in view methods."""
@@ -550,14 +550,14 @@ class TestIntegrationScenarios:
 
     def test_security_error_logging(self):
         """Test that security errors are properly logged."""
-        with patch('flask_appbuilder.exceptions.standardized.logging.getLogger') as mock_get_logger:
+        with patch('pgappforge.exceptions.standardized.logging.getLogger') as mock_get_logger:
             mock_security_logger = Mock()
             mock_get_logger.return_value = mock_security_logger
 
             error = FABSecurityError("Security violation")
 
             # Should have logged to security logger
-            mock_get_logger.assert_called_with('flask_appbuilder.security.events')
+            mock_get_logger.assert_called_with('pgappforge.security.events')
 
     def test_error_context_in_web_request(self):
         """Test error context collection in web request scenario."""

@@ -74,10 +74,10 @@ if __name__ == '__main__':
 **Validation**:
 ```python
 # Tutorial shows:
-from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+from pgappforge.collaborative.ai.ai_models import AIModelManager
 
 # ✅ VERIFIED: This import path exists in codebase
-# File: flask_appbuilder/collaborative/ai/ai_models.py
+# File: pgappforge/collaborative/ai/ai_models.py
 # Contains: AIModelManager class with all 15 providers
 ```
 
@@ -88,7 +88,7 @@ from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
 **Working Components**:
 - Model definitions (Task, TaskCategory) ✅
 - View configurations ✅  
-- Basic Flask-AppBuilder setup ✅
+- Basic PgAppForge setup ✅
 - AI feature imports ✅
 
 **Issues Found**:
@@ -125,20 +125,20 @@ from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
 
 ```bash
 # 1. Clone and setup environment
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/dpgaspar/PgAppForge.git
+cd PgAppForge
 
 python -m venv venv
 source venv/bin/activate  # Linux/macOS
 # venv\Scripts\activate  # Windows
 
-# 2. Install Flask-AppBuilder with features
+# 2. Install PgAppForge with features
 pip install -e .
 pip install redis flask-socketio  # For collaborative features
 
 # 3. Verify installation
-python -c "import flask_appbuilder; print('✅ Flask-AppBuilder installed')"
-python -c "from flask_appbuilder.collaborative.ai.ai_models import AIModelManager; print('✅ AI features available')"
+python -c "import pgappforge; print('✅ PgAppForge installed')"
+python -c "from pgappforge.collaborative.ai.ai_models import AIModelManager; print('✅ AI features available')"
 ```
 
 ### Fixed Configuration Template
@@ -153,12 +153,12 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-# Flask-AppBuilder Configuration
-from flask_appbuilder.security.manager import AUTH_DB
+# PgAppForge Configuration
+from pgappforge.security.manager import AUTH_DB
 AUTH_TYPE = AUTH_DB
 AUTH_ROLE_ADMIN = 'Admin'
 AUTH_ROLE_PUBLIC = 'Public'
-APP_NAME = "Flask-AppBuilder Tutorial"
+APP_NAME = "PgAppForge Tutorial"
 APP_THEME = "bootstrap-theme.css"
 
 # AI Configuration (validated providers)
@@ -179,21 +179,21 @@ def validate_features():
     
     # Test AI features
     try:
-        from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+        from pgappforge.collaborative.ai.ai_models import AIModelManager
         results['ai'] = '✅ Available'
     except ImportError as e:
         results['ai'] = f'❌ Error: {e}'
     
     # Test collaborative features  
     try:
-        from flask_appbuilder.collaborative.realtime.websocket_manager import WebSocketManager
+        from pgappforge.collaborative.realtime.websocket_manager import WebSocketManager
         results['collaborative'] = '✅ Available'
     except ImportError as e:
         results['collaborative'] = f'❌ Error: {e}'
     
     # Test MFA features
     try:
-        from flask_appbuilder.security.mfa.models import MFACredential
+        from pgappforge.security.mfa.models import MFACredential
         results['mfa'] = '✅ Available'
     except ImportError as e:
         results['mfa'] = f'❌ Error: {e}'
@@ -212,7 +212,7 @@ if __name__ == '__main__':
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 import os
 
 def create_app():
@@ -233,7 +233,7 @@ def create_app():
     appbuilder = AppBuilder(app, db.session)
     
     # Validate features
-    print("Validating Flask-AppBuilder features...")
+    print("Validating PgAppForge features...")
     from tutorial_config import validate_features
     validation_results = validate_features()
     
@@ -274,7 +274,7 @@ if __name__ == '__main__':
             )
             print("✅ Admin user created: admin/admin123")
     
-    print("🚀 Starting Flask-AppBuilder application...")
+    print("🚀 Starting PgAppForge application...")
     print("🌐 Open: http://localhost:8080")
     print("👤 Login: admin/admin123")
     
@@ -321,7 +321,7 @@ if __name__ == '__main__':
 
 **Status**: 🔴 **Tutorials require fixes before use**
 
-While the Flask-AppBuilder framework is **fully implemented** with all documented features, the tutorial code examples contain critical errors that prevent successful execution. The primary issues are installation instructions and missing runtime validation.
+While the PgAppForge framework is **fully implemented** with all documented features, the tutorial code examples contain critical errors that prevent successful execution. The primary issues are installation instructions and missing runtime validation.
 
 **Next Steps**:
 1. Apply the corrected code examples provided in this report

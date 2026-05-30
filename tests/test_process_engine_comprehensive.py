@@ -16,22 +16,22 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 # Import all process engine components
-from flask_appbuilder.process.models.process_models import (
+from pgappforge.process.models.process_models import (
     ProcessDefinition, ProcessInstance, ProcessStep, ProcessTemplate,
     ApprovalRequest, ApprovalChain, SmartTrigger, ProcessMetric,
     ProcessInstanceStatus, ProcessStepStatus, ApprovalStatus
 )
-from flask_appbuilder.process.engine.process_engine import ProcessEngine
-from flask_appbuilder.process.engine.state_machine import ProcessStateMachine, StateTransitionError
-from flask_appbuilder.process.engine.executors import (
+from pgappforge.process.engine.process_engine import ProcessEngine
+from pgappforge.process.engine.state_machine import ProcessStateMachine, StateTransitionError
+from pgappforge.process.engine.executors import (
     TaskExecutor, ServiceExecutor, GatewayExecutor, ApprovalExecutor, TimerExecutor
 )
-from flask_appbuilder.process.approval.chain_manager import (
+from pgappforge.process.approval.chain_manager import (
     ApprovalChainManager, ApprovalDecision, ApprovalContext
 )
-from flask_appbuilder.process.ml.smart_triggers import SmartTriggerEngine, TriggerEvent
-from flask_appbuilder.process.analytics.dashboard import ProcessAnalytics
-from flask_appbuilder.process.async.task_monitor import TaskMonitor
+from pgappforge.process.ml.smart_triggers import SmartTriggerEngine, TriggerEvent
+from pgappforge.process.analytics.dashboard import ProcessAnalytics
+from pgappforge.process.async.task_monitor import TaskMonitor
 
 
 class TestProcessModels(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestProcessModels(unittest.TestCase):
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         
         # Initialize database
-        from flask_appbuilder import db
+        from pgappforge import db
         db.init_app(self.app)
         
         with self.app.app_context():
@@ -56,7 +56,7 @@ class TestProcessModels(unittest.TestCase):
     
     def create_test_data(self):
         """Create test process definitions and instances."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         # Create process definition
         self.test_definition = ProcessDefinition(
@@ -135,7 +135,7 @@ class TestProcessModels(unittest.TestCase):
     def test_process_step_creation(self):
         """Test ProcessStep model creation and methods."""
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             
             step = ProcessStep(
                 instance_id=self.test_instance.id,
@@ -166,7 +166,7 @@ class TestProcessModels(unittest.TestCase):
     def test_approval_chain_creation(self):
         """Test ApprovalChain model creation."""
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             
             # Create process step
             step = ProcessStep(
@@ -207,7 +207,7 @@ class TestProcessEngine(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
             
@@ -216,7 +216,7 @@ class TestProcessEngine(unittest.TestCase):
     
     def create_test_definition(self):
         """Create a test process definition."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         self.definition = ProcessDefinition(
             name="Engine Test Process",
@@ -303,7 +303,7 @@ class TestProcessEngine(unittest.TestCase):
             result = self.engine._evaluate_condition("input_data.approve === true", context)
             self.assertFalse(result)
     
-    @patch('flask_appbuilder.process.engine.executors.TaskExecutor.execute')
+    @patch('pgappforge.process.engine.executors.TaskExecutor.execute')
     def test_execute_node(self, mock_execute):
         """Test node execution."""
         with self.app.app_context():
@@ -516,7 +516,7 @@ class TestExecutors(unittest.TestCase):
             self.assertIsInstance(result, dict)
             self.assertIn('selected_path', result)
     
-    @patch('flask_appbuilder.process.approval.chain_manager.ApprovalChainManager.create_approval_chain')
+    @patch('pgappforge.process.approval.chain_manager.ApprovalChainManager.create_approval_chain')
     def test_approval_executor(self, mock_create_chain):
         """Test ApprovalExecutor functionality."""
         with self.app.app_context():
@@ -552,7 +552,7 @@ class TestApprovalSystem(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
             
@@ -561,7 +561,7 @@ class TestApprovalSystem(unittest.TestCase):
     
     def create_test_data(self):
         """Create test data for approval tests."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         # Create process instance and step
         self.instance = ProcessInstance(
@@ -612,8 +612,8 @@ class TestApprovalSystem(unittest.TestCase):
         self.assertEqual(decision.comment, "Looks good")
         self.assertIsNotNone(decision.timestamp)
     
-    @patch('flask_appbuilder.process.approval.chain_manager.ApprovalChainManager._determine_approvers')
-    @patch('flask_appbuilder.process.approval.chain_manager.ApprovalChainManager._send_approval_notification')
+    @patch('pgappforge.process.approval.chain_manager.ApprovalChainManager._determine_approvers')
+    @patch('pgappforge.process.approval.chain_manager.ApprovalChainManager._send_approval_notification')
     def test_create_approval_chain(self, mock_send_notification, mock_determine_approvers):
         """Test approval chain creation."""
         with self.app.app_context():
@@ -680,7 +680,7 @@ class TestSmartTriggers(unittest.TestCase):
         self.assertEqual(predictor.model_name, "process_outcome_predictor")
         self.assertFalse(predictor.is_trained)
     
-    @patch('flask_appbuilder.process.ml.smart_triggers.ProcessOutcomePredictor.predict')
+    @patch('pgappforge.process.ml.smart_triggers.ProcessOutcomePredictor.predict')
     def test_ml_prediction(self, mock_predict):
         """Test ML prediction functionality."""
         # Mock prediction result
@@ -717,7 +717,7 @@ class TestAnalyticsDashboard(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
             
@@ -726,7 +726,7 @@ class TestAnalyticsDashboard(unittest.TestCase):
     
     def create_test_analytics_data(self):
         """Create test data for analytics."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         # Create process instances with various statuses
         for i in range(10):
@@ -742,7 +742,7 @@ class TestAnalyticsDashboard(unittest.TestCase):
         
         db.session.commit()
     
-    @patch('flask_appbuilder.tenants.context.TenantContext.get_current_tenant_id')
+    @patch('pgappforge.tenants.context.TenantContext.get_current_tenant_id')
     def test_dashboard_metrics(self, mock_tenant_id):
         """Test dashboard metrics calculation."""
         with self.app.app_context():
@@ -794,8 +794,8 @@ class TestTaskMonitoring(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
-            from flask_appbuilder.process.async.task_monitor import Base
+            from pgappforge import db
+            from pgappforge.process.async.task_monitor import Base
             
             db.init_app(self.app)
             
@@ -809,7 +809,7 @@ class TestTaskMonitoring(unittest.TestCase):
         self.assertIsNotNone(self.task_monitor)
         self.assertIsInstance(self.task_monitor._recent_tasks, type(self.task_monitor._recent_tasks))
     
-    @patch('flask_appbuilder.tenants.context.TenantContext.get_current_tenant_id')
+    @patch('pgappforge.tenants.context.TenantContext.get_current_tenant_id')
     def test_task_statistics(self, mock_tenant_id):
         """Test task statistics calculation."""
         with self.app.app_context():
@@ -842,7 +842,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         with self.app.app_context():
-            from flask_appbuilder import db
+            from pgappforge import db
             db.init_app(self.app)
             db.create_all()
             
@@ -851,7 +851,7 @@ class TestIntegrationScenarios(unittest.TestCase):
     
     def create_complex_process(self):
         """Create a complex process for integration testing."""
-        from flask_appbuilder import db
+        from pgappforge import db
         
         self.definition = ProcessDefinition(
             name="Complex Integration Test Process",
@@ -885,8 +885,8 @@ class TestIntegrationScenarios(unittest.TestCase):
         db.session.add(self.definition)
         db.session.commit()
     
-    @patch('flask_appbuilder.process.engine.executors.TaskExecutor.execute')
-    @patch('flask_appbuilder.process.engine.executors.ApprovalExecutor.execute')
+    @patch('pgappforge.process.engine.executors.TaskExecutor.execute')
+    @patch('pgappforge.process.engine.executors.ApprovalExecutor.execute')
     def test_complete_process_flow(self, mock_approval_executor, mock_task_executor):
         """Test complete process execution flow."""
         with self.app.app_context():
@@ -909,7 +909,7 @@ class TestIntegrationScenarios(unittest.TestCase):
             self.assertEqual(instance.status, ProcessInstanceStatus.RUNNING.value)
             
             # Verify steps were created
-            from flask_appbuilder import db
+            from pgappforge import db
             steps = db.session.query(ProcessStep).filter_by(instance_id=instance.id).all()
             self.assertGreater(len(steps), 0)
     
@@ -924,7 +924,7 @@ class TestIntegrationScenarios(unittest.TestCase):
                 input_data={"invalid": "data"}
             )
             
-            from flask_appbuilder import db
+            from pgappforge import db
             db.session.add(instance)
             db.session.commit()
             

@@ -1,6 +1,6 @@
 # Enhanced View Generation Guide
 
-Flask-AppBuilder's enhanced view generation system provides sophisticated master-detail views, inline formsets, and relationship-specific views that dramatically improve the user experience for complex data relationships.
+PgForge's enhanced view generation system provides sophisticated master-detail views, inline formsets, and relationship-specific views that dramatically improve the user experience for complex data relationships.
 
 ## Table of Contents
 
@@ -434,7 +434,7 @@ class MasterDetailInfo:
 
 For additional support and examples, see:
 
-- [Flask-AppBuilder Documentation](http://flask-appbuilder.readthedocs.org/)
+- [PgForge Documentation](http://flask-appbuilder.readthedocs.org/)
 - [Enhanced View Generation Demo](../examples/enhanced_view_generation_demo.py)
 - [Test Suite](../tests/test_enhanced_view_generation.py)
-- [GitHub Issues](https://github.com/dpgaspar/Flask-AppBuilder/issues)
+- [GitHub Issues](https://github.com/dpgaspar/PgForge/issues)

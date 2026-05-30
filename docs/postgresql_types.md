@@ -1,6 +1,6 @@
-# PostgreSQL Types Support in Flask-AppBuilder
+# PostgreSQL Types Support in PgAppForge
 
-Flask-AppBuilder now includes comprehensive support for PostgreSQL-specific data types with rich widgets and form fields. This includes JSONB, PostGIS geometry types, pgvector embeddings, arrays, and many other PostgreSQL features.
+PgAppForge now includes comprehensive support for PostgreSQL-specific data types with rich widgets and form fields. This includes JSONB, PostGIS geometry types, pgvector embeddings, arrays, and many other PostgreSQL features.
 
 ## Overview
 
@@ -45,7 +45,7 @@ psql -d your_database -c "CREATE EXTENSION IF NOT EXISTS hstore;"
 
 ```python
 from sqlalchemy.dialects.postgresql import JSONB
-from flask_appbuilder.models.postgresql import PostgreSQLProfileMixin
+from pgappforge.models.postgresql import PostgreSQLProfileMixin
 
 class UserProfile(Model, PostgreSQLProfileMixin):
     settings = Column(JSONB, default=dict)
@@ -56,7 +56,7 @@ class UserProfile(Model, PostgreSQLProfileMixin):
 ### Form Field Usage
 
 ```python
-from flask_appbuilder.models.postgresql import JSONBField
+from pgappforge.models.postgresql import JSONBField
 
 class ProfileForm(DynamicForm):
     settings = JSONBField(label='User Settings')
@@ -118,7 +118,7 @@ class UserProfile(Model):
 ### Form Field Usage
 
 ```python
-from flask_appbuilder.models.postgresql import PostgreSQLArrayField
+from pgappforge.models.postgresql import PostgreSQLArrayField
 
 class ProfileForm(DynamicForm):
     skills = PostgreSQLArrayField(array_type='text', label='Skills')
@@ -155,7 +155,7 @@ web_developers = session.query(UserProfile).filter(
 ### Model Definition
 
 ```python
-from flask_appbuilder.models.postgresql import Geometry, Geography
+from pgappforge.models.postgresql import Geometry, Geography
 
 class UserProfile(Model):
     location = Column(Geometry('POINT', 4326))
@@ -167,7 +167,7 @@ class UserProfile(Model):
 ### Form Field Usage
 
 ```python
-from flask_appbuilder.models.postgresql import PostGISGeometryField
+from pgappforge.models.postgresql import PostGISGeometryField
 
 class ProfileForm(DynamicForm):
     location = PostGISGeometryField(
@@ -220,7 +220,7 @@ users_in_manhattan = session.query(UserProfile).filter(
 ### Model Definition
 
 ```python
-from flask_appbuilder.models.postgresql import Vector
+from pgappforge.models.postgresql import Vector
 
 class UserProfile(Model):
     profile_embedding = Column(Vector(768))  # OpenAI embeddings
@@ -231,7 +231,7 @@ class UserProfile(Model):
 ### Form Field Usage
 
 ```python
-from flask_appbuilder.models.postgresql import PgVectorField
+from pgappforge.models.postgresql import PgVectorField
 
 class ProfileForm(DynamicForm):
     profile_embedding = PgVectorField(
@@ -270,7 +270,7 @@ session.query(UserProfile).filter(
 ### UUID Fields
 
 ```python
-from flask_appbuilder.models.postgresql import PostgreSQLUUIDField
+from pgappforge.models.postgresql import PostgreSQLUUIDField
 from sqlalchemy.dialects.postgresql import UUID
 
 class UserProfile(Model):
@@ -286,7 +286,7 @@ class ProfileForm(DynamicForm):
 
 ```python
 from sqlalchemy.dialects.postgresql import INTERVAL
-from flask_appbuilder.models.postgresql import PostgreSQLIntervalField
+from pgappforge.models.postgresql import PostgreSQLIntervalField
 
 class UserProfile(Model):
     session_timeout = Column(INTERVAL, default='1 hour')
@@ -301,7 +301,7 @@ class ProfileForm(DynamicForm):
 
 ```python
 from sqlalchemy.dialects.postgresql import BIT
-from flask_appbuilder.models.postgresql import PostgreSQLBitStringField
+from pgappforge.models.postgresql import PostgreSQLBitStringField
 
 class UserProfile(Model):
     feature_flags = Column(BIT(32))
@@ -346,7 +346,7 @@ search_results = session.query(UserProfile).filter(
 ### LTREE Hierarchical Data
 
 ```python
-from flask_appbuilder.models.postgresql import LTREE
+from pgappforge.models.postgresql import LTREE
 
 class UserProfile(Model):
     org_path = Column(LTREE)  # e.g., 'engineering.backend.senior'
@@ -360,7 +360,7 @@ engineering_team = session.query(UserProfile).filter(
 ### HSTORE Key-Value Storage
 
 ```python
-from flask_appbuilder.models.postgresql import HSTORE
+from pgappforge.models.postgresql import HSTORE
 
 class UserProfile(Model):
     attributes = Column(HSTORE)
@@ -385,7 +385,7 @@ Use pre-built mixins for common PostgreSQL functionality:
 ### PostgreSQLProfileMixin
 
 ```python
-from flask_appbuilder.models.postgresql import PostgreSQLProfileMixin
+from pgappforge.models.postgresql import PostgreSQLProfileMixin
 
 class UserProfile(Model, PostgreSQLProfileMixin):
     # Includes: JSONB preferences, array skills, UUID fields, etc.
@@ -399,7 +399,7 @@ profile.add_to_array('skills_array', 'Python')
 ### PostGISProfileMixin
 
 ```python
-from flask_appbuilder.models.postgresql import PostGISProfileMixin
+from pgappforge.models.postgresql import PostGISProfileMixin
 
 class UserProfile(Model, PostGISProfileMixin):
     # Includes: location, service_area, travel_route, etc.
@@ -413,7 +413,7 @@ nearby = profile.find_nearby_profiles(radius_meters=1000)
 ### PgVectorProfileMixin
 
 ```python
-from flask_appbuilder.models.postgresql import PgVectorProfileMixin
+from pgappforge.models.postgresql import PgVectorProfileMixin
 
 class UserProfile(Model, PgVectorProfileMixin):
     # Includes: profile_embedding, skills_embedding, etc.
@@ -427,7 +427,7 @@ similar_profiles = profile.find_similar_profiles(limit=10)
 ### Combined Advanced Mixin
 
 ```python
-from flask_appbuilder.models.postgresql import AdvancedPostgreSQLProfileMixin
+from pgappforge.models.postgresql import AdvancedPostgreSQLProfileMixin
 
 class UserProfile(Model, AdvancedPostgreSQLProfileMixin):
     # Includes all PostgreSQL features
@@ -701,8 +701,8 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 ```python
 # Already included with flask-appbuilder
-from flask_appbuilder.widgets_postgresql.tree_widget import PostgreSQLTreeWidget
-from flask_appbuilder.models.postgresql import PostgreSQLTreeField
+from pgappforge.widgets_postgresql.tree_widget import PostgreSQLTreeWidget
+from pgappforge.models.postgresql import PostgreSQLTreeField
 ```
 
 ## Parent-Child Mode
@@ -730,7 +730,7 @@ CREATE INDEX idx_categories_name ON categories(name);
 
 ```python
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
-from flask_appbuilder import Model
+from pgappforge import Model
 
 class Category(Model):
     __tablename__ = 'categories'
@@ -750,7 +750,7 @@ class Category(Model):
 
 ```python
 from flask_wtf import FlaskForm
-from flask_appbuilder.models.postgresql import PostgreSQLTreeField
+from pgappforge.models.postgresql import PostgreSQLTreeField
 
 class CategoryManagementForm(FlaskForm):
     """Complete category hierarchy management form"""
@@ -776,7 +776,7 @@ class CategoryManagementForm(FlaskForm):
 
 ```python
 from flask import render_template, request, jsonify
-from flask_appbuilder import BaseView, expose
+from pgappforge import BaseView, expose
 
 class CategoryManagerView(BaseView):
     route_base = '/categories'
@@ -922,7 +922,7 @@ CREATE INDEX idx_departments_path_pattern ON departments USING BTREE (org_path t
 ### Model Definition
 
 ```python
-from flask_appbuilder.models.postgresql import LTREE
+from pgappforge.models.postgresql import LTREE
 
 class Department(Model):
     __tablename__ = 'departments'
@@ -1879,7 +1879,7 @@ def rebuild_tree_cache():
 
 ```python
 # models.py
-from flask_appbuilder import Model
+from pgappforge import Model
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean, DateTime, Numeric
 from datetime import datetime
 
@@ -1922,7 +1922,7 @@ class ProductCategory(Model):
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, BooleanField
 from wtforms.validators import DataRequired, Length
-from flask_appbuilder.models.postgresql import PostgreSQLTreeField
+from pgappforge.models.postgresql import PostgreSQLTreeField
 
 class CategoryManagementForm(FlaskForm):
     """Complete e-commerce category management"""
@@ -1946,7 +1946,7 @@ class CategoryManagementForm(FlaskForm):
 
 # views.py
 from flask import render_template, request, jsonify, flash
-from flask_appbuilder import BaseView, expose, has_access
+from pgappforge import BaseView, expose, has_access
 from .models import ProductCategory
 from .forms import CategoryManagementForm
 
@@ -2058,7 +2058,7 @@ class CategoryManagerView(BaseView):
 
 ```python
 # models.py
-from flask_appbuilder.models.postgresql import LTREE
+from pgappforge.models.postgresql import LTREE
 from sqlalchemy import Column, Integer, String, Numeric, Boolean
 
 class Department(Model):
@@ -2930,4 +2930,4 @@ treeWidget.on('nodeDeleted', function(nodeId) {
 
 ## Conclusion
 
-Flask-AppBuilder's PostgreSQL support provides comprehensive coverage of advanced PostgreSQL features with rich user interfaces. This enables building sophisticated applications that leverage PostgreSQL's full capabilities while maintaining ease of use and development productivity.
+PgAppForge's PostgreSQL support provides comprehensive coverage of advanced PostgreSQL features with rich user interfaces. This enables building sophisticated applications that leverage PostgreSQL's full capabilities while maintaining ease of use and development productivity.

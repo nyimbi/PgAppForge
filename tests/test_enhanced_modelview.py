@@ -25,12 +25,12 @@ import os
 sys.path.insert(0, '/Users/nyimbiodero/src/pjs/fab-ext')
 
 try:
-    from flask_appbuilder.models.enhanced_modelview import (
+    from pgappforge.models.enhanced_modelview import (
         FieldAnalysisCache, ModelInspector, SmartExclusionMixin,
         EnhancedModelView, FieldAnalysisManager, field_analysis_manager,
         smart_exclusion_decorator, analyze_view_performance
     )
-    from flask_appbuilder.models.field_analyzer import (
+    from pgappforge.models.field_analyzer import (
         FieldSupportLevel, UnsupportedReason
     )
     IMPORTS_AVAILABLE = True
@@ -295,7 +295,7 @@ class TestSmartExclusionMixin:
         assert 'name' in columns
         assert 'email' in columns
     
-    @patch('flask_appbuilder.models.enhanced_modelview.analyze_model_fields')
+    @patch('pgappforge.models.enhanced_modelview.analyze_model_fields')
     def test_get_enhanced_search_columns_enabled(self, mock_analyze, mock_mixin):
         """Test enhanced search columns when analysis is enabled."""
         if not IMPORTS_AVAILABLE:
@@ -325,7 +325,7 @@ class TestSmartExclusionMixin:
         assert 'description' in columns
         assert 'photo' not in columns
     
-    @patch('flask_appbuilder.models.enhanced_modelview.analyze_model_fields')
+    @patch('pgappforge.models.enhanced_modelview.analyze_model_fields')
     def test_get_enhanced_list_columns(self, mock_analyze, mock_mixin):
         """Test enhanced list columns selection."""
         if not IMPORTS_AVAILABLE:
@@ -347,7 +347,7 @@ class TestSmartExclusionMixin:
         assert 'config' in columns  # UI limitation but still displayable
         assert 'photo' not in columns  # Binary data excluded
     
-    @patch('flask_appbuilder.models.enhanced_modelview.analyze_model_fields')
+    @patch('pgappforge.models.enhanced_modelview.analyze_model_fields')
     def test_get_enhanced_edit_columns(self, mock_analyze, mock_mixin):
         """Test enhanced edit columns selection."""
         if not IMPORTS_AVAILABLE:
@@ -374,7 +374,7 @@ class TestSmartExclusionMixin:
         if not IMPORTS_AVAILABLE:
             pytest.skip("Enhanced ModelView not available")
         
-        with patch('flask_appbuilder.models.enhanced_modelview.analyze_model_fields') as mock_analyze:
+        with patch('pgappforge.models.enhanced_modelview.analyze_model_fields') as mock_analyze:
             mock_analyze.return_value = {'test': 'result'}
             
             # First call should trigger analysis
@@ -397,7 +397,7 @@ class TestEnhancedModelView:
             pytest.skip("Enhanced ModelView not available")
         
         # Mock the base ModelView
-        with patch('flask_appbuilder.models.enhanced_modelview.BaseModelView'):
+        with patch('pgappforge.models.enhanced_modelview.BaseModelView'):
             view = EnhancedModelView()
             
             assert hasattr(view, 'field_analysis_enabled')
@@ -408,8 +408,8 @@ class TestEnhancedModelView:
         if not IMPORTS_AVAILABLE:
             pytest.skip("Enhanced ModelView not available")
         
-        with patch('flask_appbuilder.models.enhanced_modelview.BaseModelView'):
-            with patch('flask_appbuilder.models.enhanced_modelview.get_model_analysis_report') as mock_report:
+        with patch('pgappforge.models.enhanced_modelview.BaseModelView'):
+            with patch('pgappforge.models.enhanced_modelview.get_model_analysis_report') as mock_report:
                 mock_report.return_value = {'test': 'report'}
                 
                 view = EnhancedModelView()
@@ -426,7 +426,7 @@ class TestEnhancedModelView:
         if not IMPORTS_AVAILABLE:
             pytest.skip("Enhanced ModelView not available")
         
-        with patch('flask_appbuilder.models.enhanced_modelview.BaseModelView'):
+        with patch('pgappforge.models.enhanced_modelview.BaseModelView'):
             view = EnhancedModelView()
             view.datamodel = MagicMock()
             view.datamodel.obj = MagicMock()
@@ -475,7 +475,7 @@ class TestFieldAnalysisManager:
         assert manager._global_config['strict_mode'] is False
         assert manager._global_config['show_warnings'] is False
     
-    @patch('flask_appbuilder.models.enhanced_modelview.analyze_model_fields')
+    @patch('pgappforge.models.enhanced_modelview.analyze_model_fields')
     def test_analyze_all_models(self, mock_analyze, manager):
         """Test analyzing multiple models."""
         if not IMPORTS_AVAILABLE:
@@ -504,8 +504,8 @@ class TestFieldAnalysisManager:
             pytest.skip("Enhanced ModelView not available")
         
         with patch.object(manager._global_cache, 'clear') as mock_global_clear:
-            with patch('flask_appbuilder.models.enhanced_modelview.SmartExclusionMixin._field_analysis_cache.clear') as mock_mixin_clear:
-                with patch('flask_appbuilder.models.enhanced_modelview.get_model_analysis_report.cache_clear') as mock_func_clear:
+            with patch('pgappforge.models.enhanced_modelview.SmartExclusionMixin._field_analysis_cache.clear') as mock_mixin_clear:
+                with patch('pgappforge.models.enhanced_modelview.get_model_analysis_report.cache_clear') as mock_func_clear:
                     manager.clear_cache()
                     
                     mock_global_clear.assert_called_once()
@@ -522,7 +522,7 @@ class TestUtilityFunctions:
             pytest.skip("Enhanced ModelView not available")
         
         # Mock base ModelView
-        with patch('flask_appbuilder.models.enhanced_modelview.BaseModelView') as MockBaseView:
+        with patch('pgappforge.models.enhanced_modelview.BaseModelView') as MockBaseView:
             class TestView(MockBaseView):
                 pass
             
@@ -620,11 +620,11 @@ class TestPerformanceAndOptimization:
         # Time the analysis
         start_time = time.time()
         
-        with patch('flask_appbuilder.models.enhanced_modelview.analyze_model_fields') as mock_analyze:
+        with patch('pgappforge.models.enhanced_modelview.analyze_model_fields') as mock_analyze:
             mock_analyze.return_value = {'total_columns': 50, 'fully_supported': []}
             
             # Simulate field analysis
-            from flask_appbuilder.models.enhanced_modelview import get_model_analysis_report
+            from pgappforge.models.enhanced_modelview import get_model_analysis_report
             result = get_model_analysis_report(LargeModel, strict_mode=True)
         
         end_time = time.time()

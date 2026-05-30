@@ -1,6 +1,6 @@
 import unittest
 
-from flask_appbuilder.models.sqla.interface import _is_sqla_type
+from pgappforge.models.sqla.interface import _is_sqla_type
 import sqlalchemy as sa
 
 

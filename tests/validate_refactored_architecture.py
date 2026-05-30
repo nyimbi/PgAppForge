@@ -2,7 +2,7 @@
 """
 Refactored Architecture Validation - Source Code Analysis
 
-Validates the refactored Flask-AppBuilder implementation by analyzing source code
+Validates the refactored PgAppForge implementation by analyzing source code
 directly without requiring imports, avoiding dependency issues.
 
 VALIDATION APPROACH:
@@ -67,8 +67,8 @@ def count_lines_in_method(source_code: str, method_name: str) -> int:
     
     return len(method_lines)
 
-def validate_flask_appbuilder_patterns(file_path: str) -> Dict:
-    """Validate Flask-AppBuilder architectural patterns."""
+def validate_pgappforge_patterns(file_path: str) -> Dict:
+    """Validate PgAppForge architectural patterns."""
     source_code = read_source_file(file_path)
     
     if not source_code:
@@ -82,7 +82,7 @@ def validate_flask_appbuilder_patterns(file_path: str) -> Dict:
         'pattern_compliance': {}
     }
     
-    log.info("🏗️  Analyzing Flask-AppBuilder Architectural Patterns")
+    log.info("🏗️  Analyzing PgAppForge Architectural Patterns")
     
     # 1. Check for @has_access decorator usage
     if re.search(r'@has_access', source_code):
@@ -96,39 +96,39 @@ def validate_flask_appbuilder_patterns(file_path: str) -> Dict:
         )
         validation_results['pattern_compliance']['has_access_decorators'] = False
     
-    # 2. Check for proper Flask-AppBuilder session management
+    # 2. Check for proper PgAppForge session management
     if re.search(r'self\.appbuilder\.get_session', source_code):
         validation_results['architectural_improvements'].append(
-            '✅ Uses Flask-AppBuilder session management patterns'
+            '✅ Uses PgAppForge session management patterns'
         )
         validation_results['pattern_compliance']['session_management'] = True
     else:
         validation_results['integration_issues'].append(
-            '❌ Not using Flask-AppBuilder session patterns'
+            '❌ Not using PgAppForge session patterns'
         )
         validation_results['pattern_compliance']['session_management'] = False
     
-    # 3. Check for Flask-AppBuilder permission system integration
+    # 3. Check for PgAppForge permission system integration
     if re.search(r'self\.appbuilder\.sm\.add_permission', source_code):
         validation_results['architectural_improvements'].append(
-            '✅ Integrates with Flask-AppBuilder permission system'
+            '✅ Integrates with PgAppForge permission system'
         )
         validation_results['pattern_compliance']['permission_system'] = True
     else:
         validation_results['integration_issues'].append(
-            '❌ Not using Flask-AppBuilder permission system'
+            '❌ Not using PgAppForge permission system'
         )
         validation_results['pattern_compliance']['permission_system'] = False
     
-    # 4. Check for Flask-AppBuilder permission checking
+    # 4. Check for PgAppForge permission checking
     if re.search(r'self\.appbuilder\.sm\.has_access', source_code):
         validation_results['architectural_improvements'].append(
-            '✅ Uses Flask-AppBuilder permission checking'
+            '✅ Uses PgAppForge permission checking'
         )
         validation_results['pattern_compliance']['permission_checking'] = True
     else:
         validation_results['integration_issues'].append(
-            '❌ Not using Flask-AppBuilder permission checking'
+            '❌ Not using PgAppForge permission checking'
         )
         validation_results['pattern_compliance']['permission_checking'] = False
     
@@ -156,22 +156,22 @@ def validate_flask_appbuilder_patterns(file_path: str) -> Dict:
         )
         validation_results['pattern_compliance']['orm_models'] = False
     
-    # 7. Check for Flask-AppBuilder exception patterns
+    # 7. Check for PgAppForge exception patterns
     if re.search(r'ApprovalException.*FABException', source_code):
         validation_results['architectural_improvements'].append(
-            '✅ Uses Flask-AppBuilder exception handling patterns'
+            '✅ Uses PgAppForge exception handling patterns'
         )
         validation_results['pattern_compliance']['exception_handling'] = True
     else:
         validation_results['integration_issues'].append(
-            '❌ Not using Flask-AppBuilder exception patterns'
+            '❌ Not using PgAppForge exception patterns'
         )
         validation_results['pattern_compliance']['exception_handling'] = False
     
     # 8. Check for standard logging patterns
     if re.search(r'log\.info|log\.error|log\.warning', source_code):
         validation_results['architectural_improvements'].append(
-            '✅ Uses standard logging patterns compatible with Flask-AppBuilder'
+            '✅ Uses standard logging patterns compatible with PgAppForge'
         )
         validation_results['pattern_compliance']['logging'] = True
     else:
@@ -281,7 +281,7 @@ def generate_comprehensive_report(file_path: str):
     log.info("=" * 80)
     
     # Run all validations
-    pattern_results = validate_flask_appbuilder_patterns(file_path)
+    pattern_results = validate_pgappforge_patterns(file_path)
     security_results = validate_security_features(file_path)
     complexity_results = analyze_complexity_reduction(file_path)
     
@@ -302,10 +302,10 @@ def generate_comprehensive_report(file_path: str):
     
     if overall_score >= 90:
         log.info("🎉 REFACTORING ASSESSMENT: EXCELLENT")
-        log.info("✅ Outstanding Flask-AppBuilder integration achieved")
+        log.info("✅ Outstanding PgAppForge integration achieved")
     elif overall_score >= 70:
         log.info("👍 REFACTORING ASSESSMENT: GOOD")  
-        log.info("✅ Good Flask-AppBuilder integration with minor improvements needed")
+        log.info("✅ Good PgAppForge integration with minor improvements needed")
     else:
         log.warning("⚠️  REFACTORING ASSESSMENT: NEEDS IMPROVEMENT")
         log.warning("🔶 Some architectural issues require attention")
@@ -354,7 +354,7 @@ def generate_comprehensive_report(file_path: str):
     log.info(f"   Security Score: {security_results.get('security_score', 0):.1f}%")
     log.info(f"   Overall Integration Score: {overall_score:.1f}%")
     
-    # Flask-AppBuilder Pattern Compliance
+    # PgAppForge Pattern Compliance
     if pattern_results.get('pattern_compliance'):
         compliance = pattern_results['pattern_compliance']
         compliance_score = (sum(compliance.values()) / len(compliance)) * 100
@@ -370,13 +370,13 @@ def generate_comprehensive_report(file_path: str):
     
     log.info("\n🏆 REFACTORING ACHIEVEMENTS:")
     log.info("   1. ✅ Replaced 150+ line custom security with @has_access patterns")
-    log.info("   2. ✅ Integrated with Flask-AppBuilder permission system")
+    log.info("   2. ✅ Integrated with PgAppForge permission system")
     log.info("   3. ✅ Used proper ORM models instead of JSON storage") 
-    log.info("   4. ✅ Leveraged Flask-AppBuilder session management")
+    log.info("   4. ✅ Leveraged PgAppForge session management")
     log.info("   5. ✅ Added internationalization support")
     log.info("   6. ✅ Implemented session-based rate limiting")
     log.info("   7. ✅ Maintained all critical security features")
-    log.info("   8. ✅ Followed Flask-AppBuilder architectural patterns")
+    log.info("   8. ✅ Followed PgAppForge architectural patterns")
     
     log.info("=" * 80)
     
@@ -391,7 +391,7 @@ def generate_comprehensive_report(file_path: str):
 
 def main():
     """Main entry point for architecture validation."""
-    file_path = 'flask_appbuilder_integrated_extensions.py'
+    file_path = 'pgappforge_integrated_extensions.py'
     
     if not os.path.exists(file_path):
         log.error(f"File not found: {file_path}")

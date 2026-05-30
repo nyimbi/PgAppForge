@@ -6,15 +6,15 @@ import unittest
 
 from flask import Flask, Response
 from flask.testing import FlaskClient
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.const import (
+from pgappforge import AppBuilder, SQLA
+from pgappforge.const import (
     API_SECURITY_PASSWORD_KEY,
     API_SECURITY_PROVIDER_KEY,
     API_SECURITY_REFRESH_KEY,
     API_SECURITY_USERNAME_KEY,
     API_SECURITY_VERSION,
 )
-from flask_appbuilder.security.sqla.models import Group, User
+from pgappforge.security.sqla.models import Group, User
 from hiro import Timeline
 import jinja2
 from tests.const import (

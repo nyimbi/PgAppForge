@@ -4,9 +4,9 @@ import os
 from typing import List
 
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder import SQLA
-from flask_appbuilder.security.sqla.models import Permission, Role, User, ViewMenu
+from pgappforge import AppBuilder
+from pgappforge import SQLA
+from pgappforge.security.sqla.models import Permission, Role, User, ViewMenu
 import prison
 from tests.base import FABTestCase
 from tests.const import PASSWORD_ADMIN, USERNAME_ADMIN
@@ -555,7 +555,7 @@ class UserAPITestCase(FABTestCase):
 class RolePermissionAPITestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
@@ -1324,7 +1324,7 @@ class RolePermissionAPITestCase(FABTestCase):
 class UserRolePermissionDisabledTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))
@@ -1368,9 +1368,9 @@ class UserRolePermissionDisabledTestCase(FABTestCase):
 class UserCustomPasswordComplexityValidatorTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
-        from flask_appbuilder.exceptions import PasswordComplexityValidationError
-        from flask_appbuilder.security.sqla.models import User
+        from pgappforge import AppBuilder
+        from pgappforge.exceptions import PasswordComplexityValidationError
+        from pgappforge.security.sqla.models import User
 
         def passwordValidator(password):
             if len(password) < 5:
@@ -1428,9 +1428,9 @@ class UserCustomPasswordComplexityValidatorTestCase(FABTestCase):
 class UserDefaultPasswordComplexityValidatorTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
-        from flask_appbuilder.exceptions import PasswordComplexityValidationError
-        from flask_appbuilder.security.sqla.models import User
+        from pgappforge import AppBuilder
+        from pgappforge.exceptions import PasswordComplexityValidationError
+        from pgappforge.security.sqla.models import User
 
         def passwordValidator(password):
             if len(password) < 5:
@@ -1487,7 +1487,7 @@ class UserDefaultPasswordComplexityValidatorTestCase(FABTestCase):
 class GroupAPITestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.basedir = os.path.abspath(os.path.dirname(__file__))

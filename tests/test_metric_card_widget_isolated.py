@@ -1,7 +1,7 @@
 """
 Isolated test for MetricCardWidget functionality.
 
-Tests the MetricCardWidget without complex Flask-AppBuilder imports that cause issues.
+Tests the MetricCardWidget without complex PgAppForge imports that cause issues.
 """
 
 import unittest
@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from datetime import datetime
 
 # Import the classes we're testing directly
-from flask_appbuilder.charts.metric_widgets import MetricCardWidget, TrendChartView
+from pgappforge.charts.metric_widgets import MetricCardWidget, TrendChartView
 
 
 class TestMetricCardWidgetIsolated(unittest.TestCase):
@@ -175,7 +175,7 @@ class TestMetricCardWidgetIsolated(unittest.TestCase):
         self.assertIn("fa-arrow-up", html)
         self.assertIn("trend-up", html)
     
-    @patch('flask_appbuilder.charts.metric_widgets.render_template_string')
+    @patch('pgappforge.charts.metric_widgets.render_template_string')
     def test_render_metric_card_template_error(self, mock_render):
         """Test metric card rendering with template error."""
         mock_render.side_effect = Exception("Template error")

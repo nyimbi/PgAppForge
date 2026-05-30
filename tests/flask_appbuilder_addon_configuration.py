@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Flask-AppBuilder Addon Configuration
+PgAppForge Addon Configuration
 
 This file demonstrates the PROPER way to integrate enhanced functionality
-with Flask-AppBuilder using the official addon manager pattern instead
+with PgAppForge using the official addon manager pattern instead
 of the parallel infrastructure anti-pattern.
 
 ELIMINATES ARCHITECTURAL ISSUES:
-- ✅ Uses Flask-AppBuilder's ADDON_MANAGERS system
-- ✅ Follows Flask-AppBuilder initialization patterns  
+- ✅ Uses PgAppForge's ADDON_MANAGERS system
+- ✅ Follows PgAppForge initialization patterns  
 - ✅ Proper configuration integration with Flask config
 - ✅ No parallel infrastructure - extends existing systems
 """
@@ -19,14 +19,14 @@ from typing import Dict, List
 # 1. PROPER ADDON MANAGER REGISTRATION
 # =============================================================================
 
-# This is how Flask-AppBuilder addons should be registered
-# Add this to your Flask-AppBuilder configuration:
+# This is how PgAppForge addons should be registered
+# Add this to your PgAppForge configuration:
 
 ADDON_MANAGERS = [
-    'tests.proper_flask_appbuilder_extensions.SearchManager',
-    'tests.proper_flask_appbuilder_extensions.GeocodingManager', 
-    'tests.proper_flask_appbuilder_extensions.ApprovalWorkflowManager',
-    'tests.proper_flask_appbuilder_extensions.CommentManager',
+    'tests.proper_pgappforge_extensions.SearchManager',
+    'tests.proper_pgappforge_extensions.GeocodingManager', 
+    'tests.proper_pgappforge_extensions.ApprovalWorkflowManager',
+    'tests.proper_pgappforge_extensions.CommentManager',
 ]
 
 # =============================================================================
@@ -35,19 +35,19 @@ ADDON_MANAGERS = [
 
 class FlaskAppBuilderConfig:
     """
-    Configuration class that integrates with Flask-AppBuilder's config system
+    Configuration class that integrates with PgAppForge's config system
     instead of creating parallel configuration management.
     """
     
     # =============================================================================
-    # Core Flask-AppBuilder Configuration (existing)
+    # Core PgAppForge Configuration (existing)
     # =============================================================================
     SECRET_KEY = 'YOUR_SECRET_KEY_HERE'
     SQLALCHEMY_DATABASE_URI = 'sqlite:///app.db'
     CSRF_ENABLED = True
     
-    # Flask-AppBuilder base configuration
-    APP_NAME = "Enhanced Flask-AppBuilder App"
+    # PgAppForge base configuration
+    APP_NAME = "Enhanced PgAppForge App"
     APP_THEME = ""  # default bootstrap theme
     APP_ICON = "static/img/logo.jpg"
     
@@ -67,7 +67,7 @@ class FlaskAppBuilderConfig:
     
     # Geocoding service configuration
     FAB_NOMINATIM_URL = 'https://nominatim.openstreetmap.org'
-    FAB_NOMINATIM_USER_AGENT = 'Flask-AppBuilder-Enhanced/1.0 (contact@yourdomain.com)'
+    FAB_NOMINATIM_USER_AGENT = 'PgAppForge-Enhanced/1.0 (contact@yourdomain.com)'
     
     # API keys for premium geocoding services (optional)
     FAB_MAPQUEST_API_KEY = None  # Set in environment or here
@@ -150,10 +150,10 @@ class FlaskAppBuilderConfig:
     FAB_COMMENTS_NOTIFY_PARTICIPANTS = True
     
     # =============================================================================
-    # Integration with existing Flask-AppBuilder security
+    # Integration with existing PgAppForge security
     # =============================================================================
     
-    # Use Flask-AppBuilder's existing security configuration
+    # Use PgAppForge's existing security configuration
     AUTH_TYPE = 1  # Database authentication
     AUTH_ROLE_ADMIN = 'Admin'
     AUTH_ROLE_PUBLIC = 'Public'
@@ -173,21 +173,21 @@ class FlaskAppBuilderConfig:
 
 def create_enhanced_app():
     """
-    Example of proper Flask-AppBuilder application initialization
+    Example of proper PgAppForge application initialization
     that integrates enhanced functionality without parallel infrastructure.
     """
     from flask import Flask
-    from flask_appbuilder import AppBuilder, SQLA
-    from flask_appbuilder.security.sqla.manager import SecurityManager
+    from pgappforge import AppBuilder, SQLA
+    from pgappforge.security.sqla.manager import SecurityManager
     
     # Create Flask app
     app = Flask(__name__)
     app.config.from_object(FlaskAppBuilderConfig)
     
-    # Initialize Flask-AppBuilder database
+    # Initialize PgAppForge database
     db = SQLA(app)
     
-    # Create Flask-AppBuilder instance with addon managers
+    # Create PgAppForge instance with addon managers
     # The ADDON_MANAGERS will be automatically loaded and initialized
     appbuilder = AppBuilder(
         app, 
@@ -208,21 +208,21 @@ def create_enhanced_app():
 def setup_enhanced_models(db, appbuilder):
     """
     Example of how to properly integrate models with enhanced functionality
-    using Flask-AppBuilder patterns instead of mixins.
+    using PgAppForge patterns instead of mixins.
     """
     from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Float
-    from flask_appbuilder.models.mixins import AuditMixin
-    from flask_appbuilder.models.decorators import renders
+    from pgappforge.models.mixins import AuditMixin
+    from pgappforge.models.decorators import renders
     
     # =============================================================================
-    # Enhanced Document Model - Proper Flask-AppBuilder integration
+    # Enhanced Document Model - Proper PgAppForge integration
     # =============================================================================
     
     class Document(AuditMixin, db.Model):
         """
         Document model with enhanced functionality.
         
-        Uses Flask-AppBuilder's AuditMixin and integrates with addon managers
+        Uses PgAppForge's AuditMixin and integrates with addon managers
         instead of creating parallel infrastructure.
         """
         __tablename__ = 'documents'
@@ -265,12 +265,12 @@ def setup_enhanced_models(db, appbuilder):
         
         @renders('title')
         def title_link(self):
-            """Flask-AppBuilder render decorator for UI integration."""
+            """PgAppForge render decorator for UI integration."""
             return f'<a href="/documents/{self.id}">{self.title}</a>'
     
     
     # =============================================================================
-    # Enhanced Location Model - Proper Flask-AppBuilder integration  
+    # Enhanced Location Model - Proper PgAppForge integration  
     # =============================================================================
     
     class Location(AuditMixin, db.Model):
@@ -312,7 +312,7 @@ def setup_enhanced_models(db, appbuilder):
         
         @renders('coordinates')
         def coordinates_display(self):
-            """Flask-AppBuilder render decorator for coordinate display."""
+            """PgAppForge render decorator for coordinate display."""
             if self.latitude and self.longitude:
                 return f"{self.latitude:.6f}, {self.longitude:.6f}"
             return "Not geocoded"
@@ -327,29 +327,29 @@ def setup_enhanced_models(db, appbuilder):
 
 def setup_enhanced_views(appbuilder, Document, Location):
     """
-    Example of proper view integration that extends Flask-AppBuilder views
+    Example of proper view integration that extends PgAppForge views
     instead of creating parallel infrastructure.
     """
-    from flask_appbuilder import ModelView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
-    from flask_appbuilder.actions import action
-    from flask_appbuilder.security.decorators import has_access
+    from pgappforge import ModelView
+    from pgappforge.models.sqla.interface import SQLAInterface
+    from pgappforge.actions import action
+    from pgappforge.security.decorators import has_access
     from flask import redirect, url_for, flash
     
     # =============================================================================
-    # Enhanced Document View - Extends Flask-AppBuilder ModelView
+    # Enhanced Document View - Extends PgAppForge ModelView
     # =============================================================================
     
     class EnhancedDocumentView(ModelView):
         """
         Document view with enhanced functionality.
         
-        Extends Flask-AppBuilder's ModelView and integrates with addon managers
+        Extends PgAppForge's ModelView and integrates with addon managers
         instead of implementing parallel functionality.
         """
         datamodel = SQLAInterface(Document)
         
-        # Use Flask-AppBuilder's native configuration
+        # Use PgAppForge's native configuration
         list_columns = ['title', 'category', 'current_state', 'created_on']
         edit_columns = ['title', 'content', 'category']
         add_columns = ['title', 'content', 'category']
@@ -395,14 +395,14 @@ def setup_enhanced_views(appbuilder, Document, Location):
     
     
     # =============================================================================
-    # Enhanced Location View - Extends Flask-AppBuilder ModelView
+    # Enhanced Location View - Extends PgAppForge ModelView
     # =============================================================================
     
     class EnhancedLocationView(ModelView):
         """
         Location view with geocoding integration.
         
-        Extends Flask-AppBuilder's ModelView with geocoding functionality.
+        Extends PgAppForge's ModelView with geocoding functionality.
         """
         datamodel = SQLAInterface(Location)
         
@@ -428,7 +428,7 @@ def setup_enhanced_views(appbuilder, Document, Location):
             return redirect(self.get_redirect())
     
     
-    # Register views with Flask-AppBuilder
+    # Register views with PgAppForge
     appbuilder.add_view(
         EnhancedDocumentView,
         "Documents",
@@ -454,7 +454,7 @@ def setup_enhanced_views(appbuilder, Document, Location):
 
 def create_complete_enhanced_app():
     """
-    Complete example showing proper Flask-AppBuilder integration
+    Complete example showing proper PgAppForge integration
     without parallel infrastructure.
     """
     
@@ -471,7 +471,7 @@ def create_complete_enhanced_app():
     with app.app_context():
         db.create_all()
         
-        # Initialize Flask-AppBuilder's security system
+        # Initialize PgAppForge's security system
         appbuilder.sm.sync_role_from_db()
         
         # Create custom roles defined in config
@@ -492,13 +492,13 @@ if __name__ == "__main__":
     print("")
     print("🏗️ ARCHITECTURAL IMPROVEMENTS:")
     print("  - Uses ADDON_MANAGERS instead of parallel infrastructure")
-    print("  - Extends Flask-AppBuilder classes instead of reimplementing")
-    print("  - Integrates with Flask-AppBuilder's configuration system")
-    print("  - Uses Flask-AppBuilder's security and database patterns")
-    print("  - Follows Flask-AppBuilder view and model conventions")
+    print("  - Extends PgAppForge classes instead of reimplementing")
+    print("  - Integrates with PgAppForge's configuration system")
+    print("  - Uses PgAppForge's security and database patterns")
+    print("  - Follows PgAppForge view and model conventions")
     print("")
     print("📚 USAGE:")
-    print("  1. Add ADDON_MANAGERS to your Flask-AppBuilder configuration")
+    print("  1. Add ADDON_MANAGERS to your PgAppForge configuration")
     print("  2. Use FlaskAppBuilderConfig as base for your configuration")
     print("  3. Register enhanced views with appbuilder.add_view()")
     print("  4. Models automatically integrate with addon managers")

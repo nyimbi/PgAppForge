@@ -1,5 +1,5 @@
 from flask import g
-from flask_appbuilder import SQLA
+from pgappforge import SQLA
 from flask_login import AnonymousUserMixin, login_user
 from tests.base import FABTestCase
 
@@ -7,7 +7,7 @@ from tests.base import FABTestCase
 class SecurityPermissionsTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__)
         self.app.config.from_object("tests.config_security")

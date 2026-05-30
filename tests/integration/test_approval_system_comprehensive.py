@@ -1,18 +1,18 @@
 """
-Comprehensive Integration Tests for Flask-AppBuilder Approval System
+Comprehensive Integration Tests for PgAppForge Approval System
 
 This test suite validates all security fixes, performance optimizations, and
-Flask-AppBuilder integration for the approval workflow system.
+PgAppForge integration for the approval workflow system.
 
 Tests cover:
 1. Circular import resolution in validation framework
 2. N+1 query optimization in expression evaluator  
 3. Connection pool configuration and dynamic scaling
 4. Security validator integration
-5. End-to-end approval workflow with Flask-AppBuilder
+5. End-to-end approval workflow with PgAppForge
 6. Performance under load with proper resource management
 
-All tests follow Flask-AppBuilder patterns and validate production readiness.
+All tests follow PgAppForge patterns and validate production readiness.
 """
 
 import pytest
@@ -26,36 +26,36 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.security.sqla.models import User, Role
+from pgappforge import AppBuilder
+from pgappforge.security.sqla.models import User, Role
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
 # Import approval system components
-from flask_appbuilder.process.approval.validation_framework import (
+from pgappforge.process.approval.validation_framework import (
     validate_approval_request,
     validate_user_input,
     validate_chain_config,
     ValidationContext,
     ValidationType
 )
-from flask_appbuilder.process.approval.secure_expression_evaluator import (
+from pgappforge.process.approval.secure_expression_evaluator import (
     SecureExpressionEvaluator
 )
-from flask_appbuilder.process.approval.connection_pool_manager import (
+from pgappforge.process.approval.connection_pool_manager import (
     ConnectionPoolManager,
     ConnectionConfig
 )
-from flask_appbuilder.process.approval.constants import (
+from pgappforge.process.approval.constants import (
     DatabaseConstants,
     SecurityConstants,
     WorkflowConstants
 )
-from flask_appbuilder.process.approval.workflow_manager import (
+from pgappforge.process.approval.workflow_manager import (
     ApprovalWorkflowManager
 )
-from flask_appbuilder.wallet.models import WalletTransaction, TransactionStatus
+from pgappforge.wallet.models import WalletTransaction, TransactionStatus
 
 
 class MockAppBuilder:
@@ -102,8 +102,8 @@ class TestValidationFrameworkIntegration(unittest.TestCase):
         """Test that validation framework resolves circular imports correctly."""
         # This should not raise ImportError due to circular dependency
         try:
-            from flask_appbuilder.process.approval.validation_framework import validate_approval_request
-            from flask_appbuilder.process.approval.security_validator import ApprovalSecurityValidator
+            from pgappforge.process.approval.validation_framework import validate_approval_request
+            from pgappforge.process.approval.security_validator import ApprovalSecurityValidator
             
             # Test that validate_approval_request can import and use ApprovalSecurityValidator
             test_data = {
@@ -572,7 +572,7 @@ def run_comprehensive_integration_tests():
 
 
 if __name__ == '__main__':
-    print("Running Comprehensive Integration Tests for Flask-AppBuilder Approval System")
+    print("Running Comprehensive Integration Tests for PgAppForge Approval System")
     print("=" * 80)
     
     results = run_comprehensive_integration_tests()

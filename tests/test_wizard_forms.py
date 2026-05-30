@@ -15,10 +15,10 @@ from flask_login import UserMixin, login_user
 from wtforms import Form, StringField, IntegerField, TextAreaField, BooleanField
 from wtforms.validators import DataRequired, Length, NumberRange
 
-from flask_appbuilder.forms.wizard import (
+from pgappforge.forms.wizard import (
     WizardForm, WizardStep, WizardFormData, WizardFormPersistence
 )
-from flask_appbuilder.views.wizard import WizardFormView, WizardFormWidget
+from pgappforge.views.wizard import WizardFormView, WizardFormWidget
 
 
 class MockUser(UserMixin):

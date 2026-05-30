@@ -1,8 +1,8 @@
 """
-Standalone component tests for Flask-AppBuilder.
+Standalone component tests for PgForge.
 
 This module tests individual components in isolation without requiring
-full Flask-AppBuilder imports, focusing on core functionality and logic.
+full PgForge imports, focusing on core functionality and logic.
 """
 
 import datetime
@@ -339,10 +339,10 @@ class TestConfigurationStructures(unittest.TestCase):
     def test_app_configurations(self):
         """Test application configuration structures"""
         app_configs = {
-            'APP_NAME': {'type': str, 'default': 'Flask-AppBuilder'},
+            'APP_NAME': {'type': str, 'default': 'PgForge'},
             'APP_THEME': {'type': str, 'default': 'bootstrap.css'},
             'APP_ICON': {'type': str, 'default': 'app-icon.png'},
-            'COPYRIGHT_NAME': {'type': str, 'default': 'Flask-AppBuilder'},
+            'COPYRIGHT_NAME': {'type': str, 'default': 'PgForge'},
             'LANGUAGES': {'type': dict, 'default': {'en': {'flag': 'us', 'name': 'English'}}}
         }
         

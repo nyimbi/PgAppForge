@@ -30,15 +30,15 @@ import statistics
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask_appbuilder.collaborative.ai.rag_engine import (
+from pgappforge.collaborative.ai.rag_engine import (
     RAGEngine, VectorStore, DocumentProcessor, DocumentType
 )
-from flask_appbuilder.collaborative.ai.rag_factory import RAGFactory, RAGConfig
-from flask_appbuilder.collaborative.ai.ai_models import AIModelAdapter, ChatMessage, ModelResponse
+from pgappforge.collaborative.ai.rag_factory import RAGFactory, RAGConfig
+from pgappforge.collaborative.ai.ai_models import AIModelAdapter, ChatMessage, ModelResponse
 
 # Test FAISS availability
 try:
-    from flask_appbuilder.collaborative.ai.faiss_vector_store import (
+    from pgappforge.collaborative.ai.faiss_vector_store import (
         FAISSIntegratedVectorStore, IndexConfig, FAISS_AVAILABLE
     )
     HAS_FAISS = True
@@ -49,7 +49,7 @@ except ImportError:
 # SQLAlchemy setup
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from flask_appbuilder.models.sqla import Base
+from pgappforge.models.sqla import Base
 
 
 @dataclass

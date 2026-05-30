@@ -57,7 +57,7 @@ when initializing on __init__.py use the *base_template* parameter::
     appbuilder = AppBuilder(app, db.session, base_template='mybase.html')
 
 You have an example that changes the way the menu is displayed on
-`examples <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quicktemplates>`_
+`examples <https://github.com/dpgaspar/PgForge/tree/master/examples/quicktemplates>`_
 
 This main structure of jinja2 on the baselayout template is::
 
@@ -418,7 +418,7 @@ subfolder named *widgets*. So in our example we will keep our template in
 - Next we must create our python class to contain our widget. In your **app** folder
   create a file named widgets.py::
 
-    from flask_appbuilder.widgets import ListWidget
+    from pgforge.widgets import ListWidget
     
     
     class MyListWidget(ListWidget):
@@ -458,7 +458,7 @@ To do this, do the following (similar to the steps above):
 
 - Create the custom ShowWidget class::
 
-    from flask_appbuilder.widgets import ShowWidget
+    from pgforge.widgets import ShowWidget
    
     class MyShowWidget(ShowWidget):
         template = 'widgets/show.html'
@@ -473,7 +473,7 @@ To do this, do the following (similar to the steps above):
 Other widget types
 ``````````````````
 
-Flask-AppBuilder has already some widgets that you can choose from, try them out:
+PgForge has already some widgets that you can choose from, try them out:
 
 - ListWidget - The default for lists.
 - ListLinkWidget - The default for lists.
@@ -487,7 +487,7 @@ Flask-AppBuilder has already some widgets that you can choose from, try them out
 - ShowBlockWidget - For show view.
 - ShowVerticalWidget - For show view.
 
-Take a look at the `widgets <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/widgets>`_ example.
+Take a look at the `widgets <https://github.com/dpgaspar/PgForge/tree/master/examples/widgets>`_ example.
 
 Library Functions
 -----------------

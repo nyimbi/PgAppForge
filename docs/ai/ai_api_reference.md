@@ -1,16 +1,16 @@
 # AI API Reference
 
-Complete API documentation for Flask-AppBuilder's AI system.
+Complete API documentation for PgAppForge's AI system.
 
 ## 📚 Module Overview
 
 | Module | Description | Location |
 |--------|-------------|----------|
-| `ai_models` | Core AI adapters and model management | `flask_appbuilder.collaborative.ai.ai_models` |
-| `chatbot_service` | High-level chatbot service | `flask_appbuilder.collaborative.ai.chatbot_service` |
-| `knowledge_base` | Knowledge management system | `flask_appbuilder.collaborative.ai.knowledge_base` |
-| `rag_engine` | Retrieval-Augmented Generation | `flask_appbuilder.collaborative.ai.rag_engine` |
-| `ai_views` | Web interface views | `flask_appbuilder.collaborative.views.ai_views` |
+| `ai_models` | Core AI adapters and model management | `pgappforge.collaborative.ai.ai_models` |
+| `chatbot_service` | High-level chatbot service | `pgappforge.collaborative.ai.chatbot_service` |
+| `knowledge_base` | Knowledge management system | `pgappforge.collaborative.ai.knowledge_base` |
+| `rag_engine` | Retrieval-Augmented Generation | `pgappforge.collaborative.ai.rag_engine` |
+| `ai_views` | Web interface views | `pgappforge.collaborative.views.ai_views` |
 
 ## 🏗️ Core Classes
 
@@ -305,10 +305,10 @@ Index content for search.
 ```python
 success = await kb_manager.index_content(
     content_id="doc_123",
-    content="Flask-AppBuilder is a rapid application development framework...",
+    content="PgAppForge is a rapid application development framework...",
     source="documentation",
     metadata={
-        "title": "Flask-AppBuilder Overview",
+        "title": "PgAppForge Overview",
         "author": "admin",
         "tags": ["flask", "python", "web"]
     }
@@ -393,7 +393,7 @@ response = await rag_engine.generate_response_with_context(
 
 ## 🌐 Web Views
 
-Flask-AppBuilder views for AI features.
+PgAppForge views for AI features.
 
 ### AIChatView
 
@@ -631,7 +631,7 @@ class AsyncBridge:
 
 **Usage:**
 ```python
-from flask_appbuilder.collaborative.utils.async_bridge import AsyncBridge
+from pgappforge.collaborative.utils.async_bridge import AsyncBridge
 
 # In sync view method
 result = AsyncBridge.run_async(
@@ -699,7 +699,7 @@ from typing import (
 
 if TYPE_CHECKING:
     from flask import Flask
-    from flask_appbuilder.collaborative.ai.ai_models import ModelManager
+    from pgappforge.collaborative.ai.ai_models import ModelManager
 ```
 
 For more detailed examples and tutorials, see:

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Flask-AppBuilder now includes a comprehensive standardized error handling system that provides consistent, structured error management throughout the framework. This system builds on the existing `FABException` structure while adding sophisticated error categorization, context tracking, and recovery mechanisms.
+PgAppForge now includes a comprehensive standardized error handling system that provides consistent, structured error management throughout the framework. This system builds on the existing `FABException` structure while adding sophisticated error categorization, context tracking, and recovery mechanisms.
 
 ## Key Features
 
@@ -20,7 +20,7 @@ Flask-AppBuilder now includes a comprehensive standardized error handling system
 ### Basic Usage
 
 ```python
-from flask_appbuilder.exceptions import (
+from pgappforge.exceptions import (
     fab_error_handler, ErrorCategory, FABValidationError
 )
 
@@ -42,7 +42,7 @@ def validate_email(email):
 ### Import Statement
 
 ```python
-from flask_appbuilder.exceptions import (
+from pgappforge.exceptions import (
     # Core classes
     ErrorCategory, ErrorSeverity, RecoveryAction, ErrorContext,
     StandardizedFABException,
@@ -93,7 +93,7 @@ Errors are automatically assigned severity levels that affect logging and handli
 ### Core Exception Class
 
 ```python
-from flask_appbuilder.exceptions import StandardizedFABException, ErrorCategory
+from pgappforge.exceptions import StandardizedFABException, ErrorCategory
 
 # Basic usage
 raise StandardizedFABException(
@@ -121,7 +121,7 @@ raise StandardizedFABException(
 
 #### Authentication Errors
 ```python
-from flask_appbuilder.exceptions import FABAuthenticationError
+from pgappforge.exceptions import FABAuthenticationError
 
 # Login failure
 raise FABAuthenticationError("Invalid username or password")
@@ -132,7 +132,7 @@ raise FABAuthenticationError("Session expired", context=context)
 
 #### Authorization Errors
 ```python
-from flask_appbuilder.exceptions import FABAuthorizationError
+from pgappforge.exceptions import FABAuthorizationError
 
 # Permission denied
 raise FABAuthorizationError(
@@ -143,7 +143,7 @@ raise FABAuthorizationError(
 
 #### Validation Errors
 ```python
-from flask_appbuilder.exceptions import FABValidationError
+from pgappforge.exceptions import FABValidationError
 
 # Field validation
 raise FABValidationError(
@@ -164,7 +164,7 @@ raise FABValidationError(
 
 #### Database Errors
 ```python
-from flask_appbuilder.exceptions import FABDatabaseError
+from pgappforge.exceptions import FABDatabaseError
 
 # Connection failure
 raise FABDatabaseError("Unable to connect to database")
@@ -178,7 +178,7 @@ raise FABDatabaseError(
 
 #### Security Errors
 ```python
-from flask_appbuilder.exceptions import FABSecurityError
+from pgappforge.exceptions import FABSecurityError
 
 # Security violation
 raise FABSecurityError(
@@ -192,7 +192,7 @@ raise FABSecurityError(
 
 #### API Errors
 ```python
-from flask_appbuilder.exceptions import FABAPIError
+from pgappforge.exceptions import FABAPIError
 
 # API request failure
 raise FABAPIError(
@@ -209,7 +209,7 @@ The `@fab_error_handler` decorator provides automatic error handling with minima
 ### Basic Decorator Usage
 
 ```python
-from flask_appbuilder.exceptions import fab_error_handler, ErrorCategory
+from pgappforge.exceptions import fab_error_handler, ErrorCategory
 
 @fab_error_handler()
 def simple_operation():
@@ -232,11 +232,11 @@ def api_operation():
     return response.json()
 ```
 
-### Flask-AppBuilder View Integration
+### PgAppForge View Integration
 
 ```python
-from flask_appbuilder import ModelView
-from flask_appbuilder.exceptions import fab_error_handler, ErrorCategory
+from pgappforge import ModelView
+from pgappforge.exceptions import fab_error_handler, ErrorCategory
 
 class UserView(ModelView):
 
@@ -258,7 +258,7 @@ Error context provides rich debugging and monitoring information:
 ### Creating Context
 
 ```python
-from flask_appbuilder.exceptions import ErrorContext, get_request_context
+from pgappforge.exceptions import ErrorContext, get_request_context
 
 # Manual context creation
 context = ErrorContext(
@@ -266,7 +266,7 @@ context = ErrorContext(
     session_id="session_456",
     operation="user_update",
     component="UserView",
-    module="flask_appbuilder.views",
+    module="pgappforge.views",
     additional_data={
         "field_name": "email",
         "old_value": "old@example.com",
@@ -285,7 +285,7 @@ context.user_id = current_user.id
 ```python
 from flask import g
 from flask_login import current_user
-from flask_appbuilder.exceptions import ErrorContext, add_user_context
+from pgappforge.exceptions import ErrorContext, add_user_context
 
 def create_error_context(operation: str) -> ErrorContext:
     """Create error context for web requests."""
@@ -321,7 +321,7 @@ def create_user(self, user_data):
 ### Getting Error Statistics
 
 ```python
-from flask_appbuilder.exceptions import get_error_stats
+from pgappforge.exceptions import get_error_stats
 
 # Get global error statistics
 stats = get_error_stats()
@@ -335,7 +335,7 @@ print(f"Recent errors: {stats['recent_errors']}")
 ### Custom Error Monitoring
 
 ```python
-from flask_appbuilder.exceptions import ErrorHandler
+from pgappforge.exceptions import ErrorHandler
 
 # Create custom error handler
 error_handler = ErrorHandler()
@@ -357,7 +357,7 @@ Standardized exceptions provide consistent API response format:
 
 ```python
 from flask import jsonify
-from flask_appbuilder.exceptions import StandardizedFABException
+from pgappforge.exceptions import StandardizedFABException
 
 @app.errorhandler(StandardizedFABException)
 def handle_fab_exception(error):
@@ -390,7 +390,7 @@ def handle_fab_exception(error):
 Exceptions automatically provide recovery suggestions:
 
 ```python
-from flask_appbuilder.exceptions import FABValidationError
+from pgappforge.exceptions import FABValidationError
 
 try:
     validate_user_input(data)
@@ -407,10 +407,10 @@ except FABValidationError as e:
 1. **Update Imports**:
 ```python
 # Before
-from flask_appbuilder.exceptions import FABException
+from pgappforge.exceptions import FABException
 
 # After
-from flask_appbuilder.exceptions import (
+from pgappforge.exceptions import (
     StandardizedFABException, FABValidationError, fab_error_handler
 )
 ```
@@ -447,7 +447,7 @@ if not email:
 4. **Use Migration Tools**:
 ```python
 # Run migration analysis
-from flask_appbuilder.utils.error_migration import ErrorHandlingMigrator
+from pgappforge.utils.error_migration import ErrorHandlingMigrator
 
 migrator = ErrorHandlingMigrator("/path/to/project")
 report = migrator.analyze_project()
@@ -462,11 +462,11 @@ All existing `FABException` usage continues to work:
 
 ```python
 # This still works
-from flask_appbuilder.exceptions import FABException
+from pgappforge.exceptions import FABException
 raise FABException("Old style exception")
 
 # But this is now enhanced with standardized features
-from flask_appbuilder.exceptions import StandardizedFABException
+from pgappforge.exceptions import StandardizedFABException
 raise StandardizedFABException("New style exception")
 ```
 
@@ -540,11 +540,11 @@ raise FABSecurityError(
 
 ## Integration Examples
 
-### Flask-AppBuilder Views
+### PgAppForge Views
 
 ```python
-from flask_appbuilder import ModelView
-from flask_appbuilder.exceptions import fab_error_handler, ErrorCategory, FABValidationError
+from pgappforge import ModelView
+from pgappforge.exceptions import fab_error_handler, ErrorCategory, FABValidationError
 
 class EnhancedUserView(ModelView):
 
@@ -567,7 +567,7 @@ class EnhancedUserView(ModelView):
 
 ```python
 from flask import Blueprint, request, jsonify
-from flask_appbuilder.exceptions import fab_error_handler, ErrorCategory, FABAPIError
+from pgappforge.exceptions import fab_error_handler, ErrorCategory, FABAPIError
 
 api_bp = Blueprint('api', __name__)
 
@@ -593,7 +593,7 @@ def handle_api_error(error):
 
 ```python
 from celery import Celery
-from flask_appbuilder.exceptions import fab_error_handler, ErrorCategory
+from pgappforge.exceptions import fab_error_handler, ErrorCategory
 
 celery = Celery('myapp')
 
@@ -611,7 +611,7 @@ def send_email_notification(user_id, message):
 
 ```python
 import pytest
-from flask_appbuilder.exceptions import FABValidationError, FABDatabaseError
+from pgappforge.exceptions import FABValidationError, FABDatabaseError
 
 def test_validation_error_handling():
     """Test validation error handling."""
@@ -641,11 +641,11 @@ def test_error_decorator():
 
 ```python
 from unittest.mock import patch, Mock
-from flask_appbuilder.exceptions import get_error_stats
+from pgappforge.exceptions import get_error_stats
 
 def test_error_statistics():
     """Test error statistics collection."""
-    with patch('flask_appbuilder.exceptions.standardized._global_error_handler') as mock_handler:
+    with patch('pgappforge.exceptions.standardized._global_error_handler') as mock_handler:
         mock_handler.get_error_stats.return_value = {
             'total_errors': 5,
             'category_distribution': {'validation': 3, 'database': 2}
@@ -666,7 +666,7 @@ def test_error_statistics():
 
 ### Common Issues
 
-1. **Import Errors**: Ensure you're importing from `flask_appbuilder.exceptions`
+1. **Import Errors**: Ensure you're importing from `pgappforge.exceptions`
 2. **Decorator Order**: Place `@fab_error_handler` closest to the function
 3. **Context Missing**: Use `get_request_context()` in Flask applications
 4. **Logging Not Working**: Check logger configuration and levels
@@ -677,7 +677,7 @@ Enable debug logging for error handling:
 
 ```python
 import logging
-logging.getLogger('flask_appbuilder.exceptions').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.exceptions').setLevel(logging.DEBUG)
 ```
 
-This comprehensive standardized error handling system provides Flask-AppBuilder with enterprise-grade error management while maintaining simplicity and backward compatibility.
+This comprehensive standardized error handling system provides PgAppForge with enterprise-grade error management while maintaining simplicity and backward compatibility.

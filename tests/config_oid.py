@@ -1,6 +1,6 @@
 import os
 
-from flask_appbuilder.security.manager import AUTH_OID
+from pgappforge.security.manager import AUTH_OID
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 

@@ -1,7 +1,7 @@
 import datetime
 import enum
 
-from flask_appbuilder import Model
+from pgappforge import Model
 from sqlalchemy import Column, Date, ForeignKey, Integer, String, Enum
 from sqlalchemy.orm import relationship, backref
 

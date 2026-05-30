@@ -57,7 +57,7 @@ Take a quick look to the current possibilities. (The bold ones require app conte
 
   - **upgrade-db** - Upgrade your database after F.A.B upgrade.
 
-  - **version** - Flask-AppBuilder package version.
+  - **version** - PgForge package version.
 
 Command Line uses the excellent click package, so you can have a detailed help for each command, for instance::
 
@@ -94,7 +94,7 @@ Use multi **-k** options separated by space to specify how to locate the strings
 Default values: **lazy_gettext, gettext, _, __**.
 For example::
 
-    flask fab babel-extract --target flask_appbuilder/translations/ -k _ -k __
+    flask fab babel-extract --target pgforge/translations/ -k _ -k __
 
 **create-addon** - Create new AddOns
 ------------------------------------

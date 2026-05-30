@@ -1,8 +1,8 @@
-# JHipster Integration Analysis for Flask-AppBuilder Workflows
+# JHipster Integration Analysis for PgAppForge Workflows
 
 ## Executive Summary
 
-This analysis identifies key JHipster concepts that can enhance our Flask-AppBuilder workflow system, transforming it from a basic workflow engine into an enterprise-grade, code-generating development platform.
+This analysis identifies key JHipster concepts that can enhance our PgAppForge workflow system, transforming it from a basic workflow engine into an enterprise-grade, code-generating development platform.
 
 ## 🎯 Key JHipster Concepts Successfully Integrated
 
@@ -36,7 +36,7 @@ workflow EmployeeOnboarding {
 ### 2. **Comprehensive Code Generation Engine**
 
 **JHipster Concept**: Generate complete applications from JDL
-**Our Implementation**: Generate Flask-AppBuilder components from WDL
+**Our Implementation**: Generate PgAppForge components from WDL
 
 **Generated Components**:
 - 📄 **Models**: SQLAlchemy models with validation
@@ -122,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Generate workflows from WDL
-        run: python -m flask_appbuilder.workflow.generators
+        run: python -m pgappforge.workflow.generators
       - name: Run workflow tests
         run: pytest generated/*/tests/
 ```
@@ -323,7 +323,7 @@ services:
 
 ## 🎯 **Competitive Advantage**
 
-This JHipster-inspired approach transforms Flask-AppBuilder into:
+This JHipster-inspired approach transforms PgAppForge into:
 
 1. **The Fastest Way to Build Enterprise Workflows** - From idea to production in hours
 2. **Developer Experience Excellence** - Hot reload, testing, and debugging built-in
@@ -348,4 +348,4 @@ This JHipster-inspired approach transforms Flask-AppBuilder into:
 - ✅ Best practices enforced by default
 - ✅ Comprehensive testing and documentation
 
-This integration positions Flask-AppBuilder as the premier choice for enterprise workflow development, combining the power of JHipster's generation approach with Flask's flexibility and Python's ecosystem.
+This integration positions PgAppForge as the premier choice for enterprise workflow development, combining the power of JHipster's generation approach with Flask's flexibility and Python's ecosystem.

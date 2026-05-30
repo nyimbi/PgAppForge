@@ -1,7 +1,7 @@
 """
 Isolated tests for Basic Alerting System functionality.
 
-Tests the alerting system components without complex Flask-AppBuilder imports.
+Tests the alerting system components without complex PgAppForge imports.
 """
 
 import unittest
@@ -11,9 +11,9 @@ import time
 from datetime import datetime, timedelta
 
 # Import the classes we're testing directly
-from flask_appbuilder.alerting.alert_manager import AlertManager, AlertSeverity, AlertStatus, Alert, AlertRule
-from flask_appbuilder.alerting.threshold_monitor import ThresholdMonitor, ThresholdCondition, MonitoringConfig
-from flask_appbuilder.alerting.notification_service import (
+from pgappforge.alerting.alert_manager import AlertManager, AlertSeverity, AlertStatus, Alert, AlertRule
+from pgappforge.alerting.threshold_monitor import ThresholdMonitor, ThresholdCondition, MonitoringConfig
+from pgappforge.alerting.notification_service import (
     NotificationService, NotificationChannel, NotificationPriority,
     NotificationRecipient, EmailNotificationProvider, InAppNotificationProvider
 )
@@ -498,7 +498,7 @@ class TestNotificationServiceIsolated(unittest.TestCase):
         updated_notifications = self.notification_service.get_in_app_notifications('test_user')
         self.assertTrue(updated_notifications[0]['read'])
     
-    @patch('flask_appbuilder.alerting.notification_service.render_template_string')
+    @patch('pgappforge.alerting.notification_service.render_template_string')
     def test_alert_notification_rendering(self, mock_render):
         """Test alert notification template rendering."""
         mock_render.return_value = "Rendered notification content"

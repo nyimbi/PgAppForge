@@ -1,8 +1,8 @@
 """
-Examples of using Flask-AppBuilder collaborative error handling utilities.
+Examples of using PgAppForge collaborative error handling utilities.
 
 This file demonstrates various error handling patterns and how to create
-robust, user-friendly error responses in Flask-AppBuilder applications.
+robust, user-friendly error responses in PgAppForge applications.
 """
 
 import logging
@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from flask import request, jsonify
 
 # Import error handling utilities
-from flask_appbuilder.collaborative.utils.error_handling import (
+from pgappforge.collaborative.utils.error_handling import (
     CollaborativeError,
     ValidationError,
     AuthenticationError,
@@ -481,7 +481,7 @@ class AdvancedErrorHandlingService(ErrorHandlingMixin):
 def run_error_handling_examples():
     """Run examples to demonstrate error handling utilities."""
 
-    print("🚨 Flask-AppBuilder Collaborative Error Handling Examples")
+    print("🚨 PgAppForge Collaborative Error Handling Examples")
     print("=" * 65)
 
     # Basic error handling

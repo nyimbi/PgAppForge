@@ -1,6 +1,6 @@
-# Flask-AppBuilder Graph Analytics Platform v4.8.0-enhanced
+# PgAppForge Graph Analytics Platform v4.8.0-enhanced
 
-🚀 **The Ultimate Enterprise-Grade Graph Analytics Platform Built on Flask-AppBuilder**
+🚀 **The Ultimate Enterprise-Grade Graph Analytics Platform Built on PgAppForge**
 
 Transform your data into actionable insights with the most comprehensive graph database management and analytics platform available. Built with Apache AGE (PostgreSQL) and enhanced with cutting-edge AI capabilities.
 
@@ -13,7 +13,7 @@ Transform your data into actionable insights with the most comprehensive graph d
 
 ## 🌟 What Makes This Platform Revolutionary
 
-This isn't just another Flask-AppBuilder extension. We've created a **world-class enterprise graph analytics platform** that rivals commercial solutions like Neo4j Enterprise, AWS Neptune, and Azure Cosmos DB, while providing unique capabilities not found anywhere else.
+This isn't just another PgAppForge extension. We've created a **world-class enterprise graph analytics platform** that rivals commercial solutions like Neo4j Enterprise, AWS Neptune, and Azure Cosmos DB, while providing unique capabilities not found anywhere else.
 
 ### 🎯 **25 Advanced Features Across 5 Phases**
 
@@ -27,7 +27,7 @@ This isn't just another Flask-AppBuilder extension. We've created a **world-clas
 - **Query Performance Analysis**: Execution plans, timing metrics, and optimization recommendations
 
 ```python
-from flask_appbuilder.database.query_builder import get_query_builder
+from pgappforge.database.query_builder import get_query_builder
 
 builder = get_query_builder('social_graph')
 result = builder.natural_language_to_cypher("Show me influential users with many connections")
@@ -58,7 +58,7 @@ result = builder.natural_language_to_cypher("Show me influential users with many
 - **Predictive Analytics**: Machine learning models for graph evolution prediction
 
 ```python
-from flask_appbuilder.database.graph_ml import get_ml_engine
+from pgappforge.database.graph_ml import get_ml_engine
 
 ml_engine = get_ml_engine('fraud_detection_graph')
 suspicious_accounts = ml_engine.detect_anomalies(
@@ -142,7 +142,7 @@ suspicious_accounts = ml_engine.detect_anomalies(
 - **Auto-Validation**: Automatic validation and cleanup of extracted knowledge
 
 ```python
-from flask_appbuilder.database.knowledge_graph_constructor import get_knowledge_builder
+from pgappforge.database.knowledge_graph_constructor import get_knowledge_builder
 
 builder = get_knowledge_builder('research_graph')
 entities, relationships = builder.process_document(
@@ -166,7 +166,7 @@ entities, relationships = builder.process_document(
 - **Cross-Modal Similarity**: Find similar content across different media types
 
 ```python
-from flask_appbuilder.database.multimodal_integration import get_multimodal_integration
+from pgappforge.database.multimodal_integration import get_multimodal_integration
 
 integration = get_multimodal_integration('media_graph')
 metadata = integration.process_media_file(image_data, 'product_photo.jpg')
@@ -183,7 +183,7 @@ metadata = integration.process_media_file(image_data, 'product_photo.jpg')
 ## 🏗️ **Complete System Architecture**
 
 ```
-Flask-AppBuilder Graph Analytics Platform
+PgAppForge Graph Analytics Platform
 ├── Database Layer (11 core modules)
 │   ├── graph_manager.py           # Core Apache AGE operations
 │   ├── query_builder.py           # AI-powered query construction
@@ -245,8 +245,8 @@ Flask-AppBuilder Graph Analytics Platform
 - **PostgreSQL Integration**: Full PostgreSQL advanced types support
 
 ```python
-from flask_appbuilder.views.erd_view import ERDView
-from flask_appbuilder.database.erd_manager import get_erd_manager
+from pgappforge.views.erd_view import ERDView
+from pgappforge.database.erd_manager import get_erd_manager
 
 # Create interactive ERD interface
 erd_manager = get_erd_manager()
@@ -282,8 +282,8 @@ pip install flask-appbuilder psycopg2-binary
 ### Basic Setup
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.database.graph_manager import get_graph_manager
+from pgappforge import AppBuilder
+from pgappforge.database.graph_manager import get_graph_manager
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
@@ -443,7 +443,7 @@ POST /api/v1/federated/query
 
 ### **Python SDK Usage**
 ```python
-from flask_appbuilder.graph import GraphAnalytics
+from pgappforge.graph import GraphAnalytics
 
 # Initialize graph analytics
 analytics = GraphAnalytics('fraud_detection')
@@ -598,7 +598,7 @@ Our platform has been tested against industry-leading graph databases:
 
 ## 📚 **Comprehensive Documentation**
 
-- **[Complete Implementation Guide](flask_appbuilder/IMPLEMENTATION_COMPLETE.md)** - Full feature documentation
+- **[Complete Implementation Guide](pgappforge/IMPLEMENTATION_COMPLETE.md)** - Full feature documentation
 - **[API Documentation](docs/API_DOCUMENTATION.md)** - Complete API reference
 - **[Enhanced Usage Guide](ENHANCED_USAGE_GUIDE.md)** - Detailed examples and tutorials
 - **[Profile Management Guide](docs/profile_management.md)** - User profile system
@@ -610,7 +610,7 @@ Our platform has been tested against industry-leading graph databases:
 ## 🤝 **Community & Support**
 
 ### **Community Resources**
-- **GitHub Discussions**: [Ask questions and share ideas](https://github.com/nyimbi/Flask-AppBuilder/discussions)
+- **GitHub Discussions**: [Ask questions and share ideas](https://github.com/nyimbi/PgAppForge/discussions)
 - **Stack Overflow**: Tag your questions with `flask-appbuilder-graph`
 - **Reddit**: Join the conversation at [r/FlaskAppBuilder](https://reddit.com/r/FlaskAppBuilder)
 - **Discord**: Real-time chat with the community
@@ -686,8 +686,8 @@ Transform your data into actionable insights with the world's most advanced grap
 
 ```bash
 # Quick Installation
-git clone https://github.com/nyimbi/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/nyimbi/PgAppForge.git
+cd PgAppForge
 pip install -r requirements.txt
 
 # Initialize your first graph
@@ -699,7 +699,7 @@ python app.py
 
 Visit `http://localhost:5000` and experience the future of graph analytics! 🎉
 
-**Flask-AppBuilder Graph Analytics Platform v4.8.0-enhanced**
+**PgAppForge Graph Analytics Platform v4.8.0-enhanced**
 *Empowering organizations with intelligent graph analytics and AI-driven insights.*
 
 [![Deploy to AWS](https://img.shields.io/badge/deploy%20to-aws-orange.svg)](https://aws.amazon.com/)
@@ -709,6 +709,6 @@ Visit `http://localhost:5000` and experience the future of graph analytics! 🎉
 
 ---
 
-**Built with ❤️ by the Flask-AppBuilder Graph Analytics Team**
+**Built with ❤️ by the PgAppForge Graph Analytics Team**
 
 *Making graph analytics accessible, powerful, and intelligent for everyone.*

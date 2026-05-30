@@ -4,7 +4,7 @@
 ![Runtime Testing](https://img.shields.io/badge/Runtime%20Testing-🔄%20Required-yellow)
 ![Tutorial Level](https://img.shields.io/badge/Level-Beginner-green)
 
-Welcome to Flask-AppBuilder! This tutorial will guide you through creating your first application with the enhanced AI and collaborative features.
+Welcome to PgAppForge! This tutorial will guide you through creating your first application with the enhanced AI and collaborative features.
 
 > **⚠️ Validation Status**: All features in this tutorial have been **confirmed implemented** in the codebase. Code examples require runtime testing to verify they work correctly.
 
@@ -41,7 +41,7 @@ source venv/bin/activate  # Linux/macOS
 # venv\Scripts\activate  # Windows
 ```
 
-### Install Flask-AppBuilder
+### Install PgAppForge
 
 ```bash
 pip install flask-appbuilder[mfa,export]
@@ -65,14 +65,14 @@ Create `config.py`:
 
 ```python
 import os
-from flask_appbuilder.security.manager import AUTH_DB
+from pgappforge.security.manager import AUTH_DB
 
 # Basic Flask configuration
 SECRET_KEY = 'your-secret-key-change-in-production'
 SQLALCHEMY_DATABASE_URI = 'sqlite:///app.db'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-# Flask-AppBuilder configuration
+# PgAppForge configuration
 AUTH_TYPE = AUTH_DB
 AUTH_ROLE_ADMIN = 'Admin'
 AUTH_ROLE_PUBLIC = 'Public'
@@ -99,7 +99,7 @@ Create `app.py`:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 # Create Flask app
 app = Flask(__name__)
@@ -108,7 +108,7 @@ app.config.from_object('config')
 # Initialize database
 db = SQLA(app)
 
-# Initialize Flask-AppBuilder
+# Initialize PgAppForge
 appbuilder = AppBuilder(app, db.session)
 
 # Import models and views after appbuilder initialization
@@ -158,8 +158,8 @@ if __name__ == '__main__':
 Create `models.py`:
 
 ```python
-from flask_appbuilder import Model
-from flask_appbuilder.models.mixins import AuditMixin
+from pgappforge import Model
+from pgappforge.models.mixins import AuditMixin
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 
@@ -233,10 +233,10 @@ Create `views.py`:
 
 ```python
 from flask import request, flash, redirect, url_for
-from flask_appbuilder import ModelView, BaseView, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.widgets import ListWidget, ShowWidget
-from flask_appbuilder.actions import action
+from pgappforge import ModelView, BaseView, expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.widgets import ListWidget, ShowWidget
+from pgappforge.actions import action
 from flask_babel import lazy_gettext
 from wtforms import TextAreaField, SelectField
 from wtforms.validators import DataRequired
@@ -301,7 +301,7 @@ class TaskModelView(ModelView):
         """Generate AI summaries for selected tasks."""
         if not hasattr(self, '_ai_manager'):
             try:
-                from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+                from pgappforge.collaborative.ai.ai_models import AIModelManager
                 self._ai_manager = AIModelManager()
             except ImportError:
                 flash('AI features not available', 'warning')
@@ -334,7 +334,7 @@ class TaskModelView(ModelView):
         """Generate AI tags for selected tasks."""
         if not hasattr(self, '_ai_manager'):
             try:
-                from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+                from pgappforge.collaborative.ai.ai_models import AIModelManager
                 self._ai_manager = AIModelManager()
             except ImportError:
                 flash('AI features not available', 'warning')
@@ -368,7 +368,7 @@ class TaskModelView(ModelView):
 
             if ai_option != 'none' and item.description:
                 try:
-                    from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+                    from pgappforge.collaborative.ai.ai_models import AIModelManager
                     ai_manager = AIModelManager()
 
                     if ai_option in ['summary', 'both']:
@@ -458,7 +458,7 @@ class TaskDashboardView(BaseView):
     def ai_insights(self):
         """Show AI-generated insights about tasks."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
             ai_manager = AIModelManager()
 
             # Get recent tasks for analysis
@@ -808,9 +808,9 @@ python -c "from app import db; db.create_all()"
 
 **Import Errors:**
 ```bash
-# Reinstall Flask-AppBuilder
+# Reinstall PgAppForge
 pip uninstall flask-appbuilder
 pip install flask-appbuilder[mfa,export]
 ```
 
-This completes the getting started tutorial. You now have a functional Flask-AppBuilder application with AI and collaborative features!
+This completes the getting started tutorial. You now have a functional PgAppForge application with AI and collaborative features!

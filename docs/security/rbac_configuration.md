@@ -1,10 +1,10 @@
 # RBAC Configuration Guide
 
-Complete guide to configuring Role-Based Access Control (RBAC) in Flask-AppBuilder with advanced permission management, dynamic authorization, and row-level security.
+Complete guide to configuring Role-Based Access Control (RBAC) in PgForge with advanced permission management, dynamic authorization, and row-level security.
 
 ## 🎭 Overview
 
-Flask-AppBuilder's RBAC system provides enterprise-grade authorization with:
+PgForge's RBAC system provides enterprise-grade authorization with:
 
 - **Hierarchical Roles** with inheritance and delegation
 - **Fine-Grained Permissions** at view, model, field, and row levels

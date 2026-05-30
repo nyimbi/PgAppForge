@@ -1,6 +1,6 @@
 from flask import current_app
-from flask_appbuilder import ModelView, IndexView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView, IndexView
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from .models import Contact, ContactGroup, Gender
 

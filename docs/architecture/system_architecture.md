@@ -1,10 +1,10 @@
 # System Architecture
 
-Comprehensive architecture overview of Flask-AppBuilder enhanced with advanced features including AI, collaboration, process automation, and security systems.
+Comprehensive architecture overview of PgAppForge enhanced with advanced features including AI, collaboration, process automation, and security systems.
 
 ## 🏗️ Architecture Overview
 
-Flask-AppBuilder follows a layered architecture pattern with clear separation of concerns and modular design for scalability and maintainability.
+PgAppForge follows a layered architecture pattern with clear separation of concerns and modular design for scalability and maintainability.
 
 ```mermaid
 graph TB
@@ -96,7 +96,7 @@ Each layer has distinct responsibilities:
 
 ```python
 # Core modules structure
-flask_appbuilder/
+pgappforge/
 ├── base.py                    # Core AppBuilder class
 ├── views/                     # View layer
 │   ├── __init__.py
@@ -146,7 +146,7 @@ class AppBuilder:
 
 ```python
 # Event system for loose coupling
-from flask_appbuilder.events import EventManager
+from pgappforge.events import EventManager
 
 # Event definitions
 class UserEvents:
@@ -375,7 +375,7 @@ class ProcessEngine:
 ```python
 # Data layer architecture
 class Model(DeclarativeBase):
-    """Enhanced base model with Flask-AppBuilder features."""
+    """Enhanced base model with PgAppForge features."""
 
     @declared_attr
     def __tablename__(cls):

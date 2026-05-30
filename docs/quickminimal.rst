@@ -16,7 +16,7 @@ I do advise using the skeleton application as described on the :doc:`installatio
 
     import os
     from flask import Flask
-    from flask_appbuilder import SQLA, AppBuilder
+    from pgforge import SQLA, AppBuilder
 
     # init Flask
     app = Flask(__name__)
@@ -42,4 +42,4 @@ as well has all the security detailed permissions.
 The default authentication method will be database, and you can initially login with **'admin'/'general'**.
 you can take a look at all your configuration options on :doc:`config`
 
-Take a look at this `example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickminimal>`_ on Github
+Take a look at this `example <https://github.com/dpgaspar/PgForge/tree/master/examples/quickminimal>`_ on Github

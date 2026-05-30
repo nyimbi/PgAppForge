@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float
 from sqlalchemy.orm import relationship
-from flask_appbuilder import Model
+from pgappforge import Model
 import datetime
 
 

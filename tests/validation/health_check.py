@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Health Check Script
-Flask-AppBuilder Apache AGE Graph Analytics Platform
+PgForge Apache AGE Graph Analytics Platform
 
 Comprehensive system health monitoring and validation script.
 """

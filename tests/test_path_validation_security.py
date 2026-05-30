@@ -10,11 +10,11 @@ import tempfile
 import os
 from pathlib import Path
 
-from flask_appbuilder.security.path_validation import (
+from pgappforge.security.path_validation import (
     SecurePathValidator, SecureFileHandler, PathTraversalError, InvalidPathError,
     validate_safe_path, validate_safe_filename, safe_path_join
 )
-from flask_appbuilder.cli.generators.file_operations import (
+from pgappforge.cli.generators.file_operations import (
     AtomicFileWriter, atomic_file_operations, write_files_safely, FileOperationError
 )
 

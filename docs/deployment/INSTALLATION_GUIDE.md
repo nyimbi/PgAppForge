@@ -1,4 +1,4 @@
-# 🚀 Flask-AppBuilder Apache AGE Graph Analytics Platform
+# 🚀 PgAppForge Apache AGE Graph Analytics Platform
 ## **COMPREHENSIVE INSTALLATION GUIDE**
 
 > **Production-Ready Deployment Guide**  
@@ -416,7 +416,7 @@ sudo ufw allow 3000/tcp
 # Create security settings file
 cat > security_config.py << EOF
 # Security Manager Configuration
-FAB_SECURITY_MANAGER_CLASS = 'flask_appbuilder.security.manager.SecurityManager'
+FAB_SECURITY_MANAGER_CLASS = 'pgappforge.security.manager.SecurityManager'
 
 # Password complexity requirements
 AUTH_PASSWORD_COMPLEXITY_ENABLED = True
@@ -485,8 +485,8 @@ Create `init_db.py`:
 import os
 import sys
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.security.sqla.manager import SecurityManager
+from pgappforge import AppBuilder, SQLA
+from pgappforge.security.sqla.manager import SecurityManager
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -506,7 +506,7 @@ def init_database():
         print("✅ Database tables created successfully")
         
         # Initialize Apache AGE graph
-        from flask_appbuilder.database.graph_manager import get_graph_manager
+        from pgappforge.database.graph_manager import get_graph_manager
         graph_manager = get_graph_manager()
         graph_manager.create_graph('analytics_graph')
         print("✅ Apache AGE graph initialized successfully")
@@ -538,8 +538,8 @@ Create `create_admin.py`:
 import getpass
 import sys
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.security.sqla.manager import SecurityManager
+from pgappforge import AppBuilder, SQLA
+from pgappforge.security.sqla.manager import SecurityManager
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -912,12 +912,12 @@ free -h
 
 ---
 
-**🎉 Congratulations! Your Flask-AppBuilder Apache AGE Graph Analytics Platform is now ready for production use!**
+**🎉 Congratulations! Your PgAppForge Apache AGE Graph Analytics Platform is now ready for production use!**
 
 > **Next Steps**: Explore the comprehensive features, import your data, and start building powerful graph analytics applications.
 
 ---
 
-*Installation Guide v1.0 - Flask-AppBuilder Apache AGE Graph Analytics Platform*  
+*Installation Guide v1.0 - PgAppForge Apache AGE Graph Analytics Platform*  
 *Last Updated: $(date +%Y-%m-%d)*  
 *For the latest updates, visit: https://docs.example.com*

@@ -2,45 +2,45 @@
 API Reference
 =============
 
-flask_appbuilder
+pgforge
 ====================
 
 AppBuilder
 ----------
 
-.. automodule:: flask_appbuilder.base
+.. automodule:: pgforge.base
 
     .. autoclass:: AppBuilder
         :members:
 
         .. automethod:: __init__
 
-flask_appbuilder.security.decorators
+pgforge.security.decorators
 ========================================
 
-.. automodule:: flask_appbuilder.security.decorators
+.. automodule:: pgforge.security.decorators
 
     .. autofunction:: protect
     .. autofunction:: has_access
     .. autofunction:: permission_name
 
-flask_appbuilder.models.decorators
+pgforge.models.decorators
 ========================================
 
-.. automodule:: flask_appbuilder.models.decorators
+.. automodule:: pgforge.models.decorators
 
     .. autofunction:: renders
 
-flask_appbuilder.hooks
+pgforge.hooks
 ======================
-.. automodule:: flask_appbuilder.hooks
+.. automodule:: pgforge.hooks
 
     .. autofunction:: before_request
 
-flask_appbuilder.api
+pgforge.api
 ==============================
 
-.. automodule:: flask_appbuilder.api
+.. automodule:: pgforge.api
 
     .. autofunction:: expose
     .. autofunction:: rison
@@ -58,10 +58,10 @@ ModelRestApi
 .. autoclass:: ModelRestApi
     :members:
 
-flask_appbuilder.baseviews
+pgforge.baseviews
 ==============================
 
-.. automodule:: flask_appbuilder.baseviews
+.. automodule:: pgforge.baseviews
 
     .. autofunction:: expose
 
@@ -89,10 +89,10 @@ BaseCRUDView
 .. autoclass:: BaseCRUDView
     :members:
 
-flask_appbuilder.views
+pgforge.views
 ==========================
 
-.. automodule:: flask_appbuilder.views
+.. automodule:: pgforge.views
 
 IndexView
 ---------
@@ -136,17 +136,17 @@ CompactCRUDMixin
 .. autoclass:: CompactCRUDMixin
     :members:
 
-flask_appbuilder.actions
+pgforge.actions
 ============================
 
-.. automodule:: flask_appbuilder.actions
+.. automodule:: pgforge.actions
 
     .. autofunction:: action
 
-flask_appbuilder.security
+pgforge.security
 =============================
 
-.. automodule:: flask_appbuilder.security.manager
+.. automodule:: pgforge.security.manager
 
 BaseSecurityManager
 -------------------
@@ -157,31 +157,31 @@ BaseSecurityManager
 BaseRegisterUser
 ----------------
 
-.. automodule:: flask_appbuilder.security.registerviews
+.. automodule:: pgforge.security.registerviews
 
     .. autoclass:: BaseRegisterUser
         :members:
 
-flask_appbuilder.filemanager
+pgforge.filemanager
 ================================
 
-.. automodule:: flask_appbuilder.filemanager
+.. automodule:: pgforge.filemanager
 
     .. autofunction:: get_file_original_name
 
 Aggr Functions for Group By Charts
 ==================================
 
-.. automodule:: flask_appbuilder.models.group
+.. automodule:: pgforge.models.group
 
     .. autofunction:: aggregate_count
     .. autofunction:: aggregate_avg
     .. autofunction:: aggregate_sum
 
-flask_appbuilder.charts.views
+pgforge.charts.views
 =================================
 
-.. automodule:: flask_appbuilder.charts.views
+.. automodule:: pgforge.charts.views
 
 BaseChartView
 -------------
@@ -220,10 +220,10 @@ GroupByChartView
     :members:
 
 
-flask_appbuilder.models.mixins
+pgforge.models.mixins
 ==================================
 
-.. automodule:: flask_appbuilder.models.mixins
+.. automodule:: pgforge.models.mixins
 
     .. autoclass:: BaseMixin
         :members:
@@ -243,10 +243,10 @@ Extra Columns
 Generic Data Source (Beta)
 --------------------------
 
-flask_appbuilder.models.generic
+pgforge.models.generic
 ===================================
 
-.. automodule:: flask_appbuilder.models.generic
+.. automodule:: pgforge.models.generic
 
     .. autoclass:: GenericColumn
         :members:

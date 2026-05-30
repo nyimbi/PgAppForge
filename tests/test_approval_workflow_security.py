@@ -9,7 +9,7 @@ Tests all security vulnerabilities that were fixed:
 4. Memory-based Security State Issues
 5. Database Session Management Anti-patterns
 
-Test Environment: Flask-AppBuilder with SQLAlchemy
+Test Environment: PgAppForge with SQLAlchemy
 """
 
 import pytest
@@ -25,10 +25,10 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from flask_appbuilder.process.approval.views import ApprovalWorkflowView
-from flask_appbuilder.process.approval.chain_manager import ApprovalChainManager
-from flask_appbuilder.process.approval.workflow_engine import ApprovalWorkflowEngine
-from flask_appbuilder.process.security.approval_security_config import (
+from pgappforge.process.approval.views import ApprovalWorkflowView
+from pgappforge.process.approval.chain_manager import ApprovalChainManager
+from pgappforge.process.approval.workflow_engine import ApprovalWorkflowEngine
+from pgappforge.process.security.approval_security_config import (
     ApprovalSecurityConfig, SecurityEvent, SecurityError
 )
 
@@ -44,7 +44,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
         self.app.config['WTF_CSRF_ENABLED'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
-        # Mock Flask-AppBuilder components
+        # Mock PgAppForge components
         self.mock_appbuilder = Mock()
         self.mock_sm = Mock()
         self.mock_db = Mock()
@@ -85,7 +85,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
             # Mock unauthenticated user
             g.user = None
             
-            with patch('flask_appbuilder.process.approval.views.current_user') as mock_current_user:
+            with patch('pgappforge.process.approval.views.current_user') as mock_current_user:
                 mock_current_user.is_authenticated = False
                 
                 # Test financial operation endpoint
@@ -102,7 +102,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
             # Mock authenticated user but invalid CSRF token
             g.user = self.mock_user
             
-            with patch('flask_appbuilder.process.approval.views.current_user') as mock_current_user:
+            with patch('pgappforge.process.approval.views.current_user') as mock_current_user:
                 mock_current_user.is_authenticated = True
                 mock_current_user.id = 123
                 
@@ -126,7 +126,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
             # Test case 1: Self-approval via user_id
             self.mock_approval_request.user_id = 123  # Same as current user
             
-            with patch('flask_appbuilder.process.approval.views.current_user') as mock_current_user:
+            with patch('pgappforge.process.approval.views.current_user') as mock_current_user:
                 mock_current_user.is_authenticated = True
                 mock_current_user.id = 123
                 
@@ -168,7 +168,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
     def test_database_session_management_patterns(self):
         """Test proper database session management without undefined variables."""
         # Test that db_session is properly imported and defined
-        with patch('flask_appbuilder.db') as mock_db:
+        with patch('pgappforge.db') as mock_db:
             mock_session = Mock()
             mock_db.session = mock_session
             
@@ -202,7 +202,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
             # High value approval request
             self.mock_approval_request.amount = 1000000.0  # $1M
             
-            with patch('flask_appbuilder.process.approval.views.current_user') as mock_current_user:
+            with patch('pgappforge.process.approval.views.current_user') as mock_current_user:
                 mock_current_user.is_authenticated = True
                 mock_current_user.id = 123
                 
@@ -226,7 +226,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
             with self.app.test_request_context():
                 g.user = self.mock_user
                 
-                with patch('flask_appbuilder.process.approval.views.current_user') as mock_current_user:
+                with patch('pgappforge.process.approval.views.current_user') as mock_current_user:
                     mock_current_user.is_authenticated = True
                     mock_current_user.id = 123
                     
@@ -248,7 +248,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
         # All validations should complete successfully
         self.assertEqual(len(results), 5)
         
-    @patch('flask_appbuilder.process.approval.views.log')
+    @patch('pgappforge.process.approval.views.log')
     def test_security_audit_logging(self, mock_log):
         """Test that security events are properly audit logged."""
         with self.app.test_request_context():
@@ -272,7 +272,7 @@ class TestApprovalWorkflowSecurity(unittest.TestCase):
             g.user = self.mock_user
             
             # This should not raise NameError
-            from flask_appbuilder.process.approval.views import g as imported_g
+            from pgappforge.process.approval.views import g as imported_g
             
             # g should be accessible in views
             self.assertEqual(g.user, self.mock_user)

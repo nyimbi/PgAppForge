@@ -5,7 +5,7 @@ On this chapter we will create a very simple contacts application you can try a
 `Live Demo <http://flaskappbuilder.pythonanywhere.com/>`_ (login with guest/welcome).
 
 And the source code for this chapter on
-`examples <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickhowto>`_
+`examples <https://github.com/dpgaspar/PgForge/tree/master/examples/quickhowto>`_
 
 The Base Skeleton Application
 -----------------------------
@@ -24,7 +24,7 @@ you now have the following directory structure::
     
 It's very easy and fast to create an application out of the box, with detailed security.
 
-Please take a look at github `examples <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples>`_
+Please take a look at github `examples <https://github.com/dpgaspar/PgForge/tree/master/examples>`_
 
 
 Simple contacts application
@@ -63,7 +63,7 @@ The *ContactGroup* model.
 
     from sqlalchemy import Column, Integer, String, ForeignKey, Date
     from sqlalchemy.orm import relationship
-    from flask_appbuilder import Model
+    from pgforge import Model
 
     class ContactGroup(Model):
         id = Column(Integer, primary_key=True)
@@ -110,8 +110,8 @@ Take a look at :doc:`advanced`.
 
 ::
 
-    from flask_appbuilder import ModelView
-    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from pgforge import ModelView
+    from pgforge.models.sqla.interface import SQLAInterface
 
     class GroupModelView(ModelView):
         datamodel = SQLAInterface(ContactGroup)
@@ -166,7 +166,7 @@ Remember you can include columns, relations or methods from a model's definition
 list of columns and want to exclude just a few from add/edit/show form you can use the exclude columns
 property:
 
-.. automodule:: flask_appbuilder.baseviews
+.. automodule:: pgforge.baseviews
 
     .. autoclass:: BaseCRUDView
         :members: list_columns,add_columns,edit_columns,show_columns,add_exclude_columns,edit_exclude_columns,show_exclude_columns
@@ -175,13 +175,13 @@ property:
 
 You can also control which columns will be included on search, use the same logic for this:
 
-.. automodule:: flask_appbuilder.baseviews
+.. automodule:: pgforge.baseviews
 
     .. autoclass:: BaseModelView
         :members: search_columns, search_exclude_columns
 
 You can easily use builtin alternative look, using widgets 
-take a look at the `widgets <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/widgets>`_ example.
+take a look at the `widgets <https://github.com/dpgaspar/PgForge/tree/master/examples/widgets>`_ example.
 
 
 .. note::
@@ -225,7 +225,7 @@ and reduce the level of granularity, for mode detail about this read the :doc:`s
 Example and Live Demo
 ---------------------
 
-You can find this example at: https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/quickhowto
+You can find this example at: https://github.com/dpgaspar/PgForge/tree/master/examples/quickhowto
 
 Live quickhowto `Demo <http://flaskappbuilder.pythonanywhere.com/>`_ (login with guest/welcome).
 
@@ -386,7 +386,7 @@ add the following view after the definition of **GroupModelView** and **ContactM
 
 First remember to import::
 
-    from flask_appbuilder import MultipleView
+    from pgforge import MultipleView
 
 Then define your View::
 

@@ -2,7 +2,7 @@
 Minimal unit tests for MFA service layer (avoiding circular import issues).
 
 This module contains targeted unit tests for MFA services without importing
-the full Flask-AppBuilder framework to avoid circular import issues.
+the full PgAppForge framework to avoid circular import issues.
 """
 
 import pytest
@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, '/Users/nyimbiodero/src/pjs/fab-ext')
 
 # Import services directly
-from flask_appbuilder.security.mfa.services import (
+from pgappforge.security.mfa.services import (
     CircuitBreaker, CircuitBreakerState, 
     MFAServiceError, ServiceUnavailableError,
     ValidationError, ConfigurationError
@@ -153,7 +153,7 @@ class TestMFAServiceExceptions:
 class TestTOTPServiceMinimal:
     """Minimal TOTP service tests using mocks."""
     
-    @patch('flask_appbuilder.security.mfa.services.current_app')
+    @patch('pgappforge.security.mfa.services.current_app')
     def test_totp_service_init(self, mock_app):
         """Test TOTP service initialization."""
         mock_app.config.get.side_effect = lambda key, default=None: {
@@ -161,20 +161,20 @@ class TestTOTPServiceMinimal:
             'MFA_TOTP_VALIDITY_WINDOW': 2
         }.get(key, default)
         
-        from flask_appbuilder.security.mfa.services import TOTPService
+        from pgappforge.security.mfa.services import TOTPService
         
         service = TOTPService()
         assert service.issuer == 'Test App'
         assert service.validity_window == 2
     
-    @patch('flask_appbuilder.security.mfa.services.current_app')
-    @patch('flask_appbuilder.security.mfa.services.pyotp')
+    @patch('pgappforge.security.mfa.services.current_app')
+    @patch('pgappforge.security.mfa.services.pyotp')
     def test_generate_secret(self, mock_pyotp, mock_app):
         """Test TOTP secret generation."""
         mock_app.config.get.return_value = 'Test App'
         mock_pyotp.random_base32.return_value = 'TESTSECRET123456'
         
-        from flask_appbuilder.security.mfa.services import TOTPService
+        from pgappforge.security.mfa.services import TOTPService
         
         service = TOTPService()
         secret = service.generate_secret()
@@ -182,9 +182,9 @@ class TestTOTPServiceMinimal:
         assert secret == 'TESTSECRET123456'
         mock_pyotp.random_base32.assert_called_once()
     
-    @patch('flask_appbuilder.security.mfa.services.current_app')
-    @patch('flask_appbuilder.security.mfa.services.pyotp')
-    @patch('flask_appbuilder.security.mfa.services.qrcode')
+    @patch('pgappforge.security.mfa.services.current_app')
+    @patch('pgappforge.security.mfa.services.pyotp')
+    @patch('pgappforge.security.mfa.services.qrcode')
     def test_generate_qr_code(self, mock_qrcode, mock_pyotp, mock_app):
         """Test QR code generation."""
         mock_app.config.get.return_value = 'Test App'
@@ -201,26 +201,26 @@ class TestTOTPServiceMinimal:
         mock_img = MagicMock()
         mock_qr_instance.make_image.return_value = mock_img
         
-        from flask_appbuilder.security.mfa.services import TOTPService
+        from pgappforge.security.mfa.services import TOTPService
         
         service = TOTPService()
         
         # Mock the image buffer operations
-        with patch('flask_appbuilder.security.mfa.services.io.BytesIO') as mock_buffer:
+        with patch('pgappforge.security.mfa.services.io.BytesIO') as mock_buffer:
             mock_buffer_instance = MagicMock()
             mock_buffer.return_value = mock_buffer_instance
             mock_buffer_instance.getvalue.return_value = b'fake_image_data'
             
-            with patch('flask_appbuilder.security.mfa.services.base64.b64encode') as mock_b64:
+            with patch('pgappforge.security.mfa.services.base64.b64encode') as mock_b64:
                 mock_b64.return_value = b'ZmFrZV9pbWFnZV9kYXRh'
                 
                 qr_code = service.generate_qr_code('SECRET123', 'test@example.com')
                 
                 assert qr_code == 'data:image/png;base64,ZmFrZV9pbWFnZV9kYXRh'
     
-    @patch('flask_appbuilder.security.mfa.services.current_app')
-    @patch('flask_appbuilder.security.mfa.services.pyotp')
-    @patch('flask_appbuilder.security.mfa.services.datetime')
+    @patch('pgappforge.security.mfa.services.current_app')
+    @patch('pgappforge.security.mfa.services.pyotp')
+    @patch('pgappforge.security.mfa.services.datetime')
     def test_validate_totp_success(self, mock_datetime, mock_pyotp, mock_app):
         """Test successful TOTP validation."""
         mock_app.config.get.side_effect = lambda key, default=None: {
@@ -237,7 +237,7 @@ class TestTOTPServiceMinimal:
         mock_totp.verify.return_value = True
         mock_pyotp.TOTP.return_value = mock_totp
         
-        from flask_appbuilder.security.mfa.services import TOTPService
+        from pgappforge.security.mfa.services import TOTPService
         
         service = TOTPService()
         is_valid, counter = service.validate_totp('SECRET123', '123456')
@@ -246,9 +246,9 @@ class TestTOTPServiceMinimal:
         assert counter == 123456
         mock_totp.verify.assert_called_once()
     
-    @patch('flask_appbuilder.security.mfa.services.current_app')
-    @patch('flask_appbuilder.security.mfa.services.pyotp')
-    @patch('flask_appbuilder.security.mfa.services.datetime')
+    @patch('pgappforge.security.mfa.services.current_app')
+    @patch('pgappforge.security.mfa.services.pyotp')
+    @patch('pgappforge.security.mfa.services.datetime')
     def test_validate_totp_replay_protection(self, mock_datetime, mock_pyotp, mock_app):
         """Test TOTP replay protection."""
         mock_app.config.get.side_effect = lambda key, default=None: {
@@ -264,7 +264,7 @@ class TestTOTPServiceMinimal:
         mock_totp.timecode.return_value = 123456
         mock_pyotp.TOTP.return_value = mock_totp
         
-        from flask_appbuilder.security.mfa.services import TOTPService
+        from pgappforge.security.mfa.services import TOTPService
         
         service = TOTPService()
         

@@ -1,7 +1,7 @@
 import logging
 import os
 
-from flask_appbuilder import IndexView, SQLA
+from pgappforge import IndexView, SQLA
 
 from .base import FABTestCase
 
@@ -15,7 +15,7 @@ class CustomIndexView(IndexView):
 class FlaskTestCase(FABTestCase):
     def setUp(self):
         from flask import Flask
-        from flask_appbuilder import AppBuilder
+        from pgappforge import AppBuilder
 
         self.app = Flask(__name__, template_folder=".")
         self.basedir = os.path.abspath(os.path.dirname(__file__))

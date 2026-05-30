@@ -19,7 +19,7 @@
   },
   "build": {
     "buildCommand": "make build",
-    "testCommand": "VENV=/Users/nyimbiodero/src/pjs/fab-ext/.venv\n$VENV/bin/python3.12 -m pytest tests/ci/test_codegen_pipeline.py -q 2>&1 | tail -3 &\n\n# Also update __version__ to note Python 3.14 support\npython3 -c \"\npath = 'flask_appbuilder/__init__.py'\nwith open(path) as f:\n    content = f.read()\ncontent = content.replace('__version__ = \\\"5.2.1.dev1\\\"', '__version__ = \\\"5.2.1.dev2\\\"')\nwith open(path, 'w') as f:\n    f.write(content)\nprint('bumped to 5.2.1.dev2')\n\" &\nwait",
+    "testCommand": "VENV=/Users/nyimbiodero/src/pjs/fab-ext/.venv\n$VENV/bin/python -m pytest tests/ci/test_codegen_pipeline.py -q 2>&1 | tail -3",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {}

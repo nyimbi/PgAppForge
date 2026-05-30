@@ -1,10 +1,10 @@
 # Production Deployment Guide
 
-This guide covers deploying Flask-AppBuilder applications to production environments with proper security, scalability, and monitoring.
+This guide covers deploying PgAppForge applications to production environments with proper security, scalability, and monitoring.
 
 ## Overview
 
-Flask-AppBuilder applications require careful consideration of security, database configuration, caching, and monitoring when deployed to production. This guide provides best practices and configuration examples.
+PgAppForge applications require careful consideration of security, database configuration, caching, and monitoring when deployed to production. This guide provides best practices and configuration examples.
 
 ## Environment Configuration
 
@@ -138,7 +138,7 @@ flask fab create-admin
 ```python
 # app.py - Database initialization
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 from flask_migrate import Migrate
 
 app = Flask(__name__)
@@ -526,7 +526,7 @@ def metrics():
         disk = psutil.disk_usage('/')
 
         # Application metrics
-        from flask_appbuilder import appbuilder
+        from pgappforge import appbuilder
         user_count = appbuilder.sm.get_user_model().query.count()
 
         return jsonify({
@@ -601,7 +601,7 @@ LOGGING_CONFIG = {
         }
     },
     'loggers': {
-        'flask_appbuilder': {
+        'pgappforge': {
             'level': 'INFO',
             'handlers': ['file'],
             'propagate': False
@@ -868,4 +868,4 @@ iotop
 netstat -tulpn
 ```
 
-This production deployment guide provides comprehensive coverage of deploying Flask-AppBuilder applications with proper security, monitoring, and scalability considerations.
+This production deployment guide provides comprehensive coverage of deploying PgAppForge applications with proper security, monitoring, and scalability considerations.

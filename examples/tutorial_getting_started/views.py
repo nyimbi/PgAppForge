@@ -1,16 +1,16 @@
 """
-View Classes for Flask-AppBuilder Getting Started Tutorial
+View Classes for PgAppForge Getting Started Tutorial
 
 This module defines the view classes for the task management application,
 including enhanced ModelViews with AI capabilities and custom dashboard views.
 """
 
 from flask import request, flash, redirect, url_for, g
-from flask_appbuilder import ModelView, BaseView, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.widgets import ListWidget, ShowWidget
-from flask_appbuilder.actions import action
-from flask_appbuilder.security.decorators import has_access
+from pgappforge import ModelView, BaseView, expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.widgets import ListWidget, ShowWidget
+from pgappforge.actions import action
+from pgappforge.security.decorators import has_access
 from flask_babel import lazy_gettext, gettext
 from wtforms import TextAreaField, SelectField, IntegerField
 from wtforms.validators import DataRequired, Optional, NumberRange
@@ -347,7 +347,7 @@ class TaskModelView(ModelView):
     def _check_ai_availability(self, show_flash=True):
         """Check if AI features are available."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
             return True
         except ImportError:
             if show_flash:
@@ -356,7 +356,7 @@ class TaskModelView(ModelView):
 
     def _get_ai_manager(self):
         """Get AI manager instance."""
-        from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+        from pgappforge.collaborative.ai.ai_models import AIModelManager
         return AIModelManager()
 
     def _generate_ai_content(self, item, ai_option):
@@ -530,7 +530,7 @@ class TaskDashboardView(BaseView):
     def ai_insights(self):
         """Show AI-generated insights about tasks and productivity."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
             ai_manager = AIModelManager()
 
             # Get recent tasks for analysis

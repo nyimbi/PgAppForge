@@ -3,7 +3,7 @@
 Enhanced View Generation Demo
 
 Demonstrates the new master-detail views, inline formsets, and relationship-specific 
-view generation capabilities of Flask-AppBuilder.
+view generation capabilities of PgAppForge.
 
 Usage:
     python enhanced_view_generation_demo.py [DATABASE_URI] [OUTPUT_DIR]
@@ -20,8 +20,8 @@ from pathlib import Path
 # Add the parent directory to the path so we can import the generators
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from flask_appbuilder.cli.generators.database_inspector import EnhancedDatabaseInspector
-from flask_appbuilder.cli.generators.view_generator import (
+from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
+from pgappforge.cli.generators.view_generator import (
     BeautifulViewGenerator,
     ViewGenerationConfig
 )
@@ -260,7 +260,7 @@ def demonstrate_view_generation(inspector: EnhancedDatabaseInspector, output_dir
 
 def main():
     """Main demonstration function."""
-    print("🌟 Flask-AppBuilder Enhanced View Generation Demo")
+    print("🌟 PgAppForge Enhanced View Generation Demo")
     print("=" * 60)
     
     # Parse command line arguments
@@ -306,7 +306,7 @@ def main():
         # Show next steps
         print("\n📋 Next Steps:")
         print("   1. Review the generated view files")
-        print("   2. Copy templates to your Flask-AppBuilder templates directory")
+        print("   2. Copy templates to your PgAppForge templates directory")
         print("   3. Import and register views in your Flask app")
         print("   4. Test the master-detail forms with inline formsets")
         print("   5. Explore relationship navigation views")

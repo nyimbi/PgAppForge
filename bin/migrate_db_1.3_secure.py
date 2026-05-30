@@ -19,11 +19,11 @@ from flask import Flask
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from flask_appbuilder.security.sqla.models import User
-from flask_appbuilder.security.sql_utils import SecureDDLExecutor, SQLIdentifierValidator
+from pgappforge.security.sqla.models import User
+from pgappforge.security.sql_utils import SecureDDLExecutor, SQLIdentifierValidator
 
 sys.path.append(os.getcwd())
-from flask_appbuilder import SQLA
+from pgappforge import SQLA
 
 # Configure logging
 logging.basicConfig(format='%(levelname)s:%(name)s:%(message)s')

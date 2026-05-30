@@ -27,8 +27,8 @@ sys.path.insert(0, '/Users/nyimbiodero/src/pjs/fab-ext')
 
 # Import specific components with error handling
 try:
-    from flask_appbuilder.security.mfa.manager_mixin import MFASessionState
-    from flask_appbuilder.security.mfa.services import ValidationError as MFAValidationError
+    from pgappforge.security.mfa.manager_mixin import MFASessionState
+    from pgappforge.security.mfa.services import ValidationError as MFAValidationError
     IMPORTS_AVAILABLE = True
 except ImportError as e:
     print(f"Import error: {e}")
@@ -268,7 +268,7 @@ class TestMFAView:
     @pytest.fixture
     def mfa_view(self):
         """Create MFA view instance."""
-        with patch('flask_appbuilder.security.mfa.views.MFAOrchestrationService'):
+        with patch('pgappforge.security.mfa.views.MFAOrchestrationService'):
             return MFAView()
     
     def test_view_initialization(self, mfa_view):
@@ -281,57 +281,57 @@ class TestMFAView:
     def test_challenge_get_unauthenticated(self, app, mfa_view):
         """Test challenge view GET request when user is not authenticated."""
         with app.test_request_context('/mfa/challenge'):
-            with patch('flask_appbuilder.security.mfa.views.current_user') as mock_user:
+            with patch('pgappforge.security.mfa.views.current_user') as mock_user:
                 mock_user.is_authenticated = False
                 
-                with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                    with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/login'):
-                        with patch('flask_appbuilder.security.mfa.views.flash'):
+                with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                    with patch('pgappforge.security.mfa.views.url_for', return_value='/login'):
+                        with patch('pgappforge.security.mfa.views.flash'):
                             mfa_view.challenge()
                             mock_redirect.assert_called_once()
     
     def test_challenge_get_mfa_not_required(self, app, mfa_view, mock_user):
         """Test challenge view when MFA is not required."""
         with app.test_request_context('/mfa/challenge'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     # Mock security manager without MFA requirement
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=False)
                     
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/login'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/login'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 mfa_view.challenge()
                                 mock_redirect.assert_called_once()
     
     def test_challenge_get_already_verified(self, app, mfa_view, mock_user):
         """Test challenge view when MFA is already verified."""
         with app.test_request_context('/mfa/challenge'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=True)
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFASessionState') as mock_state:
+                    with patch('pgappforge.security.mfa.views.MFASessionState') as mock_state:
                         mock_state.is_verified_and_valid.return_value = True
                         
-                        with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                            with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/login'):
-                                with patch('flask_appbuilder.security.mfa.views.flash'):
+                        with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                            with patch('pgappforge.security.mfa.views.url_for', return_value='/login'):
+                                with patch('pgappforge.security.mfa.views.flash'):
                                     mfa_view.challenge()
                                     mock_redirect.assert_called_once()
     
     def test_challenge_get_session_locked(self, app, mfa_view, mock_user):
         """Test challenge view when session is locked."""
         with app.test_request_context('/mfa/challenge'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=True)
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFASessionState') as mock_state:
+                    with patch('pgappforge.security.mfa.views.MFASessionState') as mock_state:
                         mock_state.is_verified_and_valid.return_value = False
                         mock_state.is_locked.return_value = True
                         
-                        with patch('flask_appbuilder.security.mfa.views.render_template') as mock_render:
+                        with patch('pgappforge.security.mfa.views.render_template') as mock_render:
                             mfa_view.challenge()
                             mock_render.assert_called_once_with(
                                 'mfa/locked.html',
@@ -342,34 +342,34 @@ class TestMFAView:
     def test_challenge_get_no_methods_configured(self, app, mfa_view, mock_user):
         """Test challenge view when user has no MFA methods configured."""
         with app.test_request_context('/mfa/challenge'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=True)
                     app.appbuilder.sm.get_user_mfa_methods = MagicMock(return_value=[])
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFASessionState') as mock_state:
+                    with patch('pgappforge.security.mfa.views.MFASessionState') as mock_state:
                         mock_state.is_verified_and_valid.return_value = False
                         mock_state.is_locked.return_value = False
                         
-                        with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                            with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/setup'):
+                        with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                            with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/setup'):
                                 mfa_view.challenge()
                                 mock_redirect.assert_called_once()
     
     def test_challenge_get_success(self, app, mfa_view, mock_user):
         """Test successful challenge view GET request."""
         with app.test_request_context('/mfa/challenge'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=True)
                     app.appbuilder.sm.get_user_mfa_methods = MagicMock(return_value=['totp', 'sms'])
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFASessionState') as mock_state:
+                    with patch('pgappforge.security.mfa.views.MFASessionState') as mock_state:
                         mock_state.is_verified_and_valid.return_value = False
                         mock_state.is_locked.return_value = False
                         mock_state.get_state.return_value = MFASessionState.REQUIRED
                         
-                        with patch('flask_appbuilder.security.mfa.views.render_template') as mock_render:
+                        with patch('pgappforge.security.mfa.views.render_template') as mock_render:
                             mfa_view.challenge()
                             mock_render.assert_called_once()
                             
@@ -384,11 +384,11 @@ class TestMFAView:
         with app.test_request_context('/mfa/initiate', method='POST', 
                                     data=json.dumps({'method': 'sms'}), 
                                     content_type='application/json'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm = MagicMock()
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFAAuthenticationHandler') as mock_handler:
+                    with patch('pgappforge.security.mfa.views.MFAAuthenticationHandler') as mock_handler:
                         mock_auth_handler = MagicMock()
                         mock_handler.return_value = mock_auth_handler
                         mock_auth_handler.initiate_mfa_challenge.return_value = {
@@ -397,7 +397,7 @@ class TestMFAView:
                             'message': 'Code sent'
                         }
                         
-                        with patch('flask_appbuilder.security.mfa.views.jsonify') as mock_jsonify:
+                        with patch('pgappforge.security.mfa.views.jsonify') as mock_jsonify:
                             mfa_view.initiate()
                             mock_jsonify.assert_called_once_with({
                                 'success': True,
@@ -411,8 +411,8 @@ class TestMFAView:
         with app.test_request_context('/mfa/initiate', method='POST', 
                                     data=json.dumps({}), 
                                     content_type='application/json'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.jsonify') as mock_jsonify:
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.jsonify') as mock_jsonify:
                     mfa_view.initiate()
                     mock_jsonify.assert_called_once_with({
                         'success': False, 
@@ -424,11 +424,11 @@ class TestMFAView:
         with app.test_request_context('/mfa/verify', method='POST',
                                     data=json.dumps({'method': 'totp', 'code': '123456'}),
                                     content_type='application/json'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm = MagicMock()
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFAAuthenticationHandler') as mock_handler:
+                    with patch('pgappforge.security.mfa.views.MFAAuthenticationHandler') as mock_handler:
                         mock_auth_handler = MagicMock()
                         mock_handler.return_value = mock_auth_handler
                         mock_auth_handler.verify_mfa_response.return_value = {
@@ -436,8 +436,8 @@ class TestMFAView:
                             'message': 'Verification successful'
                         }
                         
-                        with patch('flask_appbuilder.security.mfa.views.jsonify') as mock_jsonify:
-                            with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/login'):
+                        with patch('pgappforge.security.mfa.views.jsonify') as mock_jsonify:
+                            with patch('pgappforge.security.mfa.views.url_for', return_value='/login'):
                                 mfa_view.verify()
                                 mock_jsonify.assert_called_once_with({
                                     'success': True,
@@ -450,11 +450,11 @@ class TestMFAView:
         with app.test_request_context('/mfa/verify', method='POST',
                                     data=json.dumps({'method': 'totp', 'code': '000000'}),
                                     content_type='application/json'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm = MagicMock()
                     
-                    with patch('flask_appbuilder.security.mfa.views.MFAAuthenticationHandler') as mock_handler:
+                    with patch('pgappforge.security.mfa.views.MFAAuthenticationHandler') as mock_handler:
                         mock_auth_handler = MagicMock()
                         mock_handler.return_value = mock_auth_handler
                         mock_auth_handler.verify_mfa_response.return_value = {
@@ -463,7 +463,7 @@ class TestMFAView:
                             'attempts_remaining': 2
                         }
                         
-                        with patch('flask_appbuilder.security.mfa.views.jsonify') as mock_jsonify:
+                        with patch('pgappforge.security.mfa.views.jsonify') as mock_jsonify:
                             mfa_view.verify()
                             mock_jsonify.assert_called_once_with({
                                 'success': False,
@@ -474,14 +474,14 @@ class TestMFAView:
     def test_status_endpoint(self, app, mfa_view, mock_user):
         """Test MFA status endpoint."""
         with app.test_request_context('/mfa/status'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.MFASessionState') as mock_state:
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.MFASessionState') as mock_state:
                     mock_state.get_state.return_value = MFASessionState.VERIFIED
                     mock_state.get_user_id.return_value = 123
                     mock_state.is_verified_and_valid.return_value = True
                     mock_state.is_locked.return_value = False
                     
-                    with patch('flask_appbuilder.security.mfa.views.jsonify') as mock_jsonify:
+                    with patch('pgappforge.security.mfa.views.jsonify') as mock_jsonify:
                         mfa_view.status()
                         
                         expected_status = {
@@ -529,7 +529,7 @@ class TestMFASetupView:
     @pytest.fixture
     def setup_view(self):
         """Create MFA setup view instance."""
-        with patch('flask_appbuilder.security.mfa.views.MFAOrchestrationService'):
+        with patch('pgappforge.security.mfa.views.MFAOrchestrationService'):
             return MFASetupView()
     
     def test_view_initialization(self, setup_view):
@@ -542,28 +542,28 @@ class TestMFASetupView:
     def test_setup_get_already_configured(self, app, setup_view, mock_user):
         """Test setup view when MFA is already configured."""
         with app.test_request_context('/mfa/setup/'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.setup_completed = True
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/manage'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/manage'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 setup_view.setup()
                                 mock_redirect.assert_called_once()
     
     def test_setup_get_not_configured(self, app, setup_view, mock_user):
         """Test setup view when MFA is not configured."""
         with app.test_request_context('/mfa/setup/'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.setup_completed = False
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     
-                    with patch('flask_appbuilder.security.mfa.views.render_template') as mock_render:
+                    with patch('pgappforge.security.mfa.views.render_template') as mock_render:
                         setup_view.setup()
                         mock_render.assert_called_once()
                         
@@ -582,8 +582,8 @@ class TestMFASetupView:
                                         'preferred_method': 'totp',
                                         'csrf_token': 'test'
                                     }):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     app.appbuilder.sm.get_user_mfa.return_value = None
                     
                     # Mock orchestration service
@@ -595,25 +595,25 @@ class TestMFASetupView:
                         'allowed_methods': ['totp', 'sms', 'email']
                     }
                     
-                    with patch('flask_appbuilder.security.mfa.views.session', {}) as mock_session:
-                        with patch('flask_appbuilder.security.mfa.views.db') as mock_db:
+                    with patch('pgappforge.security.mfa.views.session', {}) as mock_session:
+                        with patch('pgappforge.security.mfa.views.db') as mock_db:
                             mock_user_mfa = MagicMock()
                             mock_db.session.query.return_value.get.return_value = mock_user_mfa
                             
-                            with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                                with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/setup/verify'):
-                                    with patch('flask_appbuilder.security.mfa.views.flash'):
+                            with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                                with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/setup/verify'):
+                                    with patch('pgappforge.security.mfa.views.flash'):
                                         setup_view.setup()
                                         mock_redirect.assert_called_once()
     
     def test_verify_get_no_session(self, app, setup_view, mock_user):
         """Test verify view when no setup session exists."""
         with app.test_request_context('/mfa/setup/verify'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.session', {}) as mock_session:
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/setup'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.session', {}) as mock_session:
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/setup'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 setup_view.verify()
                                 mock_redirect.assert_called_once()
     
@@ -627,17 +627,17 @@ class TestMFASetupView:
         
         with app.test_request_context('/mfa/setup/verify', method='POST',
                                     data={'verification_code': '123456'}):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.session', {'_mfa_setup_info': setup_info}) as mock_session:
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.session', {'_mfa_setup_info': setup_info}) as mock_session:
                     # Mock successful completion
                     setup_view.orchestration_service.complete_mfa_setup.return_value = {
                         'setup_completed': True,
                         'backup_codes': ['12345678', '87654321']
                     }
                     
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/setup/backup-codes'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/setup/backup-codes'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 setup_view.verify()
                                 mock_redirect.assert_called_once()
     
@@ -646,9 +646,9 @@ class TestMFASetupView:
         backup_codes = ['12345678', '87654321', '11111111']
         
         with app.test_request_context('/mfa/setup/backup-codes'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.session', {'_mfa_backup_codes': backup_codes}):
-                    with patch('flask_appbuilder.security.mfa.views.render_template') as mock_render:
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.session', {'_mfa_backup_codes': backup_codes}):
+                    with patch('pgappforge.security.mfa.views.render_template') as mock_render:
                         setup_view.backup_codes()
                         mock_render.assert_called_once()
                         
@@ -665,9 +665,9 @@ class TestMFASetupView:
         }
         
         with app.test_request_context('/mfa/setup/qr-code'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.session', {'_mfa_setup_info': setup_info}):
-                    with patch('flask_appbuilder.security.mfa.views.jsonify') as mock_jsonify:
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.session', {'_mfa_setup_info': setup_info}):
+                    with patch('pgappforge.security.mfa.views.jsonify') as mock_jsonify:
                         setup_view.qr_code()
                         mock_jsonify.assert_called_once_with({
                             'success': True,
@@ -718,32 +718,32 @@ class TestMFAManagementView:
     def test_index_mfa_not_setup(self, app, management_view, mock_user):
         """Test management index when MFA is not set up."""
         with app.test_request_context('/mfa/manage/'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.setup_completed = False
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/setup'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/setup'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 management_view.index()
                                 mock_redirect.assert_called_once()
     
     def test_index_mfa_configured(self, app, management_view, mock_user):
         """Test management index when MFA is configured."""
         with app.test_request_context('/mfa/manage/'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.setup_completed = True
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     app.appbuilder.sm.get_user_mfa_methods.return_value = ['totp', 'sms']
                     
-                    with patch('flask_appbuilder.security.mfa.views.BackupCodeService') as mock_backup_service:
+                    with patch('pgappforge.security.mfa.views.BackupCodeService') as mock_backup_service:
                         mock_backup_service.return_value.get_remaining_codes_count.return_value = 5
                         
-                        with patch('flask_appbuilder.security.mfa.views.render_template') as mock_render:
+                        with patch('pgappforge.security.mfa.views.render_template') as mock_render:
                             management_view.index()
                             mock_render.assert_called_once()
                             
@@ -757,20 +757,20 @@ class TestMFAManagementView:
     def test_regenerate_backup_codes_success(self, app, management_view, mock_user):
         """Test successful backup codes regeneration."""
         with app.test_request_context('/mfa/manage/regenerate-backup-codes', method='POST'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.id = 456
                     mock_user_mfa.setup_completed = True
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     
-                    with patch('flask_appbuilder.security.mfa.views.BackupCodeService') as mock_backup_service:
+                    with patch('pgappforge.security.mfa.views.BackupCodeService') as mock_backup_service:
                         mock_backup_service.return_value.generate_codes_for_user.return_value = [
                             '12345678', '87654321', '11111111'
                         ]
                         
-                        with patch('flask_appbuilder.security.mfa.views.render_template') as mock_render:
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                        with patch('pgappforge.security.mfa.views.render_template') as mock_render:
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 management_view.regenerate_backup_codes()
                                 mock_render.assert_called_once()
                                 
@@ -782,31 +782,31 @@ class TestMFAManagementView:
     def test_disable_mfa_not_enabled(self, app, management_view, mock_user):
         """Test disable MFA when not currently enabled."""
         with app.test_request_context('/mfa/manage/disable'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.is_enabled = False
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/manage'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/manage'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 management_view.disable()
                                 mock_redirect.assert_called_once()
     
     def test_disable_mfa_policy_required(self, app, management_view, mock_user):
         """Test disable MFA when required by policy."""
         with app.test_request_context('/mfa/manage/disable'):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.is_enabled = True
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=True)
                     
-                    with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/mfa/manage'):
-                            with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.views.url_for', return_value='/mfa/manage'):
+                            with patch('pgappforge.security.mfa.views.flash'):
                                 management_view.disable()
                                 mock_redirect.assert_called_once()
     
@@ -814,18 +814,18 @@ class TestMFAManagementView:
         """Test successful MFA disable."""
         with app.test_request_context('/mfa/manage/disable', method='POST',
                                     data={'confirm_disable': 'DISABLE'}):
-            with patch('flask_appbuilder.security.mfa.views.current_user', mock_user):
-                with patch('flask_appbuilder.security.mfa.views.current_app', app):
+            with patch('pgappforge.security.mfa.views.current_user', mock_user):
+                with patch('pgappforge.security.mfa.views.current_app', app):
                     mock_user_mfa = MagicMock()
                     mock_user_mfa.is_enabled = True
                     app.appbuilder.sm.get_user_mfa.return_value = mock_user_mfa
                     app.appbuilder.sm.is_mfa_required = MagicMock(return_value=False)
                     
-                    with patch('flask_appbuilder.security.mfa.views.db') as mock_db:
-                        with patch('flask_appbuilder.security.mfa.views.MFASessionState') as mock_state:
-                            with patch('flask_appbuilder.security.mfa.views.redirect') as mock_redirect:
-                                with patch('flask_appbuilder.security.mfa.views.url_for', return_value='/login'):
-                                    with patch('flask_appbuilder.security.mfa.views.flash'):
+                    with patch('pgappforge.security.mfa.views.db') as mock_db:
+                        with patch('pgappforge.security.mfa.views.MFASessionState') as mock_state:
+                            with patch('pgappforge.security.mfa.views.redirect') as mock_redirect:
+                                with patch('pgappforge.security.mfa.views.url_for', return_value='/login'):
+                                    with patch('pgappforge.security.mfa.views.flash'):
                                         management_view.disable()
                                         
                                         # Check that MFA was disabled

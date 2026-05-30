@@ -3,7 +3,7 @@
 Test Phase 1.2: Model Validation and Field Type Handling
 
 This test validates the REAL field type analyzer implementation against 
-actual Flask-AppBuilder models to ensure it properly handles:
+actual PgAppForge models to ensure it properly handles:
 1. Complex field types (JSONB, Arrays, etc.)
 2. Security-sensitive field detection
 3. Search/filter field exclusion
@@ -27,7 +27,7 @@ try:
         analyze_model_fields, get_model_searchable_fields, get_model_filterable_fields,
         ModelValidationMixin
     )
-    from tests.proper_flask_appbuilder_extensions import SearchManager, DatabaseMixin
+    from tests.proper_pgappforge_extensions import SearchManager, DatabaseMixin
     HAS_FIELD_ANALYZER = True
 except ImportError as e:
     print(f"Could not import field analyzer: {e}")
@@ -172,7 +172,7 @@ class TestFieldTypeAnalyzer(unittest.TestCase):
 @unittest.skipIf(not HAS_TEST_MODELS, "Test models not available")
 @unittest.skipIf(not HAS_SQLALCHEMY, "SQLAlchemy not available")
 class TestRealModelAnalysis(unittest.TestCase):
-    """Test field analysis against real Flask-AppBuilder test models."""
+    """Test field analysis against real PgAppForge test models."""
     
     def test_model1_analysis(self):
         """Test field analysis against Model1."""

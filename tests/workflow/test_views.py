@@ -1,5 +1,5 @@
 """
-Tests for Flask-AppBuilder Workflow Views
+Tests for PgAppForge Workflow Views
 
 Tests the WorkflowModelView, form handling, and view integration.
 """
@@ -10,13 +10,13 @@ import json
 
 import pytest
 from flask import Flask, request
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.test import Client
 
-from flask_appbuilder.workflow.views import WorkflowModelView, WorkflowFormView
-from flask_appbuilder.workflow.core import WorkflowDefinition, WorkflowStepDefinition, WorkflowStepType
-from flask_appbuilder.workflow.mixins import WorkflowMixin
+from pgappforge.workflow.views import WorkflowModelView, WorkflowFormView
+from pgappforge.workflow.core import WorkflowDefinition, WorkflowStepDefinition, WorkflowStepType
+from pgappforge.workflow.mixins import WorkflowMixin
 
 
 class TestWorkflowModelView(unittest.TestCase):
@@ -46,7 +46,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 workflow_name = 'test_workflow'
 
             # Create view
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class TestView(WorkflowModelView):
                 datamodel = SQLAInterface(TestModel)
@@ -70,7 +70,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 id = self.db.Column(self.db.Integer, primary_key=True)
                 name = self.db.Column(self.db.String(100))
 
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class TestView(WorkflowModelView):
                 datamodel = SQLAInterface(TestModel)
@@ -97,7 +97,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 id = self.db.Column(self.db.Integer, primary_key=True)
                 name = self.db.Column(self.db.String(100))
 
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class TestView(WorkflowModelView):
                 datamodel = SQLAInterface(TestModel)
@@ -133,7 +133,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 id = self.db.Column(self.db.Integer, primary_key=True)
                 name = self.db.Column(self.db.String(100))
 
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class TestView(WorkflowModelView):
                 datamodel = SQLAInterface(TestModel)
@@ -151,7 +151,7 @@ class TestWorkflowModelView(unittest.TestCase):
             mock_state.set_form_data_for_step = Mock()
             mock_state.available_next_steps = ['step2']
             
-            with patch('flask_appbuilder.workflow.views.request') as mock_request:
+            with patch('pgappforge.workflow.views.request') as mock_request:
                 mock_request.form = {'workflow_next': True}
                 
                 with patch.object(view, '_handle_workflow_navigation') as mock_nav:
@@ -173,7 +173,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 id = self.db.Column(self.db.Integer, primary_key=True)
                 name = self.db.Column(self.db.String(100))
 
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class TestView(WorkflowModelView):
                 datamodel = SQLAInterface(TestModel)
@@ -188,9 +188,9 @@ class TestWorkflowModelView(unittest.TestCase):
             mock_engine = Mock()
             mock_engine.advance_workflow.return_value = True
             
-            with patch('flask_appbuilder.workflow.views.get_workflow_engine', return_value=mock_engine):
-                with patch('flask_appbuilder.workflow.views.redirect') as mock_redirect:
-                    with patch('flask_appbuilder.workflow.views.url_for') as mock_url:
+            with patch('pgappforge.workflow.views.get_workflow_engine', return_value=mock_engine):
+                with patch('pgappforge.workflow.views.redirect') as mock_redirect:
+                    with patch('pgappforge.workflow.views.url_for') as mock_url:
                         mock_url.return_value = '/test/url'
                         
                         result = view._handle_workflow_navigation(mock_state, 'next')
@@ -208,7 +208,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 id = self.db.Column(self.db.Integer, primary_key=True)
                 name = self.db.Column(self.db.String(100))
 
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class TestView(WorkflowModelView):
                 datamodel = SQLAInterface(TestModel)
@@ -227,7 +227,7 @@ class TestWorkflowModelView(unittest.TestCase):
                 mock_item = TestModel(name='Test Name')
                 mock_add.return_value = mock_item
                 
-                with patch('flask_appbuilder.workflow.views.redirect') as mock_redirect:
+                with patch('pgappforge.workflow.views.redirect') as mock_redirect:
                     result = view._create_entity_from_workflow(mock_state)
                     
                     mock_add.assert_called_once()
@@ -320,12 +320,12 @@ class TestWorkflowFormView(unittest.TestCase):
             mock_state.set_form_data_for_step = Mock()
             mock_state.available_next_steps = ['step2']
             
-            with patch('flask_appbuilder.workflow.views.request') as mock_request:
+            with patch('pgappforge.workflow.views.request') as mock_request:
                 mock_request.form = {'next': True}
                 
-                with patch('flask_appbuilder.workflow.views.redirect') as mock_redirect:
-                    with patch('flask_appbuilder.workflow.views.url_for'):
-                        with patch('flask_appbuilder.workflow.views.get_workflow_engine') as mock_engine:
+                with patch('pgappforge.workflow.views.redirect') as mock_redirect:
+                    with patch('pgappforge.workflow.views.url_for'):
+                        with patch('pgappforge.workflow.views.get_workflow_engine') as mock_engine:
                             mock_engine.return_value.advance_workflow.return_value = True
                             
                             result = view._handle_form_submission(mock_form, 'step1', mock_state)
@@ -367,7 +367,7 @@ class TestWorkflowIntegration(unittest.TestCase):
             self.db.create_all()
 
             # Create workflow view
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class EmployeeView(WorkflowModelView):
                 datamodel = SQLAInterface(Employee)
@@ -426,7 +426,7 @@ class TestWorkflowIntegration(unittest.TestCase):
                 workflow_name = 'document_approval'
 
             # Create workflow view
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class DocumentView(WorkflowModelView):
                 datamodel = SQLAInterface(Document)

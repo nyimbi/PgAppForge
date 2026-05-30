@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch, MagicMock
 from sqlalchemy import create_engine, text, Column, Integer, String, MetaData, Table
 from sqlalchemy.exc import SQLAlchemyError
 
-from flask_appbuilder.security.sql_utils import (
+from pgappforge.security.sql_utils import (
     SQLIdentifierValidator,
     SecureDDLExecutor,
     validate_column_type

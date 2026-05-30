@@ -4,19 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Flask-AppBuilder (FAB) is a rapid application development framework built on top of Flask that provides automatic CRUD generation, detailed security, RESTful APIs, and extensive customization options. This is the main Flask-AppBuilder repository with version 4.8.0.
+PgAppForge (FAB) is a rapid application development framework built on top of Flask that provides automatic CRUD generation, detailed security, RESTful APIs, and extensive customization options. This is the main PgAppForge repository with version 4.8.0.
 
 ## Development Commands
 
 ### Testing
-- **Run all tests**: `nose2 -c setup.cfg -F -v --with-coverage --coverage flask_appbuilder -A '!mongo' tests`
-- **Run MongoDB tests**: `nose2 -c setup.cfg -F -v --with-coverage --coverage flask_appbuilder -A 'mongo' tests`
+- **Run all tests**: `nose2 -c setup.cfg -F -v --with-coverage --coverage pgappforge -A '!mongo' tests`
+- **Run MongoDB tests**: `nose2 -c setup.cfg -F -v --with-coverage --coverage pgappforge -A 'mongo' tests`
 - **Run single test**: `nose2 tests.test_<module_name>`
 - **Tox environments**: `tox -e api-sqlite`, `tox -e mysql`, `tox -e postgres`, `tox -e mongodb`
 
 ### Code Quality
 - **Linting**: `flake8` (configured in setup.cfg with Google import order style, 90 char line limit)
-- **Code formatting**: `black --check setup.py flask_appbuilder tests` or `black setup.py flask_appbuilder tests`
+- **Code formatting**: `black --check setup.py pgappforge tests` or `black setup.py pgappforge tests`
 - **Type checking**: `mypy` (configured for specific modules in setup.cfg)
 
 ### SQLAlchemy 2.x Development
@@ -36,20 +36,20 @@ Flask-AppBuilder (FAB) is a rapid application development framework built on top
 
 ### Core Components
 
-1. **AppBuilder (`flask_appbuilder/base.py`)**: Central orchestrator that manages views, security, menus, and the Flask app lifecycle. Handles registration of views, permissions, and addon managers.
+1. **AppBuilder (`pgappforge/base.py`)**: Central orchestrator that manages views, security, menus, and the Flask app lifecycle. Handles registration of views, permissions, and addon managers.
 
-2. **Security System (`flask_appbuilder/security/`)**: 
+2. **Security System (`pgappforge/security/`)**: 
    - Supports multiple auth methods: OAuth, OpenID, Database, LDAP, REMOTE_USER
    - Role-based permissions with automatic permission generation
    - Separate implementations for SQLAlchemy (`sqla/`) and MongoEngine (`mongoengine/`)
 
-3. **Views System (`flask_appbuilder/views.py`, `flask_appbuilder/baseviews.py`)**:
+3. **Views System (`pgappforge/views.py`, `pgappforge/baseviews.py`)**:
    - `ModelView`: Automatic CRUD for database models
    - `BaseView`: Foundation for custom views  
    - `CompactCRUDMixin`, `MasterDetailView`: Specialized view mixins
    - `RestCRUDView`: RESTful API endpoints
 
-4. **API System (`flask_appbuilder/api/`)**:
+4. **API System (`pgappforge/api/`)**:
    - `ModelRestApi`: Automatic REST API generation
    - OpenAPI/Swagger integration
    - Schema validation and serialization
@@ -96,9 +96,9 @@ Test databases configured via environment variables in tox.ini.
 - Code style enforced by black and flake8
 - Type hints used selectively with mypy checking on core modules
 - Extensive example applications in `examples/` directory
-- Internationalization support via Flask-Babel with translations in `flask_appbuilder/translations/`
-- Static assets (CSS, JS, images) in `flask_appbuilder/static/appbuilder/`
-- Jinja2 templates in `flask_appbuilder/templates/appbuilder/`
+- Internationalization support via Flask-Babel with translations in `pgappforge/translations/`
+- Static assets (CSS, JS, images) in `pgappforge/static/appbuilder/`
+- Jinja2 templates in `pgappforge/templates/appbuilder/`
 
 ## Dependencies
 

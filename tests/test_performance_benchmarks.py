@@ -78,7 +78,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 		mock_connect.return_value = self.mock_db
 		self.mock_cursor.fetchall.return_value = []
 		
-		from flask_appbuilder.database.graph_manager import GraphManager
+		from pgappforge.database.graph_manager import GraphManager
 		
 		def create_graph():
 			gm = GraphManager("perf_test_graph")
@@ -117,7 +117,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 		"""Benchmark advanced query builder performance"""
 		mock_connect.return_value = self.mock_db
 		
-		from flask_appbuilder.database.query_builder import AdvancedQueryBuilder
+		from pgappforge.database.query_builder import AdvancedQueryBuilder
 		
 		def build_simple_query():
 			qb = AdvancedQueryBuilder("perf_test_graph")
@@ -175,7 +175,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 		mock_connect.return_value = self.mock_db
 		mock_loop.return_value = Mock()
 		
-		from flask_appbuilder.database.graph_streaming import GraphStreamingManager
+		from pgappforge.database.graph_streaming import GraphStreamingManager
 		
 		def create_session():
 			streaming = GraphStreamingManager()
@@ -223,7 +223,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 			[(i, f"Node{i}", 0.1 if i < 5 else 0.9) for i in range(10)]
 		]
 		
-		from flask_appbuilder.database.graph_ml import GraphMLSuite
+		from pgappforge.database.graph_ml import GraphMLSuite
 		
 		def train_classifier():
 			ml_suite = GraphMLSuite("perf_test_graph")
@@ -260,7 +260,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 		mock_connect.return_value = self.mock_db
 		self.mock_cursor.fetchall.return_value = [(1, "Alice", 3), (2, "Bob", 2)]
 		
-		from flask_appbuilder.database.ai_analytics_assistant import AIAnalyticsAssistant
+		from pgappforge.database.ai_analytics_assistant import AIAnalyticsAssistant
 		
 		def process_nl_query():
 			ai_assistant = AIAnalyticsAssistant("perf_test_graph")
@@ -292,7 +292,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 	
 	def test_visualization_performance(self):
 		"""Benchmark visualization engine performance"""
-		from flask_appbuilder.database.advanced_visualization import AdvancedVisualizationEngine
+		from pgappforge.database.advanced_visualization import AdvancedVisualizationEngine
 		
 		# Generate test graph data
 		test_data = {
@@ -334,7 +334,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 		"""Test that performance optimization engine actually improves performance"""
 		mock_connect.return_value = self.mock_db
 		
-		from flask_appbuilder.database.performance_optimizer import PerformanceOptimizer
+		from pgappforge.database.performance_optimizer import PerformanceOptimizer
 		
 		# Mock slow and optimized queries
 		slow_query = "MATCH (n:Person) WHERE exists(n.name) RETURN n"
@@ -456,7 +456,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 		mock_connect.return_value = self.mock_db
 		self.mock_cursor.fetchall.return_value = [(1, "Alice", "Person")]
 		
-		from flask_appbuilder.database.performance_optimizer import PerformanceOptimizer
+		from pgappforge.database.performance_optimizer import PerformanceOptimizer
 		
 		optimizer = PerformanceOptimizer("perf_test_graph")
 		test_query = "MATCH (n:Person) RETURN n LIMIT 10"
@@ -484,7 +484,7 @@ class TestPerformanceBenchmarks(FABTestCase):
 	
 	def test_scalability_characteristics(self):
 		"""Test how performance scales with data size"""
-		from flask_appbuilder.database.advanced_visualization import AdvancedVisualizationEngine
+		from pgappforge.database.advanced_visualization import AdvancedVisualizationEngine
 		
 		viz_engine = AdvancedVisualizationEngine()
 		results = {}

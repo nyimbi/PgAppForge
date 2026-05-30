@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test configuration for Flask-AppBuilder tutorial tests.
+Test configuration for PgForge tutorial tests.
 
 This module provides standardized configuration for all tutorial tests,
 ensuring consistent test environments and reliable test execution.

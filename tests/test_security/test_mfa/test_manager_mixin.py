@@ -22,7 +22,7 @@ from flask import Flask, session, request, current_app
 import sys
 sys.path.insert(0, '/Users/nyimbiodero/src/pjs/fab-ext')
 
-from flask_appbuilder.security.mfa.manager_mixin import (
+from pgappforge.security.mfa.manager_mixin import (
     MFASessionState, MFAAuthenticationHandler, 
     MFASecurityManagerMixin, mfa_required,
     ValidationError, ServiceUnavailableError
@@ -133,7 +133,7 @@ class TestMFASessionState:
             
             assert MFASessionState.is_locked() is False
     
-    @patch('flask_appbuilder.security.mfa.manager_mixin.datetime')
+    @patch('pgappforge.security.mfa.manager_mixin.datetime')
     def test_is_verified_and_valid_true(self, mock_datetime, app):
         """Test checking if MFA is verified and valid - positive case."""
         with app.test_request_context():
@@ -148,7 +148,7 @@ class TestMFASessionState:
             
             assert MFASessionState.is_verified_and_valid() is True
     
-    @patch('flask_appbuilder.security.mfa.manager_mixin.datetime')
+    @patch('pgappforge.security.mfa.manager_mixin.datetime')
     def test_is_verified_and_valid_false_expired(self, mock_datetime, app):
         """Test checking if MFA is verified and valid - expired."""
         with app.test_request_context():
@@ -224,8 +224,8 @@ class TestMFAAuthenticationHandler:
     @pytest.fixture
     def auth_handler(self, mock_security_manager):
         """Create authentication handler with mocked dependencies."""
-        with patch('flask_appbuilder.security.mfa.manager_mixin.MFAOrchestrationService'):
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+        with patch('pgappforge.security.mfa.manager_mixin.MFAOrchestrationService'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
                 return MFAAuthenticationHandler(mock_security_manager)
     
     @pytest.fixture
@@ -286,7 +286,7 @@ class TestMFAAuthenticationHandler:
             'totp', 'sms', 'email', 'backup'
         ]
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.BackupCodeService') as mock_backup_service:
+        with patch('pgappforge.security.mfa.manager_mixin.BackupCodeService') as mock_backup_service:
             mock_backup_service.return_value.get_remaining_codes_count.return_value = 5
             
             methods = auth_handler.get_user_mfa_methods(mock_user)
@@ -311,7 +311,7 @@ class TestMFAAuthenticationHandler:
             auth_handler.security_manager.get_user_mfa.return_value = mock_user_mfa
             
             with patch.object(auth_handler, 'get_user_mfa_methods', return_value=['sms']):
-                with patch('flask_appbuilder.security.mfa.manager_mixin.SMSService') as mock_sms:
+                with patch('pgappforge.security.mfa.manager_mixin.SMSService') as mock_sms:
                     with patch.object(auth_handler, '_generate_challenge_code', return_value='123456'):
                         mock_sms.return_value.send_mfa_code.return_value = True
                         
@@ -328,7 +328,7 @@ class TestMFAAuthenticationHandler:
             auth_handler.security_manager.get_user_mfa.return_value = mock_user_mfa
             
             with patch.object(auth_handler, 'get_user_mfa_methods', return_value=['email']):
-                with patch('flask_appbuilder.security.mfa.manager_mixin.EmailService') as mock_email:
+                with patch('pgappforge.security.mfa.manager_mixin.EmailService') as mock_email:
                     with patch.object(auth_handler, '_generate_challenge_code', return_value='789012'):
                         mock_email.return_value.send_mfa_code.return_value = True
                         
@@ -402,7 +402,7 @@ class TestMFAAuthenticationHandler:
             
             auth_handler.security_manager.get_user_mfa.return_value = mock_user_mfa
             
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAVerification'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAVerification'):
                 result = auth_handler.verify_mfa_response(mock_user, "sms", "123456")
                 
                 assert result["success"] is True
@@ -418,7 +418,7 @@ class TestMFAAuthenticationHandler:
             
             auth_handler.security_manager.get_user_mfa.return_value = mock_user_mfa
             
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAVerification'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAVerification'):
                 result = auth_handler.verify_mfa_response(mock_user, "sms", "000000")
                 
                 assert result["success"] is False
@@ -494,18 +494,18 @@ class TestMFARequired:
     def test_mfa_required_not_authenticated(self, app, mock_view):
         """Test @mfa_required when user is not authenticated."""
         with app.test_request_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.current_user') as mock_user:
+            with patch('pgappforge.security.mfa.manager_mixin.current_user') as mock_user:
                 mock_user.is_authenticated = False
                 
-                with patch('flask_appbuilder.security.mfa.manager_mixin.redirect') as mock_redirect:
-                    with patch('flask_appbuilder.security.mfa.manager_mixin.url_for', return_value='/login'):
+                with patch('pgappforge.security.mfa.manager_mixin.redirect') as mock_redirect:
+                    with patch('pgappforge.security.mfa.manager_mixin.url_for', return_value='/login'):
                         mock_view()
                         mock_redirect.assert_called_once()
     
     def test_mfa_required_no_mfa_needed(self, app, mock_view):
         """Test @mfa_required when MFA is not required."""
         with app.test_request_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.current_user') as mock_user:
+            with patch('pgappforge.security.mfa.manager_mixin.current_user') as mock_user:
                 mock_user.is_authenticated = True
                 
                 # Security manager doesn't have MFA capability
@@ -517,11 +517,11 @@ class TestMFARequired:
     def test_mfa_required_mfa_verified(self, app, mock_view):
         """Test @mfa_required when MFA is verified."""
         with app.test_request_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.current_user') as mock_user:
+            with patch('pgappforge.security.mfa.manager_mixin.current_user') as mock_user:
                 mock_user.is_authenticated = True
                 app.appbuilder.sm.is_mfa_required.return_value = True
                 
-                with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState') as mock_state:
+                with patch('pgappforge.security.mfa.manager_mixin.MFASessionState') as mock_state:
                     mock_state.is_verified_and_valid.return_value = True
                     
                     result = mock_view()
@@ -530,15 +530,15 @@ class TestMFARequired:
     def test_mfa_required_mfa_not_verified(self, app, mock_view):
         """Test @mfa_required when MFA is not verified."""
         with app.test_request_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.current_user') as mock_user:
+            with patch('pgappforge.security.mfa.manager_mixin.current_user') as mock_user:
                 mock_user.is_authenticated = True
                 app.appbuilder.sm.is_mfa_required.return_value = True
                 
-                with patch('flask_appbuilder.security.mfa.manager_mixin.MFASessionState') as mock_state:
+                with patch('pgappforge.security.mfa.manager_mixin.MFASessionState') as mock_state:
                     mock_state.is_verified_and_valid.return_value = False
                     
-                    with patch('flask_appbuilder.security.mfa.manager_mixin.redirect') as mock_redirect:
-                        with patch('flask_appbuilder.security.mfa.manager_mixin.url_for', return_value='/mfa/challenge'):
+                    with patch('pgappforge.security.mfa.manager_mixin.redirect') as mock_redirect:
+                        with patch('pgappforge.security.mfa.manager_mixin.url_for', return_value='/mfa/challenge'):
                             mock_view()
                             mock_redirect.assert_called_once()
 
@@ -598,7 +598,7 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+        with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
             sm = TestSecurityManager(mock_appbuilder)
             
             assert hasattr(sm, 'mfa_auth_handler')
@@ -609,8 +609,8 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
-            with patch.dict('sys.modules', {'flask_appbuilder.security.mfa.views': MagicMock()}):
+        with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
+            with patch.dict('sys.modules', {'pgappforge.security.mfa.views': MagicMock()}):
                 sm = TestSecurityManager(mock_appbuilder)
                 
                 # Should attempt to register views
@@ -621,7 +621,7 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+        with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
             # This should not raise an exception even if views can't be imported
             sm = TestSecurityManager(mock_appbuilder)
             
@@ -632,7 +632,7 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+        with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
             sm = TestSecurityManager(mock_appbuilder)
             
             # Mock the query
@@ -649,7 +649,7 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+        with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
             sm = TestSecurityManager(mock_appbuilder)
             
             mock_user = MagicMock()
@@ -670,7 +670,7 @@ class TestMFASecurityManagerMixin:
                 return user
         
         with app.test_request_context():
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
                 sm = TestSecurityManager(mock_appbuilder)
                 sm.mfa_auth_handler.is_mfa_required = MagicMock(return_value=True)
                 
@@ -685,10 +685,10 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.request') as mock_request:
+        with patch('pgappforge.security.mfa.manager_mixin.request') as mock_request:
             mock_request.endpoint = 'static'
             
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
                 sm = TestSecurityManager(mock_appbuilder)
                 
                 result = sm._should_skip_mfa_check()
@@ -699,10 +699,10 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.request') as mock_request:
+        with patch('pgappforge.security.mfa.manager_mixin.request') as mock_request:
             mock_request.endpoint = 'SomeView.index'
             
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
                 sm = TestSecurityManager(mock_appbuilder)
                 
                 result = sm._should_skip_mfa_check()
@@ -713,10 +713,10 @@ class TestMFASecurityManagerMixin:
         class TestSecurityManager(MFASecurityManagerMixin, mock_base_security_manager):
             pass
         
-        with patch('flask_appbuilder.security.mfa.manager_mixin.request') as mock_request:
+        with patch('pgappforge.security.mfa.manager_mixin.request') as mock_request:
             mock_request.endpoint = 'MFAView.challenge'
             
-            with patch('flask_appbuilder.security.mfa.manager_mixin.MFAPolicyService'):
+            with patch('pgappforge.security.mfa.manager_mixin.MFAPolicyService'):
                 sm = TestSecurityManager(mock_appbuilder)
                 
                 result = sm._is_mfa_route()

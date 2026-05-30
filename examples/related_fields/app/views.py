@@ -1,7 +1,7 @@
-from flask_appbuilder import ModelView
-from flask_appbuilder.fields import AJAXSelectField
-from flask_appbuilder.fieldwidgets import Select2AJAXWidget, Select2SlaveAJAXWidget
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.fields import AJAXSelectField
+from pgappforge.fieldwidgets import Select2AJAXWidget, Select2SlaveAJAXWidget
+from pgappforge.models.sqla.interface import SQLAInterface
 from wtforms import validators
 
 

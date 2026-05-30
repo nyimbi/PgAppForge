@@ -1,5 +1,5 @@
 """
-Comprehensive unit tests for Flask-AppBuilder forms and widgets.
+Comprehensive unit tests for PgAppForge forms and widgets.
 
 This module provides thorough testing coverage for form handling, validation,
 field widgets, custom forms, and form rendering functionality.
@@ -12,17 +12,17 @@ from unittest.mock import Mock, patch
 
 import pytest
 from flask import Flask, request
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.fieldwidgets import (
+from pgappforge import AppBuilder, SQLA
+from pgappforge.fieldwidgets import (
     BS3TextFieldWidget, BS3TextAreaFieldWidget, BS3PasswordFieldWidget,
     BS3SelectFieldWidget, Select2Widget, DatePickerWidget, DateTimePickerWidget,
     BS3SelectMultipleFieldWidget
 )
-from flask_appbuilder.forms import DynamicForm
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.validators import Unique
-from flask_appbuilder.widgets import FormWidget, ListWidget, ShowWidget, SearchWidget
+from pgappforge.forms import DynamicForm
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.validators import Unique
+from pgappforge.widgets import FormWidget, ListWidget, ShowWidget, SearchWidget
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float
 from wtforms import (
     StringField, TextAreaField, PasswordField, SelectField, BooleanField,

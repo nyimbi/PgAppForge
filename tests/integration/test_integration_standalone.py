@@ -2,7 +2,7 @@
 """
 Standalone Integration Test Suite for Enhanced Wizard System
 
-Tests all components independently without Flask-AppBuilder dependencies.
+Tests all components independently without PgAppForge dependencies.
 """
 
 import sys
@@ -15,13 +15,13 @@ from pathlib import Path
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
-sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder'))
+sys.path.insert(0, os.path.join(project_root, 'pgappforge'))
 
 def test_configuration_classes():
     """Test configuration classes directly"""
     try:
         # Import config classes
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'config'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'config'))
         from wizard import WizardConfig, WizardUIConfig, WizardBehaviorConfig
         
         print("✓ Testing configuration classes...")
@@ -47,7 +47,7 @@ def test_theme_classes():
     """Test theme classes directly"""
     try:
         # Import theme classes
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'theming'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'theming'))
         from wizard_themes import (
             WizardThemeManager, 
             WizardTheme,
@@ -106,7 +106,7 @@ def test_error_handler_class():
     """Test error handler directly"""
     try:
         # Import error handling classes  
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'utils'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'utils'))
         from error_handling import (
             WizardErrorHandler,
             WizardErrorType,
@@ -150,7 +150,7 @@ def test_analytics_classes():
     """Test analytics classes directly"""
     try:
         # Import analytics classes
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'analytics'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'analytics'))
         from wizard_analytics import (
             WizardAnalyticsEngine,
             WizardCompletionStats,
@@ -203,7 +203,7 @@ def test_collaboration_classes():
     """Test collaboration classes directly"""
     try:
         # Import collaboration classes
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'collaboration'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'collaboration'))
         from wizard_collaboration import (
             WizardCollaborationManager,
             CollaborationPermission,
@@ -255,7 +255,7 @@ def test_form_classes():
     """Test form classes directly"""
     try:
         # Import or create form classes 
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'forms'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'forms'))
         try:
             import wizard as wizard_forms
             WizardFormData = wizard_forms.WizardFormData
@@ -323,17 +323,17 @@ def test_data_structures_integration():
         print("✓ Testing data structure integration...")
         
         # Test that error handling works with analytics
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'utils'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'utils'))
         from error_handling import WizardErrorType, WizardErrorSeverity
         
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'analytics'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'analytics'))
         from wizard_analytics import WizardCompletionStats
         
         # Test that theme and config work together
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'config'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'config'))
         from wizard import WizardConfig
         
-        sys.path.insert(0, os.path.join(project_root, 'flask_appbuilder', 'theming'))
+        sys.path.insert(0, os.path.join(project_root, 'pgappforge', 'theming'))
         from wizard_themes import WizardColorScheme
         
         # Test data flow

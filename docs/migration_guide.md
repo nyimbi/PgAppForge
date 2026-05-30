@@ -48,28 +48,28 @@ This guide helps you migrate from previous collaborative feature implementations
 #### Before
 ```python
 # Old direct imports
-from flask_appbuilder.collaborative.team_manager import TeamManager
-from flask_appbuilder.collaborative.workspace_manager import WorkspaceManager
+from pgappforge.collaborative.team_manager import TeamManager
+from pgappforge.collaborative.workspace_manager import WorkspaceManager
 ```
 
 #### After
 ```python
 # New utility imports
-from flask_appbuilder.collaborative.utils.validation import (
+from pgappforge.collaborative.utils.validation import (
     ValidationResult, FieldValidator, UserValidator
 )
-from flask_appbuilder.collaborative.utils.error_handling import (
+from pgappforge.collaborative.utils.error_handling import (
     ErrorHandlingMixin, ValidationError, create_error_response
 )
-from flask_appbuilder.collaborative.utils.audit_logging import (
+from pgappforge.collaborative.utils.audit_logging import (
     CollaborativeAuditMixin, AuditEventType
 )
-from flask_appbuilder.collaborative.utils.transaction_manager import (
+from pgappforge.collaborative.utils.transaction_manager import (
     TransactionMixin, transaction_required
 )
 
 # Service interfaces
-from flask_appbuilder.collaborative.interfaces.base_interfaces import (
+from pgappforge.collaborative.interfaces.base_interfaces import (
     BaseCollaborativeService
 )
 ```
@@ -347,8 +347,8 @@ class TeamService(
         pass
 
 # Register with service registry
-from flask_appbuilder.collaborative.interfaces.service_registry import ServiceRegistry
-from flask_appbuilder.collaborative.interfaces.base_interfaces import ITeamService
+from pgappforge.collaborative.interfaces.service_registry import ServiceRegistry
+from pgappforge.collaborative.interfaces.base_interfaces import ITeamService
 
 registry = ServiceRegistry(app_builder)
 registry.register_service(

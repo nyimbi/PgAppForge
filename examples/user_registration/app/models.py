@@ -1,7 +1,7 @@
 import datetime
 
-from flask_appbuilder import Model
-from flask_appbuilder.models.mixins import UserExtensionMixin
+from pgappforge import Model
+from pgappforge.models.mixins import UserExtensionMixin
 from sqlalchemy import Column, Date, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 

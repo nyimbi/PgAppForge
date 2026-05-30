@@ -1,6 +1,6 @@
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.charts.views import ChartView, TimeChartView
+from pgappforge import ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.charts.views import ChartView, TimeChartView
 from flask_babel import lazy_gettext as _
 
 from app import session, appbuilder

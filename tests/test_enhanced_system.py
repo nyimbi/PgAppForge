@@ -1,5 +1,5 @@
 """
-Comprehensive Validation Tests for Enhanced Flask-AppBuilder System
+Comprehensive Validation Tests for Enhanced PgAppForge System
 
 Tests all components: dashboard, wizard forms, analytics, theming, 
 collaboration, migration, and error handling systems.
@@ -13,31 +13,31 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 
 # Import enhanced system components
-from flask_appbuilder.views.dashboard import DashboardIndexView, DashboardAPIView
-from flask_appbuilder.views.wizard import WizardFormView, WizardModelView
-from flask_appbuilder.views.wizard_builder import (
+from pgappforge.views.dashboard import DashboardIndexView, DashboardAPIView
+from pgappforge.views.wizard import WizardFormView, WizardModelView
+from pgappforge.views.wizard_builder import (
     WizardBuilderView, 
     WizardTemplateGalleryView,
     WizardPreviewView,
     WizardManagementView
 )
-from flask_appbuilder.views.wizard_migration import (
+from pgappforge.views.wizard_migration import (
     WizardMigrationView,
     WizardExportView, 
     WizardImportView,
     WizardBackupView
 )
-from flask_appbuilder.forms.wizard import WizardForm, WizardConfig
-from flask_appbuilder.analytics.wizard_analytics import WizardAnalyticsEngine
-from flask_appbuilder.theming.wizard_themes import WizardThemeManager
-from flask_appbuilder.collaboration.wizard_collaboration import WizardCollaborationManager
-from flask_appbuilder.migration.wizard_migration import WizardMigrationManager
-from flask_appbuilder.utils.error_handling import WizardErrorHandler
-from flask_appbuilder.enhanced_index_view import IndexView
+from pgappforge.forms.wizard import WizardForm, WizardConfig
+from pgappforge.analytics.wizard_analytics import WizardAnalyticsEngine
+from pgappforge.theming.wizard_themes import WizardThemeManager
+from pgappforge.collaboration.wizard_collaboration import WizardCollaborationManager
+from pgappforge.migration.wizard_migration import WizardMigrationManager
+from pgappforge.utils.error_handling import WizardErrorHandler
+from pgappforge.enhanced_index_view import IndexView
 
 
 class TestEnhancedSystem:
-    """Comprehensive test suite for the enhanced Flask-AppBuilder system"""
+    """Comprehensive test suite for the enhanced PgAppForge system"""
     
     def setup_method(self):
         """Setup test environment"""
@@ -219,7 +219,7 @@ class TestEnhancedSystem:
         assert len(active_users) == 2
         
         # Test permission granting
-        from flask_appbuilder.collaboration.wizard_collaboration import CollaborationPermission
+        from pgappforge.collaboration.wizard_collaboration import CollaborationPermission
         
         success = self.collaboration.grant_permission(
             wizard_id, user2, CollaborationPermission.EDIT, user1
@@ -298,7 +298,7 @@ class TestEnhancedSystem:
         print("Testing Error Handling...")
         
         # Test error handling for various error types
-        from flask_appbuilder.utils.error_handling import WizardErrorType, WizardErrorSeverity
+        from pgappforge.utils.error_handling import WizardErrorType, WizardErrorSeverity
         
         # Test validation error
         validation_error = ValueError("Field 'email' is required")
@@ -320,7 +320,7 @@ class TestEnhancedSystem:
         # For now, just test that error handler can handle empty configs
         
         # Test input sanitization
-        from flask_appbuilder.utils.error_handling import sanitize_user_input
+        from pgappforge.utils.error_handling import sanitize_user_input
         
         clean_input, errors = sanitize_user_input("Normal input", "text")
         assert clean_input == "Normal input"
@@ -486,7 +486,7 @@ if __name__ == "__main__":
     success = test_suite.run_all_tests()
     
     if success:
-        print("\n✅ Enhanced Flask-AppBuilder system validated successfully!")
+        print("\n✅ Enhanced PgAppForge system validated successfully!")
         print("🚀 Ready for production use!")
     else:
         print("\n❌ Some tests failed. Please review and fix issues before deployment.")

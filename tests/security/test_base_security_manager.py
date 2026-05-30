@@ -2,7 +2,7 @@ import datetime
 import unittest
 from unittest.mock import MagicMock, patch
 
-from flask_appbuilder.security.manager import BaseSecurityManager
+from pgappforge.security.manager import BaseSecurityManager
 
 JWTClaimsMock = MagicMock()
 

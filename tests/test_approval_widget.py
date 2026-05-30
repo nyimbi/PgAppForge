@@ -1,7 +1,7 @@
 """
 Test ApprovalWidget and ApprovalModelView functionality.
 
-Tests the approval workflow capabilities and integration with Flask-AppBuilder patterns.
+Tests the approval workflow capabilities and integration with PgForge patterns.
 """
 
 import unittest
@@ -12,7 +12,7 @@ from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Test the ApprovalWidget without complex Flask-AppBuilder imports
+# Test the ApprovalWidget without complex PgForge imports
 Base = declarative_base()
 
 

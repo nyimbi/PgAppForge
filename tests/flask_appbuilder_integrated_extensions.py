@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Flask-AppBuilder Integrated Extensions - REFACTORED ARCHITECTURE
+PgAppForge Integrated Extensions - REFACTORED ARCHITECTURE
 
 This refactored implementation addresses critical architectural issues by:
-1. Using Flask-AppBuilder's @has_access decorators instead of custom security
-2. Leveraging Flask-AppBuilder's permission system properly  
-3. Using Flask-AppBuilder's session management patterns
+1. Using PgAppForge's @has_access decorators instead of custom security
+2. Leveraging PgAppForge's permission system properly  
+3. Using PgAppForge's session management patterns
 4. Creating proper ORM models instead of JSON storage
-5. Integrating with Flask-AppBuilder's audit logging
+5. Integrating with PgAppForge's audit logging
 6. Reducing complexity while maintaining security features
 
 ARCHITECTURAL IMPROVEMENTS:
-✅ Replace custom security with Flask-AppBuilder patterns
+✅ Replace custom security with PgAppForge patterns
 ✅ Use proper ORM relationships for approval history
-✅ Integrate with Flask-AppBuilder's permission system
-✅ Follow Flask-AppBuilder's session management conventions
-✅ Use Flask-AppBuilder's audit logging system
+✅ Integrate with PgAppForge's permission system
+✅ Follow PgAppForge's session management conventions
+✅ Use PgAppForge's audit logging system
 ✅ Add internationalization support
 ✅ Implement proper rate limiting
 ✅ Reduce code complexity by 60%+
@@ -25,14 +25,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 
-# Flask-AppBuilder core imports - using established patterns
+# PgAppForge core imports - using established patterns
 from flask import current_app, flash, request
-from flask_appbuilder import ModelView, BaseView, expose, has_access, action
-from flask_appbuilder.basemanager import BaseManager
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import protect
-from flask_appbuilder.exceptions import FABException
+from pgappforge import ModelView, BaseView, expose, has_access, action
+from pgappforge.basemanager import BaseManager
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import protect
+from pgappforge.exceptions import FABException
 from flask_babel import lazy_gettext as _
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Index
 from sqlalchemy.orm import relationship
@@ -48,7 +48,7 @@ class ApprovalHistory(Model):
     """
     Proper ORM model for approval history replacing JSON storage.
     
-    Follows Flask-AppBuilder model patterns:
+    Follows PgAppForge model patterns:
     - Extends Model base class
     - Uses proper relationships
     - Includes audit trail fields
@@ -63,11 +63,11 @@ class ApprovalHistory(Model):
     comments = Column(Text)
     status = Column(String(50), default='approved', nullable=False)
     
-    # Flask-AppBuilder audit fields
+    # PgAppForge audit fields
     created_by_fk = Column(Integer, ForeignKey('ab_user.id'), nullable=False)
     created_on = Column(DateTime, default=datetime.utcnow, nullable=False)
     
-    # Relationships using Flask-AppBuilder patterns
+    # Relationships using PgAppForge patterns
     created_by = relationship("User")
     
     # Performance indexes
@@ -82,46 +82,46 @@ class ApprovalHistory(Model):
 
 class ApprovalException(FABException):
     """
-    Approval-specific exception following Flask-AppBuilder patterns.
+    Approval-specific exception following PgAppForge patterns.
     Extends FABException for consistent error handling.
     """
     pass
 
 
 # =============================================================================
-# SIMPLIFIED APPROVAL WORKFLOW MANAGER - Using Flask-AppBuilder patterns
+# SIMPLIFIED APPROVAL WORKFLOW MANAGER - Using PgAppForge patterns
 # =============================================================================
 
 class ApprovalWorkflowManager(BaseManager):
     """
-    REFACTORED: Flask-AppBuilder integrated approval workflow manager.
+    REFACTORED: PgAppForge integrated approval workflow manager.
     
     KEY IMPROVEMENTS:
     - Uses @has_access decorators instead of custom security validation
-    - Leverages Flask-AppBuilder's permission system
-    - Uses Flask-AppBuilder's session management patterns  
-    - Integrates with Flask-AppBuilder's audit logging
+    - Leverages PgAppForge's permission system
+    - Uses PgAppForge's session management patterns  
+    - Integrates with PgAppForge's audit logging
     - Proper ORM models instead of JSON storage
     - 60%+ code reduction while maintaining security
     """
     
     def __init__(self, appbuilder):
-        """Initialize with proper Flask-AppBuilder integration."""
+        """Initialize with proper PgAppForge integration."""
         super().__init__(appbuilder)
         self.workflows = {}
         self._setup_permissions()
-        log.info("ApprovalWorkflowManager initialized with Flask-AppBuilder integration")
+        log.info("ApprovalWorkflowManager initialized with PgAppForge integration")
     
     def _setup_permissions(self):
-        """Set up approval permissions using Flask-AppBuilder's permission system."""
-        # Register approval permissions with Flask-AppBuilder
+        """Set up approval permissions using PgAppForge's permission system."""
+        # Register approval permissions with PgAppForge
         for step in range(5):  # Support up to 5 approval steps
             permission = f'can_approve_step_{step}'
             self.appbuilder.sm.add_permission(permission, 'ApprovalWorkflow')
     
     def register_model_workflow(self, model_class, workflow_config: Dict = None):
         """
-        Register model for approval workflow using Flask-AppBuilder patterns.
+        Register model for approval workflow using PgAppForge patterns.
         
         Args:
             model_class: SQLAlchemy model class
@@ -145,12 +145,12 @@ class ApprovalWorkflowManager(BaseManager):
     @has_access
     def approve_instance(self, instance, step: int = 0, comments: str = None) -> bool:
         """
-        SIMPLIFIED: Approve instance using Flask-AppBuilder patterns.
+        SIMPLIFIED: Approve instance using PgAppForge patterns.
         
-        Reduced from 150+ lines to ~30 lines by leveraging Flask-AppBuilder:
+        Reduced from 150+ lines to ~30 lines by leveraging PgAppForge:
         - @has_access handles authentication automatically
-        - Flask-AppBuilder's permission system handles authorization
-        - Flask-AppBuilder's logging patterns handle audit trails
+        - PgAppForge's permission system handles authorization
+        - PgAppForge's logging patterns handle audit trails
         - ORM model handles data persistence
         
         Args:
@@ -180,7 +180,7 @@ class ApprovalWorkflowManager(BaseManager):
             
             step_config = workflow['steps'][step]
             
-            # Flask-AppBuilder permission check (replaces 50+ lines of custom validation)
+            # PgAppForge permission check (replaces 50+ lines of custom validation)
             if not self.appbuilder.sm.has_access(step_config['permission'], 'ApprovalWorkflow'):
                 flash(_("Insufficient permissions for approval step %(step)d", step=step), "error")
                 return False
@@ -190,7 +190,7 @@ class ApprovalWorkflowManager(BaseManager):
                 flash(_("Users cannot approve their own submissions"), "error")
                 return False
             
-            # SECURITY: Rate limiting using Flask-AppBuilder cache
+            # SECURITY: Rate limiting using PgAppForge cache
             if not self._check_rate_limit(current_user.id):
                 flash(_("Too many approval requests. Please wait."), "error")
                 return False
@@ -204,7 +204,7 @@ class ApprovalWorkflowManager(BaseManager):
                 created_by=current_user
             )
             
-            # Use Flask-AppBuilder's session management
+            # Use PgAppForge's session management
             self.appbuilder.get_session.add(approval)
             self.appbuilder.get_session.commit()
             
@@ -212,7 +212,7 @@ class ApprovalWorkflowManager(BaseManager):
             return True
             
         except ApprovalException as e:
-            # Flask-AppBuilder error handling pattern
+            # PgAppForge error handling pattern
             self.appbuilder.get_session.rollback()
             flash(str(e), "error")
             return False
@@ -270,12 +270,12 @@ class ApprovalWorkflowManager(BaseManager):
     def _sanitize_comments(self, comments: str) -> Optional[str]:
         """
         SIMPLIFIED: Basic comment sanitization.
-        Reduced from 50+ lines to 10 lines using Flask-AppBuilder patterns.
+        Reduced from 50+ lines to 10 lines using PgAppForge patterns.
         """
         if not comments or len(comments.strip()) == 0:
             return None
         
-        # Basic sanitization - Flask-AppBuilder's forms handle most security
+        # Basic sanitization - PgAppForge's forms handle most security
         sanitized = comments.strip()[:500]  # Length limit
         
         # Remove basic problematic patterns
@@ -295,7 +295,7 @@ class ApprovalWorkflowManager(BaseManager):
 
 
 # =============================================================================
-# SIMPLIFIED APPROVAL MODEL VIEW - Flask-AppBuilder integration
+# SIMPLIFIED APPROVAL MODEL VIEW - PgAppForge integration
 # =============================================================================
 
 class ApprovalModelView(ModelView):
@@ -303,7 +303,7 @@ class ApprovalModelView(ModelView):
     REFACTORED: ModelView with approval integration.
     
     IMPROVEMENTS:
-    - Uses Flask-AppBuilder's action system properly
+    - Uses PgAppForge's action system properly
     - Integrates with permission system
     - Simplified bulk operations
     - Proper error handling
@@ -320,9 +320,9 @@ class ApprovalModelView(ModelView):
             lazy_gettext("Approve selected items (Step 1)?"), 
             "fa-check",
             single=False)
-    @has_access  # Flask-AppBuilder handles permissions
+    @has_access  # PgAppForge handles permissions
     def approve_step_0_action(self, items):
-        """Approval action for step 0 using Flask-AppBuilder patterns."""
+        """Approval action for step 0 using PgAppForge patterns."""
         return self._approve_items(items, 0)
     
     @action("approve_step_1", 
@@ -332,13 +332,13 @@ class ApprovalModelView(ModelView):
             single=False)
     @has_access
     def approve_step_1_action(self, items):
-        """Approval action for step 1 using Flask-AppBuilder patterns.""" 
+        """Approval action for step 1 using PgAppForge patterns.""" 
         return self._approve_items(items, 1)
     
     def _approve_items(self, items, step: int):
         """
-        SIMPLIFIED: Bulk approval using Flask-AppBuilder patterns.
-        Reduced complexity by leveraging Flask-AppBuilder's infrastructure.
+        SIMPLIFIED: Bulk approval using PgAppForge patterns.
+        Reduced complexity by leveraging PgAppForge's infrastructure.
         """
         if not hasattr(self.appbuilder, 'approval_manager'):
             flash(_("Approval system not available"), "error")
@@ -352,7 +352,7 @@ class ApprovalModelView(ModelView):
         success_count = 0
         approval_manager = self.appbuilder.approval_manager
         
-        # Process each item - Flask-AppBuilder handles individual permissions
+        # Process each item - PgAppForge handles individual permissions
         for item in items:
             try:
                 if approval_manager.approve_instance(item, step):
@@ -379,7 +379,7 @@ class ApprovalModelView(ModelView):
 class ApprovalHistoryModelView(ModelView):
     """
     View for managing approval history records.
-    Follows Flask-AppBuilder patterns for consistent UI.
+    Follows PgAppForge patterns for consistent UI.
     """
     datamodel = SQLAInterface(ApprovalHistory)
     
@@ -407,7 +407,7 @@ class ApprovalHistoryModelView(ModelView):
 class ApprovalAddonManager(BaseManager):
     """
     Main addon manager for approval system.
-    Registers all components with Flask-AppBuilder.
+    Registers all components with PgAppForge.
     """
     
     def __init__(self, appbuilder):
@@ -440,10 +440,10 @@ def example_usage():
     # Example 1: Register a model for approval workflow
     # In your app initialization:
     """
-    from flask_appbuilder_integrated_extensions import ApprovalAddonManager
+    from pgappforge_integrated_extensions import ApprovalAddonManager
     
     # Add to ADDON_MANAGERS in config
-    ADDON_MANAGERS = ['flask_appbuilder_integrated_extensions.ApprovalAddonManager']
+    ADDON_MANAGERS = ['pgappforge_integrated_extensions.ApprovalAddonManager']
     """
     
     # Example 2: Create model with approval support
@@ -473,4 +473,4 @@ def example_usage():
 
 
 if __name__ == '__main__':
-    log.info("Flask-AppBuilder Integrated Extensions loaded successfully")
+    log.info("PgAppForge Integrated Extensions loaded successfully")

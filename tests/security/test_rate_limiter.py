@@ -1,9 +1,9 @@
 import logging
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, BaseView, SQLA
-from flask_appbuilder.api import BaseApi, expose
-from flask_appbuilder.security.decorators import limit
+from pgappforge import AppBuilder, BaseView, SQLA
+from pgappforge.api import BaseApi, expose
+from pgappforge.security.decorators import limit
 import hiro
 import jinja2
 from tests.base import FABTestCase

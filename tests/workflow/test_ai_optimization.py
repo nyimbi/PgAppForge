@@ -1,5 +1,5 @@
 """
-Tests for Flask-AppBuilder Workflow AI Optimization
+Tests for PgAppForge Workflow AI Optimization
 
 Tests the AI-powered workflow optimization using Ollama and performance analytics.
 """
@@ -12,10 +12,10 @@ import asyncio
 
 import pytest
 from flask import Flask
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 from flask_sqlalchemy import SQLAlchemy
 
-from flask_appbuilder.workflow.ai_optimization import (
+from pgappforge.workflow.ai_optimization import (
     AIWorkflowOptimizer, WorkflowInsight, PerformanceMetrics, OptimizationType,
     get_ai_optimizer, analyze_workflow, get_workflow_insights
 )
@@ -101,7 +101,7 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
                 self.assertIn('ollama', optimizer.ai_providers)
                 self.assertTrue(optimizer.ai_providers['ollama']['available'])
 
-    @patch('flask_appbuilder.workflow.ai_optimization.db')
+    @patch('pgappforge.workflow.ai_optimization.db')
     async def test_analyze_workflow_performance(self, mock_db):
         """Test workflow performance analysis."""
         with self.app.app_context():
@@ -193,7 +193,7 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
     def test_predict_form_values(self):
         """Test form value prediction."""
         with self.app.app_context():
-            with patch('flask_appbuilder.workflow.ai_optimization.db') as mock_db:
+            with patch('pgappforge.workflow.ai_optimization.db') as mock_db:
                 # Mock historical form data
                 mock_analytics = [
                     Mock(event_data={'form_data': {'field1': 'value1', 'field2': 'common_value'}}),
@@ -218,7 +218,7 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
     def test_detect_workflow_anomalies(self):
         """Test workflow anomaly detection."""
         with self.app.app_context():
-            with patch('flask_appbuilder.workflow.ai_optimization.db') as mock_db:
+            with patch('pgappforge.workflow.ai_optimization.db') as mock_db:
                 # Mock analytics with anomalous data
                 normal_times = [100.0, 110.0, 105.0, 95.0, 120.0]  # Normal completion times
                 anomalous_times = [500.0, 600.0]  # Unusually long times
@@ -262,7 +262,7 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
             mock_state.available_next_steps = ['step_2', 'step_3']
             
             # Mock workflow engine and definition
-            with patch('flask_appbuilder.workflow.ai_optimization.get_workflow_engine') as mock_engine:
+            with patch('pgappforge.workflow.ai_optimization.get_workflow_engine') as mock_engine:
                 mock_workflow_def = Mock()
                 mock_step2 = Mock()
                 mock_step2.id = 'step_2'
@@ -287,8 +287,8 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
     def test_record_workflow_event(self):
         """Test workflow event recording."""
         with self.app.app_context():
-            with patch('flask_appbuilder.workflow.ai_optimization.db') as mock_db:
-                with patch('flask_appbuilder.workflow.ai_optimization.current_user') as mock_user:
+            with patch('pgappforge.workflow.ai_optimization.db') as mock_db:
+                with patch('pgappforge.workflow.ai_optimization.current_user') as mock_user:
                     mock_user.is_authenticated = True
                     mock_user.id = 1
                     
@@ -307,7 +307,7 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
     def test_store_insight(self):
         """Test storing AI insights."""
         with self.app.app_context():
-            with patch('flask_appbuilder.workflow.ai_optimization.db') as mock_db:
+            with patch('pgappforge.workflow.ai_optimization.db') as mock_db:
                 insight = WorkflowInsight(
                     insight_type=OptimizationType.PERFORMANCE_OPTIMIZATION,
                     workflow_name='test_workflow',
@@ -362,7 +362,7 @@ class TestAsyncOperations(unittest.TestCase):
         """Test async workflow analysis."""
         with self.app.app_context():
             async def test_analysis():
-                with patch('flask_appbuilder.workflow.ai_optimization.get_ai_optimizer') as mock_optimizer:
+                with patch('pgappforge.workflow.ai_optimization.get_ai_optimizer') as mock_optimizer:
                     mock_instance = Mock()
                     mock_metrics = PerformanceMetrics()
                     mock_instance.analyze_workflow_performance.return_value = mock_metrics
@@ -380,7 +380,7 @@ class TestAsyncOperations(unittest.TestCase):
         """Test async insights generation."""
         with self.app.app_context():
             async def test_insights():
-                with patch('flask_appbuilder.workflow.ai_optimization.get_ai_optimizer') as mock_optimizer:
+                with patch('pgappforge.workflow.ai_optimization.get_ai_optimizer') as mock_optimizer:
                     mock_instance = Mock()
                     mock_insights = [
                         WorkflowInsight(

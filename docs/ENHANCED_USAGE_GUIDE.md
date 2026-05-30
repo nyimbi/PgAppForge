@@ -1,14 +1,14 @@
-# Enhanced Flask-AppBuilder Usage Guide
+# Enhanced PgAppForge Usage Guide
 
-Welcome to the Enhanced Flask-AppBuilder v4.8.0-enhanced! This comprehensive guide will help you leverage all the powerful new features that transform your bland default application into a beautiful, feature-rich platform.
+Welcome to the Enhanced PgAppForge v4.8.0-enhanced! This comprehensive guide will help you leverage all the powerful new features that transform your bland default application into a beautiful, feature-rich platform.
 
 ## 🚀 Quick Start
 
-The enhanced system is a drop-in replacement for Flask-AppBuilder. Simply install and use:
+The enhanced system is a drop-in replacement for PgAppForge. Simply install and use:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, IndexView
+from pgappforge import AppBuilder, IndexView
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 **Create multi-step forms with ease:**
 
 ```python
-from flask_appbuilder.views import WizardBuilderView
+from pgappforge.views import WizardBuilderView
 
 # Add wizard builder to your app
 appbuilder.add_view(
@@ -75,7 +75,7 @@ appbuilder.add_view(
 **Comprehensive analytics with AI-powered insights:**
 
 ```python
-from flask_appbuilder.views import WizardAnalyticsView
+from pgappforge.views import WizardAnalyticsView
 
 # Add analytics dashboard
 appbuilder.add_view(
@@ -107,7 +107,7 @@ appbuilder.add_view(
 
 **Usage:**
 ```python
-from flask_appbuilder.theming import wizard_theme_manager
+from pgappforge.theming import wizard_theme_manager
 
 # Get available themes
 themes = wizard_theme_manager.get_all_themes()
@@ -128,7 +128,7 @@ wizard_config = {
 **Team collaboration features:**
 
 ```python
-from flask_appbuilder.collaboration import wizard_collaboration
+from pgappforge.collaboration import wizard_collaboration
 
 # Grant permissions
 wizard_collaboration.grant_permission(
@@ -160,7 +160,7 @@ comment_id = wizard_collaboration.add_comment(
 **Comprehensive migration system:**
 
 ```python
-from flask_appbuilder.views import WizardMigrationView
+from pgappforge.views import WizardMigrationView
 
 # Add migration tools
 appbuilder.add_view(
@@ -183,7 +183,7 @@ appbuilder.add_view(
 **Comprehensive error management:**
 
 ```python
-from flask_appbuilder.utils.error_handling import wizard_error_handler
+from pgappforge.utils.error_handling import wizard_error_handler
 
 # Handle errors gracefully
 try:
@@ -228,7 +228,7 @@ class Config(object):
 ### Advanced Wizard Configuration
 
 ```python
-from flask_appbuilder.config.wizard import WizardConfig
+from pgappforge.config.wizard import WizardConfig
 
 # Comprehensive wizard configuration
 wizard_config = WizardConfig(
@@ -283,9 +283,9 @@ wizard_config = WizardConfig(
 ### 1. Creating a Customer Registration Wizard
 
 ```python
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.views import WizardFormView
-from flask_appbuilder.config.wizard import WizardConfig
+from pgappforge import AppBuilder
+from pgappforge.views import WizardFormView
+from pgappforge.config.wizard import WizardConfig
 
 class CustomerRegistrationWizard(WizardFormView):
     def __init__(self):
@@ -346,8 +346,8 @@ appbuilder.add_view(
 ### 2. Building a Survey with Analytics
 
 ```python
-from flask_appbuilder.views import WizardBuilderView
-from flask_appbuilder.analytics import wizard_analytics
+from pgappforge.views import WizardBuilderView
+from pgappforge.analytics import wizard_analytics
 
 class ProductSurveyWizard(WizardFormView):
     def __init__(self):
@@ -404,8 +404,8 @@ class ProductSurveyWizard(WizardFormView):
 ### 3. Team Collaboration Setup
 
 ```python
-from flask_appbuilder.collaboration import wizard_collaboration
-from flask_appbuilder.collaboration.wizard_collaboration import CollaborationPermission
+from pgappforge.collaboration import wizard_collaboration
+from pgappforge.collaboration.wizard_collaboration import CollaborationPermission
 
 # Setup team permissions for a wizard
 def setup_team_wizard(wizard_id):
@@ -439,7 +439,7 @@ def setup_team_wizard(wizard_id):
 ### Custom Themes
 
 ```python
-from flask_appbuilder.theming.wizard_themes import WizardTheme, WizardColorPalette
+from pgappforge.theming.wizard_themes import WizardTheme, WizardColorPalette
 
 # Create custom theme
 custom_theme = WizardTheme(
@@ -471,7 +471,7 @@ wizard_theme_manager.themes['company_brand'] = custom_theme
 ### Custom Field Types
 
 ```python
-from flask_appbuilder.forms.wizard import WizardField
+from pgappforge.forms.wizard import WizardField
 
 class SignatureField(WizardField):
     field_type = "signature"
@@ -604,7 +604,7 @@ CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]
 
 ```txt
 Flask>=2.3.0
-Flask-AppBuilder>=4.8.0
+PgAppForge>=4.8.0
 Flask-SQLAlchemy>=3.0.0
 Flask-WTF>=1.1.0
 WTForms>=3.0.0
@@ -671,11 +671,11 @@ python-dateutil>=2.8.0
 - **Documentation**: Check this guide and inline code comments
 - **Logs**: Review application logs for detailed error messages  
 - **Debug Mode**: Enable Flask debug mode for detailed error pages
-- **Community**: Flask-AppBuilder community and forums
+- **Community**: PgAppForge community and forums
 
 ## 🎉 Conclusion
 
-The Enhanced Flask-AppBuilder v4.8.0-enhanced transforms your application from a basic, bland interface into a comprehensive, beautiful, and powerful platform. With features like the modern dashboard, wizard builder, analytics, theming, collaboration, and migration tools, you have everything needed to create professional web applications.
+The Enhanced PgAppForge v4.8.0-enhanced transforms your application from a basic, bland interface into a comprehensive, beautiful, and powerful platform. With features like the modern dashboard, wizard builder, analytics, theming, collaboration, and migration tools, you have everything needed to create professional web applications.
 
 **Key Benefits:**
 - ✅ **Drop-in replacement** - No breaking changes to existing code
@@ -684,8 +684,8 @@ The Enhanced Flask-AppBuilder v4.8.0-enhanced transforms your application from a
 - ✅ **Production ready** - Built with security, performance, and scalability in mind
 - ✅ **Fully documented** - Complete guides and examples
 
-Start building amazing applications today with Enhanced Flask-AppBuilder! 🚀
+Start building amazing applications today with Enhanced PgAppForge! 🚀
 
 ---
 
-*Enhanced Flask-AppBuilder v4.8.0-enhanced - Making Flask applications beautiful and powerful.*
+*Enhanced PgAppForge v4.8.0-enhanced - Making Flask applications beautiful and powerful.*

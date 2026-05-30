@@ -5,9 +5,9 @@ import unittest
 from unittest.mock import Mock
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.security.manager import AUTH_LDAP
-from flask_appbuilder.security.sqla.models import User
+from pgappforge import AppBuilder, SQLA
+from pgappforge.security.manager import AUTH_LDAP
+from pgappforge.security.sqla.models import User
 import jinja2
 import ldap
 from tests.const import USERNAME_ADMIN, USERNAME_READONLY
@@ -52,7 +52,7 @@ class LDAPSearchTestCase(unittest.TestCase):
         # stop Flask
         self.app = None
 
-        # stop Flask-AppBuilder
+        # stop PgAppForge
         self.appbuilder = None
 
         # stop Database

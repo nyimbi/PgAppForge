@@ -1,7 +1,7 @@
 import os
 
-from flask_appbuilder.const import AUTH_DB
-from flask_appbuilder.exceptions import PasswordComplexityValidationError
+from pgappforge.const import AUTH_DB
+from pgappforge.exceptions import PasswordComplexityValidationError
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -87,7 +87,7 @@ APP_THEME = ""  # default
 # ------------------------------
 # AI MODEL CONFIGURATIONS
 # ------------------------------
-# Flask-AppBuilder AI features support multiple providers.
+# PgAppForge AI features support multiple providers.
 # Uncomment and configure the providers you want to use.
 # You can enable multiple providers simultaneously.
 

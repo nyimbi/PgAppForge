@@ -18,7 +18,7 @@ SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SQLALCHEMY_ECHO = False  # Set to True for debugging SQL queries
 
-# Flask-AppBuilder configuration
+# PgAppForge configuration
 APP_NAME = "Multi-Tenant Test App"
 APP_THEME = "readable.css"
 
@@ -27,7 +27,7 @@ ENABLE_MULTI_TENANT = True
 
 # Register the TenantManager addon
 ADDON_MANAGERS = [
-    'flask_appbuilder.tenants.manager.TenantManager'
+    'pgappforge.tenants.manager.TenantManager'
 ]
 
 # Tenant system configuration
@@ -220,7 +220,7 @@ LOGGING_CONFIG = {
         'handlers': ['console']
     },
     'loggers': {
-        'flask_appbuilder.tenants': {
+        'pgappforge.tenants': {
             'level': 'INFO',
             'handlers': ['console'],
             'propagate': False

@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 def test_xss_protection():
     """Test XSS protection utilities."""
     try:
-        from flask_appbuilder.widgets.xss_security import XSSProtection
+        from pgappforge.widgets.xss_security import XSSProtection
 
         # Test basic HTML escaping
         dangerous_html = "<script>alert('xss')</script>"
@@ -54,7 +54,7 @@ def test_xss_protection():
 def test_sql_injection_warning():
     """Test SQL injection warning documentation exists."""
     try:
-        warning_file = os.path.join(os.path.dirname(__file__), '..', 'flask_appbuilder', 'widgets_postgresql', 'SECURITY_WARNING.md')
+        warning_file = os.path.join(os.path.dirname(__file__), '..', 'pgappforge', 'widgets_postgresql', 'SECURITY_WARNING.md')
 
         if not os.path.exists(warning_file):
             print("❌ SQL Injection Warning FAILED: Warning file not found")
@@ -82,11 +82,11 @@ def test_security_imports():
     """Test that security modules can be imported correctly."""
     try:
         # Test AI security manager
-        from flask_appbuilder.collaborative.ai.security import AISecurityManager, PromptSanitizer
+        from pgappforge.collaborative.ai.security import AISecurityManager, PromptSanitizer
         print("✅ AI Security Manager: Imports successfully")
 
         # Test XSS security utilities
-        from flask_appbuilder.widgets.xss_security import XSSProtection, apply_csp_headers
+        from pgappforge.widgets.xss_security import XSSProtection, apply_csp_headers
         print("✅ XSS Security Utilities: Imports successfully")
 
         return True
@@ -101,7 +101,7 @@ def test_security_imports():
 def test_team_manager_fixes():
     """Test team manager N+1 query fixes."""
     try:
-        from flask_appbuilder.collaborative.core.team_manager import TeamManager
+        from pgappforge.collaborative.core.team_manager import TeamManager
 
         # Check if bulk methods exist
         if not hasattr(TeamManager, 'get_teams_with_stats'):
@@ -160,7 +160,7 @@ def test_deployment_guide():
 
 def main():
     """Run all security validation tests."""
-    print("🔒 Flask-AppBuilder Security Fixes Validation")
+    print("🔒 PgAppForge Security Fixes Validation")
     print("=" * 50)
 
     tests = [

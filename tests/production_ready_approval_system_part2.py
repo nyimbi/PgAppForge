@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Production-Ready Flask-AppBuilder Approval System - Part 2
+Production-Ready PgAppForge Approval System - Part 2
 
 Continuation of the comprehensive implementation with:
 ✅ Production workflow manager integrating all components
-✅ Enhanced model views with deep Flask-AppBuilder integration  
+✅ Enhanced model views with deep PgAppForge integration  
 ✅ Comprehensive addon manager with lifecycle management
 ✅ Real business logic implementations
 ✅ Production monitoring and metrics
@@ -21,14 +21,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union, Tuple
 
-# Flask-AppBuilder imports
+# PgAppForge imports
 from flask import current_app, flash, request, session, jsonify
-from flask_appbuilder import ModelView, BaseView, expose, has_access, action
-from flask_appbuilder.basemanager import BaseManager
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import protect
-from flask_appbuilder.exceptions import FABException
-from flask_appbuilder.widgets import ListWidget, FormWidget
+from pgappforge import ModelView, BaseView, expose, has_access, action
+from pgappforge.basemanager import BaseManager
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import protect
+from pgappforge.exceptions import FABException
+from pgappforge.widgets import ListWidget, FormWidget
 from flask_babel import lazy_gettext as _
 from sqlalchemy import and_, or_, func, desc
 from sqlalchemy.exc import SQLAlchemyError
@@ -49,7 +49,7 @@ class ProductionApprovalWorkflowManager(BaseManager):
     ✅ Real workflow management with state machine
     ✅ Complete business logic for approval processes  
     ✅ Production security integration
-    ✅ Deep Flask-AppBuilder audit system integration
+    ✅ Deep PgAppForge audit system integration
     ✅ Comprehensive error handling and monitoring
     ✅ Workflow completion tracking and reporting
     ✅ Real rate limiting and security controls
@@ -62,7 +62,7 @@ class ProductionApprovalWorkflowManager(BaseManager):
         self.security_manager = ProductionSecurityManager(appbuilder)
         self.workflow_engine = ProductionWorkflowEngine(appbuilder, self.security_manager)
         
-        # Register permissions with Flask-AppBuilder
+        # Register permissions with PgAppForge
         self._register_workflow_permissions()
         
         # Initialize monitoring
@@ -76,7 +76,7 @@ class ProductionApprovalWorkflowManager(BaseManager):
         log.info("ProductionApprovalWorkflowManager initialized successfully")
     
     def _register_workflow_permissions(self):
-        """Register all workflow permissions with Flask-AppBuilder's security system."""
+        """Register all workflow permissions with PgAppForge's security system."""
         permissions = [
             'can_submit', 'can_review', 'can_approve_review',
             'can_reject_review', 'can_final_approve', 'can_final_reject',
@@ -432,7 +432,7 @@ class ProductionApprovalWorkflowManager(BaseManager):
             log.error(f"Rejection hooks execution failed: {e}")
     
     def _get_model_class(self, model_name: str):
-        """Get model class by name from Flask-AppBuilder registry."""
+        """Get model class by name from PgAppForge registry."""
         # This would need to be implemented based on your model registry
         # For now, return None as placeholder
         return None
@@ -465,12 +465,12 @@ class ProductionApprovalWorkflowManager(BaseManager):
         }
 
 # =============================================================================
-# ENHANCED MODEL VIEWS - Deep Flask-AppBuilder Integration
+# ENHANCED MODEL VIEWS - Deep PgAppForge Integration
 # =============================================================================
 
 class WorkflowInstanceModelView(ModelView):
     """
-    Production workflow instance view with comprehensive Flask-AppBuilder integration.
+    Production workflow instance view with comprehensive PgAppForge integration.
     """
     datamodel = SQLAInterface(WorkflowInstance)
     
@@ -650,10 +650,10 @@ class ApprovalActionModelView(ModelView):
 
 class ProductionApprovalAddonManager(BaseManager):
     """
-    PRODUCTION ADDON MANAGER: Complete Flask-AppBuilder integration.
+    PRODUCTION ADDON MANAGER: Complete PgAppForge integration.
     
     Comprehensive addon lifecycle management with:
-    ✅ Proper Flask-AppBuilder initialization
+    ✅ Proper PgAppForge initialization
     ✅ Database schema management
     ✅ Permission registration
     ✅ View registration with proper security
@@ -679,7 +679,7 @@ class ProductionApprovalAddonManager(BaseManager):
         log.info("ProductionApprovalAddonManager initialized successfully")
     
     def _register_views(self):
-        """Register all approval system views with Flask-AppBuilder."""
+        """Register all approval system views with PgAppForge."""
         
         # Workflow management views
         self.appbuilder.add_view(
@@ -702,7 +702,7 @@ class ProductionApprovalAddonManager(BaseManager):
         
         # Admin views for workflow configuration
         if WorkflowConfiguration:
-            from flask_appbuilder.models.sqla.interface import SQLAInterface
+            from pgappforge.models.sqla.interface import SQLAInterface
             
             class WorkflowConfigurationModelView(ModelView):
                 datamodel = SQLAInterface(WorkflowConfiguration)
@@ -764,7 +764,7 @@ def example_usage():
     Complete usage examples for the production approval system.
     """
     
-    # Example 1: Flask-AppBuilder app configuration
+    # Example 1: PgAppForge app configuration
     """
     # In your app configuration
     ADDON_MANAGERS = [
@@ -787,7 +787,7 @@ def example_usage():
     
     # Example 2: Model setup for approval workflows
     """
-    from flask_appbuilder import Model
+    from pgappforge import Model
     from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
     from sqlalchemy.orm import relationship
     
@@ -868,4 +868,4 @@ def example_usage():
     """
 
 if __name__ == '__main__':
-    log.info("Production-ready Flask-AppBuilder Approval System loaded successfully")
+    log.info("Production-ready PgAppForge Approval System loaded successfully")

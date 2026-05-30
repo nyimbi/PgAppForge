@@ -1,7 +1,7 @@
 from flask import session
-from flask_appbuilder import expose
-from flask_appbuilder.security.views import AuthOAuthView
-from flask_appbuilder.security.sqla.manager import SecurityManager
+from pgappforge import expose
+from pgappforge.security.views import AuthOAuthView
+from pgappforge.security.sqla.manager import SecurityManager
 
 
 class MyAuthOAuthView(AuthOAuthView):

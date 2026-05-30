@@ -4,7 +4,7 @@ Security
 Responsible disclosure
 ----------------------
 
-We want to keep Flask-AppBuilder safe for everyone. If you've discovered a security vulnerability
+We want to keep PgForge safe for everyone. If you've discovered a security vulnerability
 please report to danielvazgaspar@gmail.com.
 
 Supported Authentication Types
@@ -29,7 +29,7 @@ You can choose one from 5 authentication methods. Configure the method to be use
 on the **config.py** (when using the create-app, or following the proposed app structure). First the
 configuration imports the constants for the authentication methods::
 
-    from flask_appbuilder.security.manager import (
+    from pgforge.security.manager import (
         AUTH_DB,
         AUTH_LDAP,
         AUTH_OAUTH,
@@ -426,7 +426,7 @@ To customize the userinfo retrieval, you can create your own method like this::
             }
         return {}
 
-On Flask-AppBuilder 3.4.0 the login page has changed.
+On PgForge 3.4.0 the login page has changed.
 
 With one provider:
 
@@ -443,11 +443,11 @@ Note that on 3.3.X the user would automatically be sent to the provider allow pa
 Decorate your method with the SecurityManager **oauth_user_info_getter** decorator.
 Your method should return a dictionary with the userinfo, with the keys having the same column names as the User Model.
 Your method will be called after the user authorizes your application on the OAuth provider.
-Take a look at the `example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/oauth>`_
+Take a look at the `example <https://github.com/dpgaspar/PgForge/tree/master/examples/oauth>`_
 
 You can also use the OAuth provider APIs.
 Therefore, you can send tweets, post on the users Facebook, retrieve the user's LinkedIn profile etc.
-Take a look at the `example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/oauth>`_
+Take a look at the `example <https://github.com/dpgaspar/PgForge/tree/master/examples/oauth>`_
 to get an idea of a simple use for this.
 
 Authentication: Rate limiting
@@ -763,8 +763,8 @@ You can check also, a total login count (successful login), and the last failed 
 
 If you're using SQLAlchemy you can mix auditing to your models in a simple way. Mix AuditMixin class to your models::
 
-    from flask_appbuilder.models.mixins import AuditMixin
-    from flask_appbuilder import Model
+    from pgforge.models.mixins import AuditMixin
+    from pgforge import Model
     from sqlalchemy import Column, Integer, String
 
 
@@ -807,7 +807,7 @@ If you want to set your own password complexity validation, you can write your o
 
 Example on your config::
 
-    from flask_appbuilder.exceptions import PasswordComplexityValidationError
+    from pgforge.exceptions import PasswordComplexityValidationError
     ...
 
     def custom_password_validator(password: str) -> None:
@@ -831,9 +831,9 @@ If you want to add, for example, actions to the list of users you can do it in a
 First i advise you to create security.py and add the following to it::
 
     from flask import redirect
-    from flask_appbuilder.security.views import UserDBModelView
-    from flask_appbuilder.security.sqla.manager import SecurityManager
-    from flask_appbuilder.actions import action
+    from pgforge.security.views import UserDBModelView
+    from pgforge.security.sqla.manager import SecurityManager
+    from pgforge.actions import action
 
 
     class MyUserDBView(UserDBModelView):
@@ -866,9 +866,9 @@ F.A.B. uses a different user view for each authentication method
 You can extend or create from scratch your own, and then tell F.A.B. to use them instead, by overriding their
 correspondent lower case properties on **SecurityManager** (just like on the given example).
 
-Take a look and run the example on `Employees example <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/employees>`_
+Take a look and run the example on `Employees example <https://github.com/dpgaspar/PgForge/tree/master/examples/employees>`_
 
-Study the source code of `BaseSecurityManager <https://github.com/dpgaspar/Flask-AppBuilder/blob/master/flask_appbuilder/security/manager.py>`_
+Study the source code of `BaseSecurityManager <https://github.com/dpgaspar/PgForge/blob/master/pgforge/security/manager.py>`_
 
 Extending the User Model
 ------------------------
@@ -878,10 +878,10 @@ can easily do it. Use the same type of approach as explained earlier.
 
 First extend the User Model (create a sec_models.py file)::
 
-    from flask_appbuilder.security.sqla.models import User
+    from pgforge.security.sqla.models import User
     from sqlalchemy import Column, Integer, ForeignKey, String, Sequence, Table
     from sqlalchemy.orm import relationship, backref
-    from flask_appbuilder import Model
+    from pgforge import Model
 
     class MyUser(User):
         __tablename__ = 'ab_user'
@@ -899,7 +899,7 @@ If you're using:
 
 So using AUTH_DB::
 
-    from flask_appbuilder.security.views import UserDBModelView
+    from pgforge.security.views import UserDBModelView
     from flask_babel import lazy_gettext
 
     class MyUserDBModelView(UserDBModelView):
@@ -957,7 +957,7 @@ So using AUTH_DB::
 
 Next create your own SecurityManager class, overriding your model and view for User (create a sec.py)::
 
-    from flask_appbuilder.security.sqla.manager import SecurityManager
+    from pgforge.security.sqla.manager import SecurityManager
     from .sec_models import MyUser
     from .sec_views import MyUserDBModelView
 
@@ -976,8 +976,8 @@ Finally (as shown on the previous example) tell F.A.B. to use your SecurityManag
 **AppBuilder** (on __init__.py)::
 
     from flask import Flask
-    from flask_appbuilder import SQLA, AppBuilder
-    from flask_appbuilder.menu import Menu
+    from pgforge import SQLA, AppBuilder
+    from pgforge.menu import Menu
     from .sec import MySecurityManager
 
     app = Flask(__name__)
@@ -1004,7 +1004,7 @@ To initialize Flask-Talisman, you can do the following:
 .. code-block:: python
 
     from flask import Flask
-    from flask_appbuilder import AppBuilder
+    from pgforge import AppBuilder
     from flask_talisman import Talisman
 
     app = Flask(__name__)

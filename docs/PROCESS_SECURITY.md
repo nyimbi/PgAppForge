@@ -16,7 +16,7 @@ The Process Security System provides comprehensive security measures for the Int
 - **HTML Content**: XSS prevention through sanitization
 
 ```python
-from flask_appbuilder.process.security import ProcessValidator
+from pgappforge.process.security import ProcessValidator
 
 # Validate process definition
 validated_data = ProcessValidator.validate_process_definition({
@@ -36,7 +36,7 @@ validated_data = ProcessValidator.validate_process_definition({
 - Role-based authorization
 
 ```python
-from flask_appbuilder.process.security import ProcessAuthorization
+from pgappforge.process.security import ProcessAuthorization
 
 # Check user permissions
 if ProcessAuthorization.check_permission('deploy', definition_id):
@@ -58,7 +58,7 @@ def create_process():
 - Automatic tenant context filtering
 
 ```python
-from flask_appbuilder.process.security import TenantIsolationValidator
+from pgappforge.process.security import TenantIsolationValidator
 
 # Validate tenant access
 if TenantIsolationValidator.validate_tenant_access(ProcessDefinition, process_id):
@@ -81,7 +81,7 @@ def access_process(id):
 - Automatic cleanup of expired entries
 
 ```python
-from flask_appbuilder.process.security import RateLimiter
+from pgappforge.process.security import RateLimiter
 
 # Create custom rate limiter
 limiter = RateLimiter()
@@ -90,7 +90,7 @@ if limiter.is_allowed('user:123:endpoint', limit=100, window=60):
     pass
 
 # Pre-configured limiters
-from flask_appbuilder.process.security import process_deploy_limiter
+from pgappforge.process.security import process_deploy_limiter
 
 @process_deploy_limiter
 def deploy_process():
@@ -107,7 +107,7 @@ def deploy_process():
 - Persistent storage for compliance
 
 ```python
-from flask_appbuilder.process.security import ProcessAuditLogger
+from pgappforge.process.security import ProcessAuditLogger
 
 # Log operation
 ProcessAuditLogger.log_operation(
@@ -139,7 +139,7 @@ def create_process():
 ### Securing View Methods
 
 ```python
-from flask_appbuilder.process.security import secure_view_method
+from pgappforge.process.security import secure_view_method
 
 class ProcessDefinitionView(ModelView):
     
@@ -153,7 +153,7 @@ class ProcessDefinitionView(ModelView):
 ### Securing API Endpoints
 
 ```python
-from flask_appbuilder.process.security import secure_api_endpoint
+from pgappforge.process.security import secure_api_endpoint
 
 class ProcessApi(ModelRestApi):
     
@@ -168,7 +168,7 @@ class ProcessApi(ModelRestApi):
 ### Combined Security Decorator
 
 ```python
-from flask_appbuilder.process.security import secure_process_operation
+from pgappforge.process.security import secure_process_operation
 
 @secure_process_operation(
     operation='deploy',
@@ -222,7 +222,7 @@ MAX_EXPRESSION_LENGTH = 1000
 The security system provides specific exception types:
 
 ```python
-from flask_appbuilder.process.security import (
+from pgappforge.process.security import (
     ProcessSecurityError,
     ValidationError,
     AuthorizationError,
@@ -254,7 +254,7 @@ except RateLimitExceededError as e:
 Tracks all process operations:
 
 ```python
-from flask_appbuilder.process.models.audit_models import ProcessAuditLog
+from pgappforge.process.models.audit_models import ProcessAuditLog
 
 # Query audit logs
 logs = ProcessAuditLog.query.filter_by(
@@ -268,7 +268,7 @@ logs = ProcessAuditLog.query.filter_by(
 Tracks security events:
 
 ```python
-from flask_appbuilder.process.models.audit_models import ProcessSecurityEvent
+from pgappforge.process.models.audit_models import ProcessSecurityEvent
 
 # Query security events
 events = ProcessSecurityEvent.query.filter_by(
@@ -285,7 +285,7 @@ event.resolve(admin_user.id, "False positive - resolved by admin")
 Tracks compliance-related activities:
 
 ```python
-from flask_appbuilder.process.models.audit_models import ProcessComplianceLog
+from pgappforge.process.models.audit_models import ProcessComplianceLog
 
 # Create compliance log
 compliance_log = ProcessComplianceLog(
@@ -303,7 +303,7 @@ compliance_log = ProcessComplianceLog(
 Initialize the security system in your Flask application:
 
 ```python
-from flask_appbuilder.process.security import init_process_security
+from pgappforge.process.security import init_process_security
 
 def create_app():
     app = Flask(__name__)
@@ -409,7 +409,7 @@ The security system includes comprehensive tests:
 python -m pytest tests/test_process_security.py -v
 
 # Run with coverage
-python -m pytest tests/test_process_security.py --cov=flask_appbuilder.process.security
+python -m pytest tests/test_process_security.py --cov=pgappforge.process.security
 ```
 
 ## Troubleshooting
@@ -444,7 +444,7 @@ Enable debug logging for security operations:
 import logging
 
 # Set debug level for security module
-logging.getLogger('flask_appbuilder.process.security').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.process.security').setLevel(logging.DEBUG)
 ```
 
 ## Security Checklist

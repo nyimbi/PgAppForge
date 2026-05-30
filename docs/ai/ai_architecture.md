@@ -1,6 +1,6 @@
 # AI System Architecture
 
-The Flask-AppBuilder AI system provides a unified interface for integrating multiple AI providers, speech processing, and intelligent knowledge management into your applications.
+The PgAppForge AI system provides a unified interface for integrating multiple AI providers, speech processing, and intelligent knowledge management into your applications.
 
 ## 🏗️ Architecture Overview
 
@@ -103,10 +103,10 @@ The central orchestrator for all AI operations.
 - Configuration validation
 - Error handling and fallbacks
 
-**Location:** `flask_appbuilder/collaborative/ai/ai_models.py:2416`
+**Location:** `pgappforge/collaborative/ai/ai_models.py:2416`
 
 ```python
-from flask_appbuilder.collaborative.ai.ai_models import ModelManager
+from pgappforge.collaborative.ai.ai_models import ModelManager
 
 # Initialize with app configuration
 model_manager = ModelManager(app=app)
@@ -175,11 +175,11 @@ Advanced knowledge retrieval system for context-aware AI responses.
 - **Query Engine** - Semantic search with ranking
 - **Context Manager** - Relevant context injection
 
-**Location:** `flask_appbuilder/collaborative/ai/rag_engine.py`
+**Location:** `pgappforge/collaborative/ai/rag_engine.py`
 
 ```python
-from flask_appbuilder.collaborative.ai.rag_engine import RAGEngine
-from flask_appbuilder.collaborative.ai.faiss_vector_store import FAISSVectorStore
+from pgappforge.collaborative.ai.rag_engine import RAGEngine
+from pgappforge.collaborative.ai.faiss_vector_store import FAISSVectorStore
 
 # Initialize RAG system
 vector_store = FAISSVectorStore()
@@ -210,7 +210,7 @@ High-level service for managing organizational knowledge.
 - Analytics and insights
 - Content lifecycle management
 
-**Location:** `flask_appbuilder/collaborative/ai/knowledge_base.py`
+**Location:** `pgappforge/collaborative/ai/knowledge_base.py`
 
 ## 🔧 Configuration
 
@@ -242,9 +242,9 @@ WHISPER_MODEL_SIZE=base
 TTS_VOICE=alloy
 ```
 
-### Flask-AppBuilder Integration
+### PgAppForge Integration
 
-The AI system integrates seamlessly with Flask-AppBuilder's configuration system:
+The AI system integrates seamlessly with PgAppForge's configuration system:
 
 ```python
 # config.py
@@ -269,7 +269,7 @@ OLLAMA_HOST = "http://localhost:11434"
 
 ### Access Control
 
-- **Role-Based Permissions** - Integration with Flask-AppBuilder RBAC
+- **Role-Based Permissions** - Integration with PgAppForge RBAC
 - **Feature Flags** - Granular capability control
 - **Multi-Tenant Isolation** - Secure workspace separation
 
@@ -291,7 +291,7 @@ OLLAMA_HOST = "http://localhost:11434"
 
 ## 🔗 Integration Points
 
-### Flask-AppBuilder Views
+### PgAppForge Views
 
 The AI system provides ready-to-use web interfaces:
 
@@ -329,7 +329,7 @@ GET /api/v1/ai/knowledge/search?q=authentication&limit=5
 ### Basic Chat Integration
 
 ```python
-from flask_appbuilder.collaborative.ai.chatbot_service import ChatbotService
+from pgappforge.collaborative.ai.chatbot_service import ChatbotService
 
 chatbot = ChatbotService(model_manager=model_manager)
 
@@ -380,7 +380,7 @@ response = await model_manager.generate_response(messages)
 ## 🎯 Next Steps
 
 1. **Provider Setup** - Configure your preferred AI providers
-2. **Integration** - Add AI features to your Flask-AppBuilder app
+2. **Integration** - Add AI features to your PgAppForge app
 3. **Customization** - Extend adapters for specialized use cases
 4. **Monitoring** - Set up logging and analytics
 5. **Scaling** - Configure load balancing and caching

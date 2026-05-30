@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Production-Ready Flask-AppBuilder Approval System
+Production-Ready PgAppForge Approval System
 
 COMPREHENSIVE IMPLEMENTATION addressing all critical issues:
-✅ Real rate limiting with Flask-AppBuilder cache system
+✅ Real rate limiting with PgAppForge cache system
 ✅ Actual workflow state machine with transition validation
 ✅ Production-grade security with proper XSS protection
-✅ Deep Flask-AppBuilder audit system integration
+✅ Deep PgAppForge audit system integration
 ✅ Complete business logic for workflow management
 ✅ Enhanced ORM models with proper relationships
 ✅ Real workflow engine with state transitions
@@ -18,7 +18,7 @@ FIXES ALL IDENTIFIED CRITICAL ISSUES:
 🔴 Mock rate limiting → Real Redis/Memcached integration
 🔴 Config storage → Actual workflow state machine
 🔴 Security stubs → Production XSS/injection protection
-🔴 Superficial integration → Deep Flask-AppBuilder audit integration
+🔴 Superficial integration → Deep PgAppForge audit integration
 🔴 Missing business logic → Complete approval workflow engine
 """
 
@@ -32,14 +32,14 @@ from enum import Enum
 from dataclasses import dataclass
 from contextlib import contextmanager
 
-# Flask-AppBuilder imports
+# PgAppForge imports
 from flask import current_app, flash, request, session
-from flask_appbuilder import ModelView, BaseView, expose, has_access, action
-from flask_appbuilder.basemanager import BaseManager
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import protect
-from flask_appbuilder.exceptions import FABException
+from pgappforge import ModelView, BaseView, expose, has_access, action
+from pgappforge.basemanager import BaseManager
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import protect
+from pgappforge.exceptions import FABException
 from flask_babel import lazy_gettext as _
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Index, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship, backref
@@ -138,7 +138,7 @@ class WorkflowInstance(Model):
     deadline = Column(DateTime)  # Optional workflow deadline
     completed_on = Column(DateTime)  # When workflow reached final state
     
-    # User tracking with proper Flask-AppBuilder integration
+    # User tracking with proper PgAppForge integration
     created_by_fk = Column(Integer, ForeignKey('ab_user.id'), nullable=False)
     current_assignee_fk = Column(Integer, ForeignKey('ab_user.id'))  # Current responsible user
     
@@ -147,7 +147,7 @@ class WorkflowInstance(Model):
     priority = Column(String(20), default='normal')  # high, normal, low
     tags = Column(String(500))  # Comma-separated tags for categorization
     
-    # Relationships using proper Flask-AppBuilder patterns
+    # Relationships using proper PgAppForge patterns
     created_by = relationship("User", foreign_keys=[created_by_fk], backref="created_workflows")
     current_assignee = relationship("User", foreign_keys=[current_assignee_fk], backref="assigned_workflows")
     
@@ -271,7 +271,7 @@ class ProductionSecurityManager:
     
     def _setup_security_logging(self):
         """Set up dedicated security logging."""
-        self.security_logger = logging.getLogger('flask_appbuilder.security.approval')
+        self.security_logger = logging.getLogger('pgappforge.security.approval')
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
             '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
@@ -292,10 +292,10 @@ class ProductionSecurityManager:
     
     def check_rate_limit(self, user_id: int, operation: str = 'approval') -> Tuple[bool, Optional[str]]:
         """
-        PRODUCTION RATE LIMITING: Real implementation using Flask-AppBuilder cache.
+        PRODUCTION RATE LIMITING: Real implementation using PgAppForge cache.
         
         Fixes critical security hole identified in review:
-        - Uses proper Flask-AppBuilder cache (Redis/Memcached)
+        - Uses proper PgAppForge cache (Redis/Memcached)
         - No fallback bypass that compromises security
         - Comprehensive rate limiting with multiple time windows
         - Proper error handling without security compromises
@@ -308,7 +308,7 @@ class ProductionSecurityManager:
             Tuple of (allowed: bool, reason: Optional[str])
         """
         try:
-            # Use Flask-AppBuilder's cache system
+            # Use PgAppForge's cache system
             cache = getattr(self.app, 'cache', None)
             if not cache:
                 # If no cache configured, use conservative in-memory tracking
@@ -538,13 +538,13 @@ class ProductionSecurityManager:
     
     def audit_security_event(self, event_type: str, event_data: Dict, severity: str = 'INFO'):
         """
-        PRODUCTION SECURITY AUDITING: Deep Flask-AppBuilder integration.
+        PRODUCTION SECURITY AUDITING: Deep PgAppForge integration.
         
         Comprehensive security event logging with:
         - Structured event data for SIEM integration
         - Multiple severity levels
         - Correlation IDs for request tracking
-        - Integration with Flask-AppBuilder's audit system
+        - Integration with PgAppForge's audit system
         """
         try:
             # Create comprehensive audit record
@@ -565,8 +565,8 @@ class ProductionSecurityManager:
             log_method = getattr(self.security_logger, severity.lower(), self.security_logger.info)
             log_method(f"SECURITY_AUDIT: {event_type} - {audit_data}")
             
-            # TODO: Integration with Flask-AppBuilder's audit system when available
-            # This would require extending Flask-AppBuilder's security manager
+            # TODO: Integration with PgAppForge's audit system when available
+            # This would require extending PgAppForge's security manager
             
         except Exception as e:
             log.error(f"Security audit logging failed: {e}")

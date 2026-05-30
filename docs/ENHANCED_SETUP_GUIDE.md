@@ -1,13 +1,13 @@
-# Enhanced Flask-AppBuilder Setup Guide
+# Enhanced PgAppForge Setup Guide
 
-This guide shows how to install and configure the enhanced Flask-AppBuilder with advanced analytics, export capabilities, and alerting features.
+This guide shows how to install and configure the enhanced PgAppForge with advanced analytics, export capabilities, and alerting features.
 
 ## Installation
 
 ### Base Installation
 
 ```bash
-pip install Flask-AppBuilder
+pip install PgAppForge
 ```
 
 ### Enhanced Features Installation
@@ -16,12 +16,12 @@ For complete functionality, install with all enhanced features:
 
 ```bash
 # Install with all enhanced capabilities
-pip install "Flask-AppBuilder[export,analytics,mfa]"
+pip install "PgAppForge[export,analytics,mfa]"
 
 # Or install specific feature sets
-pip install "Flask-AppBuilder[export]"      # Export functionality only
-pip install "Flask-AppBuilder[analytics]"   # Analytics dashboards only
-pip install "Flask-AppBuilder[mfa]"         # Multi-factor authentication only
+pip install "PgAppForge[export]"      # Export functionality only
+pip install "PgAppForge[analytics]"   # Analytics dashboards only
+pip install "PgAppForge[mfa]"         # Multi-factor authentication only
 ```
 
 ### Development Installation
@@ -36,11 +36,11 @@ pip install -e ".[export,analytics,mfa]"
 
 ### 1. Basic Application Setup
 
-Create your Flask-AppBuilder application as usual:
+Create your PgAppForge application as usual:
 
 ```python
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 app = Flask(__name__)
 app.config.from_object('config')
@@ -58,10 +58,10 @@ Add to your `config.py`:
 # Enable enhanced addon managers
 ADDON_MANAGERS = [
     # Alerting System Manager
-    'flask_appbuilder.alerting.manager.AlertingManager',
+    'pgappforge.alerting.manager.AlertingManager',
     
     # Export Enhancement Manager  
-    'flask_appbuilder.export.manager.ExportManager',
+    'pgappforge.export.manager.ExportManager',
 ]
 
 # Export system configuration
@@ -104,9 +104,9 @@ The enhanced features require additional database tables. Run migrations:
 
 ```python
 # In your application startup or migration script
-from flask_appbuilder.models.alert_models import AlertRule, AlertHistory, MetricSnapshot, NotificationSettings
-from flask_appbuilder.models.dashboard_models import DashboardConfig, DashboardWidget, DashboardTemplate
-from flask_appbuilder.models.export_models import ExportJob, ExportTemplate, ExportSchedule
+from pgappforge.models.alert_models import AlertRule, AlertHistory, MetricSnapshot, NotificationSettings
+from pgappforge.models.dashboard_models import DashboardConfig, DashboardWidget, DashboardTemplate
+from pgappforge.models.export_models import ExportJob, ExportTemplate, ExportSchedule
 
 # Create all tables
 db.create_all()
@@ -174,7 +174,7 @@ Features:
 Register your own metrics for monitoring:
 
 ```python
-from flask_appbuilder.alerting.manager import AlertManager
+from pgappforge.alerting.manager import AlertManager
 
 def get_active_users():
     # Your custom metric logic
@@ -190,8 +190,8 @@ alert_manager.register_metric_provider('active_users', get_active_users)
 Create custom dashboards:
 
 ```python
-from flask_appbuilder.views.analytics_dashboard import EnhancedDashboardView
-from flask_appbuilder.charts.metric_widgets import MetricCardWidget
+from pgappforge.views.analytics_dashboard import EnhancedDashboardView
+from pgappforge.charts.metric_widgets import MetricCardWidget
 
 class MyCustomDashboard(EnhancedDashboardView):
     route_base = '/my-dashboard'
@@ -224,7 +224,7 @@ The system automatically creates roles for enhanced features:
 
 ### API Security
 
-New API endpoints are protected with Flask-AppBuilder's security:
+New API endpoints are protected with PgAppForge's security:
 
 ```python
 # Alert API endpoints require proper permissions
@@ -290,16 +290,16 @@ Enable debug logging:
 
 ```python
 import logging
-logging.getLogger('flask_appbuilder.alerting').setLevel(logging.DEBUG)
-logging.getLogger('flask_appbuilder.export').setLevel(logging.DEBUG)
-logging.getLogger('flask_appbuilder.analytics').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.alerting').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.export').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.analytics').setLevel(logging.DEBUG)
 ```
 
 ### Getting Help
 
 - Check the example configuration in `examples/enhanced_config_example.py`
 - Review the test files in `tests/` for usage examples
-- Ensure your Flask-AppBuilder version is 4.8.0-enhanced or later
+- Ensure your PgAppForge version is 4.8.0-enhanced or later
 
 ## Example Applications
 
@@ -320,12 +320,12 @@ python complete_enhanced_app.py
 
 ## Upgrading
 
-When upgrading from standard Flask-AppBuilder:
+When upgrading from standard PgAppForge:
 
-1. Install enhanced dependencies: `pip install "Flask-AppBuilder[export,analytics]"`
+1. Install enhanced dependencies: `pip install "PgAppForge[export,analytics]"`
 2. Update config to add `ADDON_MANAGERS`
 3. Run database migrations
 4. Update any custom views to use enhanced base classes
 5. Test all functionality in development before deploying
 
-The enhanced version maintains full backward compatibility with existing Flask-AppBuilder applications.
+The enhanced version maintains full backward compatibility with existing PgAppForge applications.

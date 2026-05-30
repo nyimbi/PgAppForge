@@ -1,6 +1,6 @@
 # Developer Getting Started Guide
 
-Complete guide for developers to get up and running with Flask-AppBuilder development, from basic setup to advanced customization.
+Complete guide for developers to get up and running with PgAppForge development, from basic setup to advanced customization.
 
 ## 🚀 Quick Start
 
@@ -26,15 +26,15 @@ conda create -n fab-dev python=3.11
 conda activate fab-dev
 ```
 
-#### 2. Install Flask-AppBuilder
+#### 2. Install PgAppForge
 
 ```bash
 # Development installation with all features
 pip install flask-appbuilder[mfa,export,analytics]
 
 # Or from source for contributing
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/dpgaspar/PgAppForge.git
+cd PgAppForge
 pip install -e .[mfa,export,analytics]
 ```
 
@@ -93,7 +93,7 @@ my-app/
 """Main application entry point."""
 import os
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 # Create Flask app
 app = Flask(__name__)
@@ -121,7 +121,7 @@ if __name__ == '__main__':
 ```python
 """Application configuration."""
 import os
-from flask_appbuilder.security.manager import AUTH_DB
+from pgappforge.security.manager import AUTH_DB
 
 # Base directory
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -143,7 +143,7 @@ class Config:
         'pool_recycle': 300,
     }
 
-    # Flask-AppBuilder settings
+    # PgAppForge settings
     APP_NAME = "My Development App"
     APP_THEME = ""  # Default theme
     APP_ICON = "/static/img/logo.jpg"
@@ -219,9 +219,9 @@ config = {
 #### `app/__init__.py` - App Factory Pattern
 
 ```python
-"""App factory for Flask-AppBuilder application."""
+"""App factory for PgAppForge application."""
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 from flask_migrate import Migrate
 
 # Global variables
@@ -299,8 +299,8 @@ def register_error_handlers(app):
 
 ```python
 """Database models using SQLAlchemy."""
-from flask_appbuilder import Model
-from flask_appbuilder.models.mixins import (
+from pgappforge import Model
+from pgappforge.models.mixins import (
     AuditMixin, BaseMixin, FileColumn, ImageColumn
 )
 from sqlalchemy import Column, Integer, String, Text, Date, Float, Boolean, ForeignKey
@@ -498,11 +498,11 @@ class Document(Model, AuditMixin, TimestampMixin, SoftDeleteMixin, VersionedMixi
 ```python
 """Custom ModelViews for the application."""
 from flask import flash, redirect, url_for, request, g
-from flask_appbuilder import ModelView, BaseView, expose, has_access
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.widgets import ListWidget, ShowWidget
-from flask_appbuilder.charts.views import GroupByChartView
-from flask_appbuilder.actions import action
+from pgappforge import ModelView, BaseView, expose, has_access
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.widgets import ListWidget, ShowWidget
+from pgappforge.charts.views import GroupByChartView
+from pgappforge.actions import action
 from wtforms import StringField, SelectField, validators
 from wtforms.widgets import TextArea
 
@@ -702,7 +702,7 @@ class ProjectModelView(ModelView):
 ```python
 """Custom BaseViews for special functionality."""
 from flask import render_template, jsonify, request
-from flask_appbuilder import BaseView, expose, has_access
+from pgappforge import BaseView, expose, has_access
 from sqlalchemy import func
 
 class DashboardView(BaseView):
@@ -998,7 +998,7 @@ const departmentChart = new Chart(deptCtx, {
 
 ```python
 """Custom widgets for enhanced UI."""
-from flask_appbuilder.widgets import ListWidget
+from pgappforge.widgets import ListWidget
 from flask import Markup
 
 class EmployeeListWidget(ListWidget):

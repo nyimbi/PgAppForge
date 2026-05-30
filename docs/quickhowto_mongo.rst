@@ -7,7 +7,7 @@ the security models will be created on the MongoDB and not on SQLLite by default
 at the way that AppBuilder is initialized.
 
 And the source code for this chapter on
-`examples <https://github.com/dpgaspar/Flask-AppBuilder/tree/master/examples/mongoengine>`_
+`examples <https://github.com/dpgaspar/PgForge/tree/master/examples/mongoengine>`_
 
 Initialization
 --------------
@@ -18,8 +18,8 @@ On __init__.py::
 
     import logging
     from flask import Flask
-    from flask_appbuilder import AppBuilder
-    from flask_appbuilder.security.mongoengine.manager import SecurityManager
+    from pgforge import AppBuilder
+    from pgforge.security.mongoengine.manager import SecurityManager
     from flask_mongoengine import MongoEngine
 
     logging.getLogger().setLevel(logging.DEBUG)
@@ -27,7 +27,7 @@ On __init__.py::
     app = Flask(__name__)
     app.config.from_object('config')
     dbmongo = MongoEngine(app)
-    # The Flask-AppBuilder init
+    # The PgForge init
     appbuilder = AppBuilder(app, security_manager_class=SecurityManager)
 
     from app import models, views
@@ -108,8 +108,8 @@ take a look at :doc:`advanced`.
 
 ::
 
-    from flask_appbuilder import ModelView
-    from flask_appbuilder.models.mongoengine.interface import MongoEngineInterface
+    from pgforge import ModelView
+    from pgforge.models.mongoengine.interface import MongoEngineInterface
 
     class GroupModelView(ModelView):
         datamodel = MongoEngineInterface(ContactGroup)

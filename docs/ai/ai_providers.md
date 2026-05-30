@@ -1,10 +1,10 @@
 # AI Provider Configuration
 
-Complete guide to configuring and using all 12+ AI providers supported by Flask-AppBuilder.
+Complete guide to configuring and using all 12+ AI providers supported by PgAppForge.
 
 ## 🌍 Overview
 
-Flask-AppBuilder supports a comprehensive range of AI providers, from major cloud services to local models, enabling you to choose the best solution for your needs.
+PgAppForge supports a comprehensive range of AI providers, from major cloud services to local models, enabling you to choose the best solution for your needs.
 
 ## 🔧 Configuration Methods
 
@@ -35,7 +35,7 @@ OLLAMA_HOST = "http://localhost:11434"
 Dynamic configuration at runtime:
 
 ```python
-from flask_appbuilder.collaborative.ai.ai_models import create_model_adapter, ModelConfig, ModelProvider
+from pgappforge.collaborative.ai.ai_models import create_model_adapter, ModelConfig, ModelProvider
 
 config = ModelConfig(
     provider=ModelProvider.OPENAI,
@@ -69,7 +69,7 @@ OPENAI_TTS_VOICE = "alloy"  # alloy, echo, fable, onyx, nova, shimmer
 
 **Example Usage:**
 ```python
-from flask_appbuilder.collaborative.ai.ai_models import ModelManager
+from pgappforge.collaborative.ai.ai_models import ModelManager
 
 model_manager = ModelManager(app=app)
 response = await model_manager.generate_response(
@@ -154,7 +154,7 @@ OLLAMA_TEMPERATURE = 0.7
 1. Install Ollama: `curl -fsSL https://ollama.ai/install.sh | sh`
 2. Pull a model: `ollama pull llama2`
 3. Start server: `ollama serve`
-4. Configure Flask-AppBuilder to use local endpoint
+4. Configure PgAppForge to use local endpoint
 
 **Popular Models:**
 - `llama2` - Meta's open-source model
@@ -344,7 +344,7 @@ The system automatically detects configured providers and sets priorities:
 
 ```python
 # Explicit priority configuration
-from flask_appbuilder.collaborative.ai.ai_models import ModelManager
+from pgappforge.collaborative.ai.ai_models import ModelManager
 
 model_manager = ModelManager(app=app)
 model_manager.set_provider_priority([
@@ -380,7 +380,7 @@ model_manager.set_provider_priority([
 **1. API Key Not Working**
 ```python
 # Test API key validity
-from flask_appbuilder.collaborative.ai.ai_models import test_provider_connection
+from pgappforge.collaborative.ai.ai_models import test_provider_connection
 
 result = await test_provider_connection('openai')
 if not result.success:

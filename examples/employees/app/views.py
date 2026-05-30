@@ -1,7 +1,7 @@
-from flask_appbuilder import ModelView
-from flask_appbuilder.fields import QuerySelectField
-from flask_appbuilder.fieldwidgets import Select2Widget
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import ModelView
+from pgappforge.fields import QuerySelectField
+from pgappforge.fieldwidgets import Select2Widget
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from . import appbuilder, db
 from .models import Benefit, Department, Employee, EmployeeHistory, Function

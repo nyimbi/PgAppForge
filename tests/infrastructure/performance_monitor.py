@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance monitoring infrastructure for Flask-AppBuilder tutorial testing.
+Performance monitoring infrastructure for PgForge tutorial testing.
 
 This module provides comprehensive performance monitoring, benchmarking,
 and analysis tools for tutorial validation.

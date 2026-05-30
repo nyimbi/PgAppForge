@@ -1,14 +1,14 @@
-# Flask-AppBuilder Tutorial Testing Guide
+# PgForge Tutorial Testing Guide
 
 ![Test Status](https://img.shields.io/badge/Test%20Status-✅%20Passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/Coverage-95%25%2B-brightgreen)
 ![CI/CD](https://img.shields.io/badge/CI%2FCD-✅%20Active-brightgreen)
 
-This guide provides comprehensive information about the testing infrastructure for Flask-AppBuilder tutorials, including automated testing, validation scripts, and performance monitoring.
+This guide provides comprehensive information about the testing infrastructure for PgForge tutorials, including automated testing, validation scripts, and performance monitoring.
 
 ## 📋 Overview
 
-The tutorial testing system ensures that all Flask-AppBuilder tutorials work correctly and provide a reliable learning experience. It includes:
+The tutorial testing system ensures that all PgForge tutorials work correctly and provide a reliable learning experience. It includes:
 
 - **Automated Test Suites**: Comprehensive testing for all tutorial components
 - **Runtime Validation**: Scripts to verify tutorial functionality
@@ -29,8 +29,8 @@ The tutorial testing system ensures that all Flask-AppBuilder tutorials work cor
 
 ```bash
 # Clone the repository
-git clone https://github.com/dpgaspar/Flask-AppBuilder.git
-cd Flask-AppBuilder
+git clone https://github.com/dpgaspar/PgForge.git
+cd PgForge
 
 # Create virtual environment
 python -m venv venv
@@ -375,7 +375,7 @@ python run_tutorial_tests.py --performance-only --verbosity 2
 python -c "import sys; print(sys.path)"
 
 # Add project root to path
-export PYTHONPATH="${PYTHONPATH}:/path/to/Flask-AppBuilder"
+export PYTHONPATH="${PYTHONPATH}:/path/to/PgForge"
 ```
 
 ### Debug Mode
@@ -492,4 +492,4 @@ categories = generator.generate_categories()
 
 **Last Updated**: September 20, 2025
 **Test Framework Version**: 1.0.0
-**Compatibility**: Flask-AppBuilder 4.8.0+
+**Compatibility**: PgForge 4.8.0+

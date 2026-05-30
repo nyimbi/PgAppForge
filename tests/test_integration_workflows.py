@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 from flask_login import login_user
 
 from tests.base import FABTestCase

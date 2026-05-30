@@ -6,7 +6,7 @@ Configuration keys
 
 Use config.py to configure the following parameters. By default it will use SQLLITE DB, and bootstrap's default theme:
 
-**Note**: Flask-AppBuilder now uses **SQLAlchemy 2.x** and **Flask-SQLAlchemy 3.x** by default. 
+**Note**: PgForge now uses **SQLAlchemy 2.x** and **Flask-SQLAlchemy 3.x** by default. 
 The configuration remains the same, but you'll benefit from improved performance and modern features.
 
     .. cssclass:: table-bordered table-hover
@@ -365,7 +365,7 @@ Next you only have to import them to the Flask app object, like this
     app = Flask(__name__)
     app.config.from_object('config')
 
-Take a look at the skeleton `config.py <https://github.com/dpgaspar/Flask-AppBuilder-Skeleton/blob/master/config.py.tpl>`_
+Take a look at the skeleton `config.py <https://github.com/dpgaspar/PgForge-Skeleton/blob/master/config.py.tpl>`_
 
 
 .. _jmespath-examples:

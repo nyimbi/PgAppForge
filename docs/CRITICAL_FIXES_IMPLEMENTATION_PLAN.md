@@ -22,14 +22,14 @@
 #### 1.1 Fix Code Injection in Import Validation
 
 **Files to Modify**:
-- `flask_appbuilder/cli/utils/import_utils.py` (create if missing)
+- `pgappforge/cli/utils/import_utils.py` (create if missing)
 - Any files currently using `exec()` for import validation
 
 **Implementation Steps**:
 
 1. **Create secure import validation utility**:
 ```python
-# flask_appbuilder/cli/utils/import_utils.py
+# pgappforge/cli/utils/import_utils.py
 import importlib.util
 import ast
 import re
@@ -132,7 +132,7 @@ def validate_imports_secure(imports: List[str]) -> ValidationResult:
 ```python
 # tests/test_import_validation_security.py
 import unittest
-from flask_appbuilder.cli.utils.import_utils import validate_imports_secure
+from pgappforge.cli.utils.import_utils import validate_imports_secure
 
 class ImportSecurityTest(unittest.TestCase):
     def test_malicious_import_rejection(self):
@@ -155,14 +155,14 @@ class ImportSecurityTest(unittest.TestCase):
 
 **Files to Modify**:
 - All files with SQL string formatting (search for `%` in SQL contexts)
-- `flask_appbuilder/cli/generators/database_inspector.py`
+- `pgappforge/cli/generators/database_inspector.py`
 - Migration scripts in any migration directories
 
 **Implementation Steps**:
 
 1. **Create secure SQL utilities**:
 ```python
-# flask_appbuilder/security/sql_utils.py
+# pgappforge/security/sql_utils.py
 import re
 from typing import Optional
 from sqlalchemy import text, MetaData
@@ -218,7 +218,7 @@ def safe_execute_ddl(conn, template: str, **params):
 
 2. **Fix database inspector SQL injection**:
 ```python
-# Update flask_appbuilder/cli/generators/database_inspector.py
+# Update pgappforge/cli/generators/database_inspector.py
 def _estimate_table_rows(self, table_name: str) -> int:
     """Estimate table rows with SQL injection protection."""
     try:
@@ -248,7 +248,7 @@ def _estimate_table_rows(self, table_name: str) -> int:
 ```python
 # tests/test_sql_injection_prevention.py
 import unittest
-from flask_appbuilder.security.sql_utils import SQLIdentifierValidator
+from pgappforge.security.sql_utils import SQLIdentifierValidator
 
 class SQLInjectionPreventionTest(unittest.TestCase):
     def test_malicious_identifier_rejection(self):
@@ -280,7 +280,7 @@ class SQLInjectionPreventionTest(unittest.TestCase):
 
 1. **Create secure configuration template**:
 ```python
-# flask_appbuilder/cli/templates/secure_config.py
+# pgappforge/cli/templates/secure_config.py
 import os
 import secrets
 from typing import Optional
@@ -344,7 +344,7 @@ class Config:
 
 2. **Update configuration validation**:
 ```python
-# flask_appbuilder/security/config_validator.py
+# pgappforge/security/config_validator.py
 def validate_production_config(config) -> List[str]:
     """Validate configuration for production deployment."""
     issues = []
@@ -393,15 +393,15 @@ class ConfigurationSecurityTest(unittest.TestCase):
 #### 3.1 Create Plugin System Foundation
 
 **Files to Create**:
-- `flask_appbuilder/plugins/__init__.py`
-- `flask_appbuilder/plugins/base.py`
-- `flask_appbuilder/plugins/manager.py`
+- `pgappforge/plugins/__init__.py`
+- `pgappforge/plugins/base.py`
+- `pgappforge/plugins/manager.py`
 
 **Implementation Steps**:
 
 1. **Plugin base classes**:
 ```python
-# flask_appbuilder/plugins/base.py
+# pgappforge/plugins/base.py
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -416,7 +416,7 @@ class PluginInfo:
     config_keys: List[str]
 
 class AppBuilderPlugin(ABC):
-    """Base class for Flask-AppBuilder plugins."""
+    """Base class for PgAppForge plugins."""
 
     @property
     @abstractmethod
@@ -446,14 +446,14 @@ class AppBuilderPlugin(ABC):
 
 2. **Plugin manager**:
 ```python
-# flask_appbuilder/plugins/manager.py
+# pgappforge/plugins/manager.py
 from typing import Dict, List, Optional, Type
 import logging
 
 logger = logging.getLogger(__name__)
 
 class PluginManager:
-    """Manages Flask-AppBuilder plugins."""
+    """Manages PgAppForge plugins."""
 
     def __init__(self):
         self.plugins: Dict[str, AppBuilderPlugin] = {}
@@ -487,22 +487,22 @@ class PluginManager:
 #### 3.2 Convert Workflow System to Plugin
 
 **Files to Modify**:
-- Create `flask_appbuilder/plugins/workflow_plugin.py`
+- Create `pgappforge/plugins/workflow_plugin.py`
 - Update workflow initialization
 
 **Implementation Steps**:
 
 1. **Workflow plugin implementation**:
 ```python
-# flask_appbuilder/plugins/workflow_plugin.py
+# pgappforge/plugins/workflow_plugin.py
 from .base import AppBuilderPlugin, PluginInfo
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from flask_appbuilder import AppBuilder
+    from pgappforge import AppBuilder
 
 class WorkflowPlugin(AppBuilderPlugin):
-    """Workflow engine plugin for Flask-AppBuilder."""
+    """Workflow engine plugin for PgAppForge."""
 
     @property
     def info(self) -> PluginInfo:
@@ -510,7 +510,7 @@ class WorkflowPlugin(AppBuilderPlugin):
             name="workflow",
             version="1.0.0",
             description="Workflow engine with AI capabilities",
-            author="Flask-AppBuilder Team",
+            author="PgAppForge Team",
             dependencies=["redis>=4.5.0"],
             config_keys=["WORKFLOW_ENGINE_ENABLED", "WORKFLOW_REDIS_URL"]
         )
@@ -528,8 +528,8 @@ class WorkflowPlugin(AppBuilderPlugin):
         """Install workflow views and models."""
         try:
             # Only import when actually installing
-            from flask_appbuilder.workflow.views import WorkflowModelView
-            from flask_appbuilder.workflow.models import WorkflowDefinition
+            from pgappforge.workflow.views import WorkflowModelView
+            from pgappforge.workflow.models import WorkflowDefinition
 
             # Register views
             app_builder.add_view(
@@ -558,14 +558,14 @@ class WorkflowPlugin(AppBuilderPlugin):
 #### 4.1 Standardize Resource Management
 
 **Files to Modify**:
-- `flask_appbuilder/cli/generators/database_inspector.py`
+- `pgappforge/cli/generators/database_inspector.py`
 - All files with database connections
 
 **Implementation Steps**:
 
 1. **Connection context manager**:
 ```python
-# flask_appbuilder/utils/database.py
+# pgappforge/utils/database.py
 from contextlib import contextmanager
 from typing import Iterator
 from sqlalchemy import create_engine
@@ -615,14 +615,14 @@ def managed_database_connection(database_uri: str, **engine_kwargs) -> Iterator:
 #### 4.2 Standardize Error Handling
 
 **Files to Create**:
-- `flask_appbuilder/utils/validation.py`
-- `flask_appbuilder/exceptions.py`
+- `pgappforge/utils/validation.py`
+- `pgappforge/exceptions.py`
 
 **Implementation Steps**:
 
 1. **Validation utilities**:
 ```python
-# flask_appbuilder/utils/validation.py
+# pgappforge/utils/validation.py
 from dataclasses import dataclass
 from typing import Any, Optional, List, Callable
 from enum import Enum

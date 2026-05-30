@@ -66,10 +66,10 @@ graph TB
 
 Core team entity with hierarchical structure.
 
-**Location:** `flask_appbuilder/collaborative/core/team_manager.py`
+**Location:** `pgappforge/collaborative/core/team_manager.py`
 
 ```python
-from flask_appbuilder.collaborative.core.team_manager import TeamManager
+from pgappforge.collaborative.core.team_manager import TeamManager
 
 team_manager = TeamManager(db.session)
 
@@ -205,7 +205,7 @@ TEAM_ROLES = {
 ### Invitation System
 
 ```python
-from flask_appbuilder.collaborative.core.invitation_manager import InvitationManager
+from pgappforge.collaborative.core.invitation_manager import InvitationManager
 
 invitation_manager = InvitationManager(team_manager, email_service)
 
@@ -233,7 +233,7 @@ await invitation_manager.accept_invitation(
 Project-specific collaboration environments.
 
 ```python
-from flask_appbuilder.collaborative.core.workspace_manager import WorkspaceManager
+from pgappforge.collaborative.core.workspace_manager import WorkspaceManager
 
 workspace_manager = WorkspaceManager(db.session, team_manager)
 
@@ -378,7 +378,7 @@ await team_manager.create_custom_role(team.id, custom_role)
 ### Activity Tracking
 
 ```python
-from flask_appbuilder.collaborative.analytics.team_analytics import TeamAnalytics
+from pgappforge.collaborative.analytics.team_analytics import TeamAnalytics
 
 analytics = TeamAnalytics(db.session)
 
@@ -427,12 +427,12 @@ print(f"Skill development: {member_stats['skill_progress']}")
 
 ### Team Management Views
 
-Flask-AppBuilder views for team management.
+PgAppForge views for team management.
 
-**Location:** `flask_appbuilder/collaborative/views/team_view.py`
+**Location:** `pgappforge/collaborative/views/team_view.py`
 
 ```python
-from flask_appbuilder.collaborative.views.team_view import TeamView
+from pgappforge.collaborative.views.team_view import TeamView
 
 class TeamView(ModelView):
     route_base = "/teams"
@@ -487,7 +487,7 @@ async def get_team_analytics(team_id):
 ### Onboarding Workflow
 
 ```python
-from flask_appbuilder.collaborative.workflows.onboarding import OnboardingWorkflow
+from pgappforge.collaborative.workflows.onboarding import OnboardingWorkflow
 
 onboarding = OnboardingWorkflow(team_manager, notification_service)
 

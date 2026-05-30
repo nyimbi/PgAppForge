@@ -1,5 +1,5 @@
-from flask_appbuilder import BaseView, expose
-from flask_appbuilder.basemanager import BaseManager
+from pgappforge import BaseView, expose
+from pgappforge.basemanager import BaseManager
 
 
 class DummyView(BaseView):

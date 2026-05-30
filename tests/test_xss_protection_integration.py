@@ -1,5 +1,5 @@
 """
-Integration tests for XSS protection across Flask-AppBuilder widgets and templates.
+Integration tests for XSS protection across PgAppForge widgets and templates.
 
 Tests comprehensive XSS protection including:
 - Widget rendering safety
@@ -10,9 +10,9 @@ Tests comprehensive XSS protection including:
 
 import pytest
 from flask import Flask, render_template_string
-from flask_appbuilder import AppBuilder
-from flask_appbuilder.widgets.xss_security import XSSProtection, init_xss_filters, apply_csp_headers
-from flask_appbuilder.widgets.core import ApprovalWidget
+from pgappforge import AppBuilder
+from pgappforge.widgets.xss_security import XSSProtection, init_xss_filters, apply_csp_headers
+from pgappforge.widgets.core import ApprovalWidget
 from markupsafe import Markup
 import json
 
@@ -193,7 +193,7 @@ class TestXSSProtectionIntegration:
 
     def test_widget_gallery_xss_protection(self):
         """Test XSS protection in widget gallery error responses."""
-        from flask_appbuilder.widgets.widget_gallery import UnifiedWidgetGalleryView
+        from pgappforge.widgets.widget_gallery import UnifiedWidgetGalleryView
 
         # Simulate error with XSS payload
         error_message = "<script>alert('xss')</script>Invalid config"

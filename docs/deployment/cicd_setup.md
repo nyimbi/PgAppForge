@@ -1,10 +1,10 @@
 # CI/CD Setup and Best Practices
 
-This guide covers setting up continuous integration and deployment pipelines for Flask-AppBuilder applications with comprehensive testing, security scanning, and automated deployment.
+This guide covers setting up continuous integration and deployment pipelines for PgAppForge applications with comprehensive testing, security scanning, and automated deployment.
 
 ## Overview
 
-A robust CI/CD pipeline for Flask-AppBuilder should include:
+A robust CI/CD pipeline for PgAppForge should include:
 - Automated testing across multiple Python versions and databases
 - Code quality checks and security scanning
 - Documentation generation and deployment
@@ -119,19 +119,19 @@ jobs:
 
     - name: Run code quality checks
       run: |
-        black --check flask_appbuilder tests examples
-        flake8 flask_appbuilder tests examples
-        mypy flask_appbuilder
+        black --check pgappforge tests examples
+        flake8 pgappforge tests examples
+        mypy pgappforge
 
     - name: Run security checks
       run: |
-        bandit -r flask_appbuilder -f json -o bandit-report.json
+        bandit -r pgappforge -f json -o bandit-report.json
         safety check --json --output safety-report.json
 
     - name: Run tests
       run: |
         pytest tests/ \
-          --cov=flask_appbuilder \
+          --cov=pgappforge \
           --cov-report=xml \
           --cov-report=html \
           --junitxml=junit.xml \
@@ -341,9 +341,9 @@ lint:
   image: python:$PYTHON_VERSION
   script:
     - pip install black flake8 mypy
-    - black --check flask_appbuilder tests examples
-    - flake8 flask_appbuilder tests examples
-    - mypy flask_appbuilder
+    - black --check pgappforge tests examples
+    - flake8 pgappforge tests examples
+    - mypy pgappforge
   only:
     - merge_requests
     - main
@@ -371,7 +371,7 @@ lint:
     - pip install --upgrade pip
     - pip install -e ".[mfa,export,analytics]"
   script:
-    - pytest tests/ --cov=flask_appbuilder --cov-report=xml --junitxml=junit.xml -v
+    - pytest tests/ --cov=pgappforge --cov-report=xml --junitxml=junit.xml -v
   coverage: '/TOTAL.+?(\d+\%)$/'
   artifacts:
     reports:
@@ -401,7 +401,7 @@ security:
   image: python:$PYTHON_VERSION
   script:
     - pip install bandit safety
-    - bandit -r flask_appbuilder -f json -o bandit-report.json
+    - bandit -r pgappforge -f json -o bandit-report.json
     - safety check --json --output safety-report.json
   artifacts:
     reports:
@@ -522,8 +522,8 @@ pipeline {
                     steps {
                         sh '''
                             . ${VENV_NAME}/bin/activate
-                            black --check flask_appbuilder tests examples
-                            flake8 flask_appbuilder tests examples
+                            black --check pgappforge tests examples
+                            flake8 pgappforge tests examples
                         '''
                     }
                 }
@@ -531,7 +531,7 @@ pipeline {
                     steps {
                         sh '''
                             . ${VENV_NAME}/bin/activate
-                            mypy flask_appbuilder
+                            mypy pgappforge
                         '''
                     }
                 }
@@ -539,7 +539,7 @@ pipeline {
                     steps {
                         sh '''
                             . ${VENV_NAME}/bin/activate
-                            bandit -r flask_appbuilder -f json -o bandit-report.json
+                            bandit -r pgappforge -f json -o bandit-report.json
                             safety check --json --output safety-report.json
                         '''
                         archiveArtifacts artifacts: '*-report.json', fingerprint: true
@@ -554,7 +554,7 @@ pipeline {
                     steps {
                         sh '''
                             . ${VENV_NAME}/bin/activate
-                            pytest tests/unit/ --cov=flask_appbuilder --cov-report=xml --junitxml=junit.xml -v
+                            pytest tests/unit/ --cov=pgappforge --cov-report=xml --junitxml=junit.xml -v
                         '''
                         publishTestResults testResultsPattern: 'junit.xml'
                         publishCoverage adapters: [coberturaAdapter('coverage.xml')], sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
@@ -656,7 +656,7 @@ pipeline {
                 if (env.BRANCH_NAME == 'main') {
                     slackSend (
                         color: 'good',
-                        message: "✅ Flask-AppBuilder ${env.BUILD_NUMBER} deployed to production"
+                        message: "✅ PgAppForge ${env.BUILD_NUMBER} deployed to production"
                     )
                 }
             }
@@ -675,7 +675,7 @@ import pytest
 import os
 import tempfile
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 @pytest.fixture(scope='session')
 def test_config():
@@ -748,7 +748,7 @@ class TestPerformance:
     def test_database_query_performance(self, app):
         """Test database query performance."""
         with app.app_context():
-            from flask_appbuilder import appbuilder
+            from pgappforge import appbuilder
             User = appbuilder.sm.user_model
 
             # Measure query time
@@ -763,7 +763,7 @@ class TestPerformance:
     def test_ai_response_time(self, app):
         """Test AI service response time."""
         with app.app_context():
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
 
             manager = AIModelManager()
             start_time = time()
@@ -826,7 +826,7 @@ class TestAIIntegration:
     def test_real_ai_service_integration(self, app):
         """Test integration with real AI services."""
         with app.app_context():
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
 
             manager = AIModelManager()
 
@@ -864,7 +864,7 @@ class TestAIIntegration:
 ```yaml
 # deploy.yml
 ---
-- name: Deploy Flask-AppBuilder Application
+- name: Deploy PgAppForge Application
   hosts: webservers
   become: yes
   vars:
@@ -872,7 +872,7 @@ class TestAIIntegration:
     app_user: "{{ app_name }}"
     app_dir: "/opt/{{ app_name }}"
     venv_dir: "{{ app_dir }}/venv"
-    repo_url: "https://github.com/dpgaspar/Flask-AppBuilder.git"
+    repo_url: "https://github.com/dpgaspar/PgAppForge.git"
     branch: "{{ deploy_branch | default('main') }}"
 
   tasks:
@@ -1113,7 +1113,7 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  - "flask_appbuilder_rules.yml"
+  - "pgappforge_rules.yml"
 
 scrape_configs:
   - job_name: 'flask-appbuilder'
@@ -1140,9 +1140,9 @@ alerting:
 ### Alert Rules
 
 ```yaml
-# monitoring/flask_appbuilder_rules.yml
+# monitoring/pgappforge_rules.yml
 groups:
-  - name: flask_appbuilder
+  - name: pgappforge
     rules:
       - alert: HighErrorRate
         expr: rate(flask_http_request_exceptions_total[5m]) > 0.1
@@ -1190,4 +1190,4 @@ groups:
           description: "AI service timeout rate is {{ $value }} per second"
 ```
 
-This comprehensive CI/CD setup guide provides automated testing, security scanning, deployment pipelines, and monitoring for Flask-AppBuilder applications with enhanced AI and collaborative features.
+This comprehensive CI/CD setup guide provides automated testing, security scanning, deployment pipelines, and monitoring for PgAppForge applications with enhanced AI and collaborative features.

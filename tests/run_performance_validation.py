@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from flask_appbuilder.process.approval.workflow_engine import ApprovalWorkflowEngine
+    from pgappforge.process.approval.workflow_engine import ApprovalWorkflowEngine
     from unittest.mock import Mock
     
     print("✅ Successfully imported optimized ApprovalWorkflowEngine")

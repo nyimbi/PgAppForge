@@ -11,7 +11,7 @@ ApprovalWorkflowManager to prevent the following vulnerabilities:
 4. JSON Injection Attacks
 5. Bulk Operation Authorization Bypass
 
-All tests follow Flask-AppBuilder testing patterns and include comprehensive
+All tests follow PgAppForge testing patterns and include comprehensive
 audit logging validation.
 """
 
@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # Import the security-enhanced ApprovalWorkflowManager
-from proper_flask_appbuilder_extensions import (
+from proper_pgappforge_extensions import (
     ApprovalWorkflowManager,
     ApprovalModelView,
     validate_security_implementation,
@@ -36,8 +36,8 @@ class TestApprovalSecurityFixes(unittest.TestCase):
     """
     
     def setUp(self):
-        """Set up test fixtures with mock Flask-AppBuilder components."""
-        # Mock Flask-AppBuilder components
+        """Set up test fixtures with mock PgAppForge components."""
+        # Mock PgAppForge components
         self.mock_appbuilder = Mock()
         self.mock_sm = Mock()
         self.mock_appbuilder.sm = self.mock_sm
@@ -535,4 +535,4 @@ if __name__ == '__main__':
         for error in result.errors:
             print(f"ERROR: {error[0]}")
     
-    print("\n🚀 Flask-AppBuilder ApprovalWorkflowManager Security Testing Complete!")
+    print("\n🚀 PgAppForge ApprovalWorkflowManager Security Testing Complete!")

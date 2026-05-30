@@ -13,7 +13,7 @@ from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Test the NotificationService without complex Flask-AppBuilder imports
+# Test the NotificationService without complex PgAppForge imports
 Base = declarative_base()
 
 
@@ -77,7 +77,7 @@ class MockMail:
 
 
 class MockSecurityManager:
-    """Mock Flask-AppBuilder security manager."""
+    """Mock PgAppForge security manager."""
     
     def __init__(self):
         self.permissions = {
@@ -101,7 +101,7 @@ class MockSecurityManager:
 
 
 class MockAppBuilder:
-    """Mock Flask-AppBuilder instance."""
+    """Mock PgAppForge instance."""
     
     def __init__(self):
         self.sm = MockSecurityManager()
@@ -124,7 +124,7 @@ class MockApp:
 
 
 # Import the actual NotificationService from the services package
-from flask_appbuilder.services import NotificationService
+from pgappforge.services import NotificationService
 
 
 class TestNotificationService(unittest.TestCase):
@@ -138,7 +138,7 @@ class TestNotificationService(unittest.TestCase):
         self.mock_app = MockApp()
         
         # Create service with mocked dependencies
-        with patch('flask_appbuilder.services.notification_service.current_app', self.mock_app):
+        with patch('pgappforge.services.notification_service.current_app', self.mock_app):
             self.service = NotificationService(mail=self.mock_mail)
         
         # Create test model
@@ -150,7 +150,7 @@ class TestNotificationService(unittest.TestCase):
         self.user = MockUser()
         self.model.created_by = self.user
     
-    @patch('flask_appbuilder.services.notification_service.current_app')
+    @patch('pgappforge.services.notification_service.current_app')
     def test_service_initialization(self, mock_current_app):
         """Test service initialization."""
         mock_current_app.extensions = {'mail': self.mock_mail}
@@ -163,9 +163,9 @@ class TestNotificationService(unittest.TestCase):
         service = NotificationService()
         self.assertEqual(service.mail, self.mock_mail)
     
-    @patch('flask_appbuilder.services.notification_service.current_app')
-    @patch('flask_appbuilder.services.notification_service.render_template_string')
-    @patch('flask_appbuilder.services.notification_service.Message', MockMessage)
+    @patch('pgappforge.services.notification_service.current_app')
+    @patch('pgappforge.services.notification_service.render_template_string')
+    @patch('pgappforge.services.notification_service.Message', MockMessage)
     def test_send_status_notification_success(self, mock_render_template, mock_current_app):
         """Test successful status change notification."""
         mock_current_app.config = {'MAIL_DEFAULT_SENDER': 'noreply@example.com'}
@@ -229,8 +229,8 @@ class TestNotificationService(unittest.TestCase):
         
         self.assertFalse(result)
     
-    @patch('flask_appbuilder.services.notification_service.current_app')
-    @patch('flask_appbuilder.services.notification_service.render_template_string')
+    @patch('pgappforge.services.notification_service.current_app')
+    @patch('pgappforge.services.notification_service.render_template_string')
     def test_send_approval_notification_approved(self, mock_render_template, mock_current_app):
         """Test approval notification."""
         mock_current_app.config = {'MAIL_DEFAULT_SENDER': 'noreply@example.com'}
@@ -277,8 +277,8 @@ class TestNotificationService(unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(len(self.mock_mail.sent_messages), 0)
     
-    @patch('flask_appbuilder.services.notification_service.current_app')
-    @patch('flask_appbuilder.services.notification_service.render_template_string')
+    @patch('pgappforge.services.notification_service.current_app')
+    @patch('pgappforge.services.notification_service.render_template_string')
     def test_send_submission_notification_success(self, mock_render_template, mock_current_app):
         """Test successful submission notification."""
         mock_current_app.config = {'MAIL_DEFAULT_SENDER': 'noreply@example.com'}

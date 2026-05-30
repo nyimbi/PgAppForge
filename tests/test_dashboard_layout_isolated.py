@@ -1,7 +1,7 @@
 """
 Isolated tests for Dashboard Layout Manager functionality.
 
-Tests the dashboard layout system without complex Flask-AppBuilder imports.
+Tests the dashboard layout system without complex PgAppForge imports.
 """
 
 import unittest
@@ -10,8 +10,8 @@ import json
 from datetime import datetime
 
 # Import the classes we're testing directly
-from flask_appbuilder.views.dashboard_layout import DashboardLayoutView, DashboardLayoutForm
-from flask_appbuilder.views.configurable_dashboard import ConfigurableDashboardView
+from pgappforge.views.dashboard_layout import DashboardLayoutView, DashboardLayoutForm
+from pgappforge.views.configurable_dashboard import ConfigurableDashboardView
 
 
 class TestDashboardLayoutFormIsolated(unittest.TestCase):
@@ -81,7 +81,7 @@ class TestDashboardLayoutViewIsolated(unittest.TestCase):
         self.assertEqual(self.layout_view.route_base, '/dashboard-layout')
         self.assertEqual(self.layout_view.form, DashboardLayoutForm)
     
-    @patch('flask_appbuilder.views.dashboard_layout.current_user')
+    @patch('pgappforge.views.dashboard_layout.current_user')
     def test_get_user_dashboard_config_default(self, mock_current_user):
         """Test getting default dashboard configuration."""
         mock_current_user.id = 1
@@ -100,7 +100,7 @@ class TestDashboardLayoutViewIsolated(unittest.TestCase):
         self.assertEqual(config['refresh_interval'], 300)
         self.assertIn('widgets', config)
     
-    @patch('flask_appbuilder.views.dashboard_layout.current_user')
+    @patch('pgappforge.views.dashboard_layout.current_user')
     def test_get_user_dashboard_config_existing(self, mock_current_user):
         """Test getting existing dashboard configuration."""
         mock_current_user.id = 1
@@ -126,7 +126,7 @@ class TestDashboardLayoutViewIsolated(unittest.TestCase):
         self.assertEqual(config['layout_type'], 'tabs')
         self.assertIn('widgets', config)
     
-    @patch('flask_appbuilder.views.dashboard_layout.current_user')
+    @patch('pgappforge.views.dashboard_layout.current_user')
     def test_save_user_dashboard_config_new(self, mock_current_user):
         """Test saving new dashboard configuration."""
         mock_current_user.id = 1
@@ -151,7 +151,7 @@ class TestDashboardLayoutViewIsolated(unittest.TestCase):
         mock_session.add.assert_called_once()
         mock_session.commit.assert_called_once()
     
-    @patch('flask_appbuilder.views.dashboard_layout.current_user')
+    @patch('pgappforge.views.dashboard_layout.current_user')
     def test_save_user_dashboard_config_update(self, mock_current_user):
         """Test updating existing dashboard configuration."""
         mock_current_user.id = 1
@@ -197,7 +197,7 @@ class TestConfigurableDashboardViewIsolated(unittest.TestCase):
         self.assertEqual(self.dashboard_view.route_base, '/dashboard')
         self.assertEqual(self.dashboard_view.default_view, 'index')
     
-    @patch('flask_appbuilder.views.configurable_dashboard.current_user')
+    @patch('pgappforge.views.configurable_dashboard.current_user')
     def test_get_user_dashboard_config_mock(self, mock_current_user):
         """Test getting user dashboard configuration (mocked)."""
         mock_current_user.id = 1
@@ -393,7 +393,7 @@ class TestDashboardIntegration(unittest.TestCase):
         }
         
         # Test saving configuration
-        with patch('flask_appbuilder.views.dashboard_layout.current_user') as mock_user:
+        with patch('pgappforge.views.dashboard_layout.current_user') as mock_user:
             mock_user.id = 1
             mock_session = Mock()
             mock_session.query.return_value.filter.return_value.first.return_value = None

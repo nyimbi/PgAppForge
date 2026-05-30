@@ -7,7 +7,7 @@ with validation, best practices, and real-world scenarios.
 
 import json
 from datetime import datetime, timedelta
-from flask_appbuilder.process.approval.config_validation import (
+from pgappforge.process.approval.config_validation import (
     ConfigurationValidator, ConfigurationType, validate_config
 )
 
@@ -545,7 +545,7 @@ def generate_configuration_templates():
     print("\n📝 GENERATING CONFIGURATION TEMPLATES")
     print("=" * 60)
     
-    from flask_appbuilder.process.approval.config_validation import create_configuration_template
+    from pgappforge.process.approval.config_validation import create_configuration_template
     
     templates = {
         "workflow_template.json": ConfigurationType.WORKFLOW,

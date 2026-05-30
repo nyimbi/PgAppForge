@@ -12,7 +12,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 from flask import Flask
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -193,7 +193,7 @@ def mock_requests_get():
 @pytest.fixture 
 def mock_security_validator():
     """Mock SecurityValidator for testing."""
-    with patch('flask_appbuilder.mixins.security_framework.SecurityValidator') as mock_validator:
+    with patch('pgappforge.mixins.security_framework.SecurityValidator') as mock_validator:
         # Setup default validation behavior
         mock_user = Mock()
         mock_user.id = 123
@@ -206,7 +206,7 @@ def mock_security_validator():
 @pytest.fixture
 def mock_security_auditor():
     """Mock SecurityAuditor for testing.""" 
-    with patch('flask_appbuilder.mixins.security_framework.SecurityAuditor') as mock_auditor:
+    with patch('pgappforge.mixins.security_framework.SecurityAuditor') as mock_auditor:
         yield mock_auditor
 
 
@@ -218,8 +218,8 @@ class TestModelFactory:
     @staticmethod
     def create_enhanced_soft_delete_model(**kwargs):
         """Create test model with EnhancedSoftDeleteMixin."""
-        from flask_appbuilder.mixins.enhanced_mixins import EnhancedSoftDeleteMixin
-        from flask_appbuilder import Model
+        from pgappforge.mixins.enhanced_mixins import EnhancedSoftDeleteMixin
+        from pgappforge import Model
         
         class TestModel(EnhancedSoftDeleteMixin, Model):
             __tablename__ = 'test_soft_delete'
@@ -235,8 +235,8 @@ class TestModelFactory:
     @staticmethod  
     def create_currency_model(**kwargs):
         """Create test model with CurrencyMixin."""
-        from flask_appbuilder.mixins.specialized_mixins import CurrencyMixin
-        from flask_appbuilder import Model
+        from pgappforge.mixins.specialized_mixins import CurrencyMixin
+        from pgappforge import Model
         
         class TestModel(CurrencyMixin, Model):
             __tablename__ = 'test_currency'
@@ -253,8 +253,8 @@ class TestModelFactory:
     @staticmethod
     def create_approval_workflow_model(**kwargs):
         """Create test model with ApprovalWorkflowMixin."""
-        from flask_appbuilder.mixins.business_mixins import ApprovalWorkflowMixin
-        from flask_appbuilder import Model
+        from pgappforge.mixins.business_mixins import ApprovalWorkflowMixin
+        from pgappforge import Model
         
         workflow_config = kwargs.get('approval_workflow', {
             1: {'required_role': 'reviewer', 'required_approvals': 1},
@@ -386,11 +386,11 @@ class ErrorSimulator:
     @staticmethod
     def validation_error():
         """Simulate validation error.""" 
-        from flask_appbuilder.mixins.security_framework import MixinValidationError
+        from pgappforge.mixins.security_framework import MixinValidationError
         raise MixinValidationError("Test validation error", field="test_field")
     
     @staticmethod
     def permission_error():
         """Simulate permission error."""
-        from flask_appbuilder.mixins.security_framework import MixinPermissionError
+        from pgappforge.mixins.security_framework import MixinPermissionError
         raise MixinPermissionError("Access denied", user_id=123)

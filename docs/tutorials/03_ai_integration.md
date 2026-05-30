@@ -4,7 +4,7 @@
 ![Runtime Testing](https://img.shields.io/badge/Runtime%20Testing-🔄%20Required-yellow)
 ![Tutorial Level](https://img.shields.io/badge/Level-Advanced-red)
 
-This tutorial shows you how to implement and use the comprehensive AI features in Flask-AppBuilder, including multiple AI providers, speech processing, and intelligent content generation.
+This tutorial shows you how to implement and use the comprehensive AI features in PgAppForge, including multiple AI providers, speech processing, and intelligent content generation.
 
 > **⚠️ Validation Status**: All 15 AI providers and speech processing features have been **confirmed implemented** with complete adapter classes. Tutorial examples require runtime testing with actual API keys.
 
@@ -253,8 +253,8 @@ Create `ai_views.py`:
 
 ```python
 from flask import request, render_template, jsonify, session, send_file
-from flask_appbuilder import BaseView, expose, has_access
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import BaseView, expose, has_access
+from pgappforge.models.sqla.interface import SQLAInterface
 from werkzeug.utils import secure_filename
 import os
 import tempfile
@@ -277,7 +277,7 @@ class AIContentGeneratorView(BaseView):
     def generate_content(self):
         """Generate content using AI."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
 
             data = request.get_json()
             prompt = data.get('prompt', '')
@@ -331,7 +331,7 @@ class AIContentGeneratorView(BaseView):
     def analyze_task(self, task_id):
         """Analyze a task using AI."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
             from models import Task, TaskAI
 
             task = Task.query.get_or_404(task_id)
@@ -428,7 +428,7 @@ class AIConversationView(BaseView):
     def chat_message(self):
         """Process chat message."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
             from models import AIConversation
 
             data = request.get_json()
@@ -529,7 +529,7 @@ class SpeechProcessingView(BaseView):
     def speech_to_text(self):
         """Convert speech to text."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
 
             if 'audio' not in request.files:
                 return jsonify({'error': 'No audio file provided'}), 400
@@ -585,7 +585,7 @@ class SpeechProcessingView(BaseView):
     def text_to_speech(self):
         """Convert text to speech."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
 
             data = request.get_json()
             text = data.get('text', '')
@@ -670,7 +670,7 @@ class AIAnalyticsView(BaseView):
     def productivity_analysis(self):
         """Analyze user productivity patterns."""
         try:
-            from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+            from pgappforge.collaborative.ai.ai_models import AIModelManager
             from models import Task
             from sqlalchemy import func
 
@@ -1267,7 +1267,7 @@ $(document).ready(function() {
 ```python
 # Test the AI content generator
 python -c "
-from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+from pgappforge.collaborative.ai.ai_models import AIModelManager
 manager = AIModelManager()
 result = manager.generate_text('Write a summary of project management best practices', max_tokens=200)
 print(result)
@@ -1278,7 +1278,7 @@ print(result)
 
 ```python
 # Test speech-to-text (requires audio file)
-from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+from pgappforge.collaborative.ai.ai_models import AIModelManager
 manager = AIModelManager()
 
 # For text-to-speech
@@ -1304,7 +1304,7 @@ with open('test_speech.mp3', 'wb') as f:
 def rag_query(self):
     """Query using RAG (Retrieval-Augmented Generation)."""
     try:
-        from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+        from pgappforge.collaborative.ai.ai_models import AIModelManager
 
         data = request.get_json()
         query = data.get('query', '')
@@ -1365,7 +1365,7 @@ def rag_query(self):
 def smart_schedule(self):
     """AI-powered smart scheduling."""
     try:
-        from flask_appbuilder.collaborative.ai.ai_models import AIModelManager
+        from pgappforge.collaborative.ai.ai_models import AIModelManager
         from models import Task
         from datetime import datetime, timedelta
 

@@ -1,7 +1,7 @@
 """
 Test ProcessStatusChartView functionality.
 
-Tests the process status chart capabilities and integration with Flask-AppBuilder chart patterns.
+Tests the process status chart capabilities and integration with PgForge chart patterns.
 """
 
 import unittest
@@ -12,7 +12,7 @@ from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Test the ProcessStatusChartView without complex Flask-AppBuilder imports
+# Test the ProcessStatusChartView without complex PgForge imports
 Base = declarative_base()
 
 

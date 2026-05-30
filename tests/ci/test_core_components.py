@@ -1,7 +1,7 @@
 """
-Comprehensive unit tests for Flask-AppBuilder core components.
+Comprehensive unit tests for PgAppForge core components.
 
-This module provides thorough testing coverage for all core Flask-AppBuilder
+This module provides thorough testing coverage for all core PgAppForge
 components including base classes, views, security, and data models.
 """
 
@@ -14,11 +14,11 @@ from unittest.mock import Mock, MagicMock, patch
 
 import pytest
 from flask import Flask, g
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.baseviews import BaseView, BaseModelView
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.security.sqla.models import User, Role, Permission
-from flask_appbuilder.views import ModelView, SimpleFormView
+from pgappforge import AppBuilder, SQLA
+from pgappforge.baseviews import BaseView, BaseModelView
+from pgappforge.models.sqla import Model
+from pgappforge.security.sqla.models import User, Role, Permission
+from pgappforge.views import ModelView, SimpleFormView
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -170,7 +170,7 @@ class TestCoreModelView(FABTestCase):
     
     def test_model_view_creation(self):
         """Test ModelView can be created with datamodel"""
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge.models.sqla.interface import SQLAInterface
         
         with self.app.app_context():
             view = TestCoreModelView()
@@ -183,7 +183,7 @@ class TestCoreModelView(FABTestCase):
     
     def test_model_view_crud_operations(self):
         """Test ModelView CRUD operations"""
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge.models.sqla.interface import SQLAInterface
         
         with self.app.app_context():
             view = TestCoreModelView()
@@ -199,7 +199,7 @@ class TestCoreModelView(FABTestCase):
     
     def test_model_view_columns_configuration(self):
         """Test ModelView column configuration"""
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge.models.sqla.interface import SQLAInterface
         
         with self.app.app_context():
             view = TestCoreModelView()

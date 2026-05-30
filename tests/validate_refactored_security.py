@@ -2,15 +2,15 @@
 """
 Refactored Security Implementation Validation
 
-Validates that the refactored Flask-AppBuilder integrated implementation:
+Validates that the refactored PgAppForge integrated implementation:
 1. Maintains all original security features
-2. Follows Flask-AppBuilder architectural patterns  
+2. Follows PgAppForge architectural patterns  
 3. Reduces complexity while preserving security
-4. Integrates properly with Flask-AppBuilder systems
+4. Integrates properly with PgAppForge systems
 
 VALIDATION CRITERIA:
 ✅ All security features preserved
-✅ Flask-AppBuilder patterns followed
+✅ PgAppForge patterns followed
 ✅ Code complexity reduced by 60%+
 ✅ Proper architectural integration
 """
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 def validate_architectural_improvements():
     """
-    Validate that architectural improvements follow Flask-AppBuilder patterns.
+    Validate that architectural improvements follow PgAppForge patterns.
     """
     validation_results = {
         'architectural_improvements': [],
@@ -44,13 +44,13 @@ def validate_architectural_improvements():
         import sys
         from unittest.mock import Mock
         
-        # Create mocks for Flask-AppBuilder dependencies if not available
+        # Create mocks for PgAppForge dependencies if not available
         if 'flask_babel' not in sys.modules:
             mock_babel = Mock()
             mock_babel.lazy_gettext = lambda x, **kwargs: x
             sys.modules['flask_babel'] = mock_babel
         
-        if 'flask_appbuilder' not in sys.modules:
+        if 'pgappforge' not in sys.modules:
             mock_fab = Mock()
             mock_fab.ModelView = type('ModelView', (), {})
             mock_fab.BaseView = type('BaseView', (), {})
@@ -60,16 +60,16 @@ def validate_architectural_improvements():
             mock_fab.action = lambda *args, **kwargs: lambda f: f
             mock_fab.expose = lambda *args, **kwargs: lambda f: f
             mock_fab.protect = lambda f: f
-            sys.modules['flask_appbuilder'] = mock_fab
+            sys.modules['pgappforge'] = mock_fab
             
             # Mock sub-modules
-            sys.modules['flask_appbuilder.models.sqla'] = Mock()
-            sys.modules['flask_appbuilder.security.decorators'] = Mock()
-            sys.modules['flask_appbuilder.exceptions'] = Mock()
-            sys.modules['flask_appbuilder.basemanager'] = Mock()
+            sys.modules['pgappforge.models.sqla'] = Mock()
+            sys.modules['pgappforge.security.decorators'] = Mock()
+            sys.modules['pgappforge.exceptions'] = Mock()
+            sys.modules['pgappforge.basemanager'] = Mock()
         
         # Import both implementations for comparison
-        from flask_appbuilder_integrated_extensions import (
+        from pgappforge_integrated_extensions import (
             ApprovalWorkflowManager as RefactoredManager,
             ApprovalModelView as RefactoredView,
             ApprovalHistory,
@@ -79,7 +79,7 @@ def validate_architectural_improvements():
         # Test 1: Architectural Pattern Compliance
         log.info("🏗️  Testing Architectural Pattern Compliance")
         
-        # Check proper Flask-AppBuilder imports
+        # Check proper PgAppForge imports
         import inspect
         refactored_source = inspect.getsource(RefactoredManager)
         
@@ -92,10 +92,10 @@ def validate_architectural_improvements():
                 '❌ Missing @has_access decorators'
             )
         
-        # Flask-AppBuilder uses standard logging patterns
+        # PgAppForge uses standard logging patterns
         if 'log.info' in refactored_source or 'logging' in refactored_source:
             validation_results['architectural_improvements'].append(
-                '✅ Uses standard logging patterns compatible with Flask-AppBuilder'
+                '✅ Uses standard logging patterns compatible with PgAppForge'
             )
         else:
             validation_results['integration_issues'].append(
@@ -104,11 +104,11 @@ def validate_architectural_improvements():
         
         if 'self.appbuilder.get_session' in refactored_source:
             validation_results['architectural_improvements'].append(
-                '✅ Uses Flask-AppBuilder session management patterns'
+                '✅ Uses PgAppForge session management patterns'
             )
         else:
             validation_results['integration_issues'].append(
-                '❌ Not using Flask-AppBuilder session patterns'
+                '❌ Not using PgAppForge session patterns'
             )
         
         # Test 2: ORM Model Integration
@@ -145,7 +145,7 @@ def validate_architectural_improvements():
         # Check rate limiting
         if hasattr(RefactoredManager, '_check_rate_limit'):
             validation_results['security_features_preserved'].append(
-                '✅ Rate limiting implemented using Flask-AppBuilder cache'
+                '✅ Rate limiting implemented using PgAppForge cache'
             )
         else:
             validation_results['integration_issues'].append(
@@ -167,20 +167,20 @@ def validate_architectural_improvements():
         
         if 'self.appbuilder.sm.add_permission' in refactored_source:
             validation_results['architectural_improvements'].append(
-                '✅ Integrates with Flask-AppBuilder permission system'
+                '✅ Integrates with PgAppForge permission system'
             )
         else:
             validation_results['integration_issues'].append(
-                '❌ Not using Flask-AppBuilder permission system'
+                '❌ Not using PgAppForge permission system'
             )
         
         if 'self.appbuilder.sm.has_access' in refactored_source:
             validation_results['architectural_improvements'].append(
-                '✅ Uses Flask-AppBuilder permission checking'
+                '✅ Uses PgAppForge permission checking'
             )
         else:
             validation_results['integration_issues'].append(
-                '❌ Not using Flask-AppBuilder permission checking'
+                '❌ Not using PgAppForge permission checking'
             )
         
         # Test 5: Internationalization Support
@@ -225,11 +225,11 @@ def validate_architectural_improvements():
         
         if 'ApprovalException' in refactored_source and 'FABException' in refactored_source:
             validation_results['architectural_improvements'].append(
-                '✅ Uses Flask-AppBuilder exception handling patterns'
+                '✅ Uses PgAppForge exception handling patterns'
             )
         else:
             validation_results['integration_issues'].append(
-                '❌ Not using Flask-AppBuilder exception patterns'
+                '❌ Not using PgAppForge exception patterns'
             )
         
         # Test 8: Bulk Operation Security
@@ -238,7 +238,7 @@ def validate_architectural_improvements():
         view_source = inspect.getsource(RefactoredView)
         if '_approve_items' in view_source and 'len(items) >' in view_source:
             validation_results['security_features_preserved'].append(
-                '✅ Bulk operation limits maintained with Flask-AppBuilder patterns'
+                '✅ Bulk operation limits maintained with PgAppForge patterns'
             )
         else:
             validation_results['integration_issues'].append(
@@ -325,28 +325,28 @@ def generate_refactoring_report(results: Dict):
     log.info(f"   Security Features Preserved: {total_security}")
     log.info(f"   Integration Issues: {total_issues}")
     
-    # Flask-AppBuilder Integration Score
+    # PgAppForge Integration Score
     if total_issues == 0:
         score = 100
     else:
         score = max(0, ((total_improvements + total_security) - total_issues) * 10)
     
-    log.info(f"   Flask-AppBuilder Integration Score: {score}/100")
+    log.info(f"   PgAppForge Integration Score: {score}/100")
     
     if score >= 90:
-        log.info("   Rating: 🏆 EXCELLENT Flask-AppBuilder integration")
+        log.info("   Rating: 🏆 EXCELLENT PgAppForge integration")
     elif score >= 70:
-        log.info("   Rating: ✅ GOOD Flask-AppBuilder integration")
+        log.info("   Rating: ✅ GOOD PgAppForge integration")
     else:
         log.warning("   Rating: ⚠️  NEEDS IMPROVEMENT")
     
     log.info("\n🎯 KEY ACHIEVEMENTS:")
     log.info("   1. ✅ Replaced custom security with @has_access decorators")
-    log.info("   2. ✅ Integrated with Flask-AppBuilder permission system")
+    log.info("   2. ✅ Integrated with PgAppForge permission system")
     log.info("   3. ✅ Used proper ORM models instead of JSON storage")
-    log.info("   4. ✅ Leveraged Flask-AppBuilder session management")
-    log.info("   5. ✅ Added Flask-AppBuilder audit logging integration")
-    log.info("   6. ✅ Implemented Flask-AppBuilder cache-based rate limiting")
+    log.info("   4. ✅ Leveraged PgAppForge session management")
+    log.info("   5. ✅ Added PgAppForge audit logging integration")
+    log.info("   6. ✅ Implemented PgAppForge cache-based rate limiting")
     log.info("   7. ✅ Added internationalization support")
     log.info("   8. ✅ Achieved significant complexity reduction")
     

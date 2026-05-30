@@ -1,7 +1,7 @@
-from flask_appbuilder import ModelRestApi
-from flask_appbuilder.api import BaseApi, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.models.filters import BaseFilter
+from pgappforge import ModelRestApi
+from pgappforge.api import BaseApi, expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.models.filters import BaseFilter
 from sqlalchemy import or_
 
 from . import appbuilder, db

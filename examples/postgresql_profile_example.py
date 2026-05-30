@@ -2,7 +2,7 @@
 """
 PostgreSQL Advanced Profile Management Example
 
-This example demonstrates Flask-AppBuilder's comprehensive PostgreSQL support
+This example demonstrates PgAppForge's comprehensive PostgreSQL support
 including JSONB, PostGIS, pgvector, arrays, and other PostgreSQL-specific types.
 
 Prerequisites:
@@ -27,21 +27,21 @@ import uuid
 from typing import List, Optional
 
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.security.sqla.models import User
+from pgappforge import AppBuilder, SQLA
+from pgappforge.models.sqla import Model
+from pgappforge.security.sqla.models import User
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import (
     ARRAY, INET, INTERVAL, JSONB, UUID, BIT, TSVECTOR
 )
 
 # Import PostgreSQL-specific components
-from flask_appbuilder.models.postgresql import (
+from pgappforge.models.postgresql import (
     AdvancedPostgreSQLProfileMixin,
     Vector, Geometry, Geography, LTREE, HSTORE,
     PostgreSQLProfileMixin, PostGISProfileMixin, PgVectorProfileMixin
 )
-from flask_appbuilder.widgets_postgresql.postgresql import (
+from pgappforge.widgets_postgresql.postgresql import (
     JSONBWidget, PostgreSQLArrayWidget, PostGISGeometryWidget,
     PgVectorWidget, PostgreSQLUUIDWidget
 )

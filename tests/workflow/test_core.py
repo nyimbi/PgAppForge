@@ -1,5 +1,5 @@
 """
-Tests for Flask-AppBuilder Workflow Core System
+Tests for PgAppForge Workflow Core System
 
 Tests the core workflow engine, state management, and form sequencing functionality.
 """
@@ -10,15 +10,15 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 from flask import Flask
-from flask_appbuilder import AppBuilder
+from pgappforge import AppBuilder
 from flask_sqlalchemy import SQLAlchemy
 
-from flask_appbuilder.workflow.core import (
+from pgappforge.workflow.core import (
     WorkflowEngine, WorkflowDefinition, WorkflowStepDefinition, WorkflowStepType,
     WorkflowState, get_workflow_engine
 )
-from flask_appbuilder.workflow.forms import WorkflowFormSequence, FormOrchestrator
-from flask_appbuilder.workflow.mixins import WorkflowMixin
+from pgappforge.workflow.forms import WorkflowFormSequence, FormOrchestrator
+from pgappforge.workflow.mixins import WorkflowMixin
 
 
 class TestWorkflowDefinition(unittest.TestCase):
@@ -136,7 +136,7 @@ class TestWorkflowState(unittest.TestCase):
             )
             
             # Mock workflow definition with 3 steps
-            with patch('flask_appbuilder.workflow.core.get_workflow_engine') as mock_engine:
+            with patch('pgappforge.workflow.core.get_workflow_engine') as mock_engine:
                 mock_workflow = Mock()
                 mock_workflow.steps = [Mock(id=f"step_{i}") for i in range(1, 4)]
                 mock_engine.return_value.workflow_definitions = {"test_workflow": mock_workflow}
@@ -296,7 +296,7 @@ class TestWorkflowFormSequence(unittest.TestCase):
     """Test WorkflowFormSequence class."""
 
     def setUp(self):
-        from flask_appbuilder.workflow.forms import FieldDefinition, FormStepDefinition
+        from pgappforge.workflow.forms import FieldDefinition, FormStepDefinition
         
         self.field1 = FieldDefinition(
             name="name",
@@ -397,7 +397,7 @@ class TestWorkflowMixin(unittest.TestCase):
             self.db.create_all()
             
             # Mock workflow engine
-            with patch('flask_appbuilder.workflow.mixins.get_workflow_engine') as mock_engine:
+            with patch('pgappforge.workflow.mixins.get_workflow_engine') as mock_engine:
                 mock_state = Mock()
                 mock_state.id = "test_state_id"
                 mock_engine.return_value.create_workflow_state.return_value = mock_state
@@ -491,7 +491,7 @@ class TestIntegration(unittest.TestCase):
         with self.app.app_context():
             self.db.create_all()
             
-            from flask_appbuilder.workflow.forms import (
+            from pgappforge.workflow.forms import (
                 FieldDefinition, FormStepDefinition, FormOrchestrator
             )
             

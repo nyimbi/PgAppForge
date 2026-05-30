@@ -10,7 +10,7 @@ Tests database transaction safety and race condition prevention:
 5. Concurrent approval processing
 6. Deadlock prevention
 
-Environment: Flask-AppBuilder with SQLAlchemy threading support
+Environment: PgAppForge with SQLAlchemy threading support
 """
 
 import pytest
@@ -29,10 +29,10 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from flask_appbuilder.process.approval.workflow_engine import (
+from pgappforge.process.approval.workflow_engine import (
     ApprovalWorkflowEngine, ApprovalTransactionError
 )
-from flask_appbuilder.process.approval.chain_manager import ApprovalChainManager
+from pgappforge.process.approval.chain_manager import ApprovalChainManager
 
 
 class TestApprovalWorkflowConcurrency(unittest.TestCase):
@@ -48,7 +48,7 @@ class TestApprovalWorkflowConcurrency(unittest.TestCase):
             'pool_recycle': -1
         }
         
-        # Mock Flask-AppBuilder components
+        # Mock PgAppForge components
         self.mock_appbuilder = Mock()
         self.mock_db_session = Mock()
         self.mock_appbuilder.get_session.return_value = self.mock_db_session

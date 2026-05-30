@@ -2,8 +2,8 @@ import datetime
 import math
 
 from flask import Markup
-from flask_appbuilder import Model
-from flask_appbuilder.models.decorators import renders
+from pgappforge import Model
+from pgappforge.models.decorators import renders
 from sqlalchemy import Column, Date, Float, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 

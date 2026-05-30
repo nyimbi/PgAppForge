@@ -51,7 +51,7 @@ class RealFunctionalityValidator:
         self._setup_test_environment()
     
     def _setup_test_environment(self):
-        """Set up test environment with mocks for Flask-AppBuilder dependencies."""
+        """Set up test environment with mocks for PgAppForge dependencies."""
         
         # Create comprehensive mocks that allow testing
         self.mock_appbuilder = Mock()
@@ -408,7 +408,7 @@ class RealFunctionalityValidator:
             )
             
             # Verify WorkflowAction is a Model class
-            from flask_appbuilder.models.sqla import Model
+            from pgappforge.models.sqla import Model
             is_model = hasattr(WorkflowAction, '__tablename__')
             
             # Verify WorkflowActionType is an Enum

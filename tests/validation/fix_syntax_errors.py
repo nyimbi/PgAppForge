@@ -215,7 +215,7 @@ class SyntaxErrorFixer:
             try:
                 # Create a minimal working version
                 content_template = f'''"""
-{file_path.name} - Flask-AppBuilder Component
+{file_path.name} - PgAppForge Component
 
 This module has been restored to a minimal working state due to syntax errors.
 Original functionality is preserved where possible.
@@ -295,12 +295,12 @@ pass
 
 def main():
     """Main function to fix syntax errors."""
-    flask_appbuilder_path = Path(__file__).parent.parent.parent / "flask_appbuilder"
+    pgappforge_path = Path(__file__).parent.parent.parent / "pgappforge"
     
     print("Starting syntax error fixing process...")
     print("=" * 60)
     
-    fixer = SyntaxErrorFixer(str(flask_appbuilder_path))
+    fixer = SyntaxErrorFixer(str(pgappforge_path))
     results = fixer.fix_all_syntax_errors()
     
     print("\n" + "=" * 60)

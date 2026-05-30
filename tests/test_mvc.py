@@ -4,28 +4,28 @@ import logging
 from typing import Set
 
 from flask import Flask, make_response, redirect, session
-from flask_appbuilder import AppBuilder, SQLA
-from flask_appbuilder.actions import action
-from flask_appbuilder.baseviews import expose
-from flask_appbuilder.charts.views import (
+from pgappforge import AppBuilder, SQLA
+from pgappforge.actions import action
+from pgappforge.baseviews import expose
+from pgappforge.charts.views import (
     ChartView,
     DirectByChartView,
     DirectChartView,
     GroupByChartView,
     TimeChartView,
 )
-from flask_appbuilder.hooks import before_request
-from flask_appbuilder.models.generic import PSModel
-from flask_appbuilder.models.generic import PSSession
-from flask_appbuilder.models.generic.interface import GenericInterface
-from flask_appbuilder.models.group import aggregate_avg, aggregate_count, aggregate_sum
-from flask_appbuilder.models.sqla.filters import (
+from pgappforge.hooks import before_request
+from pgappforge.models.generic import PSModel
+from pgappforge.models.generic import PSSession
+from pgappforge.models.generic.interface import GenericInterface
+from pgappforge.models.group import aggregate_avg, aggregate_count, aggregate_sum
+from pgappforge.models.sqla.filters import (
     FilterEqual,
     FilterEqualFunction,
     FilterStartsWith,
 )
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.views import CompactCRUDMixin, MasterDetailView, ModelView
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.views import CompactCRUDMixin, MasterDetailView, ModelView
 from flask_wtf import CSRFProtect
 from tests.base import BaseMVCTestCase, FABTestCase
 from tests.const import (
@@ -1561,8 +1561,8 @@ class MVCTestCase(BaseMVCTestCase):
         """
         MVC: Test class method permission name override
         """
-        from flask_appbuilder import ModelView
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge import ModelView
+        from pgappforge.models.sqla.interface import SQLAInterface
 
         class Model1PermOverride(ModelView):
             datamodel = SQLAInterface(Model1)
@@ -1627,8 +1627,8 @@ class MVCTestCase(BaseMVCTestCase):
         """
         MVC: Test method permission name override
         """
-        from flask_appbuilder import ModelView
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge import ModelView
+        from pgappforge.models.sqla.interface import SQLAInterface
 
         class Model1PermOverride(ModelView):
             datamodel = SQLAInterface(Model1)
@@ -1740,8 +1740,8 @@ class MVCTestCase(BaseMVCTestCase):
         """
         MVC: Test action permission name override
         """
-        from flask_appbuilder import action, ModelView
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge import action, ModelView
+        from pgappforge.models.sqla.interface import SQLAInterface
 
         class Model1PermOverride(ModelView):
             datamodel = SQLAInterface(Model1)
@@ -1816,8 +1816,8 @@ class MVCTestCase(BaseMVCTestCase):
         """
         MVC: Test permission name converge compress
         """
-        from flask_appbuilder import ModelView
-        from flask_appbuilder.models.sqla.interface import SQLAInterface
+        from pgappforge import ModelView
+        from pgappforge.models.sqla.interface import SQLAInterface
 
         class Model1PermConverge(ModelView):
             datamodel = SQLAInterface(Model1)

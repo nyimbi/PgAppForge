@@ -1,9 +1,9 @@
 import calendar
 
-from flask_appbuilder import GroupByChartView, ModelView
-from flask_appbuilder.models.group import aggregate_count
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.widgets import (
+from pgappforge import GroupByChartView, ModelView
+from pgappforge.models.group import aggregate_count
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.widgets import (
     ListBlock, ListItem, ListLinkWidget, ListThumbnail, ShowBlockWidget
 )
 

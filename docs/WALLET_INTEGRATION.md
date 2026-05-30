@@ -1,6 +1,6 @@
-# Wallet Integration for Flask-AppBuilder
+# Wallet Integration for PgAppForge
 
-This document describes the cryptocurrency wallet integration feature added to Flask-AppBuilder, enabling Web3 functionality and blockchain wallet management.
+This document describes the cryptocurrency wallet integration feature added to PgAppForge, enabling Web3 functionality and blockchain wallet management.
 
 ## Overview
 
@@ -34,7 +34,7 @@ The wallet integration module provides:
 4. **Security Features**
    - Wallet address validation
    - Signature verification (extensible for production use)
-   - Access control through Flask-AppBuilder permissions
+   - Access control through PgAppForge permissions
 
 ### API Endpoints
 
@@ -55,12 +55,12 @@ The wallet integration module provides:
 
 ### 1. Enable Wallet Integration
 
-Add the wallet manager to your Flask-AppBuilder configuration:
+Add the wallet manager to your PgAppForge configuration:
 
 ```python
 # In your config.py
 ADDON_MANAGERS = [
-    'flask_appbuilder.security.wallet.WalletManager'
+    'pgappforge.security.wallet.WalletManager'
 ]
 ```
 
@@ -81,7 +81,7 @@ CREATE INDEX idx_wallet_address ON ab_user(wallet_address);
 
 ### 3. Optional Configuration
 
-Configure wallet settings in your Flask-AppBuilder app:
+Configure wallet settings in your PgAppForge app:
 
 ```python
 WALLET_CONFIG = {
@@ -143,7 +143,7 @@ const response = await fetch('/api/v1/wallet/verify', {
 ### Check Wallet Status (Python)
 
 ```python
-from flask_appbuilder.security import current_user
+from pgappforge.security import current_user
 
 # Check if user has a wallet
 if current_user.has_wallet():
@@ -179,10 +179,10 @@ user.get_wallet_metadata()     # Returns metadata as dict
 
 ### Access Control
 
-Use Flask-AppBuilder's built-in permissions system:
+Use PgAppForge's built-in permissions system:
 
 ```python
-from flask_appbuilder.security.decorators import has_access
+from pgappforge.security.decorators import has_access
 
 @has_access
 @expose('/wallet-required-page')
@@ -250,7 +250,7 @@ Enable debug logging for wallet operations:
 
 ```python
 import logging
-logging.getLogger('flask_appbuilder.security.wallet').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.security.wallet').setLevel(logging.DEBUG)
 ```
 
 ## Extending the Integration
@@ -285,15 +285,15 @@ class CustomWalletApi(WalletApi):
 
 ## License
 
-This wallet integration is part of Flask-AppBuilder and is provided under the same license terms.
+This wallet integration is part of PgAppForge and is provided under the same license terms.
 
 ## Support
 
 For issues related to wallet integration:
 
 1. Check the troubleshooting section above
-2. Review Flask-AppBuilder documentation
-3. Submit issues to the Flask-AppBuilder GitHub repository
+2. Review PgAppForge documentation
+3. Submit issues to the PgAppForge GitHub repository
 4. Contact the development team for enterprise support
 
 ---

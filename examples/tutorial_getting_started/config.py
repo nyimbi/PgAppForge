@@ -1,12 +1,12 @@
 """
-Flask-AppBuilder Configuration for Getting Started Tutorial
+PgAppForge Configuration for Getting Started Tutorial
 
 This configuration demonstrates best practices for a production-ready
-Flask-AppBuilder application with AI and collaborative features.
+PgAppForge application with AI and collaborative features.
 """
 
 import os
-from flask_appbuilder.security.manager import AUTH_DB
+from pgappforge.security.manager import AUTH_DB
 
 # =============================================================================
 # Flask Core Configuration
@@ -24,7 +24,7 @@ SQLALCHEMY_DATABASE_URI = os.environ.get(
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # =============================================================================
-# Flask-AppBuilder Configuration
+# PgAppForge Configuration
 # =============================================================================
 
 # Authentication Configuration

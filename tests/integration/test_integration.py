@@ -2,7 +2,7 @@
 """
 Comprehensive Integration Test Suite for Enhanced Wizard System
 
-Tests all components working together without relying on Flask-AppBuilder imports.
+Tests all components working together without relying on PgAppForge imports.
 """
 
 import sys
@@ -19,7 +19,7 @@ sys.path.insert(0, project_root)
 def test_wizard_config_integration():
     """Test wizard configuration system"""
     try:
-        from flask_appbuilder.config.wizard import WizardConfig, WizardUIConfig
+        from pgappforge.config.wizard import WizardConfig, WizardUIConfig
         
         print("✓ Testing wizard configuration...")
         
@@ -47,7 +47,7 @@ def test_wizard_config_integration():
 def test_wizard_forms_integration():
     """Test wizard forms functionality"""
     try:
-        from flask_appbuilder.forms.wizard import WizardForm, WizardFormManager
+        from pgappforge.forms.wizard import WizardForm, WizardFormManager
         
         print("✓ Testing wizard forms...")
         
@@ -84,7 +84,7 @@ def test_wizard_forms_integration():
 def test_theme_system_integration():
     """Test theme system functionality"""
     try:
-        from flask_appbuilder.theming.wizard_themes import (
+        from pgappforge.theming.wizard_themes import (
             WizardThemeManager, 
             WizardTheme,
             WizardColorScheme
@@ -114,7 +114,7 @@ def test_theme_system_integration():
 def test_error_handling_integration():
     """Test error handling system"""
     try:
-        from flask_appbuilder.utils.error_handling import (
+        from pgappforge.utils.error_handling import (
             WizardErrorHandler,
             WizardErrorType,
             WizardErrorSeverity,
@@ -149,7 +149,7 @@ def test_error_handling_integration():
 def test_analytics_integration():
     """Test analytics system"""
     try:
-        from flask_appbuilder.analytics.wizard_analytics import (
+        from pgappforge.analytics.wizard_analytics import (
             WizardAnalyticsEngine,
             WizardCompletionStats
         )
@@ -184,7 +184,7 @@ def test_analytics_integration():
 def test_collaboration_integration():
     """Test collaboration system"""
     try:
-        from flask_appbuilder.collaboration.wizard_collaboration import (
+        from pgappforge.collaboration.wizard_collaboration import (
             WizardCollaborationManager,
             CollaborationPermission
         )
@@ -217,7 +217,7 @@ def test_collaboration_integration():
 def test_migration_system_integration():
     """Test migration/export system"""
     try:
-        from flask_appbuilder.migration.wizard_migration import (
+        from pgappforge.migration.wizard_migration import (
             WizardMigrationManager,
             WizardExporter
         )
@@ -259,9 +259,9 @@ def test_migration_system_integration():
 def test_data_flow_integration():
     """Test data flow between components"""
     try:
-        from flask_appbuilder.config.wizard import WizardConfig
-        from flask_appbuilder.theming.wizard_themes import WizardThemeManager
-        from flask_appbuilder.analytics.wizard_analytics import WizardAnalyticsEngine
+        from pgappforge.config.wizard import WizardConfig
+        from pgappforge.theming.wizard_themes import WizardThemeManager
+        from pgappforge.analytics.wizard_analytics import WizardAnalyticsEngine
         
         print("✓ Testing cross-component data flow...")
         

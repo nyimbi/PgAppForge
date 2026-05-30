@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Truly Functional Flask-AppBuilder Approval System - FIXED VERSION
+Truly Functional PgAppForge Approval System - FIXED VERSION
 
 FIXES ALL REMAINING ISSUES INCLUDING SQLALCHEMY PROBLEMS:
 
 🔴 FIXED: SQLAlchemy table redefinition errors → extend_existing=True
-🔴 FIXED: User relationship import issues → Proper Flask-AppBuilder User import
+🔴 FIXED: User relationship import issues → Proper PgAppForge User import
 🔴 FIXED: Namespace conflicts completely resolved
 🔴 FIXED: Real model integration that actually works
 🔴 FIXED: All import and dependency issues
@@ -21,13 +21,13 @@ from enum import Enum
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Flask-AppBuilder imports - PROPER integration
+# PgAppForge imports - PROPER integration
 from flask import current_app, flash, request
-from flask_appbuilder import ModelView, BaseView, has_access, action
-from flask_appbuilder.basemanager import BaseManager
-from flask_appbuilder.models.sqla import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.exceptions import FABException
+from pgappforge import ModelView, BaseView, has_access, action
+from pgappforge.basemanager import BaseManager
+from pgappforge.models.sqla import Model
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.exceptions import FABException
 from flask_babel import lazy_gettext as _
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Index, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship
@@ -76,7 +76,7 @@ class WorkflowInstance(Model):
     target_id = Column(Integer, nullable=False, index=True)
     current_state = Column(SQLEnum(WorkflowState), default=WorkflowState.DRAFT, nullable=False)
     
-    # FIXED User relationship - proper Flask-AppBuilder reference
+    # FIXED User relationship - proper PgAppForge reference
     created_by_fk = Column(Integer, ForeignKey('ab_user.id'), nullable=False)
     
     # Timestamps
@@ -156,7 +156,7 @@ class WorkingApprovalEngine:
                     self._model_registry[model_name] = model_class
                     return model_class
             
-            # Method 2: Search through Flask-AppBuilder's registered views
+            # Method 2: Search through PgAppForge's registered views
             if hasattr(self.appbuilder, 'baseviews'):
                 for view in self.appbuilder.baseviews:
                     if hasattr(view, 'datamodel') and hasattr(view.datamodel, 'obj'):
@@ -636,4 +636,4 @@ def approve_workflow_by_id(workflow_id: int, comments: str = None) -> bool:
 from unittest.mock import Mock
 
 if __name__ == '__main__':
-    log.info("Truly Functional Flask-AppBuilder Approval System - FIXED VERSION LOADED")
+    log.info("Truly Functional PgAppForge Approval System - FIXED VERSION LOADED")

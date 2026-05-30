@@ -9,7 +9,7 @@ from mongoengine import (
     FileField,
     ImageField,
 )
-from flask_appbuilder.security.mongoengine.models import User
+from pgappforge.security.mongoengine.models import User
 
 mindate = datetime.date(datetime.MINYEAR, 1, 1)
 

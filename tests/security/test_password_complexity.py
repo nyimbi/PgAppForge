@@ -1,5 +1,5 @@
-from flask_appbuilder.exceptions import PasswordComplexityValidationError
-from flask_appbuilder.validators import default_password_complexity
+from pgappforge.exceptions import PasswordComplexityValidationError
+from pgappforge.validators import default_password_complexity
 from parameterized import parameterized
 
 from ..base import FABTestCase

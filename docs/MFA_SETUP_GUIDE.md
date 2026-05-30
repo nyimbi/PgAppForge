@@ -2,7 +2,7 @@
 
 ## Overview
 
-Flask-AppBuilder now includes built-in Multi-Factor Authentication (MFA) support with the following features:
+PgAppForge now includes built-in Multi-Factor Authentication (MFA) support with the following features:
 
 - **TOTP Authentication** - Authenticator apps (Google Authenticator, Authy, etc.)
 - **SMS Authentication** - via Twilio or AWS SNS
@@ -34,7 +34,7 @@ pip install pyotp qrcode[pil] Pillow twilio boto3 sendgrid
 
 ### 2. Configure Your Application
 
-Add the following to your Flask-AppBuilder `config.py`:
+Add the following to your PgAppForge `config.py`:
 
 ```python
 # Enable MFA
@@ -172,7 +172,7 @@ FAB_AWS_REGION = "us-east-1"
 
 ### Setting Up MFA
 
-1. **Login** to your Flask-AppBuilder application
+1. **Login** to your PgAppForge application
 2. **Navigate** to MFA Settings (usually in user profile/security)
 3. **Choose** MFA method (Authenticator App, SMS, or Email)
 4. **Follow** setup instructions:
@@ -259,7 +259,7 @@ Enable debug logging for MFA:
 import logging
 
 # Enable debug logging
-logging.getLogger('flask_appbuilder.security.mfa').setLevel(logging.DEBUG)
+logging.getLogger('pgappforge.security.mfa').setLevel(logging.DEBUG)
 ```
 
 ### Getting Help
@@ -268,14 +268,14 @@ logging.getLogger('flask_appbuilder.security.mfa').setLevel(logging.DEBUG)
 2. Verify all required dependencies are installed
 3. Test provider credentials independently
 4. Review configuration for typos
-5. Check Flask-AppBuilder documentation for updates
+5. Check PgAppForge documentation for updates
 
 ## Example Complete Configuration
 
 ```python
 # Complete MFA configuration example
 from flask import Flask
-from flask_appbuilder import AppBuilder, SQLA
+from pgappforge import AppBuilder, SQLA
 
 app = Flask(__name__)
 app.config.update({
@@ -308,7 +308,7 @@ app.config.update({
     'FAB_MFA_RATE_LIMIT_ENABLED': True,
 })
 
-# Initialize Flask-AppBuilder
+# Initialize PgAppForge
 db = SQLA(app)
 appbuilder = AppBuilder(app, db.session)
 

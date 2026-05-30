@@ -13,13 +13,13 @@ import sqlalchemy as sa
 from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.engine import create_engine
 
-from flask_appbuilder.cli.generators.database_inspector import (
+from pgappforge.cli.generators.database_inspector import (
     EnhancedDatabaseInspector,
     MasterDetailInfo,
     RelationshipType,
     RelationshipInfo
 )
-from flask_appbuilder.cli.generators.view_generator import (
+from pgappforge.cli.generators.view_generator import (
     BeautifulViewGenerator,
     ViewGenerationConfig
 )
