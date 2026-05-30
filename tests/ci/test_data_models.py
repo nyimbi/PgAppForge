@@ -790,7 +790,7 @@ class TestDataModelFilters(FABTestCase):
         """Test FilterStartsWith functionality"""
         with self.app.app_context():
             filters = self.interface.get_filters()
-            filters.add_filter(FilterStartsWith, 'title', 'A')
+            filters.add_filter('title', FilterStartsWith, 'A')
             count, articles = self.interface.query(filters=filters)
             for article in articles:
                 self.assertTrue(article.title.startswith('A'))

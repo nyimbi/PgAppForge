@@ -200,11 +200,24 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             log.error(c.LOGMSG_ERR_SEC_CREATE_DB, e)
             raise RuntimeError(f"DB creation failed: {e}") from e
 
+    def is_item_public(self, permission_name: str, view_name: str) -> bool:
+        """Check if a permission+view pair is accessible to the Public role."""
+        public_role = self.find_role(self.auth_role_public)
+        if public_role:
+            for pvm in getattr(public_role, 'permissions', []):
+                if (getattr(pvm.permission, 'name', None) == permission_name
+                        and getattr(pvm.view_menu, 'name', None) == view_name):
+                    return True
+        return False
+
     def has_access(self, permission_name: str, view_name: str) -> bool:
         """Check if the current user or Public role has a permission on a view."""
-        from flask_login import current_user
-        if current_user.is_authenticated:
-            return self.has_access_for_user(permission_name, view_name, current_user)
+        try:
+            from flask_login import current_user
+            if current_user and current_user.is_authenticated:
+                return self.has_access_for_user(permission_name, view_name, current_user)
+        except Exception:
+            pass
         return self.is_item_public(permission_name, view_name)
 
     def has_access_for_user(self, permission_name: str, view_name: str, user) -> bool:
