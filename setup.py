@@ -70,6 +70,7 @@ setup(
         "werkzeug<4",
         "itsdangerous>=1.1.0, <3.0.0",  # Required for tenant email verification
         "inflect>=7.0.0, <8",
+        "bleach>=6.0.0",  # XSS sanitisation for widgets
         "psycopg2-binary>=2.9.0",  # PostgreSQL only
     ],
     extras_require={
