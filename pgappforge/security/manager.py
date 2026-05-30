@@ -407,6 +407,17 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         g.user = current_user
         return result
 
+    def logout_user(self) -> None:
+        """Log out the current user via Flask-Login and clear g.user.
+
+        Delegates to flask_login.logout_user and resets the g.user proxy
+        to the anonymous user.
+        """
+        from flask import g
+        from flask_login import logout_user as _flask_logout_user
+        _flask_logout_user()
+        g.user = current_user
+
     def auth_user_db(self, username: str, password: str):
         """Authenticate a user by username and password against the DB.
 
