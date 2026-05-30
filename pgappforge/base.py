@@ -18,7 +18,7 @@ from .const import (
     LOGMSG_WAR_FAB_VIEW_EXISTS,
 )
 from .filters import TemplateFilters
-from .menu import Menu, MenuApi
+from .menu import Menu, MenuApi, MenuApiManager
 from .views import IndexView, UtilView
 # Enhanced plugin system imports
 from .plugins import PluginManager, PluginLoader, SecurePluginLoader, BasePlugin
@@ -152,7 +152,7 @@ class AppBuilder:
         # Babel Manager Class
         self.bm: BabelManager = None  # type: ignore
         self.openapi_manager: OpenApiManager = None  # type: ignore
-        self.menuapi_manager: MenuApi = None  # type: ignore
+        self.menuapi_manager: MenuApiManager = None  # type: ignore
 
         if app is not None:
             self.init_app(app, session)
@@ -219,7 +219,7 @@ class AppBuilder:
         self.sm = self.security_manager_class(self)
         self.bm = BabelManager(self)
         self.openapi_manager = OpenApiManager(self)
-        self.menuapi_manager = MenuApi()
+        self.menuapi_manager = MenuApiManager(self)
 
         # Init event hooks and load configured plugins
         self.hooks.init_app(app)

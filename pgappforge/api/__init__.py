@@ -644,22 +644,15 @@ class BaseApi(AbstractViewApi):
         return re.sub("[._]", " ", name).title()
 
     def get_uninit_inner_views(self) -> List[Type[AbstractViewApi]]:
-        """
-        Will return a list with views that need to be initialized.
-        Normally related_views from ModelView
-        
+        """Return views that need to be initialized (e.g. related_views from ModelView)."""
         return []
 
     def get_init_inner_views(self) -> List[AbstractViewApi]:
-        
-        Sets initialized inner views
-        
+        """Return the list of inner views after they have been initialized."""
         pass  # pragma: no cover
 
     def get_method_permission(self, method_name: str) -> str:
-        
-        Returns the permission name for a method
-        """
+        """Return the permission name for a method, respecting any method_permission_name override."""
         if self.method_permission_name:
             return self.method_permission_name.get(method_name, method_name)
         else:

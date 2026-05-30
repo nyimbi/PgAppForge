@@ -35,7 +35,7 @@ class TestSecurityManager(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-security'
         self.app.config['AUTH_TYPE'] = AUTH_DB
@@ -45,9 +45,6 @@ class TestSecurityManager(FABTestCase):
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_security_manager_initialization(self):
         """Test SecurityManager initializes correctly"""
@@ -114,7 +111,7 @@ class TestUserManagement(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-users'
         self.app.config['AUTH_TYPE'] = AUTH_DB
@@ -122,9 +119,6 @@ class TestUserManagement(FABTestCase):
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_add_user(self):
         """Test adding a new user"""
@@ -234,16 +228,13 @@ class TestRoleBasedAccessControl(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-rbac'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_create_custom_role(self):
         """Test creating custom roles"""
@@ -334,7 +325,7 @@ class TestAuthentication(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-auth'
         self.app.config['AUTH_TYPE'] = AUTH_DB
@@ -342,9 +333,6 @@ class TestAuthentication(FABTestCase):
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
             
             # Create test user
             self.test_user = self.appbuilder.sm.add_user(
@@ -395,7 +383,7 @@ class TestAuthenticationViews(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-auth-views'
         self.app.config['WTF_CSRF_ENABLED'] = False  # Disable CSRF for testing
@@ -404,9 +392,6 @@ class TestAuthenticationViews(FABTestCase):
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.client = self.app.test_client()
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
             
             # Create test user
             self.appbuilder.sm.add_user(
@@ -501,7 +486,7 @@ class TestSecurityConfiguration(FABTestCase):
         """Test security configuration validation"""
         app = Flask(__name__)
         app.config['SECRET_KEY'] = 'test-key'
-        app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         
         # Test that AppBuilder can be created with valid config
         db = SQLA(app)
@@ -516,15 +501,12 @@ class TestPasswordSecurity(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-passwords'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_password_hashing_security(self):
         """Test password hashing uses secure methods"""

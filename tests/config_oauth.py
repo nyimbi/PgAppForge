@@ -4,9 +4,11 @@ from pgappforge.security.manager import AUTH_OAUTH
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or "sqlite:///:memory:"
-) or "sqlite:///" + os.path.join(basedir, "app.db")
-
+SQLALCHEMY_DATABASE_URI = (
+    os.environ.get("SQLALCHEMY_DATABASE_URI")
+    or os.environ.get("PGAPPFORGE_DB")
+    or "postgresql:///pgaf_test"
+)
 SECRET_KEY = "thisismyscretkey"
 
 AUTH_TYPE = AUTH_OAUTH

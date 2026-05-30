@@ -52,16 +52,13 @@ class TestCoreAppBuilderInitialization(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_appbuilder_initialization(self):
         """Test AppBuilder initializes correctly"""
@@ -153,7 +150,7 @@ class TestCoreModelView(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
@@ -165,9 +162,6 @@ class TestCoreModelView(FABTestCase):
         
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_model_view_creation(self):
         """Test ModelView can be created with datamodel"""
@@ -224,7 +218,7 @@ class TestCoreDataModel(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
@@ -270,16 +264,13 @@ class TestCoreSecurity(FABTestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         self.app.config['SECRET_KEY'] = 'test-secret-key'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         
-        with self.app.app_context():
-            self.db.create_all()
-            self.appbuilder.security_manager.create_db()
     
     def test_user_creation(self):
         """Test user creation and authentication"""

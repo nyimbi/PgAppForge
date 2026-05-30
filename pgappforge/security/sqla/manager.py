@@ -121,8 +121,6 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         return self.appbuilder.get_session
 
     def register_views(self):
-        super(SecurityManager, self).register_views()
-
         if self.appbuilder.app.config.get("FAB_ADD_SECURITY_API", False):
             self.appbuilder.add_api(self.permission_api)
             self.appbuilder.add_api(self.role_api)
@@ -150,6 +148,26 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         with self.appbuilder.app.app_context():
             self._create_db_tables()
 
+    @staticmethod
+    def _safe_create_all(engine) -> None:
+        """Call Base.metadata.create_all, ignoring pre-existing tables/indexes.
+
+        extend_existing=True on some models can register indexes multiple times
+        in the same metadata object when modules are re-imported, causing
+        DuplicateTable errors on the second CREATE INDEX even though the object
+        was just created by the same create_all call. Catching and ignoring
+        these is safe — the object already exists and that's fine.
+        """
+        from sqlalchemy.exc import ProgrammingError
+        try:
+            Base.metadata.create_all(engine)
+        except ProgrammingError as exc:
+            orig = getattr(exc, 'orig', None)
+            if orig and orig.__class__.__name__ in ('DuplicateTable', 'DuplicateObject'):
+                log.debug("Ignoring pre-existing DB object during create_all: %s", exc)
+            else:
+                raise
+
     def _create_db_tables(self):
         try:
             from sqlalchemy import inspect as sa_inspect
@@ -158,18 +176,18 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             existing_tables = inspector.get_table_names()
             if "ab_user" not in existing_tables or "ab_group" not in existing_tables:
                 log.info(c.LOGMSG_INF_SEC_NO_DB)
-                Base.metadata.create_all(engine)
+                self._safe_create_all(engine)
                 log.info(c.LOGMSG_INF_SEC_ADD_DB)
-            
-            # Create MFA tables if enabled and not exist
+
+            # Create MFA tables if enabled and not present
             if self.appbuilder.app.config.get('FAB_MFA_ENABLED', False):
-                mfa_tables = ['ab_user_mfa', 'ab_mfa_backup_codes', 'ab_mfa_verification_attempts', 'ab_mfa_policies']
-                missing_mfa_tables = [table for table in mfa_tables if table not in existing_tables]
-                if missing_mfa_tables:
-                    log.info(f"Creating MFA tables: {', '.join(missing_mfa_tables)}")
-                    Base.metadata.create_all(engine)
-                    
-            super(SecurityManager, self).create_db()
+                mfa_tables = ['ab_user_mfa', 'ab_mfa_backup_codes',
+                              'ab_mfa_verification_attempts', 'ab_mfa_policies']
+                missing = [t for t in mfa_tables if t not in existing_tables]
+                if missing:
+                    log.info("Creating MFA tables: %s", ', '.join(missing))
+                    self._safe_create_all(engine)
+
         except Exception as e:
             log.error(c.LOGMSG_ERR_SEC_CREATE_DB, e)
             raise RuntimeError(f"DB creation failed: {e}") from e
@@ -731,6 +749,17 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             .filter_by(view_menu_id=view_menu.id)
             .all()
         )
+
+    def add_permissions_view(self, base_permissions, view_menu):
+        """Register all permissions for a view — called when a view is registered."""
+        if self.appbuilder.update_perms:
+            for permission in base_permissions:
+                self.add_permission_view_menu(permission, view_menu)
+
+    def add_permissions_menu(self, view_menu_name):
+        """Register the menu_access permission for a menu item."""
+        if self.appbuilder.update_perms:
+            self.add_permission_view_menu("menu_access", view_menu_name)
 
     def add_permission_view_menu(self, permission_name, view_menu_name):
         """

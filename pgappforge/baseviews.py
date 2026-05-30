@@ -97,7 +97,9 @@ class AbstractViewApi:
 
     def get_init_inner_views(self):
         """
-        Sets initialized inner views
+        Returns the list of inner views that have been initialized.
+
+        Inner views are sub-views embedded within this view (e.g. related model views).
         """
         ...
 
@@ -593,7 +595,10 @@ class BaseModelView(BaseView):
 
     def __init__(self, **kwargs):
         """
-        Constructor
+        Initialize the base model view.
+
+        Accepts ``datamodel`` (SQLAInterface) and all class-level properties as
+        keyword arguments, enabling programmatic view creation without subclassing.
         """
         datamodel = kwargs.get("datamodel", None)
         if datamodel:

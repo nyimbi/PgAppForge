@@ -180,6 +180,22 @@ class BaseMVCTestCase(FABTestCase):
         logging.basicConfig(level=logging.ERROR)
 
         self.db = SQLA(self.app)
+        # Clean state before each test class. For PostgreSQL, drop the public
+        # schema and recreate it (guarantees all tables/indexes are gone even if
+        # some model modules weren't imported yet). For SQLite :memory: this
+        # path is skipped — each engine instance is already a fresh DB.
+        uri = self.app.config.get("SQLALCHEMY_DATABASE_URI", "")
+        if uri.startswith("postgresql"):
+            with self.app.app_context():
+                from sqlalchemy import text as _sa_text
+                with self.db.engine.connect() as _conn:
+                    _conn.execute(_sa_text("DROP SCHEMA public CASCADE"))
+                    _conn.execute(_sa_text("CREATE SCHEMA public"))
+                    _conn.execute(_sa_text("GRANT ALL ON SCHEMA public TO PUBLIC"))
+                    # Restore extensions that live in public schema
+                    for _ext in ("pg_trgm", "ltree", "postgis"):
+                        _conn.execute(_sa_text(f"CREATE EXTENSION IF NOT EXISTS {_ext}"))
+                    _conn.commit()
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.create_default_users(self.appbuilder)
 

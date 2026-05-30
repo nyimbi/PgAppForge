@@ -386,6 +386,13 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         limiter.init_app(app)
         return limiter
 
+    def add_limit_view(self, baseview) -> None:
+        """Apply view-level rate limits defined on the view's ``limits`` attribute."""
+        if not hasattr(self, "limiter") or self.limiter is None:
+            return
+        for limit in getattr(baseview, "limits", []):
+            self.limiter.limit(limit)(baseview.__class__)
+
     def load_user(self, pk):
         """Flask-Login user_loader callback — load a user by primary key."""
         return self.get_user_by_id(int(pk))

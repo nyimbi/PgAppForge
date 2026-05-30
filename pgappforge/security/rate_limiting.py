@@ -42,8 +42,8 @@ class SecurityRateLimiter:
         })
         
         self.limiter = Limiter(
-            app,
             key_func=self._get_limiter_key,
+            app=app,
             default_limits=[app.config['RATELIMIT_DEFAULT']],
             storage_uri=app.config['RATELIMIT_STORAGE_URL'],
             headers_enabled=app.config['RATELIMIT_HEADERS_ENABLED']

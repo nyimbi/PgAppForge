@@ -9,6 +9,8 @@ from .security.decorators import permission_name, protect
 
 
 class MenuItem(object):
+    """A single navigation menu item with optional children and a conditional display function."""
+
     def __init__(
         self, name, href="", icon="", label="", childs=None, baseview=None, cond=None
     ):
@@ -21,9 +23,11 @@ class MenuItem(object):
         self.cond = cond
 
     def should_render(self) -> bool:
+        """Return True if this menu item should be visible (evaluates the optional cond callable)."""
         return bool(self.cond()) if self.cond is not None else True
 
     def get_url(self):
+        """Return the resolved URL for this menu item, falling back to the href string."""
         if not self.href:
             if not self.baseview:
                 return ""
@@ -49,6 +53,8 @@ class MenuItem(object):
 
 
 class Menu(object):
+    """Application navigation menu — holds a tree of MenuItems and exposes helpers to add/find entries."""
+
     def __init__(self, reverse=True, extra_classes=""):
         self.menu = []
         if reverse:
@@ -60,9 +66,11 @@ class Menu(object):
         return "navbar-inverse" in self.extra_classes
 
     def get_list(self):
+        """Return the top-level list of MenuItem objects in this menu."""
         return self.menu
 
     def get_flat_name_list(self, menu: "Menu" = None, result: List = None) -> List:
+        """Return a flat list of all menu item names (recursive, depth-first)."""
         menu = menu or self.menu
         result = result or []
         for item in menu:
@@ -125,6 +133,7 @@ class Menu(object):
                         return ret_item
 
     def add_category(self, category, icon="", label="", parent_category=""):
+        """Add a top-level or nested category (dropdown parent) to the menu."""
         label = label or category
         if parent_category == "":
             self.menu.append(MenuItem(name=category, icon=icon, label=label))
@@ -185,6 +194,7 @@ class Menu(object):
                 self.find(category).childs.append(new_menu_item)
 
     def add_separator(self, category="", cond=None):
+        """Add a visual separator (horizontal rule) inside the given category dropdown."""
         menu_item = self.find(category)
         if menu_item:
             menu_item.childs.append(MenuItem("-", cond=cond))
@@ -195,6 +205,8 @@ class Menu(object):
 
 
 class MenuApi(BaseApi):
+    """REST API endpoint that exposes the application menu structure as JSON."""
+
     resource_name = "menu"
     openapi_spec_tag = "Menu"
 
@@ -246,6 +258,8 @@ class MenuApi(BaseApi):
 
 
 class MenuApiManager(BaseManager):
+    """Registers the MenuApi blueprint when FAB_ADD_MENU_API is enabled (default: True)."""
+
     def register_views(self):
-        if current_app.config.get("FAB_ADD_MENU_API", True):
+        if self.appbuilder.app.config.get("FAB_ADD_MENU_API", True):
             self.appbuilder.add_api(MenuApi)

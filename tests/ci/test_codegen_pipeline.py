@@ -61,7 +61,8 @@ def test_db(tmp_path_factory):
 @pytest.fixture(scope="module")
 def inspector(test_db):
     from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
-    with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
+    uri = os.environ.get("PG_TEST_URI") or f"sqlite:///{test_db}"
+    with EnhancedDatabaseInspector(uri) as insp:
         yield insp
 
 
