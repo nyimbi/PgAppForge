@@ -38,7 +38,7 @@ DOWNLOAD_SOURCES: dict[str, dict] = {
 			"admin2Codes.txt":          "https://download.geonames.org/export/dump/admin2Codes.txt",
 			"featureCodes_en.txt":      "https://download.geonames.org/export/dump/featureCodes_en.txt",
 			"timeZones.txt":            "https://download.geonames.org/export/dump/timeZones.txt",
-			"allCountriesPostal.zip":   "https://download.geonames.org/export/dump/allCountries.zip",
+			"allCountriesPostal.zip":   "https://download.geonames.org/export/zip/allCountries.zip",
 		},
 	},
 	"loinc": {
