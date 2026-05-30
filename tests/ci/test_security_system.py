@@ -362,9 +362,9 @@ class TestAuthentication(FABTestCase):
         """Test user login process"""
         with self.app.app_context():
             with self.app.test_request_context():
-                # Test login
-                login_result = self.appbuilder.sm.login_user(self.test_user)
-                # Test that login infrastructure exists
+                # Reload user in current session to avoid DetachedInstanceError
+                user = self.appbuilder.sm.get_session.merge(self.test_user)
+                login_result = self.appbuilder.sm.login_user(user)
                 self.assertTrue(hasattr(self.appbuilder.sm, 'login_user'))
     
     def test_logout_user(self):
