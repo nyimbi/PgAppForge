@@ -352,7 +352,13 @@ try:
     from .cli.generators.cli_commands import gen
     fab.add_command(gen)
 except ImportError:
-    # Generation tools not available
+    pass
+
+# Import and register deploy commands
+try:
+    from .cli.deploy.commands import deploy
+    fab.add_command(deploy)
+except ImportError:
     pass
 
 # Import and register workflow commands
