@@ -833,6 +833,202 @@ window.wbsCollapseAll = function(cid) {{
 
 # ─── Exports ──────────────────────────────────────────────────────────────────
 
+class PERTWidget:
+	"""PERT (Program Evaluation and Review Technique) network diagram.
+
+	Renders tasks as a directed acyclic graph. Performs forward pass (ES/EF)
+	and backward pass (LS/LF/float) to identify the critical path.
+	Critical path tasks (float ≤ 0) are rendered in red.
+
+	PERT expected duration: E = (O + 4M + P) / 6
+	Variance: σ² = ((P - O) / 6)²
+
+	Features:
+	- Cytoscape.js breadth-first layout (DAG-friendly)
+	- Red = critical path, blue = normal, green = completed
+	- Click a node to see ES/EF/LS/LF/Float in the info bar
+	- 3-point estimates (optimistic/likely/pessimistic) shown on hover
+	- Project total duration calculated automatically
+
+	Args:
+	    id_col:           Primary key column name.
+	    label_col:        Task name column name.
+	    duration_col:     Duration column (used when no 3-point estimates).
+	    optimistic_col:   Optimistic duration estimate column (optional).
+	    likely_col:       Most-likely estimate column (optional).
+	    pessimistic_col:  Pessimistic estimate column (optional).
+	    dependency_col:   Comma-separated predecessor task ID column.
+	    status_col:       Task status column (done/in_progress/todo).
+	    height:           Canvas height in pixels.
+	"""
+
+	def __init__(
+		self,
+		id_col: str = "id",
+		label_col: str = "name",
+		duration_col: str = "duration",
+		optimistic_col: str | None = None,
+		likely_col: str | None = None,
+		pessimistic_col: str | None = None,
+		dependency_col: str | None = None,
+		status_col: str | None = None,
+		height: int = 500,
+	) -> None:
+		self.id_col = id_col
+		self.label_col = label_col
+		self.duration_col = duration_col
+		self.optimistic_col = optimistic_col
+		self.likely_col = likely_col
+		self.pessimistic_col = pessimistic_col
+		self.dependency_col = dependency_col
+		self.status_col = status_col
+		self.height = height
+
+	def render(self, rows: list, container_id: str = "pert") -> Markup:
+		"""Render the PERT network diagram as a Cytoscape.js graph."""
+		_SC = {"done": "#27ae60", "completed": "#27ae60",
+		       "in_progress": "#3498db", "active": "#3498db"}
+
+		# Build task dict with timing defaults
+		tasks: dict[str, dict] = {}
+		for row in rows:
+			tid = str(_row_val(row, self.id_col, ""))
+			o = float(_row_val(row, self.optimistic_col, 0) or 0) if self.optimistic_col else 0
+			m_raw = _row_val(row, self.likely_col or self.duration_col, 1)
+			m = float(m_raw or 1)
+			p = float(_row_val(row, self.pessimistic_col, 0) or 0) if self.pessimistic_col else 0
+			exp = round((o + 4 * m + p) / 6, 2) if (o > 0 and p > 0) else m
+			var = round(((p - o) / 6) ** 2, 2) if (o > 0 and p > 0) else 0
+			deps_raw = str(_row_val(row, self.dependency_col, "") or "") if self.dependency_col else ""
+			deps = [d.strip() for d in deps_raw.split(",") if d.strip()]
+			st = str(_row_val(row, self.status_col, "") or "") if self.status_col else ""
+			tasks[tid] = {
+				"id": tid,
+				"name": str(_row_val(row, self.label_col, "")),
+				"o": o, "m": m, "p": p, "exp": exp, "var": var,
+				"deps": deps, "status": st,
+				"es": 0.0, "ef": 0.0, "ls": 0.0, "lf": 0.0, "float": 0.0,
+			}
+
+		# Topological sort
+		order: list[str] = []
+		seen: set[str] = set()
+		def _visit(tid: str) -> None:
+			if tid in seen:
+				return
+			seen.add(tid)
+			for d in tasks.get(tid, {}).get("deps", []):
+				if d in tasks:
+					_visit(d)
+			order.append(tid)
+		for tid in tasks:
+			_visit(tid)
+
+		# Forward pass
+		for tid in order:
+			t = tasks[tid]
+			t["es"] = max((tasks[d]["ef"] for d in t["deps"] if d in tasks), default=0.0)
+			t["ef"] = round(t["es"] + t["exp"], 2)
+
+		# Backward pass
+		end = max((t["ef"] for t in tasks.values()), default=0.0)
+		for tid in reversed(order):
+			t = tasks[tid]
+			succs = [s for s in tasks.values() if tid in s["deps"]]
+			t["lf"] = min((s["ls"] for s in succs), default=end)
+			t["ls"] = round(t["lf"] - t["exp"], 2)
+			t["float"] = round(t["ls"] - t["es"], 2)
+
+		# Build Cytoscape elements
+		elems: list[dict] = []
+		for t in tasks.values():
+			crit = t["float"] <= 0.001
+			bg = "#e74c3c" if crit else (_SC.get(t["status"].lower(), "") or "#3498db")
+			elems.append({"data": {
+				"id": t["id"], "label": t["name"] + "\n" + str(t["exp"]) + "d",
+				"name": t["name"], "exp": t["exp"], "float": t["float"],
+				"es": t["es"], "ef": t["ef"], "ls": t["ls"], "lf": t["lf"],
+				"o": t["o"], "m": t["m"], "p": t["p"], "var": t["var"],
+				"critical": crit, "bg": bg,
+			}})
+			for dep in t["deps"]:
+				if dep in tasks:
+					dep_crit = tasks[dep]["float"] <= 0.001 and crit
+					elems.append({"data": {
+						"id": "e_" + dep + "_" + t["id"],
+						"source": dep, "target": t["id"], "critical": dep_crit,
+					}})
+
+		crit_count = sum(1 for e in elems if "source" not in e["data"] and e["data"].get("critical"))
+		elems_json = json.dumps(elems)
+		cid = container_id
+		h = self.height
+
+		return Markup(f"""
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.27.0/cytoscape.min.js" crossorigin=""></script>
+<div style="border:1px solid #dee2e6;border-radius:4px;overflow:hidden">
+  <div style="padding:6px 10px;background:#f8f9fa;border-bottom:1px solid #dee2e6;font-size:0.85em">
+    <span style="color:#e74c3c">&#9679;</span> Critical ({crit_count} tasks)
+    &nbsp;<span style="color:#3498db">&#9679;</span> Normal
+    &nbsp;<span style="color:#27ae60">&#9679;</span> Done
+    &nbsp; Duration: <b>{end}d</b>
+    <span style="float:right">
+      <button class="btn btn-xs btn-default" onclick="pertcy_{cid}.fit()">Fit</button>
+    </span>
+  </div>
+  <div id="{cid}" style="height:{h}px;background:#1a1a2e"></div>
+  <div id="{cid}_bar" style="padding:6px 10px;background:#f8f9fa;border-top:1px solid #dee2e6;
+       font-size:0.82em;color:#6c757d;min-height:26px">
+    Click a task to see timing details
+  </div>
+</div>
+<script>
+(function() {{
+  var elems = {elems_json};
+  var cy = cytoscape({{
+    container: document.getElementById('{cid}'),
+    elements: elems,
+    style: [
+      {{ selector: 'node', style: {{
+        'label': 'data(label)', 'text-wrap': 'wrap', 'text-halign': 'center',
+        'text-valign': 'center', 'color': '#fff', 'font-size': '10px',
+        'width': 80, 'height': 45, 'shape': 'rectangle',
+        'background-color': 'data(bg)',
+        'border-width': 0,
+      }} }},
+      {{ selector: 'node[?critical]', style: {{
+        'border-width': 3, 'border-color': '#c0392b',
+      }} }},
+      {{ selector: 'edge', style: {{
+        'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
+        'line-color': '#adb5bd', 'target-arrow-color': '#adb5bd', 'width': 1.5,
+      }} }},
+      {{ selector: 'edge[?critical]', style: {{
+        'line-color': '#e74c3c', 'target-arrow-color': '#e74c3c', 'width': 3,
+      }} }},
+    ],
+    layout: {{ name: 'breadthfirst', directed: true, spacingFactor: 1.5, padding: 20 }},
+  }});
+
+  cy.on('tap', 'node', function(e) {{
+    var d = e.target.data();
+    var three = (d.o && d.p)
+      ? ' | O:' + d.o + ' M:' + d.m + ' P:' + d.p + ' &sigma;&sup2;:' + d.var
+      : '';
+    document.getElementById('{cid}_bar').innerHTML =
+      '<b>' + d.name + '</b>'
+      + ' | ES:' + d.es + ' EF:' + d.ef
+      + ' | LS:' + d.ls + ' LF:' + d.lf
+      + ' | Float:<b style="color:' + (d.critical ? '#e74c3c' : '#27ae60') + '">'
+      + d.float + '</b>' + three;
+  }});
+
+  window['pertcy_{cid}'] = cy;
+}})();
+</script>
+""")
+
+
 __all__ = [
 	"GanttWidget",
 	"KanbanWidget",
@@ -840,4 +1036,5 @@ __all__ = [
 	"SprintBurndownWidget",
 	"MilestoneTimelineWidget",
 	"WBSWidget",
+	"PERTWidget",
 ]
