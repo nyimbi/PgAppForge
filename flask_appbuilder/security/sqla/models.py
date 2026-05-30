@@ -406,3 +406,10 @@ try:
 except ImportError:
     # MFA models not available, proceed without them
     __all__ = ['Permission', 'ViewMenu', 'PermissionView', 'Role', 'User', 'Group', 'RegisterUser', 'UserProfile', 'assoc_permissionview_role']
+
+# Ensure wallet models are registered with the SQLAlchemy mapper registry
+# so that UserProfile.wallets / UserProfile.mpesa_accounts relationships resolve.
+try:
+    import flask_appbuilder.wallet.models  # noqa: F401
+except ImportError:
+    pass

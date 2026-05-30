@@ -870,7 +870,7 @@ Features: Modern widgets, responsive design, security controls
 
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.widgets import {% for column in form_columns %}{{ column.widget.type }}{% if not loop.last %}, {% endif %}{% endfor %}
+from flask_appbuilder.widgets import BS3TextFieldWidget, BS3TextAreaFieldWidget, Select2Widget  # noqa: F401
 from flask_babel import lazy_gettext as _
 from wtforms.validators import {% for validator in validators %}{{ validator }}{% if not loop.last %}, {% endif %}{% endfor %}
 
