@@ -7,7 +7,8 @@ JSONB, PostGIS geometry types, arrays, and pgvector embeddings.
 import json
 from typing import Any, Dict, List, Optional, Union
 
-from flask import Markup, render_template_string
+from markupsafe import Markup
+from flask import render_template_string
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from wtforms.widgets import TextArea, Input, Select
 from wtforms.widgets.core import html_params
