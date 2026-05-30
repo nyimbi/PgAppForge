@@ -1,0 +1,166 @@
+{
+  "name": "saref",
+  "label": "SAREF (Smart Appliances)",
+  "description": "EU Smart Appliances Reference ontology \u2014 smart home IoT standard required by EU IoT regulations",
+  "color": "#1abc9c",
+  "icon": "fa-home",
+  "version": "4.1",
+  "source_url": "https://saref.etsi.org/",
+  "tags": [
+    "iot",
+    "smart-home",
+    "eu",
+    "saref",
+    "appliances"
+  ],
+  "tables": {
+    "saref_device": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "manufacturer",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "model",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "serial_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "device_category",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "functions",
+        "type": "JSONB"
+      },
+      {
+        "name": "states",
+        "type": "JSONB"
+      },
+      {
+        "name": "energy_class",
+        "type": "VARCHAR(5)"
+      },
+      {
+        "name": "location_id",
+        "type": "UUID",
+        "fk": "saref_building_space.id"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      },
+      {
+        "name": "commissioned_at",
+        "type": "DATE"
+      }
+    ],
+    "saref_building_space": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "space_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "floor_area_m2",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "parent_id",
+        "type": "UUID",
+        "fk": "saref_building_space.id"
+      },
+      {
+        "name": "geometry",
+        "type": "GEOGRAPHY(POLYGON,4326)"
+      }
+    ],
+    "saref_property_measurement": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "device_id",
+        "type": "UUID",
+        "fk": "saref_device.id"
+      },
+      {
+        "name": "property_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "unit_of_measure",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "value",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "quality",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "saref_command": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "device_id",
+        "type": "UUID",
+        "fk": "saref_device.id"
+      },
+      {
+        "name": "command_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "parameters",
+        "type": "JSONB"
+      },
+      {
+        "name": "issued_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "executed_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "issued_by",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

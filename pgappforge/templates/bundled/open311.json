@@ -1,0 +1,198 @@
+{
+  "name": "open311",
+  "label": "Open311 (Civic Tech)",
+  "description": "US government service request standard \u2014 311 calls, civic issues, public services",
+  "color": "#3498db",
+  "icon": "fa-phone-square",
+  "version": "2.2",
+  "source_url": "https://www.open311.org/",
+  "tags": [
+    "civic",
+    "government",
+    "us-government",
+    "311",
+    "smart-city"
+  ],
+  "tables": {
+    "o311_jurisdiction": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "url",
+        "type": "TEXT"
+      },
+      {
+        "name": "locale",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "geo_boundary",
+        "type": "GEOGRAPHY(POLYGON,4326)"
+      }
+    ],
+    "o311_service": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "jurisdiction_id",
+        "type": "INTEGER",
+        "fk": "o311_jurisdiction.id"
+      },
+      {
+        "name": "service_code",
+        "type": "VARCHAR(50)",
+        "nullable": false
+      },
+      {
+        "name": "service_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "metadata",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "keywords",
+        "type": "JSONB"
+      },
+      {
+        "name": "group",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "o311_service_request": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "service_id",
+        "type": "INTEGER",
+        "fk": "o311_service.id"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "status_notes",
+        "type": "TEXT"
+      },
+      {
+        "name": "agency_responsible",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "requested_datetime",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_datetime",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "expected_datetime",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "address",
+        "type": "TEXT"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "media_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "requestor_email",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "requestor_phone",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "token",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "o311_attribute": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "service_id",
+        "type": "INTEGER",
+        "fk": "o311_service.id"
+      },
+      {
+        "name": "variable",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "datatype",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "required",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "datatype_description",
+        "type": "TEXT"
+      },
+      {
+        "name": "order_num",
+        "type": "INTEGER"
+      },
+      {
+        "name": "values",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

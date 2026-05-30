@@ -1,0 +1,195 @@
+{
+  "name": "akoma-ntoso",
+  "label": "Akoma Ntoso (Legal Documents)",
+  "description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
+  "color": "#2c3e50",
+  "icon": "fa-landmark",
+  "version": "OASIS-1.0",
+  "source_url": "http://www.akomantoso.org/",
+  "tags": [
+    "legal",
+    "legislation",
+    "un",
+    "eu",
+    "parliament"
+  ],
+  "tables": {
+    "an_frbr_work": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "TEXT"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "author",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "jurisdiction",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "subject",
+        "type": "JSONB"
+      },
+      {
+        "name": "doc_type",
+        "type": "VARCHAR(50)"
+      }
+    ],
+    "an_frbr_expression": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "work_id",
+        "type": "UUID",
+        "fk": "an_frbr_work.id"
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "language",
+        "type": "CHAR(5)"
+      },
+      {
+        "name": "author",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "version",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      }
+    ],
+    "an_document": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "expression_id",
+        "type": "UUID",
+        "fk": "an_frbr_expression.id"
+      },
+      {
+        "name": "content",
+        "type": "TEXT"
+      },
+      {
+        "name": "xml_content",
+        "type": "TEXT"
+      },
+      {
+        "name": "format",
+        "type": "VARCHAR(20)",
+        "default": "'xml'"
+      },
+      {
+        "name": "file_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "an_reference": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "source_doc_id",
+        "type": "UUID",
+        "fk": "an_document.id"
+      },
+      {
+        "name": "target_uri",
+        "type": "TEXT"
+      },
+      {
+        "name": "reference_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "source_element",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "context",
+        "type": "TEXT"
+      }
+    ],
+    "an_amendment": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "amending_doc_id",
+        "type": "UUID",
+        "fk": "an_document.id"
+      },
+      {
+        "name": "amended_doc_id",
+        "type": "UUID",
+        "fk": "an_document.id"
+      },
+      {
+        "name": "amendment_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE"
+      },
+      {
+        "name": "source_element",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "old_text",
+        "type": "TEXT"
+      },
+      {
+        "name": "new_text",
+        "type": "TEXT"
+      }
+    ]
+  }
+}

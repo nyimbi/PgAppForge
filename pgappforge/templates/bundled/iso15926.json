@@ -1,0 +1,157 @@
+{
+  "name": "iso15926",
+  "label": "ISO 15926 (Oil & Gas)",
+  "description": "Plant lifecycle data integration standard \u2014 dominant in oil & gas and process industries",
+  "color": "#95a5a6",
+  "icon": "fa-oil-can",
+  "version": "ISO 15926-2",
+  "source_url": "https://www.posccaesar.org/",
+  "tags": [
+    "oil-gas",
+    "energy",
+    "plant-lifecycle",
+    "iso"
+  ],
+  "tables": {
+    "iso15926_class": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "superclass_id",
+        "type": "UUID",
+        "fk": "iso15926_class.id"
+      },
+      {
+        "name": "namespace",
+        "type": "VARCHAR(200)"
+      }
+    ],
+    "iso15926_individual": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "class_id",
+        "type": "UUID",
+        "fk": "iso15926_class.id"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "lifecycle_begin",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "lifecycle_end",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "properties",
+        "type": "JSONB"
+      }
+    ],
+    "iso15926_activity": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "activity_type_id",
+        "type": "UUID",
+        "fk": "iso15926_class.id"
+      },
+      {
+        "name": "begin_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "end_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "location_id",
+        "type": "UUID",
+        "fk": "iso15926_individual.id"
+      },
+      {
+        "name": "involved_parties",
+        "type": "JSONB"
+      }
+    ],
+    "iso15926_document": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "document_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "revision",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "document_type_id",
+        "type": "UUID",
+        "fk": "iso15926_class.id"
+      },
+      {
+        "name": "issue_date",
+        "type": "DATE"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "file_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "tags",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

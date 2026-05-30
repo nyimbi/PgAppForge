@@ -1,0 +1,190 @@
+{
+  "name": "cf-conventions",
+  "label": "CF Conventions (Climate)",
+  "description": "Climate and Forecast metadata conventions \u2014 atmospheric science, climate modeling",
+  "color": "#5dade2",
+  "icon": "fa-cloud-sun",
+  "version": "1.11",
+  "source_url": "https://cfconventions.org/",
+  "tags": [
+    "climate",
+    "meteorology",
+    "science",
+    "atmospheric"
+  ],
+  "tables": {
+    "cf_variable": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "standard_name",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "canonical_units",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "amip",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "grib",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "cf_dataset": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(1000)"
+      },
+      {
+        "name": "institution",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "source",
+        "type": "TEXT"
+      },
+      {
+        "name": "history",
+        "type": "TEXT"
+      },
+      {
+        "name": "references",
+        "type": "TEXT"
+      },
+      {
+        "name": "conventions",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "file_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "spatial_extent",
+        "type": "GEOGRAPHY(POLYGON,4326)"
+      },
+      {
+        "name": "time_start",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "time_end",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "cf_observation": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "dataset_id",
+        "type": "UUID",
+        "fk": "cf_dataset.id"
+      },
+      {
+        "name": "variable_id",
+        "type": "INTEGER",
+        "fk": "cf_variable.id"
+      },
+      {
+        "name": "time",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "latitude",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "longitude",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "altitude_m",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "value",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "uncertainty",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "quality_flag",
+        "type": "SMALLINT"
+      }
+    ],
+    "cf_grid_metadata": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "dataset_id",
+        "type": "UUID",
+        "fk": "cf_dataset.id"
+      },
+      {
+        "name": "grid_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "lat_min",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "lat_max",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "lon_min",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "lon_max",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "lat_resolution",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "lon_resolution",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "num_levels",
+        "type": "INTEGER"
+      },
+      {
+        "name": "projection",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

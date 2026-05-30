@@ -1,0 +1,146 @@
+{
+  "name": "dublin-core",
+  "label": "Dublin Core Metadata",
+  "description": "ISO 15836 general-purpose metadata standard \u2014 used by libraries, repositories, web resources",
+  "color": "#8e44ad",
+  "icon": "fa-book-open",
+  "version": "ISO 15836-2",
+  "source_url": "https://www.dublincore.org/",
+  "tags": [
+    "metadata",
+    "libraries",
+    "repositories",
+    "iso",
+    "general"
+  ],
+  "tables": {
+    "dc_resource": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "identifier",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "title",
+        "type": "JSONB",
+        "nullable": false
+      },
+      {
+        "name": "creator",
+        "type": "JSONB"
+      },
+      {
+        "name": "subject",
+        "type": "JSONB"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "publisher",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "contributor",
+        "type": "JSONB"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "dc_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "format",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "source",
+        "type": "TEXT"
+      },
+      {
+        "name": "language",
+        "type": "CHAR(5)"
+      },
+      {
+        "name": "relation",
+        "type": "JSONB"
+      },
+      {
+        "name": "coverage",
+        "type": "TEXT"
+      },
+      {
+        "name": "rights",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "modified_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "dc_collection": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "license",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "publisher",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "dc_collection_member": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "collection_id",
+        "type": "UUID",
+        "fk": "dc_collection.id"
+      },
+      {
+        "name": "resource_id",
+        "type": "UUID",
+        "fk": "dc_resource.id"
+      },
+      {
+        "name": "added_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ]
+  }
+}

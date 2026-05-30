@@ -1,0 +1,240 @@
+{
+  "name": "arts",
+  "label": "ARTS (Retail Technology)",
+  "description": "Association for Retail Technology Standards \u2014 POS, transactions, inventory for large retailers",
+  "color": "#e67e22",
+  "icon": "fa-cash-register",
+  "version": "7.0",
+  "source_url": "https://www.nrf.com/resources/retail-library/arts",
+  "tags": [
+    "retail",
+    "pos",
+    "inventory",
+    "nrf",
+    "enterprise"
+  ],
+  "tables": {
+    "arts_retail_store": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "store_number",
+        "type": "VARCHAR(50)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "store_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "arts_workstation": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "store_id",
+        "type": "INTEGER",
+        "fk": "arts_retail_store.id"
+      },
+      {
+        "name": "workstation_id",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "serial_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "last_heartbeat_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "arts_transaction": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "store_id",
+        "type": "INTEGER",
+        "fk": "arts_retail_store.id"
+      },
+      {
+        "name": "workstation_id",
+        "type": "INTEGER",
+        "fk": "arts_workstation.id"
+      },
+      {
+        "name": "transaction_number",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "transaction_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "business_date",
+        "type": "DATE"
+      },
+      {
+        "name": "begin_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "end_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "operator_id",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "customer_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "total_amount",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "total_tax",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "total_discount",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "arts_line_item": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "transaction_id",
+        "type": "UUID",
+        "fk": "arts_transaction.id"
+      },
+      {
+        "name": "sequence",
+        "type": "INTEGER"
+      },
+      {
+        "name": "item_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "sku",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "upc",
+        "type": "VARCHAR(14)"
+      },
+      {
+        "name": "description",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "quantity",
+        "type": "NUMERIC(12,4)"
+      },
+      {
+        "name": "uom",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "unit_price",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "extended_amount",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "discount_amount",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "tax_amount",
+        "type": "NUMERIC(15,4)"
+      }
+    ],
+    "arts_tender": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "transaction_id",
+        "type": "UUID",
+        "fk": "arts_transaction.id"
+      },
+      {
+        "name": "tender_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "amount",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "authorization_code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "card_type",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "card_last4",
+        "type": "CHAR(4)"
+      }
+    ]
+  }
+}

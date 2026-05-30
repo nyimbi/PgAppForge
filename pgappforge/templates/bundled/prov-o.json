@@ -1,0 +1,210 @@
+{
+  "name": "prov-o",
+  "label": "PROV-O (Data Provenance)",
+  "description": "W3C data provenance ontology \u2014 track lineage and origin of any data artifact",
+  "color": "#2980b9",
+  "icon": "fa-sitemap",
+  "version": "2013",
+  "source_url": "https://www.w3.org/TR/prov-o/",
+  "tags": [
+    "provenance",
+    "data-lineage",
+    "w3c",
+    "science",
+    "governance"
+  ],
+  "tables": {
+    "prov_entity": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "label",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "entity_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "location",
+        "type": "TEXT"
+      },
+      {
+        "name": "format",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      },
+      {
+        "name": "generated_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "invalidated_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "prov_agent": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "label",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "agent_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      }
+    ],
+    "prov_activity": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "label",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "activity_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "started_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "ended_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      }
+    ],
+    "prov_was_generated_by": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "entity_id",
+        "type": "UUID",
+        "fk": "prov_entity.id"
+      },
+      {
+        "name": "activity_id",
+        "type": "UUID",
+        "fk": "prov_activity.id"
+      },
+      {
+        "name": "at_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "role",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "prov_used": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "activity_id",
+        "type": "UUID",
+        "fk": "prov_activity.id"
+      },
+      {
+        "name": "entity_id",
+        "type": "UUID",
+        "fk": "prov_entity.id"
+      },
+      {
+        "name": "at_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "role",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "prov_was_attributed_to": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "entity_id",
+        "type": "UUID",
+        "fk": "prov_entity.id"
+      },
+      {
+        "name": "agent_id",
+        "type": "UUID",
+        "fk": "prov_agent.id"
+      },
+      {
+        "name": "role",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "prov_was_derived_from": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "derived_entity_id",
+        "type": "UUID",
+        "fk": "prov_entity.id"
+      },
+      {
+        "name": "source_entity_id",
+        "type": "UUID",
+        "fk": "prov_entity.id"
+      },
+      {
+        "name": "derivation_type",
+        "type": "VARCHAR(50)"
+      }
+    ]
+  }
+}

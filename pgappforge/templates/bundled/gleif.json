@@ -1,0 +1,148 @@
+{
+  "name": "gleif",
+  "label": "GLEIF LEI (Entity IDs)",
+  "description": "Global Legal Entity Identifier Foundation \u2014 universal business ID used in financial regulation worldwide",
+  "color": "#2c3e50",
+  "icon": "fa-id-card",
+  "version": "2.1",
+  "source_url": "https://www.gleif.org/",
+  "tags": [
+    "finance",
+    "entity-id",
+    "regulation",
+    "global",
+    "lei"
+  ],
+  "tables": {
+    "gleif_lei_record": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "lei",
+        "type": "VARCHAR(20)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "entity_legal_name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "entity_status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "entity_category",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "legal_jurisdiction",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "legal_form_code",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "legal_form_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "registered_address_line",
+        "type": "TEXT"
+      },
+      {
+        "name": "registered_address_city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "registered_address_country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "registered_address_postal",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "hq_address_line",
+        "type": "TEXT"
+      },
+      {
+        "name": "hq_city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "hq_country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "registration_authority",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "registration_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "lei_status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "initial_registration",
+        "type": "DATE"
+      },
+      {
+        "name": "last_update",
+        "type": "DATE"
+      },
+      {
+        "name": "next_renewal",
+        "type": "DATE"
+      },
+      {
+        "name": "managing_lou",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "gleif_relationship": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "child_lei",
+        "type": "VARCHAR(20)",
+        "fk": "gleif_lei_record.lei"
+      },
+      {
+        "name": "parent_lei",
+        "type": "VARCHAR(20)",
+        "fk": "gleif_lei_record.lei"
+      },
+      {
+        "name": "relationship_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "relationship_status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "accounting_standard",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "period_start",
+        "type": "DATE"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      }
+    ]
+  }
+}

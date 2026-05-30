@@ -1,0 +1,142 @@
+{
+  "name": "automationml",
+  "label": "AutomationML (Manufacturing)",
+  "description": "Factory planning and engineering data exchange for manufacturing digital twins",
+  "color": "#7f8c8d",
+  "icon": "fa-cogs",
+  "version": "2.10",
+  "source_url": "https://www.automationml.org/",
+  "tags": [
+    "manufacturing",
+    "digital-twin",
+    "industry40",
+    "factory"
+  ],
+  "tables": {
+    "aml_project": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "version",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "author",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "modified_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "aml_instance_hierarchy": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "project_id",
+        "type": "UUID",
+        "fk": "aml_project.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      }
+    ],
+    "aml_internal_element": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "hierarchy_id",
+        "type": "UUID",
+        "fk": "aml_instance_hierarchy.id"
+      },
+      {
+        "name": "parent_id",
+        "type": "UUID",
+        "fk": "aml_internal_element.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "class_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "role_classes",
+        "type": "JSONB"
+      },
+      {
+        "name": "interface_classes",
+        "type": "JSONB"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      },
+      {
+        "name": "geometry",
+        "type": "JSONB"
+      }
+    ],
+    "aml_connection": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "hierarchy_id",
+        "type": "UUID",
+        "fk": "aml_instance_hierarchy.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "partner_side_a",
+        "type": "UUID",
+        "fk": "aml_internal_element.id"
+      },
+      {
+        "name": "partner_side_b",
+        "type": "UUID",
+        "fk": "aml_internal_element.id"
+      },
+      {
+        "name": "connection_type",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

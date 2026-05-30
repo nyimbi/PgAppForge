@@ -1,0 +1,178 @@
+{
+  "name": "lti",
+  "label": "IMS Global LTI (Learning Tools)",
+  "description": "Learning Tools Interoperability \u2014 standard for connecting LMS to external learning tools",
+  "color": "#f39c12",
+  "icon": "fa-chalkboard-teacher",
+  "version": "1.3",
+  "source_url": "https://www.imsglobal.org/activity/learning-tools-interoperability",
+  "tags": [
+    "education",
+    "lms",
+    "ims-global",
+    "edtech"
+  ],
+  "tables": {
+    "lti_platform": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "client_id",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "issuer",
+        "type": "TEXT"
+      },
+      {
+        "name": "auth_endpoint",
+        "type": "TEXT"
+      },
+      {
+        "name": "token_endpoint",
+        "type": "TEXT"
+      },
+      {
+        "name": "jwks_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "public_key",
+        "type": "TEXT"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "lti_tool": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "launch_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "deep_link_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "icon_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "privacy_level",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "placements",
+        "type": "JSONB"
+      },
+      {
+        "name": "custom_params",
+        "type": "JSONB"
+      }
+    ],
+    "lti_deployment": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "platform_id",
+        "type": "UUID",
+        "fk": "lti_platform.id"
+      },
+      {
+        "name": "tool_id",
+        "type": "UUID",
+        "fk": "lti_tool.id"
+      },
+      {
+        "name": "deployment_id",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "context_id",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "context_title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "lti_launch": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "deployment_id",
+        "type": "UUID",
+        "fk": "lti_deployment.id"
+      },
+      {
+        "name": "user_id",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "user_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "roles",
+        "type": "JSONB"
+      },
+      {
+        "name": "resource_link_id",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "resource_link_title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "custom_params",
+        "type": "JSONB"
+      },
+      {
+        "name": "launched_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "nonce",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

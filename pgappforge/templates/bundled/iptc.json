@@ -1,0 +1,214 @@
+{
+  "name": "iptc",
+  "label": "IPTC (News/Journalism)",
+  "description": "International Press Telecommunications Council \u2014 news article metadata standard used by all major news organizations",
+  "color": "#c0392b",
+  "icon": "fa-newspaper",
+  "version": "IPTC Photo Metadata 2023.1",
+  "source_url": "https://www.iptc.org/",
+  "tags": [
+    "journalism",
+    "news",
+    "media",
+    "publishing"
+  ],
+  "tables": {
+    "iptc_media_item": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "guid",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "item_class",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "version",
+        "type": "INTEGER",
+        "default": "1"
+      },
+      {
+        "name": "title",
+        "type": "JSONB"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "slugline",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "headline",
+        "type": "JSONB"
+      },
+      {
+        "name": "byline",
+        "type": "JSONB"
+      },
+      {
+        "name": "credit_line",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "copyright_notice",
+        "type": "TEXT"
+      },
+      {
+        "name": "usage_terms",
+        "type": "TEXT"
+      },
+      {
+        "name": "language",
+        "type": "CHAR(5)"
+      },
+      {
+        "name": "content_created",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "first_created",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "content_modified",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "item_status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "editorial_office",
+        "type": "VARCHAR(255)"
+      }
+    ],
+    "iptc_subject": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "media_item_id",
+        "type": "UUID",
+        "fk": "iptc_media_item.id"
+      },
+      {
+        "name": "subject_code",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "subject_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "subject_scheme",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "subject_scheme_uri",
+        "type": "TEXT"
+      }
+    ],
+    "iptc_location": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "media_item_id",
+        "type": "UUID",
+        "fk": "iptc_media_item.id"
+      },
+      {
+        "name": "location_role",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "country_code",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "country_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "geo_point",
+        "type": "GEOGRAPHY(POINT,4326)"
+      }
+    ],
+    "iptc_asset": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "media_item_id",
+        "type": "UUID",
+        "fk": "iptc_media_item.id"
+      },
+      {
+        "name": "media_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "file_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "mime_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "width_px",
+        "type": "INTEGER"
+      },
+      {
+        "name": "height_px",
+        "type": "INTEGER"
+      },
+      {
+        "name": "file_size_bytes",
+        "type": "BIGINT"
+      },
+      {
+        "name": "color_mode",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "camera_make",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "camera_model",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "gps",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "taken_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ]
+  }
+}

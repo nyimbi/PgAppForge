@@ -1,0 +1,182 @@
+{
+  "name": "fao-agrovoc",
+  "label": "FAO AgrInfo / AGROVOC",
+  "description": "UN Food and Agriculture Organization data standards \u2014 food security, agricultural statistics",
+  "color": "#27ae60",
+  "icon": "fa-leaf",
+  "version": "2024",
+  "source_url": "https://www.fao.org/statistics/",
+  "tags": [
+    "agriculture",
+    "fao",
+    "un",
+    "food-security",
+    "statistics"
+  ],
+  "tables": {
+    "fao_country": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "fao_code",
+        "type": "VARCHAR(5)",
+        "unique": true
+      },
+      {
+        "name": "iso2",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "iso3",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "region",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "sub_region",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "fao_item": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "fao_code",
+        "type": "VARCHAR(10)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(300)"
+      },
+      {
+        "name": "category",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "commodity_group",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR(30)"
+      }
+    ],
+    "fao_production": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "country_id",
+        "type": "INTEGER",
+        "fk": "fao_country.id"
+      },
+      {
+        "name": "item_id",
+        "type": "INTEGER",
+        "fk": "fao_item.id"
+      },
+      {
+        "name": "element",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "year",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC(18,4)"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "flag",
+        "type": "CHAR(2)"
+      }
+    ],
+    "fao_trade": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "reporter_id",
+        "type": "INTEGER",
+        "fk": "fao_country.id"
+      },
+      {
+        "name": "partner_id",
+        "type": "INTEGER",
+        "fk": "fao_country.id"
+      },
+      {
+        "name": "item_id",
+        "type": "INTEGER",
+        "fk": "fao_item.id"
+      },
+      {
+        "name": "flow",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "year",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "quantity_mt",
+        "type": "NUMERIC(18,4)"
+      },
+      {
+        "name": "value_usd",
+        "type": "NUMERIC(18,2)"
+      }
+    ],
+    "agrovoc_concept": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "prefLabel_en",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "broader_id",
+        "type": "INTEGER",
+        "fk": "agrovoc_concept.id"
+      },
+      {
+        "name": "related",
+        "type": "JSONB"
+      },
+      {
+        "name": "alt_labels",
+        "type": "JSONB"
+      }
+    ]
+  }
+}
