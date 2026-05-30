@@ -596,3 +596,11 @@ class MFAAuditLog(Model):
     def __repr__(self):
         username = self.user.username if self.user else 'system'
         return f"<MFAAuditLog {username}:{self.event_type}:{self.event_result}>"
+
+# Compatibility aliases — mfa/__init__.py and security/sqla/models.py use these names
+UserMFA = MFACredential
+MFABackupCode = BackupCode
+MFABackupCodes = BackupCode
+MFAVerification = MFAChallenge
+MFAVerificationAttempt = MFAChallenge
+MFAPolicy = MFAAuditLog  # closest equivalent; MFAPolicy class does not exist

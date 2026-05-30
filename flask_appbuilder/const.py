@@ -54,6 +54,7 @@ LOGMSG_ERR_SEC_DEL_REGISTER_USER = "Remove Register User Error: %s"
 LOGMSG_ERR_SEC_NO_REGISTER_HASH = "Attempt to activate user with false hash: %s"
 """ Attempt to activate user with not registered hash, format with hash """
 LOGMSG_ERR_SEC_AUTH_LDAP = "LDAP Error %s"
+LOGMSG_ERR_SEC_AUTH_USERNAME = "Username or password incorrect"
 """ Generic LDAP error, format with err message """
 LOGMSG_ERR_SEC_AUTH_LDAP_TLS = (
     "LDAP Could not activate TLS on established connection with %s"

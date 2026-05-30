@@ -158,6 +158,7 @@ class TestBasicFormFunctionality(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-forms'
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -227,6 +228,7 @@ class TestFormValidation(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-validation'
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -332,6 +334,7 @@ class TestAdvancedFormValidation(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-advanced'
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -623,6 +626,7 @@ class TestFormIntegration(FABTestCase):
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-integration'
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -803,6 +807,7 @@ class TestFormErrorHandling(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SECRET_KEY'] = 'test-secret-key-for-errors'
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)

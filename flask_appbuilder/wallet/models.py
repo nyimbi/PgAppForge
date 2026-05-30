@@ -18,7 +18,7 @@ from enum import Enum
 from flask import current_app
 from flask_appbuilder import Model
 from flask_appbuilder.models.mixins import AuditMixin
-from flask_appbuilder.security import current_user
+from flask_login import current_user
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, Numeric, 
     ForeignKey, Index, CheckConstraint, UniqueConstraint, event

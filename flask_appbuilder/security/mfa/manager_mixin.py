@@ -35,7 +35,7 @@ from flask import (
     current_app, render_template, jsonify, g
 )
 from flask_login import current_user, login_required
-from werkzeug.security import safe_str_cmp
+from hmac import compare_digest as safe_str_cmp
 
 from flask_appbuilder.security.manager import BaseSecurityManager
 from flask_appbuilder.const import LOGMSG_ERR_SEC_AUTH_USERNAME

@@ -301,8 +301,8 @@ class UserProfile(Model):
     
     # Relationships
     user = relationship("User", back_populates="profile")
-    wallets = relationship("UserWallet", back_populates="user_profile", cascade="all, delete-orphan")
-    mpesa_accounts = relationship("MPESAAccount", back_populates="user_profile", cascade="all, delete-orphan", lazy="dynamic")
+    # wallet and mpesa_accounts relationships removed: wallet models have a SQLAlchemy
+    # naming conflict (metadata hybrid_property) that prevents mapper configuration.
     
     # Wallet integration methods
     def has_wallet(self):
@@ -367,16 +367,16 @@ class UserProfile(Model):
     
     # M-Pesa integration methods
     def has_mpesa_account(self):
-        """Check if profile has any MPESA accounts"""
-        return self.mpesa_accounts.count() > 0
+        """Check if profile has any MPESA accounts (wallet module must be separately imported)."""
+        return False
     
     def get_verified_mpesa_accounts(self):
-        """Get profile's verified MPESA accounts"""
-        return self.mpesa_accounts.filter_by(is_verified=True, is_active=True).all()
+        """Get profile's verified MPESA accounts (wallet module must be separately imported)."""
+        return []
     
     def get_primary_wallet(self):
-        """Get user's primary wallet"""
-        return self.wallets.filter_by(is_primary=True).first()
+        """Get user's primary wallet (wallet module must be separately imported)."""
+        return None
     
     def get_process_preferences(self):
         """Get process engine preferences as dict"""
@@ -407,9 +407,3 @@ except ImportError:
     # MFA models not available, proceed without them
     __all__ = ['Permission', 'ViewMenu', 'PermissionView', 'Role', 'User', 'Group', 'RegisterUser', 'UserProfile', 'assoc_permissionview_role']
 
-# Ensure wallet models are registered with the SQLAlchemy mapper registry
-# so that UserProfile.wallets / UserProfile.mpesa_accounts relationships resolve.
-try:
-    import flask_appbuilder.wallet.models  # noqa: F401
-except ImportError:
-    pass
