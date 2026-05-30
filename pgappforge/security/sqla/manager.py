@@ -189,8 +189,8 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
 
             # Create MFA tables if enabled and not present
             if self.appbuilder.app.config.get('PGAF_MFA_ENABLED', False):
-                mfa_tables = ['ab_user_mfa', 'ab_mfa_backup_codes',
-                              'ab_mfa_verification_attempts', 'ab_mfa_policies']
+                mfa_tables = ['mfa_credentials', 'webauthn_credentials',
+                              'mfa_challenges', 'backup_codes', 'mfa_audit_log']
                 missing = [t for t in mfa_tables if t not in existing_tables]
                 if missing:
                     log.info("Creating MFA tables: %s", ', '.join(missing))

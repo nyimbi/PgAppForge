@@ -21,10 +21,10 @@ Restart the app. PgAppForge auto-creates the MFA tables and registers:
 
 | Route | Purpose |
 |-------|---------|
-| `/mfa/setup` | User enrols TOTP / SMS / email / passkey |
-| `/mfa/verify` | Challenge page after primary login |
-| `/passkey/register` | Add a passkey credential |
-| `/passkey/authenticate` | Passwordless passkey login |
+| `/mfa/setup/` | User enrols TOTP / SMS / email |
+| `/mfa/challenge` | Challenge page after primary login |
+| `/mfa/manage/` | Manage enrolled methods, regenerate backup codes |
+| `/mfa/passkeys` | Register and manage passkey credentials |
 
 Users see "Set up two-factor authentication" in their profile menu as soon as
 `PGAF_MFA_ENABLED = True`.
@@ -107,8 +107,8 @@ PGAF_WEBAUTHN_USER_VERIFICATION = "required"  # preferred | required | discourag
 ### Registering a passkey (user flow)
 
 1. User is logged in (via password or TOTP first time).
-2. Goes to `/passkey/register`.
-3. Browser shows biometric/hardware prompt.
+2. Goes to `/mfa/passkeys`.
+3. Clicks "Register new passkey" — browser shows biometric/hardware prompt.
 4. Credential is stored — user can now sign in with biometrics alone.
 
 ---
@@ -223,10 +223,11 @@ Replace them at your convenience; both prefixes work indefinitely.
 
 | Table | Purpose |
 |-------|---------|
-| `ab_user_mfa` | Per-user MFA enrolment and method state |
-| `ab_mfa_backup_codes` | Hashed backup codes |
-| `ab_mfa_verification_attempts` | Rate-limiting and audit log |
-| `ab_mfa_policies` | Per-role or per-user policy overrides |
+| `mfa_credentials` | Per-user TOTP/SMS/email method enrolment |
+| `webauthn_credentials` | Passkey/hardware key credential public keys |
+| `mfa_challenges` | Active challenges and verification tokens |
+| `backup_codes` | Hashed one-time backup codes |
+| `mfa_audit_log` | MFA event history (enrolments, verifications, failures) |
 
 These are created by `AppBuilder` on first start when `PGAF_MFA_ENABLED = True`.
 No manual migration needed.
