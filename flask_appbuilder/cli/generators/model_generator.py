@@ -171,13 +171,32 @@ class EnhancedModelGenerator:
         """Generate Pydantic model for API serialization."""
         template = self.jinja_env.get_template('pydantic_schema.j2')
 
+        cols = []
+        for col in table_info.columns:
+            if col.primary_key:
+                continue
+            python_type = self._get_python_type(col) or 'str'
+            # Strip Optional[...] wrapper to get inner type
+            inner = python_type.replace('Optional[', '').rstrip(']') if python_type.startswith('Optional[') else python_type
+            nullable = col.nullable or python_type.startswith('Optional[')
+            field_type = f'Optional[{inner}]' if nullable else inner
+            comment = f' = Field(description="{col.comment}")' if col.comment else ''
+            example = '"example_value"' if 'str' in inner else ('123' if 'int' in inner else ('True' if 'bool' in inner else 'None'))
+            cols.append({
+                'name': col.name,
+                'definition': f'    {col.name}: {field_type}{comment}',
+                'example': example,
+                'nullable': nullable,
+                'python_type': inner,
+                'comment': col.comment,
+            })
+
         context = {
             'table_info': table_info,
             'class_name': f"{self._to_pascal_case(table_info.name)}Schema",
-            'columns': [col for col in table_info.columns if not col.primary_key],
-            'relationships': table_info.relationships
+            'columns': cols,
+            'relationships': table_info.relationships,
         }
-
         return template.render(**context)
 
     def _process_columns(self, columns: List[ColumnInfo]) -> List[Dict[str, Any]]:
@@ -185,12 +204,26 @@ class EnhancedModelGenerator:
         processed = []
 
         for column in columns:
+            sql_type = self._get_sqlalchemy_type(column)
+            constraints = self._get_column_constraints(column)
+            python_type = self._get_python_type(column)
+
+            # Pre-compute the full definition string so the template avoids
+            # inline {% if %} tags that cause trim_blocks to eat newlines.
+            type_hint = f": {python_type}" if self.config.use_type_hints and python_type else ""
+            constraint_part = f", {', '.join(constraints)}" if constraints else ""
+            comment_part = f"  # {column.comment}" if column.comment else ""
+            definition = (
+                f"    {column.name}{type_hint} = Column({sql_type}{constraint_part}){comment_part}"
+            )
+
             col_dict = {
                 'name': column.name,
-                'type': self._get_sqlalchemy_type(column),
-                'constraints': self._get_column_constraints(column),
+                'type': sql_type,
+                'constraints': constraints,
                 'comment': column.comment,
-                'python_type': self._get_python_type(column),
+                'python_type': python_type,
+                'definition': definition,
                 'validation': column.validation_rules,
                 'widget_type': column.widget_type,
                 'display_name': column.display_name,
@@ -494,13 +527,18 @@ def before_update_{table_name}(mapper, connection, target):
             return ''
 
         type_mapping = {
+            ColumnType.PRIMARY_KEY: 'int',
+            ColumnType.FOREIGN_KEY: 'int',
             ColumnType.TEXT: 'str',
             ColumnType.NUMERIC: 'int' if 'INT' in column.type.upper() else 'float',
             ColumnType.BOOLEAN: 'bool',
             ColumnType.DATE_TIME: 'datetime',
             ColumnType.JSON: 'dict',
+            ColumnType.JSONB: 'dict',
             ColumnType.ARRAY: 'list',
-            ColumnType.BINARY: 'bytes'
+            ColumnType.BINARY: 'bytes',
+            ColumnType.UUID: 'str',
+            ColumnType.ENUM: 'str',
         }
 
         python_type = type_mapping.get(column.category, 'str')
@@ -568,7 +606,7 @@ def before_update_{table_name}(mapper, connection, target):
         base_imports = {
             'from datetime import datetime',
             'from typing import Optional, List, Dict, Any',
-            'from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey, func, event',
+            'from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey, Numeric, func, event',
             'from sqlalchemy.orm import relationship, validates',
             'from sqlalchemy.ext.hybrid import hybrid_property',
             'from flask_appbuilder import Model'

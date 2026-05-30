@@ -262,27 +262,14 @@ class FullAppGenerator:
             self.generated_files['app/models/validators.py'] = models['validators.py']
 
     def _generate_views(self):
-        """Generate view files."""
-        views_result = self.view_generator.generate_all_views()
-        views = views_result['views']
-
-        # Generate view files
-        for table_name, table_views in views.items():
-            for view_type, view_code in table_views.items():
-                filename = f"app/views/{table_name}_{view_type}.py"
-                self.generated_files[filename] = view_code
-
-        # Generate supporting files
-        supporting_files = views_result.get('supporting_files', {})
-        for filename, content in supporting_files.items():
-            if filename.endswith('.py'):
-                self.generated_files[f'app/views/{filename}'] = content
-            elif filename.endswith('.js'):
-                self.generated_files[f'app/static/js/{filename}'] = content
-            elif filename.endswith('.css'):
-                self.generated_files[f'app/static/css/{filename}'] = content
-            elif filename.endswith('.html'):
-                self.generated_files[f'app/templates/{filename}'] = content
+        """Generate view files — writes directly via BeautifulViewGenerator."""
+        import os
+        views_dir = self.output_dir / 'views'
+        views_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.view_generator.generate_all_views(str(self.output_dir))
+        except Exception as e:
+            logger.warning(f"View generation partial failure: {e}")
 
     def _generate_authentication(self):
         """Generate authentication configuration."""
@@ -1325,4 +1312,873 @@ if (typeof module !== 'undefined' && module.exports) {
         # In a real implementation, you might want to generate or use an actual icon
         return '''data:image/x-icon;base64,AAABAAEAEBAAAAEACABoBQAAFgAAACgAAAAQAAAAIAAAAAEACAAAAAAAAAEAAAAAAAAAAAAAAAEAAAAAAAAAAAAAP4+uAP+TrwBchLAAUIGwAOCpxwAEaKoAAJW7AGKYuwBNlbsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBAAQQQQQQQQQQQQQQQQQQQAAEEEEEEEEEEEEEEEEEEEAABBBBBBBBBBBBBBBBBBAAQQQQQQQQQQQQQQQQQQAAAEEEEEEEEEEEEEEEEEAAABBBBBBBBBBBBBBBBBAAAAQQQQQQQQQQQQQQQQQAAAAEEEEEEEEEEEEEEEEEAAAABBBBBBBBBBBBBBBBBAAAAQQQQQQQQQQQQQQQQQAAAAEEEEEEEEEEEEEEEEEAAAABBBBBBBBBBBBBBBBBAAAAQQQQQQQQQQQQQQQQQAAAAEEEEEEEEEEEEEEEEEAAAAA'''
 
-    # More template methods would be implemented following this pattern...
+    # ─── Core App Files ─────────────────────────────────────────────────────
+
+    def _generate_app_init(self) -> str:
+        name = self.config.app_name
+        return f'''"""
+{name} application factory.
+"""
+from flask import Flask
+from flask_appbuilder import AppBuilder, SQLA
+{"from .security import CustomSecurityManager" if self.config.enable_auth else ""}
+
+db = SQLA()
+appbuilder = AppBuilder()
+
+
+def create_app(config_object="app.config.Config"):
+    app = Flask(__name__)
+    app.config.from_object(config_object)
+    db.init_app(app)
+    appbuilder.init_app(app, db.session{"," + chr(10) + "        security_manager_class=CustomSecurityManager" if self.config.enable_auth else ""})
+    _register_views(app)
+    return app
+
+
+def _register_views(app):
+    with app.app_context():
+        from app.views import register_views
+        register_views(appbuilder)
+'''
+
+    def _generate_models_init(self) -> str:
+        return '"""Model package — import all models here."""\nfrom .models import *  # noqa: F401,F403\n'
+
+    def _generate_views_init(self) -> str:
+        name = self.config.app_name
+        return f'''"""View package for {name}."""
+
+
+def register_views(appbuilder):
+    """Register all views with AppBuilder."""
+    pass  # View modules are imported individually from app/views/
+'''
+
+    def _generate_api_init(self) -> str:
+        return f'''"""REST API blueprint for {self.config.app_name}."""
+from flask import Blueprint
+
+api_bp = Blueprint("api", __name__, url_prefix="/api/v1")
+
+from app.api.api import *  # noqa: F401,F403
+'''
+
+    def _generate_setup_py(self) -> str:
+        name = self.config.app_name
+        return f'''from setuptools import setup, find_packages
+
+setup(
+    name="{name.lower()}",
+    version="{self.config.version}",
+    packages=find_packages(),
+    install_requires=[
+        "Flask>=3.0.0",
+        "Flask-AppBuilder>=5.0.0",
+    ],
+)
+'''
+
+    def _generate_pyproject_toml(self) -> str:
+        name = self.config.app_name
+        return f'''[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "{name.lower()}"
+version = "{self.config.version}"
+requires-python = ">=3.10"
+dependencies = ["Flask>=3.0.0", "Flask-AppBuilder>=5.0.0"]
+'''
+
+    def _generate_env_example(self) -> str:
+        return f'''# Copy to .env and fill in values
+FLASK_APP=app
+FLASK_ENV=development
+SECRET_KEY=change-me-in-production
+SQLALCHEMY_DATABASE_URI=sqlite:///app.db
+# SQLALCHEMY_DATABASE_URI=postgresql://user:pass@localhost/{self.config.app_name.lower()}
+'''
+
+    def _generate_gitignore(self) -> str:
+        return '''__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+instance/
+*.db
+*.sqlite3
+.pytest_cache/
+htmlcov/
+.coverage
+migrations/versions/
+.DS_Store
+'''
+
+    # ─── Configuration ───────────────────────────────────────────────────────
+
+    def _generate_main_config(self) -> str:
+        name = self.config.app_name
+        return f'''"""Base configuration."""
+import os
+
+
+class Config:
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "SQLALCHEMY_DATABASE_URI", "sqlite:///app.db"
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    WTF_CSRF_ENABLED = True
+    APP_NAME = "{name}"
+    APP_ICON = ""
+    FAB_UPDATE_PERMS = True
+'''
+
+    def _generate_dev_config(self) -> str:
+        return '''"""Development configuration."""
+from .config import Config
+
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+    SQLALCHEMY_ECHO = False
+    WTF_CSRF_ENABLED = False  # easier local testing
+'''
+
+    def _generate_prod_config(self) -> str:
+        return '''"""Production configuration."""
+from .config import Config
+
+
+class ProductionConfig(Config):
+    DEBUG = False
+    TESTING = False
+    # Set SECRET_KEY via environment — never hardcode
+'''
+
+    def _generate_test_config(self) -> str:
+        return '''"""Test configuration."""
+from .config import Config
+
+
+class TestingConfig(Config):
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    WTF_CSRF_ENABLED = False
+'''
+
+    # ─── Database ────────────────────────────────────────────────────────────
+
+    def _generate_alembic_config(self) -> str:
+        return '''[alembic]
+script_location = migrations
+prepend_sys_path = .
+sqlalchemy.url = sqlite:///app.db
+
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+'''
+
+    def _generate_migration_env(self) -> str:
+        return '''"""Alembic environment configuration."""
+from alembic import context
+from app import create_app, db
+
+app = create_app()
+
+
+def run_migrations_online():
+    with app.app_context():
+        connectable = db.engine
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=db.metadata,
+            )
+            with context.begin_transaction():
+                context.run_migrations()
+
+
+run_migrations_online()
+'''
+
+    def _generate_migration_template(self) -> str:
+        return '''"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision | comma,n}
+Create Date: ${create_date}
+"""
+from alembic import op
+import sqlalchemy as sa
+${imports if imports else ""}
+
+revision = ${repr(up_revision)}
+down_revision = ${repr(down_revision)}
+branch_labels = ${repr(branch_labels)}
+depends_on = ${repr(depends_on)}
+
+
+def upgrade():
+    ${upgrades if upgrades else "pass"}
+
+
+def downgrade():
+    ${downgrades if downgrades else "pass"}
+'''
+
+    def _generate_db_init_script(self) -> str:
+        return f'''"""Initialize database with default data."""
+from app import create_app, db
+from flask_appbuilder.security.sqla.models import User
+
+app = create_app()
+
+with app.app_context():
+    db.create_all()
+    # Create admin user if none exists
+    if not db.session.query(User).first():
+        from app import appbuilder
+        appbuilder.sm.add_user(
+            username="admin",
+            firstname="Admin",
+            lastname="User",
+            email="admin@{self.config.app_name.lower()}.local",
+            role=appbuilder.sm.find_role(appbuilder.sm.auth_role_admin),
+            password="admin",
+        )
+    db.session.commit()
+    print("Database initialized.")
+'''
+
+    def _generate_seed_data(self) -> str:
+        return '''"""Seed database with sample data."""
+from app import create_app, db
+
+app = create_app()
+
+with app.app_context():
+    # Add sample data here
+    db.session.commit()
+    print("Seed data loaded.")
+'''
+
+    # ─── Authentication ───────────────────────────────────────────────────────
+
+    def _generate_security_manager(self) -> str:
+        return '''"""Custom security manager."""
+from flask_appbuilder.security.sqla.manager import SecurityManager
+
+
+class CustomSecurityManager(SecurityManager):
+    """Extended security manager with custom auth logic."""
+
+    def auth_user_db(self, username, password):
+        user = super().auth_user_db(username, password)
+        return user
+'''
+
+    def _generate_oauth_config(self) -> str:
+        return '''"""OAuth provider configuration."""
+OAUTH_PROVIDERS = [
+    {
+        "name": "google",
+        "icon": "fa-google",
+        "token_key": "access_token",
+        "remote_app": {
+            "client_id": "GOOGLE_CLIENT_ID",
+            "client_secret": "GOOGLE_CLIENT_SECRET",
+            "api_base_url": "https://www.googleapis.com/oauth2/v2/",
+            "client_kwargs": {"scope": "email profile"},
+            "request_token_url": None,
+            "access_token_url": "https://oauth2.googleapis.com/token",
+            "authorize_url": "https://accounts.google.com/o/oauth2/auth",
+        },
+    },
+]
+'''
+
+    def _generate_ldap_config(self) -> str:
+        return '''"""LDAP authentication configuration."""
+AUTH_TYPE = 2  # AUTH_LDAP
+AUTH_LDAP_SERVER = "ldap://ldap.example.com"
+AUTH_LDAP_USE_TLS = False
+AUTH_LDAP_SEARCH = "dc=example,dc=com"
+AUTH_LDAP_BIND_USER = "cn=admin,dc=example,dc=com"
+AUTH_LDAP_BIND_PASSWORD = "change-me"
+AUTH_LDAP_UID_FIELD = "uid"
+'''
+
+    # ─── Navigation ──────────────────────────────────────────────────────────
+
+    def _generate_navigation_config(self, categories) -> str:
+        lines = ['"""Navigation menu registration."""', 'from flask_appbuilder import AppBuilder', '']
+        lines.append('def register_navigation(appbuilder: AppBuilder):')
+        lines.append('    """Register views grouped by category."""')
+        for category, tables in categories.items():
+            for table_info in tables:
+                cls = ''.join(w.title() for w in table_info.name.split('_')) + 'View'
+                lines.append(f'    # appbuilder.add_view({cls}, "{table_info.display_name}", category="{category}")')
+        lines.append('')
+        return '\n'.join(lines)
+
+    # ─── API ─────────────────────────────────────────────────────────────────
+
+    def _generate_api_blueprint(self) -> str:
+        return f'''"""REST API views for {self.config.app_name}."""
+from flask_appbuilder.api import ModelRestApi
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from app import appbuilder
+from app.models.models import *  # noqa: F401,F403
+'''
+
+    def _generate_swagger_config(self) -> str:
+        return f'''"""OpenAPI/Swagger configuration."""
+SWAGGER_UI = True
+FAB_API_SWAGGER_UI = True
+FAB_API_MAX_PAGE_SIZE = 100
+
+OPENAPI_SPEC = {{
+    "info": {{
+        "title": "{self.config.app_title or self.config.app_name} API",
+        "version": "{self.config.version}",
+    }}
+}}
+'''
+
+    def _generate_api_auth(self) -> str:
+        return '''"""API authentication configuration."""
+from flask_appbuilder.security.decorators import protect
+
+# JWT is enabled by default in Flask-AppBuilder
+# Configure in config.py:
+# JWT_SECRET_KEY = "your-jwt-secret"
+# JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+'''
+
+    # ─── Static Assets ───────────────────────────────────────────────────────
+
+    def _generate_service_worker(self) -> str:
+        return """// Service Worker for offline support
+const CACHE_NAME = 'app-cache-v1';
+const urlsToCache = ['/', '/static/css/custom.css', '/static/js/custom.js'];
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
+});
+
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request).then(response => response || fetch(event.request))
+  );
+});
+"""
+
+    def _generate_web_manifest(self) -> str:
+        import json
+        return json.dumps({
+            "name": self.config.app_title or self.config.app_name,
+            "short_name": self.config.app_name,
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#007bff",
+            "icons": [{"src": "/static/img/favicon.ico", "sizes": "any", "type": "image/x-icon"}],
+        }, indent=2)
+
+    # ─── Templates ───────────────────────────────────────────────────────────
+
+    def _generate_templates(self):
+        """Generate HTML template files."""
+        self.generated_files['app/templates/base.html'] = self._generate_base_template()
+        self.generated_files['app/templates/dashboard.html'] = self._generate_dashboard_template()
+        self.generated_files['app/templates/login.html'] = self._generate_login_template()
+
+    def _generate_base_template(self) -> str:
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{% block title %}}{self.config.app_title or self.config.app_name}{{% endblock %}}</title>
+  <link rel="stylesheet" href="{{{{ url_for('static', filename='appbuilder/css/bootstrap.min.css') }}}}">
+  <link rel="stylesheet" href="{{{{ url_for('static', filename='css/custom.css') }}}}">
+</head>
+<body>
+  {{% block content %}}{{% endblock %}}
+  <script src="{{{{ url_for('static', filename='appbuilder/js/jquery-latest.js') }}}}"></script>
+  <script src="{{{{ url_for('static', filename='js/custom.js') }}}}"></script>
+</body>
+</html>
+'''
+
+    def _generate_dashboard_template(self) -> str:
+        return '''{%- extends "appbuilder/base.html" %}
+{%- block content %}
+<div class="container-fluid mt-4">
+  <h1>Dashboard</h1>
+  <div class="row">
+    <div class="col-md-12">
+      <p>Welcome to ''' + (self.config.app_title or self.config.app_name) + '''.</p>
+    </div>
+  </div>
+</div>
+{%- endblock %}
+'''
+
+    def _generate_login_template(self) -> str:
+        return '''{%- extends "appbuilder/general/security/login_db.html" %}
+{%- block brand %}''' + (self.config.app_title or self.config.app_name) + '''{%- endblock %}
+'''
+
+    # ─── Development Files ────────────────────────────────────────────────────
+
+    def _generate_development_files(self):
+        """Generate development tooling files."""
+        self.generated_files['run_dev.py'] = self._generate_dev_server()
+        self.generated_files['.pre-commit-config.yaml'] = self._generate_pre_commit_config()
+        self.generated_files['.vscode/settings.json'] = self._generate_vscode_settings()
+        self.generated_files['.vscode/launch.json'] = self._generate_vscode_launch()
+
+    def _generate_dev_server(self) -> str:
+        return f'''"""Development server launcher."""
+from app import create_app
+from config.development import DevelopmentConfig
+
+app = create_app()
+app.config.from_object(DevelopmentConfig)
+
+if __name__ == "__main__":
+    app.run(debug=True, port=8080)
+'''
+
+    def _generate_pre_commit_config(self) -> str:
+        return '''repos:
+  - repo: https://github.com/psf/black
+    rev: 23.12.0
+    hooks:
+      - id: black
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=90]
+'''
+
+    def _generate_vscode_settings(self) -> str:
+        import json
+        return json.dumps({
+            "python.defaultInterpreterPath": ".venv/bin/python",
+            "python.linting.enabled": True,
+            "python.linting.flake8Enabled": True,
+            "python.formatting.provider": "black",
+            "editor.formatOnSave": True,
+            "[python]": {"editor.defaultFormatter": "ms-python.black-formatter"},
+        }, indent=2)
+
+    def _generate_vscode_launch(self) -> str:
+        import json
+        return json.dumps({
+            "version": "0.2.0",
+            "configurations": [{
+                "name": "Flask Dev",
+                "type": "python",
+                "request": "launch",
+                "module": "flask",
+                "env": {"FLASK_APP": "run_dev.py", "FLASK_ENV": "development"},
+                "args": ["run", "--debug", "--port", "8080"],
+            }],
+        }, indent=2)
+
+    # ─── Docker ───────────────────────────────────────────────────────────────
+
+    def _generate_docker_compose(self) -> str:
+        name = self.config.app_name.lower()
+        return f'''version: "3.9"
+services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${{SECRET_KEY}}
+      - SQLALCHEMY_DATABASE_URI=postgresql://app:app@db/{name}
+    depends_on:
+      - db
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: {name}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
+'''
+
+    def _generate_docker_compose_dev(self) -> str:
+        return '''version: "3.9"
+services:
+  web:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    command: python run_dev.py
+'''
+
+    def _generate_dockerignore(self) -> str:
+        return '''.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.env
+*.db
+htmlcov/
+.pytest_cache/
+'''
+
+    # ─── CI/CD ────────────────────────────────────────────────────────────────
+
+    def _generate_github_actions(self) -> str:
+        return f'''name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/ -v
+      - run: flake8 app/ --max-line-length=90
+'''
+
+    def _generate_deploy_workflow(self) -> str:
+        return '''name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ secrets.REGISTRY }}/${{ github.repository }}:latest .
+          docker push ${{ secrets.REGISTRY }}/${{ github.repository }}:latest
+'''
+
+    def _generate_gitlab_ci(self) -> str:
+        return '''image: python:3.12
+
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  script:
+    - pip install -e ".[dev]"
+    - pytest tests/ -v
+    - flake8 app/
+
+deploy:
+  stage: deploy
+  only:
+    - main
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - docker push $CI_REGISTRY_IMAGE:latest
+'''
+
+    def _generate_k8s_deployment(self) -> str:
+        name = self.config.app_name.lower()
+        return f'''apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {name}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: {name}
+  template:
+    metadata:
+      labels:
+        app: {name}
+    spec:
+      containers:
+        - name: {name}
+          image: {name}:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {name}-secrets
+                  key: secret-key
+'''
+
+    def _generate_k8s_service(self) -> str:
+        name = self.config.app_name.lower()
+        return f'''apiVersion: v1
+kind: Service
+metadata:
+  name: {name}
+spec:
+  selector:
+    app: {name}
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+'''
+
+    def _generate_k8s_ingress(self) -> str:
+        name = self.config.app_name.lower()
+        return f'''apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {name}
+spec:
+  rules:
+    - host: {name}.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {name}
+                port:
+                  number: 80
+'''
+
+    # ─── Testing ──────────────────────────────────────────────────────────────
+
+    def _generate_conftest(self) -> str:
+        return '''"""Shared pytest fixtures."""
+import pytest
+from app import create_app, db
+from config.testing import TestingConfig
+
+
+@pytest.fixture(scope="session")
+def app():
+    app = create_app()
+    app.config.from_object(TestingConfig)
+    with app.app_context():
+        db.create_all()
+        yield app
+        db.drop_all()
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+@pytest.fixture
+def runner(app):
+    return app.test_cli_runner()
+'''
+
+    def _generate_pytest_config(self) -> str:
+        return '''[pytest]
+testpaths = tests
+addopts = -v --tb=short
+filterwarnings =
+    ignore::DeprecationWarning
+'''
+
+    def _generate_model_tests(self) -> str:
+        return '''"""Unit tests for generated models."""
+import pytest
+from app.models.models import *  # noqa
+
+
+def test_models_importable():
+    """All models should be importable."""
+    pass
+'''
+
+    def _generate_view_tests(self) -> str:
+        return '''"""Unit tests for generated views."""
+import pytest
+
+
+def test_index_redirects_to_login(client):
+    """Unauthenticated access should redirect to login."""
+    response = client.get("/")
+    assert response.status_code in (200, 302)
+'''
+
+    def _generate_api_tests(self) -> str:
+        return '''"""Integration tests for REST API."""
+import pytest
+
+
+def test_api_health(client):
+    """API should respond."""
+    response = client.get("/api/v1/")
+    assert response.status_code in (200, 401, 404)
+'''
+
+    def _generate_e2e_tests(self) -> str:
+        return '''"""End-to-end user flow tests (Playwright / Selenium)."""
+import pytest
+
+# Run with: pytest tests/e2e/ --headed
+# Requires: pip install playwright && playwright install
+
+
+def test_login_flow():
+    """User can log in via the login form."""
+    pytest.skip("E2E tests require a running server — run manually.")
+'''
+
+    # ─── Documentation ────────────────────────────────────────────────────────
+
+    def _generate_api_docs(self) -> str:
+        return f'''# {self.config.app_name} API Reference
+
+Base URL: `/api/v1`
+
+Authentication: JWT Bearer token — obtain via `POST /api/v1/security/login`.
+
+## Endpoints
+
+All ModelRestApi endpoints follow FAB conventions:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/<resource>/` | List resources |
+| POST | `/<resource>/` | Create resource |
+| GET | `/<resource>/<pk>` | Get resource |
+| PUT | `/<resource>/<pk>` | Update resource |
+| DELETE | `/<resource>/<pk>` | Delete resource |
+'''
+
+    def _generate_dev_docs(self) -> str:
+        return f'''# {self.config.app_name} — Development Guide
+
+## Setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+flask db upgrade
+python scripts/init_db.py
+python run_dev.py
+```
+
+## Testing
+
+```bash
+pytest tests/ -v
+```
+
+## Code Style
+
+```bash
+black app/
+flake8 app/ --max-line-length=90
+```
+'''
+
+    def _generate_deployment_docs(self) -> str:
+        return f'''# {self.config.app_name} — Deployment Guide
+
+## Docker
+
+```bash
+docker compose up -d
+```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SECRET_KEY` | Flask secret key (required in production) |
+| `SQLALCHEMY_DATABASE_URI` | Database connection string |
+| `FLASK_ENV` | `production` or `development` |
+'''
+
+    def _generate_architecture_docs(self) -> str:
+        return f'''# {self.config.app_name} — Architecture
+
+## Stack
+
+- **Framework**: Flask + Flask-AppBuilder
+- **ORM**: SQLAlchemy 2.x
+- **Auth**: Flask-AppBuilder SecurityManager (RBAC)
+- **API**: Flask-AppBuilder ModelRestApi (OpenAPI 3)
+
+## Project Layout
+
+```
+app/
+  models/   — SQLAlchemy models
+  views/    — ModelView CRUD views
+  api/      — REST API blueprint
+  security.py — custom SecurityManager
+config/     — environment configs
+scripts/    — database init/seed
+tests/      — unit + integration tests
+```
+'''

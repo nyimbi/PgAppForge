@@ -11,6 +11,7 @@ Generates sophisticated, modern Flask-AppBuilder views with:
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set, Tuple
 from dataclasses import dataclass
@@ -104,6 +105,7 @@ class BeautifulViewGenerator:
         self.inspector = inspector
         self.config = config or ViewGenerationConfig()
         self.jinja_env = Environment(loader=BaseLoader())
+        self.jinja_env.filters['repr'] = repr
 
         # Analysis cache
         self.database_analysis = None
@@ -133,7 +135,12 @@ class BeautifulViewGenerator:
         
         try:
             # Generate supporting files (templates, CSS, JS)
-            self._generate_supporting_files(output_dir)
+            supporting = self._generate_supporting_files()
+            for fname, content in supporting.items():
+                fpath = os.path.join(output_dir, fname)
+                os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                with open(fpath, 'w') as f:
+                    f.write(content)
             
             # Generate inline formset templates
             if self.config.enable_inline_formsets:
@@ -285,11 +292,14 @@ class BeautifulViewGenerator:
         # Generate security settings
         security_settings = self._generate_view_security(table_info)
 
+        add_edit_columns = [col['name'] if isinstance(col, dict) else col.name for col in form_columns]
         context = {
             'table_info': table_info,
             'class_name': f"{self._to_pascal_case(table_info.name)}ModelView",
             'model_name': self._to_pascal_case(table_info.name),
             'form_columns': form_columns,
+            'add_columns': add_edit_columns,
+            'edit_columns': add_edit_columns,
             'list_columns': list_columns,
             'show_columns': show_columns,
             'search_columns': search_columns,
@@ -387,13 +397,42 @@ class BeautifulViewGenerator:
         # Create wizard steps
         steps = self._create_wizard_steps(table_info.columns)
 
+        non_pk = [col for col in table_info.columns if not col.primary_key]
+        required_cols = [col for col in non_pk if not col.nullable]
+        optional_cols = [col for col in non_pk if col.nullable]
+
+        def _wtf(col):
+            t = str(col.type).lower()
+            if 'bool' in t: return 'BooleanField'
+            if 'int' in t: return 'IntegerField'
+            if 'text' in t: return 'TextAreaField'
+            if 'date' in t or 'time' in t: return 'DateTimeLocalField'
+            return 'StringField'
+
+        req_ctx = [{'name': c.name, 'display_name': c.display_name or c.name,
+                    'wtf_field_type': _wtf(c), 'max_length': getattr(c, 'length', None)}
+                   for c in required_cols]
+        opt_ctx = [{'name': c.name, 'display_name': c.display_name or c.name,
+                    'wtf_field_type': _wtf(c), 'max_length': getattr(c, 'length', None)}
+                   for c in optional_cols]
+
         context = {
             'table_info': table_info,
             'class_name': f"{self._to_pascal_case(table_info.name)}WizardView",
             'model_name': self._to_pascal_case(table_info.name),
             'steps': steps,
+            'required_columns': req_ctx,
+            'optional_columns': opt_ctx,
+            'relationships': [
+                {
+                    'property_name': r.name,
+                    'display_name': r.display_name or r.name.replace('_', ' ').title(),
+                    'target_model': self._to_pascal_case(r.remote_table),
+                }
+                for r in table_info.relationships
+            ],
             'config': self.config,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
         }
 
         return template.render(**context)
@@ -852,8 +891,8 @@ class {{ class_name }}(ModelView):
     # Column configurations
     list_columns = {{ list_columns }}
     show_columns = {{ show_columns }}
-    add_columns = {{ [col.name for col in form_columns] }}
-    edit_columns = {{ [col.name for col in form_columns] }}
+    add_columns = {{ add_columns }}
+    edit_columns = {{ edit_columns }}
 
     {% if search_columns %}
     search_columns = {{ search_columns }}
@@ -962,7 +1001,7 @@ class {{ model_name }}Schema(Schema):
     """{{ table_info.display_name }} serialization schema."""
 
     {% for field in serialization_fields %}
-    {{ field.name }} = fields.{{ field.type }}({% if field.required %}required=True{% endif %}{% if field.description %}, description='{{ field.description }}'{% endif %})
+    {{ field.name }} = fields.{{ field.type }}({{ field.args }})
     {% endfor %}
 
 
@@ -990,7 +1029,7 @@ class {{ class_name }}(ModelRestApi):
     {% endfor %}
         '''.strip()
 
-    def _generate_view_registry(self) -> str:
+    def _generate_view_registry(self, results=None) -> str:
         """Generate view registry __init__.py."""
         return '''
 """
@@ -3377,7 +3416,7 @@ class {{ class_name }}(ModelView):
     def lookup_by_relation(self, relation, pk):
         """Quick lookup by related entity."""
         # Apply filter and redirect to filtered list
-        return redirect(url_for('.list', _flt_0_{{ rel.name }}=pk))
+        return redirect(url_for('.list', **{f'_flt_0_{relation}': pk}))
 
 
 appbuilder.add_view(
@@ -3450,7 +3489,7 @@ class {{ class_name }}(ModelView):
             return redirect(url_for('.list'))
         
         # Apply filter and show results
-        filtered_url = url_for('.list', _flt_0_{{ relationship.name }}=pk)
+        filtered_url = url_for('.list', **{f'_flt_0_{pk}': pk})
         return redirect(filtered_url)
 
 
@@ -3532,7 +3571,7 @@ class {{ class_name }}(BaseView):
                 'relationship': '{{ rel.display_name }}',
                 'related_item': str(item),
                 'count': count,
-                'url': url_for('{{ model_name }}ModelView.list', _flt_0_{{ rel.name }}=item.id)
+                'url': url_for('{{ model_name }}ModelView.list') + f'?_flt_0_{rel.name}={item.id}'
             })
         {% endfor %}
         
@@ -3551,3 +3590,136 @@ appbuilder.add_link(
     category="{{ table_info.category or 'Relationships' }}"
 )
 '''
+
+    def _generate_form_validators(self, columns) -> List[str]:
+        """Return WTForms validator class names needed for these columns."""
+        validators: set = {'DataRequired'}
+        for col in columns:
+            name = col.get('name', '') if isinstance(col, dict) else getattr(col, 'name', '')
+            if 'email' in name.lower():
+                validators.add('Email')
+            length = col.get('length') if isinstance(col, dict) else getattr(col, 'length', None)
+            if length:
+                validators.add('Length')
+        return sorted(validators)
+
+    def _generate_export_settings(self, table_info) -> Dict[str, Any]:
+        """Return export configuration for the table view."""
+        return {
+            'formats': ['csv', 'xlsx'],
+            'max_rows': 10000,
+            'include_headers': True,
+        }
+
+    def _generate_api_security(self, table_info) -> Dict[str, Any]:
+        """Return API security settings for the table."""
+        return {
+            'requires_auth': True,
+            'rate_limit': '100/hour',
+            'allowed_methods': ['GET', 'POST', 'PUT', 'DELETE'],
+        }
+
+    def _get_serialization_fields(self, columns) -> List[Dict[str, Any]]:
+        """Return marshmallow field dicts for API serialization."""
+        _type_map = {
+            'int': 'Integer', 'bool': 'Boolean', 'float': 'Float',
+            'decimal': 'Float', 'date': 'DateTime', 'time': 'DateTime',
+            'text': 'String', 'str': 'String',
+        }
+        fields_out = []
+        for col in columns:
+            if isinstance(col, dict):
+                name, nullable, comment, type_str = (
+                    col.get('name', ''), col.get('nullable', True),
+                    col.get('comment', ''), str(col.get('type', 'str')).lower()
+                )
+            else:
+                name, nullable, comment = col.name, col.nullable, col.comment or ''
+                type_str = str(col.type).lower()
+            ma_type = next((v for k, v in _type_map.items() if k in type_str), 'String')
+            desc = comment or name.replace('_', ' ').title()
+            required = not nullable
+            args_parts = []
+            if required:
+                args_parts.append('required=True')
+            if desc:
+                args_parts.append(f"description='{desc}'")
+            fields_out.append({
+                'name': name,
+                'type': ma_type,
+                'required': required,
+                'description': desc,
+                'args': ', '.join(args_parts),
+            })
+        return fields_out
+
+    def _generate_api_endpoints(self, table_info) -> List[Dict[str, Any]]:
+        """Return API endpoint definitions for the table."""
+        name = table_info.name
+        return [
+            {'method': 'GET',    'path': f'/{name}/',    'description': f'List {name}'},
+            {'method': 'POST',   'path': f'/{name}/',    'description': f'Create {name}'},
+            {'method': 'GET',    'path': f'/{name}/{{pk}}', 'description': f'Get {name}'},
+            {'method': 'PUT',    'path': f'/{name}/{{pk}}', 'description': f'Update {name}'},
+            {'method': 'DELETE', 'path': f'/{name}/{{pk}}', 'description': f'Delete {name}'},
+        ]
+
+    def _generate_chart_configs(self, numeric_columns, date_columns) -> List[Dict[str, Any]]:
+        """Return chart configuration for numeric/date columns."""
+        configs = []
+        for col in numeric_columns:
+            name = col.get('name') if isinstance(col, dict) else col.name
+            configs.append({'column': name, 'chart_type': 'bar', 'label': name.replace('_', ' ').title()})
+        return configs
+
+    def _get_aggregation_options(self, columns=None) -> List[str]:
+        """Return available aggregation functions for chart/report views."""
+        return ['count', 'sum', 'avg', 'min', 'max']
+
+    def _get_grouping_options(self, columns) -> List[str]:
+        """Return column names suitable for grouping in chart/report views."""
+        result = []
+        for col in columns:
+            name = col.get('name') if isinstance(col, dict) else col.name
+            pk = col.get('primary_key', False) if isinstance(col, dict) else col.primary_key
+            if not pk:
+                result.append(name)
+        return result[:5]  # limit to first 5
+
+    def _get_report_columns(self, columns) -> List[str]:
+        """Return column names to include in report views."""
+        result = []
+        for col in columns:
+            pk = col.get('primary_key', False) if isinstance(col, dict) else col.primary_key
+            if not pk:
+                result.append(col.get('name') if isinstance(col, dict) else col.name)
+        return result
+
+    def _create_wizard_steps(self, columns) -> List[Dict[str, Any]]:
+        """Return wizard step definitions for multi-step form views."""
+        non_pk = [col for col in columns if not (col.get('primary_key', False) if isinstance(col, dict) else col.primary_key)]
+        step_size = max(3, len(non_pk) // 3)
+        steps = []
+        for i, chunk in enumerate([non_pk[j:j+step_size] for j in range(0, len(non_pk), step_size)]):
+            names = [c.get('name') if isinstance(c, dict) else c.name for c in chunk]
+            steps.append({'title': f'Step {i + 1}', 'fields': names, 'description': f'Part {i + 1}'})
+        return steps
+
+    def _determine_event_fields(self, columns) -> Dict[str, str]:
+        """Return start/end date column names for calendar views."""
+        start, end = None, None
+        for col in columns:
+            lower = col.name.lower()
+            if start is None and any(k in lower for k in ('start', 'begin', 'from', 'date')):
+                start = col.name
+            elif end is None and any(k in lower for k in ('end', 'finish', 'to', 'due')):
+                end = col.name
+        return {'start': start or 'created_at', 'end': end or start or 'created_at'}
+
+    def _get_add_form(self, master_record=None) -> Dict[str, Any]:
+        """Return add-form configuration."""
+        return {'fields': [], 'master_record': master_record}
+
+    def _get_edit_form(self, master_record=None) -> Dict[str, Any]:
+        """Return edit-form configuration."""
+        return {'fields': [], 'master_record': master_record}

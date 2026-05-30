@@ -186,9 +186,6 @@ class SecurityValidationSuite:
                 config = {'SECRET_KEY': 'a' * 32}  # Valid 32-char key
 
             # Temporarily set mock app
-            import flask
-            original_app = getattr(flask, '_app_ctx_stack', None)
-
             # Mock current_app
             from unittest.mock import patch
             with patch('flask.current_app', MockApp()):

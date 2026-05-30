@@ -22,9 +22,9 @@ class {{ class_name }}({{ base_class }}):
     {% endif %}
 
     # Columns
-    {% for column in columns %}
-    {{ column.name }}{% if config.use_type_hints and column.python_type %}: {{ column.python_type }}{% endif %} = Column({{ column.type }}{% if column.constraints %}, {{ column.constraints|join(', ') }}{% endif %}){% if column.comment %} # {{ column.comment }}{% endif %}
-    {% endfor %}
+{% for column in columns %}
+{{ column.definition }}
+{% endfor %}
 
     # Relationships
     {% for relationship in relationships %}

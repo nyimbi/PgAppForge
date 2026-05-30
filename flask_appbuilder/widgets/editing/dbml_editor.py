@@ -997,7 +997,7 @@ Ref: order_items.product_id > products.id
   id integer [primary key, increment]
   name varchar(255) [not null]
   email varchar [unique]
-  created_at timestamp [default: \`now()\`]
+  created_at timestamp [default: `now()`]
 }}</pre>
 
                                     <h5>Relationships:</h5>

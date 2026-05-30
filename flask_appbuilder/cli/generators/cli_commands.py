@@ -80,7 +80,9 @@ def validate_database_uri(ctx, param, value):
         if ctx and hasattr(ctx, 'params') and ctx.params.get('validate_connection'):
             click.echo('🔍 Testing database connection...')
             try:
-                engine = create_engine(value, connect_args={'connect_timeout': 5})
+                dialect = value.split("://")[0].split("+")[0]
+                ca = {} if dialect == "sqlite" else {"connect_timeout": 5}
+                engine = create_engine(value, connect_args=ca)
                 with engine.connect() as conn:
                     # Simple test query
                     if parsed.scheme == 'postgresql':
@@ -361,51 +363,37 @@ def generate_models(
     try:
         click.echo("🔍 Connecting to database and analyzing schema...")
 
-        # Initialize database inspector with context management
-        with EnhancedDatabaseInspector(uri) as inspector:
-            # Create model generation configuration
-            model_config = ModelGenerationConfig(
-            generate_pydantic=include_pydantic,
-            generate_validation=include_validation,
-            generate_hybrid_properties=include_hybrid_properties,
-            generate_event_listeners=include_event_listeners,
-            security_features=security_features,
-            performance_optimizations=performance_optimizations,
-            custom_base_class=custom_base_class
-        )
-
-        # Initialize model generator
-        generator = EnhancedModelGenerator(inspector, model_config)
-
-        click.echo("🏗️ Generating enhanced models...")
-
-        # Generate models
-        models = generator.generate_all_models()
-
-        # Write main models file
-        output_path = Path(output)
-        # Write files using transaction-safe operations
         from .file_operations import GenerationTransaction
-        
-        with GenerationTransaction(output_path.parent, "Model Generation") as transaction:
-            # Add main models file
-            transaction.add_file('models.py', models['models.py'])
-            
-            # Add additional files if generated
-            if models.get('schemas.py') and include_pydantic:
-                transaction.add_file('schemas.py', models['schemas.py'])
-                
-            if models.get('validators.py') and include_validation:
-                transaction.add_file('validators.py', models['validators.py'])
-        
-        files_written = [str(f) for f in transaction.file_writer.get_written_files()]
+
+        with EnhancedDatabaseInspector(uri) as inspector:
+            model_config = ModelGenerationConfig(
+                generate_pydantic=include_pydantic,
+                generate_validation=include_validation,
+                generate_hybrid_properties=include_hybrid_properties,
+                generate_event_listeners=include_event_listeners,
+                security_features=security_features,
+                performance_optimizations=performance_optimizations,
+                custom_base_class=custom_base_class,
+            )
+
+            generator = EnhancedModelGenerator(inspector, model_config)
+            click.echo("🏗️ Generating enhanced models...")
+            models = generator.generate_all_models()
+
+            output_path = Path(output)
+            with GenerationTransaction(output_path.parent, "Model Generation") as transaction:
+                transaction.add_file('models.py', models['models.py'])
+                if models.get('schemas.py') and include_pydantic:
+                    transaction.add_file('schemas.py', models['schemas.py'])
+                if models.get('validators.py') and include_validation:
+                    transaction.add_file('validators.py', models['validators.py'])
+
+            files_written = [str(f) for f in transaction.file_writer.get_written_files()]
 
         click.echo("✅ Model generation complete!")
         click.echo(f"📁 Generated {len(files_written)} files:")
         for file_path in files_written:
             click.echo(f"   • {file_path}")
-
-        # Show next steps
         click.echo("\n📋 Next steps:")
         click.echo("1. Review generated models")
         click.echo("2. Customize validation rules as needed")

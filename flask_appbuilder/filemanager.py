@@ -4,17 +4,10 @@ import os.path as op
 import re
 import uuid
 
-from flask.globals import _request_ctx_stack
+from flask import current_app, has_app_context
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 from wtforms import ValidationError
-
-try:
-    from flask import _app_ctx_stack
-except ImportError:
-    _app_ctx_stack = None
-
-app_stack = _app_ctx_stack or _request_ctx_stack
 
 log = logging.getLogger(__name__)
 
@@ -75,8 +68,8 @@ class FileManager(object):
         Returns:
             Default base path string
         """
-        if app_stack.top:
-            return app_stack.top.app.static_folder
+        if has_app_context():
+            return current_app.static_folder
         return os.getcwd()
 
     def _uuid_namegen(self, obj, file_data):

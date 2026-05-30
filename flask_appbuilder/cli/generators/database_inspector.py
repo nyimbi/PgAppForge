@@ -215,11 +215,14 @@ class EnhancedDatabaseInspector:
         """Lazy-loaded database engine with proper connection management."""
         if self._engine is None:
             try:
+                # connect_timeout is only valid for PostgreSQL/MySQL, not SQLite
+                dialect = self.database_uri.split("://")[0].split("+")[0]
+                connect_args = {} if dialect == "sqlite" else {"connect_timeout": 30}
                 self._engine = create_engine(
                     self.database_uri,
-                    pool_pre_ping=True,  # Verify connections before use
-                    pool_recycle=3600,   # Recycle connections after 1 hour
-                    connect_args={'connect_timeout': 30}  # 30 second connection timeout
+                    pool_pre_ping=True,
+                    pool_recycle=3600,
+                    connect_args=connect_args,
                 )
                 logger.info(f"Created database engine for: {self._engine.url.database}")
             except Exception as e:
@@ -351,8 +354,11 @@ class EnhancedDatabaseInspector:
         """
         table = self.metadata.tables[table_name]
 
-        # Basic table info
-        table_comment = self.inspector.get_table_comment(table_name)
+        # Basic table info (SQLite doesn't support table comments)
+        try:
+            table_comment = self.inspector.get_table_comment(table_name)
+        except NotImplementedError:
+            table_comment = {"text": None}
 
         # Analyze columns
         columns = []

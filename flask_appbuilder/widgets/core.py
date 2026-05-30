@@ -6,7 +6,7 @@ Created on Oct 12, 2013
 
 import logging
 
-from flask.globals import _request_ctx_stack
+from flask import current_app
 
 from flask_appbuilder._compat import as_unicode
 from .xss_security import XSSProtection
@@ -40,8 +40,7 @@ class RenderTemplateWidget(object):
         :param kwargs: Additional template arguments
         :return: Rendered HTML string
         """
-        ctx = _request_ctx_stack.top
-        jinja_env = ctx.app.jinja_env
+        jinja_env = current_app.jinja_env
 
         template = jinja_env.get_template(self.template)
         args = self.template_args.copy()
@@ -382,8 +381,7 @@ class ApprovalWidget(FormWidget):
             return ''
         
         # Render approval buttons template
-        ctx = _request_ctx_stack.top
-        jinja_env = ctx.app.jinja_env
+        jinja_env = current_app.jinja_env
         
         try:
             template = jinja_env.get_template('appbuilder/widgets/approval_buttons.html')

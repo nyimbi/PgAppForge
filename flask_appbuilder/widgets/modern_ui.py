@@ -12106,7 +12106,7 @@ class OrgChartWidget(Input):
             function wrap(text, width) {{
                 text.each(function() {{
                     const text = d3.select(this);
-                    const words = text.text().split(/\s+/).reverse();
+                    const words = text.text().split(/\\s+/).reverse();
                     let word;
                     let line = [];
                     let lineNumber = 0;

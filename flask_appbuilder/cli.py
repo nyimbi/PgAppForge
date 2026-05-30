@@ -355,6 +355,14 @@ except ImportError:
     # Generation tools not available
     pass
 
+# Import and register workflow commands
+try:
+    from .cli.workflow_commands import workflow
+    fab.add_command(workflow)
+except ImportError:
+    # Workflow tools not available
+    pass
+
 # Register all commands with the fab group
 fab.add_command(create_app)
 fab.add_command(create_addon)

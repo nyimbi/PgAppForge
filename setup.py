@@ -51,8 +51,8 @@ setup(
         "click>=8, <9",
         "cryptography>=3.4.8, <5.0.0",  # Required for MFA encryption
         "email_validator>=1.0.5",
-        "Flask>=2, <3.0.0",
-        "Flask-Babel>=1, <3",
+        "Flask>=2, <4",
+        "Flask-Babel>=4.0.0, <5",
         "Flask-Limiter>3,<4",
         "Flask-Login>=0.3, <0.7",
         "Flask-SQLAlchemy>=2.5, <4",
@@ -69,6 +69,7 @@ setup(
         "WTForms<4",
         "werkzeug<4",
         "itsdangerous>=1.1.0, <3.0.0",  # Required for tenant email verification
+        "inflect>=7.0.0, <8",
     ],
     extras_require={
         "jmespath": ["jmespath>=0.9.5"],
