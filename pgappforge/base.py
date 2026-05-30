@@ -22,6 +22,7 @@ from .menu import Menu, MenuApi
 from .views import IndexView, UtilView
 # Enhanced plugin system imports
 from .plugins import PluginManager, PluginLoader, SecurePluginLoader, BasePlugin
+from .plugins.hooks import HookRegistry
 
 if TYPE_CHECKING:
     from pgappforge.basemanager import BaseManager
@@ -136,6 +137,7 @@ class AppBuilder:
         # Enhanced plugin system
         self.plugin_manager: PluginManager = None  # type: ignore
         self.plugin_loader: PluginLoader = None  # type: ignore
+        self.hooks: HookRegistry = HookRegistry()  # Application event hooks
         self.menu = menu
         self.base_template = base_template
         self.security_manager_class = security_manager_class
@@ -218,6 +220,18 @@ class AppBuilder:
         self.bm = BabelManager(self)
         self.openapi_manager = OpenApiManager(self)
         self.menuapi_manager = MenuApi()
+
+        # Init event hooks and load configured plugins
+        self.hooks.init_app(app)
+        try:
+            from .plugins.plugin_manager import PluginManager as _PM, PluginRegistry as _PR
+            if self.plugin_manager is None:
+                self.plugin_manager = _PM(_PR())
+            self.plugin_manager.init_from_app_config(app, self)
+            self.plugin_manager.wire_hooks(self.hooks)
+        except Exception as _e:
+            import logging
+            logging.getLogger(__name__).debug("Plugin init skipped: %s", _e)
 
         # Initialize enhanced plugin system
         self._init_plugin_system(app)

@@ -127,6 +127,24 @@ setup(
             "python-engineio>=4.7.0, <5.0.0",  # Engine.IO transport
             "eventlet>=0.33.0, <1.0.0",        # Async networking for SocketIO
         ],
+        "analytics": [
+            "plotly>=5.17.0",
+            "pandas>=2.1.0",
+            "scikit-learn>=1.3.0",
+            "duckdb>=0.9.0",
+        ],
+        "workflow": [
+            "celery>=5.3.0",
+            "redis>=5.0.0",
+        ],
+        "tenancy": [
+            "stripe>=7.0.0",
+            "boto3>=1.26.0",
+        ],
+        "realtime": [
+            "flask-socketio>=5.3.0",
+            "python-socketio>=5.8.0",
+        ],
         "dev": [
             "nose2==0.14.0",                   # Testing framework
             "mockldap>=0.3.0",                 # LDAP testing
