@@ -360,6 +360,20 @@ try:
     fab.add_command(deploy)
 except ImportError:
     pass
+# Import and register help commands
+try:
+    from .cli.help_commands import help_group
+    fab.add_command(help_group)
+except ImportError:
+    pass
+
+# Import and register screenshot commands
+try:
+    from .cli.screenshot_commands import screenshot_group
+    fab.add_command(screenshot_group)
+except ImportError:
+    pass
+
 
 # Import and register workflow commands
 try:
@@ -377,3 +391,10 @@ fab.add_command(reset_password)
 fab.add_command(list_users)
 fab.add_command(list_views)
 fab.add_command(create_ext_app)
+
+# Import and register screenshot commands
+try:
+    from .cli.screenshot_commands import screenshot_group
+    fab.add_command(screenshot_group)
+except ImportError:
+    pass
