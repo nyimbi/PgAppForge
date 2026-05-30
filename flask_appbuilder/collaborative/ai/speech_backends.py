@@ -116,7 +116,7 @@ class FasterWhisperSTT:
 		    Transcribed text string.
 		"""
 		model = self._load_model()
-		loop = asyncio.get_event_loop()
+		loop = asyncio.get_running_loop()
 
 		def _run():
 			with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -262,7 +262,7 @@ class SupertonicTTS:
 		    Audio bytes in the configured output_format.
 		"""
 		engine = self._load_engine()
-		loop = asyncio.get_event_loop()
+		loop = asyncio.get_running_loop()
 
 		def _run():
 			return self._synthesize_sync(engine, text, kwargs)
