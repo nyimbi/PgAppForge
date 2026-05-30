@@ -1,0 +1,216 @@
+{
+  "name": "opcua",
+  "label": "OPC UA (Industrial)",
+  "description": "Industrial automation data standard \u2014 used by every IIoT platform (Siemens, Rockwell, ABB)",
+  "color": "#8e44ad",
+  "icon": "fa-industry",
+  "version": "1.05",
+  "source_url": "https://opcfoundation.org/",
+  "tags": [
+    "industrial",
+    "iiot",
+    "automation",
+    "industry40",
+    "opc"
+  ],
+  "tables": {
+    "opcua_server": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "application_uri",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "product_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "manufacturer",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "software_version",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "endpoint_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "is_online",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "last_connected_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "opcua_node": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "server_id",
+        "type": "UUID",
+        "fk": "opcua_server.id"
+      },
+      {
+        "name": "node_id",
+        "type": "VARCHAR(500)",
+        "nullable": false
+      },
+      {
+        "name": "browse_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "display_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "node_class",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "data_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "access_level",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "parent_id",
+        "type": "UUID",
+        "fk": "opcua_node.id"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      }
+    ],
+    "opcua_data_value": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "node_id",
+        "type": "UUID",
+        "fk": "opcua_node.id"
+      },
+      {
+        "name": "value_boolean",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "value_int",
+        "type": "BIGINT"
+      },
+      {
+        "name": "value_float",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "value_string",
+        "type": "TEXT"
+      },
+      {
+        "name": "source_timestamp",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "server_timestamp",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "status_code",
+        "type": "INTEGER"
+      }
+    ],
+    "opcua_alarm": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "server_id",
+        "type": "UUID",
+        "fk": "opcua_server.id"
+      },
+      {
+        "name": "node_id",
+        "type": "UUID",
+        "fk": "opcua_node.id"
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "severity",
+        "type": "INTEGER"
+      },
+      {
+        "name": "message",
+        "type": "TEXT"
+      },
+      {
+        "name": "active_state",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "triggered_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "acknowledged_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "opcua_method_call": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "node_id",
+        "type": "UUID",
+        "fk": "opcua_node.id"
+      },
+      {
+        "name": "method_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "input_args",
+        "type": "JSONB"
+      },
+      {
+        "name": "output_args",
+        "type": "JSONB"
+      },
+      {
+        "name": "status_code",
+        "type": "INTEGER"
+      },
+      {
+        "name": "called_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ]
+  }
+}

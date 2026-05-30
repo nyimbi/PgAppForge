@@ -1,0 +1,239 @@
+{
+  "name": "fiware",
+  "label": "FIWARE Smart Data Models",
+  "description": "EU-backed open data models \u2014 smart cities, agrifood, energy, environment",
+  "color": "#3498db",
+  "icon": "fa-smart-city",
+  "version": "2024",
+  "source_url": "https://smartdatamodels.org/",
+  "tags": [
+    "smart-city",
+    "eu",
+    "iot",
+    "fiware",
+    "environment"
+  ],
+  "tables": {
+    "fw_weather_observed": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "station_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "observed_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "temperature",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "feels_like_temperature",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "relative_humidity",
+        "type": "NUMERIC(5,2)"
+      },
+      {
+        "name": "wind_speed",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "wind_direction",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "atmospheric_pressure",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "precipitation",
+        "type": "NUMERIC(7,3)"
+      },
+      {
+        "name": "weather_type",
+        "type": "JSONB"
+      }
+    ],
+    "fw_air_quality_observed": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "station_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "observed_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "co",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "no2",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "o3",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "pm10",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "pm25",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "aqi",
+        "type": "INTEGER"
+      },
+      {
+        "name": "aqi_level",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "fw_traffic_flow_observed": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "road_segment_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "observed_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "intensity",
+        "type": "INTEGER"
+      },
+      {
+        "name": "occupancy",
+        "type": "NUMERIC(5,4)"
+      },
+      {
+        "name": "average_vehicle_speed",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "vehicle_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "congestion_level",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "fw_waste_container": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "container_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "fill_level",
+        "type": "NUMERIC(4,3)"
+      },
+      {
+        "name": "fill_level_updated_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "capacity_liters",
+        "type": "INTEGER"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "last_emptied_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "fw_device": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "category",
+        "type": "JSONB"
+      },
+      {
+        "name": "device_state",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "owner",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "battery_level",
+        "type": "NUMERIC(4,3)"
+      },
+      {
+        "name": "rssi",
+        "type": "INTEGER"
+      },
+      {
+        "name": "date_last_value_reported",
+        "type": "TIMESTAMPTZ"
+      }
+    ]
+  }
+}

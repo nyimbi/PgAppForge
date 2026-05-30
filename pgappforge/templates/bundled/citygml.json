@@ -1,0 +1,213 @@
+{
+  "name": "citygml",
+  "label": "OGC CityGML 3.0",
+  "description": "3D city model standard \u2014 buildings, bridges, roads for digital twins and smart cities",
+  "color": "#95a5a6",
+  "icon": "fa-city",
+  "version": "3.0",
+  "source_url": "https://www.ogc.org/standards/citygml/",
+  "tags": [
+    "smart-city",
+    "digital-twin",
+    "3d",
+    "spatial",
+    "ogc"
+  ],
+  "tables": {
+    "cgml_city_model": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "creation_date",
+        "type": "DATE"
+      },
+      {
+        "name": "bounding_box",
+        "type": "GEOGRAPHY(POLYGON,4326)"
+      },
+      {
+        "name": "reference_system",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "lod",
+        "type": "SMALLINT"
+      }
+    ],
+    "cgml_building": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "city_model_id",
+        "type": "UUID",
+        "fk": "cgml_city_model.id"
+      },
+      {
+        "name": "gml_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "function",
+        "type": "JSONB"
+      },
+      {
+        "name": "usage",
+        "type": "JSONB"
+      },
+      {
+        "name": "year_of_construction",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "year_of_demolition",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "roof_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "storeys_above_ground",
+        "type": "INTEGER"
+      },
+      {
+        "name": "storeys_below_ground",
+        "type": "INTEGER"
+      },
+      {
+        "name": "measured_height_m",
+        "type": "NUMERIC(8,3)"
+      },
+      {
+        "name": "footprint",
+        "type": "GEOGRAPHY(POLYGON,4326)"
+      },
+      {
+        "name": "lod1_solid",
+        "type": "JSONB"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      }
+    ],
+    "cgml_bridge": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "city_model_id",
+        "type": "UUID",
+        "fk": "cgml_city_model.id"
+      },
+      {
+        "name": "gml_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "function",
+        "type": "JSONB"
+      },
+      {
+        "name": "year_of_construction",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "span_m",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "geometry",
+        "type": "GEOGRAPHY(LINESTRING,4326)"
+      }
+    ],
+    "cgml_transportation": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "city_model_id",
+        "type": "UUID",
+        "fk": "cgml_city_model.id"
+      },
+      {
+        "name": "gml_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "function",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "surface_material",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "geometry",
+        "type": "GEOGRAPHY(LINESTRING,4326)"
+      }
+    ],
+    "cgml_land_use": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "city_model_id",
+        "type": "UUID",
+        "fk": "cgml_city_model.id"
+      },
+      {
+        "name": "gml_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "class",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "function",
+        "type": "JSONB"
+      },
+      {
+        "name": "geometry",
+        "type": "GEOGRAPHY(POLYGON,4326)"
+      }
+    ]
+  }
+}

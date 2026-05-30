@@ -1,0 +1,252 @@
+{
+  "name": "activitypub",
+  "label": "ActivityPub / ActivityStreams 2.0",
+  "description": "W3C federated social networking standard \u2014 Mastodon, Lemmy, PeerTube, Pixelfed",
+  "color": "#6c3483",
+  "icon": "fa-users",
+  "version": "1.0",
+  "source_url": "https://www.w3.org/TR/activitypub/",
+  "tags": [
+    "social",
+    "federated",
+    "w3c",
+    "mastodon"
+  ],
+  "tables": {
+    "ap_actor": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "actor_url",
+        "type": "TEXT",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(30)",
+        "nullable": false
+      },
+      {
+        "name": "preferred_username",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "summary",
+        "type": "TEXT"
+      },
+      {
+        "name": "inbox_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "outbox_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "followers_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "following_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "public_key_pem",
+        "type": "TEXT"
+      },
+      {
+        "name": "icon_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "header_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "shared_inbox_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "is_local",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "is_bot",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "follower_count",
+        "type": "INTEGER",
+        "default": "0"
+      },
+      {
+        "name": "following_count",
+        "type": "INTEGER",
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "ap_object": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "object_url",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(30)",
+        "nullable": false
+      },
+      {
+        "name": "attributed_to_id",
+        "type": "UUID",
+        "fk": "ap_actor.id"
+      },
+      {
+        "name": "content",
+        "type": "TEXT"
+      },
+      {
+        "name": "content_map",
+        "type": "JSONB"
+      },
+      {
+        "name": "summary",
+        "type": "TEXT"
+      },
+      {
+        "name": "in_reply_to_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "conversation_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "tags",
+        "type": "JSONB"
+      },
+      {
+        "name": "attachments",
+        "type": "JSONB"
+      },
+      {
+        "name": "to_recipients",
+        "type": "JSONB"
+      },
+      {
+        "name": "cc_recipients",
+        "type": "JSONB"
+      },
+      {
+        "name": "sensitive",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "language",
+        "type": "CHAR(5)"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "likes_count",
+        "type": "INTEGER",
+        "default": "0"
+      },
+      {
+        "name": "replies_count",
+        "type": "INTEGER",
+        "default": "0"
+      },
+      {
+        "name": "shares_count",
+        "type": "INTEGER",
+        "default": "0"
+      }
+    ],
+    "ap_activity": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "activity_url",
+        "type": "TEXT",
+        "unique": true
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(30)",
+        "nullable": false
+      },
+      {
+        "name": "actor_id",
+        "type": "UUID",
+        "fk": "ap_actor.id"
+      },
+      {
+        "name": "object_id",
+        "type": "UUID",
+        "fk": "ap_object.id"
+      },
+      {
+        "name": "target_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "ap_follow": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "follower_id",
+        "type": "UUID",
+        "fk": "ap_actor.id"
+      },
+      {
+        "name": "following_id",
+        "type": "UUID",
+        "fk": "ap_actor.id"
+      },
+      {
+        "name": "state",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ]
+  }
+}

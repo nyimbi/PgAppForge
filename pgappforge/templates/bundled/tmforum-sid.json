@@ -1,0 +1,254 @@
+{
+  "name": "tmforum-sid",
+  "label": "TM Forum Open API / SID",
+  "description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
+  "color": "#e74c3c",
+  "icon": "fa-network-wired",
+  "version": "22.5",
+  "source_url": "https://www.tmforum.org/open-apis/",
+  "tags": [
+    "telecoms",
+    "bss-oss",
+    "enterprise",
+    "global"
+  ],
+  "tables": {
+    "tmf_party": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "party_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "tax_exempt_certificate",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "credit_rating",
+        "type": "JSONB"
+      },
+      {
+        "name": "contact_medium",
+        "type": "JSONB"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "tmf_customer": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "party_id",
+        "type": "UUID",
+        "fk": "tmf_party.id"
+      },
+      {
+        "name": "account_number",
+        "type": "VARCHAR(50)",
+        "unique": true
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "customer_since",
+        "type": "DATE"
+      },
+      {
+        "name": "credit_limit",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "balance",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "segment",
+        "type": "VARCHAR(50)"
+      }
+    ],
+    "tmf_product": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "product_class",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "start_date",
+        "type": "DATE"
+      },
+      {
+        "name": "end_date",
+        "type": "DATE"
+      },
+      {
+        "name": "price",
+        "type": "NUMERIC(12,4)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "characteristics",
+        "type": "JSONB"
+      }
+    ],
+    "tmf_service": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "service_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "state",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "customer_id",
+        "type": "UUID",
+        "fk": "tmf_customer.id"
+      },
+      {
+        "name": "product_id",
+        "type": "UUID",
+        "fk": "tmf_product.id"
+      },
+      {
+        "name": "started_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "ended_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      }
+    ],
+    "tmf_resource": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "resource_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "category",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "state",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "service_id",
+        "type": "UUID",
+        "fk": "tmf_service.id"
+      },
+      {
+        "name": "characteristics",
+        "type": "JSONB"
+      },
+      {
+        "name": "place",
+        "type": "JSONB"
+      }
+    ],
+    "tmf_trouble_ticket": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "ticket_number",
+        "type": "VARCHAR(50)",
+        "unique": true
+      },
+      {
+        "name": "customer_id",
+        "type": "UUID",
+        "fk": "tmf_customer.id"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "priority",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "severity",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "resolved_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ]
+  }
+}

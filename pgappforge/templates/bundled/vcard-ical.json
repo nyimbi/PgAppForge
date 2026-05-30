@@ -1,0 +1,271 @@
+{
+  "name": "vcard-ical",
+  "label": "vCard 4.0 + iCal",
+  "description": "RFC standards for contacts and calendar data \u2014 interoperable with every phone/email client",
+  "color": "#16a085",
+  "icon": "fa-address-book",
+  "version": "RFC 6350/5545",
+  "source_url": "https://datatracker.ietf.org/doc/html/rfc6350",
+  "tags": [
+    "contacts",
+    "calendar",
+    "rfc",
+    "crm",
+    "scheduling"
+  ],
+  "tables": {
+    "vcard_contact": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "uid",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "fn",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "additional_name",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "honorific_prefix",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "honorific_suffix",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "nickname",
+        "type": "JSONB"
+      },
+      {
+        "name": "photo_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "birthday",
+        "type": "DATE"
+      },
+      {
+        "name": "anniversary",
+        "type": "DATE"
+      },
+      {
+        "name": "gender",
+        "type": "CHAR(1)"
+      },
+      {
+        "name": "org",
+        "type": "JSONB"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "role",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "url",
+        "type": "JSONB"
+      },
+      {
+        "name": "note",
+        "type": "TEXT"
+      },
+      {
+        "name": "categories",
+        "type": "JSONB"
+      },
+      {
+        "name": "rev",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "vcard_email": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "contact_id",
+        "type": "UUID",
+        "fk": "vcard_contact.id"
+      },
+      {
+        "name": "address",
+        "type": "VARCHAR(320)",
+        "nullable": false
+      },
+      {
+        "name": "types",
+        "type": "JSONB"
+      },
+      {
+        "name": "preference",
+        "type": "INTEGER",
+        "default": "100"
+      },
+      {
+        "name": "label",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "vcard_phone": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "contact_id",
+        "type": "UUID",
+        "fk": "vcard_contact.id"
+      },
+      {
+        "name": "number",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "types",
+        "type": "JSONB"
+      },
+      {
+        "name": "preference",
+        "type": "INTEGER",
+        "default": "100"
+      }
+    ],
+    "ical_calendar": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "color",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "owner_uid",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "prodid",
+        "type": "VARCHAR(255)"
+      }
+    ],
+    "ical_event": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "calendar_id",
+        "type": "UUID",
+        "fk": "ical_calendar.id"
+      },
+      {
+        "name": "uid",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "summary",
+        "type": "TEXT"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "location",
+        "type": "TEXT"
+      },
+      {
+        "name": "geo_point",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "dtstart",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "dtend",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "all_day",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "rrule",
+        "type": "TEXT"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "transp",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "organizer",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "attendees",
+        "type": "JSONB"
+      },
+      {
+        "name": "categories",
+        "type": "JSONB"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "last_modified",
+        "type": "TIMESTAMPTZ"
+      }
+    ]
+  }
+}

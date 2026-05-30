@@ -1,0 +1,170 @@
+{
+  "name": "open-badges",
+  "label": "Open Badges / Verifiable Credentials",
+  "description": "W3C digital credentials \u2014 professional development, micro-credentials, certificates",
+  "color": "#f39c12",
+  "icon": "fa-award",
+  "version": "3.0",
+  "source_url": "https://www.imsglobal.org/activity/openbadges",
+  "tags": [
+    "education",
+    "credentials",
+    "w3c",
+    "blockchain-adjacent"
+  ],
+  "tables": {
+    "ob_issuer": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "url",
+        "type": "TEXT"
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "image_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "public_key",
+        "type": "TEXT"
+      }
+    ],
+    "ob_badge_class": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "issuer_id",
+        "type": "UUID",
+        "fk": "ob_issuer.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "image_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "criteria_narrative",
+        "type": "TEXT"
+      },
+      {
+        "name": "criteria_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "alignment",
+        "type": "JSONB"
+      },
+      {
+        "name": "tags",
+        "type": "JSONB"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "ob_assertion": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "badge_class_id",
+        "type": "UUID",
+        "fk": "ob_badge_class.id"
+      },
+      {
+        "name": "recipient_id",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "recipient_type",
+        "type": "VARCHAR(30)",
+        "default": "'email'"
+      },
+      {
+        "name": "issued_on",
+        "type": "DATE"
+      },
+      {
+        "name": "expires_on",
+        "type": "DATE"
+      },
+      {
+        "name": "evidence_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "narrative",
+        "type": "TEXT"
+      },
+      {
+        "name": "verification_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "revoked",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "revocation_reason",
+        "type": "TEXT"
+      }
+    ],
+    "ob_endorsement": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "assertion_id",
+        "type": "UUID",
+        "fk": "ob_assertion.id"
+      },
+      {
+        "name": "issuer_id",
+        "type": "UUID",
+        "fk": "ob_issuer.id"
+      },
+      {
+        "name": "claim",
+        "type": "TEXT"
+      },
+      {
+        "name": "issued_on",
+        "type": "DATE"
+      }
+    ]
+  }
+}

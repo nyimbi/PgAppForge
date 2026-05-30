@@ -1,0 +1,141 @@
+{
+  "name": "green-button",
+  "label": "Green Button / ESPI",
+  "description": "Energy consumption data standard \u2014 all US utilities must provide Green Button data",
+  "color": "#27ae60",
+  "icon": "fa-plug",
+  "version": "3.3",
+  "source_url": "https://www.greenbuttondata.org/",
+  "tags": [
+    "energy",
+    "utilities",
+    "us-mandate",
+    "smart-home",
+    "espi"
+  ],
+  "tables": {
+    "gb_usage_point": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "local_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "customer_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "service_category",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "meter_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "service_address",
+        "type": "TEXT"
+      },
+      {
+        "name": "utility_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "tariff_profile",
+        "type": "VARCHAR(100)"
+      }
+    ],
+    "gb_meter_reading": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "usage_point_id",
+        "type": "UUID",
+        "fk": "gb_usage_point.id"
+      },
+      {
+        "name": "reading_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "uom",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "power_of_ten_multiplier",
+        "type": "SMALLINT",
+        "default": "0"
+      },
+      {
+        "name": "interval_length_seconds",
+        "type": "INTEGER"
+      },
+      {
+        "name": "accumulation_behaviour",
+        "type": "VARCHAR(30)"
+      }
+    ],
+    "gb_interval_block": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "meter_reading_id",
+        "type": "UUID",
+        "fk": "gb_meter_reading.id"
+      },
+      {
+        "name": "start_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "duration_seconds",
+        "type": "INTEGER"
+      },
+      {
+        "name": "num_readings",
+        "type": "INTEGER"
+      }
+    ],
+    "gb_interval_reading": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "interval_block_id",
+        "type": "UUID",
+        "fk": "gb_interval_block.id"
+      },
+      {
+        "name": "start_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "duration_seconds",
+        "type": "INTEGER"
+      },
+      {
+        "name": "value",
+        "type": "BIGINT"
+      },
+      {
+        "name": "quality_of_reading",
+        "type": "VARCHAR(20)"
+      }
+    ]
+  }
+}

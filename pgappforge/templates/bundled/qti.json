@@ -1,0 +1,205 @@
+{
+  "name": "qti",
+  "label": "IMS Global QTI (Assessment)",
+  "description": "Question and Test Interoperability \u2014 standardized assessment/exam data",
+  "color": "#e67e22",
+  "icon": "fa-graduation-cap",
+  "version": "3.0",
+  "source_url": "https://www.imsglobal.org/activity/assessment",
+  "tags": [
+    "education",
+    "assessment",
+    "testing",
+    "ims-global"
+  ],
+  "tables": {
+    "qti_item_bank": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "owner_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "qti_item": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "bank_id",
+        "type": "UUID",
+        "fk": "qti_item_bank.id"
+      },
+      {
+        "name": "identifier",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "interaction_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "prompt",
+        "type": "TEXT"
+      },
+      {
+        "name": "choices",
+        "type": "JSONB"
+      },
+      {
+        "name": "correct_response",
+        "type": "JSONB"
+      },
+      {
+        "name": "feedback",
+        "type": "JSONB"
+      },
+      {
+        "name": "tags",
+        "type": "JSONB"
+      },
+      {
+        "name": "difficulty",
+        "type": "NUMERIC(3,2)"
+      },
+      {
+        "name": "points",
+        "type": "NUMERIC(6,2)",
+        "default": "1"
+      }
+    ],
+    "qti_test": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "time_limit_minutes",
+        "type": "INTEGER"
+      },
+      {
+        "name": "max_attempts",
+        "type": "INTEGER",
+        "default": "1"
+      },
+      {
+        "name": "shuffle_items",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "pass_score",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "total_points",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "instructions",
+        "type": "TEXT"
+      }
+    ],
+    "qti_test_item": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "test_id",
+        "type": "UUID",
+        "fk": "qti_test.id"
+      },
+      {
+        "name": "item_id",
+        "type": "UUID",
+        "fk": "qti_item.id"
+      },
+      {
+        "name": "sequence",
+        "type": "INTEGER"
+      },
+      {
+        "name": "section",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "weight",
+        "type": "NUMERIC(6,4)",
+        "default": "1"
+      }
+    ],
+    "qti_attempt": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "test_id",
+        "type": "UUID",
+        "fk": "qti_test.id"
+      },
+      {
+        "name": "candidate_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "started_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "submitted_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "score",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "passed",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "responses",
+        "type": "JSONB"
+      },
+      {
+        "name": "feedback",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

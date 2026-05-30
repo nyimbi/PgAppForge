@@ -1,0 +1,209 @@
+{
+  "name": "niem",
+  "label": "NIEM (US Government)",
+  "description": "National Information Exchange Model \u2014 mandatory for US federal agency data exchange",
+  "color": "#1a3a5c",
+  "icon": "fa-flag-usa",
+  "version": "6.0",
+  "source_url": "https://niem.github.io/",
+  "tags": [
+    "us-government",
+    "federal",
+    "regulation",
+    "justice",
+    "emergency"
+  ],
+  "tables": {
+    "niem_organization": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(300)",
+        "nullable": false
+      },
+      {
+        "name": "abbreviation",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "category",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "jurisdiction",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "niem_person": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "full_name",
+        "type": "VARCHAR(300)"
+      },
+      {
+        "name": "date_of_birth",
+        "type": "DATE"
+      },
+      {
+        "name": "gender",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "race",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "ethnicity",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "ssn_hash",
+        "type": "CHAR(64)"
+      },
+      {
+        "name": "state_id",
+        "type": "VARCHAR(50)"
+      }
+    ],
+    "niem_location": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "address_line",
+        "type": "TEXT"
+      },
+      {
+        "name": "city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "state_code",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "zip",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "geo_point",
+        "type": "GEOGRAPHY(POINT,4326)"
+      }
+    ],
+    "niem_incident": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "incident_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "incident_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "category_code",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "location_id",
+        "type": "UUID",
+        "fk": "niem_location.id"
+      },
+      {
+        "name": "reported_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "occurred_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "narrative",
+        "type": "TEXT"
+      },
+      {
+        "name": "reporting_org_id",
+        "type": "UUID",
+        "fk": "niem_organization.id"
+      }
+    ],
+    "niem_case": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "case_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "case_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "filing_date",
+        "type": "DATE"
+      },
+      {
+        "name": "court_id",
+        "type": "UUID",
+        "fk": "niem_organization.id"
+      },
+      {
+        "name": "subject_id",
+        "type": "UUID",
+        "fk": "niem_person.id"
+      },
+      {
+        "name": "charges",
+        "type": "JSONB"
+      },
+      {
+        "name": "disposition",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

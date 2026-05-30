@@ -1,0 +1,165 @@
+{
+  "name": "waterml",
+  "label": "OGC WaterML 2.0",
+  "description": "Water quality and hydrological data standard \u2014 for water management applications",
+  "color": "#3498db",
+  "icon": "fa-water",
+  "version": "2.0",
+  "source_url": "https://www.ogc.org/standards/waterml/",
+  "tags": [
+    "water",
+    "hydrology",
+    "environmental",
+    "ogc"
+  ],
+  "tables": {
+    "waterml_monitoring_point": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "local_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "point_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "position",
+        "type": "GEOGRAPHY(POINT,4326)"
+      },
+      {
+        "name": "elevation_m",
+        "type": "NUMERIC(8,3)"
+      },
+      {
+        "name": "vertical_datum",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "responsible_party",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "waterml_observed_property": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "identifier",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "definition_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "unit_of_measure",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      }
+    ],
+    "waterml_observation": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "monitoring_point_id",
+        "type": "UUID",
+        "fk": "waterml_monitoring_point.id"
+      },
+      {
+        "name": "observed_property_id",
+        "type": "INTEGER",
+        "fk": "waterml_observed_property.id"
+      },
+      {
+        "name": "phenomenon_time",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "result_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC(15,6)"
+      },
+      {
+        "name": "quality_code",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "processing_level",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "censor_code",
+        "type": "VARCHAR(10)"
+      }
+    ],
+    "waterml_time_series": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "monitoring_point_id",
+        "type": "UUID",
+        "fk": "waterml_monitoring_point.id"
+      },
+      {
+        "name": "observed_property_id",
+        "type": "INTEGER",
+        "fk": "waterml_observed_property.id"
+      },
+      {
+        "name": "start_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "end_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "count",
+        "type": "INTEGER"
+      },
+      {
+        "name": "method",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "equipment",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

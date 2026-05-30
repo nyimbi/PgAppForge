@@ -1,0 +1,226 @@
+{
+  "name": "dicom-sr",
+  "label": "DICOM SR (Medical Imaging)",
+  "description": "DICOM Structured Reporting \u2014 medical imaging studies, series, instances for radiology apps",
+  "color": "#1a7abf",
+  "icon": "fa-x-ray",
+  "version": "2024c",
+  "source_url": "https://www.dicomstandard.org/",
+  "tags": [
+    "healthcare",
+    "radiology",
+    "imaging",
+    "hl7"
+  ],
+  "tables": {
+    "dicom_patient": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "VARCHAR(64)",
+        "unique": true
+      },
+      {
+        "name": "patient_name",
+        "type": "JSONB"
+      },
+      {
+        "name": "birth_date",
+        "type": "DATE"
+      },
+      {
+        "name": "sex",
+        "type": "CHAR(1)"
+      },
+      {
+        "name": "fhir_patient_id",
+        "type": "UUID"
+      }
+    ],
+    "dicom_study": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "study_instance_uid",
+        "type": "VARCHAR(64)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "dicom_patient.id"
+      },
+      {
+        "name": "study_date",
+        "type": "DATE"
+      },
+      {
+        "name": "study_time",
+        "type": "TIME"
+      },
+      {
+        "name": "study_description",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "modalities",
+        "type": "JSONB"
+      },
+      {
+        "name": "accession_number",
+        "type": "VARCHAR(64)"
+      },
+      {
+        "name": "referring_physician",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "institution",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "num_series",
+        "type": "INTEGER",
+        "default": "0"
+      }
+    ],
+    "dicom_series": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "series_instance_uid",
+        "type": "VARCHAR(64)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "study_id",
+        "type": "UUID",
+        "fk": "dicom_study.id"
+      },
+      {
+        "name": "series_number",
+        "type": "INTEGER"
+      },
+      {
+        "name": "series_description",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "modality",
+        "type": "VARCHAR(16)"
+      },
+      {
+        "name": "body_part",
+        "type": "VARCHAR(64)"
+      },
+      {
+        "name": "num_instances",
+        "type": "INTEGER",
+        "default": "0"
+      },
+      {
+        "name": "series_date",
+        "type": "DATE"
+      }
+    ],
+    "dicom_instance": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "sop_instance_uid",
+        "type": "VARCHAR(64)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "series_id",
+        "type": "UUID",
+        "fk": "dicom_series.id"
+      },
+      {
+        "name": "sop_class_uid",
+        "type": "VARCHAR(64)"
+      },
+      {
+        "name": "instance_number",
+        "type": "INTEGER"
+      },
+      {
+        "name": "storage_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "transfer_syntax",
+        "type": "VARCHAR(64)"
+      },
+      {
+        "name": "file_size_bytes",
+        "type": "BIGINT"
+      },
+      {
+        "name": "content_date",
+        "type": "DATE"
+      },
+      {
+        "name": "metadata",
+        "type": "JSONB"
+      }
+    ],
+    "dicom_report": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "study_id",
+        "type": "UUID",
+        "fk": "dicom_study.id"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "radiologist",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "findings",
+        "type": "TEXT"
+      },
+      {
+        "name": "impression",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "finalized_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ]
+  }
+}

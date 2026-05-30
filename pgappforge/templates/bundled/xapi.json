@@ -1,0 +1,154 @@
+{
+  "name": "xapi",
+  "label": "xAPI (Experience API)",
+  "description": "Learning analytics standard \u2014 Actor/Verb/Object statement model used by US DoD and corporate training",
+  "color": "#27ae60",
+  "icon": "fa-graduation-cap",
+  "version": "2.0",
+  "source_url": "https://xapi.com/",
+  "tags": [
+    "education",
+    "learning-analytics",
+    "lms",
+    "us-dod"
+  ],
+  "tables": {
+    "xapi_actor": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "account_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "account_homepage",
+        "type": "TEXT"
+      },
+      {
+        "name": "mbox",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "mbox_sha1sum",
+        "type": "CHAR(40)"
+      },
+      {
+        "name": "openid",
+        "type": "TEXT"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "object_type",
+        "type": "VARCHAR(10)",
+        "default": "'Agent'"
+      }
+    ],
+    "xapi_verb": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "display",
+        "type": "JSONB"
+      }
+    ],
+    "xapi_activity": [
+      {
+        "name": "id",
+        "type": "VARCHAR(500)",
+        "pk": true
+      },
+      {
+        "name": "activity_type",
+        "type": "TEXT"
+      },
+      {
+        "name": "name",
+        "type": "JSONB"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "more_info",
+        "type": "TEXT"
+      },
+      {
+        "name": "extensions",
+        "type": "JSONB"
+      }
+    ],
+    "xapi_statement": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "actor_id",
+        "type": "UUID",
+        "fk": "xapi_actor.id"
+      },
+      {
+        "name": "verb_id",
+        "type": "VARCHAR(255)",
+        "fk": "xapi_verb.id"
+      },
+      {
+        "name": "object_type",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "object_activity_id",
+        "type": "VARCHAR(500)",
+        "fk": "xapi_activity.id"
+      },
+      {
+        "name": "result_score_raw",
+        "type": "NUMERIC(8,4)"
+      },
+      {
+        "name": "result_score_max",
+        "type": "NUMERIC(8,4)"
+      },
+      {
+        "name": "result_completion",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "result_success",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "result_duration_seconds",
+        "type": "INTEGER"
+      },
+      {
+        "name": "context",
+        "type": "JSONB"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "stored_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "authority",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

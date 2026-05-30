@@ -1,0 +1,176 @@
+{
+  "name": "datacite",
+  "label": "DataCite Metadata",
+  "description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
+  "color": "#9b59b6",
+  "icon": "fa-microscope",
+  "version": "4.5",
+  "source_url": "https://datacite.org/",
+  "tags": [
+    "science",
+    "research-data",
+    "repositories",
+    "doi"
+  ],
+  "tables": {
+    "dc_creator": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)",
+        "nullable": false
+      },
+      {
+        "name": "name_type",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "orcid",
+        "type": "VARCHAR(19)"
+      },
+      {
+        "name": "affiliation",
+        "type": "JSONB"
+      }
+    ],
+    "dc_resource": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "doi",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "title",
+        "type": "JSONB"
+      },
+      {
+        "name": "resource_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "resource_type_general",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "publisher",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "publication_year",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "language",
+        "type": "CHAR(5)"
+      },
+      {
+        "name": "version",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "rights",
+        "type": "JSONB"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "subject",
+        "type": "JSONB"
+      },
+      {
+        "name": "related_identifiers",
+        "type": "JSONB"
+      },
+      {
+        "name": "funding_references",
+        "type": "JSONB"
+      },
+      {
+        "name": "geo_locations",
+        "type": "JSONB"
+      },
+      {
+        "name": "file_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "file_size_bytes",
+        "type": "BIGINT"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "dc_resource_creator": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "resource_id",
+        "type": "UUID",
+        "fk": "dc_resource.id"
+      },
+      {
+        "name": "creator_id",
+        "type": "INTEGER",
+        "fk": "dc_creator.id"
+      },
+      {
+        "name": "order_num",
+        "type": "INTEGER"
+      }
+    ],
+    "dc_download": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "resource_id",
+        "type": "UUID",
+        "fk": "dc_resource.id"
+      },
+      {
+        "name": "downloaded_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "ip_country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "client_type",
+        "type": "VARCHAR(30)"
+      }
+    ]
+  }
+}

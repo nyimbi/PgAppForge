@@ -1,0 +1,188 @@
+{
+  "name": "xbrl-ifrs",
+  "label": "XBRL + IFRS/GAAP Taxonomy",
+  "description": "SEC-mandated financial reporting standard \u2014 public company filings, IFRS/GAAP concepts",
+  "color": "#2c3e50",
+  "icon": "fa-balance-scale",
+  "version": "2024",
+  "source_url": "https://www.xbrl.org/",
+  "tags": [
+    "finance",
+    "reporting",
+    "sec-mandate",
+    "ifrs",
+    "gaap"
+  ],
+  "tables": {
+    "xbrl_concept": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "namespace",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "local_name",
+        "type": "VARCHAR(200)",
+        "nullable": false
+      },
+      {
+        "name": "data_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "period_type",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "balance_type",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "abstract",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "labels",
+        "type": "JSONB"
+      },
+      {
+        "name": "documentation",
+        "type": "TEXT"
+      }
+    ],
+    "xbrl_taxonomy": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(200)",
+        "unique": true
+      },
+      {
+        "name": "namespace",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "version",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "entry_point_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "standard",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE"
+      }
+    ],
+    "xbrl_filing": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "entity_lei",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "entity_name",
+        "type": "VARCHAR(500)"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "period_start",
+        "type": "DATE"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "filing_date",
+        "type": "DATE"
+      },
+      {
+        "name": "taxonomy_id",
+        "type": "INTEGER",
+        "fk": "xbrl_taxonomy.id"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "submission_url",
+        "type": "TEXT"
+      }
+    ],
+    "xbrl_fact": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "filing_id",
+        "type": "UUID",
+        "fk": "xbrl_filing.id"
+      },
+      {
+        "name": "concept_id",
+        "type": "INTEGER",
+        "fk": "xbrl_concept.id"
+      },
+      {
+        "name": "context_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "value_numeric",
+        "type": "NUMERIC(30,4)"
+      },
+      {
+        "name": "value_text",
+        "type": "TEXT"
+      },
+      {
+        "name": "decimals",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "period_start",
+        "type": "DATE"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "segment",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "name": "iati",
+  "label": "IATI (International Aid)",
+  "description": "International Aid Transparency Initiative \u2014 1500+ NGOs and governments publish aid data",
+  "color": "#1abc9c",
+  "icon": "fa-hands-helping",
+  "version": "2.03",
+  "source_url": "https://iatistandard.org/",
+  "tags": [
+    "development-aid",
+    "ngo",
+    "government",
+    "transparency"
+  ],
+  "tables": {
+    "iati_organisation": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "ref",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "JSONB"
+      },
+      {
+        "name": "type_code",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      }
+    ],
+    "iati_activity": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "iati_identifier",
+        "type": "VARCHAR(200)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "reporting_org_id",
+        "type": "INTEGER",
+        "fk": "iati_organisation.id"
+      },
+      {
+        "name": "title",
+        "type": "JSONB"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "status_code",
+        "type": "VARCHAR(3)"
+      },
+      {
+        "name": "activity_scope",
+        "type": "VARCHAR(3)"
+      },
+      {
+        "name": "start_planned",
+        "type": "DATE"
+      },
+      {
+        "name": "end_planned",
+        "type": "DATE"
+      },
+      {
+        "name": "start_actual",
+        "type": "DATE"
+      },
+      {
+        "name": "end_actual",
+        "type": "DATE"
+      },
+      {
+        "name": "collaboration_type",
+        "type": "VARCHAR(3)"
+      },
+      {
+        "name": "default_currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "last_updated",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "iati_transaction": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "activity_id",
+        "type": "UUID",
+        "fk": "iati_activity.id"
+      },
+      {
+        "name": "transaction_type",
+        "type": "VARCHAR(3)"
+      },
+      {
+        "name": "transaction_date",
+        "type": "DATE"
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "provider_org_id",
+        "type": "INTEGER",
+        "fk": "iati_organisation.id"
+      },
+      {
+        "name": "receiver_org_id",
+        "type": "INTEGER",
+        "fk": "iati_organisation.id"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "sector_code",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "country_code",
+        "type": "CHAR(2)"
+      }
+    ],
+    "iati_budget": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "activity_id",
+        "type": "UUID",
+        "fk": "iati_activity.id"
+      },
+      {
+        "name": "budget_type",
+        "type": "VARCHAR(3)"
+      },
+      {
+        "name": "period_start",
+        "type": "DATE"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(3)"
+      }
+    ],
+    "iati_result": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "activity_id",
+        "type": "UUID",
+        "fk": "iati_activity.id"
+      },
+      {
+        "name": "result_type",
+        "type": "VARCHAR(3)"
+      },
+      {
+        "name": "title",
+        "type": "JSONB"
+      },
+      {
+        "name": "description",
+        "type": "JSONB"
+      },
+      {
+        "name": "indicators",
+        "type": "JSONB"
+      }
+    ]
+  }
+}
