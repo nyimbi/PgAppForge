@@ -221,5 +221,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "Biodiversity occurrence data \u2014 GBIF global database, natural history collections worldwide",
+  "long_description": "Darwin Core is the biodiversity informatics standard maintained by TDWG (Taxonomic Databases Working Group) for sharing occurrence records from natural history collections, field surveys, and citizen science projects. The schema covers dataset provenance, specimen/observation occurrence records with taxonomic identification, full Linnaean taxonomy, and IUCN conservation status.",
+  "when_to_use": "Use for biodiversity databases, natural history collection management systems, conservation planning tools, or citizen science platforms. Darwin Core is the primary format for GBIF (Global Biodiversity Information Facility), iNaturalist, eBird, and the Ocean Biodiversity Information System. Required for data contribution to GBIF and reporting under the Convention on Biological Diversity (CBD)."
 }

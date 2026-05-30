@@ -234,5 +234,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "IEEE/ANSI-backed cross-vendor HR data standard",
+  "long_description": "HR-Open Standards (formerly HR-XML) is the IEEE/ANSI-backed standard for HR data exchange. The schema covers the complete hire-to-retire lifecycle: job postings (PositionOpening), candidate profiles with employment/education history, applications with assessment results, and employment records with compensation data.",
+  "when_to_use": "Use for any HR information system, applicant tracking system (ATS), or HR integration platform that must exchange data with third-party HR vendors. HR-Open is used by SAP SuccessFactors, Workday, and ADP for integration APIs. Essential for staffing agency systems and background check integrations."
 }

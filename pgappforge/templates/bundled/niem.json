@@ -205,5 +205,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "National Information Exchange Model \u2014 mandatory for US federal agency data exchange",
+  "long_description": "NIEM (National Information Exchange Model) is the US federal government's framework for sharing information across agencies and jurisdictions. The schema implements core NIEM justice and public safety entities: organizations (agencies), persons with biographic and identifier data, geographic locations, incidents (reported events), and legal cases with charge/disposition tracking.",
+  "when_to_use": "Use for law enforcement records management systems, court case management, emergency dispatch (CAD) systems, or any federal contractor building inter-agency data sharing solutions. NIEM compliance is required for NCIC (National Crime Information Center) integration, DOJ grants, and DHS/FEMA contracts. State courts increasingly mandate NIEM-aligned data exchange for criminal justice systems."
 }

@@ -180,5 +180,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "System for Cross-domain Identity Management \u2014 enterprise SSO standard",
+  "long_description": "SCIM 2.0 (RFC 7643/7644) defines how enterprise identity systems provision, manage, and deprovision user and group accounts across applications. The schema covers the core SCIM user profile with enterprise extension (manager hierarchy, org structure, employee ID), group memberships, and the SCIM schema registry for custom extensions.",
+  "when_to_use": "Use for any enterprise application that needs to synchronize users with corporate identity providers. Okta, Azure AD, Google Workspace, and OneLogin all push users via SCIM. Required for SSO integrations with enterprise customers \u2014 most B2B SaaS companies must implement SCIM to close enterprise deals. Essential for Just-In-Time user provisioning."
 }

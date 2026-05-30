@@ -206,5 +206,8 @@
         "type": "VARCHAR(50)"
       }
     ]
-  }
+  },
+  "short_description": "W3C data provenance ontology \u2014 track lineage and origin of any data artifact",
+  "long_description": "W3C PROV-O (Provenance Ontology) provides a universal model for recording the provenance (lineage, origin, history) of data \u2014 who created it, what processes transformed it, which sources it derived from, and when each change occurred. The schema implements the PROV core: entities (data artifacts), activities (processes), agents (people/systems), and their relationships.",
+  "when_to_use": "Use for data governance platforms, scientific reproducibility tools, regulatory audit trails, AI/ML model lineage tracking, or any system where data trust requires documented origins. Required for FDA 21 CFR Part 11 electronic records compliance, GDPR Article 5 accountability, and ISO 27001 change management. Essential for MLOps platforms tracking model training provenance."
 }

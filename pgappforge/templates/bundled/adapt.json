@@ -299,5 +299,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "Agricultural Data Application Programming Toolkit \u2014 precision farming",
+  "long_description": "ADAPT (Agricultural Data Application Programming Toolkit) is the multi-vendor standard from John Deere, AGCO, CNH Industrial, and Trimble for farm data exchange. The schema covers the complete precision agriculture data chain: farm and field boundaries, crop zone planting records, field operations (planting, spraying, harvest), machine registrations, agricultural inputs, GPS time logs, and harvest yield data.",
+  "when_to_use": "Use for precision agriculture platforms, farm management information systems (FMIS), agtech apps, or any agricultural data integration. ADAPT is implemented by all major precision agriculture equipment manufacturers. Required for John Deere Operations Center and Climate FieldView integrations. Essential for carbon credit programs that need verified field activity data."
 }

@@ -213,5 +213,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "International Aid Transparency Initiative \u2014 1500+ NGOs and governments publish aid data",
+  "long_description": "IATI (International Aid Transparency Initiative) 2.03 defines the open data standard for publishing development cooperation activities. The schema covers reporting organizations, activities with titles/descriptions/status, individual financial transactions (commitments, disbursements, expenditures), budget breakdowns by period, and result indicators with target/actual values.",
+  "when_to_use": "Use for donor management systems, project management tools for NGOs, aid coordination platforms, or M&E systems. Over 1,700 publishers including USAID, UKAID, World Bank, and UNICEF publish IATI data. Many bilateral donors require IATI-compatible reporting as a grant condition. Required for integration with d-portal.org, the IATI Datastore, and DevTracker."
 }

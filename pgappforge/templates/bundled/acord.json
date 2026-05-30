@@ -220,5 +220,8 @@
         "type": "NUMERIC(15,2)"
       }
     ]
-  }
+  },
+  "short_description": "Association for Cooperative Operations Research \u2014 global insurance standard",
+  "long_description": "ACORD (Association for Cooperative Operations Research and Development) is the foundational data standard for the global insurance industry, covering P&C, life, health, and commercial lines. The schema models the complete insurance lifecycle: parties, policies, coverages, risks, claims, and payments \u2014 matching the ACORD 1/2 form data elements used in US commercial insurance.",
+  "when_to_use": "Use for any insurance management system, agency portal, or insurtech application. ACORD standards are implemented by 90%+ of US insurance carriers and are widely used globally. Required for carrier data feeds, comparative rating platforms, and state DOI reporting submissions."
 }

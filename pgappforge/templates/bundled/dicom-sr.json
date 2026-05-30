@@ -222,5 +222,8 @@
         "type": "TIMESTAMPTZ"
       }
     ]
-  }
+  },
+  "short_description": "DICOM Structured Reporting \u2014 medical imaging studies, series, instances for radiology apps",
+  "long_description": "DICOM (Digital Imaging and Communications in Medicine) is the universal ISO/IEEE standard for medical imaging, used in every hospital radiology department worldwide. The Structured Reporting schema covers the four-level DICOM hierarchy: patient demographics, imaging study metadata, series within a study, and individual image instances, plus radiologist report content.",
+  "when_to_use": "Use for PACS (Picture Archiving and Communication System) software, radiology AI tools, teleradiology platforms, or any clinical application that handles medical images. Required by FDA for medical device software (SaMD) that processes medical images. The HL7 FHIR ImagingStudy resource references DICOM UIDs, making this the bridge between clinical records and imaging."
 }

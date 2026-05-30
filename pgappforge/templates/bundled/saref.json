@@ -162,5 +162,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "EU Smart Appliances Reference ontology \u2014 smart home IoT standard required by EU IoT regulations",
+  "long_description": "SAREF (Smart Appliances REFerence ontology) ETSI TS 103 264 enables smart home device interoperability across EU manufacturers and IoT platforms.",
+  "when_to_use": "Use for smart building management, home energy management, or EU IoT compliance. Referenced in EU energy product regulations and required for some Horizon Europe IoT project grants."
 }

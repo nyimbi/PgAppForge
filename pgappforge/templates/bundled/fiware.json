@@ -235,5 +235,8 @@
         "type": "TIMESTAMPTZ"
       }
     ]
-  }
+  },
+  "short_description": "EU-backed open data models \u2014 smart cities, agrifood, energy, environment",
+  "long_description": "FIWARE Smart Data Models are the EU-backed reference schemas for smart city and IoT applications, maintained by TM Forum, IUDX, and the FIWARE Foundation. The schema covers weather observations, air quality measurements, traffic flow counts, waste container fill levels, and IoT device registry \u2014 the five most commonly deployed models.",
+  "when_to_use": "Use for smart city platforms, environmental monitoring dashboards, or any IoT application targeting EU markets. Used by 300+ cities in the EU Smart Cities Marketplace. Required for compliance with many EU Horizon and CEF Digital grants. The Catania, Porto, Santander, and Helsinki smart city reference implementations all use FIWARE data models."
 }

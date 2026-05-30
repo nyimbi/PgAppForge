@@ -346,5 +346,8 @@
         "type": "INTEGER"
       }
     ]
-  }
+  },
+  "short_description": "General Transit Feed Specification \u2014 used by every transit authority",
+  "long_description": "GTFS (General Transit Feed Specification) is the universal format for publishing public transit schedules and geographic data. The schema covers agencies, stops, routes, calendar service patterns, trips, and stop times \u2014 the complete set of GTFS Static tables plus fare attributes.",
+  "when_to_use": "Use for transit applications, trip planning tools, mobility-as-a-service (MaaS) platforms, or any system that needs to work with public transit data. Cities and transit agencies in 100+ countries publish GTFS. Many jurisdictions legally require agencies to publish GTFS data. Google Maps, Apple Maps, and all major navigation apps consume GTFS."
 }

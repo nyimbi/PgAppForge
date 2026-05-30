@@ -153,5 +153,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "Plant lifecycle data integration standard \u2014 dominant in oil & gas and process industries",
+  "long_description": "ISO 15926 is the process industries data integration standard, covering the lifecycle of oil & gas plants, chemical plants, and other complex industrial facilities from design through decommissioning. The schema implements Part 2 (Data model) with classes (types in the POSCCAESAR RDL), individuals (specific equipment items), activities, and engineering documents.",
+  "when_to_use": "Use for plant information management systems, digital twin platforms for process industries, or asset management systems in oil & gas, chemicals, or power generation. Mandated by major operators including Shell, BP, Equinor, and Saudi Aramco for vendor data deliverables. Required for ISO 15926-compliant handover packages on major capital projects."
 }

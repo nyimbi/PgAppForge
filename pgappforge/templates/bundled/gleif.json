@@ -144,5 +144,8 @@
         "type": "DATE"
       }
     ]
-  }
+  },
+  "short_description": "Global Legal Entity Identifier Foundation \u2014 universal business ID used in financial regulation worldwide",
+  "long_description": "GLEIF (Global Legal Entity Identifier Foundation) maintains the LEI (Legal Entity Identifier) system \u2014 the universal business identifier mandated by G20 financial regulations. The schema covers LEI records with legal/headquarters addresses, entity status, and corporate ownership hierarchy (parent/child relationships via Level 1/Level 2 data).",
+  "when_to_use": "Use for any financial application requiring entity identification \u2014 KYC compliance, counterparty risk management, transaction reporting, or financial reference data management. LEI codes are required by MiFID II, EMIR, SFTR, and Dodd-Frank for OTC derivatives reporting. Also used for SWIFT payments, Basel reporting, and EU DORA (Digital Operational Resilience Act) compliance."
 }

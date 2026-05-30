@@ -201,5 +201,8 @@
         "type": "VARCHAR(20)"
       }
     ]
-  }
+  },
+  "short_description": "Supply chain event tracking \u2014 EU pharma mandate, retail standard",
+  "long_description": "GS1/EPCIS 2.0 (Electronic Product Code Information Services) enables real-time tracking of physical products through supply chains using standardized events. The schema captures the five W's for each supply chain event: What (EPC/GTIN), Where (GLN location), When (timestamp), Why (business step/disposition), and How (EPCIS extensions). Supports full traceability from manufacturer to patient/consumer.",
+  "when_to_use": "Use for pharmaceutical track-and-trace (EU FMD mandate), food safety traceability (FDA FSMA 204), and retail supply chain visibility. Required by EU Falsified Medicines Directive, US Drug Supply Chain Security Act, and China CFDA for pharmaceuticals. Walmart, Amazon, and major grocers mandate EPCIS for suppliers."
 }

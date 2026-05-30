@@ -267,5 +267,8 @@
         "type": "TIMESTAMPTZ"
       }
     ]
-  }
+  },
+  "short_description": "RFC standards for contacts and calendar data \u2014 interoperable with every phone/email client",
+  "long_description": "vCard 4.0 (RFC 6350) and iCalendar (RFC 5545) are the IETF standards for contacts and calendar data interchange, supported natively by every phone, email client, and calendar application. The schema covers the complete vCard data model with typed email/phone fields, iCalendar event records with RRULE recurrence, attendees, and geolocation.",
+  "when_to_use": "Use for CRM systems, address book applications, scheduling/booking platforms, calendar sharing tools, or any application that needs to import/export contacts and events. vCard/iCal support is required for CalDAV/CardDAV server compatibility (used by iOS, Android, Thunderbird, Outlook). Essential for multi-platform calendar sync and contact migration tools."
 }

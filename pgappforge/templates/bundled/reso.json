@@ -252,5 +252,8 @@
         "type": "TEXT"
       }
     ]
-  }
+  },
+  "short_description": "Real Estate Standards Organization \u2014 MLS/IDX standard for North America",
+  "long_description": "RESO (Real Estate Standards Organization) defines the data dictionary used by all Multiple Listing Services (MLS) in North America. The schema includes the core property listing fields (status, price, features), media assets, agent/member details, brokerage office data, and open house records \u2014 all aligned with RESO Data Dictionary 2.0.",
+  "when_to_use": "Use for real estate portals, MLS applications, property management systems, or any real estate API integration. IDX (Internet Data Exchange) compliance is legally required by NAR rules for all MLS participants. The RESO API standard is used by Zillow, Realtor.com, and all major US/Canadian real estate platforms."
 }

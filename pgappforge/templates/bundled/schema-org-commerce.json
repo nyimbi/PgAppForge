@@ -272,5 +272,8 @@
         "default": "false"
       }
     ]
-  }
+  },
+  "short_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "long_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "when_to_use": "Use when building applications that need to conform to the Schema.org Commerce standard."
 }

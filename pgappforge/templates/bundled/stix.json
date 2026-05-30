@@ -304,5 +304,8 @@
         "default": "false"
       }
     ]
-  }
+  },
+  "short_description": "Structured Threat Intelligence Expression \u2014 used by every SIEM platform",
+  "long_description": "STIX 2.1 (Structured Threat Information Expression) is the OASIS standard for sharing cyber threat intelligence. The schema covers all STIX domain objects: identities (organizations), threat actors, indicators (detection patterns), malware definitions, vulnerability records, relationships between objects, and sighting events when indicators are observed.",
+  "when_to_use": "Use for SIEM platforms, threat intelligence feeds, SOC (Security Operations Center) tools, or any security analytics application. Supported by Splunk, IBM QRadar, Microsoft Sentinel, and all major SIEM vendors. MISP, OpenCTI, and TAXII servers all use STIX 2.1. Required for information sharing with ISACs (Information Sharing and Analysis Centers)."
 }

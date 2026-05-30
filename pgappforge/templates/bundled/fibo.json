@@ -186,5 +186,8 @@
         "type": "BIGINT"
       }
     ]
-  }
+  },
+  "short_description": "Financial Industry Business Ontology \u2014 EDM Council + OMG standard",
+  "long_description": "FIBO (Financial Industry Business Ontology) is the EDM Council and OMG's comprehensive financial domain ontology covering 10,000+ concepts. This schema captures the most practically useful subset: legal entities with LEI codes, currencies, financial instruments (equities, bonds, derivatives), exchanges with MIC codes, and market data prices. All identifiers align with GLEIF, ISO 4217, and ISO 10383.",
+  "when_to_use": "Use for financial data management platforms, instrument master data, or any system that must precisely model the relationships between issuers, instruments, markets, and prices. Required for SFDR, MiFID II, and EMIR reporting where entity and instrument identification must be unambiguous. Pairs with GLEIF for entity LEI validation."
 }

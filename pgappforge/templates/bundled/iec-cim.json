@@ -219,5 +219,8 @@
         "type": "VARCHAR(30)"
       }
     ]
-  }
+  },
+  "short_description": "Common Information Model \u2014 power grid standard used by all utilities",
+  "long_description": "IEC CIM (Common Information Model, standards IEC 61968/61970) is the power industry's universal data model for electric utility systems. The schema covers grid topology (substations, equipment, lines), energy consumers (loads), and time-series measurements \u2014 the minimum viable CIM subset for most utility applications.",
+  "when_to_use": "Use for SCADA systems, outage management, smart grid applications, or any tool that must exchange data with utility control systems. NERC (US), ENTSO-E (EU), and most national grid operators mandate CIM for grid data exchange. Required for compliance with FERC Order 881, EU Clean Energy Package, and UK Grid Code."
 }

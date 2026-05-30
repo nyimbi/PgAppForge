@@ -191,5 +191,8 @@
         "type": "TEXT"
       }
     ]
-  }
+  },
+  "short_description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
+  "long_description": "Akoma Ntoso (Architecture for Knowledge-Oriented Management of African Normative Texts in an Open Standard) is the OASIS/UN standard for representing legislative and judicial documents in XML. The schema covers the FRBR (Functional Requirements for Bibliographic Records) work/expression hierarchy, document content storage, cross-references between legal texts, and amendment tracking.",
+  "when_to_use": "Use for legal information systems, legislative drafting tools, parliamentary document management, or legal tech platforms. Used by EU Parliament (EUR-Lex), UN (UNDOC), African Union, and national parliaments in Italy, Norway, Brazil, and Kenya. Required for interoperability with Legislation.gov.uk and EUR-Lex APIs. Essential for legal AI tools parsing statutory texts."
 }

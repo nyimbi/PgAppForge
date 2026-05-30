@@ -186,5 +186,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "Climate and Forecast metadata conventions \u2014 atmospheric science, climate modeling",
+  "long_description": "CF (Climate and Forecast) Conventions define the metadata standards for scientific atmospheric, oceanic, and climate data stored in netCDF files. The schema captures CF Standard Name definitions for physical quantities, gridded dataset metadata with projection information, individual observation records with quality flags, and spatial grid configuration.",
+  "when_to_use": "Use for climate analytics platforms, weather data management systems, environmental monitoring tools, or any scientific computing application handling atmospheric/oceanographic data. Used by every major climate modeling center (ECMWF, NCAR, NOAA, Met Office). Required by CMIP6 (the data source for IPCC AR6) and Copernicus Climate Change Service (C3S) for data submissions."
 }

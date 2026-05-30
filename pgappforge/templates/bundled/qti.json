@@ -201,5 +201,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "Question and Test Interoperability \u2014 standardized assessment/exam data",
+  "long_description": "IMS QTI (Question and Test Interoperability) 3.0 is the global standard for assessment content. The schema covers item banks for storing questions with interaction types (multiple choice, fill-in-blank, hot spot), test definitions with timing and attempt rules, and attempt records with learner responses and scores.",
+  "when_to_use": "Use for assessment platforms, exam management systems, or any edtech tool that creates/delivers tests. Used by major testing organizations (Educational Testing Service, Pearson Vue, JAMB) for question bank management. Required for integration with IMS-certified LMS platforms. Essential for adaptive testing systems."
 }

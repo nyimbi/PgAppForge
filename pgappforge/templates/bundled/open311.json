@@ -194,5 +194,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "US government service request standard \u2014 311 calls, civic issues, public services",
+  "long_description": "Open311 is the standard API protocol for civic service requests \u2014 potholes, broken streetlights, graffiti, noise complaints \u2014 enabling citizens to report issues and track resolution. The schema covers jurisdiction registration, service type catalog with custom attribute definitions, and individual service request records with geolocation, status, and agency assignment.",
+  "when_to_use": "Use for 311 call center systems, civic engagement apps, smart city service management, or citizen reporting platforms. Adopted by cities including Chicago, San Francisco, Boston, and New York. Required for SeeClickFix, Salesforce Government Cloud, and Microsoft Azure for Government integrations. Growing adoption through EU Smart City Marketplace and FIWARE ecosystem."
 }

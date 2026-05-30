@@ -250,5 +250,8 @@
         "type": "TIMESTAMPTZ"
       }
     ]
-  }
+  },
+  "short_description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
+  "long_description": "TM Forum's Open API suite (formerly SID) provides the universal data model for telecommunications BSS/OSS systems, covering the complete telco product/service/resource stack. The schema covers party management, customer accounts, product catalog, service instances, resource inventory, and trouble ticket management \u2014 aligned with TMF620/TMF622/TMF629/TMF632 APIs.",
+  "when_to_use": "Use for any telecom BSS/OSS application, MVNO platform, or telco API integration. TM Forum Open APIs are implemented by 850+ companies including AT&T, Deutsche Telekom, Orange, and Telef\u00f3nica. Required for TM Forum Open API certification. Essential for MVNO management systems and telecom-as-a-service platforms."
 }

@@ -209,5 +209,8 @@
         "type": "GEOGRAPHY(POLYGON,4326)"
       }
     ]
-  }
+  },
+  "short_description": "3D city model standard \u2014 buildings, bridges, roads for digital twins and smart cities",
+  "long_description": "OGC CityGML 3.0 is the international standard for 3D city models, covering buildings, bridges, roads, vegetation, and land use with multi-level-of-detail (LoD) geometry. The schema captures 2D footprints and building attributes suitable for most smart city analytics, with JSONB fields for 3D geometry when needed.",
+  "when_to_use": "Use for digital twin platforms, smart city dashboards, urban planning tools, or any application modeling the built environment. Used by Singapore's Virtual Singapore, Helsinki 3D+, and many EU city digital twins. Required for EU Urban Digital Twin projects and some EU Cohesion Fund applications. Pairs with PostGIS for spatial queries."
 }

@@ -150,5 +150,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "Learning analytics standard \u2014 Actor/Verb/Object statement model used by US DoD and corporate training",
+  "long_description": "xAPI (Experience API / Tin Can) defines a simple but extensible statement structure \u2014 Actor Verb Object \u2014 for recording any learning experience. The schema captures the actor (learner), verb (completed, attempted, passed), activity (course, assessment, video), and result (score, duration, completion status) with full context.",
+  "when_to_use": "Use for corporate LMS, training management systems, learning analytics platforms, or any edtech tool that needs to track learning experiences. Adopted by US DoD SCORM successors and required by ADL (Advanced Distributed Learning). Used by Coursera, LinkedIn Learning, and major corporate LMS vendors for xAPI data export."
 }

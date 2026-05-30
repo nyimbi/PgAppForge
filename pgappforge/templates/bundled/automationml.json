@@ -138,5 +138,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "Factory planning and engineering data exchange for manufacturing digital twins",
+  "long_description": "AutomationML (IEC 62714) is the standard for engineering data exchange in discrete manufacturing, using CAEX (Computer Aided Engineering Exchange) as its XML foundation. The schema captures engineering projects, instance hierarchies (machine layouts), internal elements (individual components), and connections (signal flows and physical links).",
+  "when_to_use": "Use for factory planning systems, engineering CAD data management, production line commissioning tools, or manufacturing digital twin platforms. Supported by Siemens TIA Portal, EPLAN, and ABB Ability. Required for data exchange between planning (PLC programming), simulation (MATLAB/Simulink), and execution (SCADA/MES) tools in IEC 62264-aligned architectures."
 }

@@ -223,5 +223,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "EU e-invoicing standard \u2014 27 EU countries mandate by 2028",
+  "long_description": "UN/CEFACT UBL (Universal Business Language) 2.1 is the OASIS standard for electronic business documents. The invoice schema covers the complete invoice data model including seller/buyer party details, invoice lines with UBL quantity/price, tax breakdown by category, and payment terms. Compliant with EN 16931 European invoice standard used in all EU e-invoicing mandates.",
+  "when_to_use": "Use for any accounts payable/receivable system, ERP, or fintech platform operating in the EU. Italy (since 2019), Poland, Germany (2025), France (2026), and all 27 EU countries will mandate B2B e-invoicing by 2028. Also used in Australia (PEPPOL), Singapore, and many APAC countries. Essential for cross-border trade applications."
 }

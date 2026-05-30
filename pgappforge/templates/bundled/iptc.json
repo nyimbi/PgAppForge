@@ -210,5 +210,8 @@
         "type": "TIMESTAMPTZ"
       }
     ]
-  }
+  },
+  "short_description": "International Press Telecommunications Council \u2014 news article metadata standard used by all major news organizations",
+  "long_description": "IPTC (International Press Telecommunications Council) Photo Metadata and News Architecture are the global standards for news content metadata, used by Reuters, AP, Getty Images, and all major news organizations. The schema covers news items/articles with IPTC subjects and genres, geographic locations, bylines/credits, and the original media asset (image) with EXIF camera data and GPS coordinates.",
+  "when_to_use": "Use for content management systems for newsrooms, digital asset management (DAM) for image libraries, or media archive platforms. IPTC metadata is embedded in all professional news photography and required by Adobe Stock, Getty Images, and all major stock photo platforms. Required for press accreditation systems and news wire API integrations."
 }

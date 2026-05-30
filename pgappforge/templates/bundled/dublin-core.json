@@ -142,5 +142,8 @@
         "default": "NOW()"
       }
     ]
-  }
+  },
+  "short_description": "ISO 15836 general-purpose metadata standard \u2014 used by libraries, repositories, web resources",
+  "long_description": "Dublin Core (ISO 15836-2) is the foundational metadata standard used by libraries, digital repositories, and the web. The 15 core metadata elements cover the complete resource description lifecycle.",
+  "when_to_use": "Use for digital libraries, institutional repositories, content management, or any resource catalog requiring discovery metadata. Required for OAI-PMH repository compliance and interoperability with WorldCat."
 }

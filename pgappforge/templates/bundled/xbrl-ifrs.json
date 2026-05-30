@@ -184,5 +184,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "SEC-mandated financial reporting standard \u2014 public company filings, IFRS/GAAP concepts",
+  "long_description": "XBRL with IFRS/GAAP taxonomy enables structured financial reporting that regulators can process programmatically. The schema covers the complete XBRL pipeline: taxonomy concept definitions (account names from IFRS/GAAP), filing metadata (entity, period, reporting currency), and individual financial facts with their dimensional context (segment, unit, period type).",
+  "when_to_use": "Use for financial reporting automation tools, regulatory compliance platforms, audit/analytics systems processing SEC filings, or investor relations portals. SEC mandates XBRL for all public company filers (10-K, 10-Q, 8-K). ESMA requires iXBRL for EU public companies. UK FCA, EBA (banking), EIOPA (insurance), and ESMA (securities) all require XBRL reporting."
 }

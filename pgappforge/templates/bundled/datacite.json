@@ -172,5 +172,8 @@
         "type": "VARCHAR(30)"
       }
     ]
-  }
+  },
+  "short_description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
+  "long_description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
+  "when_to_use": "Use when building applications that need to conform to the DataCite Metadata standard."
 }

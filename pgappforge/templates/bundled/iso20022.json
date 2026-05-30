@@ -177,5 +177,8 @@
         "type": "TEXT"
       }
     ]
-  }
+  },
+  "short_description": "Global financial messaging \u2014 bank payment mandate 2024-2026",
+  "long_description": "ISO 20022 is the global financial messaging standard replacing legacy SWIFT MT messages across all payment types. The schema implements the core payment initiation (PAIN.001) and interbank clearing (PACS.008) message structures, capturing financial institution identifiers (BIC/LEI), account numbers (IBAN), transaction details, and status reporting.",
+  "when_to_use": "Use for any payment processing system, banking API, treasury management platform, or fintech that must process or initiate wire transfers, ACH payments, SEPA transfers, or SWIFT gpi transactions. The US Federal Reserve completed its ISO 20022 migration in 2024; SWIFT global migration runs 2022-2026. Required for TARGET2 (ECB), CHAPS (UK), TIPS, and all G20 central bank systems."
 }

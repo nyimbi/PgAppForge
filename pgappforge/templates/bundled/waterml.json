@@ -161,5 +161,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "Water quality and hydrological data standard \u2014 for water management applications",
+  "long_description": "OGC WaterML 2.0 is the global standard for hydrological and water quality data exchange, from USGS stream gauges to EPA water quality monitoring.",
+  "when_to_use": "Use for water utility systems, flood forecasting, or environmental monitoring. Required for EU WFD reporting to EEA and USGS NWIS integrations."
 }

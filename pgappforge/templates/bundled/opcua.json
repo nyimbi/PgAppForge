@@ -212,5 +212,8 @@
         "default": "NOW()"
       }
     ]
-  }
+  },
+  "short_description": "Industrial automation data standard \u2014 used by every IIoT platform (Siemens, Rockwell, ABB)",
+  "long_description": "OPC UA (Unified Architecture) is the IEC 62541 standard for industrial automation data exchange, combining platform-independent data modeling with built-in security. The schema covers OPC UA server registration, node address space (variables, objects, methods), real-time data values, process alarms, and method call logging.",
+  "when_to_use": "Use for Industrial IoT platforms, SCADA/DCS system integrations, manufacturing execution systems (MES), or any Industry 4.0 application. OPC UA is implemented in virtually all modern industrial equipment from Siemens, Rockwell, ABB, Beckhoff, and Bosch. Required for Industry 4.0 compliance in EU's IACS cybersecurity framework (IEC 62443) and German Industrie 4.0 reference architecture (RAMI 4.0)."
 }

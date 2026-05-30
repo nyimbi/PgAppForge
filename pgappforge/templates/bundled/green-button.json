@@ -137,5 +137,8 @@
         "type": "VARCHAR(20)"
       }
     ]
-  }
+  },
+  "short_description": "Energy consumption data standard \u2014 all US utilities must provide Green Button data",
+  "long_description": "Green Button / ESPI (Energy Services Provider Interface) is the US standard for consumer energy data access, mandated under Smart Grid Investment Grant programs. The schema captures utility account data, meter reading configurations, interval data blocks, and individual interval readings \u2014 enabling analysis of energy consumption patterns.",
+  "when_to_use": "Use for energy analytics tools, smart home energy management apps, demand response platforms, or any consumer energy application. All US utilities receiving Smart Grid Investment Grants must provide Green Button data. Over 65 million US homes have Green Button access. Required for participation in US demand response programs and some state utility API mandates."
 }

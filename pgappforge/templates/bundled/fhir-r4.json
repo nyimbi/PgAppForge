@@ -463,5 +463,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "Healthcare resources \u2014 US/EU/AU government mandated standard",
+  "long_description": "HL7 FHIR R4 (Fast Healthcare Interoperability Resources) is the definitive standard for exchanging electronic health records. Each resource type (Patient, Encounter, Observation, etc.) maps directly to a PostgreSQL table with searchable columns and a JSONB resource column for the full FHIR payload. Includes all mandatory SMART on FHIR compliance fields.",
+  "when_to_use": "Use when building any clinical system that must exchange patient data with hospitals, labs, or health systems. Required by US 21st Century Cures Act (2021), EU eHDSI, NHS Digital, and ADHA (Australia). Essential for EHR integrations, patient portals, telehealth, and clinical trials."
 }

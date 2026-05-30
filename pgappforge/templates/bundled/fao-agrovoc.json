@@ -178,5 +178,8 @@
         "type": "JSONB"
       }
     ]
-  }
+  },
+  "short_description": "UN Food and Agriculture Organization data standards \u2014 food security, agricultural statistics",
+  "long_description": "FAO AGROVOC is the UN Food and Agriculture Organization's multilingual thesaurus covering agriculture, forestry, fisheries, food, and related topics with 40,000+ concepts in 40+ languages. The schema also includes FAO production and trade statistics tables for storing FAOSTAT data \u2014 commodity production by country and year, and bilateral trade flows.",
+  "when_to_use": "Use for food security information systems, agricultural statistics portals, commodity trading platforms, or any application needing FAO-standard crop/livestock classification. AGROVOC is the reference vocabulary for FAO, Bioversity International, and CIGAR. FAOSTAT data is required for SDG 2 (Zero Hunger) monitoring reports and national food security assessments."
 }

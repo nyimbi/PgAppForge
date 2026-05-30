@@ -260,5 +260,8 @@
         "type": "VARCHAR(30)"
       }
     ]
-  }
+  },
+  "short_description": "Open Contracting Data Standard \u2014 used by 70+ governments",
+  "long_description": "OCDS (Open Contracting Data Standard) defines how governments publish their procurement data \u2014 from tender announcement through contract award and implementation. The schema covers the complete contracting lifecycle: tenders with item descriptions, award decisions, contracts with values, and milestone tracking.",
+  "when_to_use": "Use for government procurement platforms, anti-corruption monitoring tools, or any system working with public sector purchasing data. Mandatory for public procurement in Ukraine, Moldova, Colombia, and many other countries. Used by World Bank, UNDP, and 70+ national governments. Required for EU public procurement portal data feeds."
 }

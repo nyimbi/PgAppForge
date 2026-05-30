@@ -166,5 +166,8 @@
         "type": "DATE"
       }
     ]
-  }
+  },
+  "short_description": "W3C digital credentials \u2014 professional development, micro-credentials, certificates",
+  "long_description": "Open Badges 3.0 is the W3C Verifiable Credentials-based standard for digital credentials. The schema covers the complete badge lifecycle: issuer identity, badge class definitions (criteria, alignment to standards), assertions (issued badges with recipient), and endorsements from third parties verifying badge quality.",
+  "when_to_use": "Use for professional development platforms, certification systems, workforce development tools, or any app that issues verifiable digital credentials. Adopted by LinkedIn, Acclaim, Credly, and major certification bodies. Required for compliance with US workforce development grants that mandate portable credentials. Growing adoption in EU Digital Credentials for Learning."
 }

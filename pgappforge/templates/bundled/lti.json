@@ -174,5 +174,8 @@
         "type": "VARCHAR(100)"
       }
     ]
-  }
+  },
+  "short_description": "Learning Tools Interoperability \u2014 standard for connecting LMS to external learning tools",
+  "long_description": "IMS Global LTI (Learning Tools Interoperability) 1.3 enables secure, standards-based integration between LMS platforms and external learning tools. The schema models platforms (Canvas, Moodle, Blackboard), tools (external apps), deployments (tool registration in an LMS context), and individual launch records with user roles and context.",
+  "when_to_use": "Use for building edtech tools that integrate with university LMS systems. LTI 1.3 is required for integration with Canvas, Moodle, Blackboard, and D2L Brightspace. Essential for gradebook passback (LTI Advantage Assignments and Grades Service). Required by most university instructional technology procurement policies."
 }
