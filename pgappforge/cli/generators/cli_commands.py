@@ -856,6 +856,24 @@ def generate_api(
     '--email',
     help='Author email'
 )
+@click.option(
+    '--platform', '-p',
+    default='web',
+    show_default=True,
+    help=(
+        'Comma-separated platforms to generate. '
+        'Choices: web, desktop, mobile, all. '
+        'Examples: web,desktop  |  all'
+    ),
+)
+@click.option('--desktop-target', default='pywebview',
+              type=click.Choice(['pywebview', 'pyside6', 'both']),
+              show_default=True,
+              help='Desktop wrapper target (used when platform includes desktop)')
+@click.option('--api-url', default='http://localhost:8080/api/v1', show_default=True,
+              help='API base URL for mobile app (used when platform includes mobile)')
+@click.option('--app-id', default=None,
+              help='Bundle ID for mobile/desktop (e.g. com.company.myapp)')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
 def generate_all(
     uri: str,
@@ -864,61 +882,102 @@ def generate_all(
     title: Optional[str],
     author: Optional[str],
     email: Optional[str],
+    platform: str,
+    desktop_target: str,
+    api_url: str,
+    app_id: Optional[str],
     verbose: bool
 ):
-    """Generate complete PgForge application with all features enabled."""
+    """Generate a complete application across web, desktop, and mobile platforms.
+
+    \b
+    Examples:
+      # Web only (default)
+      flask forge gen all --uri postgresql://... --name MyApp --output-dir ./app
+
+      # Web + desktop wrapper
+      flask forge gen all --uri postgresql://... --name MyApp --output-dir ./app \\
+        --platform web,desktop
+
+      # All three platforms
+      flask forge gen all --uri postgresql://... --name MyApp --output-dir ./app \\
+        --platform all --app-id com.example.myapp --api-url https://api.example.com
+    """
     if verbose:
         logging.basicConfig(level=logging.INFO)
 
+    # Normalise platform list
+    _p = {p.strip().lower() for p in platform.split(',') if p.strip()}
+    if 'all' in _p:
+        _p = {'web', 'desktop', 'mobile'}
+    do_web = 'web' in _p or not _p          # web is always the default
+    do_desktop = 'desktop' in _p
+    do_mobile = 'mobile' in _p
+
+    resolved_id = app_id or f"com.pgappforge.{name.lower().replace(' ', '')}"
+    output_path = Path(output_dir)
+
     try:
-        click.echo("🌟 Generating complete PgForge application with ALL features...")
+        # ── Web ──────────────────────────────────────────────────────────────
+        if do_web:
+            click.echo("🌐 Generating web application...")
+            from click.testing import CliRunner
+            runner = CliRunner()
+            cmd_args = [
+                '--uri', uri, '--name', name, '--output-dir', output_dir,
+                '--enable-auth', '--enable-api', '--enable-websockets',
+                '--enable-docker', '--enable-testing',
+                '--security-level', 'high', '--theme', 'modern',
+            ]
+            if title:
+                cmd_args.extend(['--title', title])
+            if author:
+                cmd_args.extend(['--author', author])
+            if email:
+                cmd_args.extend(['--email', email])
+            if verbose:
+                cmd_args.append('--verbose')
 
-        # Use the app command with all features enabled
-        from click.testing import CliRunner
-        runner = CliRunner()
+            result = runner.invoke(generate_app, cmd_args, catch_exceptions=False)
+            if result.exit_code != 0:
+                click.echo("❌ Web generation failed", err=True)
+                sys.exit(1)
+            click.echo("   ✓ Web application generated")
 
-        # Build command arguments
-        cmd_args = [
-            '--uri', uri,
-            '--name', name,
-            '--output-dir', output_dir,
-            '--enable-auth',
-            '--enable-api',
-            '--enable-websockets',
-            '--enable-docker',
-            '--enable-testing',
-            '--security-level', 'high',
-            '--theme', 'modern'
-        ]
+        # ── Desktop ───────────────────────────────────────────────────────────
+        if do_desktop:
+            click.echo(f"🖥  Generating desktop wrapper ({desktop_target})...")
+            from .desktop_generator import DesktopGenerator, DesktopConfig
+            desktop_config = DesktopConfig(
+                app_name=name,
+                app_id=resolved_id,
+                target=desktop_target,
+            )
+            DesktopGenerator(desktop_config, output_path).generate()
+            click.echo("   ✓ Desktop wrapper generated")
 
-        if title:
-            cmd_args.extend(['--title', title])
-        if author:
-            cmd_args.extend(['--author', author])
-        if email:
-            cmd_args.extend(['--email', email])
-        if verbose:
-            cmd_args.append('--verbose')
+        # ── Mobile ────────────────────────────────────────────────────────────
+        if do_mobile:
+            click.echo("📱 Generating mobile app (Expo)...")
+            mobile_out = output_path / f"{name.lower().replace(' ', '_')}-mobile"
+            with EnhancedDatabaseInspector(uri) as inspector:
+                mobile_config = MobileGenerationConfig(
+                    app_name=name,
+                    app_id=resolved_id,
+                    framework="expo",
+                    api_base_url=api_url,
+                )
+                MobileGenerator(inspector, mobile_config, mobile_out).generate_complete_app()
+            click.echo(f"   ✓ Mobile app generated → {mobile_out}")
 
-        # Execute app generation
-        result = runner.invoke(generate_app, cmd_args, catch_exceptions=False)
-
-        if result.exit_code == 0:
-            click.echo("🎉 Complete application generated successfully!")
-            click.echo("\n🌟 All features enabled:")
-            click.echo("   • Enhanced models with validation")
-            click.echo("   • Beautiful views with modern widgets")
-            click.echo("   • RESTful API with OpenAPI docs")
-            click.echo("   • Authentication & authorization")
-            click.echo("   • Real-time WebSocket support")
-            click.echo("   • Docker & Kubernetes support")
-            click.echo("   • Comprehensive testing suite")
-            click.echo("   • CI/CD pipeline configuration")
-            click.echo("   • Performance monitoring")
-            click.echo("   • Security features")
-        else:
-            click.echo("❌ Generation failed", err=True)
-            sys.exit(1)
+        # ── Summary ───────────────────────────────────────────────────────────
+        click.echo("\n🎉 Generation complete!")
+        if do_web:
+            click.echo(f"   Web    → {output_dir}/")
+        if do_desktop:
+            click.echo(f"   Desktop→ {output_dir}/run_desktop.py  (python run_desktop.py)")
+        if do_mobile:
+            click.echo(f"   Mobile → {mobile_out}/  (cd {mobile_out} && npm i && npx expo start)")
 
     except Exception as e:
         click.echo(f"❌ Error: {e}", err=True)
@@ -1106,6 +1165,94 @@ def generate_mobile(
 
     except Exception as e:
         click.echo(f"❌ Mobile generation failed: {e}", err=True)
+        if verbose:
+            import traceback
+            click.echo(traceback.format_exc(), err=True)
+        sys.exit(1)
+
+
+@gen.command('desktop')
+@click.option('--name', '-n', required=True, help='Application display name')
+@click.option('--output-dir', '-o', required=True, callback=validate_output_path,
+              help='Output directory (should be the generated Flask app root)')
+@click.option('--app-id', default=None,
+              help='Bundle identifier, e.g. com.company.myapp')
+@click.option('--version', default='0.1.0', show_default=True,
+              help='Application version')
+@click.option('--target', default='pywebview',
+              type=click.Choice(['pywebview', 'pyside6', 'both']), show_default=True,
+              help='Desktop wrapper target')
+@click.option('--port', default=5000, show_default=True,
+              help='Port for embedded Flask server')
+@click.option('--width', default=1280, show_default=True, help='Window width')
+@click.option('--height', default=800, show_default=True, help='Window height')
+@click.option('--icon', default='', help='Path to app icon (.ico/.icns/.png)')
+@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+def generate_desktop(
+    name: str,
+    output_dir: str,
+    app_id: Optional[str],
+    version: str,
+    target: str,
+    port: int,
+    width: int,
+    height: int,
+    icon: str,
+    verbose: bool,
+):
+    """Generate a desktop wrapper for a pgappforge Flask app.
+
+    \b
+    Wraps the generated Flask application in a native OS window.
+    Two targets are supported:
+
+      pywebview  — system WebView, ~10 MB binary (recommended)
+      pyside6    — Qt WebEngine, ~150 MB binary (richer native APIs)
+      both       — generate both wrappers
+
+    \b
+    Example:
+      flask forge gen desktop \\
+        --name MyApp --output-dir ./myapp \\
+        --target pywebview
+    """
+    from .desktop_generator import DesktopGenerator, DesktopConfig
+
+    if verbose:
+        logging.basicConfig(level=logging.INFO)
+
+    resolved_id = app_id or f"com.pgappforge.{name.lower().replace(' ', '')}"
+
+    click.echo(f"🖥  Generating desktop wrapper: {name}")
+    click.echo(f"   Target    : {target}")
+    click.echo(f"   Bundle ID : {resolved_id}")
+    click.echo(f"   Output    : {output_dir}")
+
+    try:
+        config = DesktopConfig(
+            app_name=name,
+            app_id=resolved_id,
+            version=version,
+            flask_port=port,
+            window_width=width,
+            window_height=height,
+            icon_path=icon,
+            target=target,
+        )
+        generator = DesktopGenerator(config, output_dir)
+        files = generator.generate()
+
+        click.echo(f"✅ Desktop wrapper generated — {len(files)} files written to {output_dir}")
+        click.echo("\n📋 Next steps:")
+        if target in ("pywebview", "both"):
+            click.echo("   Pywebview:  pip install pywebview && python run_desktop.py")
+            click.echo("   Package:    pip install pyinstaller && make -C desktop dist")
+        if target in ("pyside6", "both"):
+            click.echo("   PySide6:    pip install PySide6 PySide6-WebEngine && python run_desktop_qt.py")
+            click.echo("   Package:    make -C desktop dist-qt")
+
+    except Exception as e:
+        click.echo(f"❌ Desktop generation failed: {e}", err=True)
         if verbose:
             import traceback
             click.echo(traceback.format_exc(), err=True)

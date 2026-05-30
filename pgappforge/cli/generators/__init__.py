@@ -24,6 +24,7 @@ from .model_generator import EnhancedModelGenerator
 from .view_generator import BeautifulViewGenerator
 from .app_generator import FullAppGenerator
 from .mobile_generator import MobileGenerator, MobileGenerationConfig
+from .desktop_generator import DesktopGenerator, DesktopConfig
 from .code_templates import (
     ColumnSpec,
     RelationshipSpec,
@@ -47,6 +48,9 @@ __all__ = [
     "BeautifulViewGenerator",
     "FullAppGenerator",
     "MobileGenerator",
+    "MobileGenerationConfig",
+    "DesktopGenerator",
+    "DesktopConfig",
     "MobileGenerationConfig",
     # Pure-Python code templates (3.14-aware)
     "ColumnSpec",
