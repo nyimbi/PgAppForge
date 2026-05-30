@@ -286,9 +286,117 @@
   },
   "hotPaths": [
     {
+      "path": "pgappforge/plugins/base_plugin.py",
+      "accessCount": 13,
+      "lastAccessed": 1780163429157,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/baseviews.py",
+      "accessCount": 12,
+      "lastAccessed": 1780164006626,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/hooks.py",
+      "accessCount": 6,
+      "lastAccessed": 1780159709304,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/base.py",
+      "accessCount": 6,
+      "lastAccessed": 1780159724042,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/sqla/__init__.py",
+      "accessCount": 6,
+      "lastAccessed": 1780159741983,
+      "type": "file"
+    },
+    {
       "path": "setup.py",
+      "accessCount": 6,
+      "lastAccessed": 1780171047201,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/config/__init__.py",
+      "accessCount": 5,
+      "lastAccessed": 1780158591732,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/voice/__init__.py",
+      "accessCount": 5,
+      "lastAccessed": 1780159722033,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/database/age/graph.py",
       "accessCount": 4,
-      "lastAccessed": 1780129796342,
+      "lastAccessed": 1780158293177,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/database/age/types.py",
+      "accessCount": 4,
+      "lastAccessed": 1780158298151,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/cli/generators/cli_commands.py",
+      "accessCount": 4,
+      "lastAccessed": 1780160177862,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/cli/generators/__init__.py",
+      "accessCount": 4,
+      "lastAccessed": 1780160573532,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/mixins.py",
+      "accessCount": 4,
+      "lastAccessed": 1780163422219,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/config/models.py",
+      "accessCount": 3,
+      "lastAccessed": 1780158550078,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/config/views.py",
+      "accessCount": 3,
+      "lastAccessed": 1780158581035,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/offline/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1780158624213,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/workflow/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1780159254663,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/tenancy/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1780163424380,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/analytics/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1780163434546,
       "type": "file"
     },
     {
@@ -301,6 +409,66 @@
       "path": "docs/CODE_REVIEW_REPORT.md",
       "accessCount": 2,
       "lastAccessed": 1780128008937,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/manager.py",
+      "accessCount": 2,
+      "lastAccessed": 1780157683379,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/realtime/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1780157686807,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 2,
+      "lastAccessed": 1780157882080,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/sqla/models.py",
+      "accessCount": 2,
+      "lastAccessed": 1780157949211,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/sqla/manager.py",
+      "accessCount": 2,
+      "lastAccessed": 1780157957300,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/cli/generators/database_inspector.py",
+      "accessCount": 2,
+      "lastAccessed": 1780158435663,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/theming/wizard_themes.py",
+      "accessCount": 2,
+      "lastAccessed": 1780158443062,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/config/wizard.py",
+      "accessCount": 2,
+      "lastAccessed": 1780158453726,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1780158473665,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/base.py",
+      "accessCount": 2,
+      "lastAccessed": 1780163425295,
       "type": "file"
     },
     {
@@ -367,6 +535,54 @@
       "path": "docs/CRITICAL_FIXES_IMPLEMENTATION_PLAN.md",
       "accessCount": 1,
       "lastAccessed": 1780128016962,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/tenant_models.py",
+      "accessCount": 1,
+      "lastAccessed": 1780156509712,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/dashboard_models.py",
+      "accessCount": 1,
+      "lastAccessed": 1780156510907,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/classify/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1780157622443,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1780157677931,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/database/age/manager.py",
+      "accessCount": 1,
+      "lastAccessed": 1780157758458,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/cli/generators/mobile_generator.py",
+      "accessCount": 1,
+      "lastAccessed": 1780157810954,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/integrations/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1780157814953,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/security/views.py",
+      "accessCount": 1,
+      "lastAccessed": 1780157923010,
       "type": "file"
     }
   ],

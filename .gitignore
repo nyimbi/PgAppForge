@@ -21,3 +21,7 @@ venv
 .simple-task-master/tasks/
 .simple-task-master/lock
 .serena/
+
+# pgappforge project-local tools (not for public repo)
+.omc/
+CLAUDE.md
