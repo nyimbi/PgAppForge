@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import logging
 import re
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -729,14 +727,15 @@ class TriggerProcedureManager:
 		return row[0] if row else None
 
 	def _execute_ddl(self, stmts: list[str]) -> dict:
+		"""Execute DDL statements in a single transaction. Rolls back all on any error."""
 		errors: list[str] = []
 		applied = 0
-		with self.engine.begin() as conn:
-			for stmt in stmts:
-				try:
+		try:
+			with self.engine.begin() as conn:
+				for stmt in stmts:
 					conn.execute(text(stmt))
 					applied += 1
-				except Exception as exc:
-					errors.append(str(exc))
-					break
+		except Exception as exc:
+			errors.append(str(exc))
+			applied = 0  # full rollback — none applied
 		return {"applied": applied, "sql": stmts[:applied], "errors": errors}

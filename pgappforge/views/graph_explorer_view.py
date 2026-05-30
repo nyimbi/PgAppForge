@@ -37,7 +37,13 @@ class GraphExplorerView(BaseView):
 
 	def _get_age_manager(self):
 		"""Get AGEManager connected to the current app database."""
-		from pgappforge.database.age import AGEManager
+		try:
+			from pgappforge.database.age import AGEManager
+		except ImportError:
+			raise RuntimeError(
+				"Apache AGE support requires: pip install pgappforge[age] "
+				"and the PostgreSQL AGE extension installed."
+			)
 		engine = self.appbuilder.get_session.bind
 		mgr = AGEManager(engine)
 		return mgr
