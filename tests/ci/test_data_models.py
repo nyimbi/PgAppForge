@@ -352,34 +352,36 @@ class TestDataModelRelationships(FABTestCase):
     
     def _create_test_data(self):
         """Create test data for relationship testing"""
+        import uuid as _uuid
+        _sfx = _uuid.uuid4().hex[:8]
         # Create categories
         self.tech_category = TestCategory(
-            name='Technology',
-            slug='technology'
+            name=f'Technology_{_sfx}',
+            slug=f'technology_{_sfx}'
         )
         self.news_category = TestCategory(
-            name='News',
-            slug='news'
+            name=f'News_{_sfx}',
+            slug=f'news_{_sfx}'
         )
         
         # Create authors
         self.author1 = TestAuthor(
-            username='author1',
+            username=f'author1_{_sfx}',
             first_name='John',
             last_name='Doe',
-            email='john@example.com'
+            email=f'john_{_sfx}@example.com'
         )
         self.author2 = TestAuthor(
-            username='author2',
+            username=f'author2_{_sfx}',
             first_name='Jane',
             last_name='Smith',
-            email='jane@example.com'
+            email=f'jane_{_sfx}@example.com'
         )
         
         # Create tags
-        self.tag1 = TestTag(name='Python', slug='python')
-        self.tag2 = TestTag(name='Web Development', slug='web-dev')
-        self.tag3 = TestTag(name='Tutorial', slug='tutorial')
+        self.tag1 = TestTag(name=f'Python_{_sfx}', slug=f'python_{_sfx}')
+        self.tag2 = TestTag(name=f'Web_{_sfx}', slug=f'web_{_sfx}')
+        self.tag3 = TestTag(name=f'Tutorial_{_sfx}', slug=f'tutorial_{_sfx}')
         
         # Save to database
         objects = [
@@ -545,9 +547,9 @@ class TestSQLAInterface(FABTestCase):
             self._create_test_data()
             
             # Create interfaces
-            self.article_interface = SQLAInterface(TestArticle)
-            self.category_interface = SQLAInterface(TestCategory)
-            self.author_interface = SQLAInterface(TestAuthor)
+            self.article_interface = SQLAInterface(TestArticle, self.db.session)
+            self.category_interface = SQLAInterface(TestCategory, self.db.session)
+            self.author_interface = SQLAInterface(TestAuthor, self.db.session)
     
     def _create_test_data(self):
         """Create test data"""
@@ -723,7 +725,7 @@ class TestDataModelFilters(FABTestCase):
         with self.app.app_context():
             self.db.create_all()
             self._create_filter_test_data()
-            self.interface = SQLAInterface(TestArticle)
+            self.interface = SQLAInterface(TestArticle, self.db.session)
     
     def _create_filter_test_data(self):
         """Create test data for filtering"""

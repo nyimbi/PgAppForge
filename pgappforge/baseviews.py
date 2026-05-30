@@ -945,6 +945,8 @@ class BaseCRUDView(BaseModelView):
         Init Titles if not defined
         """
         super(BaseCRUDView, self)._init_titles()
+        if not self.datamodel:
+            return
         class_name = self.datamodel.model_name
         if not self.list_title:
             self.list_title = "List " + self._prettify_name(class_name)

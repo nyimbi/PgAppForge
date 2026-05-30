@@ -1,14 +1,13 @@
 """
 tests/ci/conftest.py
 
-PostgreSQL schema reset for AppBuilder integration tests.
+PostgreSQL isolation for AppBuilder integration tests.
 
-Each test that calls AppBuilder() triggers create_db(), which creates tables
-and indexes. On a shared PostgreSQL DB, multiple test classes will collide on
-the same index names (e.g. ix_app_config_category).
+Strategy:
+- On CLASS change: DROP/CREATE SCHEMA (nuclear, handles index duplicates)
+- On every test: TRUNCATE all user tables (fast, handles data isolation)
 
-This conftest resets the public schema before each test class changes
-(tracked by class name). For non-PostgreSQL tests the reset is skipped.
+This gives full isolation without the 1-2s overhead of DROP/CREATE on every test.
 """
 import os
 import pytest
@@ -19,34 +18,61 @@ _PG_URI = (
     or "postgresql:///pgaf_test"
 )
 
-_last_class: list[str] = [""]  # mutable container to track last seen class name
+_last_class: list[str] = [""]
+
+_TRUNCATE_SQL = """
+DO $$ DECLARE r RECORD; BEGIN
+  FOR r IN (SELECT tablename FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename NOT IN ('spatial_ref_sys'))
+  LOOP
+    EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename)
+            || ' RESTART IDENTITY CASCADE';
+  END LOOP;
+END $$;
+"""
+
+_SCHEMA_RESET_SQL = [
+    "DROP SCHEMA public CASCADE",
+    "CREATE SCHEMA public",
+    "GRANT ALL ON SCHEMA public TO PUBLIC",
+    "CREATE EXTENSION IF NOT EXISTS pg_trgm",
+    "CREATE EXTENSION IF NOT EXISTS ltree",
+    "CREATE EXTENSION IF NOT EXISTS postgis",
+]
 
 
-def _reset_pg_schema(uri: str) -> None:
+def _exec_pg(uri: str, statements: list[str]) -> None:
     from sqlalchemy import create_engine, text
     engine = create_engine(uri, isolation_level="AUTOCOMMIT")
     with engine.connect() as conn:
-        conn.execute(text("DROP SCHEMA public CASCADE"))
-        conn.execute(text("CREATE SCHEMA public"))
-        conn.execute(text("GRANT ALL ON SCHEMA public TO PUBLIC"))
-        for ext in ("pg_trgm", "ltree", "postgis"):
-            conn.execute(text(f"CREATE EXTENSION IF NOT EXISTS {ext}"))
+        for sql in statements:
+            conn.execute(text(sql))
     engine.dispose()
 
 
 @pytest.fixture(autouse=True)
-def pg_schema_reset(request):
-    """Reset PostgreSQL schema when the test class changes, to avoid DuplicateTable errors."""
+def pg_isolation(request):
+    """Isolate each test from DB state left by previous tests."""
     if not _PG_URI.startswith("postgresql"):
         yield
         return
 
     cls_name = request.node.cls.__name__ if request.node.cls else ""
+
     if cls_name != _last_class[0]:
+        # New test class: nuclear reset (handles duplicate indexes from re-imports)
         _last_class[0] = cls_name
         try:
-            _reset_pg_schema(_PG_URI)
+            _exec_pg(_PG_URI, _SCHEMA_RESET_SQL)
         except Exception as exc:
             import warnings
-            warnings.warn(f"pg_schema_reset failed: {exc}")
+            warnings.warn(f"pg schema reset failed: {exc}")
+    else:
+        # Same class: just truncate data (fast, handles data isolation)
+        try:
+            _exec_pg(_PG_URI, [_TRUNCATE_SQL])
+        except Exception:
+            pass  # No tables yet — first test in class, truncate is no-op
+
     yield
