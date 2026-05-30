@@ -73,15 +73,31 @@ except ImportError:
 # Import wizard forms
 try:
     from .wizard import WizardForm, WizardStep, WizardFormData, WizardFormPersistence
-    
+
     wizard_exports = [
         'WizardForm',
-        'WizardStep', 
+        'WizardStep',
         'WizardFormData',
         'WizardFormPersistence'
     ]
-    
+
     __all__.extend(wizard_exports)
-    
+
 except ImportError:
     pass  # Continue without wizard forms if not available
+
+# Import form layout editor
+try:
+    from .layout_manager import FormLayout, FormLayoutManager, AVAILABLE_WIDGETS
+    from .layout_editor import FormLayoutEditorView, inject_edit_button
+
+    __all__.extend([
+        'FormLayout',
+        'FormLayoutManager',
+        'AVAILABLE_WIDGETS',
+        'FormLayoutEditorView',
+        'inject_edit_button',
+    ])
+
+except ImportError:
+    pass  # SQLAlchemy or pgappforge not fully available in this environment
