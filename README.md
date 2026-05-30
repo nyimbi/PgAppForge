@@ -130,6 +130,17 @@ Beyond the PostgreSQL type widgets, the widget library includes:
 - `H3IndexWidget`, `H3ArrayWidget` — Uber H3 hex cell maps
 - `EmbeddingWidget`, `VectorDisplayWidget` — pgvector visualisation
 
+### Project management widgets
+
+| Widget | What it renders | JS library |
+|--------|-----------------|-----------|
+| `GanttWidget` | Gantt chart with dependencies, drag-reschedule, progress bars | Frappe Gantt (MIT) |
+| `KanbanWidget` | Drag-to-column Kanban with WIP limits, swimlanes | Vanilla JS |
+| `ResourceCalendarWidget` | Who-is-doing-what resource timeline | FullCalendar.js |
+| `SprintBurndownWidget` | Sprint burndown/burnup with ideal line | Chart.js |
+| `MilestoneTimelineWidget` | Horizontal milestone timeline, overdue detection | D3.js |
+| `WBSWidget` | Collapsible work breakdown tree, progress + effort | Vanilla JS |
+
 ### Markdown editor and display
 
 ```python
