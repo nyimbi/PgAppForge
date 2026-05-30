@@ -12196,7 +12196,7 @@ class MapWidget(BS3TextFieldWidget):
 
     # JavaScript/CSS dependencies
     JS_DEPENDENCIES = [
-        "https://unpkg.com/leaflet@1.7.1/dist/leaflet.js",
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
         "https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js",
         "https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js",
         "https://unpkg.com/leaflet.locatecontrol@0.74.0/dist/L.Control.Locate.min.js",
@@ -12206,7 +12206,7 @@ class MapWidget(BS3TextFieldWidget):
     ]
 
     CSS_DEPENDENCIES = [
-        "https://unpkg.com/leaflet@1.7.1/dist/leaflet.css",
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
         "https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css",
         "https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css",
         "https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css",
@@ -20295,7 +20295,7 @@ class GeographicHeatmapWidget(BS3TextFieldWidget):
 
     # JavaScript Dependencies
     JS_DEPENDENCIES = [
-        "https://unpkg.com/leaflet@1.7.1/dist/leaflet.js",
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
         "https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js",
         "https://d3js.org/d3.v7.min.js",
         "https://unpkg.com/@turf/turf@6.5.0/turf.min.js",
@@ -20305,7 +20305,7 @@ class GeographicHeatmapWidget(BS3TextFieldWidget):
 
     # CSS Dependencies
     CSS_DEPENDENCIES = [
-        "https://unpkg.com/leaflet@1.7.1/dist/leaflet.css",
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
         "/static/css/heatmap-widget.css",
     ]
 
@@ -21489,7 +21489,7 @@ class GPSTrackerWidget(BS3TextFieldWidget):
 
     # JavaScript Dependencies
     JS_DEPENDENCIES = [
-        "https://unpkg.com/leaflet@1.7.1/dist/leaflet.js",
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
         "https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js",
         "https://npmcdn.com/@turf/turf@6.5.0/turf.min.js",
         "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js",
@@ -21498,7 +21498,7 @@ class GPSTrackerWidget(BS3TextFieldWidget):
 
     # CSS Dependencies
     CSS_DEPENDENCIES = [
-        "https://unpkg.com/leaflet@1.7.1/dist/leaflet.css",
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
         "/static/css/gps-tracker.css",
     ]
 
