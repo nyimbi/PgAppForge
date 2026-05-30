@@ -1,5 +1,6 @@
 {
   "name": "hr-open",
+  "schema": "hr_open",
   "label": "HR-Open Standards",
   "description": "IEEE/ANSI-backed cross-vendor HR data standard",
   "color": "#16a085",
@@ -13,225 +14,281 @@
     "ansi",
     "enterprise"
   ],
+  "table_notes": {
+    "hro_person_profile": "Core identity record for any individual in the HR system \u2014 employee, candidate, or contractor.",
+    "hro_position_opening": "Defines a job vacancy including type, FTE ratio, compensation band, and posting lifecycle status.",
+    "hro_candidate": "Aggregates resume data (work history, education, skills, certifications) linked to a person profile.",
+    "hro_application": "Tracks a candidate's pipeline progress against a specific position opening, from submission to offer.",
+    "hro_employment": "Active or historical employment contract record linking a person to a position with compensation and schedule terms."
+  },
   "tables": {
     "hro_person_profile": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the person record"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Legal family name (surname) of the individual"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Legal given (first) name of the individual"
       },
       {
         "name": "preferred_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Name the individual prefers to be addressed by (may differ from legal name)"
       },
       {
         "name": "date_of_birth",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date of birth used for age verification, benefits eligibility, and compliance"
       },
       {
         "name": "gender",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Self-identified gender (HR-Open GenderCodeList: Male, Female, Undisclosed, NotApplicable)"
       },
       {
         "name": "nationality",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "Primary nationality as ISO 3166-1 alpha-2 country code (e.g. US, GB, DE)"
       },
       {
         "name": "primary_language",
-        "type": "CHAR(5)"
+        "type": "CHAR(5)",
+        "description": "Primary spoken/written language as IETF BCP 47 tag (e.g. en-US, fr-FR)"
       },
       {
         "name": "communication",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Contact channels: {phone: [{use, dialNumber}], email: [{use, address}], web: [{use, uri}]}"
       },
       {
         "name": "primary_address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured mailing address: {line, city, countrySubdivision, postalCode, countryCode}"
       }
     ],
     "hro_position_opening": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the position opening"
       },
       {
         "name": "job_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Internal job classification code from the organization's job catalog"
       },
       {
         "name": "job_title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable title for the position as posted"
       },
       {
         "name": "job_category",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Occupational category (O*NET or ISCO-08 code recommended for interoperability)"
       },
       {
         "name": "position_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Engagement type: DirectHire, Contract, Temporary, Internship, Volunteer"
       },
       {
         "name": "full_time_equivalent",
-        "type": "NUMERIC(4,2)"
+        "type": "NUMERIC(4,2)",
+        "description": "FTE ratio for the position (1.00 = full-time, 0.50 = half-time)"
       },
       {
         "name": "organization_unit",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Department or cost center responsible for this position"
       },
       {
         "name": "work_location",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Work site details: {address, remote: bool, onsite: bool, travel_percentage}"
       },
       {
         "name": "compensation_range",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Advertised pay band: {minimum, maximum, currency (ISO 4217), intervalCode (Hour/Week/Year)}"
       },
       {
         "name": "posting_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the position was publicly posted or internally advertised"
       },
       {
         "name": "target_start_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Desired start date for the successful candidate"
       },
       {
         "name": "status",
         "type": "VARCHAR(30)",
-        "default": "'Open'"
+        "default": "'Open'",
+        "description": "Posting lifecycle state: Open, OnHold, Filled, Cancelled, Expired"
       }
     ],
     "hro_candidate": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the candidate record"
       },
       {
         "name": "person_id",
         "type": "UUID",
-        "fk": "hro_person_profile.id"
+        "fk": "hro_person_profile.id",
+        "description": "References hro_person_profile \u2014 links candidate to their identity and contact data"
       },
       {
         "name": "profile_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Talent pool availability: Active, Passive, Hired, Withdrawn, DoNotContact"
       },
       {
         "name": "employment_history",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of past roles: [{employer, title, start, end, description, reasonForLeaving}]"
       },
       {
         "name": "education_history",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of credentials: [{institution, degree, fieldOfStudy, start, end, gpa}]"
       },
       {
         "name": "skills",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of competencies: [{name, proficiencyLevel, yearsExperience, lastUsed}]"
       },
       {
         "name": "certifications",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of certifications: [{name, issuingAuthority, issueDate, expiryDate, credentialId}]"
       },
       {
-        "name": "references",
-        "type": "JSONB"
+        "name": "ref_notes",
+        "type": "JSONB",
+        "description": "Array of professional references: [{name, title, company, relationship, contact}]"
       }
     ],
     "hro_application": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the application"
       },
       {
         "name": "candidate_id",
         "type": "UUID",
-        "fk": "hro_candidate.id"
+        "fk": "hro_candidate.id",
+        "description": "References hro_candidate \u2014 the applicant submitting this application"
       },
       {
         "name": "position_id",
         "type": "UUID",
-        "fk": "hro_position_opening.id"
+        "fk": "hro_position_opening.id",
+        "description": "References hro_position_opening \u2014 the role being applied for"
       },
       {
         "name": "applied_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the application was submitted (UTC)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Disposition status: Active, Withdrawn, Rejected, Hired, OnHold"
       },
       {
         "name": "stage",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Current pipeline stage: Applied, Screening, Interview, Assessment, Offer, Background"
       },
       {
         "name": "source",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Recruitment channel where the candidate originated (e.g. LinkedIn, Referral, JobBoard)"
       },
       {
         "name": "assessment_results",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured evaluation outcomes: [{assessmentType, score, maxScore, completedAt, notes}]"
       },
       {
         "name": "offer",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Formal offer details: {salary, currency (ISO 4217), startDate, expiryDate, status, terms}"
       }
     ],
     "hro_employment": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the employment record"
       },
       {
         "name": "person_id",
         "type": "UUID",
-        "fk": "hro_person_profile.id"
+        "fk": "hro_person_profile.id",
+        "description": "References hro_person_profile \u2014 the employed individual"
       },
       {
         "name": "position_id",
         "type": "UUID",
-        "fk": "hro_position_opening.id"
+        "fk": "hro_position_opening.id",
+        "description": "References hro_position_opening \u2014 the position this employee fills"
       },
       {
         "name": "employee_id",
         "type": "VARCHAR(50)",
-        "unique": true
+        "unique": true,
+        "description": "Employer-assigned employee badge or payroll number (unique within the organization)"
       },
       {
         "name": "start_date",
         "type": "DATE",
-        "nullable": false
+        "nullable": false,
+        "description": "Official employment start date (hire date for statutory calculations)"
       },
       {
         "name": "end_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Employment end date; NULL indicates currently active employment"
       },
       {
         "name": "employment_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "HR-Open EmploymentTypeCodeList: FullTime, PartTime, Contract, Temporary, Seasonal"
       },
       {
         "name": "compensation",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Active pay details: {base, currency (ISO 4217), intervalCode, bonus, equity, effectiveDate}"
       },
       {
         "name": "benefits",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Enrolled benefit plans: [{planType, planName, provider, coverageStart, coverageEnd}]"
       },
       {
         "name": "work_schedule",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Working pattern: {hoursPerWeek, daysPerWeek, shiftCode, flexibleWork, remoteAllowed}"
       }
     ]
   },

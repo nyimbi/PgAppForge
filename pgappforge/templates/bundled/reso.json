@@ -1,5 +1,6 @@
 {
   "name": "reso",
+  "schema": "reso",
   "label": "RESO (Real Estate)",
   "description": "Real Estate Standards Organization \u2014 MLS/IDX standard for North America",
   "color": "#27ae60",
@@ -12,244 +13,306 @@
     "idx",
     "north-america"
   ],
+  "table_notes": {
+    "reso_property": "Core listing record per RESO Data Dictionary 2.0; one row per MLS listing, keyed by listing_key. The features JSONB column holds additional amenity and attribute data not covered by scalar columns.",
+    "reso_media": "Photos, virtual tours, and documents attached to a listing. The is_preferred flag marks the primary display image; order controls carousel sort.",
+    "reso_member": "Licensed real estate agents and brokers registered in the MLS. member_license_number is issued by the state licensing authority.",
+    "reso_office": "Brokerage office records. Agents (reso_member) are implicitly affiliated with an office via the MLS feed; add an office_key FK to reso_member if your MLS supplies it.",
+    "reso_open_house": "Scheduled public or broker open house events for a listing. Multiple events per listing are allowed; each has its own date and time window."
+  },
   "tables": {
     "reso_property": [
       {
         "name": "listing_key",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "MLS system-assigned unique key for this listing (RESO standard primary identifier)"
       },
       {
         "name": "listing_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Human-readable MLS listing number displayed to agents and consumers"
       },
       {
         "name": "status",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Local MLS status label (varies by board); use standard_status for cross-MLS portability"
       },
       {
         "name": "standard_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "RESO-standardised status: Active, Pending, Closed, Expired, Withdrawn, Cancelled, ActiveUnderContract"
       },
       {
         "name": "property_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "RESO property type: Residential, CommercialSale, CommercialLease, Land, MultiFamily, etc."
       },
       {
         "name": "property_subtype",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "More granular classification within property_type (e.g. SingleFamilyResidence, Condominium)"
       },
       {
         "name": "street_number",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Civic street number portion of the property address"
       },
       {
         "name": "street_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Street name portion of the property address (excluding number and suffix)"
       },
       {
         "name": "city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City or municipality where the property is located"
       },
       {
         "name": "state_or_province",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "State or province abbreviation (e.g. CA, ON) per the RESO State/Province lookup"
       },
       {
         "name": "postal_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "ZIP or postal code for the property address"
       },
       {
         "name": "country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code (e.g. US, CA)"
       },
       {
         "name": "latitude",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 latitude of the property in decimal degrees"
       },
       {
         "name": "longitude",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 longitude of the property in decimal degrees"
       },
       {
         "name": "list_price",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Current asking price in the local currency at time of listing"
       },
       {
         "name": "close_price",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Final sale price recorded at closing; NULL until the transaction closes"
       },
       {
         "name": "list_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the property was first made active on the MLS"
       },
       {
         "name": "close_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the sale was legally closed and title transferred; NULL until closed"
       },
       {
         "name": "days_on_market",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of calendar days the listing has been or was active on the MLS"
       },
       {
         "name": "bedrooms_total",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Total number of bedrooms across all levels of the property"
       },
       {
         "name": "bathrooms_total_decimal",
-        "type": "NUMERIC(4,2)"
+        "type": "NUMERIC(4,2)",
+        "description": "Total bathrooms as decimal (full bath=1.0, half bath=0.5) per RESO convention"
       },
       {
         "name": "living_area",
-        "type": "NUMERIC(10,2)"
+        "type": "NUMERIC(10,2)",
+        "description": "Above-grade finished living area in square feet (RESO living_area_units for metric)"
       },
       {
         "name": "lot_size_acres",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Lot or parcel size in acres; convert to sq ft (*43560) or hectares (*0.4047) as needed"
       },
       {
         "name": "year_built",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Year the primary structure was originally constructed (4-digit year)"
       },
       {
         "name": "public_remarks",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Agent-authored marketing description shown to consumers on IDX/portal sites"
       },
       {
         "name": "features",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB bag of supplemental RESO fields; expected keys: appliances[], heating[], cooling[], parking[], amenities[]"
       }
     ],
     "reso_media": [
       {
         "name": "media_key",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "MLS system-assigned unique key for this media asset"
       },
       {
         "name": "listing_key",
         "type": "VARCHAR(255)",
-        "fk": "reso_property.listing_key"
+        "fk": "reso_property.listing_key",
+        "description": "References reso_property.listing_key; the listing this media asset belongs to"
       },
       {
         "name": "media_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Publicly accessible URL to the full-resolution media asset"
       },
       {
         "name": "media_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "RESO media type: Photo, Video, VirtualTour, FloorPlan, Document, ExteriorMap, etc."
       },
       {
-        "name": "order",
-        "type": "INTEGER"
+        "name": "sort_order",
+        "type": "INTEGER",
+        "description": "Display sort order; lower values appear first in photo carousels"
       },
       {
         "name": "is_preferred",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True for the primary/hero image to display as the listing thumbnail"
       },
       {
         "name": "caption",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Agent-supplied caption or alt-text for the media asset"
       }
     ],
     "reso_member": [
       {
         "name": "member_key",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "MLS system-assigned unique key for this agent/broker member"
       },
       {
         "name": "member_mls_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Human-readable MLS member ID displayed on listings and business cards"
       },
       {
         "name": "member_first_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Member's legal first (given) name"
       },
       {
         "name": "member_last_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Member's legal last (family) name"
       },
       {
         "name": "member_email",
         "type": "VARCHAR(320)",
-        "unique": true
+        "unique": true,
+        "description": "Primary contact email; must be unique per RFC 5321 address spec (max 320 chars)"
       },
       {
         "name": "member_direct_phone",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Member's direct contact phone number in E.164 or local format"
       },
       {
         "name": "member_license_number",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "State/provincial real estate license number issued by the regulatory authority"
       },
       {
         "name": "member_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "RESO member status: Active, Inactive, Pending, Suspended; controls MLS access rights"
       }
     ],
     "reso_office": [
       {
         "name": "office_key",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "MLS system-assigned unique key for this brokerage office"
       },
       {
         "name": "office_mls_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Human-readable MLS office ID used on listings and regulatory filings"
       },
       {
         "name": "office_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Legal or trade name of the brokerage office"
       },
       {
         "name": "office_phone",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Main reception phone number for the office"
       },
       {
         "name": "office_address",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full civic address of the office (street number, name, suite)"
       },
       {
         "name": "office_city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City where the brokerage office is physically located"
       },
       {
         "name": "office_postal_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "ZIP or postal code of the office address"
       }
     ],
     "reso_open_house": [
       {
         "name": "open_house_key",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "MLS system-assigned unique key for this open house event"
       },
       {
         "name": "listing_key",
         "type": "VARCHAR(255)",
-        "fk": "reso_property.listing_key"
+        "fk": "reso_property.listing_key",
+        "description": "References reso_property.listing_key; the listing being shown at this open house"
       },
       {
         "name": "open_house_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Calendar date on which the open house is scheduled"
       },
       {
         "name": "open_house_start_time",
-        "type": "TIME"
+        "type": "TIME",
+        "description": "Local start time for public admission to the open house"
       },
       {
         "name": "open_house_end_time",
-        "type": "TIME"
+        "type": "TIME",
+        "description": "Local end time; visitors are expected to leave by this time"
       },
       {
         "name": "open_house_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "RESO open house type: Public, BrokerOnly, Private, Twilight, Virtual"
       },
       {
         "name": "remarks",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Agent notes for the open house (directions, parking instructions, highlights)"
       }
     ]
   },

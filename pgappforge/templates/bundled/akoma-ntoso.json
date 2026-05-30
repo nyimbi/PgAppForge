@@ -1,7 +1,11 @@
 {
   "name": "akoma-ntoso",
+  "schema": "akoma_ntoso",
   "label": "Akoma Ntoso (Legal Documents)",
   "description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
+  "short_description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
+  "long_description": "Akoma Ntoso (Architecture for Knowledge-Oriented Management of African Normative Texts in an Open Standard) is the OASIS/UN standard for representing legislative and judicial documents in XML. The schema covers the FRBR (Functional Requirements for Bibliographic Records) work/expression hierarchy, document content storage, cross-references between legal texts, and amendment tracking.",
+  "when_to_use": "Use for legal information systems, legislative drafting tools, parliamentary document management, or legal tech platforms. Used by EU Parliament (EUR-Lex), UN (UNDOC), African Union, and national parliaments in Italy, Norway, Brazil, and Kenya. Required for interoperability with Legislation.gov.uk and EUR-Lex APIs. Essential for legal AI tools parsing statutory texts.",
   "color": "#2c3e50",
   "icon": "fa-landmark",
   "version": "OASIS-1.0",
@@ -13,186 +17,228 @@
     "eu",
     "parliament"
   ],
+  "table_notes": {
+    "an_frbr_work": "Abstract legal work identity in the FRBR hierarchy \u2014 one row per distinct legislative act regardless of language or version.",
+    "an_frbr_expression": "A specific language/version realisation of an an_frbr_work; multiple expressions can exist per work (e.g. EN and FR versions).",
+    "an_document": "Stores actual document content (XML or plain text) for a given expression; one row per physical rendition of an expression.",
+    "an_reference": "Cross-references from one document to another legal URI, capturing citations, definitions, and repeals within legislative texts.",
+    "an_amendment": "Records the before/after text changes between an amending document and the document it modifies, with effective date."
+  },
   "tables": {
     "an_frbr_work": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the abstract work entity"
       },
       {
         "name": "uri",
         "type": "TEXT",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Akoma Ntoso FRBR Work URI uniquely identifying the legislative act (e.g. /akn/ke/act/2010/3)"
       },
       {
         "name": "title",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Official title of the legislative act or judicial document"
       },
       {
         "name": "date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date of enactment, adoption, or promulgation of the work"
       },
       {
         "name": "author",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Originating body (e.g. parliament, court, ministry) responsible for the work"
       },
       {
         "name": "country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code of the enacting jurisdiction"
       },
       {
         "name": "jurisdiction",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Subdivision or supranational jurisdiction (e.g. EU, UN, US-CA) when country alone is insufficient"
       },
       {
         "name": "subject",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Controlled vocabulary subject tags; expected structure: [{\"value\": \"...\", \"showAs\": \"...\"}] per Akoma Ntoso FRBRsubject"
       },
       {
         "name": "doc_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Akoma Ntoso document type code: act, bill, amendment, debate, judgment, officialGazette, etc."
       }
     ],
     "an_frbr_expression": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this language/version expression"
       },
       {
         "name": "work_id",
         "type": "UUID",
-        "fk": "an_frbr_work.id"
+        "fk": "an_frbr_work.id",
+        "description": "References the abstract work this expression realises (an_frbr_work.id)"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Akoma Ntoso FRBR Expression URI including language and version (e.g. /akn/ke/act/2010/3/eng@2021-01-01)"
       },
       {
         "name": "date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date this expression version came into force or was published"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "ISO 639-1/639-2 language code of this expression (e.g. eng, fra, swa)"
       },
       {
         "name": "author",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Body or person responsible for producing this expression (may differ from work author)"
       },
       {
         "name": "version",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Version label for this expression (e.g. original, consolidated-2021, amended-by-act-5)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Publication lifecycle status: draft, published, consolidated, repealed, superseded"
       }
     ],
     "an_document": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this physical document rendition"
       },
       {
         "name": "expression_id",
         "type": "UUID",
-        "fk": "an_frbr_expression.id"
+        "fk": "an_frbr_expression.id",
+        "description": "References the expression this document embodies (an_frbr_expression.id)"
       },
       {
         "name": "content",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Plain-text body of the document, used for full-text indexing and search"
       },
       {
         "name": "xml_content",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full Akoma Ntoso XML source; authoritative representation conforming to the OASIS AN schema"
       },
       {
         "name": "format",
         "type": "VARCHAR(20)",
-        "default": "'xml'"
+        "default": "'xml'",
+        "description": "Content format indicator: xml (Akoma Ntoso), html, pdf, or docx"
       },
       {
         "name": "file_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "External storage URL (S3, GCS, etc.) where the original document file is persisted"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this document row was inserted into the database"
       }
     ],
     "an_reference": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the reference record"
       },
       {
         "name": "source_doc_id",
         "type": "UUID",
-        "fk": "an_document.id"
+        "fk": "an_document.id",
+        "description": "Document that contains the reference (an_document.id)"
       },
       {
         "name": "target_uri",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Akoma Ntoso or external URI of the referenced legal text, provision, or resource"
       },
       {
         "name": "reference_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Nature of the reference: citation, definition, repeal, amendment, modification, or passiveRef"
       },
       {
         "name": "source_element",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "XPath or element ID within the source XML where this reference originates (e.g. sec_3/para_1)"
       },
       {
         "name": "context",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Surrounding sentence or phrase providing human-readable context for the reference"
       }
     ],
     "an_amendment": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the amendment record"
       },
       {
         "name": "amending_doc_id",
         "type": "UUID",
-        "fk": "an_document.id"
+        "fk": "an_document.id",
+        "description": "Document that introduces the change (the amending act) \u2014 references an_document.id"
       },
       {
         "name": "amended_doc_id",
         "type": "UUID",
-        "fk": "an_document.id"
+        "fk": "an_document.id",
+        "description": "Document being modified by the amendment \u2014 references an_document.id"
       },
       {
         "name": "amendment_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Type of textual change: insertion, substitution, repeal, renumbering, or suspension"
       },
       {
         "name": "effective_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date from which the amendment takes legal effect in the consolidated text"
       },
       {
         "name": "source_element",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "XPath or element ID in the amending document that specifies the change instruction"
       },
       {
         "name": "old_text",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Original text before the amendment (NULL for pure insertions)"
       },
       {
         "name": "new_text",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Replacement or inserted text after the amendment (NULL for repeals)"
       }
     ]
-  },
-  "short_description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
-  "long_description": "Akoma Ntoso (Architecture for Knowledge-Oriented Management of African Normative Texts in an Open Standard) is the OASIS/UN standard for representing legislative and judicial documents in XML. The schema covers the FRBR (Functional Requirements for Bibliographic Records) work/expression hierarchy, document content storage, cross-references between legal texts, and amendment tracking.",
-  "when_to_use": "Use for legal information systems, legislative drafting tools, parliamentary document management, or legal tech platforms. Used by EU Parliament (EUR-Lex), UN (UNDOC), African Union, and national parliaments in Italy, Norway, Brazil, and Kenya. Required for interoperability with Legislation.gov.uk and EUR-Lex APIs. Essential for legal AI tools parsing statutory texts."
+  }
 }

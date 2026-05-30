@@ -1,7 +1,11 @@
 {
   "name": "schema-org-commerce",
+  "schema": "schema_org_commerce",
   "label": "Schema.org Commerce",
   "description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "short_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "long_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "when_to_use": "Use when building applications that need to conform to the Schema.org Commerce standard.",
   "color": "#e67e22",
   "icon": "fa-shopping-bag",
   "version": "25.0",
@@ -12,268 +16,330 @@
     "google",
     "schema-org"
   ],
+  "table_notes": {
+    "sorg_organization": "Represents a business or brand entity per schema.org/Organization; used as the seller and brand reference across offers and products.",
+    "sorg_product": "A sellable item per schema.org/Product; holds identifiers (SKU, GTIN, MPN), brand linkage, and aggregate review data used in Google Shopping markup.",
+    "sorg_offer": "A specific price/availability listing for a product from a seller per schema.org/Offer; drives Google Shopping price feeds and structured data.",
+    "sorg_order": "A customer purchase transaction per schema.org/Order; records payment, status, totals, and address snapshots at time of purchase.",
+    "sorg_order_item": "A single line item within an order per schema.org/OrderItem; links an offer to an order with quantity and fulfillment status.",
+    "sorg_review": "A customer review and star rating for a product per schema.org/Review; contributes to aggregate ratings shown in Google search results."
+  },
   "tables": {
     "sorg_organization": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the organization"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Trading name of the organization (schema.org/name)"
       },
       {
         "name": "legal_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Registered legal name, if different from trading name (schema.org/legalName)"
       },
       {
         "name": "url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Canonical website URL for the organization (schema.org/url)"
       },
       {
         "name": "logo_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Absolute URL of the organization logo used in structured data (schema.org/logo)"
       },
       {
         "name": "email",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Primary contact email address (RFC 5321 max 320 chars)"
       },
       {
         "name": "telephone",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Contact phone number in E.164 or local format (schema.org/telephone)"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Postal address as schema.org/PostalAddress object: {streetAddress, addressLocality, addressRegion, postalCode, addressCountry}"
       },
       {
         "name": "same_as",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of URLs for the same entity on other sites (e.g. Wikipedia, Wikidata, social profiles) per schema.org/sameAs"
       }
     ],
     "sorg_product": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the product"
       },
       {
         "name": "name",
         "type": "VARCHAR(500)",
-        "nullable": false
+        "nullable": false,
+        "description": "Product title as shown to customers and in search snippets (schema.org/name)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full product description used in structured data markup (schema.org/description)"
       },
       {
         "name": "sku",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Merchant-assigned Stock Keeping Unit; unique per product variant (schema.org/sku)"
       },
       {
         "name": "gtin",
-        "type": "VARCHAR(14)"
+        "type": "VARCHAR(14)",
+        "description": "Global Trade Item Number (EAN-13/UPC-12/GTIN-14) per GS1 standard (schema.org/gtin)"
       },
       {
         "name": "mpn",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Manufacturer Part Number assigned by the producer (schema.org/mpn)"
       },
       {
         "name": "brand_id",
         "type": "INTEGER",
-        "fk": "sorg_organization.id"
+        "fk": "sorg_organization.id",
+        "description": "References sorg_organization; identifies the brand that makes this product"
       },
       {
         "name": "category",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Product category path, ideally using Google Product Taxonomy strings (schema.org/category)"
       },
       {
         "name": "image_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Absolute URL of the primary product image (schema.org/image)"
       },
       {
         "name": "additional_images",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of additional image URLs for variant or angle shots: [\"https://...\", ...]"
       },
       {
         "name": "aggregate_rating",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Rolled-up rating per schema.org/AggregateRating: {ratingValue, reviewCount, bestRating, worstRating}"
       },
       {
         "name": "is_related_to",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of product IDs or URLs of related products (schema.org/isRelatedTo)"
       },
       {
         "name": "is_similar_to",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of product IDs or URLs of similar/comparable products (schema.org/isSimilarTo)"
       }
     ],
     "sorg_offer": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the offer"
       },
       {
         "name": "product_id",
         "type": "INTEGER",
-        "fk": "sorg_product.id"
+        "fk": "sorg_product.id",
+        "description": "References sorg_product; the item being offered for sale"
       },
       {
         "name": "seller_id",
         "type": "INTEGER",
-        "fk": "sorg_organization.id"
+        "fk": "sorg_organization.id",
+        "description": "References sorg_organization; the merchant making this offer"
       },
       {
         "name": "price",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Offer price with four decimal places for currency precision (schema.org/price)"
       },
       {
         "name": "price_currency",
         "type": "CHAR(3)",
-        "default": "'USD'"
+        "default": "'USD'",
+        "description": "ISO 4217 three-letter currency code for the price (e.g. USD, EUR, GBP)"
       },
       {
         "name": "price_valid_until",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date after which this price is no longer valid (schema.org/priceValidUntil)"
       },
       {
         "name": "availability",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Stock status using schema.org values: InStock, OutOfStock, PreOrder, BackOrder, Discontinued"
       },
       {
         "name": "item_condition",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Product condition using schema.org values: NewCondition, UsedCondition, RefurbishedCondition, DamagedCondition"
       },
       {
         "name": "shipping",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Shipping details per schema.org/OfferShippingDetails: {shippingRate, deliveryTime, shippingDestination}"
       },
       {
         "name": "eligible_region",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code where this offer is valid (schema.org/eligibleRegion)"
       }
     ],
     "sorg_order": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key for the order (stable reference for customer-facing links)"
       },
       {
         "name": "order_number",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Human-readable order reference shown to customers (schema.org/orderNumber)"
       },
       {
         "name": "order_date",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the order was placed, stored with timezone (schema.org/orderDate)"
       },
       {
         "name": "customer_id",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Application-level foreign key to the customer/user record"
       },
       {
         "name": "order_status",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Fulfillment status using schema.org/OrderStatus values: OrderProcessing, OrderShipped, OrderDelivered, OrderCancelled"
       },
       {
         "name": "payment_method",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Payment instrument used, e.g. CreditCard, PayPal, BankTransfer (schema.org/paymentMethod)"
       },
       {
         "name": "discount_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Coupon or promotional code applied to this order"
       },
       {
         "name": "price_total",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Order grand total including tax and shipping (schema.org/price)"
       },
       {
         "name": "price_currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 three-letter currency code for all monetary fields in this order"
       },
       {
         "name": "billing_address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Billing address snapshot at time of purchase per schema.org/PostalAddress: {streetAddress, addressLocality, postalCode, addressCountry}"
       },
       {
         "name": "shipping_address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Delivery address snapshot at time of purchase per schema.org/PostalAddress: {streetAddress, addressLocality, postalCode, addressCountry}"
       }
     ],
     "sorg_order_item": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the order line item"
       },
       {
         "name": "order_id",
         "type": "UUID",
-        "fk": "sorg_order.id"
+        "fk": "sorg_order.id",
+        "description": "References sorg_order; the parent order this line item belongs to"
       },
       {
         "name": "offer_id",
         "type": "INTEGER",
-        "fk": "sorg_offer.id"
+        "fk": "sorg_offer.id",
+        "description": "References sorg_offer; the specific price listing that was purchased"
       },
       {
         "name": "order_quantity",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of units ordered for this offer (schema.org/orderQuantity)"
       },
       {
         "name": "order_item_status",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Per-line fulfillment status using schema.org/OrderStatus values (may differ from parent order)"
       },
       {
         "name": "unit_price",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Price per unit at time of purchase, snapshotted to handle future price changes"
       }
     ],
     "sorg_review": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the review"
       },
       {
         "name": "product_id",
         "type": "INTEGER",
-        "fk": "sorg_product.id"
+        "fk": "sorg_product.id",
+        "description": "References sorg_product; the product being reviewed"
       },
       {
         "name": "author_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Display name of the reviewer (schema.org/author)"
       },
       {
         "name": "rating_value",
-        "type": "NUMERIC(3,1)"
+        "type": "NUMERIC(3,1)",
+        "description": "Numeric star rating given by the reviewer (schema.org/ratingValue)"
       },
       {
         "name": "best_rating",
         "type": "NUMERIC(3,1)",
-        "default": "5"
+        "default": "5",
+        "description": "Maximum possible rating on this scale; defaults to 5 (schema.org/bestRating)"
       },
       {
         "name": "review_body",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full text of the written review (schema.org/reviewBody)"
       },
       {
         "name": "date_published",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the review was published or submitted (schema.org/datePublished)"
       },
       {
         "name": "is_verified",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if the reviewer was verified as a confirmed purchaser of the product"
       }
     ]
-  },
-  "short_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
-  "long_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
-  "when_to_use": "Use when building applications that need to conform to the Schema.org Commerce standard."
+  }
 }

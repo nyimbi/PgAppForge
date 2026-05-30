@@ -1,5 +1,6 @@
 {
   "name": "xbrl-ifrs",
+  "schema": "xbrl_ifrs",
   "label": "XBRL + IFRS/GAAP Taxonomy",
   "description": "SEC-mandated financial reporting standard \u2014 public company filings, IFRS/GAAP concepts",
   "color": "#2c3e50",
@@ -13,175 +14,219 @@
     "ifrs",
     "gaap"
   ],
+  "table_notes": {
+    "xbrl_concept": "Master registry of all XBRL taxonomy elements (account names/line items) from IFRS, US-GAAP, or custom namespaces.",
+    "xbrl_taxonomy": "One row per taxonomy package (e.g. IFRS 2023, US-GAAP 2024); the filing FK pins which standard was used.",
+    "xbrl_filing": "Top-level filing record per entity/period \u2014 the root context for all facts in a submission.",
+    "xbrl_fact": "Core fact table storing individual reported values keyed to a concept, filing, and dimensional context."
+  },
   "tables": {
     "xbrl_concept": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate key for the concept row"
       },
       {
         "name": "namespace",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "XML namespace URI that owns this concept (e.g. http://xbrl.ifrs.org/taxonomy/2023-03-23)"
       },
       {
         "name": "local_name",
         "type": "VARCHAR(200)",
-        "nullable": false
+        "nullable": false,
+        "description": "Local part of the QName identifying this element within its namespace (e.g. Assets, Revenue)"
       },
       {
         "name": "data_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "XBRL built-in or custom data type (e.g. monetaryItemType, stringItemType, perShareItemType)"
       },
       {
         "name": "period_type",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Whether the concept is a point-in-time snapshot (instant) or a flow over a period (duration)"
       },
       {
         "name": "balance_type",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "Normal balance direction for monetary concepts: debit or credit (NULL for non-monetary)"
       },
       {
         "name": "abstract",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if this is a structural heading element that cannot carry fact values"
       },
       {
         "name": "labels",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multi-language label linkbase entries; keys are lang codes, values are label role maps (e.g. {\"en\": {\"label\": \"Total Assets\"}})"
       },
       {
         "name": "documentation",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Normative definition from the taxonomy\u2019s documentation linkbase"
       }
     ],
     "xbrl_taxonomy": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate key for the taxonomy package"
       },
       {
         "name": "name",
         "type": "VARCHAR(200)",
-        "unique": true
+        "unique": true,
+        "description": "Human-readable taxonomy identifier (e.g. ifrs-full-2023, us-gaap-2024)"
       },
       {
         "name": "namespace",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Primary XML namespace URI for this taxonomy package"
       },
       {
         "name": "version",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Taxonomy release version string (e.g. 2024-03-31)"
       },
       {
         "name": "entry_point_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the taxonomy entry point schema (.xsd) used to load the full DTS"
       },
       {
         "name": "standard",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Accounting standard family: IFRS, US-GAAP, UK-GAAP, or custom"
       },
       {
         "name": "effective_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date from which this taxonomy version is authoritative for filing purposes"
       }
     ],
     "xbrl_filing": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key for this filing submission"
       },
       {
         "name": "entity_lei",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Legal Entity Identifier (LEI, ISO 17442) of the reporting entity"
       },
       {
         "name": "entity_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Registered legal name of the reporting entity"
       },
       {
         "name": "report_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "SEC form type or equivalent (e.g. 10-K, 10-Q, 20-F, iXBRL annual)"
       },
       {
         "name": "period_start",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "First day of the reporting period covered by this filing"
       },
       {
         "name": "period_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Last day of the reporting period (balance-sheet date for annual reports)"
       },
       {
         "name": "filing_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the document was submitted to the regulator (SEC EDGAR, HMRC, ESMA, etc.)"
       },
       {
         "name": "taxonomy_id",
         "type": "INTEGER",
-        "fk": "xbrl_taxonomy.id"
+        "fk": "xbrl_taxonomy.id",
+        "description": "References xbrl_taxonomy \u2014 the taxonomy package used to tag this filing"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for the primary reporting currency (e.g. USD, EUR, GBP)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Processing lifecycle state (e.g. submitted, accepted, rejected, superseded)"
       },
       {
         "name": "submission_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Canonical URL of the filing package on the regulator\u2019s portal"
       }
     ],
     "xbrl_fact": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate key for a single reported fact value"
       },
       {
         "name": "filing_id",
         "type": "UUID",
-        "fk": "xbrl_filing.id"
+        "fk": "xbrl_filing.id",
+        "description": "References xbrl_filing \u2014 the submission this fact belongs to"
       },
       {
         "name": "concept_id",
         "type": "INTEGER",
-        "fk": "xbrl_concept.id"
+        "fk": "xbrl_concept.id",
+        "description": "References xbrl_concept \u2014 the taxonomy element (line item) this fact reports"
       },
       {
         "name": "context_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "XBRL context identifier from the source document (entity + period + scenario key)"
       },
       {
         "name": "unit",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "ISO 4217 currency or measure unit (e.g. USD, shares, pure) per XBRL units registry"
       },
       {
         "name": "value_numeric",
-        "type": "NUMERIC(30,4)"
+        "type": "NUMERIC(30,4)",
+        "description": "Numeric reported value; NULL for text-only facts"
       },
       {
         "name": "value_text",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Text or HTML string value for narrative and non-numeric facts"
       },
       {
         "name": "decimals",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "XBRL decimals attribute: precision of value_numeric (negative = thousands/millions rounding)"
       },
       {
         "name": "period_start",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Start of the fact\u2019s period context (NULL for instant-type concepts)"
       },
       {
         "name": "period_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "End date or instant date of the fact\u2019s period context"
       },
       {
         "name": "segment",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Dimensional breakdown for this fact; keys are dimension QNames, values are member QNames (e.g. {\"srt:StatementGeographicalAxis\": \"srt:NorthAmericaMember\"})"
       }
     ]
   },

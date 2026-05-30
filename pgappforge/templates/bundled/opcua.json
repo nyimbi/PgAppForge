@@ -1,5 +1,6 @@
 {
   "name": "opcua",
+  "schema": "opcua",
   "label": "OPC UA (Industrial)",
   "description": "Industrial automation data standard \u2014 used by every IIoT platform (Siemens, Rockwell, ABB)",
   "color": "#8e44ad",
@@ -13,203 +14,253 @@
     "industry40",
     "opc"
   ],
+  "table_notes": {
+    "opcua_server": "Registry of OPC UA server instances; each row represents one server endpoint with its connection state and identity.",
+    "opcua_node": "OPC UA address-space node (variable, object, method, or type); forms a self-referential hierarchy via parent_id.",
+    "opcua_data_value": "Time-series store for node values; one row per sampled value with typed columns to avoid JSONB overhead for common types.",
+    "opcua_alarm": "Process alarm and event log sourced from OPC UA Alarms & Conditions (A&C); tracks lifecycle from trigger to acknowledgement.",
+    "opcua_method_call": "Audit log of OPC UA Method Service calls; preserves input/output argument payloads and the OPC UA status result."
+  },
   "tables": {
     "opcua_server": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the server record"
       },
       {
         "name": "application_uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "OPC UA ApplicationUri \u2014 globally unique URI identifying this server application instance"
       },
       {
         "name": "product_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable product name reported by the server in its ApplicationDescription"
       },
       {
         "name": "manufacturer",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Vendor or manufacturer name as reported in the server ApplicationDescription"
       },
       {
         "name": "software_version",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Server software version string (e.g. 1.4.3) for compatibility tracking"
       },
       {
         "name": "endpoint_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "OPC UA endpoint URL (opc.tcp://host:port/path) used to establish sessions"
       },
       {
         "name": "is_online",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "Whether the server was reachable at last health check; updated by the polling service"
       },
       {
         "name": "last_connected_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent successful OPC UA session establishment"
       }
     ],
     "opcua_node": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the node record"
       },
       {
         "name": "server_id",
         "type": "UUID",
-        "fk": "opcua_server.id"
+        "fk": "opcua_server.id",
+        "description": "OPC UA server that owns this node; references opcua_server.id"
       },
       {
         "name": "node_id",
         "type": "VARCHAR(500)",
-        "nullable": false
+        "nullable": false,
+        "description": "OPC UA NodeId string (e.g. ns=2;s=Pump1.Speed) \u2014 unique within a server"
       },
       {
         "name": "browse_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "OPC UA BrowseName (namespace:name) used for programmatic node traversal"
       },
       {
         "name": "display_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Localised human-readable name shown in client UIs and HMI screens"
       },
       {
         "name": "node_class",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "OPC UA NodeClass: Variable, Object, Method, ObjectType, VariableType, ReferenceType, DataType, or View"
       },
       {
         "name": "data_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "OPC UA DataType NodeId or name (e.g. Double, Int32, String) for Variable-class nodes"
       },
       {
         "name": "access_level",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "OPC UA AccessLevel bitmask: bit0=CurrentRead, bit1=CurrentWrite, bit2=HistoryRead, bit3=HistoryWrite"
       },
       {
         "name": "parent_id",
         "type": "UUID",
-        "fk": "opcua_node.id"
+        "fk": "opcua_node.id",
+        "description": "Parent node in the address-space hierarchy; self-referential FK to opcua_node.id (NULL for root objects)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "OPC UA Description attribute \u2014 free-text documentation supplied by the server for this node"
       }
     ],
     "opcua_data_value": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incrementing surrogate key for the data value row"
       },
       {
         "name": "node_id",
         "type": "UUID",
-        "fk": "opcua_node.id"
+        "fk": "opcua_node.id",
+        "description": "Node whose value was sampled; references opcua_node.id"
       },
       {
         "name": "value_boolean",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "Sampled value for Boolean-typed nodes (OPC UA DataType Boolean)"
       },
       {
         "name": "value_int",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Sampled value for integer-typed nodes (Int16/Int32/Int64/UInt*); stores widest possible integer"
       },
       {
         "name": "value_float",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Sampled value for floating-point nodes (Float/Double OPC UA types)"
       },
       {
         "name": "value_string",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Sampled value for String/ByteString/LocalizedText nodes, or fallback for other types"
       },
       {
         "name": "source_timestamp",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "OPC UA SourceTimestamp \u2014 when the value was produced at the data source (PLC/sensor)"
       },
       {
         "name": "server_timestamp",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "OPC UA ServerTimestamp \u2014 when the server received or recorded the value"
       },
       {
         "name": "status_code",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "OPC UA StatusCode (32-bit); 0x00000000 = Good; non-zero indicates quality/uncertainty issues"
       }
     ],
     "opcua_alarm": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the alarm/event record"
       },
       {
         "name": "server_id",
         "type": "UUID",
-        "fk": "opcua_server.id"
+        "fk": "opcua_server.id",
+        "description": "Server that generated this alarm; references opcua_server.id"
       },
       {
         "name": "node_id",
         "type": "UUID",
-        "fk": "opcua_node.id"
+        "fk": "opcua_node.id",
+        "description": "Address-space node that is the source of the alarm condition; references opcua_node.id"
       },
       {
         "name": "event_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "OPC UA EventType NodeId or name (e.g. ExclusiveLimitAlarmType, DiscreteAlarmType)"
       },
       {
         "name": "severity",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "OPC UA severity value 1\u20131000; 1=Low, 500=Medium, 1000=High per OPC UA Part 9"
       },
       {
         "name": "message",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "OPC UA Event Message LocalizedText \u2014 human-readable description of the alarm condition"
       },
       {
         "name": "active_state",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "Whether the alarm condition is currently active (True) or returned to normal (False)"
       },
       {
         "name": "triggered_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the alarm condition first became active (OPC UA ActiveState.TransitionTime)"
       },
       {
         "name": "acknowledged_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when an operator acknowledged the alarm; NULL if not yet acknowledged"
       }
     ],
     "opcua_method_call": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incrementing surrogate key for the method call record"
       },
       {
         "name": "node_id",
         "type": "UUID",
-        "fk": "opcua_node.id"
+        "fk": "opcua_node.id",
+        "description": "Node representing the OPC UA Method that was invoked; references opcua_node.id"
       },
       {
         "name": "method_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable method name (display name of the Method node) for quick identification"
       },
       {
         "name": "input_args",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Input argument values passed to the method; structure: [{\"name\": str, \"type\": str, \"value\": any}]"
       },
       {
         "name": "output_args",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Output argument values returned by the method; structure: [{\"name\": str, \"type\": str, \"value\": any}]"
       },
       {
         "name": "status_code",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "OPC UA StatusCode of the Call result; 0x00000000 = Good, non-zero encodes error class and sub-code"
       },
       {
         "name": "called_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this method call was recorded; defaults to server wall-clock time at insert"
       }
     ]
   },

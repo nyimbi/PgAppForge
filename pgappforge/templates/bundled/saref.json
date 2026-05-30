@@ -1,7 +1,11 @@
 {
   "name": "saref",
+  "schema": "saref",
   "label": "SAREF (Smart Appliances)",
   "description": "EU Smart Appliances Reference ontology \u2014 smart home IoT standard required by EU IoT regulations",
+  "short_description": "EU Smart Appliances Reference ontology \u2014 smart home IoT standard required by EU IoT regulations",
+  "long_description": "SAREF (Smart Appliances REFerence ontology) ETSI TS 103 264 enables smart home device interoperability across EU manufacturers and IoT platforms.",
+  "when_to_use": "Use for smart building management, home energy management, or EU IoT compliance. Referenced in EU energy product regulations and required for some Horizon Europe IoT project grants.",
   "color": "#1abc9c",
   "icon": "fa-home",
   "version": "4.1",
@@ -13,157 +17,195 @@
     "saref",
     "appliances"
   ],
+  "table_notes": {
+    "saref_device": "Registry of all smart appliances and IoT devices with manufacturer metadata, EU energy class rating, and current activation status.",
+    "saref_building_space": "Hierarchical spatial model of building locations (rooms, floors, zones) used to associate devices with physical places.",
+    "saref_property_measurement": "High-volume time-series table storing sensor readings from devices; partition by timestamp for large deployments.",
+    "saref_command": "Audit log of all control commands issued to devices, capturing intent, parameters, and execution outcome."
+  },
   "tables": {
     "saref_device": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique device identifier (stable across firmware updates)"
       },
       {
         "name": "manufacturer",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Brand or company that manufactured the device"
       },
       {
         "name": "model",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Manufacturer model number or product name"
       },
       {
         "name": "serial_number",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Hardware serial number as printed on the device label"
       },
       {
         "name": "device_category",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "SAREF device category (e.g. Sensor, Actuator, Meter, HVAC)"
       },
       {
         "name": "functions",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "SAREF function list; array of {functionType, command} objects per ontology spec"
       },
       {
         "name": "states",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Current device state snapshot; keys map to SAREF State class instances (e.g. OnOffState)"
       },
       {
         "name": "energy_class",
-        "type": "VARCHAR(5)"
+        "type": "VARCHAR(5)",
+        "description": "EU energy efficiency label (A+++, A++, A+, A\u2013G) per EU 2021/341 regulation"
       },
       {
         "name": "location_id",
         "type": "UUID",
-        "fk": "saref_building_space.id"
+        "fk": "saref_building_space.id",
+        "description": "Building space where this device is installed; references saref_building_space.id"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "False when device is decommissioned or offline; used to filter active inventory"
       },
       {
         "name": "commissioned_at",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the device was first installed and put into service"
       }
     ],
     "saref_building_space": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique space identifier"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for the space (e.g. 'Living Room', 'Floor 2 East Wing')"
       },
       {
         "name": "space_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Classification of the space (e.g. Room, Floor, Zone, Building) per SAREF4BLDG"
       },
       {
         "name": "floor_area_m2",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Floor area of the space in square metres"
       },
       {
         "name": "parent_id",
         "type": "UUID",
-        "fk": "saref_building_space.id"
+        "fk": "saref_building_space.id",
+        "description": "Parent space in the containment hierarchy; references saref_building_space.id (self-join)"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(POLYGON,4326)"
+        "type": "GEOGRAPHY(POLYGON,4326)",
+        "description": "PostGIS polygon footprint of the space in WGS84; enables spatial overlap and area queries"
       }
     ],
     "saref_property_measurement": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for each measurement row"
       },
       {
         "name": "device_id",
         "type": "UUID",
-        "fk": "saref_device.id"
+        "fk": "saref_device.id",
+        "description": "Device that produced this measurement; references saref_device.id"
       },
       {
         "name": "property_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "SAREF property class being measured (e.g. Temperature, Humidity, Power, Illuminance)"
       },
       {
         "name": "unit_of_measure",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "UCUM or SAREF unit code for the measured value (e.g. CEL, W, lx, %RH)"
       },
       {
         "name": "value",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Numeric sensor reading in the specified unit_of_measure"
       },
       {
         "name": "timestamp",
         "type": "TIMESTAMPTZ",
         "nullable": false,
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "UTC timestamp of when the measurement was taken by the device"
       },
       {
         "name": "quality",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Data quality indicator: Good, Uncertain, Bad, or OutOfRange (per IEC 62541 OPC-UA)"
       }
     ],
     "saref_command": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique command instance identifier"
       },
       {
         "name": "device_id",
         "type": "UUID",
-        "fk": "saref_device.id"
+        "fk": "saref_device.id",
+        "description": "Target device receiving this command; references saref_device.id"
       },
       {
         "name": "command_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "SAREF command class name (e.g. OnCommand, OffCommand, SetLevelCommand, ToggleCommand)"
       },
       {
         "name": "parameters",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Command-specific arguments; structure varies by command_type (e.g. {level: 75} for dimmer)"
       },
       {
         "name": "issued_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "UTC timestamp when the command was created and enqueued"
       },
       {
         "name": "executed_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp when the device acknowledged execution; NULL if still pending"
       },
       {
         "name": "status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Command lifecycle state: Pending, Sent, Executed, Failed, Cancelled"
       },
       {
         "name": "issued_by",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Identity that issued the command (user ID, automation rule name, or system process)"
       }
     ]
   },
-  "short_description": "EU Smart Appliances Reference ontology \u2014 smart home IoT standard required by EU IoT regulations",
-  "long_description": "SAREF (Smart Appliances REFerence ontology) ETSI TS 103 264 enables smart home device interoperability across EU manufacturers and IoT platforms.",
-  "when_to_use": "Use for smart building management, home energy management, or EU IoT compliance. Referenced in EU energy product regulations and required for some Horizon Europe IoT project grants."
+  "extensions": [
+    "postgis"
+  ]
 }

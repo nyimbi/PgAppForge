@@ -1,5 +1,6 @@
 {
   "name": "dbt-semantic",
+  "schema": "dbt_semantic",
   "label": "dbt Semantic Layer / OLAP",
   "description": "Modern data stack \u2014 dbt metrics, semantic models, OLAP cube definitions for BI",
   "color": "#ff694b",
@@ -13,244 +14,304 @@
     "bi",
     "data-stack"
   ],
+  "table_notes": {
+    "dbt_project": "Registry of dbt projects, each scoping a set of models and semantic definitions within a specific database/schema target.",
+    "dbt_model": "Catalogue of dbt models (SQL transformations) with their materialization strategy, column metadata, and upstream dependencies.",
+    "dbt_semantic_model": "Semantic layer abstraction over a dbt model, declaring entities, dimensions, and measures for the metrics layer.",
+    "dbt_metric": "Business metric definitions expressed via the dbt Semantic Layer, including type, filter predicates, and display metadata for BI tools.",
+    "olap_dimension": "Reusable dimension definitions for OLAP cubes, describing how to slice and group fact data with optional hierarchies.",
+    "olap_cube": "OLAP cube definitions linking a fact table to measures and dimensions with optional refresh scheduling for pre-aggregation."
+  },
   "tables": {
     "dbt_project": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the project row"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Unique slug name of the dbt project (matches dbt_project.yml name field)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Human-readable summary of what this project models and its business domain"
       },
       {
-        "name": "database",
-        "type": "VARCHAR(100)"
+        "name": "db_name",
+        "type": "VARCHAR(100)",
+        "description": "Target database (warehouse) where this project materialises its models"
       },
       {
-        "name": "schema",
-        "type": "VARCHAR(100)"
+        "name": "schema_name",
+        "type": "VARCHAR(100)",
+        "description": "Default schema/dataset within the target database for this project's models"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this project record was first registered"
       }
     ],
     "dbt_model": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the model row"
       },
       {
         "name": "project_id",
         "type": "INTEGER",
-        "fk": "dbt_project.id"
+        "fk": "dbt_project.id",
+        "description": "References dbt_project.id \u2014 the project this model belongs to"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Model node name (unique within its project, e.g. stg_orders, fct_revenue)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Human-readable description of what this model computes and its grain"
       },
       {
-        "name": "schema",
-        "type": "VARCHAR(100)"
+        "name": "schema_name",
+        "type": "VARCHAR(100)",
+        "description": "Schema override for this model (falls back to project default when NULL)"
       },
       {
         "name": "materialization",
         "type": "VARCHAR(20)",
-        "default": "'view'"
+        "default": "'view'",
+        "description": "dbt materialization strategy: view, table, incremental, ephemeral, or snapshot"
       },
       {
         "name": "depends_on",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of upstream node identifiers (ref/source) this model depends on"
       },
       {
         "name": "columns",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Column-level metadata as [{name, data_type, description, tests, tags}] from schema.yml"
       },
       {
         "name": "tags",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of string tags applied to this model for grouping and selection (e.g. ['finance','daily'])"
       },
       {
         "name": "meta",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Arbitrary key-value metadata dict from the model's meta: block in schema.yml"
       },
       {
         "name": "last_compiled_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent successful dbt compile for this model"
       }
     ],
     "dbt_semantic_model": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the semantic model row"
       },
       {
         "name": "project_id",
         "type": "INTEGER",
-        "fk": "dbt_project.id"
+        "fk": "dbt_project.id",
+        "description": "References dbt_project.id \u2014 the project this semantic model is scoped to"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Unique name of the semantic model within the project (e.g. orders_semantic)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Business-facing description of what facts this semantic model exposes"
       },
       {
         "name": "model_id",
         "type": "INTEGER",
-        "fk": "dbt_model.id"
+        "fk": "dbt_model.id",
+        "description": "References dbt_model.id \u2014 the underlying dbt model this semantic model wraps"
       },
       {
         "name": "entities",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of entity definitions [{name, type, expr}] declaring primary/foreign/unique keys"
       },
       {
         "name": "dimensions",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of dimension definitions [{name, type, expr, label}] for slicing metrics"
       },
       {
         "name": "measures",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of measure definitions [{name, agg, expr, label}] as building blocks for metrics"
       }
     ],
     "dbt_metric": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the metric row"
       },
       {
         "name": "project_id",
         "type": "INTEGER",
-        "fk": "dbt_project.id"
+        "fk": "dbt_project.id",
+        "description": "References dbt_project.id \u2014 the project that owns this metric definition"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Unique machine-readable metric name within the project (e.g. monthly_revenue)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Business definition of what this metric measures and how it should be interpreted"
       },
       {
         "name": "label",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-friendly display name shown in BI tools (e.g. 'Monthly Revenue USD')"
       },
       {
         "name": "type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Metric type per dbt Semantic Layer spec: simple, ratio, cumulative, or derived"
       },
       {
         "name": "type_params",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Type-specific parameters (e.g. {measure, numerator, denominator} depending on metric type)"
       },
       {
         "name": "filter",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Optional WHERE-clause filter applied to the metric before aggregation (dbt filter syntax)"
       },
       {
         "name": "dimensions",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of dimension names along which this metric can be queried and sliced"
       },
       {
         "name": "meta",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Arbitrary key-value metadata dict for BI tool hints, ownership, or SLA info"
       }
     ],
     "olap_dimension": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the dimension row"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Machine-readable dimension name used in cube and metric references (e.g. date, region)"
       },
       {
         "name": "label",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-friendly display name shown in BI tools and pivot tables"
       },
       {
         "name": "dimension_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Dimension type: categorical, time, or geographic \u2014 governs how BI tools render it"
       },
       {
         "name": "source_table",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Fully-qualified source table or view providing dimension members (schema.table)"
       },
       {
         "name": "key_column",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Column in source_table used as the join key when linking to fact tables"
       },
       {
         "name": "label_column",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Column in source_table providing the human-readable member label for display"
       },
       {
         "name": "hierarchies",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Ordered hierarchy level definitions [{name, column, label}] for drill-down (e.g. year > quarter > month)"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Additional non-hierarchical attribute columns [{name, column, label}] on this dimension"
       }
     ],
     "olap_cube": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the cube row"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Unique cube name used to identify this OLAP definition (e.g. sales_cube)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Business description of what business process this cube models"
       },
       {
         "name": "fact_table",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Fully-qualified fact table or materialized view serving as the cube's grain (schema.table)"
       },
       {
         "name": "measures",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of measure definitions [{name, agg, expr, format_string}] pre-aggregated in this cube"
       },
       {
         "name": "dimension_ids",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of olap_dimension.id integers representing dimensions attached to this cube"
       },
       {
         "name": "refresh_schedule",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Cron expression or named schedule for pre-aggregation refresh (e.g. '0 3 * * *')"
       },
       {
         "name": "last_refreshed_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent completed pre-aggregation refresh for this cube"
       }
     ]
   },

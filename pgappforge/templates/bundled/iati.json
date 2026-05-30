@@ -1,5 +1,6 @@
 {
   "name": "iati",
+  "schema": "iati",
   "label": "IATI (International Aid)",
   "description": "International Aid Transparency Initiative \u2014 1500+ NGOs and governments publish aid data",
   "color": "#1abc9c",
@@ -12,205 +13,256 @@
     "government",
     "transparency"
   ],
+  "table_notes": {
+    "iati_organisation": "Publishing organisations (donors, implementers, NGOs) identified by their IATI org-ref and typed via the IATI OrganisationType codelist.",
+    "iati_activity": "Core project/programme record linking a reporting organisation to a set of transactions, budgets, and results; status and scope follow IATI Activity Status and Activity Scope codelists.",
+    "iati_transaction": "Individual financial flows (commitments, disbursements, expenditures, reimbursements) attached to an activity with provider and receiver organisations.",
+    "iati_budget": "Approved or indicative budget periods for an activity, used to compare planned spend against actual transactions over time.",
+    "iati_result": "Outcome and output results declared for an activity, with JSONB indicators storing target and actual values per reporting period."
+  },
   "tables": {
     "iati_organisation": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal joins"
       },
       {
         "name": "ref",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "IATI organisation identifier (e.g. GB-CHC-1068839); globally unique per IATI standard"
       },
       {
         "name": "name",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual organisation name; JSONB array of {lang, text} objects per IATI narrative element"
       },
       {
         "name": "type_code",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "IATI OrganisationType codelist code (e.g. 10=Government, 21=International NGO, 40=Multilateral)"
       },
       {
         "name": "country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country where the organisation is registered"
       }
     ],
     "iati_activity": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key"
       },
       {
         "name": "iati_identifier",
         "type": "VARCHAR(200)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Globally unique IATI activity identifier (reporting-org-ref + activity code, e.g. GB-1-201820)"
       },
       {
         "name": "reporting_org_id",
         "type": "INTEGER",
-        "fk": "iati_organisation.id"
+        "fk": "iati_organisation.id",
+        "description": "Organisation responsible for publishing this activity record; references iati_organisation.id"
       },
       {
         "name": "title",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual activity title; JSONB array of {lang, text} IATI narrative objects"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual activity description; JSONB array of {type, lang, text} where type follows IATI DescriptionType codelist"
       },
       {
         "name": "status_code",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI ActivityStatus codelist (1=Pipeline, 2=Active, 3=Finalisation, 4=Closed, 5=Cancelled, 6=Suspended)"
       },
       {
         "name": "activity_scope",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI ActivityScope codelist indicating geographic coverage (1=Global, 3=Regional, 4=Multi-national, 5=National)"
       },
       {
         "name": "start_planned",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Planned activity start date as declared in the publisher's IATI file"
       },
       {
         "name": "end_planned",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Planned activity end date as declared in the publisher's IATI file"
       },
       {
         "name": "start_actual",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Actual date the activity began implementation"
       },
       {
         "name": "end_actual",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Actual date the activity was completed or closed"
       },
       {
         "name": "collaboration_type",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI CollaborationType codelist (1=Bilateral, 2=Multilateral, 3=Bilateral, core, 4=Multilateral, core)"
       },
       {
         "name": "default_currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code applied to transactions that omit an explicit currency"
       },
       {
         "name": "last_updated",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the publisher last updated this activity in their IATI data file"
       }
     ],
     "iati_transaction": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal joins"
       },
       {
         "name": "activity_id",
         "type": "UUID",
-        "fk": "iati_activity.id"
+        "fk": "iati_activity.id",
+        "description": "Activity this financial flow belongs to; references iati_activity.id"
       },
       {
         "name": "transaction_type",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI TransactionType codelist (1=Incoming Funds, 2=Outgoing Commitment, 3=Disbursement, 4=Expenditure, 11=Credit Guarantee)"
       },
       {
         "name": "transaction_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the financial transaction was executed or recorded"
       },
       {
         "name": "value",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Transaction amount in the specified currency (positive for all types per IATI convention)"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for this transaction (overrides activity default_currency if set)"
       },
       {
         "name": "provider_org_id",
         "type": "INTEGER",
-        "fk": "iati_organisation.id"
+        "fk": "iati_organisation.id",
+        "description": "Organisation providing the funds in this transaction; references iati_organisation.id"
       },
       {
         "name": "receiver_org_id",
         "type": "INTEGER",
-        "fk": "iati_organisation.id"
+        "fk": "iati_organisation.id",
+        "description": "Organisation receiving the funds in this transaction; references iati_organisation.id"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual narrative explaining the purpose of this transaction; JSONB array of {lang, text} objects"
       },
       {
         "name": "sector_code",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "DAC 5-digit sector code or IATI SectorVocabulary code indicating thematic purpose of the spend"
       },
       {
         "name": "country_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 code of the recipient country for this transaction"
       }
     ],
     "iati_budget": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal joins"
       },
       {
         "name": "activity_id",
         "type": "UUID",
-        "fk": "iati_activity.id"
+        "fk": "iati_activity.id",
+        "description": "Activity this budget period belongs to; references iati_activity.id"
       },
       {
         "name": "budget_type",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI BudgetType codelist (1=Original, 2=Revised)"
       },
       {
         "name": "period_start",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Start date of the budget period (typically aligned to fiscal year)"
       },
       {
         "name": "period_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "End date of the budget period (typically aligned to fiscal year)"
       },
       {
         "name": "value",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Budgeted amount for this period in the specified currency"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for this budget value (overrides activity default_currency if set)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI BudgetStatus codelist (1=Indicative, 2=Committed)"
       }
     ],
     "iati_result": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal joins"
       },
       {
         "name": "activity_id",
         "type": "UUID",
-        "fk": "iati_activity.id"
+        "fk": "iati_activity.id",
+        "description": "Activity this result framework entry belongs to; references iati_activity.id"
       },
       {
         "name": "result_type",
-        "type": "VARCHAR(3)"
+        "type": "VARCHAR(3)",
+        "description": "IATI ResultType codelist (1=Output, 2=Outcome, 3=Impact, 9=Other)"
       },
       {
         "name": "title",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual result title; JSONB array of {lang, text} IATI narrative objects"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual result description; JSONB array of {lang, text} IATI narrative objects"
       },
       {
         "name": "indicators",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of indicator objects each with {title, measure, ascending, baseline, period[{target, actual}]} per IATI schema"
       }
     ]
   },

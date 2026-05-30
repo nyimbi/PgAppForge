@@ -1,7 +1,11 @@
 {
   "name": "tmforum-sid",
+  "schema": "tmforum_sid",
   "label": "TM Forum Open API / SID",
   "description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
+  "short_description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
+  "long_description": "TM Forum's Open API suite (formerly SID) provides the universal data model for telecommunications BSS/OSS systems, covering the complete telco product/service/resource stack. The schema covers party management, customer accounts, product catalog, service instances, resource inventory, and trouble ticket management \u2014 aligned with TMF620/TMF622/TMF629/TMF632 APIs.",
+  "when_to_use": "Use for any telecom BSS/OSS application, MVNO platform, or telco API integration. TM Forum Open APIs are implemented by 850+ companies including AT&T, Deutsche Telekom, Orange, and Telef\u00f3nica. Required for TM Forum Open API certification. Essential for MVNO management systems and telecom-as-a-service platforms.",
   "color": "#e74c3c",
   "icon": "fa-network-wired",
   "version": "22.5",
@@ -12,246 +16,303 @@
     "enterprise",
     "global"
   ],
+  "table_notes": {
+    "tmf_party": "Root entity for any actor in the system (individual person, organization, or legal entity) per TMF632 Party Management API.",
+    "tmf_customer": "Links a party to a commercial customer account with billing state, credit limit, and lifecycle tracking per TMF629 Customer Management API.",
+    "tmf_product": "Catalog entry for a sellable product offering (voice plan, data bundle, device) with pricing and validity window per TMF620 Product Catalog API.",
+    "tmf_service": "Active service instance provisioned for a customer, binding a product to network/platform resources per TMF638 Service Inventory API.",
+    "tmf_resource": "Physical or logical network resource (SIM, IP address, port, node) underpinning a service instance per TMF639 Resource Inventory API.",
+    "tmf_trouble_ticket": "Customer-facing or internal fault or request ticket with priority, severity, and resolution lifecycle per TMF621 Trouble Ticket API."
+  },
   "tables": {
     "tmf_party": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Globally unique party identifier (UUID v4/v7)"
       },
       {
         "name": "party_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Discriminator: 'Individual', 'Organization', or 'LegalEntity' per TMF632 party type coding"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Full display name: legal name for organizations, given+family name for individuals"
       },
       {
         "name": "tax_exempt_certificate",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Tax exemption certificate number; NULL means standard tax applies"
       },
       {
         "name": "credit_rating",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Credit rating record(s): [{ratingAgency, ratingScore, validFor: {startDateTime, endDateTime}}]"
       },
       {
         "name": "contact_medium",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Contact channels: [{mediumType, preferred, characteristic: {emailAddress, phoneNumber, ...}}]"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether the party is currently active; false soft-deletes the record"
       }
     ],
     "tmf_customer": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Globally unique customer account identifier"
       },
       {
         "name": "party_id",
         "type": "UUID",
-        "fk": "tmf_party.id"
+        "fk": "tmf_party.id",
+        "description": "References the underlying party (person or org) that owns this account"
       },
       {
         "name": "account_number",
         "type": "VARCHAR(50)",
-        "unique": true
+        "unique": true,
+        "description": "Human-readable billing account number; unique across all customers"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Account lifecycle state: 'active', 'suspended', 'closed', 'pendingValidation' per TMF629"
       },
       {
         "name": "customer_since",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the customer relationship was established (used for tenure discounts and churn analysis)"
       },
       {
         "name": "credit_limit",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Maximum outstanding balance allowed before service suspension (in account currency)"
       },
       {
         "name": "balance",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Current outstanding balance; negative means credit, positive means amount owed"
       },
       {
         "name": "segment",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Commercial segmentation label: 'consumer', 'SME', 'enterprise', 'wholesale', etc."
       }
     ],
     "tmf_product": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Globally unique product offering identifier"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Marketable product name shown to customers (e.g. 'Unlimited 5G Plan')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full marketing description of the product offering"
       },
       {
         "name": "product_class",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "SID product class: 'ProductOffering', 'ProductSpec', 'BundledProductOffering', etc."
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Catalog lifecycle state: 'active', 'endOfSale', 'obsolete', 'draft' per TMF620"
       },
       {
         "name": "start_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date from which this product can be sold or provisioned"
       },
       {
         "name": "end_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date after which new subscriptions are no longer accepted (NULL = no expiry)"
       },
       {
         "name": "price",
-        "type": "NUMERIC(12,4)"
+        "type": "NUMERIC(12,4)",
+        "description": "Base recurring or one-time price in the currency specified by the currency column"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for the price (e.g. USD, EUR, GBP)"
       },
       {
         "name": "characteristics",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Flexible product attributes: [{name, value, valueType, unitOfMeasure}] per TMF620 ProductCharacteristic"
       }
     ],
     "tmf_service": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Globally unique service instance identifier"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable service instance label (e.g. 'Mobile Line +1-555-0100')"
       },
       {
         "name": "service_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Service category: 'mobile', 'broadband', 'voip', 'iptv', 'cloud' per TMF638 serviceType"
       },
       {
         "name": "state",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Service lifecycle state: 'active', 'inactive', 'terminated', 'pendingActive' per TMF638"
       },
       {
         "name": "customer_id",
         "type": "UUID",
-        "fk": "tmf_customer.id"
+        "fk": "tmf_customer.id",
+        "description": "References the customer account that subscribes to this service"
       },
       {
         "name": "product_id",
         "type": "UUID",
-        "fk": "tmf_product.id"
+        "fk": "tmf_product.id",
+        "description": "References the product offering that defines this service's commercial terms"
       },
       {
         "name": "started_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the service was activated and began incurring charges"
       },
       {
         "name": "ended_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the service was deactivated or terminated (NULL if still active)"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Service-specific configuration: [{name, value}] e.g. MSISDN, IMSI, bandwidth, QoS class"
       }
     ],
     "tmf_resource": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Globally unique resource instance identifier"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable resource label (e.g. 'SIM 8944500102344567891', 'Port GE-0/0/1')"
       },
       {
         "name": "resource_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "TMF639 resource class: 'PhysicalResource', 'LogicalResource', 'CompoundResource'"
       },
       {
         "name": "category",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Resource category: 'SIM', 'IPAddress', 'NetworkElement', 'VirtualMachine', etc."
       },
       {
         "name": "state",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Resource operational state: 'available', 'reserved', 'inUse', 'retired' per TMF639"
       },
       {
         "name": "service_id",
         "type": "UUID",
-        "fk": "tmf_service.id"
+        "fk": "tmf_service.id",
+        "description": "References the service instance this resource is currently allocated to (NULL if unassigned)"
       },
       {
         "name": "characteristics",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Technical attributes: [{name, value, valueType}] e.g. IMEI, MAC address, VLAN, IP address"
       },
       {
         "name": "place",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Physical location: {streetNr, streetName, city, stateOrProvince, country, geographicPoint}"
       }
     ],
     "tmf_trouble_ticket": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Globally unique trouble ticket identifier"
       },
       {
         "name": "ticket_number",
         "type": "VARCHAR(50)",
-        "unique": true
+        "unique": true,
+        "description": "Human-readable ticket reference shown to customers and agents (e.g. INC-20240501-0042)"
       },
       {
         "name": "customer_id",
         "type": "UUID",
-        "fk": "tmf_customer.id"
+        "fk": "tmf_customer.id",
+        "description": "References the customer account that raised or is affected by this ticket"
       },
       {
         "name": "title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Short summary of the fault or request (shown in ticket list views)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full symptom description, steps to reproduce, and contextual detail provided by reporter"
       },
       {
         "name": "priority",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Business impact priority: '1-Critical', '2-High', '3-Medium', '4-Low' per TMF621"
       },
       {
         "name": "severity",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Technical severity level: 'critical', 'major', 'minor', 'cleared' per TMF621"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Ticket lifecycle state: 'new', 'inProgress', 'pending', 'resolved', 'closed' per TMF621"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the ticket was first created (auto-set to server time)"
       },
       {
         "name": "resolved_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the fault was resolved or request fulfilled (NULL if still open)"
       }
     ]
-  },
-  "short_description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
-  "long_description": "TM Forum's Open API suite (formerly SID) provides the universal data model for telecommunications BSS/OSS systems, covering the complete telco product/service/resource stack. The schema covers party management, customer accounts, product catalog, service instances, resource inventory, and trouble ticket management \u2014 aligned with TMF620/TMF622/TMF629/TMF632 APIs.",
-  "when_to_use": "Use for any telecom BSS/OSS application, MVNO platform, or telco API integration. TM Forum Open APIs are implemented by 850+ companies including AT&T, Deutsche Telekom, Orange, and Telef\u00f3nica. Required for TM Forum Open API certification. Essential for MVNO management systems and telecom-as-a-service platforms."
+  }
 }

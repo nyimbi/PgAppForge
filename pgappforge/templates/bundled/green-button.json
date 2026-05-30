@@ -1,5 +1,6 @@
 {
   "name": "green-button",
+  "schema": "green_button",
   "label": "Green Button / ESPI",
   "description": "Energy consumption data standard \u2014 all US utilities must provide Green Button data",
   "color": "#27ae60",
@@ -13,128 +14,160 @@
     "smart-home",
     "espi"
   ],
+  "table_notes": {
+    "gb_usage_point": "Represents a single metered service location (e.g. a home or business) with its utility account and tariff context.",
+    "gb_meter_reading": "Captures the reading configuration for a meter at a usage point, including unit of measure and sampling interval.",
+    "gb_interval_block": "Groups a contiguous time-series window of interval readings delivered in a single ESPI data feed batch.",
+    "gb_interval_reading": "Individual energy measurement sample within an interval block; the leaf-level fact table for consumption analysis."
+  },
   "tables": {
     "gb_usage_point": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for the usage point"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Utility-assigned identifier for this service point (stable across feeds)"
       },
       {
         "name": "customer_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Utility account or customer number that owns this service point"
       },
       {
         "name": "service_category",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "ESPI service category code: electricity, gas, water, or time (ESPI ServiceKind enumeration)"
       },
       {
         "name": "meter_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Physical meter classification (e.g. AMI smart meter, AMR, analog); informs data availability"
       },
       {
         "name": "service_address",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Street address of the metered premises for geographic lookup and customer display"
       },
       {
         "name": "utility_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the utility company supplying service at this point"
       },
       {
         "name": "tariff_profile",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Rate schedule or tariff code under which this usage point is billed (e.g. E-TOU-C)"
       }
     ],
     "gb_meter_reading": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this reading configuration"
       },
       {
         "name": "usage_point_id",
         "type": "UUID",
-        "fk": "gb_usage_point.id"
+        "fk": "gb_usage_point.id",
+        "description": "References gb_usage_point.id; the service location this reading belongs to"
       },
       {
         "name": "reading_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "ESPI ReadingType descriptor (e.g. net consumption, net generation, demand); distinguishes import vs export"
       },
       {
         "name": "uom",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Unit of measure code per ESPI UnitSymbol: Wh, W, m3, ft3, therm, etc."
       },
       {
         "name": "power_of_ten_multiplier",
         "type": "SMALLINT",
-        "default": "0"
+        "default": "0",
+        "description": "Scale factor: raw value \u00d7 10^n gives the actual quantity (e.g. -3 = milli, 3 = kilo)"
       },
       {
         "name": "interval_length_seconds",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Duration of each individual reading sample in seconds (typically 900 for 15-min, 3600 for hourly)"
       },
       {
         "name": "accumulation_behaviour",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "ESPI AccumulationKind: deltaData (interval energy), summation (cumulative register), etc."
       }
     ],
     "gb_interval_block": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this interval block"
       },
       {
         "name": "meter_reading_id",
         "type": "UUID",
-        "fk": "gb_meter_reading.id"
+        "fk": "gb_meter_reading.id",
+        "description": "References gb_meter_reading.id; the reading configuration this block belongs to"
       },
       {
         "name": "start_at",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "UTC timestamp of the first interval in this block (wall-clock start of delivery window)"
       },
       {
         "name": "duration_seconds",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Total wall-clock span of the block in seconds (sum of all contained interval durations)"
       },
       {
         "name": "num_readings",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Expected count of interval readings in this block; use to detect incomplete feeds"
       }
     ],
     "gb_interval_reading": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incrementing surrogate key; BIGSERIAL supports high-volume 15-min meter feeds"
       },
       {
         "name": "interval_block_id",
         "type": "UUID",
-        "fk": "gb_interval_block.id"
+        "fk": "gb_interval_block.id",
+        "description": "References gb_interval_block.id; the delivery batch this reading was part of"
       },
       {
         "name": "start_at",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "UTC start of this specific measurement interval (index for time-series queries)"
       },
       {
         "name": "duration_seconds",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Duration of this individual sample in seconds (matches meter_reading.interval_length_seconds)"
       },
       {
         "name": "value",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Raw measured quantity; apply power_of_ten_multiplier from gb_meter_reading to get physical units"
       },
       {
         "name": "quality_of_reading",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "ESPI QualityOfReading code: valid, estimated, projected, questionable, derived, etc."
       }
     ]
   },

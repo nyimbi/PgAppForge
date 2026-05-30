@@ -405,3 +405,9 @@ try:
     forge.add_command(screenshot_group)
 except ImportError:
     pass
+# Template management commands
+try:
+    from .template_commands import templates
+    forge.add_command(templates)
+except ImportError:
+    pass

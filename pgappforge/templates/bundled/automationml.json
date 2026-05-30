@@ -1,5 +1,6 @@
 {
   "name": "automationml",
+  "schema": "automationml",
   "label": "AutomationML (Manufacturing)",
   "description": "Factory planning and engineering data exchange for manufacturing digital twins",
   "color": "#7f8c8d",
@@ -12,134 +13,166 @@
     "industry40",
     "factory"
   ],
+  "short_description": "Factory planning and engineering data exchange for manufacturing digital twins",
+  "long_description": "AutomationML (IEC 62714) is the standard for engineering data exchange in discrete manufacturing, using CAEX (Computer Aided Engineering Exchange) as its XML foundation. The schema captures engineering projects, instance hierarchies (machine layouts), internal elements (individual components), and connections (signal flows and physical links).",
+  "when_to_use": "Use for factory planning systems, engineering CAD data management, production line commissioning tools, or manufacturing digital twin platforms. Supported by Siemens TIA Portal, EPLAN, and ABB Ability. Required for data exchange between planning (PLC programming), simulation (MATLAB/Simulink), and execution (SCADA/MES) tools in IEC 62264-aligned architectures.",
+  "table_notes": {
+    "aml_project": "Top-level AML document container; each row is one .aml file import with authorship and version metadata.",
+    "aml_instance_hierarchy": "Named grouping of physical/logical elements within a project; maps to the CAEX InstanceHierarchy element in IEC 62714.",
+    "aml_internal_element": "Individual engineering component (device, cable, signal, software module) nested inside a hierarchy; supports self-referential parent/child trees for assemblies.",
+    "aml_connection": "Directed or undirected link between two InternalElement interface ports; represents signal cables, communication links, or kinematic constraints."
+  },
   "tables": {
     "aml_project": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this AML project import"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable project name, typically from the CAEX/@Name attribute"
       },
       {
         "name": "version",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "AML file version string (e.g. '2.10'), from CAEX/@Version"
       },
       {
         "name": "author",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Engineering author or originating tool that produced this AML file"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this project record was first imported into the database"
       },
       {
         "name": "modified_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent update to this project record"
       }
     ],
     "aml_instance_hierarchy": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this instance hierarchy"
       },
       {
         "name": "project_id",
         "type": "UUID",
-        "fk": "aml_project.id"
+        "fk": "aml_project.id",
+        "description": "Reference to the owning aml_project; cascade-delete if project is removed"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of this hierarchy (e.g. 'PlantTopology', 'ElectricalDesign')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the hierarchy's engineering scope or purpose"
       }
     ],
     "aml_internal_element": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this engineering component element"
       },
       {
         "name": "hierarchy_id",
         "type": "UUID",
-        "fk": "aml_instance_hierarchy.id"
+        "fk": "aml_instance_hierarchy.id",
+        "description": "Reference to the containing aml_instance_hierarchy"
       },
       {
         "name": "parent_id",
         "type": "UUID",
-        "fk": "aml_internal_element.id"
+        "fk": "aml_internal_element.id",
+        "description": "Self-referential FK to parent element; NULL for top-level elements in the hierarchy"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Component name as it appears in the engineering tool (e.g. 'PLC_Rack_01')"
       },
       {
         "name": "class_path",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Dot-separated SystemUnitClass or RoleClass path (e.g. 'AutomationComponent/PLC/S7-300')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text engineering description or notes for this component"
       },
       {
         "name": "role_classes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of applied RoleClass references; each entry: {name, class_path, supported_role_class}"
       },
       {
         "name": "interface_classes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of defined interfaces (ports); each entry: {name, class_path, id, direction}"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Key-value engineering attributes from CAEX Attribute elements; e.g. {IP: '192.168.1.10', Rack: 0}"
       },
       {
         "name": "geometry",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Optional 3D placement data for digital-twin visualization; e.g. {x, y, z, rx, ry, rz}"
       }
     ],
     "aml_connection": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this connection record"
       },
       {
         "name": "hierarchy_id",
         "type": "UUID",
-        "fk": "aml_instance_hierarchy.id"
+        "fk": "aml_instance_hierarchy.id",
+        "description": "Reference to the aml_instance_hierarchy that owns this connection"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Optional engineering label for the connection (e.g. 'X1_to_Motor_PE')"
       },
       {
         "name": "partner_side_a",
         "type": "UUID",
-        "fk": "aml_internal_element.id"
+        "fk": "aml_internal_element.id",
+        "description": "Source element of the connection; references aml_internal_element"
       },
       {
         "name": "partner_side_b",
         "type": "UUID",
-        "fk": "aml_internal_element.id"
+        "fk": "aml_internal_element.id",
+        "description": "Target element of the connection; references aml_internal_element"
       },
       {
         "name": "connection_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Engineering link type (e.g. 'Signal', 'Power', 'Kinematic', 'Communication')"
       }
     ]
-  },
-  "short_description": "Factory planning and engineering data exchange for manufacturing digital twins",
-  "long_description": "AutomationML (IEC 62714) is the standard for engineering data exchange in discrete manufacturing, using CAEX (Computer Aided Engineering Exchange) as its XML foundation. The schema captures engineering projects, instance hierarchies (machine layouts), internal elements (individual components), and connections (signal flows and physical links).",
-  "when_to_use": "Use for factory planning systems, engineering CAD data management, production line commissioning tools, or manufacturing digital twin platforms. Supported by Siemens TIA Portal, EPLAN, and ABB Ability. Required for data exchange between planning (PLC programming), simulation (MATLAB/Simulink), and execution (SCADA/MES) tools in IEC 62264-aligned architectures."
+  }
 }

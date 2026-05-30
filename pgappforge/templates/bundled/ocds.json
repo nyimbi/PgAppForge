@@ -1,5 +1,6 @@
 {
   "name": "ocds",
+  "schema": "ocds",
   "label": "OCDS (Procurement)",
   "description": "Open Contracting Data Standard \u2014 used by 70+ governments",
   "color": "#8e44ad",
@@ -13,251 +14,314 @@
     "who",
     "open-data"
   ],
+  "table_notes": {
+    "ocds_buyer": "Procuring entities (government agencies, ministries, local authorities) that initiate and manage contracting processes.",
+    "ocds_supplier": "Companies or individuals who bid on or are awarded public contracts; roles field captures OCDS party role codes.",
+    "ocds_tender": "Core contracting process record from first notice through close of bidding; one row per OCID (globally unique contracting process ID).",
+    "ocds_award": "Decision to award a contract to a specific supplier following evaluation of bids submitted against a tender.",
+    "ocds_contract": "Legally binding agreement signed between buyer and supplier following an award; tracks execution period and value.",
+    "ocds_milestone": "Key dates and deliverables within a contracting process (e.g. site visit, clarification deadline, delivery date)."
+  },
   "tables": {
     "ocds_buyer": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the buyer record"
       },
       {
         "name": "identifier",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Buyer's official identifier string combining scheme and ID (e.g. GB-COH-12345678)"
       },
       {
         "name": "scheme",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "OCDS organization identifier scheme code (e.g. GB-COH, US-EIN). See org-id.guide."
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Legal name of the buying organization as it appears in official records"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured postal address: {streetAddress, locality, region, postalCode, countryName}"
       },
       {
         "name": "contact_point",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Primary contact details: {name, email, telephone, faxNumber, url}"
       }
     ],
     "ocds_supplier": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the supplier record"
       },
       {
         "name": "identifier",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Supplier's official identifier string combining scheme and ID (e.g. GB-COH-98765432)"
       },
       {
         "name": "scheme",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "OCDS organization identifier scheme code (e.g. GB-COH, US-EIN). See org-id.guide."
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Legal or trading name of the supplier organization"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured postal address: {streetAddress, locality, region, postalCode, countryName}"
       },
       {
         "name": "contact_point",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Primary contact details: {name, email, telephone, faxNumber, url}"
       },
       {
         "name": "roles",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "OCDS party role codes array (e.g. [\"supplier\", \"tenderer\", \"contactPoint\"])"
       }
     ],
     "ocds_tender": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key for the tender row"
       },
       {
         "name": "ocid",
         "type": "VARCHAR(100)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "OCDS globally unique contracting process identifier (prefix:identifier format, e.g. ocds-abc123-001)"
       },
       {
         "name": "title",
-        "type": "VARCHAR(1024)"
+        "type": "VARCHAR(1024)",
+        "description": "Short human-readable title of the contracting process"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full narrative description of what is being procured"
       },
       {
         "name": "buyer_id",
         "type": "INTEGER",
-        "fk": "ocds_buyer.id"
+        "fk": "ocds_buyer.id",
+        "description": "References ocds_buyer \u2014 the procuring entity initiating this contracting process"
       },
       {
         "name": "procurement_method",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "OCDS procurement method code: open, selective, limited, or direct"
       },
       {
         "name": "procurement_method_details",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text local description of the procurement method (national terminology)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "OCDS tender status code: planning, planned, active, cancelled, unsuccessful, complete, withdrawn"
       },
       {
         "name": "date_published",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when this tender notice was first published"
       },
       {
         "name": "tender_period_start",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Start of the period during which bids can be submitted"
       },
       {
         "name": "tender_period_end",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Deadline for submission of bids (closing date)"
       },
       {
         "name": "enquiry_period_end",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Deadline for suppliers to submit clarification questions"
       },
       {
         "name": "value_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Estimated total value of the contract to be awarded"
       },
       {
         "name": "value_currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for value_amount (e.g. USD, EUR, GBP)"
       },
       {
         "name": "main_procurement_category",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "OCDS category code: goods, works, or services"
       },
       {
         "name": "number_of_tenderers",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Count of valid bids received by the close of the tender period"
       }
     ],
     "ocds_award": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key for the award record"
       },
       {
         "name": "tender_id",
         "type": "UUID",
-        "fk": "ocds_tender.id"
+        "fk": "ocds_tender.id",
+        "description": "References ocds_tender \u2014 the contracting process this award belongs to"
       },
       {
         "name": "supplier_id",
         "type": "INTEGER",
-        "fk": "ocds_supplier.id"
+        "fk": "ocds_supplier.id",
+        "description": "References ocds_supplier \u2014 the winning bidder receiving this award"
       },
       {
         "name": "title",
-        "type": "VARCHAR(1024)"
+        "type": "VARCHAR(1024)",
+        "description": "Short title of this award (may differ from tender title for multi-lot procurements)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "OCDS award status code: pending, active, cancelled, unsuccessful"
       },
       {
         "name": "date",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date and time the award decision was officially made"
       },
       {
         "name": "value_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Monetary value of this specific award"
       },
       {
         "name": "value_currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for value_amount (e.g. USD, EUR, GBP)"
       },
       {
         "name": "items",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of awarded line items: [{id, description, quantity, unit, classification}]"
       }
     ],
     "ocds_contract": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key for the contract record"
       },
       {
         "name": "award_id",
         "type": "UUID",
-        "fk": "ocds_award.id"
+        "fk": "ocds_award.id",
+        "description": "References ocds_award \u2014 the award decision that gave rise to this contract"
       },
       {
         "name": "title",
-        "type": "VARCHAR(1024)"
+        "type": "VARCHAR(1024)",
+        "description": "Official title of the signed contract document"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "OCDS contract status code: pending, active, cancelled, terminated"
       },
       {
         "name": "period_start",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date when contract obligations begin (commencement date)"
       },
       {
         "name": "period_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date when contract obligations expire (completion/expiry date)"
       },
       {
         "name": "value_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Total contracted value as stated in the signed agreement"
       },
       {
         "name": "value_currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for value_amount (e.g. USD, EUR, GBP)"
       },
       {
         "name": "date_signed",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the contract was formally executed by both parties"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Narrative description of the contracted scope of work or supply"
       }
     ],
     "ocds_milestone": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the milestone record"
       },
       {
         "name": "tender_id",
         "type": "UUID",
-        "fk": "ocds_tender.id"
+        "fk": "ocds_tender.id",
+        "description": "References ocds_tender \u2014 the contracting process this milestone belongs to"
       },
       {
         "name": "type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "OCDS milestone type: preProcurement, approval, engagement, assessment, delivery, reporting"
       },
       {
         "name": "title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Short label for this milestone (e.g. 'Bid submission deadline', 'Final delivery')"
       },
       {
         "name": "due_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Planned date by which this milestone should be reached"
       },
       {
         "name": "date_met",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Actual date the milestone was achieved (NULL if not yet met)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "OCDS milestone status code: scheduled, met, notMet, partiallyMet"
       }
     ]
   },

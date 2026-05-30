@@ -52,12 +52,12 @@ def templates_list(tag):
         click.echo("No templates found.")
         return
 
-    click.echo(f"{'NAME':<20} {'LABEL':<28} {'TABLES':>6}  {'SOURCE':<10} TAGS")
-    click.echo("─" * 80)
+    click.echo(f"{'NAME':<22} {'SCHEMA':<18} {'TABLES':>6}  {'SOURCE':<10} TAGS")
+    click.echo("─" * 84)
     for t in items:
         tags = ", ".join(t.get("tags", [])[:3])
         click.echo(
-            f"{t['name']:<20} {t['label']:<28} {t['table_count']:>6}  "
+            f"{t['name']:<22} {t.get('schema',''):<18} {t['table_count']:>6}  "
             f"{t['source']:<10} {tags}"
         )
     click.echo(f"\n{len(items)} template(s) available.")
@@ -79,10 +79,13 @@ def templates_info(name):
     click.echo(f"  {tmpl.get('label', name)}")
     click.echo(f"{'─'*60}")
     click.echo(f"  Name:        {tmpl.get('name')}")
+    click.echo(f"  Schema:      {tmpl.get('schema', tmpl.get('name','').replace('-','_'))}")
     click.echo(f"  Version:     {tmpl.get('version', 'unknown')}")
     click.echo(f"  Description: {tmpl.get('description', '')}")
     click.echo(f"  Source:      {tmpl.get('source_url', 'bundled')}")
     click.echo(f"  Tags:        {', '.join(tmpl.get('tags', []))}")
+    if tmpl.get('extensions'):
+        click.echo(f"  Extensions:  {', '.join(tmpl['extensions'])} (auto-installed on apply)")
     click.echo(f"\n  Tables ({len(tmpl.get('tables', {}))}):")
     for tname, cols in tmpl.get("tables", {}).items():
         col_names = [c["name"] for c in cols[:4]]
@@ -169,11 +172,20 @@ def templates_remove(name):
 def templates_apply(name, database_uri, dry_run):
     """Apply a template's tables to a PostgreSQL database.
 
-    Creates tables that don't already exist (IF NOT EXISTS).
+    Creates the template's schema (e.g. icd10, fhir_r4) then creates all
+    tables within it. Existing tables are left untouched (IF NOT EXISTS).
+
+    Example::
+
+        flask forge templates apply icd10 -d postgresql:///mydb
+        # Creates: icd10.icd10_chapter, icd10.icd10_code, ...
+
+        flask forge templates apply icd10 -d postgresql:///mydb --dry-run
+        # Prints SQL without executing
     """
     from pgappforge.templates import TemplateRegistry
     from pgappforge.views.erd_schema_manager import ERDSchemaManager
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine, text as sa_text
 
     reg = TemplateRegistry()
     try:
@@ -182,23 +194,35 @@ def templates_apply(name, database_uri, dry_run):
         click.echo(f"❌ {exc}", err=True)
         sys.exit(1)
 
+    schema = tmpl.get("schema", name.replace("-", "_"))
     tables = tmpl.get("tables", {})
     ops = []
     for tname, cols in tables.items():
-        pg_cols = []
-        for c in cols:
-            pg_cols.append({
+        pg_cols = [
+            {
                 "name": c["name"],
                 "type": c.get("type", "TEXT"),
                 "pk": c.get("pk", False),
                 "nullable": c.get("nullable", True),
                 "default": c.get("default"),
                 "unique": c.get("unique", False),
-            })
-        ops.append({"op": "create_table", "table": tname, "columns": pg_cols})
+            }
+            for c in cols
+        ]
+        ops.append({"op": "create_table", "table": tname,
+                    "schema": schema, "columns": pg_cols})
+
+    extensions = tmpl.get("extensions", [])
+    schema_ddl = f"CREATE SCHEMA IF NOT EXISTS {schema};"
+    ext_ddl = [f"CREATE EXTENSION IF NOT EXISTS {ext};" for ext in extensions]
 
     if dry_run:
-        click.echo(f"# Would apply {len(ops)} table(s) from template {name!r}:")
+        click.echo(f"# Template: {name!r}  schema: {schema}")
+        if extensions:
+            click.echo(f"# Required extensions: {', '.join(extensions)}")
+        for sql in ext_ddl:
+            click.echo(sql)
+        click.echo(schema_ddl)
         engine = create_engine(database_uri)
         mgr = ERDSchemaManager(engine)
         for op in ops:
@@ -210,8 +234,17 @@ def templates_apply(name, database_uri, dry_run):
                 click.echo(f"# Error generating SQL for {op['table']}: {exc}")
         return
 
-    click.echo(f"Applying {len(ops)} tables from {name!r} …")
+    click.echo(f"Schema: {schema}")
     engine = create_engine(database_uri)
+    with engine.connect() as conn:
+        for ext in extensions:
+            conn.execute(sa_text(f"CREATE EXTENSION IF NOT EXISTS {ext};"))
+            click.echo(f"  ✓ Extension {ext!r} ready")
+        conn.execute(sa_text(schema_ddl))
+        conn.commit()
+    click.echo(f"  ✓ Schema {schema!r} ready")
+
+    click.echo(f"Applying {len(ops)} tables from {name!r} …")
     mgr = ERDSchemaManager(engine)
     result = mgr.apply_changes(ops)
     if result.get("errors"):
@@ -246,7 +279,7 @@ def templates_export(name, output):
 @click.option('--database-uri', '-d', required=True, help='PostgreSQL connection URI')
 @click.option('--data-dir', default=None, help='Directory containing downloaded data files')
 def templates_install_data(name, database_uri, data_dir):
-    """Load reference data for terminology schemas (SNOMED CT, LOINC, etc.).
+    """Load reference data for terminology and geographic schemas.
 
     These are large datasets that must be downloaded separately:
 

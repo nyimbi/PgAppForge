@@ -1,7 +1,11 @@
 {
   "name": "stix",
+  "schema": "stix",
   "label": "STIX 2.1 (Cybersecurity)",
   "description": "Structured Threat Intelligence Expression \u2014 used by every SIEM platform",
+  "short_description": "Structured Threat Intelligence Expression \u2014 used by every SIEM platform",
+  "long_description": "STIX 2.1 (Structured Threat Information Expression) is the OASIS standard for sharing cyber threat intelligence. The schema covers all STIX domain objects: identities (organizations), threat actors, indicators (detection patterns), malware definitions, vulnerability records, relationships between objects, and sighting events when indicators are observed.",
+  "when_to_use": "Use for SIEM platforms, threat intelligence feeds, SOC (Security Operations Center) tools, or any security analytics application. Supported by Splunk, IBM QRadar, Microsoft Sentinel, and all major SIEM vendors. MISP, OpenCTI, and TAXII servers all use STIX 2.1. Required for information sharing with ISACs (Information Sharing and Analysis Centers).",
   "color": "#2c3e50",
   "icon": "fa-shield-virus",
   "version": "2.1",
@@ -12,300 +16,370 @@
     "threat-intel",
     "oasis"
   ],
+  "table_notes": {
+    "stix_identity": "Represents a named entity (person, organization, system) that produces, consumes, or is the subject of threat intelligence.",
+    "stix_threat_actor": "Describes an adversarial actor group or individual with associated tactics, motivations, and observed activity window.",
+    "stix_indicator": "Holds a detection pattern (STIX PATTERNING language) that, when matched, indicates malicious or suspicious activity.",
+    "stix_malware": "Catalogs malicious software families and instances including type classification, capabilities, and observed lifespan.",
+    "stix_vulnerability": "Records a specific software vulnerability, typically a CVE, with CVSS scoring and external reference links.",
+    "stix_relationship": "Directed edge connecting any two STIX domain objects with a typed relationship label (e.g. uses, indicates, targets).",
+    "stix_sighting": "Records an observed occurrence of a STIX indicator or other SDO, including where and how many times it was seen."
+  },
   "tables": {
     "stix_identity": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: identity--<UUID>)"
       },
       {
         "name": "type",
         "type": "VARCHAR(50)",
-        "default": "'identity'"
+        "default": "'identity'",
+        "description": "STIX object type; always 'identity' for rows in this table"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable name of the identity (organization, person, or system)"
       },
       {
         "name": "identity_class",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "STIX identity-class OV: individual, group, system, organization, class, unknown"
       },
       {
         "name": "sectors",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of industry sectors (STIX industry-sector OV, e.g. [\"finance\", \"government\"])"
       },
       {
         "name": "contact_information",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text contact details (email, phone, address) for this identity"
       },
       {
         "name": "created_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when this STIX object was first created"
       },
       {
         "name": "modified_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent modification to this STIX object"
       }
     ],
     "stix_threat_actor": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: threat-actor--<UUID>)"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Common name or designation for the threat actor (e.g. APT28, Lazarus Group)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Narrative description of the actor's background, history, and known activities"
       },
       {
         "name": "threat_actor_types",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX threat-actor-type OV values (e.g. [\"nation-state\", \"crime-syndicate\"])"
       },
       {
         "name": "aliases",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of alternative names by which this actor is known across different vendors"
       },
       {
         "name": "first_seen",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Earliest confirmed timestamp of activity attributed to this actor"
       },
       {
         "name": "last_seen",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Most recent confirmed timestamp of activity attributed to this actor"
       },
       {
         "name": "sophistication",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "STIX sophistication OV: none, minimal, intermediate, advanced, expert, innovator, strategic"
       },
       {
         "name": "resource_level",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "STIX attack-resource-level OV: individual, club, contest, team, organization, government"
       },
       {
         "name": "primary_motivation",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "STIX attack-motivation OV for this actor's primary goal (e.g. espionage, financial-gain)"
       },
       {
         "name": "secondary_motivations",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of additional STIX attack-motivation OV values beyond the primary motivation"
       }
     ],
     "stix_indicator": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: indicator--<UUID>)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Short human-readable label for this indicator (e.g. 'Cobalt Strike C2 IP')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Analyst narrative explaining what this indicator detects and why it is significant"
       },
       {
         "name": "indicator_types",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX indicator-type OV (e.g. [\"malicious-activity\", \"compromised\"])"
       },
       {
         "name": "pattern",
         "type": "TEXT",
-        "nullable": false
+        "nullable": false,
+        "description": "Detection pattern in STIX PATTERNING language (e.g. [ipv4-addr:value = '1.2.3.4'])"
       },
       {
         "name": "pattern_type",
         "type": "VARCHAR(30)",
-        "default": "'stix'"
+        "default": "'stix'",
+        "description": "Pattern language used; STIX patterning-type OV (stix, snort, yara, sigma, etc.)"
       },
       {
         "name": "valid_from",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp from which this indicator is considered active and should trigger detections"
       },
       {
         "name": "valid_until",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp after which this indicator should no longer trigger detections (NULL = indefinite)"
       },
       {
         "name": "confidence",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Producer confidence in this indicator; 0-100 scale (100 = certain, 0 = no confidence)"
       },
       {
         "name": "labels",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of freeform label strings for ad-hoc categorization and filtering"
       }
     ],
     "stix_malware": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: malware--<UUID>)"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Canonical name of the malware sample or family (e.g. WannaCry, Emotet)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Technical and operational description of how this malware functions and spreads"
       },
       {
         "name": "malware_types",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX malware-type OV values (e.g. [\"ransomware\", \"dropper\"])"
       },
       {
         "name": "aliases",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of vendor-specific alternate names for this malware"
       },
       {
         "name": "is_family",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if this record describes a malware family rather than a specific sample"
       },
       {
         "name": "first_seen",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Earliest known date this malware was observed in the wild"
       },
       {
         "name": "last_seen",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Most recent date this malware was observed in the wild"
       },
       {
         "name": "capabilities",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX malware-capabilities OV (e.g. [\"exfiltrates-data\", \"persists-after-reboot\"])"
       },
       {
         "name": "operating_system_refs",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX software SCO IDs identifying targeted operating systems"
       }
     ],
     "stix_vulnerability": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: vulnerability--<UUID>)"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Vulnerability name; typically the CVE identifier (e.g. CVE-2021-44228)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Technical description of the vulnerability, affected components, and exploitation conditions"
       },
       {
         "name": "external_references",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX external-reference objects linking to NVD, vendor advisories, or exploits"
       },
       {
         "name": "cvss_score",
-        "type": "NUMERIC(4,1)"
+        "type": "NUMERIC(4,1)",
+        "description": "CVSS base score (0.0-10.0); higher values indicate greater severity"
       },
       {
         "name": "cvss_vector",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "CVSS vector string encoding attack vector, complexity, privileges, and impact metrics"
       },
       {
         "name": "cve_id",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "CVE identifier (format: CVE-YYYY-NNNNN) for cross-referencing NVD and vendor databases"
       },
       {
         "name": "created_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when this STIX vulnerability object was first created"
       },
       {
         "name": "modified_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent modification to this vulnerability record"
       }
     ],
     "stix_relationship": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: relationship--<UUID>)"
       },
       {
         "name": "relationship_type",
         "type": "VARCHAR(50)",
-        "nullable": false
+        "nullable": false,
+        "description": "STIX relationship-type OV label (e.g. uses, indicates, targets, attributed-to, mitigates)"
       },
       {
         "name": "source_ref",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "STIX ID of the source (subject) SDO; references any STIX domain object by its id"
       },
       {
         "name": "target_ref",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "STIX ID of the target (object) SDO; references any STIX domain object by its id"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Analyst narrative clarifying the nature or evidence basis of this relationship"
       },
       {
         "name": "start_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp from which this relationship is known to have been active"
       },
       {
         "name": "stop_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp after which this relationship is no longer considered active (NULL = ongoing)"
       },
       {
         "name": "confidence",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Producer confidence in this relationship; 0-100 scale (100 = certain)"
       }
     ],
     "stix_sighting": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "STIX 2.1 identifier (format: sighting--<UUID>)"
       },
       {
         "name": "sighting_of_ref",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "STIX ID of the SDO that was sighted (typically an indicator or threat-actor)"
       },
       {
         "name": "count",
         "type": "INTEGER",
-        "default": "1"
+        "default": "1",
+        "description": "Number of times this sighting was observed within the first_seen to last_seen window"
       },
       {
         "name": "first_seen",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Earliest timestamp at which this sighting was observed"
       },
       {
         "name": "last_seen",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Most recent timestamp at which this sighting was observed"
       },
       {
         "name": "observed_data_refs",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX observed-data SCO IDs containing the raw data supporting this sighting"
       },
       {
         "name": "where_sighted_refs",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of STIX identity IDs for organizations that observed this sighting"
       },
       {
         "name": "summary",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if this is an aggregate sighting summary rather than a discrete observation event"
       }
     ]
-  },
-  "short_description": "Structured Threat Intelligence Expression \u2014 used by every SIEM platform",
-  "long_description": "STIX 2.1 (Structured Threat Information Expression) is the OASIS standard for sharing cyber threat intelligence. The schema covers all STIX domain objects: identities (organizations), threat actors, indicators (detection patterns), malware definitions, vulnerability records, relationships between objects, and sighting events when indicators are observed.",
-  "when_to_use": "Use for SIEM platforms, threat intelligence feeds, SOC (Security Operations Center) tools, or any security analytics application. Supported by Splunk, IBM QRadar, Microsoft Sentinel, and all major SIEM vendors. MISP, OpenCTI, and TAXII servers all use STIX 2.1. Required for information sharing with ISACs (Information Sharing and Analysis Centers)."
+  }
 }

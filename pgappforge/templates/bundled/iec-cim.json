@@ -1,7 +1,11 @@
 {
   "name": "iec-cim",
+  "schema": "iec_cim",
   "label": "IEC CIM (Utilities)",
   "description": "Common Information Model \u2014 power grid standard used by all utilities",
+  "short_description": "Common Information Model \u2014 power grid standard used by all utilities",
+  "long_description": "IEC CIM (Common Information Model, standards IEC 61968/61970) is the power industry's universal data model for electric utility systems. The schema covers grid topology (substations, equipment, lines), energy consumers (loads), and time-series measurements \u2014 the minimum viable CIM subset for most utility applications.",
+  "when_to_use": "Use for SCADA systems, outage management, smart grid applications, or any tool that must exchange data with utility control systems. NERC (US), ENTSO-E (EU), and most national grid operators mandate CIM for grid data exchange. Required for compliance with FERC Order 881, EU Clean Energy Package, and UK Grid Code.",
   "color": "#f39c12",
   "icon": "fa-bolt",
   "version": "IEC 61968/61970",
@@ -13,214 +17,266 @@
     "iec",
     "regulation"
   ],
+  "table_notes": {
+    "cim_substation": "Physical substation facility where voltage is transformed; anchor point for equipment and consumer load in the grid topology.",
+    "cim_equipment": "Individual switchgear, transformer, or other powered device installed at a substation, with ratings and service status.",
+    "cim_ac_line_segment": "Overhead or underground AC conductor segment connecting two network nodes, parameterised with per-unit impedance and thermal rating.",
+    "cim_energy_consumer": "Aggregated load point (feeder or service territory) representing end-use electricity demand connected to a substation.",
+    "cim_measurement": "Time-stamped telemetry reading (voltage, current, power, etc.) associated with a specific piece of equipment."
+  },
   "tables": {
     "cim_substation": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key (UUID) uniquely identifying this substation row"
       },
       {
         "name": "mrid",
         "type": "UUID",
-        "unique": true
+        "unique": true,
+        "description": "IEC CIM Master Resource Identifier \u2014 globally unique identity used for CIM data exchange"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable substation name (e.g. 'North Bay 132kV')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text operational notes or remarks about this substation"
       },
       {
         "name": "geo_location",
-        "type": "GEOGRAPHY(POINT, 4326)"
+        "type": "GEOGRAPHY(POINT, 4326)",
+        "description": "WGS84 point geometry of the substation site; enables spatial proximity queries"
       },
       {
         "name": "region",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Geographic or administrative control region this substation belongs to"
       },
       {
         "name": "voltage_level_kv",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Primary operating voltage in kilovolts (e.g. 132, 33, 11)"
       }
     ],
     "cim_equipment": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key (UUID) uniquely identifying this equipment row"
       },
       {
         "name": "mrid",
         "type": "UUID",
-        "unique": true
+        "unique": true,
+        "description": "IEC CIM Master Resource Identifier for cross-system equipment identity"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Equipment tag or nameplate designation (e.g. 'T1', 'CB-14A')"
       },
       {
         "name": "equipment_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "CIM equipment class (e.g. PowerTransformer, Breaker, Disconnector, Capacitor)"
       },
       {
         "name": "substation_id",
         "type": "UUID",
-        "fk": "cim_substation.id"
+        "fk": "cim_substation.id",
+        "description": "References cim_substation.id \u2014 the substation where this equipment is installed"
       },
       {
         "name": "in_service",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "True if the equipment is energised and available for normal operation"
       },
       {
         "name": "normal_open",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if the normal state of this switching device is open (applies to breakers and switches)"
       },
       {
         "name": "rated_kv",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Rated voltage in kilovolts as specified on the equipment nameplate"
       },
       {
         "name": "rated_mva",
-        "type": "NUMERIC(10,3)"
+        "type": "NUMERIC(10,3)",
+        "description": "Rated apparent power capacity in megavolt-amperes (for transformers and generators)"
       },
       {
         "name": "manufacturer",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "OEM name of the equipment manufacturer (e.g. ABB, Siemens, GE)"
       },
       {
         "name": "install_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the equipment was commissioned and placed in service"
       }
     ],
     "cim_ac_line_segment": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key (UUID) uniquely identifying this line segment row"
       },
       {
         "name": "mrid",
         "type": "UUID",
-        "unique": true
+        "unique": true,
+        "description": "IEC CIM Master Resource Identifier for cross-system line segment identity"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Line segment identifier or circuit name (e.g. 'LN-042', 'North-South 33kV')"
       },
       {
         "name": "length_km",
-        "type": "NUMERIC(10,3)"
+        "type": "NUMERIC(10,3)",
+        "description": "Physical route length of the conductor in kilometres"
       },
       {
         "name": "r_ohms",
-        "type": "NUMERIC(12,6)"
+        "type": "NUMERIC(12,6)",
+        "description": "Total AC resistance in ohms; used for load-flow and fault-level calculations"
       },
       {
         "name": "x_ohms",
-        "type": "NUMERIC(12,6)"
+        "type": "NUMERIC(12,6)",
+        "description": "Total inductive reactance in ohms; dominant impedance component for overhead lines"
       },
       {
         "name": "b_siemens",
-        "type": "NUMERIC(12,9)"
+        "type": "NUMERIC(12,9)",
+        "description": "Total shunt susceptance in siemens; significant for long HV cables and EHV lines"
       },
       {
         "name": "rated_kv",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Rated line-to-line voltage in kilovolts for insulation coordination"
       },
       {
         "name": "rated_current_a",
-        "type": "NUMERIC(10,2)"
+        "type": "NUMERIC(10,2)",
+        "description": "Continuous thermal current rating in amperes under standard ambient conditions"
       },
       {
         "name": "route",
-        "type": "GEOGRAPHY(LINESTRING, 4326)"
+        "type": "GEOGRAPHY(LINESTRING, 4326)",
+        "description": "WGS84 linestring tracing the physical conductor route; enables corridor and proximity analysis"
       }
     ],
     "cim_energy_consumer": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key (UUID) uniquely identifying this energy consumer row"
       },
       {
         "name": "mrid",
         "type": "UUID",
-        "unique": true
+        "unique": true,
+        "description": "IEC CIM Master Resource Identifier for cross-system load point identity"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Load point or feeder name (e.g. 'Industrial Zone A', 'Residential Feeder 7')"
       },
       {
         "name": "customer_count",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of end-use customer connections aggregated at this load point"
       },
       {
         "name": "p_fixed_mw",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Fixed active (real) power demand in megawatts used for steady-state load flow"
       },
       {
         "name": "q_fixed_mvar",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Fixed reactive power demand in megavolt-amperes reactive used for power factor analysis"
       },
       {
         "name": "phase_connection",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "IEC CIM PhaseShuntConnectionKind code: D, Y, Yn, I (delta, wye, wye-neutral, single-phase)"
       },
       {
         "name": "substation_id",
         "type": "UUID",
-        "fk": "cim_substation.id"
+        "fk": "cim_substation.id",
+        "description": "References cim_substation.id \u2014 the substation supplying this consumer load point"
       }
     ],
     "cim_measurement": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for this telemetry reading row"
       },
       {
         "name": "mrid",
-        "type": "UUID"
+        "type": "UUID",
+        "description": "IEC CIM Master Resource Identifier for the measurement definition (not the reading)"
       },
       {
         "name": "equipment_id",
         "type": "UUID",
-        "fk": "cim_equipment.id"
+        "fk": "cim_equipment.id",
+        "description": "References cim_equipment.id \u2014 the device this measurement was taken from"
       },
       {
         "name": "measurement_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "IEC CIM MeasurementKind: Voltage, Current, ActivePower, ReactivePower, Frequency, etc."
       },
       {
         "name": "value",
-        "type": "NUMERIC(15,6)"
+        "type": "NUMERIC(15,6)",
+        "description": "Measured quantity in the unit indicated by unit_symbol"
       },
       {
         "name": "unit_symbol",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "IEC CIM UnitSymbol code: V, A, W, VAr, VA, Hz, deg, etc."
       },
       {
         "name": "phases",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "IEC CIM PhaseCode indicating which phases this reading covers (A, B, C, AB, ABC, etc.)"
       },
       {
         "name": "timestamp",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "UTC timestamp when the measurement was recorded or received by the system"
       },
       {
         "name": "quality",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "IEC CIM Quality61968 validity flag: GOOD, SUSPECT, BAD, MANUALLY_ENTERED, etc."
       }
     ]
   },
-  "short_description": "Common Information Model \u2014 power grid standard used by all utilities",
-  "long_description": "IEC CIM (Common Information Model, standards IEC 61968/61970) is the power industry's universal data model for electric utility systems. The schema covers grid topology (substations, equipment, lines), energy consumers (loads), and time-series measurements \u2014 the minimum viable CIM subset for most utility applications.",
-  "when_to_use": "Use for SCADA systems, outage management, smart grid applications, or any tool that must exchange data with utility control systems. NERC (US), ENTSO-E (EU), and most national grid operators mandate CIM for grid data exchange. Required for compliance with FERC Order 881, EU Clean Energy Package, and UK Grid Code."
+  "extensions": [
+    "postgis"
+  ]
 }

@@ -1,5 +1,6 @@
 {
   "name": "waterml",
+  "schema": "waterml",
   "label": "OGC WaterML 2.0",
   "description": "Water quality and hydrological data standard \u2014 for water management applications",
   "color": "#3498db",
@@ -12,157 +13,198 @@
     "environmental",
     "ogc"
   ],
+  "table_notes": {
+    "waterml_monitoring_point": "Physical or virtual location where water observations are collected, such as a river gauge, well, or lake sampling station.",
+    "waterml_observed_property": "Reference catalogue of measurable water properties (e.g. pH, dissolved oxygen, discharge) with units and definition URIs.",
+    "waterml_observation": "Individual measurement events linking a monitoring point to an observed property with quality and censoring metadata.",
+    "waterml_time_series": "Summary of an ordered sequence of observations at a monitoring point for a specific property, including temporal extent and collection method."
+  },
   "tables": {
     "waterml_monitoring_point": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the monitoring point (UUID, stable across systems)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name of the monitoring point (e.g. 'Sacramento River at Freeport')"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Agency-assigned local identifier (e.g. USGS site number, unique within operator)"
       },
       {
         "name": "point_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Classification of the monitoring point (e.g. stream, well, lake, estuary, spring)"
       },
       {
-        "name": "position",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "name": "geo_position",
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "WGS84 geographic coordinates of the monitoring point; enables spatial proximity queries"
       },
       {
         "name": "elevation_m",
-        "type": "NUMERIC(8,3)"
+        "type": "NUMERIC(8,3)",
+        "description": "Elevation of the monitoring point above vertical datum, in metres"
       },
       {
         "name": "vertical_datum",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Reference datum for elevation (e.g. NAVD88, EGM2008, local mean sea level)"
       },
       {
         "name": "responsible_party",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Organisation or agency responsible for operating and maintaining this monitoring point"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether this monitoring point is currently collecting observations"
       }
     ],
     "waterml_observed_property": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the observed property"
       },
       {
         "name": "identifier",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique URI for this property (e.g. http://environment.data.gov.au/water/id/waterquality/ph)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Short human-readable name of the measured property (e.g. 'Water Temperature', 'Dissolved Oxygen')"
       },
       {
         "name": "definition_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Canonical URL pointing to the property definition in a controlled vocabulary or ontology"
       },
       {
         "name": "unit_of_measure",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Unit symbol for observation values (e.g. mg/L, m\u00b3/s, \u00b0C, pH units)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full narrative description of what the property measures and any measurement conventions"
       }
     ],
     "waterml_observation": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key; BIGSERIAL supports high-volume time-series ingestion"
       },
       {
         "name": "monitoring_point_id",
         "type": "UUID",
-        "fk": "waterml_monitoring_point.id"
+        "fk": "waterml_monitoring_point.id",
+        "description": "References waterml_monitoring_point \u2014 the location where this measurement was taken"
       },
       {
         "name": "observed_property_id",
         "type": "INTEGER",
-        "fk": "waterml_observed_property.id"
+        "fk": "waterml_observed_property.id",
+        "description": "References waterml_observed_property \u2014 what physical/chemical quantity was measured"
       },
       {
         "name": "phenomenon_time",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "Timestamp at which the observed phenomenon occurred (always store in UTC)"
       },
       {
         "name": "result_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the result was produced or published (may differ from phenomenon_time)"
       },
       {
         "name": "value",
-        "type": "NUMERIC(15,6)"
+        "type": "NUMERIC(15,6)",
+        "description": "Numeric measurement result in the unit defined by the observed property"
       },
       {
         "name": "quality_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Data quality flag using WaterML/CUAHSI vocabulary (e.g. Good, Suspect, Poor, Missing)"
       },
       {
         "name": "processing_level",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Level of data processing applied: raw, quality-controlled, derived, or modelled"
       },
       {
         "name": "censor_code",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "Censoring indicator per CUAHSI standard: nc=not censored, lt=below detection, gt=above range"
       }
     ],
     "waterml_time_series": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this time series descriptor record"
       },
       {
         "name": "monitoring_point_id",
         "type": "UUID",
-        "fk": "waterml_monitoring_point.id"
+        "fk": "waterml_monitoring_point.id",
+        "description": "References waterml_monitoring_point \u2014 the station associated with this time series"
       },
       {
         "name": "observed_property_id",
         "type": "INTEGER",
-        "fk": "waterml_observed_property.id"
+        "fk": "waterml_observed_property.id",
+        "description": "References waterml_observed_property \u2014 the variable captured in this time series"
       },
       {
         "name": "start_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the earliest observation in this time series"
       },
       {
         "name": "end_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent observation in this time series (NULL if ongoing)"
       },
       {
         "name": "count",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Total number of observation records in this time series (used for completeness checks)"
       },
       {
         "name": "method",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Measurement or derivation method (e.g. continuous sensor, grab sample, modelled output)"
       },
       {
         "name": "equipment",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Instrument or sensor model used to collect the measurements (e.g. YSI EXO2, OTT Qliner)"
       }
     ]
   },
   "short_description": "Water quality and hydrological data standard \u2014 for water management applications",
   "long_description": "OGC WaterML 2.0 is the global standard for hydrological and water quality data exchange, from USGS stream gauges to EPA water quality monitoring.",
-  "when_to_use": "Use for water utility systems, flood forecasting, or environmental monitoring. Required for EU WFD reporting to EEA and USGS NWIS integrations."
+  "when_to_use": "Use for water utility systems, flood forecasting, or environmental monitoring. Required for EU WFD reporting to EEA and USGS NWIS integrations.",
+  "extensions": [
+    "postgis"
+  ]
 }

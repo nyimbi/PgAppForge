@@ -1,5 +1,6 @@
 {
   "name": "activitypub",
+  "schema": "activitypub",
   "label": "ActivityPub / ActivityStreams 2.0",
   "description": "W3C federated social networking standard \u2014 Mastodon, Lemmy, PeerTube, Pixelfed",
   "color": "#6c3483",
@@ -12,240 +13,296 @@
     "w3c",
     "mastodon"
   ],
+  "table_notes": {
+    "ap_actor": "Represents any ActivityPub actor (Person, Group, Service, Application, Organization). Local and remote actors share this table; is_local distinguishes origin.",
+    "ap_object": "Stores ActivityStreams objects (Note, Article, Image, Video, Event, etc.) that actors create, like, or share. JSONB columns hold structured AP metadata.",
+    "ap_activity": "Records every ActivityPub activity (Create, Like, Announce, Delete, Update, Undo) as an append-only log linking an actor to the object they acted on.",
+    "ap_follow": "Tracks directed follow relationships between actors. State column reflects the follow lifecycle: pending, accepted, or rejected."
+  },
   "tables": {
     "ap_actor": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for the actor"
       },
       {
         "name": "actor_url",
         "type": "TEXT",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Globally unique ActivityPub actor IRI (e.g. https://mastodon.social/users/alice)"
       },
       {
         "name": "type",
         "type": "VARCHAR(30)",
-        "nullable": false
+        "nullable": false,
+        "description": "ActivityStreams actor type: Person, Group, Organization, Service, or Application"
       },
       {
         "name": "preferred_username",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Short username used in mentions (e.g. alice in @alice@example.com)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Display name shown in UI (may differ from preferred_username)"
       },
       {
         "name": "summary",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "HTML bio/profile description provided by the actor"
       },
       {
         "name": "inbox_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "ActivityPub inbox endpoint where activities addressed to this actor are delivered"
       },
       {
         "name": "outbox_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "ActivityPub outbox endpoint listing activities this actor has published"
       },
       {
         "name": "followers_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "ActivityPub collection endpoint listing actors that follow this actor"
       },
       {
         "name": "following_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "ActivityPub collection endpoint listing actors this actor follows"
       },
       {
         "name": "public_key_pem",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "RSA public key in PEM format used to verify HTTP Signatures from this actor"
       },
       {
         "name": "icon_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the actor's avatar/profile image"
       },
       {
         "name": "header_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the actor's profile header/banner image"
       },
       {
         "name": "shared_inbox_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Shared inbox endpoint for the actor's server; used for efficient fan-out delivery"
       },
       {
         "name": "is_local",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if this actor is hosted on the local server; false for federated remote actors"
       },
       {
         "name": "is_bot",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if this actor is an automated bot rather than a human user"
       },
       {
         "name": "follower_count",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of actors following this actor (denormalized for query performance)"
       },
       {
         "name": "following_count",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of actors this actor follows (denormalized for query performance)"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this actor record was first stored locally"
       }
     ],
     "ap_object": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for the object"
       },
       {
         "name": "object_url",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique ActivityPub object IRI identifying this content across the Fediverse"
       },
       {
         "name": "type",
         "type": "VARCHAR(30)",
-        "nullable": false
+        "nullable": false,
+        "description": "ActivityStreams object type: Note, Article, Image, Video, Event, Question, etc."
       },
       {
         "name": "attributed_to_id",
         "type": "UUID",
-        "fk": "ap_actor.id"
+        "fk": "ap_actor.id",
+        "description": "References ap_actor.id \u2014 the actor who authored or owns this object"
       },
       {
         "name": "content",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Primary content body in HTML (the rendered post or article text)"
       },
       {
         "name": "content_map",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Language-keyed content variants as JSONB: {\"en\": \"<p>Hello</p>\", \"fr\": \"<p>Bonjour</p>\"}"
       },
       {
         "name": "summary",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Content warning or subject line shown before expanding sensitive content"
       },
       {
         "name": "in_reply_to_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "ActivityPub IRI of the object this is a reply to; NULL for top-level posts"
       },
       {
         "name": "conversation_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "IRI of the thread/conversation root, used to group replies together"
       },
       {
         "name": "tags",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of ActivityStreams Tag objects: [{\"type\":\"Hashtag\",\"name\":\"#foo\",\"href\":\"...\"}]"
       },
       {
         "name": "attachments",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of ActivityStreams Document/Image objects describing media attachments"
       },
       {
         "name": "to_recipients",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of actor IRIs or collection URLs in the 'to' (public/direct) addressing field"
       },
       {
         "name": "cc_recipients",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of actor IRIs or collection URLs in the 'cc' (followers/mentioned) addressing field"
       },
       {
         "name": "sensitive",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if the content is marked sensitive/NSFW and should be hidden behind a warning"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "BCP 47 language tag for the primary content language (e.g. en, fr, zh-TW)"
       },
       {
         "name": "published_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the object was originally published by its author"
       },
       {
         "name": "likes_count",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of Like activities targeting this object"
       },
       {
         "name": "replies_count",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of objects that have in_reply_to_url pointing to this object"
       },
       {
         "name": "shares_count",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of Announce (boost/reblog) activities targeting this object"
       }
     ],
     "ap_activity": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for the activity record"
       },
       {
         "name": "activity_url",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique ActivityPub activity IRI identifying this event across the Fediverse"
       },
       {
         "name": "type",
         "type": "VARCHAR(30)",
-        "nullable": false
+        "nullable": false,
+        "description": "ActivityStreams activity type: Create, Like, Announce, Follow, Delete, Update, Undo, etc."
       },
       {
         "name": "actor_id",
         "type": "UUID",
-        "fk": "ap_actor.id"
+        "fk": "ap_actor.id",
+        "description": "References ap_actor.id \u2014 the actor who performed this activity"
       },
       {
         "name": "object_id",
         "type": "UUID",
-        "fk": "ap_object.id"
+        "fk": "ap_object.id",
+        "description": "References ap_object.id \u2014 the object this activity was performed on (NULL for Follow)"
       },
       {
         "name": "target_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Optional ActivityPub IRI of the target collection or actor (used in Add, Move activities)"
       },
       {
         "name": "published_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this activity was received or generated"
       }
     ],
     "ap_follow": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for the follow relationship"
       },
       {
         "name": "follower_id",
         "type": "UUID",
-        "fk": "ap_actor.id"
+        "fk": "ap_actor.id",
+        "description": "References ap_actor.id \u2014 the actor initiating the follow"
       },
       {
         "name": "following_id",
         "type": "UUID",
-        "fk": "ap_actor.id"
+        "fk": "ap_actor.id",
+        "description": "References ap_actor.id \u2014 the actor being followed"
       },
       {
         "name": "state",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Follow lifecycle state: pending (awaiting Accept), accepted, or rejected"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the Follow activity was received and this record created"
       }
     ]
   },

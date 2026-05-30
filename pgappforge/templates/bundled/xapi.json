@@ -1,5 +1,6 @@
 {
   "name": "xapi",
+  "schema": "xapi",
   "label": "xAPI (Experience API)",
   "description": "Learning analytics standard \u2014 Actor/Verb/Object statement model used by US DoD and corporate training",
   "color": "#27ae60",
@@ -12,142 +13,178 @@
     "lms",
     "us-dod"
   ],
+  "table_notes": {
+    "xapi_actor": "Represents a learner or system (Agent or Group) identified by mbox, openid, or account; one of the four identifier fields must be populated per xAPI spec.",
+    "xapi_verb": "Controlled vocabulary of actions a learner performs; the PK is the full IRI (e.g. http://adlnet.gov/expapi/verbs/completed) per xAPI spec.",
+    "xapi_activity": "A learning object, course, assessment, or any IRI-identified resource that can be the target of a statement.",
+    "xapi_statement": "Central fact table recording each learning event as Actor\u2013Verb\u2013Object with optional result and context; immutable once stored per xAPI spec."
+  },
   "tables": {
     "xapi_actor": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; xAPI actors have no mandatory single identifier"
       },
       {
         "name": "account_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Username or account ID on the platform identified by account_homepage"
       },
       {
         "name": "account_homepage",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "IRI of the system where account_name is registered (xAPI account identifier)"
       },
       {
         "name": "mbox",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Mailto IRI uniquely identifying the actor (e.g. mailto:user@example.com); xAPI inverse functional identifier"
       },
       {
         "name": "mbox_sha1sum",
-        "type": "CHAR(40)"
+        "type": "CHAR(40)",
+        "description": "SHA-1 hash of the mbox IRI for privacy-preserving actor identification"
       },
       {
         "name": "openid",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "OpenID IRI uniquely identifying the actor; alternative to mbox when privacy is required"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable display name of the actor; not used for identity matching"
       },
       {
         "name": "object_type",
         "type": "VARCHAR(10)",
-        "default": "'Agent'"
+        "default": "'Agent'",
+        "description": "xAPI actor type: 'Agent' (individual) or 'Group' (collection of agents)"
       }
     ],
     "xapi_verb": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "Full IRI identifying the verb (e.g. http://adlnet.gov/expapi/verbs/completed); globally unique per xAPI spec"
       },
       {
         "name": "display",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Language map of human-readable verb labels keyed by RFC 5646 language tag (e.g. {\"en-US\": \"completed\"})"
       }
     ],
     "xapi_activity": [
       {
         "name": "id",
         "type": "VARCHAR(500)",
-        "pk": true
+        "pk": true,
+        "description": "IRI uniquely identifying the activity (e.g. course URL or URN); globally unique per xAPI spec"
       },
       {
         "name": "activity_type",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "IRI categorising the activity kind (e.g. http://adlnet.gov/expapi/activities/course)"
       },
       {
         "name": "name",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Language map of human-readable activity names keyed by RFC 5646 language tag"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Language map of human-readable activity descriptions keyed by RFC 5646 language tag"
       },
       {
         "name": "more_info",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "IRI linking to additional human-readable information about the activity"
       },
       {
         "name": "extensions",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Arbitrary IRI-keyed extension data for activity-specific metadata not covered by the spec"
       }
     ],
     "xapi_statement": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "xAPI statement UUID; may be assigned by the LRS or provided by the client at submission"
       },
       {
         "name": "actor_id",
         "type": "UUID",
-        "fk": "xapi_actor.id"
+        "fk": "xapi_actor.id",
+        "description": "References xapi_actor; identifies who performed the learning action"
       },
       {
         "name": "verb_id",
         "type": "VARCHAR(255)",
-        "fk": "xapi_verb.id"
+        "fk": "xapi_verb.id",
+        "description": "References xapi_verb by IRI; the action performed (e.g. completed, attempted, passed)"
       },
       {
         "name": "object_type",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Type of the statement object: 'Activity', 'Agent', 'Group', 'SubStatement', or 'StatementRef'"
       },
       {
         "name": "object_activity_id",
         "type": "VARCHAR(500)",
-        "fk": "xapi_activity.id"
+        "fk": "xapi_activity.id",
+        "description": "References xapi_activity when object_type is 'Activity'; the learning object acted upon"
       },
       {
         "name": "result_score_raw",
-        "type": "NUMERIC(8,4)"
+        "type": "NUMERIC(8,4)",
+        "description": "Raw score achieved by the actor on this activity (units defined by the activity)"
       },
       {
         "name": "result_score_max",
-        "type": "NUMERIC(8,4)"
+        "type": "NUMERIC(8,4)",
+        "description": "Maximum possible raw score for this activity; used to normalise result_score_raw"
       },
       {
         "name": "result_completion",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if the actor completed the activity per the activity's completion criteria"
       },
       {
         "name": "result_success",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if the actor passed or succeeded at the activity per its success criteria"
       },
       {
         "name": "result_duration_seconds",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Time the actor spent on the activity in seconds (converted from xAPI ISO 8601 duration)"
       },
       {
         "name": "context",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "xAPI context object: registration UUID, instructor, team, contextActivities, extensions, and language"
       },
       {
         "name": "timestamp",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "When the learning event occurred (client-supplied); may differ from stored_at"
       },
       {
         "name": "stored_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "When the LRS received and stored this statement; set server-side on insert"
       },
       {
         "name": "authority",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Agent or OAuth consumer that submitted this statement; used for trust and provenance tracking"
       }
     ]
   },

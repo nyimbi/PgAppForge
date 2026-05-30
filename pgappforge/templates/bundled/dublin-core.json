@@ -1,5 +1,6 @@
 {
   "name": "dublin-core",
+  "schema": "dublin_core",
   "label": "Dublin Core Metadata",
   "description": "ISO 15836 general-purpose metadata standard \u2014 used by libraries, repositories, web resources",
   "color": "#8e44ad",
@@ -13,133 +14,166 @@
     "iso",
     "general"
   ],
+  "table_notes": {
+    "dc_resource": "Core resource record holding all 15 Dublin Core elements; multi-valued fields (title, creator, subject, etc.) are stored as JSONB arrays of language-tagged strings.",
+    "dc_collection": "Named grouping of resources (e.g. a digital archive or thematic set); provides collection-level rights and publisher metadata.",
+    "dc_collection_member": "Many-to-many join between dc_collection and dc_resource; records when each resource was added to the collection."
+  },
   "tables": {
     "dc_resource": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal primary key for the resource record"
       },
       {
         "name": "identifier",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "DC:Identifier \u2014 unique external URI, DOI, ISBN, or URN that identifies this resource"
       },
       {
         "name": "title",
         "type": "JSONB",
-        "nullable": false
+        "nullable": false,
+        "description": "DC:Title \u2014 JSONB array of {value, lang} objects supporting multilingual titles"
       },
       {
         "name": "creator",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "DC:Creator \u2014 JSONB array of agent names or URIs primarily responsible for creating the resource"
       },
       {
         "name": "subject",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "DC:Subject \u2014 JSONB array of {value, scheme} objects; scheme may be LCSH, DDC, MeSH, or free text"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "DC:Description \u2014 JSONB array of {value, lang} objects containing abstracts or summaries"
       },
       {
         "name": "publisher",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "DC:Publisher \u2014 entity responsible for making the resource available (organisation or service name)"
       },
       {
         "name": "contributor",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "DC:Contributor \u2014 JSONB array of agent names with secondary responsibility (editors, illustrators, etc.)"
       },
       {
         "name": "date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "DC:Date \u2014 primary date associated with the resource lifecycle (publication, creation, or modification)"
       },
       {
         "name": "dc_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "DC:Type \u2014 DCMI Type Vocabulary term (e.g. Text, Dataset, Image, Collection, Event)"
       },
       {
         "name": "format",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "DC:Format \u2014 media type or dimensions; use IANA MIME type string (e.g. application/pdf, image/tiff)"
       },
       {
         "name": "source",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "DC:Source \u2014 URI or citation of the resource from which this one is derived"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "DC:Language \u2014 primary language of the resource content; RFC 5646 tag (e.g. en, fr, zh-Hant)"
       },
       {
         "name": "relation",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "DC:Relation \u2014 JSONB array of {type, uri} objects linking related resources (isPartOf, replaces, etc.)"
       },
       {
         "name": "coverage",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "DC:Coverage \u2014 spatial or temporal extent of the resource (place name, bounding box, or date range)"
       },
       {
         "name": "rights",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "DC:Rights \u2014 rights statement or license URI governing access and use of the resource"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this metadata record was first inserted"
       },
       {
         "name": "modified_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent update to this metadata record; NULL if never modified"
       }
     ],
     "dc_collection": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal primary key for the collection"
       },
       {
         "name": "title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable name of the collection (e.g. 'Early Modern Pamphlets 1600-1700')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Narrative description of the collection scope, contents, and provenance"
       },
       {
         "name": "license",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "License applying to the collection as a whole; use SPDX identifier or rights URI (e.g. CC-BY-4.0)"
       },
       {
         "name": "publisher",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Organisation or service responsible for publishing or maintaining this collection"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the collection record was created"
       }
     ],
     "dc_collection_member": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the membership row"
       },
       {
         "name": "collection_id",
         "type": "UUID",
-        "fk": "dc_collection.id"
+        "fk": "dc_collection.id",
+        "description": "References dc_collection.id \u2014 the collection this resource belongs to"
       },
       {
         "name": "resource_id",
         "type": "UUID",
-        "fk": "dc_resource.id"
+        "fk": "dc_resource.id",
+        "description": "References dc_resource.id \u2014 the resource being included in the collection"
       },
       {
         "name": "added_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this resource was added to the collection"
       }
     ]
   },

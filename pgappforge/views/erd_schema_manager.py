@@ -183,10 +183,13 @@ class ERDSchemaManager:
 		tbl = op.get("table", "")
 
 		if kind == "create_table":
+			schema = op.get("schema", "")
+			qualified = f"{schema}.{tbl}" if schema else tbl
 			cols = op.get("columns", [])
 			col_defs = []
 			for c in cols:
-				defn = f"{c['name']} {c['type']}"
+				col_name = f'"{c["name"]}"'  # always quote — handles reserved words
+				defn = f"{col_name} {c['type']}"
 				if c.get("pk"):
 					defn += " PRIMARY KEY"
 				if not c.get("nullable", True):
@@ -194,41 +197,51 @@ class ERDSchemaManager:
 				if c.get("default") is not None:
 					defn += f" DEFAULT {c['default']}"
 				col_defs.append(defn)
-			return f"CREATE TABLE IF NOT EXISTS {tbl} ({', '.join(col_defs)})"
+			return f"CREATE TABLE IF NOT EXISTS {qualified} ({', '.join(col_defs)})"
 
 		if kind == "drop_table":
-			return f"DROP TABLE IF EXISTS {tbl} CASCADE"
+			schema = op.get("schema", "")
+			qualified = f"{schema}.{tbl}" if schema else tbl
+			return f"DROP TABLE IF EXISTS {qualified} CASCADE"
 
 		if kind == "add_column":
+			schema = op.get("schema", "")
+			qualified = f"{schema}.{tbl}" if schema else tbl
 			c = op["column"]
-			defn = f"{c['name']} {c['type']}"
+			col_name = f'"{c["name"]}"'
+			defn = f"{col_name} {c['type']}"
 			if not c.get("nullable", True):
 				defn += " NOT NULL"
 			if c.get("default") is not None:
 				defn += f" DEFAULT {c['default']}"
-			return f"ALTER TABLE {tbl} ADD COLUMN {defn}"
+			return f"ALTER TABLE {qualified} ADD COLUMN IF NOT EXISTS {defn}"
 
 		if kind == "drop_column":
-			return f"ALTER TABLE {tbl} DROP COLUMN {op['column']} CASCADE"
+			schema = op.get("schema", "")
+			qualified = f"{schema}.{tbl}" if schema else tbl
+			col_name = f'"{op["column"]}"'
+			return f"ALTER TABLE {qualified} DROP COLUMN IF EXISTS {col_name} CASCADE"
 
 		if kind == "alter_column":
-			col = op["column"]
+			schema = op.get("schema", "")
+			qualified = f"{schema}.{tbl}" if schema else tbl
+			col = f'"{op["column"]}"'
 			stmts = []
 			if op.get("new_type"):
 				stmts.append(
-					f"ALTER TABLE {tbl} ALTER COLUMN {col} TYPE {op['new_type']} "
+					f"ALTER TABLE {qualified} ALTER COLUMN {col} TYPE {op['new_type']} "
 					f"USING {col}::{op['new_type']}"
 				)
 			if "nullable" in op:
 				if op["nullable"]:
-					stmts.append(f"ALTER TABLE {tbl} ALTER COLUMN {col} DROP NOT NULL")
+					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} DROP NOT NULL")
 				else:
-					stmts.append(f"ALTER TABLE {tbl} ALTER COLUMN {col} SET NOT NULL")
+					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} SET NOT NULL")
 			if "default" in op:
 				if op["default"] is None:
-					stmts.append(f"ALTER TABLE {tbl} ALTER COLUMN {col} DROP DEFAULT")
+					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} DROP DEFAULT")
 				else:
-					stmts.append(f"ALTER TABLE {tbl} ALTER COLUMN {col} SET DEFAULT {op['default']}")
+					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} SET DEFAULT {op['default']}")
 			return "; ".join(stmts) if stmts else None
 
 		if kind == "add_fk":

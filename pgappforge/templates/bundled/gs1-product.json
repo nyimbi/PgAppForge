@@ -1,5 +1,6 @@
 {
   "name": "gs1-product",
+  "schema": "gs1_product",
   "label": "GS1 Product Ontology",
   "description": "GS1 product identification \u2014 used by Google Shopping, Amazon, major retailers",
   "color": "#e74c3c",
@@ -13,152 +14,190 @@
     "amazon",
     "seo"
   ],
+  "table_notes": {
+    "gs1_product": "Core product registry keyed by GTIN; holds identity, classification, physical measurements, and multilingual content as JSONB.",
+    "gs1_product_attribute": "Extensible key-value store for GS1 product attributes not captured in the core table, supporting per-language and per-UOM values.",
+    "gs1_product_image": "Stores all product image URLs for a GTIN with type and facing metadata for planogram and packaging use cases.",
+    "gs1_allergen_declaration": "EU FIR 1169/2011-compliant allergen declarations per GTIN, recording allergen type and level of containment."
+  },
   "tables": {
     "gs1_product": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "gtin",
         "type": "VARCHAR(14)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Global Trade Item Number (GS1 standard) \u2014 14-digit padded identifier for the trade item"
       },
       {
         "name": "product_name",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual product name as {\"en\": \"...\", \"fr\": \"...\"} keyed by ISO 639-1 language code"
       },
       {
         "name": "brand_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Brand or manufacturer name as registered with GS1"
       },
       {
         "name": "gpc_category_code",
-        "type": "VARCHAR(8)"
+        "type": "VARCHAR(8)",
+        "description": "GS1 Global Product Classification (GPC) brick code \u2014 8-digit numeric category identifier"
       },
       {
         "name": "gpc_category_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name of the GPC brick category (e.g. Breakfast Cereals)"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual product description as {\"en\": \"...\", \"fr\": \"...\"} keyed by ISO 639-1 language code"
       },
       {
         "name": "net_content",
-        "type": "NUMERIC(12,4)"
+        "type": "NUMERIC(12,4)",
+        "description": "Numeric quantity of product contents (volume, weight, count); unit in net_content_uom"
       },
       {
         "name": "net_content_uom",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Unit of measure for net_content using UN/CEFACT common code (e.g. GRM, MLT, EA)"
       },
       {
         "name": "gross_weight_kg",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Total weight of the trade item including packaging, in kilograms"
       },
       {
         "name": "country_of_origin",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 code for the country where the product was manufactured or grown"
       },
       {
         "name": "target_market",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 3166-1 numeric country code of the intended sales market (GS1 target market)"
       },
       {
         "name": "certifications",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of certification objects [{\"type\": \"organic\", \"body\": \"USDA\", \"number\": \"...\"}]"
       },
       {
         "name": "images",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of image objects [{\"url\": \"...\", \"type\": \"FRONT\", \"facing\": \"FRONT\"}] for quick access"
       },
       {
         "name": "linked_data_uri",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "GS1 SmartSearch / schema.org linked data URI for this product (used by Google Shopping)"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this product record was first inserted"
       }
     ],
     "gs1_product_attribute": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "gtin",
         "type": "VARCHAR(14)",
-        "fk": "gs1_product.gtin"
+        "fk": "gs1_product.gtin",
+        "description": "References gs1_product.gtin; identifies which product this attribute belongs to"
       },
       {
         "name": "attribute_name",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "GS1 or custom attribute name (e.g. colourDescription, flavourDescription)"
       },
       {
         "name": "attribute_value",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Value of the attribute; interpret according to attribute_name and uom"
       },
       {
         "name": "uom",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "UN/CEFACT unit of measure code for numeric attributes (e.g. CMT, GRM); NULL for text attributes"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "ISO 639-1 or BCP 47 language tag for localised text attributes (e.g. en, fr-CA)"
       }
     ],
     "gs1_product_image": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "gtin",
         "type": "VARCHAR(14)",
-        "fk": "gs1_product.gtin"
+        "fk": "gs1_product.gtin",
+        "description": "References gs1_product.gtin; identifies which product this image belongs to"
       },
       {
         "name": "image_url",
         "type": "TEXT",
-        "nullable": false
+        "nullable": false,
+        "description": "Fully qualified URL to the product image asset (CDN or origin)"
       },
       {
         "name": "image_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "GS1 image type code: FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM, or DETAIL"
       },
       {
         "name": "facing",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Camera angle / shot type (e.g. FRONT_FACING, IN_USE, LIFESTYLE) per GS1 image guidelines"
       },
       {
         "name": "is_planogram",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if this image is intended for retail planogram use (whitebox / shelf-ready view)"
       }
     ],
     "gs1_allergen_declaration": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "gtin",
         "type": "VARCHAR(14)",
-        "fk": "gs1_product.gtin"
+        "fk": "gs1_product.gtin",
+        "description": "References gs1_product.gtin; identifies which product carries this allergen declaration"
       },
       {
         "name": "allergen_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "GS1 allergen type code (e.g. AC for celery, AE for eggs, AW for wheat) per GS1 code list"
       },
       {
         "name": "level_of_containment",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "GS1 containment code: CONTAINS, MAY_CONTAIN, FREE_FROM, or UNDECLARED per EU FIR 1169/2011"
       }
     ]
   },

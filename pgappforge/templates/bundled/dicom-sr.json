@@ -1,5 +1,6 @@
 {
   "name": "dicom-sr",
+  "schema": "dicom_sr",
   "label": "DICOM SR (Medical Imaging)",
   "description": "DICOM Structured Reporting \u2014 medical imaging studies, series, instances for radiology apps",
   "color": "#1a7abf",
@@ -12,214 +13,266 @@
     "imaging",
     "hl7"
   ],
+  "table_notes": {
+    "dicom_patient": "Core patient identity record linking DICOM demographics to an optional FHIR patient resource.",
+    "dicom_study": "Top-level imaging study record grouping all series acquired in a single clinical encounter.",
+    "dicom_series": "A single acquisition run within a study, sharing modality and acquisition parameters.",
+    "dicom_instance": "Individual SOP instance (image or SR document) with its storage location and transfer syntax.",
+    "dicom_report": "Radiologist structured report tied to a study, tracking findings, impression, and workflow status."
+  },
   "tables": {
     "dicom_patient": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this patient record"
       },
       {
         "name": "patient_id",
         "type": "VARCHAR(64)",
-        "unique": true
+        "unique": true,
+        "description": "DICOM Patient ID (tag 0010,0020) \u2014 typically MRN assigned by issuing institution"
       },
       {
         "name": "patient_name",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "DICOM Patient Name (tag 0010,0010) as JSONB with keys: family, given, middle, prefix, suffix"
       },
       {
         "name": "birth_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Patient date of birth (DICOM tag 0010,0030)"
       },
       {
         "name": "sex",
-        "type": "CHAR(1)"
+        "type": "CHAR(1)",
+        "description": "Patient sex code: M=male, F=female, O=other (DICOM tag 0010,0040)"
       },
       {
         "name": "fhir_patient_id",
-        "type": "UUID"
+        "type": "UUID",
+        "description": "References FHIR Patient resource for cross-system interoperability with HL7 FHIR"
       }
     ],
     "dicom_study": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this imaging study"
       },
       {
         "name": "study_instance_uid",
         "type": "VARCHAR(64)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "DICOM Study Instance UID (tag 0020,000D) \u2014 globally unique identifier assigned by the modality"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "dicom_patient.id"
+        "fk": "dicom_patient.id",
+        "description": "References dicom_patient \u2014 the subject of this imaging study"
       },
       {
         "name": "study_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the imaging study was performed (DICOM tag 0008,0020)"
       },
       {
         "name": "study_time",
-        "type": "TIME"
+        "type": "TIME",
+        "description": "Time the imaging study started (DICOM tag 0008,0030)"
       },
       {
         "name": "study_description",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Free-text description of the study protocol or clinical indication (DICOM tag 0008,1030)"
       },
       {
         "name": "modalities",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of modality codes present in this study (e.g. [\"CT\", \"SR\"]) \u2014 DICOM Modalities in Study (0008,0061)"
       },
       {
         "name": "accession_number",
-        "type": "VARCHAR(64)"
+        "type": "VARCHAR(64)",
+        "description": "RIS/HIS accession number linking study to the radiology order (DICOM tag 0008,0050)"
       },
       {
         "name": "referring_physician",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the physician who requested the study (DICOM tag 0008,0090)"
       },
       {
         "name": "institution",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the institution where the study was performed (DICOM tag 0008,0080)"
       },
       {
         "name": "num_series",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of series belonging to this study (denormalized for query performance)"
       }
     ],
     "dicom_series": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this series"
       },
       {
         "name": "series_instance_uid",
         "type": "VARCHAR(64)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "DICOM Series Instance UID (tag 0020,000E) \u2014 globally unique identifier for this acquisition run"
       },
       {
         "name": "study_id",
         "type": "UUID",
-        "fk": "dicom_study.id"
+        "fk": "dicom_study.id",
+        "description": "References dicom_study \u2014 the parent study this series belongs to"
       },
       {
         "name": "series_number",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Numeric label identifying this series within its study (DICOM tag 0020,0011)"
       },
       {
         "name": "series_description",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Free-text description of the series (e.g. 'Axial T1 post-contrast') \u2014 DICOM tag 0008,103E"
       },
       {
         "name": "modality",
-        "type": "VARCHAR(16)"
+        "type": "VARCHAR(16)",
+        "description": "DICOM modality code for this series (e.g. CT, MR, PT, SR, US) \u2014 tag 0008,0060"
       },
       {
         "name": "body_part",
-        "type": "VARCHAR(64)"
+        "type": "VARCHAR(64)",
+        "description": "SNOMED-coded body part examined (DICOM tag 0018,0015), e.g. CHEST, BRAIN, ABDOMEN"
       },
       {
         "name": "num_instances",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Cached count of SOP instances (images/documents) in this series"
       },
       {
         "name": "series_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date this series was acquired (DICOM tag 0008,0021)"
       }
     ],
     "dicom_instance": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this SOP instance"
       },
       {
         "name": "sop_instance_uid",
         "type": "VARCHAR(64)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "DICOM SOP Instance UID (tag 0008,0018) \u2014 globally unique identifier for this image or document"
       },
       {
         "name": "series_id",
         "type": "UUID",
-        "fk": "dicom_series.id"
+        "fk": "dicom_series.id",
+        "description": "References dicom_series \u2014 the series this instance belongs to"
       },
       {
         "name": "sop_class_uid",
-        "type": "VARCHAR(64)"
+        "type": "VARCHAR(64)",
+        "description": "DICOM SOP Class UID (tag 0008,0016) defining the object type (e.g. CT Image, Enhanced MR, Basic SR)"
       },
       {
         "name": "instance_number",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Sequence number of this instance within its series (DICOM tag 0020,0013)"
       },
       {
         "name": "storage_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Object storage URL (S3, GCS, WADO-RS) where the DICOM file is persisted"
       },
       {
         "name": "transfer_syntax",
-        "type": "VARCHAR(64)"
+        "type": "VARCHAR(64)",
+        "description": "DICOM Transfer Syntax UID (tag 0002,0010) specifying encoding/compression (e.g. JPEG 2000, JPEG Baseline)"
       },
       {
         "name": "file_size_bytes",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Size of the stored DICOM file in bytes, used for storage quota and retrieval planning"
       },
       {
         "name": "content_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the content was created (DICOM tag 0008,0023), may differ from acquisition date for SR documents"
       },
       {
         "name": "metadata",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Supplementary DICOM tag values as JSONB {tag: value} \u2014 pixel spacing, slice thickness, window center/width, etc."
       }
     ],
     "dicom_report": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this radiology report"
       },
       {
         "name": "study_id",
         "type": "UUID",
-        "fk": "dicom_study.id"
+        "fk": "dicom_study.id",
+        "description": "References dicom_study \u2014 the imaging study this report describes"
       },
       {
         "name": "report_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Report template or category (e.g. Preliminary, Final, Addendum, Consultation)"
       },
       {
         "name": "radiologist",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the radiologist who authored or finalized this report"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Report workflow status: draft, preliminary, final, amended, cancelled"
       },
       {
         "name": "findings",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Detailed radiologist observations describing image findings for each anatomical region"
       },
       {
         "name": "impression",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Clinical interpretation summary and conclusions \u2014 the referring physician's primary read target"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this report record was first created"
       },
       {
         "name": "finalized_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the report reached final/signed status (NULL if still in progress)"
       }
     ]
   },

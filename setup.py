@@ -39,7 +39,7 @@ setup(
     packages=find_packages(exclude=["tests*"]),
     package_data={"": ["LICENSE"]},
     entry_points={
-        "flask.commands": ["forge=pgappforge.cli:fab"],
+        "flask.commands": ["forge=pgappforge.cli:forge"],
         "console_scripts": ["pgappforge = pgappforge.console:cli"],
     },
     include_package_data=True,

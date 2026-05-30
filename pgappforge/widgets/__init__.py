@@ -299,3 +299,13 @@ try:
     from .markdown_widget import MarkdownEditorWidget, MarkdownDisplayWidget, MarkdownPreviewWidget
 except ImportError:
     pass
+
+try:
+    from .icd10_widget import ICD10SearchWidget, ICD10Field, register_icd10_blueprint
+except ImportError:
+    pass
+
+try:
+    from .snomed_widget import SNOMEDSearchWidget, SNOMEDField, register_snomed_blueprint
+except ImportError:
+    pass

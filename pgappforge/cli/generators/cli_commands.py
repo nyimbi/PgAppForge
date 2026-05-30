@@ -23,6 +23,7 @@ from .database_inspector import EnhancedDatabaseInspector
 from .model_generator import EnhancedModelGenerator, ModelGenerationConfig
 from .view_generator import BeautifulViewGenerator, ViewGenerationConfig
 from .app_generator import FullAppGenerator, AppGenerationConfig
+from .mobile_generator import MobileGenerator, MobileGenerationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -996,6 +997,118 @@ def inspect_database(
 
     except Exception as e:
         click.echo(f"❌ Error inspecting database: {e}", err=True)
+        sys.exit(1)
+
+
+@gen.command('mobile')
+@click.option(
+    '--uri', '-u',
+    required=True,
+    callback=validate_database_uri,
+    help='Database connection URI (postgresql://...)'
+)
+@click.option(
+    '--name', '-n',
+    required=True,
+    callback=validate_app_name,
+    help='Application display name (e.g. "MyApp")'
+)
+@click.option(
+    '--app-id',
+    default=None,
+    help='Bundle / package identifier (e.g. com.company.myapp). Defaults to com.example.<name>.'
+)
+@click.option(
+    '--output-dir', '-o',
+    required=True,
+    callback=validate_output_path,
+    help='Output directory for the generated mobile app'
+)
+@click.option(
+    '--framework',
+    default='expo',
+    type=click.Choice(['expo', 'pwa']),
+    show_default=True,
+    help='Mobile framework target'
+)
+@click.option(
+    '--api-url',
+    default='http://localhost:8080/api/v1',
+    show_default=True,
+    help='Base URL of the pgappforge REST API'
+)
+@click.option(
+    '--primary-color',
+    default='#007bff',
+    show_default=True,
+    help='Brand primary color (hex)'
+)
+@click.option(
+    '--features',
+    default='auth,list,detail,create,edit',
+    show_default=True,
+    help='Comma-separated feature set to generate'
+)
+@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+def generate_mobile(
+    uri: str,
+    name: str,
+    app_id: Optional[str],
+    output_dir: str,
+    framework: str,
+    api_url: str,
+    primary_color: str,
+    features: str,
+    verbose: bool,
+):
+    """Generate a complete React Native (Expo) mobile app from database schema.
+
+    \b
+    Example:
+      flask forge gen mobile \\
+        --uri postgresql://user:pass@localhost/mydb \\
+        --name MyApp --app-id com.example.myapp \\
+        --output-dir ./my-mobile-app
+    """
+    if verbose:
+        logging.basicConfig(level=logging.INFO)
+
+    resolved_app_id = app_id or f"com.example.{name.lower()}"
+    feature_list = [f.strip() for f in features.split(',') if f.strip()]
+
+    click.echo(f"📱 Generating {framework} mobile app: {name}")
+    click.echo(f"   Bundle ID : {resolved_app_id}")
+    click.echo(f"   API URL   : {api_url}")
+    click.echo(f"   Features  : {', '.join(feature_list)}")
+    click.echo(f"   Output    : {output_dir}")
+
+    try:
+        with EnhancedDatabaseInspector(uri) as inspector:
+            mobile_config = MobileGenerationConfig(
+                app_name=name,
+                app_id=resolved_app_id,
+                framework=framework,
+                api_base_url=api_url,
+                primary_color=primary_color,
+                features=feature_list,
+            )
+            generator = MobileGenerator(inspector, mobile_config, output_dir)
+
+            click.echo("🔍 Introspecting database schema...")
+            files = generator.generate_complete_app()
+
+        click.echo(f"✅ Mobile app generated — {len(files)} files written to {output_dir}")
+        click.echo("\n📋 Next steps:")
+        click.echo("   1. cd into the output directory")
+        click.echo("   2. Copy .env.example to .env and set EXPO_PUBLIC_API_BASE_URL")
+        click.echo("   3. npm install")
+        click.echo("   4. npx expo start")
+
+    except Exception as e:
+        click.echo(f"❌ Mobile generation failed: {e}", err=True)
+        if verbose:
+            import traceback
+            click.echo(traceback.format_exc(), err=True)
         sys.exit(1)
 
 

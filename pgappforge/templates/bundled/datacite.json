@@ -1,5 +1,6 @@
 {
   "name": "datacite",
+  "schema": "datacite",
   "label": "DataCite Metadata",
   "description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
   "color": "#9b59b6",
@@ -12,164 +13,205 @@
     "repositories",
     "doi"
   ],
+  "table_notes": {
+    "dc_creator": "Canonical creator/author registry; shared across resources so the same person is not duplicated when they contribute to multiple datasets.",
+    "dc_resource": "Central record for a citable research output identified by a DOI; holds all DataCite mandatory and recommended metadata fields.",
+    "dc_resource_creator": "Many-to-many join between resources and creators, preserving author order (order_num) as required by DataCite citation rules.",
+    "dc_download": "Append-only download event log used for usage statistics reporting to Make Data Count / COUNTER compliance."
+  },
   "tables": {
     "dc_creator": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this creator record"
       },
       {
         "name": "name",
         "type": "VARCHAR(500)",
-        "nullable": false
+        "nullable": false,
+        "description": "Full name of the creator (personal: 'Family, Given'; org: full name)"
       },
       {
         "name": "name_type",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Creator type per DataCite schema: 'Personal' or 'Organizational'"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Given (first) name for personal creators; NULL for organizations"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Family (last) name for personal creators; NULL for organizations"
       },
       {
         "name": "orcid",
-        "type": "VARCHAR(19)"
+        "type": "VARCHAR(19)",
+        "description": "ORCID iD in 0000-0000-0000-0000 format, uniquely identifying the researcher"
       },
       {
         "name": "affiliation",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of affiliation objects: [{name, affiliationIdentifier, affiliationIdentifierScheme}]"
       }
     ],
     "dc_resource": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key for this resource record"
       },
       {
         "name": "doi",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "Registered DataCite DOI (e.g. 10.5281/zenodo.1234567); globally unique persistent identifier"
       },
       {
         "name": "title",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of title objects: [{title, titleType, lang}]; titleType: AlternativeTitle/Subtitle/TranslatedTitle"
       },
       {
         "name": "resource_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Free-text resource type as provided by the depositor (e.g. 'CSV Dataset', 'Software package')"
       },
       {
         "name": "resource_type_general",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "DataCite controlled vocabulary type: Dataset, Software, Text, Image, Workflow, Other, etc."
       },
       {
         "name": "publisher",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Entity responsible for making the resource available (e.g. 'Zenodo', 'Dryad')"
       },
       {
         "name": "publication_year",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Year the resource was or will be made publicly available (YYYY)"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "Primary language of the resource per IETF BCP 47 (e.g. 'en', 'de', 'zh-CN')"
       },
       {
         "name": "version",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Version string of the resource as assigned by the depositor (e.g. '1.0', '2.3.1')"
       },
       {
         "name": "rights",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of license/rights objects: [{rights, rightsUri, rightsIdentifier, rightsIdentifierScheme}]"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of description objects: [{description, descriptionType, lang}]; types: Abstract/Methods/TechnicalInfo/Other"
       },
       {
         "name": "subject",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of subject/keyword objects: [{subject, subjectScheme, schemeUri, valueUri, classificationCode}]"
       },
       {
         "name": "related_identifiers",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of related resource links: [{relatedIdentifier, relatedIdentifierType, relationType, resourceTypeGeneral}]"
       },
       {
         "name": "funding_references",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of funder objects: [{funderName, funderIdentifier, funderIdentifierType, awardNumber, awardUri, awardTitle}]"
       },
       {
         "name": "geo_locations",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of spatial coverage objects: [{geoLocationPlace, geoLocationPoint, geoLocationBox, geoLocationPolygon}]"
       },
       {
         "name": "file_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Direct download URL for the primary file or archive associated with this resource"
       },
       {
         "name": "file_size_bytes",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Size of the primary file in bytes; used for storage accounting and display"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this record was first ingested into the local database"
       },
       {
         "name": "updated_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent metadata update from the DataCite API"
       }
     ],
     "dc_resource_creator": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this resource-creator association"
       },
       {
         "name": "resource_id",
         "type": "UUID",
-        "fk": "dc_resource.id"
+        "fk": "dc_resource.id",
+        "description": "References dc_resource.id; the resource this creator contributed to"
       },
       {
         "name": "creator_id",
         "type": "INTEGER",
-        "fk": "dc_creator.id"
+        "fk": "dc_creator.id",
+        "description": "References dc_creator.id; the contributing creator or author"
       },
       {
         "name": "order_num",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "1-based position of this creator in the author list (citation order)"
       }
     ],
     "dc_download": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incrementing event ID; BIGSERIAL to handle high-volume repositories"
       },
       {
         "name": "resource_id",
         "type": "UUID",
-        "fk": "dc_resource.id"
+        "fk": "dc_resource.id",
+        "description": "References dc_resource.id; the resource that was downloaded"
       },
       {
         "name": "downloaded_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "UTC timestamp when the download event was recorded"
       },
       {
         "name": "ip_country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code resolved from the downloader's IP address"
       },
       {
         "name": "client_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Category of downloading agent: 'browser', 'api', 'harvester', 'unknown'"
       }
     ]
   },

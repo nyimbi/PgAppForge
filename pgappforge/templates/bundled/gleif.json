@@ -1,5 +1,6 @@
 {
   "name": "gleif",
+  "schema": "gleif",
   "label": "GLEIF LEI (Entity IDs)",
   "description": "Global Legal Entity Identifier Foundation \u2014 universal business ID used in financial regulation worldwide",
   "color": "#2c3e50",
@@ -13,135 +14,169 @@
     "global",
     "lei"
   ],
+  "table_notes": {
+    "gleif_lei_record": "Core entity table holding one row per Legal Entity Identifier (LEI) with legal name, registered and HQ addresses, legal form, entity status, and LEI lifecycle dates.",
+    "gleif_relationship": "Level 2 ownership relationships between LEI holders \u2014 child_lei is owned/controlled by parent_lei under the stated relationship_type (DIRECT_CHILD or ULTIMATE_CHILD)."
+  },
   "tables": {
     "gleif_lei_record": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate auto-increment primary key"
       },
       {
         "name": "lei",
         "type": "VARCHAR(20)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "20-character Legal Entity Identifier (ISO 17442) \u2014 globally unique business ID"
       },
       {
         "name": "entity_legal_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Official registered legal name of the entity as filed with its registration authority"
       },
       {
         "name": "entity_status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Operational status of the entity: ACTIVE, INACTIVE, or NULL if unknown"
       },
       {
         "name": "entity_category",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "GLEIF entity category: GENERAL, BRANCH, FUND, or SOLE_PROPRIETOR"
       },
       {
         "name": "legal_jurisdiction",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "ISO 3166-1/3166-2 jurisdiction code where the entity is legally registered (e.g. US-DE, GB)"
       },
       {
         "name": "legal_form_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "GLEIF Entity Legal Form (ELF) code identifying the legal structure (ISO 20275)"
       },
       {
         "name": "legal_form_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name of the legal form (e.g. Limited Liability Company, Public Limited Company)"
       },
       {
         "name": "registered_address_line",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Street address lines of the entity\u2019s registered legal address, newline-separated"
       },
       {
         "name": "registered_address_city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City of the registered legal address"
       },
       {
         "name": "registered_address_country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code of the registered legal address"
       },
       {
         "name": "registered_address_postal",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Postal/ZIP code of the registered legal address"
       },
       {
         "name": "hq_address_line",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Street address lines of the entity\u2019s headquarters (may differ from registered address)"
       },
       {
         "name": "hq_city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City of the headquarters address"
       },
       {
         "name": "hq_country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code of the headquarters address"
       },
       {
         "name": "registration_authority",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "GLEIF Registration Authority (RA) identifier for the body that registered this entity"
       },
       {
         "name": "registration_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Entity\u2019s identifier within its registration authority (e.g. company number)"
       },
       {
         "name": "lei_status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "LEI lifecycle status: ISSUED, LAPSED, MERGED, RETIRED, ANNULLED, DUPLICATE, or TRANSFERRED"
       },
       {
         "name": "initial_registration",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the LEI was first issued to this entity"
       },
       {
         "name": "last_update",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the LEI record was last updated by the managing LOU"
       },
       {
         "name": "next_renewal",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date by which the entity must renew its LEI to remain ISSUED"
       },
       {
         "name": "managing_lou",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "LEI of the Local Operating Unit (LOU) managing this record. References gleif_lei_record.lei."
       }
     ],
     "gleif_relationship": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate auto-increment primary key"
       },
       {
         "name": "child_lei",
         "type": "VARCHAR(20)",
-        "fk": "gleif_lei_record.lei"
+        "fk": "gleif_lei_record.lei",
+        "description": "LEI of the controlled/subsidiary entity. References gleif_lei_record.lei."
       },
       {
         "name": "parent_lei",
         "type": "VARCHAR(20)",
-        "fk": "gleif_lei_record.lei"
+        "fk": "gleif_lei_record.lei",
+        "description": "LEI of the owning/controlling parent entity. References gleif_lei_record.lei."
       },
       {
         "name": "relationship_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Ownership tier: IS_DIRECTLY_CONSOLIDATED_BY (Level 1) or IS_ULTIMATELY_CONSOLIDATED_BY (Level 2)"
       },
       {
         "name": "relationship_status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Status of this relationship record: ACTIVE, INACTIVE, or NULL"
       },
       {
         "name": "accounting_standard",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Accounting consolidation standard used to determine control: IFRS, US_GAAP, or OTHER"
       },
       {
         "name": "period_start",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Start date of the reporting period for which this relationship was valid"
       },
       {
         "name": "period_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "End date of the reporting period for this relationship (NULL if ongoing)"
       }
     ]
   },

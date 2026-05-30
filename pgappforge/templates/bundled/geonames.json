@@ -1,5 +1,6 @@
 {
   "name": "geonames",
+  "schema": "geonames",
   "label": "GeoNames (Geographic Database)",
   "description": "World geographic database \u2014 11M+ place names, admin divisions, postal codes with coordinates",
   "short_description": "World geographic database \u2014 11M+ place names, admin divisions, postal codes with coordinates",
@@ -472,5 +473,8 @@
         "description": "ISO country code where this timezone is primarily used"
       }
     ]
-  }
+  },
+  "extensions": [
+    "postgis"
+  ]
 }

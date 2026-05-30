@@ -1,5 +1,6 @@
 {
   "name": "gtfs",
+  "schema": "gtfs",
   "label": "GTFS (Transit)",
   "description": "General Transit Feed Specification \u2014 used by every transit authority",
   "color": "#27ae60",
@@ -12,338 +13,418 @@
     "government",
     "legal-mandate"
   ],
+  "table_notes": {
+    "agency": "One row per transit operator; a single feed may contain multiple agencies sharing routes.",
+    "stops": "Physical locations where passengers board or alight; also models station entrances and generic nodes via location_type.",
+    "routes": "A named service grouping trips by direction; route_type codes follow the GTFS extended route type table.",
+    "calendar": "Weekly service bitmask (0/1 per day) plus a validity window; drives which trips run on which dates.",
+    "trips": "A single vehicle run along a route; links a route, a calendar service, and an optional shape for map display.",
+    "stop_times": "Ordered arrival/departure schedule for every stop on a trip; the largest table in any GTFS feed.",
+    "calendar_dates": "Exceptions to the regular calendar (added or removed service), e.g. public holidays or special events.",
+    "shapes": "Ordered sequence of lat/lng waypoints describing the on-road geometry of a trip\u2019s path for map rendering.",
+    "fare_attributes": "Pricing rules per fare class including currency, payment method, and transfer allowance."
+  },
   "tables": {
     "agency": [
       {
         "name": "agency_id",
         "type": "VARCHAR(100)",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the transit operator (primary key, referenced by routes.agency_id)"
       },
       {
         "name": "agency_name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Full public name of the transit agency as displayed to riders"
       },
       {
         "name": "agency_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Public website URL for the agency"
       },
       {
         "name": "agency_timezone",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "IANA timezone for interpreting all times in this feed (e.g. America/New_York)"
       },
       {
         "name": "agency_lang",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 639-1 primary language code used in agency communications"
       },
       {
         "name": "agency_phone",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Voice telephone number for passenger information or customer service"
       },
       {
         "name": "agency_fare_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of a web page where riders can purchase tickets or view fare information"
       },
       {
         "name": "agency_email",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Contact email address for rider feedback or customer service"
       }
     ],
     "stops": [
       {
         "name": "stop_id",
         "type": "VARCHAR(100)",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this stop or station node (referenced by stop_times.stop_id)"
       },
       {
         "name": "stop_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Short public-facing code displayed on signage and in rider-facing apps"
       },
       {
         "name": "stop_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name of the stop as shown to passengers"
       },
       {
         "name": "stop_desc",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Prose description of the stop location to help riders identify it"
       },
       {
         "name": "stop_lat",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 latitude of the stop in decimal degrees"
       },
       {
         "name": "stop_lon",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 longitude of the stop in decimal degrees"
       },
       {
         "name": "location_type",
         "type": "SMALLINT",
-        "default": "0"
+        "default": "0",
+        "description": "GTFS location type: 0=stop, 1=station, 2=station entrance, 3=generic node, 4=boarding area"
       },
       {
         "name": "parent_station",
         "type": "VARCHAR(100)",
-        "fk": "stops.stop_id"
+        "fk": "stops.stop_id",
+        "description": "References stops.stop_id of the parent station that contains this stop or entrance"
       },
       {
         "name": "wheelchair_boarding",
         "type": "SMALLINT",
-        "default": "0"
+        "default": "0",
+        "description": "Wheelchair accessibility: 0=no info, 1=accessible path exists, 2=no accessible path"
       },
       {
         "name": "platform_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Platform identifier within a multi-platform station (e.g. \u201c3A\u201d, \u201cNorth\u201d)"
       }
     ],
     "routes": [
       {
         "name": "route_id",
         "type": "VARCHAR(100)",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this route (referenced by trips.route_id)"
       },
       {
         "name": "agency_id",
         "type": "VARCHAR(100)",
-        "fk": "agency.agency_id"
+        "fk": "agency.agency_id",
+        "description": "References agency.agency_id of the operator running this route"
       },
       {
         "name": "route_short_name",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Short public designation shown on vehicles and signage (e.g. \u201c42\u201d, \u201cRed Line\u201d)"
       },
       {
         "name": "route_long_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Full descriptive name of the route shown in schedules (e.g. \u201cDowntown Express\u201d)"
       },
       {
         "name": "route_desc",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Additional description of the route\u2019s purpose or operating pattern"
       },
       {
         "name": "route_type",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "GTFS route type code: 0=tram, 1=subway, 2=rail, 3=bus, 4=ferry, 5=cable tram, 6=aerial, 7=funicular"
       },
       {
         "name": "route_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of a web page with schedule or service information specific to this route"
       },
       {
         "name": "route_color",
-        "type": "CHAR(6)"
+        "type": "CHAR(6)",
+        "description": "6-digit hex RGB color used to render this route on maps (no leading #)"
       },
       {
         "name": "route_text_color",
-        "type": "CHAR(6)"
+        "type": "CHAR(6)",
+        "description": "6-digit hex RGB color for text drawn over route_color for legible contrast"
       }
     ],
     "calendar": [
       {
         "name": "service_id",
         "type": "VARCHAR(100)",
-        "pk": true
+        "pk": true,
+        "description": "Unique service pattern identifier (referenced by trips.service_id and calendar_dates.service_id)"
       },
       {
         "name": "monday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Mondays within the date window: 1=yes, 0=no"
       },
       {
         "name": "tuesday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Tuesdays within the date window: 1=yes, 0=no"
       },
       {
         "name": "wednesday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Wednesdays within the date window: 1=yes, 0=no"
       },
       {
         "name": "thursday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Thursdays within the date window: 1=yes, 0=no"
       },
       {
         "name": "friday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Fridays within the date window: 1=yes, 0=no"
       },
       {
         "name": "saturday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Saturdays within the date window: 1=yes, 0=no"
       },
       {
         "name": "sunday",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Service runs on Sundays within the date window: 1=yes, 0=no"
       },
       {
         "name": "start_date",
         "type": "DATE",
-        "nullable": false
+        "nullable": false,
+        "description": "First date this service pattern is active (inclusive)"
       },
       {
         "name": "end_date",
         "type": "DATE",
-        "nullable": false
+        "nullable": false,
+        "description": "Last date this service pattern is active (inclusive)"
       }
     ],
     "trips": [
       {
         "name": "trip_id",
         "type": "VARCHAR(100)",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this vehicle run (referenced by stop_times.trip_id)"
       },
       {
         "name": "route_id",
         "type": "VARCHAR(100)",
         "fk": "routes.route_id",
-        "nullable": false
+        "nullable": false,
+        "description": "References routes.route_id of the route this trip belongs to"
       },
       {
         "name": "service_id",
         "type": "VARCHAR(100)",
-        "fk": "calendar.service_id"
+        "fk": "calendar.service_id",
+        "description": "References calendar.service_id defining which days this trip operates"
       },
       {
         "name": "trip_headsign",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Destination text displayed on the vehicle\u2019s front sign (e.g. \u201cDowntown\u201d)"
       },
       {
         "name": "direction_id",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Travel direction for distinguishing outbound/inbound: 0=one direction, 1=opposite direction"
       },
       {
         "name": "block_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Groups consecutive trips served by the same physical vehicle (for through-service)"
       },
       {
         "name": "shape_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "References shapes.shape_id defining the geographic path drawn on maps for this trip"
       },
       {
         "name": "wheelchair_accessible",
         "type": "SMALLINT",
-        "default": "0"
+        "default": "0",
+        "description": "Wheelchair accessibility of the vehicle: 0=no info, 1=accessible, 2=not accessible"
       }
     ],
     "stop_times": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key (GTFS stop_times has no natural PK)"
       },
       {
         "name": "trip_id",
         "type": "VARCHAR(100)",
         "fk": "trips.trip_id",
-        "nullable": false
+        "nullable": false,
+        "description": "References trips.trip_id of the vehicle run this stop time belongs to"
       },
       {
         "name": "stop_id",
         "type": "VARCHAR(100)",
         "fk": "stops.stop_id",
-        "nullable": false
+        "nullable": false,
+        "description": "References stops.stop_id of the physical stop visited at this point in the trip"
       },
       {
         "name": "stop_sequence",
         "type": "INTEGER",
-        "nullable": false
+        "nullable": false,
+        "description": "Non-negative integer ordering stops within a trip (does not need to be consecutive)"
       },
       {
         "name": "arrival_time",
-        "type": "INTERVAL"
+        "type": "INTERVAL",
+        "description": "Scheduled arrival time offset from service-day midnight (can exceed 24h for overnight runs)"
       },
       {
         "name": "departure_time",
-        "type": "INTERVAL"
+        "type": "INTERVAL",
+        "description": "Scheduled departure time offset from service-day midnight (can exceed 24h for overnight runs)"
       },
       {
         "name": "stop_headsign",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Override headsign text shown on the vehicle from this stop onward (overrides trip_headsign)"
       },
       {
         "name": "pickup_type",
         "type": "SMALLINT",
-        "default": "0"
+        "default": "0",
+        "description": "Passenger pickup policy: 0=regular, 1=no pickup, 2=phone agency, 3=coordinate with driver"
       },
       {
         "name": "drop_off_type",
         "type": "SMALLINT",
-        "default": "0"
+        "default": "0",
+        "description": "Passenger drop-off policy: 0=regular, 1=no drop-off, 2=phone agency, 3=coordinate with driver"
       }
     ],
     "calendar_dates": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "service_id",
         "type": "VARCHAR(100)",
-        "fk": "calendar.service_id"
+        "fk": "calendar.service_id",
+        "description": "References calendar.service_id whose normal schedule is being overridden on this date"
       },
       {
         "name": "date",
         "type": "DATE",
-        "nullable": false
+        "nullable": false,
+        "description": "The specific calendar date to which this exception applies"
       },
       {
         "name": "exception_type",
         "type": "SMALLINT",
-        "nullable": false
+        "nullable": false,
+        "description": "Type of exception: 1=service added on this date, 2=service removed on this date"
       }
     ],
     "shapes": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "shape_id",
         "type": "VARCHAR(100)",
-        "nullable": false
+        "nullable": false,
+        "description": "Groups all points belonging to one route path (referenced by trips.shape_id)"
       },
       {
         "name": "shape_pt_lat",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 latitude of this waypoint in decimal degrees"
       },
       {
         "name": "shape_pt_lon",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 longitude of this waypoint in decimal degrees"
       },
       {
         "name": "shape_pt_sequence",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Ordering integer for waypoints within a shape (ascending, not necessarily contiguous)"
       }
     ],
     "fare_attributes": [
       {
         "name": "fare_id",
         "type": "VARCHAR(100)",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this fare class (referenced by fare rules if present)"
       },
       {
         "name": "price",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Fare price in the units specified by currency_type"
       },
       {
         "name": "currency_type",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for the fare amount (e.g. USD, EUR, GBP)"
       },
       {
         "name": "payment_method",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "When fare is paid: 0=on board, 1=before boarding"
       },
       {
         "name": "transfers",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Number of transfers permitted: 0=none, 1=one transfer, 2=two transfers, NULL=unlimited"
       },
       {
         "name": "transfer_duration",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Seconds within which a transfer is valid after initial fare payment"
       }
     ]
   },

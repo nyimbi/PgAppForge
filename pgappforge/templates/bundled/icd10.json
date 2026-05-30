@@ -1,0 +1,255 @@
+{
+  "name": "icd10",
+  "schema": "icd10",
+  "label": "ICD-10-CM/PCS (Diagnoses & Procedures)",
+  "description": "International Classification of Diseases \u2014 required on every US medical claim",
+  "short_description": "WHO disease classification \u2014 required on every US medical claim since 2015",
+  "long_description": "ICD-10-CM (Clinical Modification) provides 70,000+ diagnosis codes covering all diseases, injuries, symptoms, and conditions. ICD-10-PCS provides 80,000+ procedure codes for inpatient hospital procedures. Both are maintained by CMS and updated annually on October 1. The data is free from CMS with no registration required.",
+  "when_to_use": "Required on all Medicare, Medicaid, and private insurance claims in the US since October 2015. Use for clinical coding systems, billing/revenue cycle management, clinical analytics, risk adjustment (HCC model), and quality measure reporting. Pair with FHIR R4 Condition/Procedure resources for complete clinical interoperability. Annual updates: https://www.cms.gov/medicare/coding-billing/icd-10-codes",
+  "color": "#c0392b",
+  "icon": "fa-notes-medical",
+  "version": "2025",
+  "source_url": "https://www.cms.gov/medicare/coding-billing/icd-10-codes",
+  "tags": [
+    "healthcare",
+    "billing",
+    "clinical",
+    "cms",
+    "regulation",
+    "us-mandate"
+  ],
+  "table_notes": {
+    "icd10_code": "Every ICD-10-CM code with its description, billing validity, and hierarchy position. Core table for diagnosis coding and billing. Index on code, parent_code, chapter, and is_valid_for_billing for common query patterns.",
+    "icd10_chapter": "The 22 ICD-10-CM chapters (A00-B99 Infectious diseases, C00-D49 Neoplasms, etc.). Each chapter covers a major disease category. Use for high-level analytics and report grouping.",
+    "icd10_block": "Code blocks within chapters (e.g. A00-A09 Intestinal infectious diseases). Essential for mid-level grouping in analytics dashboards.",
+    "icd10_pcs_code": "ICD-10-PCS (Procedure Coding System) codes for inpatient hospital procedures. 7-character codes with each position encoding a specific dimension (section, body system, operation, etc.). US inpatient only \u2014 outpatient uses CPT codes."
+  },
+  "tables": {
+    "icd10_chapter": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
+      },
+      {
+        "name": "chapter_number",
+        "type": "SMALLINT",
+        "unique": true,
+        "description": "Roman numeral chapter number (I through XXII)"
+      },
+      {
+        "name": "code_range_start",
+        "type": "CHAR(3)",
+        "description": "First code in this chapter (e.g. A00 for Infectious diseases)"
+      },
+      {
+        "name": "code_range_end",
+        "type": "CHAR(3)",
+        "description": "Last code in this chapter (e.g. B99)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(300)",
+        "nullable": false,
+        "description": "Full chapter title (e.g. Certain infectious and parasitic diseases)"
+      },
+      {
+        "name": "short_title",
+        "type": "VARCHAR(100)",
+        "description": "Abbreviated chapter title for UI display"
+      }
+    ],
+    "icd10_block": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
+      },
+      {
+        "name": "chapter_id",
+        "type": "INTEGER",
+        "fk": "icd10_chapter.id",
+        "description": "Chapter this block belongs to"
+      },
+      {
+        "name": "code_range_start",
+        "type": "CHAR(3)",
+        "description": "First code in this block (e.g. A00)"
+      },
+      {
+        "name": "code_range_end",
+        "type": "CHAR(3)",
+        "description": "Last code in this block (e.g. A09)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(300)",
+        "nullable": false,
+        "description": "Block title (e.g. Intestinal infectious diseases)"
+      }
+    ],
+    "icd10_code": [
+      {
+        "name": "code",
+        "type": "VARCHAR(7)",
+        "pk": true,
+        "description": "ICD-10-CM code (3-7 chars, e.g. J18.9 or S72.001A). No dots stored \u2014 add for display."
+      },
+      {
+        "name": "code_with_dots",
+        "type": "VARCHAR(8)",
+        "unique": true,
+        "description": "Display form with decimal point (e.g. J18.9). Used in UI and on claims forms."
+      },
+      {
+        "name": "short_description",
+        "type": "VARCHAR(60)",
+        "nullable": false,
+        "description": "CMS short description (fits on claim forms, max 60 chars)"
+      },
+      {
+        "name": "long_description",
+        "type": "VARCHAR(300)",
+        "description": "Full CMS description with complete clinical detail"
+      },
+      {
+        "name": "chapter_id",
+        "type": "INTEGER",
+        "fk": "icd10_chapter.id",
+        "description": "Chapter this code belongs to (for analytics grouping)"
+      },
+      {
+        "name": "block_id",
+        "type": "INTEGER",
+        "fk": "icd10_block.id",
+        "description": "Code block within the chapter"
+      },
+      {
+        "name": "parent_code",
+        "type": "VARCHAR(7)",
+        "fk": "icd10_code.code",
+        "description": "Parent code in the hierarchy (e.g. J18 is parent of J18.9)"
+      },
+      {
+        "name": "is_valid_for_billing",
+        "type": "BOOLEAN",
+        "default": "false",
+        "description": "True = billable (leaf code). False = header code, not valid on claims."
+      },
+      {
+        "name": "is_header",
+        "type": "BOOLEAN",
+        "default": "false",
+        "description": "True if this is a category header code (not directly billable)"
+      },
+      {
+        "name": "code_type",
+        "type": "VARCHAR(10)",
+        "default": "'CM'",
+        "description": "CM = diagnosis code, PCS = procedure code"
+      },
+      {
+        "name": "hcc_code",
+        "type": "VARCHAR(10)",
+        "description": "CMS Hierarchical Condition Category code for Medicare risk adjustment (NULL if not in HCC model)"
+      },
+      {
+        "name": "poa_applicable",
+        "type": "BOOLEAN",
+        "default": "true",
+        "description": "Present On Admission indicator required on inpatient claims (Y/N/U/W/1)"
+      },
+      {
+        "name": "gender_specific",
+        "type": "CHAR(1)",
+        "description": "Null=any, M=male only, F=female only (some codes are sex-specific)"
+      },
+      {
+        "name": "age_range_min",
+        "type": "SMALLINT",
+        "description": "Minimum age in years for this code to be valid (NULL=no restriction)"
+      },
+      {
+        "name": "age_range_max",
+        "type": "SMALLINT",
+        "description": "Maximum age in years for this code to be valid (NULL=no restriction)"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE",
+        "description": "Date this code became valid (usually October 1 of the release year)"
+      },
+      {
+        "name": "termination_date",
+        "type": "DATE",
+        "description": "Date this code was retired (NULL=still active)"
+      },
+      {
+        "name": "search_vector",
+        "type": "TSVECTOR",
+        "description": "PostgreSQL FTS vector over short+long description for fast keyword search"
+      }
+    ],
+    "icd10_pcs_code": [
+      {
+        "name": "code",
+        "type": "CHAR(7)",
+        "pk": true,
+        "description": "7-character ICD-10-PCS code (e.g. 0BH17EZ = Medical/Surgical, Respiratory, Insertion)"
+      },
+      {
+        "name": "description",
+        "type": "VARCHAR(300)",
+        "nullable": false,
+        "description": "Full procedure description built from the 7 axial values"
+      },
+      {
+        "name": "section",
+        "type": "CHAR(1)",
+        "description": "Position 1: Section (0=Medical/Surgical, 1=Obstetrics, 2=Placement, etc.)"
+      },
+      {
+        "name": "body_system",
+        "type": "CHAR(1)",
+        "description": "Position 2: Body system (e.g. B=Respiratory, H=Heart and Great Vessels)"
+      },
+      {
+        "name": "operation",
+        "type": "CHAR(1)",
+        "description": "Position 3: Root operation (e.g. B=Excision, H=Insertion, R=Replacement)"
+      },
+      {
+        "name": "body_part",
+        "type": "CHAR(1)",
+        "description": "Position 4: Specific body part being operated on"
+      },
+      {
+        "name": "approach",
+        "type": "CHAR(1)",
+        "description": "Position 5: Approach (0=Open, 3=Percutaneous, 4=Percutaneous Endoscopic, 7=Via Natural/Artificial Opening)"
+      },
+      {
+        "name": "device",
+        "type": "CHAR(1)",
+        "description": "Position 6: Device left in body (Z=No Device, if applicable)"
+      },
+      {
+        "name": "qualifier",
+        "type": "CHAR(1)",
+        "description": "Position 7: Qualifier specifying additional detail about the procedure"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE",
+        "description": "Date this PCS code became effective (October 1 of release year)"
+      },
+      {
+        "name": "termination_date",
+        "type": "DATE",
+        "description": "Date retired (NULL=active). PCS codes change significantly each year."
+      }
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 {
   "name": "fhir-r4",
+  "schema": "fhir_r4",
   "label": "HL7 FHIR R4",
   "description": "Healthcare resources \u2014 US/EU/AU government mandated standard",
   "color": "#3498db",
@@ -13,454 +14,566 @@
     "us-mandate",
     "eu-mandate"
   ],
+  "table_notes": {
+    "patient": "Demographic and administrative record for an individual receiving care; maps to FHIR Patient resource.",
+    "practitioner": "Licensed healthcare professional who provides or participates in patient care; maps to FHIR Practitioner resource.",
+    "organization": "Healthcare provider institution (hospital, clinic, lab, payer) responsible for delivering services.",
+    "encounter": "A clinical interaction between patient and provider; the central linking record for most clinical events.",
+    "observation": "Measurements and simple clinical assessments (vitals, lab results, social history) coded with LOINC or SNOMED CT.",
+    "condition": "Diagnosed problem or clinical finding recorded against a patient; coded with ICD-10 or SNOMED CT.",
+    "medication_request": "Prescriber-issued order for a medication, including dosage instructions; coded with RxNorm.",
+    "diagnostic_report": "Structured result report (labs, imaging, pathology) linking observations to a clinical interpretation.",
+    "appointment": "Scheduled future or past visit between patient and practitioner; lifecycle managed by FHIR appointment status codes.",
+    "allergy_intolerance": "Recorded allergy or adverse reaction risk for a patient; coded with NDF-RT, RxNorm, or SNOMED CT."
+  },
   "tables": {
     "patient": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Patient resource; stable across versions"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Patient's family (last) name"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Patient's given (first/middle) name(s), space-separated"
       },
       {
         "name": "birth_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date of birth; partial dates (YYYY or YYYY-MM) are stored as the first day of that period"
       },
       {
         "name": "gender",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Administrative gender: male | female | other | unknown (FHIR AdministrativeGender code)"
       },
       {
         "name": "phone",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Primary contact phone number in E.164 or local format"
       },
       {
         "name": "email",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Primary contact email address (RFC 5321 maximum 320 chars)"
       },
       {
         "name": "active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether this patient record is in active use; false = merged or deleted"
       },
       {
         "name": "deceased_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time of death; NULL means patient is alive or death status unknown"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of FHIR Address objects: {use, type, line[], city, state, postalCode, country}"
       },
       {
         "name": "identifier",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of external identifiers: [{system (URI), value}] \u2014 MRN, SSN, passport, etc."
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Patient resource payload for round-trip fidelity and extensions"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this row was inserted into the database"
       }
     ],
     "practitioner": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Practitioner resource"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Practitioner's family (last) name"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Practitioner's given (first/middle) name(s)"
       },
       {
         "name": "npi",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "US National Provider Identifier (NPI) \u2014 10-digit NPPES-assigned number"
       },
       {
         "name": "specialty",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Primary clinical specialty text (e.g. Internal Medicine, Radiology)"
       },
       {
         "name": "active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether this practitioner record is active in the system"
       },
       {
         "name": "qualification",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of credentials: [{code (SNOMED/HL7), issuer, period}] \u2014 degrees, licenses, certifications"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Practitioner resource payload for round-trip fidelity and extensions"
       }
     ],
     "organization": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Organization resource"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Official name of the organization as used for display and search"
       },
       {
         "name": "type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Organization type code (FHIR OrganizationType): prov | dept | team | govt | ins | pay | edu | reli | crs | cg | bus | other"
       },
       {
         "name": "active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether this organization record is active; false = dissolved or merged"
       },
       {
         "name": "telecom",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of contact points: [{system (phone|fax|email|url), value, use}]"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of FHIR Address objects for the organization's physical and postal locations"
       },
       {
         "name": "npi",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "US National Provider Identifier for the organization (organizational NPI)"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Organization resource payload for round-trip fidelity and extensions"
       }
     ],
     "encounter": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Encounter resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the patient this encounter is about"
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
-        "fk": "practitioner.id"
+        "fk": "practitioner.id",
+        "description": "References practitioner.id \u2014 primary clinician responsible for this encounter"
       },
       {
         "name": "organization_id",
         "type": "UUID",
-        "fk": "organization.id"
+        "fk": "organization.id",
+        "description": "References organization.id \u2014 facility or organization where the encounter took place"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR EncounterStatus: planned | arrived | triaged | in-progress | onleave | finished | cancelled"
       },
       {
         "name": "class_code",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "HL7 v3 ActEncounterCode: AMB (ambulatory) | IMP (inpatient) | EMER (emergency) | VR (virtual) etc."
       },
       {
         "name": "type_code",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Specific type of encounter coded with SNOMED CT or local coding system"
       },
       {
         "name": "start_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the encounter started (patient arrived or encounter period began)"
       },
       {
         "name": "end_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the encounter ended; NULL if still in progress"
       },
       {
         "name": "reason_code",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Chief complaint or visit reason coded with ICD-10 or SNOMED CT"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Encounter resource payload including participants, hospitalization, and locations"
       }
     ],
     "observation": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Observation resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the subject of the observation"
       },
       {
         "name": "encounter_id",
         "type": "UUID",
-        "fk": "encounter.id"
+        "fk": "encounter.id",
+        "description": "References encounter.id \u2014 the visit during which this observation was made"
       },
       {
         "name": "code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "LOINC code identifying what was observed (e.g. 8867-4 = heart rate, 718-7 = hemoglobin)"
       },
       {
         "name": "code_display",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name for the LOINC or SNOMED CT observation code"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR ObservationStatus: registered | preliminary | final | amended | corrected | cancelled"
       },
       {
         "name": "effective_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Clinically relevant time when the observation was made or specimen collected"
       },
       {
         "name": "value_quantity",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Numeric measurement value (e.g. 98.6 for temperature); unit in value_unit"
       },
       {
         "name": "value_unit",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "UCUM unit of measure for value_quantity (e.g. mg/dL, mmHg, kg, [degF])"
       },
       {
         "name": "value_string",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Textual observation value when numeric representation is not applicable"
       },
       {
         "name": "interpretation",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "HL7 ObservationInterpretation code: N (normal) | H (high) | L (low) | A (abnormal) | AA | HH | LL"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Observation resource including components, reference ranges, and derived-from links"
       }
     ],
     "condition": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Condition resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the patient this condition is recorded against"
       },
       {
         "name": "encounter_id",
         "type": "UUID",
-        "fk": "encounter.id"
+        "fk": "encounter.id",
+        "description": "References encounter.id \u2014 the visit at which this condition was first documented"
       },
       {
         "name": "code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "ICD-10-CM or SNOMED CT code identifying the condition (e.g. E11.9 = type 2 diabetes)"
       },
       {
         "name": "code_display",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for the ICD-10 or SNOMED CT condition code"
       },
       {
         "name": "clinical_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR ConditionClinicalStatus: active | recurrence | relapse | inactive | remission | resolved"
       },
       {
         "name": "verification_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR ConditionVerificationStatus: unconfirmed | provisional | differential | confirmed | refuted"
       },
       {
         "name": "onset_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Estimated or known date the condition first appeared"
       },
       {
         "name": "abatement_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the condition resolved or went into remission; NULL if still active"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Condition resource including stage, evidence, and body site details"
       }
     ],
     "medication_request": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this MedicationRequest resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the patient for whom the medication is prescribed"
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
-        "fk": "practitioner.id"
+        "fk": "practitioner.id",
+        "description": "References practitioner.id \u2014 the prescribing clinician"
       },
       {
         "name": "medication_code",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "RxNorm concept unique identifier (RxCUI) for the prescribed drug product"
       },
       {
         "name": "medication_display",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable RxNorm drug name including strength and dose form"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR MedicationRequestStatus: active | on-hold | cancelled | completed | entered-in-error | stopped | draft"
       },
       {
         "name": "intent",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR MedicationRequestIntent: proposal | plan | order | original-order | reflex-order | filler-order | instance-order | option"
       },
       {
         "name": "authored_on",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the prescription was written by the prescriber"
       },
       {
         "name": "dosage",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of FHIR Dosage objects: [{text, route, doseAndRate, timing, maxDosePerPeriod}]"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR MedicationRequest resource including dispense request, substitution, and prior auth"
       }
     ],
     "diagnostic_report": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this DiagnosticReport resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the patient whose specimen or study was reported on"
       },
       {
         "name": "encounter_id",
         "type": "UUID",
-        "fk": "encounter.id"
+        "fk": "encounter.id",
+        "description": "References encounter.id \u2014 the visit that prompted this diagnostic report"
       },
       {
         "name": "code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "LOINC panel code identifying the type of report (e.g. 58410-2 = CBC with differential)"
       },
       {
         "name": "code_display",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable LOINC panel or report name"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR DiagnosticReportStatus: registered | partial | preliminary | final | amended | corrected | appended | cancelled"
       },
       {
         "name": "effective_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Clinically relevant time of the observations (e.g. specimen collection time)"
       },
       {
         "name": "issued_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the report was released and made available to clinicians"
       },
       {
         "name": "conclusion",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text clinical interpretation summarising the findings of the report"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR DiagnosticReport resource including referenced observations, imaging, and media"
       }
     ],
     "appointment": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this Appointment resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the patient participant in this appointment"
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
-        "fk": "practitioner.id"
+        "fk": "practitioner.id",
+        "description": "References practitioner.id \u2014 the clinician participant in this appointment"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR AppointmentStatus: proposed | pending | booked | arrived | fulfilled | cancelled | noshow | entered-in-error | checked-in | waitlist"
       },
       {
         "name": "service_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Type of service being scheduled (SNOMED CT or local code, e.g. follow-up, new patient, procedure)"
       },
       {
         "name": "start_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Scheduled start date/time of the appointment"
       },
       {
         "name": "end_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Scheduled end date/time of the appointment"
       },
       {
-        "name": "comment",
-        "type": "TEXT"
+        "name": "note_text",
+        "type": "TEXT",
+        "description": "Additional notes or instructions for the patient or care team regarding this appointment"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR Appointment resource including all participants, slot references, and cancellation reason"
       }
     ],
     "allergy_intolerance": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "FHIR logical id for this AllergyIntolerance resource"
       },
       {
         "name": "patient_id",
         "type": "UUID",
-        "fk": "patient.id"
+        "fk": "patient.id",
+        "description": "References patient.id \u2014 the patient who has this allergy or intolerance"
       },
       {
         "name": "code",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "NDF-RT, RxNorm, or SNOMED CT code identifying the allergen substance or class"
       },
       {
         "name": "code_display",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name of the allergen from NDF-RT, RxNorm, or SNOMED CT"
       },
       {
         "name": "clinical_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FHIR AllergyIntoleranceClinicalStatus: active | inactive | resolved"
       },
       {
         "name": "criticality",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Potential harm severity: low | high | unable-to-assess (FHIR AllergyIntoleranceCriticality)"
       },
       {
         "name": "onset_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time the allergy or intolerance was first identified or documented"
       },
       {
         "name": "reaction",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of adverse reactions: [{substance (SNOMED), manifestation[], severity, exposureRoute}]"
       },
       {
         "name": "resource",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full FHIR AllergyIntolerance resource including recorder, asserter, and note details"
       }
     ]
   },

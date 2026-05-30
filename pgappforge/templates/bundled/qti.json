@@ -1,7 +1,11 @@
 {
   "name": "qti",
+  "schema": "qti",
   "label": "IMS Global QTI (Assessment)",
   "description": "Question and Test Interoperability \u2014 standardized assessment/exam data",
+  "short_description": "Question and Test Interoperability \u2014 standardized assessment/exam data",
+  "long_description": "IMS QTI (Question and Test Interoperability) 3.0 is the global standard for assessment content. The schema covers item banks for storing questions with interaction types (multiple choice, fill-in-blank, hot spot), test definitions with timing and attempt rules, and attempt records with learner responses and scores.",
+  "when_to_use": "Use for assessment platforms, exam management systems, or any edtech tool that creates/delivers tests. Used by major testing organizations (Educational Testing Service, Pearson Vue, JAMB) for question bank management. Required for integration with IMS-certified LMS platforms. Essential for adaptive testing systems.",
   "color": "#e67e22",
   "icon": "fa-graduation-cap",
   "version": "3.0",
@@ -12,197 +16,242 @@
     "testing",
     "ims-global"
   ],
+  "table_notes": {
+    "qti_item_bank": "Named collection grouping related assessment items; acts as a folder/namespace for items sharing a subject, course, or owner.",
+    "qti_item": "Core assessment item record storing the question content, interaction type, scored choices, and metadata such as difficulty and point value.",
+    "qti_test": "Test definition combining timing rules, attempt limits, shuffle behaviour, and pass threshold \u2014 the blueprint a candidate receives.",
+    "qti_test_item": "Join table linking items to tests with explicit ordering, optional section grouping, and per-item score weighting.",
+    "qti_attempt": "Single candidate sitting of a test, capturing start/submit timestamps, all item responses, computed score, and pass/fail outcome."
+  },
   "tables": {
     "qti_item_bank": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the item bank"
       },
       {
         "name": "title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name of the item bank (e.g. 'Algebra I \u2014 Unit 3')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the bank's scope, subject, or intended audience"
       },
       {
         "name": "owner_id",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "References the user/organization that owns and administers this bank"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the bank was created (UTC)"
       }
     ],
     "qti_item": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the assessment item"
       },
       {
         "name": "bank_id",
         "type": "UUID",
-        "fk": "qti_item_bank.id"
+        "fk": "qti_item_bank.id",
+        "description": "References qti_item_bank \u2014 the collection this item belongs to"
       },
       {
         "name": "identifier",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "QTI spec identifier string (unique within a bank, used for IMS import/export)"
       },
       {
         "name": "title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Short title or stem summary shown in item-bank management UIs"
       },
       {
         "name": "interaction_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "QTI interaction type: choiceInteraction, textEntryInteraction, hotspotInteraction, etc."
       },
       {
         "name": "prompt",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full question text presented to the candidate, may contain HTML/MathML"
       },
       {
         "name": "choices",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of answer options: [{identifier, content, fixed}] \u2014 used for choice/order interactions"
       },
       {
         "name": "correct_response",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Expected answer(s): {cardinality, value} following QTI responseDeclaration format"
       },
       {
         "name": "feedback",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Per-choice or modal feedback: {correct: '...', incorrect: '...', perChoice: {id: msg}}"
       },
       {
         "name": "tags",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Flat array of taxonomy or curriculum tags (e.g. ['bloom:apply', 'ccss:6.EE.A.1'])"
       },
       {
         "name": "difficulty",
-        "type": "NUMERIC(3,2)"
+        "type": "NUMERIC(3,2)",
+        "description": "Item difficulty parameter in [0,1] (higher = easier, per IRT p-value convention)"
       },
       {
         "name": "points",
         "type": "NUMERIC(6,2)",
-        "default": "1"
+        "default": "1",
+        "description": "Maximum raw score awarded for a fully correct response to this item"
       }
     ],
     "qti_test": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the test definition"
       },
       {
         "name": "title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Display title shown to candidates on the test cover page"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Administrative description of the test's purpose, scope, and target population"
       },
       {
         "name": "time_limit_minutes",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Maximum minutes allowed per attempt; NULL means untimed"
       },
       {
         "name": "max_attempts",
         "type": "INTEGER",
-        "default": "1"
+        "default": "1",
+        "description": "Number of attempts a candidate may make before being locked out"
       },
       {
         "name": "shuffle_items",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "When true, item order is randomised per attempt to reduce answer sharing"
       },
       {
         "name": "pass_score",
-        "type": "NUMERIC(6,2)"
+        "type": "NUMERIC(6,2)",
+        "description": "Minimum score required to mark the attempt as passed; NULL disables pass/fail logic"
       },
       {
         "name": "total_points",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Sum of all item point values \u2014 used to normalise percentage scores"
       },
       {
         "name": "instructions",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Candidate-facing instructions displayed before the test begins"
       }
     ],
     "qti_test_item": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the test-item association"
       },
       {
         "name": "test_id",
         "type": "UUID",
-        "fk": "qti_test.id"
+        "fk": "qti_test.id",
+        "description": "References qti_test \u2014 the test this item is included in"
       },
       {
         "name": "item_id",
         "type": "UUID",
-        "fk": "qti_item.id"
+        "fk": "qti_item.id",
+        "description": "References qti_item \u2014 the item being included in the test"
       },
       {
-        "name": "sequence",
-        "type": "INTEGER"
+        "name": "seq_num",
+        "type": "INTEGER",
+        "description": "1-based display order of this item within its section (or the whole test)"
       },
       {
         "name": "section",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Optional section/part label grouping items (e.g. 'Part A', 'Reading Comprehension')"
       },
       {
         "name": "weight",
         "type": "NUMERIC(6,4)",
-        "default": "1"
+        "default": "1",
+        "description": "Multiplier applied to the item's raw score when computing the test total"
       }
     ],
     "qti_attempt": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the candidate attempt"
       },
       {
         "name": "test_id",
         "type": "UUID",
-        "fk": "qti_test.id"
+        "fk": "qti_test.id",
+        "description": "References qti_test \u2014 the test definition this attempt is against"
       },
       {
         "name": "candidate_id",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "References the learner/candidate in the application's user table"
       },
       {
         "name": "started_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp when the candidate began the attempt"
       },
       {
         "name": "submitted_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp when the candidate submitted (NULL if still in progress)"
       },
       {
         "name": "score",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Computed total score after all item responses are graded"
       },
       {
         "name": "passed",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if score >= qti_test.pass_score; NULL if test has no pass threshold"
       },
       {
         "name": "responses",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Map of item responses: {item_id: {response, score, time_spent_seconds}}"
       },
       {
         "name": "feedback",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Per-item feedback delivered to the candidate: {item_id: {text, correct}}"
       }
     ]
-  },
-  "short_description": "Question and Test Interoperability \u2014 standardized assessment/exam data",
-  "long_description": "IMS QTI (Question and Test Interoperability) 3.0 is the global standard for assessment content. The schema covers item banks for storing questions with interaction types (multiple choice, fill-in-blank, hot spot), test definitions with timing and attempt rules, and attempt records with learner responses and scores.",
-  "when_to_use": "Use for assessment platforms, exam management systems, or any edtech tool that creates/delivers tests. Used by major testing organizations (Educational Testing Service, Pearson Vue, JAMB) for question bank management. Required for integration with IMS-certified LMS platforms. Essential for adaptive testing systems."
+  }
 }

@@ -1,7 +1,11 @@
 {
   "name": "prov-o",
+  "schema": "prov_o",
   "label": "PROV-O (Data Provenance)",
   "description": "W3C data provenance ontology \u2014 track lineage and origin of any data artifact",
+  "short_description": "W3C data provenance ontology \u2014 track lineage and origin of any data artifact",
+  "long_description": "W3C PROV-O (Provenance Ontology) provides a universal model for recording the provenance (lineage, origin, history) of data \u2014 who created it, what processes transformed it, which sources it derived from, and when each change occurred. The schema implements the PROV core: entities (data artifacts), activities (processes), agents (people/systems), and their relationships.",
+  "when_to_use": "Use for data governance platforms, scientific reproducibility tools, regulatory audit trails, AI/ML model lineage tracking, or any system where data trust requires documented origins. Required for FDA 21 CFR Part 11 electronic records compliance, GDPR Article 5 accountability, and ISO 27001 change management. Essential for MLOps platforms tracking model training provenance.",
   "color": "#2980b9",
   "icon": "fa-sitemap",
   "version": "2013",
@@ -13,201 +17,247 @@
     "science",
     "governance"
   ],
+  "table_notes": {
+    "prov_entity": "Represents a PROV Entity: any data artifact, file, dataset, or digital object whose provenance is being tracked.",
+    "prov_agent": "Represents a PROV Agent: a person, software system, or organisation responsible for an activity or entity.",
+    "prov_activity": "Represents a PROV Activity: a process or transformation that occurred over a time interval, consuming and producing entities.",
+    "prov_was_generated_by": "Association linking an entity to the activity that produced it (prov:wasGeneratedBy). Records the exact generation timestamp and optional role.",
+    "prov_used": "Association linking an activity to an entity it consumed as input (prov:used). Records the usage timestamp and optional role.",
+    "prov_was_attributed_to": "Associates an entity with the agent that is responsible for it (prov:wasAttributedTo), with an optional role qualifier.",
+    "prov_was_derived_from": "Records that one entity was derived from another (prov:wasDerivedFrom), including the derivation subtype (e.g. revision, quotation, primary source)."
+  },
   "tables": {
     "prov_entity": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal references"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique IRI identifying this entity (e.g. http://example.org/data/file-v1)"
       },
       {
         "name": "label",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable display name for the entity"
       },
       {
         "name": "entity_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "PROV subtype of entity: e.g. prov:Plan, prov:Collection, or a domain-specific class"
       },
       {
         "name": "location",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Physical or logical location of the artifact (file path, S3 URL, database URI, etc.)"
       },
       {
         "name": "format",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "MIME type or format identifier of the artifact (e.g. text/csv, application/parquet)"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Arbitrary PROV-compatible key/value metadata; structure: {\"key\": \"value\"}"
       },
       {
         "name": "generated_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the entity came into existence (prov:generatedAtTime)"
       },
       {
         "name": "invalidated_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the entity ceased to be valid or usable (prov:invalidatedAtTime)"
       }
     ],
     "prov_agent": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal references"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique IRI identifying this agent (e.g. mailto:user@example.org)"
       },
       {
         "name": "label",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable display name for the agent (person name or system name)"
       },
       {
         "name": "agent_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "PROV agent subtype: prov:Person, prov:Organization, or prov:SoftwareAgent"
       },
       {
         "name": "email",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Contact email address for human agents (RFC 5321 max length)"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Arbitrary PROV-compatible key/value metadata; structure: {\"key\": \"value\"}"
       }
     ],
     "prov_activity": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for internal references"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique IRI identifying this activity (e.g. http://example.org/runs/etl-2024-01)"
       },
       {
         "name": "label",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable description of what the activity did"
       },
       {
         "name": "activity_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Domain-specific classification of the activity (e.g. ETL, ModelTraining, FileUpload)"
       },
       {
         "name": "started_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the activity began (prov:startedAtTime)"
       },
       {
         "name": "ended_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the activity completed (prov:endedAtTime); NULL if still running"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Arbitrary PROV-compatible key/value metadata; structure: {\"key\": \"value\"}"
       }
     ],
     "prov_was_generated_by": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "entity_id",
         "type": "UUID",
-        "fk": "prov_entity.id"
+        "fk": "prov_entity.id",
+        "description": "The entity that was produced; references prov_entity.id"
       },
       {
         "name": "activity_id",
         "type": "UUID",
-        "fk": "prov_activity.id"
+        "fk": "prov_activity.id",
+        "description": "The activity that produced the entity; references prov_activity.id"
       },
       {
         "name": "at_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Exact moment of generation within the activity's time span"
       },
       {
-        "name": "role",
-        "type": "VARCHAR(100)"
+        "name": "party_role",
+        "type": "VARCHAR(100)",
+        "description": "Role the entity played in the generation relationship (e.g. output, primaryOutput)"
       }
     ],
     "prov_used": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "activity_id",
         "type": "UUID",
-        "fk": "prov_activity.id"
+        "fk": "prov_activity.id",
+        "description": "The activity that consumed the entity; references prov_activity.id"
       },
       {
         "name": "entity_id",
         "type": "UUID",
-        "fk": "prov_entity.id"
+        "fk": "prov_entity.id",
+        "description": "The entity consumed as input by the activity; references prov_entity.id"
       },
       {
         "name": "at_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Exact moment the entity was accessed or consumed within the activity"
       },
       {
-        "name": "role",
-        "type": "VARCHAR(100)"
+        "name": "party_role",
+        "type": "VARCHAR(100)",
+        "description": "Role the entity played in this usage (e.g. input, trainingData, configFile)"
       }
     ],
     "prov_was_attributed_to": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "entity_id",
         "type": "UUID",
-        "fk": "prov_entity.id"
+        "fk": "prov_entity.id",
+        "description": "The entity being attributed to an agent; references prov_entity.id"
       },
       {
         "name": "agent_id",
         "type": "UUID",
-        "fk": "prov_agent.id"
+        "fk": "prov_agent.id",
+        "description": "The agent responsible for the entity; references prov_agent.id"
       },
       {
-        "name": "role",
-        "type": "VARCHAR(100)"
+        "name": "party_role",
+        "type": "VARCHAR(100)",
+        "description": "Role the agent held in relation to the entity (e.g. author, owner, curator)"
       }
     ],
     "prov_was_derived_from": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "derived_entity_id",
         "type": "UUID",
-        "fk": "prov_entity.id"
+        "fk": "prov_entity.id",
+        "description": "The newly derived entity (the result); references prov_entity.id"
       },
       {
         "name": "source_entity_id",
         "type": "UUID",
-        "fk": "prov_entity.id"
+        "fk": "prov_entity.id",
+        "description": "The source entity the derived entity was produced from; references prov_entity.id"
       },
       {
         "name": "derivation_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "PROV derivation subtype: prov:Revision, prov:Quotation, or prov:PrimarySource"
       }
     ]
-  },
-  "short_description": "W3C data provenance ontology \u2014 track lineage and origin of any data artifact",
-  "long_description": "W3C PROV-O (Provenance Ontology) provides a universal model for recording the provenance (lineage, origin, history) of data \u2014 who created it, what processes transformed it, which sources it derived from, and when each change occurred. The schema implements the PROV core: entities (data artifacts), activities (processes), agents (people/systems), and their relationships.",
-  "when_to_use": "Use for data governance platforms, scientific reproducibility tools, regulatory audit trails, AI/ML model lineage tracking, or any system where data trust requires documented origins. Required for FDA 21 CFR Part 11 electronic records compliance, GDPR Article 5 accountability, and ISO 27001 change management. Essential for MLOps platforms tracking model training provenance."
+  }
 }

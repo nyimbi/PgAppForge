@@ -1,5 +1,6 @@
 {
   "name": "w3c-wot",
+  "schema": "w3c_wot",
   "label": "W3C WoT (IoT)",
   "description": "Web of Things Thing Description \u2014 IoT device interoperability",
   "color": "#1a7abf",
@@ -12,259 +13,325 @@
     "smart-home",
     "industry40"
   ],
+  "table_notes": {
+    "wot_thing": "Root registry of every physical or virtual IoT device; security definitions and JSON-LD context are stored as JSONB alongside the geographic location.",
+    "wot_property": "Describes a readable/writable data point exposed by a Thing (e.g. temperature, switch state) including its data type, unit, and access forms.",
+    "wot_property_value": "Time-series observation store for property readings; typed columns (numeric, text, bool, json) accommodate all WoT data types in one table.",
+    "wot_action": "Defines an invocable operation on a Thing (e.g. reboot, set-brightness) with JSON Schema for request input and response output.",
+    "wot_event": "Describes an asynchronous notification a Thing can emit (e.g. threshold-exceeded, door-opened) with its payload schema.",
+    "wot_event_log": "Append-only record of every event emission from any Thing; high-volume table suited for partitioning by occurred_at."
+  },
   "tables": {
     "wot_thing": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Stable device identifier; used as FK target in all child tables"
       },
       {
         "name": "title",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable name of the Thing as specified in its Thing Description"
       },
       {
         "name": "type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "WoT @type semantic annotation (e.g. saref:Sensor, schema:Device)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the device's purpose and capabilities"
       },
       {
         "name": "base_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Base URL prepended to all relative form hrefs in the Thing Description"
       },
       {
         "name": "manufacturer",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the company or person that manufactured or deployed this device"
       },
       {
         "name": "model",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Model identifier or product name assigned by the manufacturer"
       },
       {
         "name": "serial_number",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Unique serial number assigned to this physical device unit"
       },
       {
         "name": "firmware_version",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Currently running firmware version string for compatibility tracking"
       },
       {
         "name": "support_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL to documentation or support resources for this device model"
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT, 4326)"
+        "type": "GEOGRAPHY(POINT, 4326)",
+        "description": "WGS84 physical location of the device; enables ST_DWithin proximity queries"
       },
       {
         "name": "registered_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the device was first registered in this platform"
       },
       {
         "name": "last_seen_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent successful communication with this device"
       },
       {
         "name": "is_online",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "Current connectivity status; updated by the health-check or heartbeat mechanism"
       },
       {
         "name": "security_definitions",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "WoT security scheme definitions (e.g. {\"bearer\": {\"scheme\": \"bearer\", \"in\": \"header\"}})"
       },
       {
         "name": "context",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSON-LD @context array/object mapping semantic vocabularies to namespace URIs"
       }
     ],
     "wot_property": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key; referenced by wot_property_value.property_id"
       },
       {
         "name": "thing_id",
         "type": "UUID",
-        "fk": "wot_thing.id"
+        "fk": "wot_thing.id",
+        "description": "Device that exposes this property; references wot_thing.id"
       },
       {
         "name": "name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Machine-readable property name used in protocol interactions (e.g. temperature)"
       },
       {
         "name": "title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for display in UIs (e.g. Ambient Temperature)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Detailed explanation of what this property measures or controls"
       },
       {
         "name": "type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "JSON Schema data type of the property value (number, string, boolean, object, array)"
       },
       {
         "name": "unit",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Physical unit of measurement (e.g. Celsius, lux, Pascal); preferably OM2 or QUDT URI"
       },
       {
         "name": "minimum",
-        "type": "NUMERIC"
+        "type": "NUMERIC",
+        "description": "Minimum valid numeric value for range validation"
       },
       {
         "name": "maximum",
-        "type": "NUMERIC"
+        "type": "NUMERIC",
+        "description": "Maximum valid numeric value for range validation"
       },
       {
         "name": "read_only",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if clients can only read this property and not write to it"
       },
       {
         "name": "observable",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if the device supports push notifications (SSE/WebSocket) when the value changes"
       },
       {
         "name": "forms",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "WoT interaction affordance forms array ({\"href\", \"op\", \"contentType\"}) describing protocol bindings"
       }
     ],
     "wot_property_value": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Monotonically increasing surrogate key for time-series ordering"
       },
       {
         "name": "property_id",
         "type": "INTEGER",
-        "fk": "wot_property.id"
+        "fk": "wot_property.id",
+        "description": "Which property this reading belongs to; references wot_property.id"
       },
       {
         "name": "value_numeric",
-        "type": "NUMERIC"
+        "type": "NUMERIC",
+        "description": "Observation value when the property type is number or integer"
       },
       {
         "name": "value_text",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Observation value when the property type is string or enum"
       },
       {
         "name": "value_bool",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "Observation value when the property type is boolean"
       },
       {
         "name": "value_json",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Observation value when the property type is object or array (arbitrary nested structure)"
       },
       {
         "name": "recorded_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Wall-clock time when this reading was persisted; use as the time-series partition key"
       },
       {
         "name": "quality",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "OPC-UA-style data quality flag: GOOD, UNCERTAIN, BAD, or MISSING"
       }
     ],
     "wot_action": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for this action definition"
       },
       {
         "name": "thing_id",
         "type": "UUID",
-        "fk": "wot_thing.id"
+        "fk": "wot_thing.id",
+        "description": "Device that exposes this action; references wot_thing.id"
       },
       {
         "name": "name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Machine-readable action name used in protocol bindings (e.g. reboot, setBrightness)"
       },
       {
         "name": "title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for UIs (e.g. Reboot Device, Set Brightness)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Detailed description of what the action does and any side effects"
       },
       {
         "name": "input_schema",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSON Schema object describing the action request body structure and constraints"
       },
       {
         "name": "output_schema",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSON Schema object describing the action response payload structure"
       },
       {
         "name": "forms",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "WoT interaction affordance forms array ({\"href\", \"op\", \"contentType\"}) describing protocol endpoints"
       }
     ],
     "wot_event": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key; referenced by wot_event_log.event_id"
       },
       {
         "name": "thing_id",
         "type": "UUID",
-        "fk": "wot_thing.id"
+        "fk": "wot_thing.id",
+        "description": "Device that can emit this event type; references wot_thing.id"
       },
       {
         "name": "name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Machine-readable event name used in subscription forms (e.g. overheating, motionDetected)"
       },
       {
         "name": "title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for the event type (e.g. Overheating Alert)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Explanation of what condition triggers this event and its significance"
       },
       {
         "name": "data_schema",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSON Schema object describing the structure of the event payload data field"
       },
       {
         "name": "forms",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "WoT subscription forms array ({\"href\", \"op\": \"subscribeevent\", \"contentType\"}) for consumers"
       }
     ],
     "wot_event_log": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Monotonically increasing surrogate key for append-only event ordering"
       },
       {
         "name": "event_id",
         "type": "INTEGER",
-        "fk": "wot_event.id"
+        "fk": "wot_event.id",
+        "description": "Event type that was emitted; references wot_event.id"
       },
       {
-        "name": "data",
-        "type": "JSONB"
+        "name": "payload_data",
+        "type": "JSONB",
+        "description": "Actual payload of this event emission; structure matches wot_event.data_schema"
       },
       {
         "name": "occurred_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the device emitted this event; recommended partition key for large deployments"
       }
     ]
   },
   "short_description": "Web of Things Thing Description \u2014 IoT device interoperability",
   "long_description": "Web of Things Thing Description \u2014 IoT device interoperability",
-  "when_to_use": "Use when building applications that need to conform to the W3C WoT (IoT) standard."
+  "when_to_use": "Use when building applications that need to conform to the W3C WoT (IoT) standard.",
+  "extensions": [
+    "postgis"
+  ]
 }

@@ -20,9 +20,22 @@ Usage:
 
 from .cli_commands import gen
 from .database_inspector import EnhancedDatabaseInspector
-from .model_generator import EnhancedModelGenerator  
+from .model_generator import EnhancedModelGenerator
 from .view_generator import BeautifulViewGenerator
 from .app_generator import FullAppGenerator
+from .mobile_generator import MobileGenerator, MobileGenerationConfig
+from .code_templates import (
+    ColumnSpec,
+    RelationshipSpec,
+    ViewColumnSet,
+    render_model,
+    render_model_view,
+    render_api,
+    render_all,
+    MODEL_TEMPLATE,
+    VIEW_TEMPLATE,
+    API_TEMPLATE,
+)
 
 __version__ = "1.0.0"
 __author__ = "PgForge Team"
@@ -30,7 +43,20 @@ __author__ = "PgForge Team"
 __all__ = [
     "gen",
     "EnhancedDatabaseInspector",
-    "EnhancedModelGenerator", 
+    "EnhancedModelGenerator",
     "BeautifulViewGenerator",
-    "FullAppGenerator"
+    "FullAppGenerator",
+    "MobileGenerator",
+    "MobileGenerationConfig",
+    # Pure-Python code templates (3.14-aware)
+    "ColumnSpec",
+    "RelationshipSpec",
+    "ViewColumnSet",
+    "render_model",
+    "render_model_view",
+    "render_api",
+    "render_all",
+    "MODEL_TEMPLATE",
+    "VIEW_TEMPLATE",
+    "API_TEMPLATE",
 ]

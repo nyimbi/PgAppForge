@@ -1,5 +1,6 @@
 {
   "name": "arts",
+  "schema": "arts",
   "label": "ARTS (Retail Technology)",
   "description": "Association for Retail Technology Standards \u2014 POS, transactions, inventory for large retailers",
   "color": "#e67e22",
@@ -13,231 +14,291 @@
     "nrf",
     "enterprise"
   ],
+  "table_notes": {
+    "arts_retail_store": "Physical or virtual retail location with geospatial coordinates, address JSONB, and timezone for local business-date handling.",
+    "arts_workstation": "POS terminal or self-checkout kiosk registered to a store; tracks hardware identity, type, and liveness via heartbeat.",
+    "arts_transaction": "Header record for a single POS transaction; links store, workstation, operator, and optional loyalty customer with totals.",
+    "arts_line_item": "Individual sale, return, or void entry within a transaction; carries SKU, UPC, quantity, pricing, and tax at the item level.",
+    "arts_tender": "Payment settlement record for a transaction; one row per tender type (cash, card, gift card) with authorization details."
+  },
   "tables": {
     "arts_retail_store": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the store"
       },
       {
         "name": "store_number",
         "type": "VARCHAR(50)",
-        "unique": true
+        "unique": true,
+        "description": "Retailer-assigned store number; unique across the estate (e.g. 0042, SW-NYC-01)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable store name or banner (e.g. 'Times Square Flagship')"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured postal address: {street, city, state, postal_code, country_code}"
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "PostGIS point (WGS84) for proximity search and delivery-zone queries"
       },
       {
         "name": "store_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Operational classification: flagship, outlet, kiosk, pop-up, warehouse, etc."
       },
       {
         "name": "timezone",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "IANA timezone name used to derive local business date (e.g. America/Chicago)"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "False when a store is permanently closed or temporarily suspended"
       }
     ],
     "arts_workstation": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the workstation"
       },
       {
         "name": "store_id",
         "type": "INTEGER",
-        "fk": "arts_retail_store.id"
+        "fk": "arts_retail_store.id",
+        "description": "Store this workstation belongs to; references arts_retail_store.id"
       },
       {
         "name": "workstation_id",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Lane or terminal identifier assigned by the store (e.g. LANE-03, SCO-01)"
       },
       {
         "name": "type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Hardware role: POS, SCO (self-checkout), MPOS (mobile), kiosk, back-office"
       },
       {
         "name": "serial_number",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Manufacturer serial number for asset tracking and warranty management"
       },
       {
         "name": "status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Operational state: online, offline, training, maintenance, decommissioned"
       },
       {
         "name": "last_heartbeat_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent health-check ping; used to detect dead terminals"
       }
     ],
     "arts_transaction": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key; globally unique across all stores and channels"
       },
       {
         "name": "store_id",
         "type": "INTEGER",
-        "fk": "arts_retail_store.id"
+        "fk": "arts_retail_store.id",
+        "description": "Store where this transaction occurred; references arts_retail_store.id"
       },
       {
         "name": "workstation_id",
         "type": "INTEGER",
-        "fk": "arts_workstation.id"
+        "fk": "arts_workstation.id",
+        "description": "Terminal that recorded this transaction; references arts_workstation.id"
       },
       {
         "name": "transaction_number",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Human-readable receipt number, unique within store and business date"
       },
       {
         "name": "transaction_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "ARTS transaction type code: sale, return, void, no-sale, exchange, loan, pickup"
       },
       {
         "name": "business_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Local store date when this transaction is recorded for reporting (may differ from wall time)"
       },
       {
         "name": "begin_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Wall-clock timestamp when the cashier opened this transaction"
       },
       {
         "name": "end_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Wall-clock timestamp when the transaction was completed or voided"
       },
       {
         "name": "operator_id",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Cashier or associate badge/login ID who processed this transaction"
       },
       {
         "name": "customer_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Loyalty or CRM account identifier if the customer was identified at POS"
       },
       {
         "name": "total_amount",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Grand total charged to the customer after discounts, before tender (in store currency)"
       },
       {
         "name": "total_tax",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Total tax collected across all line items for this transaction"
       },
       {
         "name": "total_discount",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Sum of all promotions and manual discounts applied to this transaction"
       },
       {
         "name": "status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Lifecycle state: in-progress, completed, voided, suspended, recalled"
       }
     ],
     "arts_line_item": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the line item"
       },
       {
         "name": "transaction_id",
         "type": "UUID",
-        "fk": "arts_transaction.id"
+        "fk": "arts_transaction.id",
+        "description": "Parent transaction this line belongs to; references arts_transaction.id"
       },
       {
-        "name": "sequence",
-        "type": "INTEGER"
+        "name": "seq_num",
+        "type": "INTEGER",
+        "description": "1-based position of this item within the transaction, preserving scan order"
       },
       {
         "name": "item_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Entry classification: sale, return, void, coupon, fee, deposit, gift-card-activation"
       },
       {
         "name": "sku",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Retailer's internal stock-keeping unit code identifying this product variant"
       },
       {
         "name": "upc",
-        "type": "VARCHAR(14)"
+        "type": "VARCHAR(14)",
+        "description": "Scanned barcode in GTIN-14 format (UPC-A, EAN-13, ITF-14 all normalised to 14 digits)"
       },
       {
         "name": "description",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Short product description printed on the receipt"
       },
       {
         "name": "quantity",
-        "type": "NUMERIC(12,4)"
+        "type": "NUMERIC(12,4)",
+        "description": "Sold or returned quantity; negative for returns; fractional for weight/measure items"
       },
       {
         "name": "uom",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Unit of measure code per UN/CEFACT: EA (each), KG, LB, LT, etc."
       },
       {
         "name": "unit_price",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Regular selling price per unit before any discounts or promotions"
       },
       {
         "name": "extended_amount",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Final net amount for this line: (unit_price * quantity) minus discounts"
       },
       {
         "name": "discount_amount",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Total promotion and markdown savings applied to this line item"
       },
       {
         "name": "tax_amount",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Tax collected on this line item (may be zero for exempt items)"
       }
     ],
     "arts_tender": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the tender row"
       },
       {
         "name": "transaction_id",
         "type": "UUID",
-        "fk": "arts_transaction.id"
+        "fk": "arts_transaction.id",
+        "description": "Transaction being settled by this tender; references arts_transaction.id"
       },
       {
         "name": "tender_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Payment method code: cash, credit, debit, gift-card, check, ewallet, store-credit"
       },
       {
         "name": "amount",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Amount tendered in this payment method (may exceed transaction total for cash change)"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for this tender (e.g. USD, EUR, GBP)"
       },
       {
         "name": "authorization_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Issuer or payment network authorization code returned for card and ewallet tenders"
       },
       {
         "name": "card_type",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Card brand for electronic tenders: Visa, Mastercard, Amex, Discover, etc."
       },
       {
         "name": "card_last4",
-        "type": "CHAR(4)"
+        "type": "CHAR(4)",
+        "description": "Last four digits of the card PAN retained for receipt display (never full PAN)"
       }
     ]
   },
   "short_description": "Association for Retail Technology Standards \u2014 POS, transactions, inventory for large retailers",
   "long_description": "ARTS (Association for Retail Technology Standards) provides the data standards used by large retailers for POS, loss prevention, and inventory management. The schema covers the complete in-store transaction lifecycle: workstation registration, transaction headers with operator/customer context, individual sale/return/void line items, and tender settlements.",
-  "when_to_use": "Use for POS (point-of-sale) software, retail analytics platforms, loss prevention tools, or retail integration middleware. ARTS standards are implemented by Oracle Retail, NCR, Toshiba, and Diebold Nixdorf POS systems. Required for integration with major retailers' inventory and reporting systems. The xTill standard (used in UK retail) is ARTS-aligned."
+  "when_to_use": "Use for POS (point-of-sale) software, retail analytics platforms, loss prevention tools, or retail integration middleware. ARTS standards are implemented by Oracle Retail, NCR, Toshiba, and Diebold Nixdorf POS systems. Required for integration with major retailers' inventory and reporting systems. The xTill standard (used in UK retail) is ARTS-aligned.",
+  "extensions": [
+    "postgis"
+  ]
 }

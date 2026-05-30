@@ -1,5 +1,6 @@
 {
   "name": "citygml",
+  "schema": "citygml",
   "label": "OGC CityGML 3.0",
   "description": "3D city model standard \u2014 buildings, bridges, roads for digital twins and smart cities",
   "color": "#95a5a6",
@@ -13,204 +14,257 @@
     "spatial",
     "ogc"
   ],
+  "table_notes": {
+    "cgml_city_model": "Root container for a CityGML dataset; all feature tables reference this via city_model_id to partition multi-city or multi-version deployments.",
+    "cgml_building": "Central feature table for above- and below-ground structures; holds footprint geometry, height, floor counts, and JSONB fields for 3D solids and structured address data.",
+    "cgml_bridge": "Models road, rail, and pedestrian bridges as linear features with construction metadata; geometry stored as a WGS84 linestring along the bridge centreline.",
+    "cgml_transportation": "Road, railway, and path segments with surface and functional classification; geometry is a WGS84 linestring suitable for network routing.",
+    "cgml_land_use": "Polygon parcels describing how land is zoned or used (residential, commercial, agricultural, etc.); function is JSONB to support multi-coded parcels."
+  },
   "tables": {
     "cgml_city_model": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Primary key \u2014 unique identifier for this city model instance"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name for the city model (e.g. 'Helsinki 3D+ 2024')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the model's scope, data sources, and coverage"
       },
       {
         "name": "creation_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the model dataset was created or published"
       },
       {
         "name": "bounding_box",
-        "type": "GEOGRAPHY(POLYGON,4326)"
+        "type": "GEOGRAPHY(POLYGON,4326)",
+        "description": "WGS84 polygon enclosing the full spatial extent of this city model"
       },
       {
         "name": "reference_system",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Coordinate reference system identifier (e.g. EPSG:25832) used by source data"
       },
       {
         "name": "lod",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Maximum Level of Detail present: 0=footprint, 1=block, 2=roofshape, 3=detailed, 4=interior"
       }
     ],
     "cgml_building": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Primary key \u2014 unique identifier for this building record"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
-        "fk": "cgml_city_model.id"
+        "fk": "cgml_city_model.id",
+        "description": "References cgml_city_model.id \u2014 the parent dataset this building belongs to"
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique GML identifier from the source CityGML file (e.g. BLDG_0001)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Common name or address label for the building (may be NULL for unnamed structures)"
       },
       {
-        "name": "function",
-        "type": "JSONB"
+        "name": "func_code",
+        "type": "JSONB",
+        "description": "JSONB array of CityGML building function codes (e.g. [{\"code\":\"1000\",\"label\":\"residential\"}])"
       },
       {
         "name": "usage",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of actual usage codes; may differ from function for mixed-use buildings"
       },
       {
         "name": "year_of_construction",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "4-digit year the building was constructed (NULL if unknown)"
       },
       {
         "name": "year_of_demolition",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "4-digit year the building was demolished; NULL means still standing"
       },
       {
         "name": "roof_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Roof form classification (e.g. flat, gabled, hipped, mansard) per CityGML codelist"
       },
       {
         "name": "storeys_above_ground",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of floors above ground level (excludes basement)"
       },
       {
         "name": "storeys_below_ground",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of underground floors (basement / parking levels)"
       },
       {
         "name": "measured_height_m",
-        "type": "NUMERIC(8,3)"
+        "type": "NUMERIC(8,3)",
+        "description": "Measured building height in metres from ground to highest roof point"
       },
       {
         "name": "footprint",
-        "type": "GEOGRAPHY(POLYGON,4326)"
+        "type": "GEOGRAPHY(POLYGON,4326)",
+        "description": "WGS84 polygon of the building footprint at ground level; used for 2D spatial queries"
       },
       {
         "name": "lod1_solid",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB encoding of the LoD1 block-extrusion solid geometry (GeoJSON or CityJSON surface array)"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB structured address: {\"street\",\"number\",\"city\",\"postcode\",\"country\"} per CityGML xAL subset"
       }
     ],
     "cgml_bridge": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Primary key \u2014 unique identifier for this bridge record"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
-        "fk": "cgml_city_model.id"
+        "fk": "cgml_city_model.id",
+        "description": "References cgml_city_model.id \u2014 the parent dataset this bridge belongs to"
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique GML identifier from the source CityGML file"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Official or common name of the bridge (e.g. 'Tower Bridge')"
       },
       {
-        "name": "function",
-        "type": "JSONB"
+        "name": "func_code",
+        "type": "JSONB",
+        "description": "JSONB array of bridge function codes (e.g. road bridge, railway bridge, pedestrian)"
       },
       {
         "name": "year_of_construction",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "4-digit year the bridge was constructed (NULL if unknown)"
       },
       {
         "name": "span_m",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Total span of the bridge in metres (longest single span for multi-span bridges)"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(LINESTRING,4326)"
+        "type": "GEOGRAPHY(LINESTRING,4326)",
+        "description": "WGS84 linestring tracing the bridge centreline from abutment to abutment"
       }
     ],
     "cgml_transportation": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Primary key \u2014 unique identifier for this transportation segment"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
-        "fk": "cgml_city_model.id"
+        "fk": "cgml_city_model.id",
+        "description": "References cgml_city_model.id \u2014 the parent dataset this segment belongs to"
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique GML identifier from the source CityGML file"
       },
       {
         "name": "type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "CityGML transportation type: Road, Railway, Square, Track, Waterway, or Path"
       },
       {
-        "name": "function",
-        "type": "VARCHAR(50)"
+        "name": "func_code",
+        "type": "VARCHAR(50)",
+        "description": "Functional classification (e.g. motorway, residential, cycleway) per CityGML codelist"
       },
       {
         "name": "surface_material",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Pavement or surface material (e.g. asphalt, concrete, cobblestone, gravel)"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(LINESTRING,4326)"
+        "type": "GEOGRAPHY(LINESTRING,4326)",
+        "description": "WGS84 linestring representing the segment centreline for routing and display"
       }
     ],
     "cgml_land_use": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Primary key \u2014 unique identifier for this land use parcel"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
-        "fk": "cgml_city_model.id"
+        "fk": "cgml_city_model.id",
+        "description": "References cgml_city_model.id \u2014 the parent dataset this parcel belongs to"
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique GML identifier from the source CityGML file"
       },
       {
         "name": "class",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Top-level land use class per CityGML codelist (e.g. residential, industrial, agriculture)"
       },
       {
-        "name": "function",
-        "type": "JSONB"
+        "name": "func_code",
+        "type": "JSONB",
+        "description": "JSONB array of detailed function codes; multiple entries for mixed-use parcels"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(POLYGON,4326)"
+        "type": "GEOGRAPHY(POLYGON,4326)",
+        "description": "WGS84 polygon boundary of the land use parcel"
       }
     ]
   },
   "short_description": "3D city model standard \u2014 buildings, bridges, roads for digital twins and smart cities",
   "long_description": "OGC CityGML 3.0 is the international standard for 3D city models, covering buildings, bridges, roads, vegetation, and land use with multi-level-of-detail (LoD) geometry. The schema captures 2D footprints and building attributes suitable for most smart city analytics, with JSONB fields for 3D geometry when needed.",
-  "when_to_use": "Use for digital twin platforms, smart city dashboards, urban planning tools, or any application modeling the built environment. Used by Singapore's Virtual Singapore, Helsinki 3D+, and many EU city digital twins. Required for EU Urban Digital Twin projects and some EU Cohesion Fund applications. Pairs with PostGIS for spatial queries."
+  "when_to_use": "Use for digital twin platforms, smart city dashboards, urban planning tools, or any application modeling the built environment. Used by Singapore's Virtual Singapore, Helsinki 3D+, and many EU city digital twins. Required for EU Urban Digital Twin projects and some EU Cohesion Fund applications. Pairs with PostGIS for spatial queries.",
+  "extensions": [
+    "postgis"
+  ]
 }

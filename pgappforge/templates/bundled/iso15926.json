@@ -1,5 +1,6 @@
 {
   "name": "iso15926",
+  "schema": "iso15926",
   "label": "ISO 15926 (Oil & Gas)",
   "description": "Plant lifecycle data integration standard \u2014 dominant in oil & gas and process industries",
   "color": "#95a5a6",
@@ -12,145 +13,181 @@
     "plant-lifecycle",
     "iso"
   ],
+  "table_notes": {
+    "iso15926_class": "Reference Data Library (RDL) type hierarchy from POSCCAESAR; each row is a class (type) in the ISO 15926-2 ontology, organized by superclass.",
+    "iso15926_individual": "Specific physical or functional objects (equipment items, pipelines, instruments) instantiating a class, with full lifecycle timestamps and flexible JSONB properties.",
+    "iso15926_activity": "Engineering or operational activities (construction, commissioning, maintenance) that occur at a location and involve one or more parties over a defined time window.",
+    "iso15926_document": "Engineering documents (P&IDs, datasheets, procedures) linked to the RDL class hierarchy, with revision tracking and status lifecycle management."
+  },
   "tables": {
     "iso15926_class": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this class (UUID, stable across imports)"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique IRI identifying this class in the POSCCAESAR RDL or vendor namespace"
       },
       {
         "name": "name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable label for this class as defined in the RDL"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Normative definition of this class from the ISO 15926-2 data model"
       },
       {
         "name": "superclass_id",
         "type": "UUID",
-        "fk": "iso15926_class.id"
+        "fk": "iso15926_class.id",
+        "description": "Parent class in the RDL type hierarchy (self-referencing FK to iso15926_class.id)"
       },
       {
         "name": "namespace",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Ontology namespace (e.g. http://posccaesar.org/rdl/ or a project-specific prefix)"
       }
     ],
     "iso15926_individual": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this individual object (UUID)"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Globally unique IRI identifying this individual across plant data exchange"
       },
       {
         "name": "name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Tag number or functional name of the physical/functional object (e.g. 101-P-001)"
       },
       {
         "name": "class_id",
         "type": "UUID",
-        "fk": "iso15926_class.id"
+        "fk": "iso15926_class.id",
+        "description": "References iso15926_class.id to type this object (e.g. Centrifugal Pump, Pipeline)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of this specific equipment item or functional object"
       },
       {
         "name": "lifecycle_begin",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when this object entered existence (e.g. fabrication or first commissioning date)"
       },
       {
         "name": "lifecycle_end",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when this object ceased to exist (e.g. decommissioning date; NULL if still active)"
       },
       {
         "name": "properties",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Flexible key-value bag of typed attributes ({\"attribute_uri\": value}); structure follows RDL property definitions"
       }
     ],
     "iso15926_activity": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this activity (UUID)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Descriptive name of the activity (e.g. Hydrostatic Test, Insulation Installation)"
       },
       {
         "name": "activity_type_id",
         "type": "UUID",
-        "fk": "iso15926_class.id"
+        "fk": "iso15926_class.id",
+        "description": "References iso15926_class.id classifying the activity type from the RDL"
       },
       {
         "name": "begin_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Scheduled or actual start time of the activity"
       },
       {
         "name": "end_time",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Scheduled or actual completion time of the activity (NULL if ongoing)"
       },
       {
         "name": "location_id",
         "type": "UUID",
-        "fk": "iso15926_individual.id"
+        "fk": "iso15926_individual.id",
+        "description": "References iso15926_individual.id for the physical location where activity takes place"
       },
       {
         "name": "involved_parties",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of party objects ([{\"role\": \"contractor\", \"party_uri\": \"...\"}]) recording participants and their roles"
       }
     ],
     "iso15926_document": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate key for this document (UUID)"
       },
       {
         "name": "document_number",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Project document number per the document management system (DMS) numbering convention"
       },
       {
         "name": "title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Full document title as it appears on the document header"
       },
       {
         "name": "revision",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Revision identifier (e.g. A, B, 0, 1, IFR, IFC) per the project revision sequence"
       },
       {
         "name": "document_type_id",
         "type": "UUID",
-        "fk": "iso15926_class.id"
+        "fk": "iso15926_class.id",
+        "description": "References iso15926_class.id classifying the document type (P&ID, datasheet, procedure)"
       },
       {
         "name": "issue_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date this revision was officially issued or approved"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Document lifecycle status (e.g. IFR=Issued for Review, IFC=Issued for Construction, AFC=As-built)"
       },
       {
         "name": "file_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL or path to the document file in the DMS or object storage"
       },
       {
         "name": "tags",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of tag/equipment references this document covers ([\"101-P-001\", \"101-V-002\"])"
       }
     ]
   },

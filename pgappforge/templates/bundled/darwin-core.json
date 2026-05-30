@@ -1,5 +1,6 @@
 {
   "name": "darwin-core",
+  "schema": "darwin_core",
   "label": "Darwin Core (Biodiversity)",
   "description": "Biodiversity occurrence data \u2014 GBIF global database, natural history collections worldwide",
   "color": "#27ae60",
@@ -13,212 +14,265 @@
     "natural-history",
     "science"
   ],
+  "table_notes": {
+    "dwc_dataset": "Provenance record for each contributing dataset (GBIF resource, collection, or survey); every occurrence traces back here.",
+    "dwc_occurrence": "Core fact table: one row per observed or collected organism event, with location, date, counts, and observer metadata.",
+    "dwc_taxon": "Normalised taxonomic reference from kingdom down to specific epithet, with IUCN conservation status and vernacular name translations.",
+    "dwc_occurrence_taxon": "Junction table linking occurrences to one or more taxa; accommodates uncertain or provisional identifications via qualifier."
+  },
   "tables": {
     "dwc_dataset": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Primary key \u2014 UUID for the dataset record"
       },
       {
         "name": "name",
         "type": "VARCHAR(500)",
-        "nullable": false
+        "nullable": false,
+        "description": "Full title of the dataset as published by the provider"
       },
       {
         "name": "publisher",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Organisation or institution that published this dataset"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text abstract describing the dataset scope, methods, and coverage"
       },
       {
         "name": "license",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Data license under which the dataset is released (e.g. CC0, CC-BY 4.0)"
       },
       {
         "name": "pub_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the dataset was published or last updated by the provider"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "IETF/ISO 639 language code for the primary metadata language (e.g. en, pt-BR)"
       }
     ],
     "dwc_occurrence": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal primary key for this occurrence row"
       },
       {
         "name": "occurrence_id",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "Darwin Core occurrenceID \u2014 globally unique identifier assigned by the data provider"
       },
       {
         "name": "dataset_id",
         "type": "UUID",
-        "fk": "dwc_dataset.id"
+        "fk": "dwc_dataset.id",
+        "description": "References dwc_dataset.id \u2014 identifies the source dataset for this occurrence"
       },
       {
         "name": "catalog_number",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Identifier for the physical specimen within the institution\u2019s collection catalogue"
       },
       {
         "name": "collection_code",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Abbreviated code for the collection within the institution (e.g. HERPS, FISHES)"
       },
       {
         "name": "institution_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Abbreviated code for the holding institution (e.g. AMNH, MNHN, CSIRO)"
       },
       {
         "name": "basis_of_record",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "DwC basisOfRecord: HumanObservation, PreservedSpecimen, LivingSpecimen, MachineObservation, etc."
       },
       {
         "name": "occurrence_status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "DwC occurrenceStatus: \u2018present\u2019 or \u2018absent\u2019 at the location and time recorded"
       },
       {
         "name": "event_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date (or start date) of the occurrence event; ISO 8601"
       },
       {
         "name": "decimal_latitude",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 latitude of the occurrence in decimal degrees"
       },
       {
         "name": "decimal_longitude",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 longitude of the occurrence in decimal degrees"
       },
       {
         "name": "coordinate_uncertainty_m",
-        "type": "NUMERIC(10,2)"
+        "type": "NUMERIC(10,2)",
+        "description": "Radius in metres around the given coordinates within which the true location falls"
       },
       {
         "name": "country_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code where the occurrence was recorded"
       },
       {
         "name": "locality",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Specific named place or verbal description of the occurrence location"
       },
       {
         "name": "individual_count",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of individual organisms counted during the event"
       },
       {
         "name": "organism_quantity",
-        "type": "NUMERIC(12,4)"
+        "type": "NUMERIC(12,4)",
+        "description": "Measured quantity of organisms when count alone is insufficient (e.g. biomass, % cover)"
       },
       {
         "name": "organism_quantity_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Unit or type for organism_quantity (e.g. individuals, grams, % areal cover)"
       },
       {
         "name": "recorded_by",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Name(s) of people who recorded the occurrence; pipe- or semicolon-delimited list"
       },
       {
         "name": "identified_by",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Name(s) of people who provided the taxonomic identification; pipe- or semicolon-delimited"
       },
       {
         "name": "habitat",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Verbal description of the habitat at the occurrence location (e.g. tropical moist forest)"
       },
       {
         "name": "established_means",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "DwC establishedMeans: native, introduced, invasive, naturalised, managed, uncertain"
       },
       {
         "name": "occurrence_remarks",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text notes about the occurrence added by the collector or data curator"
       }
     ],
     "dwc_taxon": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "taxon_id",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "Darwin Core taxonID \u2014 globally unique identifier from the source checklist (e.g. GBIF backbone taxon key)"
       },
       {
         "name": "scientific_name",
         "type": "VARCHAR(500)",
-        "nullable": false
+        "nullable": false,
+        "description": "Full scientific name including authorship (e.g. Puma concolor (Linnaeus, 1771))"
       },
       {
         "name": "kingdom",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Highest Linnaean rank: Animalia, Plantae, Fungi, Bacteria, etc."
       },
       {
         "name": "phylum",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Linnaean phylum (division in botany) within the kingdom"
       },
       {
         "name": "class",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Linnaean class within the phylum (e.g. Mammalia, Aves, Insecta)"
       },
       {
         "name": "order_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Linnaean order within the class (named order_name to avoid SQL reserved word conflict)"
       },
       {
         "name": "family",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Linnaean family within the order (e.g. Felidae, Orchidaceae)"
       },
       {
         "name": "genus",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Linnaean genus \u2014 first part of the binomial scientific name"
       },
       {
         "name": "specific_epithet",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Species epithet \u2014 second part of the binomial (e.g. concolor in Puma concolor)"
       },
       {
         "name": "taxon_rank",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "DwC taxonRank of this record: species, subspecies, genus, family, order, class, phylum, kingdom, variety, etc."
       },
       {
         "name": "vernacular_names",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB object mapping ISO 639 language codes to common names (e.g. {\"en\": \"Mountain Lion\", \"es\": \"Puma\"})"
       },
       {
         "name": "taxonomic_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "DwC taxonomicStatus: accepted, synonym, homotypicSynonym, heterotypicSynonym, misapplied, doubtful"
       },
       {
         "name": "iucn_status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "IUCN Red List category: EX, EW, CR, EN, VU, NT, LC, DD, NE"
       }
     ],
     "dwc_occurrence_taxon": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "occurrence_id",
         "type": "UUID",
-        "fk": "dwc_occurrence.id"
+        "fk": "dwc_occurrence.id",
+        "description": "References dwc_occurrence.id \u2014 the occurrence being identified"
       },
       {
         "name": "taxon_id",
         "type": "INTEGER",
-        "fk": "dwc_taxon.id"
+        "fk": "dwc_taxon.id",
+        "description": "References dwc_taxon.id \u2014 the taxon assigned to this occurrence"
       },
       {
         "name": "identification_qualifier",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "DwC identificationQualifier expressing uncertainty, e.g. \u2018cf.\u2019, \u2018aff.\u2019, \u2018?\u2019, \u2018sensu lato\u2019"
       }
     ]
   },

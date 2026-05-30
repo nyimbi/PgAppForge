@@ -1,5 +1,6 @@
 {
   "name": "dcat",
+  "schema": "dcat",
   "label": "DCAT v3 (Data Catalog)",
   "description": "W3C Data Catalog Vocabulary \u2014 used by US/UK/EU government open data portals",
   "color": "#27ae60",
@@ -13,205 +14,258 @@
     "eu",
     "us-mandate"
   ],
+  "short_description": "W3C Data Catalog Vocabulary \u2014 used by US/UK/EU government open data portals",
+  "long_description": "DCAT v3 is the W3C recommendation for describing datasets and data services in interoperable machine-readable catalogs. The schema captures catalog metadata, dataset descriptions with spatial/temporal coverage and update frequency, distribution formats with download URLs, and reusable API data services.",
+  "when_to_use": "Use for open data portals, enterprise data catalogs, data marketplace platforms, or any system publishing dataset metadata for discovery. Mandated by EU Open Data Directive for public sector bodies. US data.gov, UK data.gov.uk, EU data.europa.eu, and data.gov.au all use DCAT. Required for FAIR (Findable, Accessible, Interoperable, Reusable) data compliance in scientific publishing.",
+  "table_notes": {
+    "dcat_catalog": "Top-level container grouping related datasets under a single publisher; one row per data portal or organizational catalog.",
+    "dcat_dataset": "Core metadata record for a logical dataset including spatial/temporal coverage, themes, and update frequency; references its parent catalog.",
+    "dcat_distribution": "Describes a specific downloadable or accessible form of a dataset (e.g. CSV, API, GeoJSON); multiple distributions per dataset are common.",
+    "dcat_data_service": "Describes a reusable API endpoint that serves one or more datasets; decoupled from any single dataset to support multi-dataset APIs."
+  },
   "tables": {
     "dcat_catalog": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the catalog record"
       },
       {
         "name": "title",
         "type": "VARCHAR(1000)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable name of the catalog (e.g. 'UK Government Open Data Portal')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the catalog scope and contents"
       },
       {
         "name": "publisher_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Name of the organization responsible for publishing this catalog"
       },
       {
         "name": "publisher_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the publisher's homepage or organizational profile"
       },
       {
-        "name": "language",
+        "name": "lang_code",
         "type": "CHAR(5)",
-        "default": "'en'"
+        "default": "'en'",
+        "description": "Primary language of catalog content as an IETF BCP 47 tag (e.g. en, fr, de)"
       },
       {
         "name": "license_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the default license governing datasets in this catalog (e.g. CC-BY 4.0)"
       },
       {
         "name": "issued",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time the catalog was first published"
       },
       {
         "name": "modified",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time the catalog record was last updated"
       }
     ],
     "dcat_dataset": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the dataset record"
       },
       {
         "name": "catalog_id",
         "type": "UUID",
-        "fk": "dcat_catalog.id"
+        "fk": "dcat_catalog.id",
+        "description": "References the parent dcat_catalog that owns this dataset"
       },
       {
         "name": "title",
         "type": "VARCHAR(1000)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable title of the dataset"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the dataset contents, methodology, and coverage"
       },
       {
         "name": "identifier",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Persistent unique identifier for the dataset (DOI, URI, or publisher-assigned ID)"
       },
       {
         "name": "keywords",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of keyword strings for discovery (e.g. [\"health\", \"mortality\", \"annual\"])"
       },
       {
         "name": "themes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of theme URIs from a controlled vocabulary (e.g. EU Data Theme, schema.org)"
       },
       {
         "name": "publisher_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Name of the organization responsible for this specific dataset (may differ from catalog publisher)"
       },
       {
         "name": "contact_point",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Contact details object with keys: name, email, url (vCard/schema.org style)"
       },
       {
         "name": "spatial_coverage",
-        "type": "GEOGRAPHY(GEOMETRY, 4326)"
+        "type": "GEOGRAPHY(GEOMETRY, 4326)",
+        "description": "PostGIS geometry defining the geographic area covered by this dataset (WGS84)"
       },
       {
         "name": "temporal_start",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Start date of the time period covered by the dataset"
       },
       {
         "name": "temporal_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "End date of the time period covered by the dataset (NULL if ongoing)"
       },
       {
         "name": "update_frequency",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "How often the dataset is updated; use Dublin Core frequency terms (e.g. daily, monthly)"
       },
       {
         "name": "license_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the license governing this dataset; overrides the catalog-level license if set"
       },
       {
         "name": "issued",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time this dataset was first published"
       },
       {
         "name": "modified",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time the dataset metadata was last updated"
       },
       {
         "name": "landing_page_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the dataset's human-readable landing page for documentation and access"
       },
       {
         "name": "version",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Version identifier of the dataset content (e.g. '2024-Q1', '3.0')"
       }
     ],
     "dcat_distribution": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the distribution record"
       },
       {
         "name": "dataset_id",
         "type": "UUID",
-        "fk": "dcat_dataset.id"
+        "fk": "dcat_dataset.id",
+        "description": "References the dcat_dataset this distribution belongs to"
       },
       {
         "name": "title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable label for this distribution (e.g. 'CSV download', 'WMS endpoint')"
       },
       {
         "name": "access_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL giving access to the distribution (may be a landing page, API, or direct file)"
       },
       {
         "name": "download_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Direct URL to download the file; more specific than access_url"
       },
       {
         "name": "media_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "IANA media type of the distribution (e.g. text/csv, application/geo+json)"
       },
       {
         "name": "format",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "File format label for human display (e.g. CSV, GeoJSON, Shapefile, Parquet)"
       },
       {
         "name": "byte_size",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Approximate file size in bytes; used for consumer download planning"
       },
       {
         "name": "issued",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time this distribution was first made available"
       },
       {
         "name": "modified",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Date/time this distribution was last updated"
       }
     ],
     "dcat_data_service": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the data service record"
       },
       {
         "name": "catalog_id",
         "type": "UUID",
-        "fk": "dcat_catalog.id"
+        "fk": "dcat_catalog.id",
+        "description": "References the dcat_catalog that lists this service"
       },
       {
         "name": "title",
         "type": "VARCHAR(500)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable name of the API or service (e.g. 'SPARQL endpoint', 'WFS service')"
       },
       {
         "name": "endpoint_url",
         "type": "TEXT",
-        "nullable": false
+        "nullable": false,
+        "description": "Root URL of the service endpoint consumers send requests to"
       },
       {
         "name": "endpoint_description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL or text pointing to machine-readable API description (OpenAPI, WSDL, OGC CapabilitiesDoc)"
       },
       {
         "name": "serves_dataset",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of dcat_dataset UUIDs that this service provides access to"
       },
       {
         "name": "contact_point",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Contact details object with keys: name, email, url (vCard/schema.org style)"
       }
     ]
   },
-  "short_description": "W3C Data Catalog Vocabulary \u2014 used by US/UK/EU government open data portals",
-  "long_description": "DCAT v3 is the W3C recommendation for describing datasets and data services in interoperable machine-readable catalogs. The schema captures catalog metadata, dataset descriptions with spatial/temporal coverage and update frequency, distribution formats with download URLs, and reusable API data services.",
-  "when_to_use": "Use for open data portals, enterprise data catalogs, data marketplace platforms, or any system publishing dataset metadata for discovery. Mandated by EU Open Data Directive for public sector bodies. US data.gov, UK data.gov.uk, EU data.europa.eu, and data.gov.au all use DCAT. Required for FAIR (Findable, Accessible, Interoperable, Reusable) data compliance in scientific publishing."
+  "extensions": [
+    "postgis"
+  ]
 }

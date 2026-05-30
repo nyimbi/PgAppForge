@@ -1,5 +1,6 @@
 {
   "name": "iso20022",
+  "schema": "iso20022",
   "label": "ISO 20022 (Payments)",
   "description": "Global financial messaging \u2014 bank payment mandate 2024-2026",
   "color": "#2c3e50",
@@ -12,169 +13,209 @@
     "regulation",
     "swift"
   ],
+  "table_notes": {
+    "fi_identification": "Registry of financial institutions identified by BIC, with address metadata and domestic clearing system codes.",
+    "payment_instruction": "Top-level payment initiation message (PAIN.001) grouping one or more credit transfer transactions from a single debtor.",
+    "credit_transfer_txn": "Individual credit transfer transaction (PACS.008 line item) carrying amount, currency, creditor details, and end-to-end reference.",
+    "payment_status": "Audit log of status transitions for a credit transfer transaction, capturing reason codes per ISO 20022 status reporting messages."
+  },
   "tables": {
     "fi_identification": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the financial institution record"
       },
       {
         "name": "bic",
         "type": "VARCHAR(11)",
-        "unique": true
+        "unique": true,
+        "description": "SWIFT BIC (ISO 9362) uniquely identifying this financial institution globally"
       },
       {
         "name": "name",
-        "type": "VARCHAR(140)"
+        "type": "VARCHAR(140)",
+        "description": "Full legal name of the financial institution"
       },
       {
         "name": "clearing_system_id",
-        "type": "VARCHAR(35)"
+        "type": "VARCHAR(35)",
+        "description": "Domestic clearing system member ID (e.g. ABA routing number, UK sort code)"
       },
       {
         "name": "country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code of the institution's domicile"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured postal address: {street, building_number, post_code, town, country}"
       }
     ],
     "payment_instruction": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key for this payment instruction"
       },
       {
         "name": "msg_id",
         "type": "VARCHAR(35)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Unique message ID assigned by the initiating party (PAIN.001 GrpHdr/MsgId)"
       },
       {
         "name": "creation_dt",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "Timestamp when this instruction message was created by the initiating party"
       },
       {
         "name": "num_txns",
         "type": "INTEGER",
-        "default": "0"
+        "default": "0",
+        "description": "Number of individual credit transfer transactions grouped under this instruction"
       },
       {
         "name": "ctrl_sum",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Sum of all transaction amounts in this instruction for reconciliation"
       },
       {
         "name": "debtor_id",
         "type": "INTEGER",
-        "fk": "fi_identification.id"
+        "fk": "fi_identification.id",
+        "description": "References fi_identification \u2014 the financial institution debiting the account"
       },
       {
         "name": "debtor_account_iban",
-        "type": "VARCHAR(34)"
+        "type": "VARCHAR(34)",
+        "description": "IBAN of the debtor account to be debited (ISO 13616)"
       },
       {
         "name": "status",
         "type": "VARCHAR(30)",
-        "default": "'PDNG'"
+        "default": "'PDNG'",
+        "description": "ISO 20022 payment status code: PDNG=pending, ACCP=accepted, RJCT=rejected, PART=partial"
       },
       {
         "name": "purpose_code",
-        "type": "VARCHAR(4)"
+        "type": "VARCHAR(4)",
+        "description": "ISO 20022 ExternalPurpose1Code classifying the economic purpose of this payment"
       }
     ],
     "credit_transfer_txn": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal UUID primary key for this credit transfer transaction"
       },
       {
         "name": "instruction_id",
         "type": "UUID",
-        "fk": "payment_instruction.id"
+        "fk": "payment_instruction.id",
+        "description": "References payment_instruction \u2014 the parent instruction group"
       },
       {
         "name": "end_to_end_id",
         "type": "VARCHAR(35)",
-        "nullable": false
+        "nullable": false,
+        "description": "End-to-end reference assigned by initiating party, carried unchanged through the payment chain"
       },
       {
         "name": "uetr",
-        "type": "UUID"
+        "type": "UUID",
+        "description": "Unique End-to-end Transaction Reference (SWIFT gpi) for cross-border tracking"
       },
       {
         "name": "amount",
         "type": "NUMERIC(18,2)",
-        "nullable": false
+        "nullable": false,
+        "description": "Transaction amount in the specified currency"
       },
       {
         "name": "currency",
         "type": "CHAR(3)",
-        "nullable": false
+        "nullable": false,
+        "description": "ISO 4217 alphabetic currency code for this transaction"
       },
       {
         "name": "creditor_id",
         "type": "INTEGER",
-        "fk": "fi_identification.id"
+        "fk": "fi_identification.id",
+        "description": "References fi_identification \u2014 the financial institution crediting the account"
       },
       {
         "name": "creditor_account_iban",
-        "type": "VARCHAR(34)"
+        "type": "VARCHAR(34)",
+        "description": "IBAN of the creditor account to be credited (ISO 13616)"
       },
       {
         "name": "creditor_name",
-        "type": "VARCHAR(140)"
+        "type": "VARCHAR(140)",
+        "description": "Full legal name of the party receiving funds"
       },
       {
         "name": "remittance_info",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text or structured remittance information (invoice ref, payment details) for the creditor"
       },
       {
         "name": "status",
         "type": "VARCHAR(30)",
-        "default": "'PDNG'"
+        "default": "'PDNG'",
+        "description": "ISO 20022 transaction status code: PDNG=pending, ACSP=accepted/settled, RJCT=rejected"
       },
       {
         "name": "value_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Requested interbank settlement date for this transaction"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Row creation timestamp (server-side)"
       }
     ],
     "payment_status": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for this status event"
       },
       {
         "name": "txn_id",
         "type": "UUID",
-        "fk": "credit_transfer_txn.id"
+        "fk": "credit_transfer_txn.id",
+        "description": "References credit_transfer_txn \u2014 the transaction this status event applies to"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "ISO 20022 status code at this point in time (e.g. ACSP, RJCT, PDNG)"
       },
       {
         "name": "status_dt",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this status was recorded"
       },
       {
         "name": "reason_code",
-        "type": "VARCHAR(4)"
+        "type": "VARCHAR(4)",
+        "description": "ISO 20022 ExternalStatusReason1Code explaining an RJCT or PDNG hold (e.g. AC01, AM04)"
       },
       {
         "name": "reason_info",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text elaboration of the reason code provided by the processing institution"
       }
     ]
   },

@@ -1,5 +1,6 @@
 {
   "name": "loinc",
+  "schema": "loinc",
   "label": "HL7 LOINC (Schema)",
   "description": "Logical Observation Identifiers Names and Codes \u2014 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
   "color": "#3498db",
@@ -13,169 +14,214 @@
     "laboratory",
     "free-registration"
   ],
+  "table_notes": {
+    "loinc_code": "Master table of all LOINC codes with their six-part naming axes, status, and ranking for the most common tests.",
+    "loinc_hierarchy": "Navigable multi-part classification tree for LOINC codes stored as ltree paths; leaves link back to loinc_code.",
+    "loinc_answer_list": "Permitted answer values (HL7 answer lists) for coded LOINC observations, one row per valid answer option.",
+    "loinc_linguistic_variant": "Official multilingual translations of LOINC long common names, one row per code per language."
+  },
   "tables": {
     "loinc_code": [
       {
         "name": "loinc_num",
         "type": "VARCHAR(10)",
-        "pk": true
+        "pk": true,
+        "description": "LOINC code identifier (primary key, e.g. 2345-7)"
       },
       {
         "name": "component",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "What is measured (axis 1 of 6): analyte, organism, or observation substance"
       },
       {
         "name": "property",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Characteristic of what is measured (axis 2): e.g. MCnc=mass concentration, ACnc=arbitrary concentration"
       },
       {
         "name": "time_aspct",
-        "type": "VARCHAR(15)"
+        "type": "VARCHAR(15)",
+        "description": "Timing of measurement (axis 3): Pt=point-in-time, 24H=24-hour, etc."
       },
       {
         "name": "system",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Specimen or biological system where observation is made (axis 4): e.g. Ser, Urine, CSF"
       },
       {
         "name": "scale_typ",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Scale of measurement (axis 5): Qn=quantitative, Ord=ordinal, Nom=nominal, Nar=narrative"
       },
       {
         "name": "method_typ",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Optional measurement method (axis 6): e.g. Microscopy, Immune, Probe.amp.tar"
       },
       {
         "name": "class",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "LOINC panel/category grouping (e.g. CHEM, HEM/BC, MICRO, RAD)"
       },
       {
         "name": "long_common_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Full human-readable name combining all six naming axes"
       },
       {
         "name": "short_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Abbreviated display name suitable for column headers and constrained UIs"
       },
       {
         "name": "status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Publication lifecycle status: ACTIVE, TRIAL, DISCOURAGED, or DEPRECATED"
       },
       {
         "name": "order_obs",
-        "type": "VARCHAR(15)"
+        "type": "VARCHAR(15)",
+        "description": "Usage context: Order=orderable test, Observation=result only, Both=either"
       },
       {
         "name": "common_test_rank",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Rank among most frequently ordered tests (lower = more common; NULL if not ranked)"
       },
       {
         "name": "example_ucum_units",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Typical UCUM unit for quantitative results (e.g. g/dL, mmol/L, %)"
       },
       {
         "name": "definition_description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Narrative definition clarifying the clinical intent and boundaries of this observation"
       },
       {
         "name": "consumer_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Plain-language name intended for patient-facing applications"
       },
       {
         "name": "search_vector",
-        "type": "TSVECTOR"
+        "type": "TSVECTOR",
+        "description": "PostgreSQL full-text search vector over loinc_num, long_common_name, and component"
       }
     ],
     "loinc_hierarchy": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "path",
         "type": "LTREE",
-        "nullable": false
+        "nullable": false,
+        "description": "Materialized ltree path encoding position in the LOINC classification tree"
       },
       {
         "name": "code",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "LOINC panel/multipart/part code at this node (may differ from loinc_num on leaf)"
       },
       {
-        "name": "level",
-        "type": "INTEGER"
+        "name": "depth_level",
+        "type": "INTEGER",
+        "description": "Depth of this node in the hierarchy tree (root = 0)"
       },
       {
         "name": "code_text",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Display label for this hierarchy node"
       },
       {
         "name": "is_leaf",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if this node is a leaf (directly maps to a loinc_code row)"
       },
       {
         "name": "loinc_num",
         "type": "VARCHAR(10)",
-        "fk": "loinc_code.loinc_num"
+        "fk": "loinc_code.loinc_num",
+        "description": "FK to loinc_code; populated only for leaf nodes representing a single LOINC observation"
       }
     ],
     "loinc_answer_list": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "answer_list_id",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "LOINC answer list identifier (LL prefix, e.g. LL539-8); shared across codes using the same list"
       },
       {
         "name": "answer_string_id",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "Unique LOINC identifier for this individual answer concept within the list"
       },
       {
         "name": "answer_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "External coding system code for this answer (SNOMED CT, HL7, or local code)"
       },
       {
         "name": "display_text",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable label for this answer option as shown in forms or result reports"
       },
       {
         "name": "answer_rank",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Display order of this answer within its answer list (ascending)"
       },
       {
         "name": "loinc_num",
         "type": "VARCHAR(10)",
-        "fk": "loinc_code.loinc_num"
+        "fk": "loinc_code.loinc_num",
+        "description": "FK to loinc_code; links this answer list membership to a specific coded LOINC observation"
       }
     ],
     "loinc_linguistic_variant": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "loinc_num",
         "type": "VARCHAR(10)",
-        "fk": "loinc_code.loinc_num"
+        "fk": "loinc_code.loinc_num",
+        "description": "FK to loinc_code identifying the observation being translated"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "ISO 639-1 or BCP-47 language tag (e.g. de-AT, fr-FR, zh-CN)"
       },
       {
         "name": "long_common_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Official LOINC long common name translated into the target language"
       },
       {
         "name": "linguistic_rank",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Preference rank when multiple translations exist for the same code and language (1 = preferred)"
       }
     ]
   },
   "short_description": "Logical Observation Identifiers Names and Codes \u2014 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
   "long_description": "LOINC (Logical Observation Identifiers Names and Codes) provides 100,000+ universal codes for laboratory and clinical observations \u2014 from blood glucose measurements to radiology reports. The schema includes the main code table, hierarchical classification tree, multilingual variants, and answer list definitions for coded observations. Data download is free after registration at loinc.org.",
-  "when_to_use": "Use alongside FHIR R4 for any lab, pathology, or clinical measurement system. Required by CMS in the US for electronic lab reporting. Essential when storing structured clinical results that must be understood by multiple systems without proprietary code translation."
+  "when_to_use": "Use alongside FHIR R4 for any lab, pathology, or clinical measurement system. Required by CMS in the US for electronic lab reporting. Essential when storing structured clinical results that must be understood by multiple systems without proprietary code translation.",
+  "extensions": [
+    "ltree"
+  ]
 }

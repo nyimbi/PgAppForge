@@ -1,5 +1,6 @@
 {
   "name": "iptc",
+  "schema": "iptc",
   "label": "IPTC (News/Journalism)",
   "description": "International Press Telecommunications Council \u2014 news article metadata standard used by all major news organizations",
   "color": "#c0392b",
@@ -12,206 +13,260 @@
     "media",
     "publishing"
   ],
+  "table_notes": {
+    "iptc_media_item": "Root entity for a single news item (article, photo, video); all other IPTC tables hang off this via foreign key. JSONB columns hold language-tagged values per the IPTC Multilingual Text standard.",
+    "iptc_subject": "Classifies the news item using IPTC subject codes (NewsCodes) or custom controlled vocabularies; a single item may have many subjects at different levels of specificity.",
+    "iptc_location": "Records geographic scope of a news item \u2014 where it was created, where it is about, or both \u2014 using a role discriminator and optional PostGIS point for spatial queries.",
+    "iptc_asset": "Describes a rendition or binary file (photo, video, graphic) linked to a news item, including EXIF camera metadata and GPS capture point."
+  },
   "tables": {
     "iptc_media_item": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the news item row"
       },
       {
         "name": "guid",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "IPTC globally unique item identifier (provider-assigned, persistent across revisions)"
       },
       {
         "name": "item_class",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "IPTC item class URI (e.g. ninat:Text, ninat:Picture, ninat:Video)"
       },
       {
         "name": "version",
         "type": "INTEGER",
-        "default": "1"
+        "default": "1",
+        "description": "Monotonically increasing revision number; 1 = initial publication"
       },
       {
         "name": "title",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "IPTC multilingual title: {\"en\": \"...\", \"fr\": \"...\"} keyed by BCP-47 language tag"
       },
       {
         "name": "description",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "IPTC multilingual description/caption: {\"en\": \"...\"} keyed by BCP-47 language tag"
       },
       {
         "name": "slugline",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Short editorial slug used by wire services for internal routing (e.g. SPORT-SOCCER-UEFA)"
       },
       {
         "name": "headline",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Published headline per language: {\"en\": \"...\"} keyed by BCP-47 language tag"
       },
       {
         "name": "byline",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Author attribution per language: {\"en\": \"Jane Smith\"} keyed by BCP-47 language tag"
       },
       {
         "name": "credit_line",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Provider credit string displayed alongside the item (e.g. \u00a9 Reuters 2024)"
       },
       {
         "name": "copyright_notice",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full copyright statement as required for licensing and legal compliance"
       },
       {
         "name": "usage_terms",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Plain-text or URL describing permitted uses, embargo periods, and redistribution restrictions"
       },
       {
-        "name": "language",
-        "type": "CHAR(5)"
+        "name": "lang_code",
+        "type": "CHAR(5)",
+        "description": "Primary language of the item as a BCP-47 tag (e.g. en, en-GB, fr-CA)"
       },
       {
         "name": "content_created",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "When the content itself was originally created (may pre-date publication)"
       },
       {
         "name": "first_created",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the first transmission of this item (wire publication time)"
       },
       {
         "name": "content_modified",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent content edit or correction"
       },
       {
         "name": "item_status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "IPTC editorial status: usable, withheld, canceled, recalled"
       },
       {
         "name": "editorial_office",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name or code of the bureau/desk responsible for this item (e.g. Reuters/London)"
       }
     ],
     "iptc_subject": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "media_item_id",
         "type": "UUID",
-        "fk": "iptc_media_item.id"
+        "fk": "iptc_media_item.id",
+        "description": "References the news item this subject classification belongs to"
       },
       {
         "name": "subject_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Controlled vocabulary code (e.g. IPTC NewsCodes: 15000000 = Sport)"
       },
       {
         "name": "subject_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for the subject code in the scheme's preferred language"
       },
       {
         "name": "subject_scheme",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Name of the controlled vocabulary (e.g. medtop, IPTC_NewsCode, custom)"
       },
       {
         "name": "subject_scheme_uri",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Canonical URI identifying the subject scheme (e.g. http://cv.iptc.org/newscodes/mediatopic/)"
       }
     ],
     "iptc_location": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
       },
       {
         "name": "media_item_id",
         "type": "UUID",
-        "fk": "iptc_media_item.id"
+        "fk": "iptc_media_item.id",
+        "description": "References the news item this location is associated with"
       },
       {
         "name": "location_role",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "IPTC location role: creator (where item was made) or subject (what the item covers)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Place name (city, region, or landmark) in natural language"
       },
       {
         "name": "country_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code for the location"
       },
       {
         "name": "country_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Full English country name (denormalized for display without join)"
       },
       {
         "name": "city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City or locality name where the event occurred or item was created"
       },
       {
         "name": "geo_point",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "PostGIS WGS84 point enabling ST_DWithin radius and ST_Distance spatial queries"
       }
     ],
     "iptc_asset": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this asset rendition"
       },
       {
         "name": "media_item_id",
         "type": "UUID",
-        "fk": "iptc_media_item.id"
+        "fk": "iptc_media_item.id",
+        "description": "References the parent news item this asset is a rendition of"
       },
       {
         "name": "media_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "High-level asset type: photo, video, graphic, audio, document"
       },
       {
         "name": "file_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Full URL or object-store path to the binary asset file"
       },
       {
         "name": "mime_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "IANA media type of the file (e.g. image/jpeg, video/mp4, application/pdf)"
       },
       {
         "name": "width_px",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Width of image or video frame in pixels (NULL for non-visual assets)"
       },
       {
         "name": "height_px",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Height of image or video frame in pixels (NULL for non-visual assets)"
       },
       {
         "name": "file_size_bytes",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "File size in bytes; used for storage accounting and download estimation"
       },
       {
         "name": "color_mode",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Color space of the image: RGB, CMYK, Grayscale, sRGB (from EXIF/ICC profile)"
       },
       {
         "name": "camera_make",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Camera manufacturer from EXIF tag Make (e.g. Canon, Nikon, Sony)"
       },
       {
         "name": "camera_model",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Camera model from EXIF tag Model (e.g. EOS R5, D850)"
       },
       {
         "name": "gps",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "GPS capture point from EXIF GPS tags; enables photo-location radius search"
       },
       {
         "name": "taken_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Shutter timestamp from EXIF DateTimeOriginal (camera local time converted to UTC)"
       }
     ]
   },
   "short_description": "International Press Telecommunications Council \u2014 news article metadata standard used by all major news organizations",
   "long_description": "IPTC (International Press Telecommunications Council) Photo Metadata and News Architecture are the global standards for news content metadata, used by Reuters, AP, Getty Images, and all major news organizations. The schema covers news items/articles with IPTC subjects and genres, geographic locations, bylines/credits, and the original media asset (image) with EXIF camera data and GPS coordinates.",
-  "when_to_use": "Use for content management systems for newsrooms, digital asset management (DAM) for image libraries, or media archive platforms. IPTC metadata is embedded in all professional news photography and required by Adobe Stock, Getty Images, and all major stock photo platforms. Required for press accreditation systems and news wire API integrations."
+  "when_to_use": "Use for content management systems for newsrooms, digital asset management (DAM) for image libraries, or media archive platforms. IPTC metadata is embedded in all professional news photography and required by Adobe Stock, Getty Images, and all major stock photo platforms. Required for press accreditation systems and news wire API integrations.",
+  "extensions": [
+    "postgis"
+  ]
 }

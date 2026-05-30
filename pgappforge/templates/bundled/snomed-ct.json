@@ -1,5 +1,6 @@
 {
   "name": "snomed-ct",
+  "schema": "snomed_ct",
   "label": "SNOMED CT (Schema)",
   "description": "SNOMED Clinical Terms \u2014 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
   "color": "#9b59b6",
@@ -18,129 +19,161 @@
       {
         "name": "id",
         "type": "BIGINT",
-        "pk": true
+        "pk": true,
+        "description": "SNOMED CT concept identifier (SCTID) \u2014 18-digit integer, globally unique"
       },
       {
         "name": "effective_time",
         "type": "DATE",
-        "nullable": false
+        "nullable": false,
+        "description": "Release date when this concept version became effective (YYYYMMDD format in source)"
       },
       {
         "name": "active",
         "type": "BOOLEAN",
-        "nullable": false
+        "nullable": false,
+        "description": "True if this concept is currently active; False if retired/deprecated"
       },
       {
         "name": "module_id",
         "type": "BIGINT",
-        "nullable": false
+        "nullable": false,
+        "description": "SCTID of the module this concept belongs to (e.g. 900000000000207008 = SNOMED CT core)"
       },
       {
         "name": "definition_status_id",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Fully defined (900000000000073002) or primitive (900000000000074008)"
       }
     ],
     "snomed_description": [
       {
         "name": "id",
         "type": "BIGINT",
-        "pk": true
+        "pk": true,
+        "description": "Description SCTID \u2014 unique identifier for this term/synonym"
       },
       {
         "name": "effective_time",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Release date when this description version became effective"
       },
       {
         "name": "active",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if this description is currently active"
       },
       {
         "name": "module_id",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "SCTID of the module containing this description"
       },
       {
         "name": "concept_id",
         "type": "BIGINT",
-        "fk": "snomed_concept.id"
+        "fk": "snomed_concept.id",
+        "description": "SCTID of the concept this description belongs to"
       },
       {
         "name": "language_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 639-1 language code (e.g. en, fr, de)"
       },
       {
         "name": "type_id",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "FSN (900000000000003001) = Fully Specified Name; Synonym (900000000000013009)"
       },
       {
         "name": "term",
         "type": "VARCHAR(1000)",
-        "nullable": false
+        "nullable": false,
+        "description": "The actual text of the description/synonym (clinically precise name)"
       },
       {
         "name": "case_significance_id",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Case sensitivity: CS=case sensitive, CI=case insensitive, cI=initial char"
       },
       {
         "name": "search_vector",
-        "type": "TSVECTOR"
+        "type": "TSVECTOR",
+        "description": "PostgreSQL FTS vector over term for fast full-text search across all descriptions"
       }
     ],
     "snomed_relationship": [
       {
         "name": "id",
         "type": "BIGINT",
-        "pk": true
+        "pk": true,
+        "description": "Relationship SCTID \u2014 unique identifier for this relationship instance"
       },
       {
         "name": "effective_time",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Release date when this relationship version became effective"
       },
       {
         "name": "active",
-        "type": "BOOLEAN"
+        "type": "BOOLEAN",
+        "description": "True if relationship is currently active in the hierarchy"
       },
       {
         "name": "source_id",
         "type": "BIGINT",
-        "fk": "snomed_concept.id"
+        "fk": "snomed_concept.id",
+        "description": "SCTID of the concept on the source (child) side of the relationship"
       },
       {
         "name": "destination_id",
         "type": "BIGINT",
-        "fk": "snomed_concept.id"
+        "fk": "snomed_concept.id",
+        "description": "SCTID of the concept on the destination (parent/target) side"
       },
       {
         "name": "relationship_group",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Groups co-occurring attributes; 0=ungrouped"
       },
       {
         "name": "type_id",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Relationship type SCTID (e.g. 116680003=Is a, 363698007=Finding site)"
       },
       {
         "name": "characteristic_type_id",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "description": "Stated (from author) vs inferred (computed) relationship"
       }
     ],
     "snomed_transitive_closure": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for fast lookups"
       },
       {
         "name": "super_type_id",
         "type": "BIGINT",
-        "fk": "snomed_concept.id"
+        "fk": "snomed_concept.id",
+        "description": "Ancestor concept SCTID (any level up the Is-a hierarchy)"
       },
       {
         "name": "sub_type_id",
         "type": "BIGINT",
-        "fk": "snomed_concept.id"
+        "fk": "snomed_concept.id",
+        "description": "Descendant concept SCTID \u2014 allows \"find all X and its subtypes\" in O(1)"
       }
     ]
   },
   "short_description": "SNOMED Clinical Terms \u2014 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
   "long_description": "SNOMED CT is the world's most comprehensive clinical health terminology with 350,000+ clinical concepts organized in a poly-hierarchy. The schema includes the RF2 release format tables: concepts, descriptions (preferred terms, synonyms), relationships (is-a, finding site, etc.), and transitive closure for subsumption queries. Requires UMLS license for US use; other countries may have free access via SNOMED International.",
-  "when_to_use": "Use for clinical decision support, problem list encoding, allergy recording, and clinical documentation requiring standard clinical terms. Required by UK NHS, mandated in many EU countries, and recommended by US ONC. Pair with FHIR R4 for complete clinical interoperability. Load data via: flask forge templates install-data snomed-ct"
+  "when_to_use": "Use for clinical decision support, problem list encoding, allergy recording, and clinical documentation requiring standard clinical terms. Required by UK NHS, mandated in many EU countries, and recommended by US ONC. Pair with FHIR R4 for complete clinical interoperability. Load data via: flask forge templates install-data snomed-ct",
+  "table_notes": {
+    "snomed_concept": "All 350,000+ SNOMED CT concepts. Each concept is a clinical entity (disease, finding, procedure, substance). Query with transitive_closure for subsumption (find all subtypes).",
+    "snomed_description": "All terms/synonyms for each concept \u2014 Fully Specified Names plus synonyms in multiple languages. Build GIN index on search_vector for fast clinical term search.",
+    "snomed_relationship": "Relationships between concepts (Is-a hierarchy + clinical attributes like Finding site, Causative agent). The Is-a (116680003) relationships form the concept hierarchy.",
+    "snomed_transitive_closure": "Pre-computed transitive closure of the Is-a hierarchy. Enables O(1) subsumption queries: SELECT * FROM conditions WHERE concept_id IN (SELECT sub_type_id FROM snomed_transitive_closure WHERE super_type_id = 73211009) finds all diabetes subtypes."
+  }
 }

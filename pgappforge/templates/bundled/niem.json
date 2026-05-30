@@ -1,5 +1,6 @@
 {
   "name": "niem",
+  "schema": "niem",
   "label": "NIEM (US Government)",
   "description": "National Information Exchange Model \u2014 mandatory for US federal agency data exchange",
   "color": "#1a3a5c",
@@ -13,200 +14,252 @@
     "justice",
     "emergency"
   ],
+  "table_notes": {
+    "niem_organization": "Represents any government agency, court, or law enforcement body that originates or processes NIEM data exchanges.",
+    "niem_person": "Core biographic entity for individuals in justice and public safety contexts; SSN stored as SHA-256 hash, never plaintext.",
+    "niem_location": "Physical addresses with an optional PostGIS point; referenced by incidents and other entities for geographic correlation.",
+    "niem_incident": "A reported public-safety or law-enforcement event, linked to a location and reporting agency, with NCIC-aligned category codes.",
+    "niem_case": "Legal case record tracking filing, court assignment, subject, charges, and disposition; the primary entity for court case management systems."
+  },
   "tables": {
     "niem_organization": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; UUID generated at insert time"
       },
       {
         "name": "name",
         "type": "VARCHAR(300)",
-        "nullable": false
+        "nullable": false,
+        "description": "Official full name of the agency or organization"
       },
       {
         "name": "abbreviation",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Common acronym or short form (e.g. FBI, LAPD, USCG)"
       },
       {
         "name": "category",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Organization type: federal, state, local, court, tribal, etc."
       },
       {
         "name": "jurisdiction",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Geographic or legal jurisdiction scope (e.g. state name, federal district)"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether the organization is currently operational and accepting data exchanges"
       }
     ],
     "niem_person": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; UUID generated at insert time"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Surname / last name as it appears on government identity documents"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "First / forename as it appears on government identity documents"
       },
       {
         "name": "full_name",
-        "type": "VARCHAR(300)"
+        "type": "VARCHAR(300)",
+        "description": "Complete formatted name including middle names, prefixes, and suffixes"
       },
       {
         "name": "date_of_birth",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date of birth; used for identity verification and age-eligibility rules"
       },
       {
         "name": "gender",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Gender identity; coded per NIEM nc:PersonSexCodeSimpleType vocabulary"
       },
       {
         "name": "race",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Racial category per FBI UCR/NCIC coding standard (e.g. W, B, A, I, U)"
       },
       {
         "name": "ethnicity",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Ethnic origin per OMB standard: Hispanic or Latino vs. Not Hispanic or Latino"
       },
       {
         "name": "ssn_hash",
-        "type": "CHAR(64)"
+        "type": "CHAR(64)",
+        "description": "SHA-256 hex digest of SSN; enables matching without storing plaintext PII"
       },
       {
         "name": "state_id",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "State-issued driver\u2019s license or ID number for secondary identity matching"
       }
     ],
     "niem_location": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; UUID generated at insert time"
       },
       {
         "name": "address_line",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Street number, street name, unit/suite; free-form per USPS addressing rules"
       },
       {
         "name": "city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City or municipality name"
       },
       {
         "name": "state_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "USPS two-letter state/territory abbreviation (e.g. CA, TX, PR)"
       },
       {
         "name": "zip",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "USPS ZIP or ZIP+4 code for postal routing and geographic approximation"
       },
       {
         "name": "country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code (default US for domestic records)"
       },
       {
         "name": "geo_point",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "PostGIS WGS84 point; enables ST_DWithin proximity and ST_Distance queries"
       }
     ],
     "niem_incident": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; UUID generated at insert time"
       },
       {
         "name": "incident_number",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Agency-assigned incident report number; unique within the reporting agency"
       },
       {
         "name": "incident_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Narrative incident classification (e.g. Burglary, Traffic Stop, Domestic Disturbance)"
       },
       {
         "name": "category_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "NIBRS/UCR offense category code aligning with FBI National Incident-Based Reporting System"
       },
       {
         "name": "location_id",
         "type": "UUID",
-        "fk": "niem_location.id"
+        "fk": "niem_location.id",
+        "description": "References niem_location.id; pinpoints where the incident occurred"
       },
       {
         "name": "reported_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when the incident was officially reported to the agency (timezone-aware)"
       },
       {
         "name": "occurred_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Estimated or known timestamp when the incident actually took place"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Current lifecycle status: open, cleared, unfounded, inactive, closed"
       },
       {
         "name": "narrative",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text officer narrative describing the incident in detail"
       },
       {
         "name": "reporting_org_id",
         "type": "UUID",
-        "fk": "niem_organization.id"
+        "fk": "niem_organization.id",
+        "description": "References niem_organization.id; identifies the agency that filed this incident report"
       }
     ],
     "niem_case": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; UUID generated at insert time"
       },
       {
         "name": "case_number",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Court-assigned docket or case number; unique within the court\u2019s jurisdiction"
       },
       {
         "name": "case_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Case category: criminal, civil, juvenile, traffic, domestic, etc."
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Procedural status: pending, active, disposed, appealed, closed"
       },
       {
         "name": "filing_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the case was formally filed with the court"
       },
       {
         "name": "court_id",
         "type": "UUID",
-        "fk": "niem_organization.id"
+        "fk": "niem_organization.id",
+        "description": "References niem_organization.id; identifies the court where the case is docketed"
       },
       {
         "name": "subject_id",
         "type": "UUID",
-        "fk": "niem_person.id"
+        "fk": "niem_person.id",
+        "description": "References niem_person.id; the defendant or primary subject of the case"
       },
       {
         "name": "charges",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of charge objects: [{statute, description, degree, count, amended_from}]"
       },
       {
         "name": "disposition",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Final outcome: guilty, not guilty, dismissed, pled, deferred adjudication, etc."
       }
     ]
   },
   "short_description": "National Information Exchange Model \u2014 mandatory for US federal agency data exchange",
   "long_description": "NIEM (National Information Exchange Model) is the US federal government's framework for sharing information across agencies and jurisdictions. The schema implements core NIEM justice and public safety entities: organizations (agencies), persons with biographic and identifier data, geographic locations, incidents (reported events), and legal cases with charge/disposition tracking.",
-  "when_to_use": "Use for law enforcement records management systems, court case management, emergency dispatch (CAD) systems, or any federal contractor building inter-agency data sharing solutions. NIEM compliance is required for NCIC (National Crime Information Center) integration, DOJ grants, and DHS/FEMA contracts. State courts increasingly mandate NIEM-aligned data exchange for criminal justice systems."
+  "when_to_use": "Use for law enforcement records management systems, court case management, emergency dispatch (CAD) systems, or any federal contractor building inter-agency data sharing solutions. NIEM compliance is required for NCIC (National Crime Information Center) integration, DOJ grants, and DHS/FEMA contracts. State courts increasingly mandate NIEM-aligned data exchange for criminal justice systems.",
+  "extensions": [
+    "postgis"
+  ]
 }

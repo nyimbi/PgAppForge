@@ -1,5 +1,6 @@
 {
   "name": "actus",
+  "schema": "actus",
   "label": "ACTUS (Financial Contracts)",
   "description": "Algorithmic Contract Types Unified Standards",
   "color": "#2c3e50",
@@ -12,155 +13,193 @@
     "regulatory",
     "eu"
   ],
+  "table_notes": {
+    "actus_counterparty": "Legal entity or natural person on the other side of a financial contract, identified by LEI and rated by credit quality.",
+    "actus_contract": "Core ACTUS contract record capturing contract type, terms, and the complete parameter set needed for cash flow simulation.",
+    "actus_contract_event": "Time-ordered sequence of cash flow events produced by the ACTUS algorithmic simulation engine for a given contract.",
+    "actus_risk_factor": "Market risk factors (interest rate curves, FX rates, credit spreads) referenced by ACTUS simulation algorithms."
+  },
   "tables": {
     "actus_counterparty": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the counterparty record"
       },
       {
         "name": "lei",
         "type": "VARCHAR(20)",
-        "unique": true
+        "unique": true,
+        "description": "Legal Entity Identifier (ISO 17442) \u2014 globally unique 20-character code for the legal entity"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Full legal name of the counterparty entity or individual"
       },
       {
         "name": "counterparty_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Classification of counterparty role (e.g. bank, corporate, sovereign, central_bank)"
       },
       {
         "name": "country",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code of the counterparty's domicile"
       },
       {
         "name": "credit_rating",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "External credit rating (e.g. AAA, BB+) from a recognised ratings agency"
       },
       {
         "name": "default_probability",
-        "type": "NUMERIC(8,6)"
+        "type": "NUMERIC(8,6)",
+        "description": "Annualised probability of default used in credit risk calculations (0.0\u20131.0)"
       }
     ],
     "actus_contract": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the contract record"
       },
       {
         "name": "contract_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Business-level contract identifier (e.g. from originating system or LEI-based scheme)"
       },
       {
         "name": "contract_type",
         "type": "VARCHAR(10)",
-        "nullable": false
+        "nullable": false,
+        "description": "ACTUS contract type code (e.g. PAM=principal at maturity, ANN=annuity, CLM=call money)"
       },
       {
         "name": "contract_role",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "ACTUS contract role (RPA=receive principal, RPL=pay principal) \u2014 determines cash flow direction"
       },
       {
         "name": "counterparty_id",
         "type": "UUID",
-        "fk": "actus_counterparty.id"
+        "fk": "actus_counterparty.id",
+        "description": "References the counterparty entity in actus_counterparty"
       },
       {
         "name": "settlement_currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code in which contractual cash flows are settled"
       },
       {
         "name": "notional_principal",
-        "type": "NUMERIC(22,6)"
+        "type": "NUMERIC(22,6)",
+        "description": "Face value of the contract used as the basis for interest and cash flow calculations"
       },
       {
         "name": "nominal_interest_rate",
-        "type": "NUMERIC(12,8)"
+        "type": "NUMERIC(12,8)",
+        "description": "Contractual interest rate expressed as a decimal (e.g. 0.05 = 5% p.a.)"
       },
       {
         "name": "day_count_convention",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "ACTUS day-count convention code (e.g. A360, A365, 30E360) governing accrual calculations"
       },
       {
         "name": "initial_exchange_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date of the first exchange of principal \u2014 marks the start of the contract"
       },
       {
         "name": "maturity_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Scheduled end date of the contract when final principal repayment occurs"
       },
       {
         "name": "contract_terms",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Full ACTUS attribute set for the contract type; keys follow ACTUS data dictionary"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this contract record was inserted"
       }
     ],
     "actus_contract_event": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the event row"
       },
       {
         "name": "contract_id",
         "type": "UUID",
-        "fk": "actus_contract.id"
+        "fk": "actus_contract.id",
+        "description": "References the parent contract in actus_contract"
       },
       {
         "name": "scheduled_time",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "Exact timestamp at which this cash flow event is scheduled to occur"
       },
       {
         "name": "event_type",
         "type": "VARCHAR(4)",
-        "nullable": false
+        "nullable": false,
+        "description": "ACTUS event type code (e.g. IED=initial exchange, IP=interest payment, PR=redemption, MD=maturity)"
       },
       {
         "name": "payoff",
-        "type": "NUMERIC(22,6)"
+        "type": "NUMERIC(22,6)",
+        "description": "Net cash flow amount for this event; positive = inflow to holder, negative = outflow"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code in which the payoff is denominated"
       },
       {
         "name": "state_after",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "ACTUS contract state snapshot after this event (e.g. nominalValue, accruedInterest, statusDate)"
       }
     ],
     "actus_risk_factor": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the risk factor row"
       },
       {
         "name": "market_object_code",
         "type": "VARCHAR(50)",
-        "unique": true
+        "unique": true,
+        "description": "ACTUS market object code identifying this risk factor (e.g. LIBOR_3M, EUR/USD, EURIBOR_6M)"
       },
       {
         "name": "risk_factor_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Category of market risk: INTEREST_RATE, EXCHANGE_RATE, CREDIT_SPREAD, or EQUITY_PRICE"
       },
       {
         "name": "currency",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code for this risk factor (base currency for FX, denomination for rates)"
       },
       {
         "name": "base_value",
-        "type": "NUMERIC(18,8)"
+        "type": "NUMERIC(18,8)",
+        "description": "Current or reference value of the risk factor used as the simulation baseline"
       }
     ]
   },

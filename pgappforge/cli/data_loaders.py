@@ -28,6 +28,14 @@ import click
 # ─── Known download sources ────────────────────────────────────────────────────
 
 DOWNLOAD_SOURCES: dict[str, dict] = {
+	"icd10": {
+		"license": "Public domain — US federal government work, no registration required",
+		"files": {
+			"icd10cm_tabular_2025.zip": "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/2025/icd10cm-tabular-April-2025.zip",
+			"icd10cm_order_2025.txt":   "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/2025/icd10cm-order-April-2025.txt",
+			"icd10pcs_tables_2025.zip": "https://www.cms.gov/files/zip/2025-icd-10-pcs-code-tables-and-index.zip",
+		},
+	},
 	"geonames": {
 		"license": "CC-BY 4.0 — free, no registration required",
 		"files": {
@@ -303,8 +311,157 @@ def load_snomed(database_uri: str, data_dir: str) -> None:
 	click.echo("✅ SNOMED CT loaded.")
 
 
+def load_icd10(database_uri: str, data_dir: str | None = None) -> None:
+	"""Download and load ICD-10-CM/PCS codes from CMS (public domain, no registration).
+
+	Downloads the annual CMS flat-file release (~4MB) and loads:
+	  icd10_chapter, icd10_block, icd10_code, icd10_pcs_code
+
+	CMS releases updates annually on October 1. The order file is a fixed-width
+	format: columns 1-5 = order number, 6-13 = code (no dots), 14 = header flag,
+	15-76 = short description, 77+ = long description.
+	"""
+	from sqlalchemy import create_engine, text as sa_text
+	engine = create_engine(database_uri)
+	src = DOWNLOAD_SOURCES["icd10"]
+	dp = Path(data_dir) if data_dir else Path("/tmp/icd10_cache")
+	dp.mkdir(parents=True, exist_ok=True)
+	click.echo(f"License: {src['license']}")
+
+	# ICD-10-CM chapter boundaries — 3-char code ranges (stable across annual releases).
+	# Ch 2 and 3 both contain D codes (C00-D49 Neoplasms, D50-D89 Blood disorders),
+	# so single-letter ranges would cause ambiguous SQL comparisons.
+	CHAPTERS = [
+		(1,  "A00", "B99", "Certain infectious and parasitic diseases"),
+		(2,  "C00", "D49", "Neoplasms"),
+		(3,  "D50", "D89", "Diseases of the blood and blood-forming organs"),
+		(4,  "E00", "E89", "Endocrine, nutritional and metabolic diseases"),
+		(5,  "F01", "F99", "Mental, behavioral and neurodevelopmental disorders"),
+		(6,  "G00", "G99", "Diseases of the nervous system"),
+		(7,  "H00", "H59", "Diseases of the eye and adnexa"),
+		(8,  "H60", "H95", "Diseases of the ear and mastoid process"),
+		(9,  "I00", "I99", "Diseases of the circulatory system"),
+		(10, "J00", "J99", "Diseases of the respiratory system"),
+		(11, "K00", "K95", "Diseases of the digestive system"),
+		(12, "L00", "L99", "Diseases of the skin and subcutaneous tissue"),
+		(13, "M00", "M99", "Diseases of the musculoskeletal system and connective tissue"),
+		(14, "N00", "N99", "Diseases of the genitourinary system"),
+		(15, "O00", "O9A", "Pregnancy, childbirth and the puerperium"),
+		(16, "P00", "P96", "Certain conditions originating in the perinatal period"),
+		(17, "Q00", "Q99", "Congenital malformations, deformations and chromosomal abnormalities"),
+		(18, "R00", "R99", "Symptoms, signs and abnormal clinical findings"),
+		(19, "S00", "T88", "Injury, poisoning and certain other consequences of external causes"),
+		(20, "V00", "Y99", "External causes of morbidity"),
+		(21, "Z00", "Z99", "Factors influencing health status and contact with health services"),
+		(22, "U00", "U85", "Codes for special purposes"),
+	]
+
+	with engine.connect() as conn:
+		# ── Chapters ─────────────────────────────────────────────────────────
+		chapter_rows = [
+			{"num": ch, "start": s, "end": e, "title": title,
+			 "short": title.split(",")[0][:100]}
+			for ch, s, e, title in CHAPTERS
+		]
+		conn.execute(sa_text(
+			"INSERT INTO icd10_chapter(chapter_number,code_range_start,code_range_end,title,short_title) "
+			"VALUES(:num,:start,:end,:title,:short) ON CONFLICT(chapter_number) DO NOTHING"
+		), chapter_rows)
+		conn.commit()
+		click.echo(f"  ✓ {len(chapter_rows)} chapters loaded")
+
+		# ── Order flat file (CM codes) ────────────────────────────────────────
+		order_dest = dp / "icd10cm_order_2025.txt"
+		if not order_dest.exists():
+			f = _ensure_file("icd10cm_order_2025.txt",
+			                 src["files"]["icd10cm_order_2025.txt"], dp)
+			if f:
+				order_dest = f
+
+		if order_dest.exists():
+			click.echo(f"  Parsing {order_dest.name} …")
+			rows, batch_size = [], 2000
+			total = 0
+			with open(order_dest, encoding="latin-1") as fh:
+				for line in fh:
+					if len(line) < 14:
+						continue
+					# Fixed-width: col 6-13 = code (0-indexed: 5:13), col 14 = header (13)
+					# col 15-76 = short (14:76), col 77+ = long (76:)
+					code = line[5:13].strip()
+					is_header = line[13:14].strip() == "1"
+					short_desc = line[14:76].strip()
+					long_desc = line[76:].strip() or short_desc
+					if not code:
+						continue
+					# Add dot for display: 3-char codes have no dot, >3 get dot after char 3
+					dot_code = code if len(code) <= 3 else f"{code[:3]}.{code[3:]}"
+					parent = code[:-1] if len(code) > 3 else None
+					rows.append({
+						"code": code, "dot": dot_code,
+						"short": short_desc[:60], "long": long_desc[:300],
+						"parent": parent,
+						"billable": not is_header,
+						"header": is_header,
+					})
+					if len(rows) >= batch_size:
+						conn.execute(sa_text(
+							"INSERT INTO icd10_code(code,code_with_dots,short_description,long_description,"
+							"is_valid_for_billing,is_header,code_type,parent_code) "
+							"VALUES(:code,:dot,:short,:long,:billable,:header,'CM',:parent) "
+							"ON CONFLICT(code) DO NOTHING"
+						), rows)
+						total += len(rows)
+						rows = []
+						print(f"    {total:,} codes\r", end="", flush=True)
+			if rows:
+				conn.execute(sa_text(
+					"INSERT INTO icd10_code(code,code_with_dots,short_description,long_description,"
+					"is_valid_for_billing,is_header,code_type,parent_code) "
+					"VALUES(:code,:dot,:short,:long,:billable,:header,'CM',:parent) "
+					"ON CONFLICT(code) DO NOTHING"
+				), rows)
+				total += len(rows)
+			print()
+			conn.commit()
+			click.echo(f"  ✓ {total:,} ICD-10-CM codes loaded")
+
+			# Link chapter_id by code prefix (single UPDATE pass)
+			conn.execute(sa_text("""
+				UPDATE icd10_code c
+				SET chapter_id = ch.id
+				FROM icd10_chapter ch
+				WHERE c.code_type = 'CM'
+				  AND c.chapter_id IS NULL
+				  AND c.code >= ch.code_range_start
+				  AND c.code <= ch.code_range_end || 'ZZZ'
+			"""))
+			conn.commit()
+
+			# Build FTS search vector
+			click.echo("  Building full-text search vectors …")
+			conn.execute(sa_text("""
+				UPDATE icd10_code
+				SET search_vector = to_tsvector('english',
+				    coalesce(short_description,'') || ' ' || coalesce(long_description,''))
+				WHERE search_vector IS NULL
+			"""))
+			conn.commit()
+			click.echo("  ✓ Search vectors built")
+		else:
+			click.echo("  ⚠  CM order file not found — skipping CM codes", err=True)
+
+	click.echo("\n✅ ICD-10 data loaded.")
+	click.echo("Recommended indexes:")
+	click.echo("  CREATE INDEX CONCURRENTLY ON icd10_code USING GIN(search_vector);")
+	click.echo("  CREATE INDEX CONCURRENTLY ON icd10_code(parent_code);")
+	click.echo("  CREATE INDEX CONCURRENTLY ON icd10_code(chapter_id, is_valid_for_billing);")
+	click.echo("  CREATE INDEX CONCURRENTLY ON icd10_code(code_with_dots);")
+
+
 # Registry of all supported data-load targets
 LOADERS: dict[str, Any] = {
+	"icd10": load_icd10,
 	"geonames": load_geonames,
 	"loinc": load_loinc,
 	"snomed-ct": load_snomed,

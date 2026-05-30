@@ -1,5 +1,6 @@
 {
   "name": "fiware",
+  "schema": "fiware",
   "label": "FIWARE Smart Data Models",
   "description": "EU-backed open data models \u2014 smart cities, agrifood, energy, environment",
   "color": "#3498db",
@@ -13,230 +14,291 @@
     "fiware",
     "environment"
   ],
+  "table_notes": {
+    "fw_weather_observed": "Point-in-time meteorological readings from a physical or virtual weather station, following the FIWARE WeatherObserved data model.",
+    "fw_air_quality_observed": "Pollutant concentrations and computed AQI from an air quality monitoring station, following the FIWARE AirQualityObserved data model.",
+    "fw_traffic_flow_observed": "Vehicle count, occupancy and speed at a road sensor location, following the FIWARE TrafficFlowObserved data model.",
+    "fw_waste_container": "Physical waste bin or container with fill-level telemetry and service status, following the FIWARE WasteContainer data model.",
+    "fw_device": "IoT device registry entry tracking hardware state, owner, signal strength and last reported value, following the FIWARE Device data model."
+  },
   "tables": {
     "fw_weather_observed": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the observation record"
       },
       {
         "name": "station_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "External identifier of the weather station (e.g. WMO ID or operator code)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable name or label for the weather station"
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "WGS84 geographic position of the station. Enables ST_DWithin proximity queries."
       },
       {
         "name": "observed_at",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "UTC timestamp of when the meteorological values were measured"
       },
       {
         "name": "temperature",
-        "type": "NUMERIC(6,2)"
+        "type": "NUMERIC(6,2)",
+        "description": "Ambient air temperature in degrees Celsius at time of observation"
       },
       {
         "name": "feels_like_temperature",
-        "type": "NUMERIC(6,2)"
+        "type": "NUMERIC(6,2)",
+        "description": "Perceived temperature (heat index / wind chill) in degrees Celsius"
       },
       {
         "name": "relative_humidity",
-        "type": "NUMERIC(5,2)"
+        "type": "NUMERIC(5,2)",
+        "description": "Relative humidity as a percentage (0\u2013100)"
       },
       {
         "name": "wind_speed",
-        "type": "NUMERIC(6,2)"
+        "type": "NUMERIC(6,2)",
+        "description": "Wind speed in metres per second"
       },
       {
         "name": "wind_direction",
-        "type": "NUMERIC(6,2)"
+        "type": "NUMERIC(6,2)",
+        "description": "Wind direction in degrees clockwise from true north (0\u2013360)"
       },
       {
         "name": "atmospheric_pressure",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Atmospheric pressure in hectopascals (hPa)"
       },
       {
         "name": "precipitation",
-        "type": "NUMERIC(7,3)"
+        "type": "NUMERIC(7,3)",
+        "description": "Accumulated precipitation in millimetres over the observation period"
       },
       {
         "name": "weather_type",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "FIWARE-coded weather condition array, e.g. [\"rain\", \"fog\"]. Values follow FIWARE WeatherObserved weatherType vocabulary."
       }
     ],
     "fw_air_quality_observed": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the air quality observation record"
       },
       {
         "name": "station_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "External identifier of the air quality monitoring station"
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "WGS84 geographic position of the monitoring station"
       },
       {
         "name": "observed_at",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "UTC timestamp of when the pollutant concentrations were measured"
       },
       {
         "name": "co",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Carbon monoxide (CO) concentration in micrograms per cubic metre (\u03bcg/m\u00b3)"
       },
       {
         "name": "no2",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Nitrogen dioxide (NO\u2082) concentration in \u03bcg/m\u00b3"
       },
       {
         "name": "o3",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Ozone (O\u2083) concentration in \u03bcg/m\u00b3"
       },
       {
         "name": "pm10",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Particulate matter \u226410\u03bcm diameter concentration in \u03bcg/m\u00b3"
       },
       {
         "name": "pm25",
-        "type": "NUMERIC(10,4)"
+        "type": "NUMERIC(10,4)",
+        "description": "Fine particulate matter \u22642.5\u03bcm diameter concentration in \u03bcg/m\u00b3"
       },
       {
         "name": "aqi",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Computed Air Quality Index value (scale varies by country; typically 0\u2013500 US AQI)"
       },
       {
         "name": "aqi_level",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Textual AQI band, e.g. 'good', 'moderate', 'unhealthy', 'hazardous'"
       }
     ],
     "fw_traffic_flow_observed": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the traffic flow observation record"
       },
       {
         "name": "road_segment_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "External identifier of the road segment or loop detector being observed"
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "WGS84 geographic position of the traffic sensor"
       },
       {
         "name": "observed_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp of the traffic flow measurement"
       },
       {
         "name": "intensity",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of vehicles counted per hour at this sensor location"
       },
       {
         "name": "occupancy",
-        "type": "NUMERIC(5,4)"
+        "type": "NUMERIC(5,4)",
+        "description": "Fraction of time the detector was occupied by vehicles (0.0\u20131.0)"
       },
       {
         "name": "average_vehicle_speed",
-        "type": "NUMERIC(6,2)"
+        "type": "NUMERIC(6,2)",
+        "description": "Space-mean speed of vehicles passing the sensor in km/h"
       },
       {
         "name": "vehicle_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "FIWARE vehicle category: 'car', 'bus', 'truck', 'bicycle', 'motorcycle', etc."
       },
       {
         "name": "congestion_level",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Qualitative congestion band: 'freeFlow', 'congested', 'heavyCongestion', 'blockage'"
       }
     ],
     "fw_waste_container": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the waste container record"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label or street address description for the container"
       },
       {
         "name": "container_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Waste stream category: 'organic', 'recyclable', 'glass', 'paper', 'residual', etc."
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "WGS84 geographic position of the waste container"
       },
       {
         "name": "fill_level",
-        "type": "NUMERIC(4,3)"
+        "type": "NUMERIC(4,3)",
+        "description": "Current fill fraction reported by sensor (0.0 = empty, 1.0 = full)"
       },
       {
         "name": "fill_level_updated_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp when fill_level was last updated by sensor or manual report"
       },
       {
         "name": "capacity_liters",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Total volumetric capacity of the container in litres"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Operational status: 'ok', 'lidOpen', 'dropped', 'moved', 'vandalized', 'burning', 'unknown'"
       },
       {
         "name": "last_emptied_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp of the most recent emptying service event"
       }
     ],
     "fw_device": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the IoT device registry entry"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable device name or label"
       },
       {
         "name": "category",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of FIWARE device category tags, e.g. [\"sensor\", \"meter\", \"actuator\"]"
       },
       {
         "name": "device_state",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Current operational state: 'ok', 'outOfService', 'withIncidences'"
       },
       {
         "name": "location",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "WGS84 geographic position where the device is physically installed"
       },
       {
         "name": "owner",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name or identifier of the entity that owns and is responsible for this device"
       },
       {
         "name": "battery_level",
-        "type": "NUMERIC(4,3)"
+        "type": "NUMERIC(4,3)",
+        "description": "Battery charge fraction (0.0 = depleted, 1.0 = full). NULL for mains-powered devices."
       },
       {
         "name": "rssi",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Received Signal Strength Indicator in dBm (negative; closer to 0 = stronger signal)"
       },
       {
         "name": "date_last_value_reported",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "UTC timestamp when this device last successfully transmitted a data value"
       }
     ]
   },
   "short_description": "EU-backed open data models \u2014 smart cities, agrifood, energy, environment",
   "long_description": "FIWARE Smart Data Models are the EU-backed reference schemas for smart city and IoT applications, maintained by TM Forum, IUDX, and the FIWARE Foundation. The schema covers weather observations, air quality measurements, traffic flow counts, waste container fill levels, and IoT device registry \u2014 the five most commonly deployed models.",
-  "when_to_use": "Use for smart city platforms, environmental monitoring dashboards, or any IoT application targeting EU markets. Used by 300+ cities in the EU Smart Cities Marketplace. Required for compliance with many EU Horizon and CEF Digital grants. The Catania, Porto, Santander, and Helsinki smart city reference implementations all use FIWARE data models."
+  "when_to_use": "Use for smart city platforms, environmental monitoring dashboards, or any IoT application targeting EU markets. Used by 300+ cities in the EU Smart Cities Marketplace. Required for compliance with many EU Horizon and CEF Digital grants. The Catania, Porto, Santander, and Helsinki smart city reference implementations all use FIWARE data models.",
+  "extensions": [
+    "postgis"
+  ]
 }

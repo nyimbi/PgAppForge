@@ -1,5 +1,6 @@
 {
   "name": "scim",
+  "schema": "scim",
   "label": "SCIM 2.0 (Identity)",
   "description": "System for Cross-domain Identity Management \u2014 enterprise SSO standard",
   "color": "#8e44ad",
@@ -14,170 +15,211 @@
     "okta",
     "azure-ad"
   ],
+  "table_notes": {
+    "scim_users": "Core SCIM user resource (RFC 7643 \u00a74.1) with enterprise extension \u2014 stores identity, org hierarchy, and provisioning metadata for IdP-pushed accounts.",
+    "scim_groups": "SCIM group resource (RFC 7643 \u00a74.2) representing role or team collections; membership is normalised into scim_group_members.",
+    "scim_group_members": "Junction table resolving the many-to-many relationship between scim_groups and scim_users; each row records when a user was added.",
+    "scim_schemas": "Registry of SCIM schema URNs and their attribute definitions; used by /Schemas endpoint and custom extension negotiation."
+  },
   "tables": {
     "scim_users": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "SCIM resource ID \u2014 stable UUID assigned by the service provider on creation"
       },
       {
         "name": "external_id",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "Opaque ID set by the provisioning client (IdP); used to correlate records across re-provisions"
       },
       {
         "name": "user_name",
         "type": "VARCHAR(255)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Unique login identifier (usually email or sAMAccountName) \u2014 SCIM userName attribute"
       },
       {
         "name": "display_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Full display name as the IdP wants it shown in UI (may differ from formatted_name)"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Surname / last name component of the user's legal name"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Given / first name component of the user's legal name"
       },
       {
         "name": "formatted_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Full name in display order (e.g. honorific + given + family), as pushed by the IdP"
       },
       {
         "name": "emails",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "SCIM multi-value email array: [{\"value\": \"...\", \"type\": \"work\", \"primary\": true}]"
       },
       {
         "name": "phone_numbers",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "SCIM multi-value phone array: [{\"value\": \"+1-555-...\", \"type\": \"work\"}]"
       },
       {
         "name": "active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether the account is enabled; IdP sets false to suspend access without deleting the record"
       },
       {
         "name": "locale",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "IETF BCP 47 locale tag (e.g. en-US, fr-FR) controlling number/date formatting for this user"
       },
       {
         "name": "timezone",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "IANA timezone name (e.g. America/New_York) for scheduling and display purposes"
       },
       {
         "name": "title",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Job title as stored in the IdP directory (e.g. Senior Engineer)"
       },
       {
         "name": "organization",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Top-level organisation or company name from the enterprise extension"
       },
       {
         "name": "department",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Organisational unit or department the user belongs to"
       },
       {
         "name": "employee_number",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "HR system employee ID or badge number from the enterprise extension"
       },
       {
         "name": "cost_center",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Accounting cost centre code used for chargebacks and reporting"
       },
       {
         "name": "manager_id",
         "type": "UUID",
-        "fk": "scim_users.id"
+        "fk": "scim_users.id",
+        "description": "Self-referencing FK to scim_users.id \u2014 the user's direct manager in the org hierarchy"
       },
       {
         "name": "meta",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "SCIM meta object: {\"resourceType\", \"created\", \"lastModified\", \"location\", \"version\"}"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this record was first provisioned into the service provider"
       },
       {
         "name": "last_modified_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp of the most recent SCIM PATCH or PUT update to this user record"
       }
     ],
     "scim_groups": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "SCIM resource ID \u2014 stable UUID assigned by the service provider on group creation"
       },
       {
         "name": "external_id",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Opaque ID set by the provisioning client (IdP) to correlate the group across re-provisions"
       },
       {
         "name": "display_name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable group name as pushed by the IdP (e.g. Engineering, Sales-EMEA)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text explanation of the group's purpose or access scope"
       },
       {
         "name": "meta",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "SCIM meta object: {\"resourceType\", \"created\", \"lastModified\", \"location\", \"version\"}"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this group was first provisioned into the service provider"
       }
     ],
     "scim_group_members": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate key for the membership row"
       },
       {
         "name": "group_id",
         "type": "UUID",
         "fk": "scim_groups.id",
-        "nullable": false
+        "nullable": false,
+        "description": "FK to scim_groups.id \u2014 the group this membership belongs to"
       },
       {
         "name": "user_id",
         "type": "UUID",
         "fk": "scim_users.id",
-        "nullable": false
+        "nullable": false,
+        "description": "FK to scim_users.id \u2014 the user being added to the group"
       },
       {
         "name": "added_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the IdP provisioned this user into the group"
       }
     ],
     "scim_schemas": [
       {
         "name": "id",
         "type": "VARCHAR(255)",
-        "pk": true
+        "pk": true,
+        "description": "SCIM schema URN (e.g. urn:ietf:params:scim:schemas:core:2.0:User)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Short human-readable schema name (e.g. User, Group, EnterpriseUser)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Human-readable description of the schema's purpose and scope"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of SCIM attribute descriptors: [{\"name\", \"type\", \"multiValued\", \"required\", \"caseExact\", \"mutability\", \"returned\", \"uniqueness\"}]"
       }
     ]
   },

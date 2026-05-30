@@ -1,5 +1,6 @@
 {
   "name": "lti",
+  "schema": "lti",
   "label": "IMS Global LTI (Learning Tools)",
   "description": "Learning Tools Interoperability \u2014 standard for connecting LMS to external learning tools",
   "color": "#f39c12",
@@ -12,166 +13,207 @@
     "ims-global",
     "edtech"
   ],
+  "table_notes": {
+    "lti_platform": "Represents an LMS (e.g. Canvas, Moodle, Blackboard) registered as an LTI 1.3 platform, storing its OIDC and JWKS endpoints for secure launch verification.",
+    "lti_tool": "Describes an external learning tool (the 'TP' side) including its launch URL, supported placements, and privacy level for data sharing with the platform.",
+    "lti_deployment": "Join between a platform and a tool capturing the IMS deployment_id and course context; one tool can be deployed multiple times within the same platform.",
+    "lti_launch": "Immutable audit record of each tool launch, capturing the authenticated user, IMS roles, resource link context, and anti-replay nonce."
+  },
   "tables": {
     "lti_platform": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this platform registration"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Human-readable label for the LMS (e.g. 'Canvas Production', 'Moodle Dev')"
       },
       {
         "name": "client_id",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "OAuth 2.0 client_id issued by the platform during LTI tool registration"
       },
       {
         "name": "issuer",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "OIDC issuer URL that uniquely identifies the platform (e.g. https://canvas.instructure.com)"
       },
       {
         "name": "auth_endpoint",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Platform OIDC authentication endpoint used to initiate the login flow"
       },
       {
         "name": "token_endpoint",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Platform OAuth 2.0 token endpoint for obtaining access tokens (LTI Advantage services)"
       },
       {
         "name": "jwks_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Platform JWKS URL for fetching public keys to verify ID token signatures"
       },
       {
         "name": "public_key",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Cached PEM-encoded public key from the platform (fallback if JWKS is unavailable)"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether this platform registration is currently accepting launches"
       }
     ],
     "lti_tool": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this tool definition"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Display name of the external tool shown to instructors and students"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Long-form description of the tool's purpose for catalog or admin display"
       },
       {
         "name": "launch_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Default target URL the platform redirects to after OIDC login (the tool's entry point)"
       },
       {
         "name": "deep_link_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL for LTI Deep Linking (Content-Item) requests to select embedded resources"
       },
       {
         "name": "icon_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the tool icon shown in the LMS course navigation or activity picker"
       },
       {
         "name": "privacy_level",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Data sharing level: 'anonymous', 'name_only', 'email_only', or 'public'"
       },
       {
         "name": "placements",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of IMS placement objects (e.g. [{\"type\":\"course_navigation\",\"default\":\"enabled\"}])"
       },
       {
         "name": "custom_params",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Key-value map of custom LTI parameters sent to the tool on every launch (e.g. {\"canvas_course_id\":\"$Canvas.course.id\"})"
       }
     ],
     "lti_deployment": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this deployment record"
       },
       {
         "name": "platform_id",
         "type": "UUID",
-        "fk": "lti_platform.id"
+        "fk": "lti_platform.id",
+        "description": "Reference to the LMS platform (lti_platform) where the tool is deployed"
       },
       {
         "name": "tool_id",
         "type": "UUID",
-        "fk": "lti_tool.id"
+        "fk": "lti_tool.id",
+        "description": "Reference to the tool definition (lti_tool) being deployed"
       },
       {
         "name": "deployment_id",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "IMS-assigned deployment_id claim from the platform; scopes the tool within the LMS installation"
       },
       {
         "name": "context_id",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "LTI context_id claim identifying the course or group within the platform"
       },
       {
         "name": "context_title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable course or context title sent by the platform at registration time"
       },
       {
         "name": "is_active",
         "type": "BOOLEAN",
-        "default": "true"
+        "default": "true",
+        "description": "Whether this deployment is currently enabled for new launches"
       }
     ],
     "lti_launch": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this launch event record"
       },
       {
         "name": "deployment_id",
         "type": "UUID",
-        "fk": "lti_deployment.id"
+        "fk": "lti_deployment.id",
+        "description": "Reference to the deployment (lti_deployment) that produced this launch"
       },
       {
         "name": "user_id",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Platform-issued opaque user identifier from the LTI 'sub' claim; stable per user per platform"
       },
       {
         "name": "user_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Display name of the launching user as provided by the platform (may be null if anonymous)"
       },
       {
         "name": "roles",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Array of IMS LTI role URIs (e.g. [\"http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor\"])"
       },
       {
         "name": "resource_link_id",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Stable identifier for the specific link/activity in the LMS that triggered this launch"
       },
       {
         "name": "resource_link_title",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable title of the LMS activity or assignment that launched the tool"
       },
       {
         "name": "custom_params",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Key-value map of custom parameters resolved at launch time (variable substitutions expanded by the platform)"
       },
       {
         "name": "launched_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when the launch was initiated (UTC, server-set)"
       },
       {
         "name": "nonce",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "One-time value from the OIDC ID token used to prevent replay attacks; should be consumed on first use"
       }
     ]
   },

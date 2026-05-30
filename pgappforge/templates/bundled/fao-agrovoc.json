@@ -1,5 +1,6 @@
 {
   "name": "fao-agrovoc",
+  "schema": "fao_agrovoc",
   "label": "FAO AgrInfo / AGROVOC",
   "description": "UN Food and Agriculture Organization data standards \u2014 food security, agricultural statistics",
   "color": "#27ae60",
@@ -13,169 +14,211 @@
     "food-security",
     "statistics"
   ],
+  "table_notes": {
+    "fao_country": "FAO country/territory reference list with proprietary FAO codes alongside ISO 3166-1 alpha-2 and alpha-3 codes and UN regional groupings.",
+    "fao_item": "FAO commodity and item catalogue used across all FAOSTAT datasets; each item has a unique FAO code, category, and default measurement unit.",
+    "fao_production": "Annual crop and livestock production statistics from FAOSTAT; one row per country/item/element/year combination with a data-quality flag.",
+    "fao_trade": "Bilateral agricultural trade flows from FAOSTAT; one row per reporter-country, partner-country, commodity, and year with quantity and USD value.",
+    "agrovoc_concept": "AGROVOC SKOS thesaurus concepts; stores the broader hierarchy as a self-referencing FK and related/alternate labels as JSONB arrays."
+  },
   "tables": {
     "fao_country": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key"
       },
       {
         "name": "fao_code",
         "type": "VARCHAR(5)",
-        "unique": true
+        "unique": true,
+        "description": "FAO-assigned numeric country code (unique across FAOSTAT datasets)"
       },
       {
         "name": "iso2",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 two-letter country code"
       },
       {
         "name": "iso3",
-        "type": "CHAR(3)"
+        "type": "CHAR(3)",
+        "description": "ISO 3166-1 alpha-3 three-letter country code"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Official English country or territory name as used by FAO"
       },
       {
         "name": "region",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "FAO macro-regional grouping (e.g. Africa, Asia, Europe)"
       },
       {
         "name": "sub_region",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "FAO sub-regional grouping within the macro-region (e.g. Eastern Africa)"
       }
     ],
     "fao_item": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key"
       },
       {
         "name": "fao_code",
         "type": "VARCHAR(10)",
-        "unique": true
+        "unique": true,
+        "description": "FAO item/commodity code used in all FAOSTAT downloads (e.g. 15 = Wheat)"
       },
       {
         "name": "name",
-        "type": "VARCHAR(300)"
+        "type": "VARCHAR(300)",
+        "description": "Official English name of the commodity or item"
       },
       {
         "name": "category",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Broad commodity category (e.g. Cereals, Vegetables, Livestock)"
       },
       {
         "name": "commodity_group",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Finer commodity grouping within the category (e.g. Coarse Grains)"
       },
       {
         "name": "unit",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Default measurement unit for this item (e.g. tonnes, head, 1000 USD)"
       }
     ],
     "fao_production": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key (bigint for large FAOSTAT row volumes)"
       },
       {
         "name": "country_id",
         "type": "INTEGER",
-        "fk": "fao_country.id"
+        "fk": "fao_country.id",
+        "description": "References fao_country \u2014 the country or territory that produced the commodity"
       },
       {
         "name": "item_id",
         "type": "INTEGER",
-        "fk": "fao_item.id"
+        "fk": "fao_item.id",
+        "description": "References fao_item \u2014 the commodity being measured"
       },
       {
         "name": "element",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "FAOSTAT element label indicating what is measured (e.g. Production, Area harvested, Yield)"
       },
       {
         "name": "year",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Reference year of the statistic (calendar year)"
       },
       {
         "name": "value",
-        "type": "NUMERIC(18,4)"
+        "type": "NUMERIC(18,4)",
+        "description": "Reported numeric value in the unit specified by fao_item.unit"
       },
       {
         "name": "unit",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Unit of measurement for this specific row (may override the item default)"
       },
       {
         "name": "flag",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "FAOSTAT data-quality flag (e.g. E=estimate, F=FAO figure, I=imputed, M=missing)"
       }
     ],
     "fao_trade": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key (bigint for bilateral trade row volumes)"
       },
       {
         "name": "reporter_id",
         "type": "INTEGER",
-        "fk": "fao_country.id"
+        "fk": "fao_country.id",
+        "description": "References fao_country \u2014 the country reporting the trade flow"
       },
       {
         "name": "partner_id",
         "type": "INTEGER",
-        "fk": "fao_country.id"
+        "fk": "fao_country.id",
+        "description": "References fao_country \u2014 the trading partner country"
       },
       {
         "name": "item_id",
         "type": "INTEGER",
-        "fk": "fao_item.id"
+        "fk": "fao_item.id",
+        "description": "References fao_item \u2014 the traded commodity"
       },
       {
         "name": "flow",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "Trade flow direction: Import or Export"
       },
       {
         "name": "year",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Reference year of the trade statistic (calendar year)"
       },
       {
         "name": "quantity_mt",
-        "type": "NUMERIC(18,4)"
+        "type": "NUMERIC(18,4)",
+        "description": "Traded quantity in metric tonnes"
       },
       {
         "name": "value_usd",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Trade value in thousands of US dollars (1000 USD) as reported by FAO"
       }
     ],
     "agrovoc_concept": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key"
       },
       {
         "name": "uri",
         "type": "TEXT",
-        "unique": true
+        "unique": true,
+        "description": "Canonical AGROVOC SKOS URI (e.g. http://aims.fao.org/aos/agrovoc/c_330) \u2014 stable across versions"
       },
       {
         "name": "prefLabel_en",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Preferred English label for this concept per SKOS skos:prefLabel"
       },
       {
         "name": "broader_id",
         "type": "INTEGER",
-        "fk": "agrovoc_concept.id"
+        "fk": "agrovoc_concept.id",
+        "description": "Self-referencing FK to the broader (parent) concept per SKOS skos:broader hierarchy"
       },
       {
         "name": "related",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of URIs for associatively related concepts (skos:related); e.g. [\"http://...c_123\"]"
       },
       {
         "name": "alt_labels",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB map of language codes to alternate label arrays (skos:altLabel); e.g. {\"en\": [\"maize\"]}"
       }
     ]
   },

@@ -1,5 +1,6 @@
 {
   "name": "acord",
+  "schema": "acord",
   "label": "ACORD (Insurance)",
   "description": "Association for Cooperative Operations Research \u2014 global insurance standard",
   "color": "#c0392b",
@@ -11,213 +12,266 @@
     "acord",
     "enterprise"
   ],
+  "table_notes": {
+    "acord_party": "Any entity (person or organization) that participates in an insurance transaction \u2014 insurer, insured, claimant, agent, or broker.",
+    "acord_policy": "Master insurance contract record linking insurer and insured parties with coverage period, line of business, and total premium.",
+    "acord_coverage": "Individual coverage component within a policy, defining what is covered, up to what limit, and at what deductible and premium.",
+    "acord_risk": "Insured object or exposure (property, vehicle, person, liability) attached to a policy with its assessed value and attributes.",
+    "acord_claim": "Loss event reported against a policy, tracking dates, cause, financial reserves, paid amounts, and adjudication status."
+  },
   "tables": {
     "acord_party": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the party record"
       },
       {
         "name": "party_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Role of this party: Person, Organization, Insurer, Agent, Broker, etc."
       },
       {
         "name": "full_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Legal full name of the individual or organization"
       },
       {
         "name": "tax_id",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Government tax identifier (SSN, EIN, or foreign equivalent)"
       },
       {
         "name": "date_of_birth",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date of birth for individuals; used for age-rated underwriting"
       },
       {
         "name": "gender",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "Gender for actuarial rating purposes (M/F/Unknown or expanded codes)"
       },
       {
         "name": "address",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Structured mailing/physical address: {street, city, state, postal_code, country_code}"
       },
       {
         "name": "communication",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Contact channels: {phone, email, fax} keyed by communication type"
       }
     ],
     "acord_policy": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key; stable reference used across systems"
       },
       {
         "name": "policy_number",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Carrier-assigned unique policy identifier printed on declarations page"
       },
       {
         "name": "policy_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "High-level policy classification: Personal, Commercial, Life, Health, etc."
       },
       {
         "name": "line_of_business",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Specific line: Auto, Homeowners, GL, Workers Comp, E&O, D&O, etc."
       },
       {
         "name": "insurer_id",
         "type": "INTEGER",
-        "fk": "acord_party.id"
+        "fk": "acord_party.id",
+        "description": "References acord_party \u2014 the carrier issuing this policy"
       },
       {
         "name": "insured_id",
         "type": "INTEGER",
-        "fk": "acord_party.id"
+        "fk": "acord_party.id",
+        "description": "References acord_party \u2014 the named insured on this policy"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Policy lifecycle state: Active, Expired, Cancelled, Pending, Lapsed"
       },
       {
         "name": "effective_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date coverage begins; start of the policy term"
       },
       {
         "name": "expiration_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date coverage ends; end of the policy term"
       },
       {
         "name": "total_premium",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Total written premium for the full policy term in the policy currency"
       },
       {
         "name": "currency",
         "type": "CHAR(3)",
-        "default": "'USD'"
+        "default": "'USD'",
+        "description": "ISO 4217 currency code for all monetary amounts on this policy"
       }
     ],
     "acord_coverage": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the coverage record"
       },
       {
         "name": "policy_id",
         "type": "UUID",
-        "fk": "acord_policy.id"
+        "fk": "acord_policy.id",
+        "description": "References acord_policy \u2014 the policy this coverage belongs to"
       },
       {
         "name": "coverage_type",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Human-readable coverage name: Bodily Injury, Property Damage, Collision, etc."
       },
       {
         "name": "coverage_code",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "ACORD coverage code (from ACORD code list, e.g. BI, PD, COMP, COLL)"
       },
       {
         "name": "limit_amount",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Maximum amount the insurer will pay per occurrence or in aggregate"
       },
       {
         "name": "deductible_amount",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Amount the insured must pay out-of-pocket before coverage applies"
       },
       {
         "name": "premium",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Written premium allocated to this specific coverage component"
       },
       {
         "name": "terms",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Coverage-specific terms and endorsements: {sublimits, exclusions, conditions, endorsement_codes}"
       }
     ],
     "acord_risk": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for the risk record"
       },
       {
         "name": "policy_id",
         "type": "UUID",
-        "fk": "acord_policy.id"
+        "fk": "acord_policy.id",
+        "description": "References acord_policy \u2014 the policy insuring this risk"
       },
       {
         "name": "risk_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Category of insured object: Property, Vehicle, Person, Liability, etc."
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the insured object or exposure"
       },
       {
         "name": "location",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Physical location of the risk: {street, city, state, postal_code, country_code, lat, lng}"
       },
       {
         "name": "value",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Stated or appraised value of the insured risk in the policy currency"
       },
       {
         "name": "attributes",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Risk-type-specific underwriting attributes: e.g. {year, make, model, vin} for vehicles or {construction, stories, year_built} for property"
       }
     ],
     "acord_claim": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key; stable claim reference across adjusting systems"
       },
       {
         "name": "claim_number",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Carrier-assigned unique claim identifier used in correspondence"
       },
       {
         "name": "policy_id",
         "type": "UUID",
-        "fk": "acord_policy.id"
+        "fk": "acord_policy.id",
+        "description": "References acord_policy \u2014 the policy under which this claim is filed"
       },
       {
         "name": "claimant_id",
         "type": "INTEGER",
-        "fk": "acord_party.id"
+        "fk": "acord_party.id",
+        "description": "References acord_party \u2014 the party seeking payment under this claim"
       },
       {
         "name": "loss_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the loss event or occurrence took place"
       },
       {
         "name": "report_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the claim was first reported to the insurer"
       },
       {
         "name": "cause_of_loss",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "ACORD/ISO cause-of-loss code or description: Fire, Theft, Collision, Wind, etc."
       },
       {
         "name": "loss_description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Adjuster narrative describing the circumstances and extent of the loss"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Claim adjudication state: Open, Closed, Reopened, Denied, Pending Litigation"
       },
       {
         "name": "total_incurred",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Total expected claim cost: paid to date plus outstanding reserves"
       },
       {
         "name": "paid_to_date",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Cumulative amount disbursed to claimants and vendors through current date"
       },
       {
         "name": "reserve_amount",
-        "type": "NUMERIC(15,2)"
+        "type": "NUMERIC(15,2)",
+        "description": "Current actuarial reserve set aside for future payments on this claim"
       }
     ]
   },

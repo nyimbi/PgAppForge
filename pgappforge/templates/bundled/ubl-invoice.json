@@ -1,5 +1,6 @@
 {
   "name": "ubl-invoice",
+  "schema": "ubl_invoice",
   "label": "UN/CEFACT UBL Invoice",
   "description": "EU e-invoicing standard \u2014 27 EU countries mandate by 2028",
   "color": "#2980b9",
@@ -13,214 +14,266 @@
     "oasis",
     "regulation"
   ],
+  "table_notes": {
+    "ubl_party": "Represents any business entity (seller, buyer, or intermediary) identified by tax ID and address; shared by all invoices as supplier or customer.",
+    "ubl_invoice": "Header record for a single invoice document, linking supplier and customer parties, totals, currency, payment terms, and lifecycle status.",
+    "ubl_invoice_line": "One line item per invoiced good or service, carrying quantity, unit price, line total, UOM code, and tax category for that item.",
+    "ubl_tax_total": "Tax breakdown per invoice by category (e.g. VAT standard rate, reduced rate, exempt), supporting multiple tax subtotals per invoice as required by EN 16931."
+  },
   "tables": {
     "ubl_party": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key; referenced by ubl_invoice.supplier_id and ubl_invoice.customer_id"
       },
       {
         "name": "party_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Scheme-qualified business identifier (e.g. GLN, DUNS, or national company registry number)"
       },
       {
         "name": "party_name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Legal trading name of the party as it appears on the invoice"
       },
       {
         "name": "party_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Role of this party record: 'supplier', 'customer', or 'tax_representative'"
       },
       {
         "name": "tax_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "VAT registration number or national tax identifier (e.g. DE123456789 for German VAT)"
       },
       {
         "name": "registration_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Registered legal name (may differ from trading name used in party_name)"
       },
       {
         "name": "address_line",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Street address lines, combined into a single text block for unstructured storage"
       },
       {
         "name": "city",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "City or locality of the party's registered or mailing address"
       },
       {
         "name": "postal_zone",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Postal or ZIP code; format varies by country"
       },
       {
         "name": "country_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code of the party's address (e.g. DE, FR, GB)"
       },
       {
         "name": "electronic_mail",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "RFC 5321 email address for electronic invoice delivery or remittance notifications"
       },
       {
         "name": "telephone",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Contact telephone number in ITU-T E.164 or local format"
       }
     ],
     "ubl_invoice": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key; referenced by ubl_invoice_line.invoice_id and ubl_tax_total.invoice_id"
       },
       {
         "name": "invoice_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "nullable": false
+        "nullable": false,
+        "description": "Seller-assigned invoice number; must be unique per supplier and used in payment references"
       },
       {
         "name": "issue_date",
         "type": "DATE",
-        "nullable": false
+        "nullable": false,
+        "description": "Date the invoice was issued; determines tax point and payment due calculation"
       },
       {
         "name": "due_date",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Payment due date; NULL means immediate payment or governed by contract terms"
       },
       {
         "name": "invoice_type_code",
         "type": "VARCHAR(10)",
-        "default": "'380'"
+        "default": "'380'",
+        "description": "UN/EDIFACT UNCL 1001 document type code: 380=Commercial invoice, 381=Credit note, 384=Corrected invoice"
       },
       {
         "name": "currency_code",
         "type": "CHAR(3)",
-        "nullable": false
+        "nullable": false,
+        "description": "ISO 4217 currency code for all monetary amounts on this invoice (e.g. EUR, GBP, USD)"
       },
       {
         "name": "supplier_id",
         "type": "INTEGER",
-        "fk": "ubl_party.id"
+        "fk": "ubl_party.id",
+        "description": "References ubl_party.id for the selling party (AccountingSupplierParty in UBL spec)"
       },
       {
         "name": "customer_id",
         "type": "INTEGER",
-        "fk": "ubl_party.id"
+        "fk": "ubl_party.id",
+        "description": "References ubl_party.id for the buying party (AccountingCustomerParty in UBL spec)"
       },
       {
         "name": "payable_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Total amount due for payment, inclusive of tax and any allowances/charges"
       },
       {
         "name": "tax_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Total tax amount across all tax categories; must equal sum of ubl_tax_total.tax_amount"
       },
       {
         "name": "line_extension_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Sum of all invoice line amounts before tax (net invoice total)"
       },
       {
         "name": "payment_means_code",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "UN/EDIFACT UNCL 4461 payment means code: 30=Credit transfer, 49=Direct debit, 58=SEPA credit transfer"
       },
       {
         "name": "payment_id",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Remittance reference or payment reference number the buyer must quote on the bank transfer"
       },
       {
         "name": "note",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text note on the invoice (e.g. delivery instructions, project reference, legal disclaimer)"
       },
       {
         "name": "status",
         "type": "VARCHAR(30)",
-        "default": "'DRAFT'"
+        "default": "'DRAFT'",
+        "description": "Lifecycle state: DRAFT, ISSUED, SENT, ACCEPTED, REJECTED, PAID, CANCELLED"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this invoice record was inserted into the database"
       }
     ],
     "ubl_invoice_line": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this invoice line row"
       },
       {
         "name": "invoice_id",
         "type": "UUID",
         "fk": "ubl_invoice.id",
-        "nullable": false
+        "nullable": false,
+        "description": "References ubl_invoice.id; groups all lines belonging to the same invoice"
       },
       {
         "name": "line_id",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Seller-assigned line number within the invoice (e.g. '1', '2'); used in buyer reconciliation"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the good or service invoiced on this line"
       },
       {
         "name": "quantity",
-        "type": "NUMERIC(15,4)"
+        "type": "NUMERIC(15,4)",
+        "description": "Quantity of goods or service units billed; up to 4 decimal places for fractional units"
       },
       {
         "name": "uom_code",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "UN/ECE Recommendation 20 unit of measure code (e.g. C62=piece, KGM=kilogram, HUR=hour)"
       },
       {
         "name": "unit_price",
-        "type": "NUMERIC(18,4)"
+        "type": "NUMERIC(18,4)",
+        "description": "Net price per unit before tax and allowances; 4 decimal places for high-precision goods"
       },
       {
         "name": "line_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Net line total (quantity x unit_price minus line allowances); must match invoice line extension"
       },
       {
         "name": "item_classification",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "CPV, UNSPSC, or HS commodity classification code identifying the type of good or service"
       },
       {
         "name": "tax_category",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "UNCL 5305 tax category code: S=standard rate, Z=zero rated, E=exempt, AE=reverse charge"
       },
       {
         "name": "tax_rate",
-        "type": "NUMERIC(5,2)"
+        "type": "NUMERIC(5,2)",
+        "description": "Applicable VAT or tax percentage rate for this line (e.g. 20.00 for 20% UK VAT)"
       }
     ],
     "ubl_tax_total": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate primary key for this tax subtotal row"
       },
       {
         "name": "invoice_id",
         "type": "UUID",
-        "fk": "ubl_invoice.id"
+        "fk": "ubl_invoice.id",
+        "description": "References ubl_invoice.id; an invoice may have multiple tax subtotal rows by category"
       },
       {
         "name": "tax_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Tax amount for this category (taxable_amount x tax_rate / 100)"
       },
       {
         "name": "tax_category_id",
-        "type": "VARCHAR(10)"
+        "type": "VARCHAR(10)",
+        "description": "UNCL 5305 tax category code: S=standard rate, Z=zero rated, E=exempt, AE=reverse charge"
       },
       {
         "name": "taxable_amount",
-        "type": "NUMERIC(18,2)"
+        "type": "NUMERIC(18,2)",
+        "description": "Net base amount subject to tax at this category's rate"
       },
       {
         "name": "tax_rate",
-        "type": "NUMERIC(5,2)"
+        "type": "NUMERIC(5,2)",
+        "description": "Tax percentage rate applied to taxable_amount for this subtotal row"
       },
       {
         "name": "tax_name",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Human-readable tax scheme name (e.g. 'VAT', 'GST', 'Sales Tax') for display purposes"
       }
     ]
   },

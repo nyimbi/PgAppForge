@@ -1,5 +1,6 @@
 {
   "name": "vcard-ical",
+  "schema": "vcard_ical",
   "label": "vCard 4.0 + iCal",
   "description": "RFC standards for contacts and calendar data \u2014 interoperable with every phone/email client",
   "color": "#16a085",
@@ -13,262 +14,329 @@
     "crm",
     "scheduling"
   ],
+  "table_notes": {
+    "vcard_contact": "Core contact record per RFC 6350 vCard 4.0 \u2014 one row per person or organization, with structured name components and JSONB fields for multi-value properties.",
+    "vcard_email": "Multi-valued EMAIL property for a contact; each row is one address with RFC-defined type tags (work, home, etc.) and a preference rank.",
+    "vcard_phone": "Multi-valued TEL property for a contact; each row is one phone number with type tags and preference rank per RFC 6350 \u00a76.4.1.",
+    "ical_calendar": "Top-level VCALENDAR container per RFC 5545 \u2014 one row per calendar feed, grouping events under an owner and timezone.",
+    "ical_event": "Individual VEVENT records per RFC 5545 \u2014 stores timing, recurrence, attendees, and geolocation for a single event instance or recurring series."
+  },
   "tables": {
     "vcard_contact": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate primary key for the contact row"
       },
       {
         "name": "uid",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "RFC 6350 UID property \u2014 globally unique identifier used for CardDAV sync and import/export"
       },
       {
         "name": "fn",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "RFC 6350 FN (formatted name) \u2014 the display name as a single pre-formatted string"
       },
       {
         "name": "family_name",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Surname / last name component of the vCard N property"
       },
       {
         "name": "given_name",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "First / given name component of the vCard N property"
       },
       {
         "name": "additional_name",
-        "type": "VARCHAR(200)"
+        "type": "VARCHAR(200)",
+        "description": "Middle name(s) or additional name component of the vCard N property"
       },
       {
         "name": "honorific_prefix",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Honorific prefix (e.g. Dr., Prof., Mr.) from the vCard N property"
       },
       {
         "name": "honorific_suffix",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Honorific suffix (e.g. Jr., III, MD) from the vCard N property"
       },
       {
         "name": "nickname",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 6350 NICKNAME property \u2014 array of nickname strings, e.g. [\"Jim\", \"Jimmy\"]"
       },
       {
         "name": "photo_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL of the contact's photo (RFC 6350 PHOTO as URI value)"
       },
       {
         "name": "birthday",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Contact's date of birth (RFC 6350 BDAY property)"
       },
       {
         "name": "anniversary",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Contact's wedding or relationship anniversary (RFC 6350 ANNIVERSARY property)"
       },
       {
         "name": "gender",
-        "type": "CHAR(1)"
+        "type": "CHAR(1)",
+        "description": "RFC 6350 GENDER sex component: M=male, F=female, O=other, N=none, U=unknown"
       },
       {
         "name": "org",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 6350 ORG property \u2014 array of org unit strings, e.g. [\"Acme Corp\", \"Engineering\"]"
       },
       {
         "name": "title",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Job title within the organization (RFC 6350 TITLE property)"
       },
       {
-        "name": "role",
-        "type": "VARCHAR(255)"
+        "name": "party_role",
+        "type": "VARCHAR(255)",
+        "description": "Functional role or occupation description (RFC 6350 ROLE property)"
       },
       {
         "name": "url",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 6350 URL property \u2014 JSONB array of {value, type} objects, one per web address"
       },
       {
         "name": "note",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text note or comment about the contact (RFC 6350 NOTE property)"
       },
       {
         "name": "categories",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 6350 CATEGORIES property \u2014 array of keyword strings used for grouping/tagging contacts"
       },
       {
         "name": "rev",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "RFC 6350 REV property \u2014 timestamp of the last revision of the vCard record"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Row insertion timestamp (database-managed, not part of the vCard spec)"
       }
     ],
     "vcard_email": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "contact_id",
         "type": "UUID",
-        "fk": "vcard_contact.id"
+        "fk": "vcard_contact.id",
+        "description": "Foreign key to vcard_contact \u2014 the contact that owns this email address"
       },
       {
         "name": "address",
         "type": "VARCHAR(320)",
-        "nullable": false
+        "nullable": false,
+        "description": "The email address string (max 320 chars per RFC 5321)"
       },
       {
         "name": "types",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 6350 type parameter array for this address, e.g. [\"work\", \"internet\"] or [\"home\"]"
       },
       {
         "name": "preference",
         "type": "INTEGER",
-        "default": "100"
+        "default": "100",
+        "description": "RFC 6350 PREF parameter \u2014 1 (most preferred) to 100 (least preferred); lower wins"
       },
       {
         "name": "label",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Optional human-readable display label for this email entry (e.g. \"Work\", \"Personal\")"
       }
     ],
     "vcard_phone": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incremented surrogate primary key"
       },
       {
         "name": "contact_id",
         "type": "UUID",
-        "fk": "vcard_contact.id"
+        "fk": "vcard_contact.id",
+        "description": "Foreign key to vcard_contact \u2014 the contact that owns this phone number"
       },
       {
         "name": "number",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Phone number string in E.164 or local format (RFC 6350 TEL value)"
       },
       {
         "name": "types",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 6350 type parameter array, e.g. [\"cell\", \"voice\"] or [\"work\", \"fax\"]"
       },
       {
         "name": "preference",
         "type": "INTEGER",
-        "default": "100"
+        "default": "100",
+        "description": "RFC 6350 PREF parameter \u2014 1 (most preferred) to 100 (least preferred); lower wins"
       }
     ],
     "ical_calendar": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate primary key for the calendar"
       },
       {
         "name": "name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Human-readable display name of the calendar (iCal X-WR-CALNAME)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of the calendar's purpose (iCal X-WR-CALDESC)"
       },
       {
         "name": "color",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Display color for calendar UI (CSS hex or named color, iCal X-APPLE-CALENDAR-COLOR)"
       },
       {
         "name": "timezone",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Default IANA timezone for events in this calendar (iCal X-WR-TIMEZONE)"
       },
       {
         "name": "owner_uid",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Identifier of the user or account that owns this calendar (application-defined UID)"
       },
       {
         "name": "prodid",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "RFC 5545 PRODID \u2014 software product identifier that created this calendar feed"
       }
     ],
     "ical_event": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Internal surrogate primary key for the event row"
       },
       {
         "name": "calendar_id",
         "type": "UUID",
-        "fk": "ical_calendar.id"
+        "fk": "ical_calendar.id",
+        "description": "Foreign key to ical_calendar \u2014 the calendar this event belongs to"
       },
       {
         "name": "uid",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "RFC 5545 UID property \u2014 globally unique event identifier used for CalDAV sync and deduplication"
       },
       {
         "name": "summary",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "RFC 5545 SUMMARY \u2014 short one-line title/subject of the event (shown in calendar grid)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "RFC 5545 DESCRIPTION \u2014 detailed notes or body text for the event"
       },
       {
         "name": "location",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "RFC 5545 LOCATION \u2014 venue name or address string for the event"
       },
       {
         "name": "geo_point",
-        "type": "GEOGRAPHY(POINT,4326)"
+        "type": "GEOGRAPHY(POINT,4326)",
+        "description": "PostGIS point derived from RFC 5545 GEO property (lat;long). Enables ST_DWithin proximity queries."
       },
       {
         "name": "dtstart",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "RFC 5545 DTSTART \u2014 event start date/time in UTC (all-day events store midnight UTC)"
       },
       {
         "name": "dtend",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "RFC 5545 DTEND \u2014 event end date/time in UTC (exclusive end per RFC 5545 \u00a73.8.2.2)"
       },
       {
         "name": "all_day",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True when DTSTART/DTEND are DATE values (no time component) \u2014 renders as all-day in UIs"
       },
       {
         "name": "rrule",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "RFC 5545 RRULE string defining recurrence (e.g. FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "RFC 5545 STATUS: TENTATIVE, CONFIRMED, or CANCELLED for events"
       },
       {
         "name": "transp",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "RFC 5545 TRANSP: OPAQUE (blocks time in free/busy) or TRANSPARENT (does not block)"
       },
       {
         "name": "organizer",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "RFC 5545 ORGANIZER cal-address (mailto: URI) of the person who created the event"
       },
       {
         "name": "attendees",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 5545 ATTENDEE list \u2014 array of {cn, email, partstat, role} objects per invitee"
       },
       {
         "name": "categories",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "RFC 5545 CATEGORIES \u2014 array of keyword strings for tagging and filtering events"
       },
       {
         "name": "created_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "RFC 5545 CREATED \u2014 timestamp when the event was first added to the calendar store"
       },
       {
         "name": "last_modified",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "RFC 5545 LAST-MODIFIED \u2014 timestamp of the most recent change to this event"
       }
     ]
   },
   "short_description": "RFC standards for contacts and calendar data \u2014 interoperable with every phone/email client",
   "long_description": "vCard 4.0 (RFC 6350) and iCalendar (RFC 5545) are the IETF standards for contacts and calendar data interchange, supported natively by every phone, email client, and calendar application. The schema covers the complete vCard data model with typed email/phone fields, iCalendar event records with RRULE recurrence, attendees, and geolocation.",
-  "when_to_use": "Use for CRM systems, address book applications, scheduling/booking platforms, calendar sharing tools, or any application that needs to import/export contacts and events. vCard/iCal support is required for CalDAV/CardDAV server compatibility (used by iOS, Android, Thunderbird, Outlook). Essential for multi-platform calendar sync and contact migration tools."
+  "when_to_use": "Use for CRM systems, address book applications, scheduling/booking platforms, calendar sharing tools, or any application that needs to import/export contacts and events. vCard/iCal support is required for CalDAV/CardDAV server compatibility (used by iOS, Android, Thunderbird, Outlook). Essential for multi-platform calendar sync and contact migration tools.",
+  "extensions": [
+    "postgis"
+  ]
 }

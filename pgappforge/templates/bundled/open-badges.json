@@ -1,5 +1,6 @@
 {
   "name": "open-badges",
+  "schema": "open_badges",
   "label": "Open Badges / Verifiable Credentials",
   "description": "W3C digital credentials \u2014 professional development, micro-credentials, certificates",
   "color": "#f39c12",
@@ -12,158 +13,197 @@
     "w3c",
     "blockchain-adjacent"
   ],
+  "table_notes": {
+    "ob_issuer": "Organisations or individuals authorised to award badges; each badge class traces back to one issuer for provenance.",
+    "ob_badge_class": "The badge definition (template): what it represents, how it is earned, and optional alignment to external frameworks such as O*NET or CASE.",
+    "ob_assertion": "A single awarded badge \u2014 ties one recipient to one badge class with evidence, issuance date, and revocation state.",
+    "ob_endorsement": "A third-party claim by an issuer attesting that a specific assertion is credible or high-quality."
+  },
   "tables": {
     "ob_issuer": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for the issuing organisation or individual"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Legal or display name of the issuing entity"
       },
       {
         "name": "url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Canonical homepage URL of the issuer for public verification"
       },
       {
         "name": "email",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Contact email for the issuer (RFC 5321 max length)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Human-readable description of the issuing organisation and its mission"
       },
       {
         "name": "image_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL to the issuer's logo or branding image displayed on badges"
       },
       {
         "name": "public_key",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "PEM-encoded public key used to cryptographically sign assertions (OB 3.0 JWS)"
       }
     ],
     "ob_badge_class": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this badge class definition"
       },
       {
         "name": "issuer_id",
         "type": "UUID",
-        "fk": "ob_issuer.id"
+        "fk": "ob_issuer.id",
+        "description": "References ob_issuer \u2014 the organisation that owns and awards this badge"
       },
       {
         "name": "name",
         "type": "VARCHAR(255)",
-        "nullable": false
+        "nullable": false,
+        "description": "Human-readable title of the badge (e.g. 'Python Fundamentals Certificate')"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "What the badge represents and what the earner accomplished"
       },
       {
         "name": "image_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL to the visual badge image shown to recipients and on profiles"
       },
       {
         "name": "criteria_narrative",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Plain-text description of the requirements that must be met to earn this badge"
       },
       {
         "name": "criteria_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL to the full criteria page hosted by the issuer"
       },
       {
         "name": "alignment",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSONB array of alignment objects linking badge to external frameworks (O*NET, CASE, CTDL)"
       },
       {
         "name": "tags",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "JSON array of keyword strings for discovery and filtering (e.g. [\"python\", \"data\"])"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "default": "NOW()"
+        "default": "NOW()",
+        "description": "Timestamp when this badge class was first created"
       }
     ],
     "ob_assertion": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this awarded badge instance"
       },
       {
         "name": "badge_class_id",
         "type": "UUID",
-        "fk": "ob_badge_class.id"
+        "fk": "ob_badge_class.id",
+        "description": "References ob_badge_class \u2014 the definition being awarded"
       },
       {
         "name": "recipient_id",
-        "type": "VARCHAR(320)"
+        "type": "VARCHAR(320)",
+        "description": "Identifier for the recipient \u2014 typically an email address or hashed email"
       },
       {
         "name": "recipient_type",
         "type": "VARCHAR(30)",
-        "default": "'email'"
+        "default": "'email'",
+        "description": "Coding: type of recipient identifier \u2014 'email', 'url', 'telephone', 'did'"
       },
       {
         "name": "issued_on",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the badge was officially awarded to the recipient"
       },
       {
         "name": "expires_on",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Optional expiry date after which the badge is no longer considered valid"
       },
       {
         "name": "evidence_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL to evidence (portfolio item, project, exam result) supporting this award"
       },
       {
         "name": "narrative",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Free-text description of how this specific recipient earned the badge"
       },
       {
         "name": "verification_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Coding: how the assertion can be verified \u2014 'HostedBadge', 'SignedBadge', or 'JWS'"
       },
       {
         "name": "revoked",
         "type": "BOOLEAN",
-        "default": "false"
+        "default": "false",
+        "description": "True if the issuer has revoked this badge (e.g. due to fraud or error)"
       },
       {
         "name": "revocation_reason",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Human-readable explanation of why the badge was revoked; NULL if not revoked"
       }
     ],
     "ob_endorsement": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Unique identifier for this endorsement record"
       },
       {
         "name": "assertion_id",
         "type": "UUID",
-        "fk": "ob_assertion.id"
+        "fk": "ob_assertion.id",
+        "description": "References ob_assertion \u2014 the specific awarded badge being endorsed"
       },
       {
         "name": "issuer_id",
         "type": "UUID",
-        "fk": "ob_issuer.id"
+        "fk": "ob_issuer.id",
+        "description": "References ob_issuer \u2014 the third party making the endorsement claim"
       },
       {
         "name": "claim",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "The endorsing party's written statement about the quality or validity of this badge"
       },
       {
         "name": "issued_on",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the endorsement was published"
       }
     ]
   },

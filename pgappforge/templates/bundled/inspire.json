@@ -1,5 +1,6 @@
 {
   "name": "inspire",
+  "schema": "inspire",
   "label": "INSPIRE (EU Spatial)",
   "description": "EU spatial data infrastructure directive \u2014 mandatory for EU government geospatial applications",
   "color": "#3498db",
@@ -13,204 +14,257 @@
     "gis",
     "postgis"
   ],
+  "table_notes": {
+    "inspire_administrative_unit": "Hierarchical administrative boundary units (country/region/municipality) with self-referencing parent link and MULTIPOLYGON geometry per INSPIRE Annex I theme AU.",
+    "inspire_address": "Georeferenced postal addresses per INSPIRE Annex I theme AD, including thoroughfare, locator designator, postcode, and lifecycle status.",
+    "inspire_building": "Above-ground building footprints per INSPIRE Annex III theme BU, with use classification, floor count, height, and linked address.",
+    "inspire_protected_site": "Designated protected areas (Natura 2000, national parks, Ramsar sites) per INSPIRE Annex I theme PS, with scheme and area in hectares.",
+    "inspire_transport_network": "Linear transport network elements (road, rail, waterway, air) per INSPIRE Annex I theme TN, stored as LINESTRING geometry."
+  },
   "tables": {
     "inspire_administrative_unit": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate UUID primary key for the administrative unit record"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Persistent local identifier assigned by the data provider (INSPIRE thematic identifier)"
       },
       {
         "name": "national_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Official national code for this unit (e.g. NUTS code, LAU code, or national registry ID)"
       },
       {
         "name": "name",
-        "type": "JSONB"
+        "type": "JSONB",
+        "description": "Multilingual name map: {\"lang\": \"text\"} pairs, e.g. {\"en\": \"Bavaria\", \"de\": \"Bayern\"}"
       },
       {
         "name": "country_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code identifying the member state this unit belongs to"
       },
       {
         "name": "administrative_level",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Hierarchical level: 1=country, 2=region/NUTS2, 3=municipality/LAU, etc."
       },
       {
         "name": "upper_level_unit",
         "type": "UUID",
-        "fk": "inspire_administrative_unit.id"
+        "fk": "inspire_administrative_unit.id",
+        "description": "Self-reference to the parent administrative unit one level up in the hierarchy"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(MULTIPOLYGON, 4326)"
+        "type": "GEOGRAPHY(MULTIPOLYGON, 4326)",
+        "description": "Official boundary polygon(s) in WGS84; use MULTIPOLYGON to support non-contiguous territories"
       },
       {
         "name": "validity_begin",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date from which this unit's definition (boundary, code) is legally valid"
       },
       {
         "name": "validity_end",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date on which this unit ceased to be valid; NULL means currently active"
       }
     ],
     "inspire_address": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate UUID primary key for the address record"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Persistent local identifier assigned by the national address registry"
       },
       {
         "name": "locator_designator",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "House number or other locator (e.g. '42', '42A', 'Unit 7') within the thoroughfare"
       },
       {
         "name": "thoroughfare_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the road, street, or route where the address is located"
       },
       {
         "name": "postcode",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "Postal code for mail delivery routing (format varies by country)"
       },
       {
         "name": "post_name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Name of the postal locality or town associated with the postcode"
       },
       {
         "name": "admin_unit_id",
         "type": "UUID",
-        "fk": "inspire_administrative_unit.id"
+        "fk": "inspire_administrative_unit.id",
+        "description": "Reference to the administrative unit (inspire_administrative_unit) in which this address falls"
       },
       {
         "name": "country_code",
-        "type": "CHAR(2)"
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code; redundant with admin_unit but required by INSPIRE AD schema"
       },
       {
-        "name": "position",
-        "type": "GEOGRAPHY(POINT, 4326)"
+        "name": "geo_position",
+        "type": "GEOGRAPHY(POINT, 4326)",
+        "description": "Georeferenced position of the address in WGS84 (doorway, parcel centroid, or rooftop)"
       },
       {
         "name": "status",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Lifecycle status per INSPIRE AD codelist: current, proposed, retired, etc."
       },
       {
         "name": "validity_begin",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date from which this address record is officially valid"
       }
     ],
     "inspire_building": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate UUID primary key for the building record"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Persistent local identifier from the national building registry"
       },
       {
         "name": "current_use",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Primary use classification per INSPIRE BU codelist (e.g. residential, agriculture, industrial)"
       },
       {
         "name": "number_of_floors",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Total count of above-ground floors (storeys) in the building"
       },
       {
         "name": "number_of_dwellings",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Count of separate residential dwelling units within the building"
       },
       {
         "name": "date_of_construction",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date the building construction was completed or officially registered"
       },
       {
         "name": "geometry_2d",
-        "type": "GEOGRAPHY(POLYGON, 4326)"
+        "type": "GEOGRAPHY(POLYGON, 4326)",
+        "description": "2D footprint polygon of the building outline at ground level in WGS84"
       },
       {
         "name": "height_above_ground",
-        "type": "NUMERIC(8,2)"
+        "type": "NUMERIC(8,2)",
+        "description": "Building height in metres measured from ground level to rooftop"
       },
       {
         "name": "address_id",
         "type": "UUID",
-        "fk": "inspire_address.id"
+        "fk": "inspire_address.id",
+        "description": "Reference to the primary postal address (inspire_address) for this building"
       }
     ],
     "inspire_protected_site": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate UUID primary key for the protected site record"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Persistent local identifier from the originating designation authority"
       },
       {
         "name": "site_name",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Official name of the protected area as designated by the relevant authority"
       },
       {
         "name": "designation_scheme",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Name of the legal protection scheme (e.g. Natura2000, Ramsar, UNESCO-MaB, national park)"
       },
       {
         "name": "designation_code",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Code within the scheme's codelist (e.g. Natura2000 site code SAC/SPA, Ramsar site number)"
       },
       {
         "name": "site_area_ha",
-        "type": "NUMERIC(12,4)"
+        "type": "NUMERIC(12,4)",
+        "description": "Total protected area in hectares as recorded in the official designation document"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(MULTIPOLYGON, 4326)"
+        "type": "GEOGRAPHY(MULTIPOLYGON, 4326)",
+        "description": "Boundary of the protected site in WGS84; MULTIPOLYGON supports fragmented or marine zones"
       }
     ],
     "inspire_transport_network": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate UUID primary key for the transport network element"
       },
       {
         "name": "local_id",
         "type": "VARCHAR(100)",
-        "unique": true
+        "unique": true,
+        "description": "Persistent local identifier from the national transport data authority"
       },
       {
         "name": "transport_type",
-        "type": "VARCHAR(30)"
+        "type": "VARCHAR(30)",
+        "description": "Transport medium per INSPIRE TN codelist: road, rail, water, air, cable"
       },
       {
         "name": "name",
-        "type": "VARCHAR(255)"
+        "type": "VARCHAR(255)",
+        "description": "Official name of the road, railway line, waterway, or air route segment"
       },
       {
         "name": "geometry",
-        "type": "GEOGRAPHY(LINESTRING, 4326)"
+        "type": "GEOGRAPHY(LINESTRING, 4326)",
+        "description": "Centre-line geometry of the network link in WGS84 for routing and display"
       },
       {
         "name": "begin_lifetime",
-        "type": "DATE"
+        "type": "DATE",
+        "description": "Date from which this network element exists in the real world (opening date)"
       }
     ]
   },
   "short_description": "EU spatial data infrastructure directive \u2014 mandatory for EU government geospatial applications",
   "long_description": "INSPIRE (Infrastructure for Spatial Information in the European Community) is the EU directive requiring public authorities to publish geospatial data in standardized formats. The schema covers the most commonly implemented themes: administrative units (country/region/municipality boundaries), addresses, buildings, and transport networks.",
-  "when_to_use": "Use for any EU government GIS application, smart city platform, or spatial data infrastructure. EU Directive 2007/2/EC mandates INSPIRE compliance for all public sector bodies. Required for environmental impact assessments, urban planning permits, and emergency response systems in EU countries."
+  "when_to_use": "Use for any EU government GIS application, smart city platform, or spatial data infrastructure. EU Directive 2007/2/EC mandates INSPIRE compliance for all public sector bodies. Required for environmental impact assessments, urban planning permits, and emergency response systems in EU countries.",
+  "extensions": [
+    "postgis"
+  ]
 }

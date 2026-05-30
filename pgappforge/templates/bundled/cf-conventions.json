@@ -1,5 +1,6 @@
 {
   "name": "cf-conventions",
+  "schema": "cf_conventions",
   "label": "CF Conventions (Climate)",
   "description": "Climate and Forecast metadata conventions \u2014 atmospheric science, climate modeling",
   "color": "#5dade2",
@@ -12,182 +13,230 @@
     "science",
     "atmospheric"
   ],
+  "table_notes": {
+    "cf_variable": "Reference table of CF Standard Names defining physical quantities, their canonical SI units, and AMIP/GRIB cross-references.",
+    "cf_dataset": "One row per ingested netCDF/HDF5 dataset file, capturing provenance metadata (institution, source model, history) and the spatial/temporal envelope.",
+    "cf_observation": "High-volume point-observation records linking a dataset and variable to a single spatio-temporal measurement with uncertainty and quality flag.",
+    "cf_grid_metadata": "Describes the horizontal/vertical grid geometry of a gridded model output dataset, including projection and resolution details."
+  },
   "tables": {
     "cf_variable": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate integer key for the CF standard name entry"
       },
       {
         "name": "standard_name",
         "type": "VARCHAR(255)",
-        "unique": true
+        "unique": true,
+        "description": "Canonical CF Standard Name token (e.g. air_temperature, eastward_wind)"
       },
       {
         "name": "canonical_units",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "SI unit string for this quantity as defined by CF (e.g. K, m s-1, Pa)"
       },
       {
         "name": "description",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Human-readable definition of the physical quantity from the CF standard names table"
       },
       {
         "name": "amip",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "AMIP II short variable name for this quantity (atmosphere model intercomparison coding)"
       },
       {
         "name": "grib",
-        "type": "VARCHAR(20)"
+        "type": "VARCHAR(20)",
+        "description": "GRIB parameter code corresponding to this CF variable (WMO GRIB1/GRIB2 table entry)"
       }
     ],
     "cf_dataset": [
       {
         "name": "id",
         "type": "UUID",
-        "pk": true
+        "pk": true,
+        "description": "UUID primary key for the dataset record"
       },
       {
         "name": "title",
-        "type": "VARCHAR(1000)"
+        "type": "VARCHAR(1000)",
+        "description": "Human-readable title of the dataset as stored in the global title attribute"
       },
       {
         "name": "institution",
-        "type": "VARCHAR(500)"
+        "type": "VARCHAR(500)",
+        "description": "Name of the organisation that produced or archived this dataset"
       },
       {
         "name": "source",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Model or instrument description (maps to CF global attribute source)"
       },
       {
         "name": "history",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "Audit trail of processing steps applied to the file (CF global attribute history)"
       },
       {
-        "name": "references",
-        "type": "TEXT"
+        "name": "ref_notes",
+        "type": "TEXT",
+        "description": "Bibliographic references (papers, DOIs) associated with this dataset"
       },
       {
         "name": "conventions",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "CF convention version string declared in the file (e.g. CF-1.8, CF-1.11)"
       },
       {
         "name": "created_at",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Timestamp when this dataset record was inserted into the database"
       },
       {
         "name": "file_url",
-        "type": "TEXT"
+        "type": "TEXT",
+        "description": "URL or object-storage path to the source netCDF/HDF5 file"
       },
       {
         "name": "spatial_extent",
-        "type": "GEOGRAPHY(POLYGON,4326)"
+        "type": "GEOGRAPHY(POLYGON,4326)",
+        "description": "PostGIS polygon of the dataset's geographic bounding box (WGS84) for spatial filtering"
       },
       {
         "name": "time_start",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "First timestamp covered by this dataset (inclusive)"
       },
       {
         "name": "time_end",
-        "type": "TIMESTAMPTZ"
+        "type": "TIMESTAMPTZ",
+        "description": "Last timestamp covered by this dataset (inclusive)"
       }
     ],
     "cf_observation": [
       {
         "name": "id",
         "type": "BIGSERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Auto-incrementing bigint key for high-volume observation rows"
       },
       {
         "name": "dataset_id",
         "type": "UUID",
-        "fk": "cf_dataset.id"
+        "fk": "cf_dataset.id",
+        "description": "References cf_dataset.id \u2014 the source file this observation was extracted from"
       },
       {
         "name": "variable_id",
         "type": "INTEGER",
-        "fk": "cf_variable.id"
+        "fk": "cf_variable.id",
+        "description": "References cf_variable.id \u2014 identifies the physical quantity being measured"
       },
       {
         "name": "time",
         "type": "TIMESTAMPTZ",
-        "nullable": false
+        "nullable": false,
+        "description": "UTC timestamp of the observation or model output time step"
       },
       {
         "name": "latitude",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 latitude of the observation point in decimal degrees"
       },
       {
         "name": "longitude",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 longitude of the observation point in decimal degrees"
       },
       {
         "name": "altitude_m",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Altitude above mean sea level in metres (NULL for surface observations)"
       },
       {
         "name": "value",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Measured or modelled value in the canonical units of the referenced cf_variable"
       },
       {
         "name": "uncertainty",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "One-sigma measurement uncertainty in the same units as value (NULL if unknown)"
       },
       {
         "name": "quality_flag",
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "description": "Data quality code: 0=good, 1=suspect, 2=bad, 9=missing (GOOS/ARGO QC scale)"
       }
     ],
     "cf_grid_metadata": [
       {
         "name": "id",
         "type": "SERIAL",
-        "pk": true
+        "pk": true,
+        "description": "Surrogate key for the grid definition record"
       },
       {
         "name": "dataset_id",
         "type": "UUID",
-        "fk": "cf_dataset.id"
+        "fk": "cf_dataset.id",
+        "description": "References cf_dataset.id \u2014 the dataset whose grid geometry this row describes"
       },
       {
         "name": "grid_type",
-        "type": "VARCHAR(50)"
+        "type": "VARCHAR(50)",
+        "description": "Grid topology type (e.g. regular_lat_lon, rotated_pole, gaussian, curvilinear)"
       },
       {
         "name": "lat_min",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Southernmost latitude of the grid domain in decimal degrees"
       },
       {
         "name": "lat_max",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Northernmost latitude of the grid domain in decimal degrees"
       },
       {
         "name": "lon_min",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Westernmost longitude of the grid domain in decimal degrees"
       },
       {
         "name": "lon_max",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Easternmost longitude of the grid domain in decimal degrees"
       },
       {
         "name": "lat_resolution",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Grid spacing in the latitude direction in decimal degrees"
       },
       {
         "name": "lon_resolution",
-        "type": "DOUBLE PRECISION"
+        "type": "DOUBLE PRECISION",
+        "description": "Grid spacing in the longitude direction in decimal degrees"
       },
       {
         "name": "num_levels",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "description": "Number of vertical levels (pressure levels, sigma levels, or model layers)"
       },
       {
         "name": "projection",
-        "type": "VARCHAR(100)"
+        "type": "VARCHAR(100)",
+        "description": "Coordinate reference system name or PROJ string (e.g. EPSG:4326, lcc, stere)"
       }
     ]
   },
   "short_description": "Climate and Forecast metadata conventions \u2014 atmospheric science, climate modeling",
   "long_description": "CF (Climate and Forecast) Conventions define the metadata standards for scientific atmospheric, oceanic, and climate data stored in netCDF files. The schema captures CF Standard Name definitions for physical quantities, gridded dataset metadata with projection information, individual observation records with quality flags, and spatial grid configuration.",
-  "when_to_use": "Use for climate analytics platforms, weather data management systems, environmental monitoring tools, or any scientific computing application handling atmospheric/oceanographic data. Used by every major climate modeling center (ECMWF, NCAR, NOAA, Met Office). Required by CMIP6 (the data source for IPCC AR6) and Copernicus Climate Change Service (C3S) for data submissions."
+  "when_to_use": "Use for climate analytics platforms, weather data management systems, environmental monitoring tools, or any scientific computing application handling atmospheric/oceanographic data. Used by every major climate modeling center (ECMWF, NCAR, NOAA, Met Office). Required by CMIP6 (the data source for IPCC AR6) and Copernicus Climate Change Service (C3S) for data submissions.",
+  "extensions": [
+    "postgis"
+  ]
 }

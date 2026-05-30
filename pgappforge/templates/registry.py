@@ -105,6 +105,7 @@ class TemplateRegistry:
 			[
 				{
 					"name": t.get("name", ""),
+					"schema": t.get("schema", t.get("name", "").replace("-", "_")),
 					"label": t.get("label", ""),
 					"description": t.get("description", ""),
 					"version": t.get("version", ""),
