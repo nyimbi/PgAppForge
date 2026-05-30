@@ -1,4 +1,10 @@
-"""Integration tests for the database introspection and codegen pipeline."""
+"""Integration tests for the database introspection and codegen pipeline.
+
+NOTE: This project targets PostgreSQL only. The tests here use SQLite as a CI
+substitute when a real PostgreSQL instance is unavailable. To test against
+PostgreSQL, set the PG_TEST_URI environment variable:
+  export PG_TEST_URI=postgresql://user:pass@localhost/test_db
+"""
 import os
 import sys
 import shutil
@@ -6,6 +12,8 @@ import sqlite3
 import py_compile
 import tempfile
 import pytest
+
+PG_TEST_URI = os.environ.get("PG_TEST_URI")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 

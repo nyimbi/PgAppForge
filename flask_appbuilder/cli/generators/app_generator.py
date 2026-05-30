@@ -1397,7 +1397,7 @@ dependencies = ["Flask>=3.0.0", "Flask-AppBuilder>=5.0.0"]
 FLASK_APP=app
 FLASK_ENV=development
 SECRET_KEY=change-me-in-production
-SQLALCHEMY_DATABASE_URI=sqlite:///app.db
+SQLALCHEMY_DATABASE_URI=postgresql://user:password@localhost/{self.config.app_name.lower()}
 # SQLALCHEMY_DATABASE_URI=postgresql://user:pass@localhost/{self.config.app_name.lower()}
 '''
 
@@ -1431,7 +1431,8 @@ import os
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
     SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "SQLALCHEMY_DATABASE_URI", "sqlite:///app.db"
+        "SQLALCHEMY_DATABASE_URI",
+        "postgresql://user:password@localhost/appdb"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     WTF_CSRF_ENABLED = True
@@ -1469,7 +1470,7 @@ from .config import Config
 
 class TestingConfig(Config):
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    SQLALCHEMY_DATABASE_URI = "postgresql://user:password@localhost/test_appdb"
     WTF_CSRF_ENABLED = False
 '''
 
@@ -1479,7 +1480,7 @@ class TestingConfig(Config):
         return '''[alembic]
 script_location = migrations
 prepend_sys_path = .
-sqlalchemy.url = sqlite:///app.db
+sqlalchemy.url = postgresql://user:password@localhost/appdb
 
 [loggers]
 keys = root,sqlalchemy,alembic

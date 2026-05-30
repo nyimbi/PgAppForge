@@ -215,7 +215,7 @@ class EnhancedDatabaseInspector:
         """Lazy-loaded database engine with proper connection management."""
         if self._engine is None:
             try:
-                # connect_timeout is only valid for PostgreSQL/MySQL, not SQLite
+                # connect_timeout not supported by SQLite
                 dialect = self.database_uri.split("://")[0].split("+")[0]
                 connect_args = {} if dialect == "sqlite" else {"connect_timeout": 30}
                 self._engine = create_engine(
@@ -354,7 +354,6 @@ class EnhancedDatabaseInspector:
         """
         table = self.metadata.tables[table_name]
 
-        # Basic table info (SQLite doesn't support table comments)
         try:
             table_comment = self.inspector.get_table_comment(table_name)
         except NotImplementedError:

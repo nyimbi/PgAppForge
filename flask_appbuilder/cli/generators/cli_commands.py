@@ -39,58 +39,22 @@ def validate_database_uri(ctx, param, value):
         # Parse the URI
         parsed = urlparse(value)
         
-        # Validate scheme
-        if not parsed.scheme:
-            raise click.BadParameter('Database URI must include a scheme (postgresql://, mysql://, sqlite:///)')
-        
-        if parsed.scheme not in ['postgresql', 'mysql', 'sqlite']:
-            raise click.BadParameter(f'Unsupported database scheme: {parsed.scheme}. Supported: postgresql, mysql, sqlite')
-        
-        # Validate database name for non-sqlite
-        if parsed.scheme != 'sqlite':
-            if not parsed.path or parsed.path == '/':
-                raise click.BadParameter('Database name is required in the URI path')
-            
-            # Remove leading slash for database name validation
-            db_name = parsed.path.lstrip('/')
-            if not db_name.replace('_', '').replace('-', '').isalnum():
-                raise click.BadParameter('Database name should only contain letters, numbers, hyphens, and underscores')
-        
-        # For SQLite, validate file path
-        if parsed.scheme == 'sqlite':
-            if not parsed.path:
-                raise click.BadParameter('SQLite database file path is required')
-            
-            db_path = Path(parsed.path)
-            if db_path.exists() and not db_path.is_file():
-                raise click.BadParameter(f'SQLite path exists but is not a file: {db_path}')
-            
-            # Check if parent directory is writable
-            parent_dir = db_path.parent
-            if not parent_dir.exists():
-                try:
-                    parent_dir.mkdir(parents=True, exist_ok=True)
-                except OSError as e:
-                    raise click.BadParameter(f'Cannot create directory for SQLite database: {e}')
-            
-            if not os.access(parent_dir, os.W_OK):
-                raise click.BadParameter(f'No write permission for SQLite database directory: {parent_dir}')
-        
+        # Only PostgreSQL is supported
+        pg_schemes = ('postgresql', 'postgresql+psycopg2', 'postgresql+asyncpg')
+        if not parsed.scheme or not any(value.startswith(s + '://') for s in pg_schemes):
+            raise click.BadParameter(
+                f'Only PostgreSQL is supported. Use: postgresql://user:pass@host/dbname'
+            )
+        if not parsed.path or parsed.path == '/':
+            raise click.BadParameter('Database name is required: postgresql://user:pass@host/dbname')
+
         # Test connection (optional, only with --validate-connection flag)
         if ctx and hasattr(ctx, 'params') and ctx.params.get('validate_connection'):
             click.echo('🔍 Testing database connection...')
             try:
-                dialect = value.split("://")[0].split("+")[0]
-                ca = {} if dialect == "sqlite" else {"connect_timeout": 5}
-                engine = create_engine(value, connect_args=ca)
+                engine = create_engine(value, connect_args={"connect_timeout": 5})
                 with engine.connect() as conn:
-                    # Simple test query
-                    if parsed.scheme == 'postgresql':
-                        conn.execute('SELECT 1')
-                    elif parsed.scheme == 'mysql':
-                        conn.execute('SELECT 1')
-                    elif parsed.scheme == 'sqlite':
-                        conn.execute('SELECT 1')
+                    conn.execute('SELECT 1')
                 click.echo('✅ Database connection successful')
                 engine.dispose()
             except Exception as e:
@@ -686,7 +650,7 @@ def generate_views(
 @click.option(
     '--database-type',
     default='postgresql',
-    type=click.Choice(['postgresql', 'mysql', 'sqlite']),
+    type=click.Choice(['postgresql']),
     help='Database type'
 )
 @click.option(
