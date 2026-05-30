@@ -155,6 +155,10 @@ class MobileGenerator:
 		"tailwindcss": "^3.4.17",
 		"victory-native": "^41.14.0",
 		"date-fns": "^4.1.0",
+		"@react-native-community/datetimepicker": "^8.2.0",
+		"@hookform/resolvers": "^3.9.1",
+		"clsx": "^2.1.1",
+		"tailwind-merge": "^2.6.0",
 	}
 
 	DEV_DEPS: dict[str, str] = {
@@ -259,6 +263,21 @@ class MobileGenerator:
 		files["components/fields/JSONBField.tsx"] = self._gen_field_jsonb()
 		files["components/fields/ArrayField.tsx"] = self._gen_field_array()
 		files["components/fields/InetField.tsx"] = self._gen_field_inet()
+		files["components/fields/HStoreField.tsx"] = self._gen_field_hstore()
+		files["components/fields/UUIDField.tsx"] = self._gen_field_uuid()
+		files["components/fields/LTREEField.tsx"] = self._gen_field_ltree()
+		files["components/fields/NumericRangeField.tsx"] = self._gen_field_numeric_range()
+		files["components/fields/DateRangeField.tsx"] = self._gen_field_date_range()
+		files["components/fields/MapField.tsx"] = self._gen_field_map()
+		files["components/fields/MacAddrField.tsx"] = self._gen_field_macaddr()
+		files["components/fields/TSVectorField.tsx"] = self._gen_field_tsvector()
+		files["components/fields/VectorField.tsx"] = self._gen_field_vector()
+		files["components/fields/MarkdownField.tsx"] = self._gen_field_markdown()
+		# Plugin-conditional fields
+		if plugins.get("icd10"):
+			files["components/fields/ICD10Field.tsx"] = self._gen_field_icd10()
+		if plugins.get("snomed"):
+			files["components/fields/SNOMEDField.tsx"] = self._gen_field_snomed()
 
 		# Form components
 		files["components/forms/ModelForm.tsx"] = self._gen_model_form_component()
@@ -1105,7 +1124,7 @@ export default function MFAScreen() {
 		return "".join(parts)
 
 	def _pick_field_component(self, col) -> str:
-		"""Return the field component name for a given column."""
+		"""Return the field component name for a given column type."""
 		ct = col.category
 		if ct == ColumnType.BOOLEAN:
 			return "BooleanField"
@@ -1117,10 +1136,32 @@ export default function MFAScreen() {
 			return "JSONBField"
 		if ct == ColumnType.ARRAY:
 			return "ArrayField"
-		if ct == ColumnType.INET:
+		if ct == ColumnType.HSTORE:
+			return "HStoreField"
+		if ct == ColumnType.UUID:
+			return "UUIDField"
+		if ct == ColumnType.LTREE:
+			return "LTREEField"
+		if ct in (ColumnType.INT4RANGE, ColumnType.INT8RANGE, ColumnType.NUMRANGE):
+			return "NumericRangeField"
+		if ct in (ColumnType.DATERANGE, ColumnType.TSRANGE, ColumnType.TSTZRANGE):
+			return "DateRangeField"
+		if ct in (ColumnType.GEOMETRY, ColumnType.GEOGRAPHY):
+			return "MapField"
+		if ct == ColumnType.MACADDR:
+			return "MacAddrField"
+		if ct == ColumnType.TSVECTOR:
+			return "TSVectorField"
+		if ct == ColumnType.VECTOR:
+			return "VectorField"
+		if ct in (ColumnType.INET, ColumnType.CIDR):
 			return "InetField"
-		if "description" in col.name or "notes" in col.name or "body" in col.name:
+		# Semantic hints
+		n = col.name.lower()
+		if any(x in n for x in ("body", "content", "description", "notes", "text", "summary")):
 			return "TextAreaField"
+		if "markdown" in n:
+			return "MarkdownField"
 		return "TextField"
 
 	# ── Workflow screens ───────────────────────────────────────────────────────
@@ -1898,6 +1939,826 @@ export function InetField({ label, value, onChange, error, required }: InetField
         )}
         placeholderTextColor="#9ca3af"
       />
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_hstore(self) -> str:
+		return """\
+import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+
+interface HStoreFieldProps {
+  label: string;
+  value: Record<string, string> | null | undefined;
+  onChange: (v: Record<string, string>) => void;
+  error?: string;
+  required?: boolean;
+}
+
+export function HStoreField({ label, value, onChange, error, required }: HStoreFieldProps) {
+  const pairs = Object.entries(value ?? {});
+  const [newKey, setNewKey] = useState('');
+  const [newVal, setNewVal] = useState('');
+
+  const addPair = () => {
+    if (!newKey.trim()) return;
+    onChange({ ...value, [newKey.trim()]: newVal });
+    setNewKey(''); setNewVal('');
+  };
+
+  const removePair = (k: string) => {
+    const next = { ...value };
+    delete next[k];
+    onChange(next);
+  };
+
+  const updateVal = (k: string, v: string) => onChange({ ...value, [k]: v });
+
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      {pairs.map(([k, v]) => (
+        <View key={k} className="flex-row items-center gap-2">
+          <Text className="w-24 text-sm font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-2 rounded-lg">{k}</Text>
+          <TextInput
+            value={v}
+            onChangeText={(t) => updateVal(k, t)}
+            className="flex-1 h-10 px-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+          />
+          <Pressable onPress={() => removePair(k)}>
+            <Ionicons name="trash-outline" size={18} color="#f87171" />
+          </Pressable>
+        </View>
+      ))}
+      <View className="flex-row gap-2">
+        <TextInput
+          value={newKey}
+          onChangeText={setNewKey}
+          placeholder="key"
+          className="w-28 h-10 px-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white font-mono"
+          placeholderTextColor="#9ca3af"
+          autoCapitalize="none"
+        />
+        <TextInput
+          value={newVal}
+          onChangeText={setNewVal}
+          placeholder="value"
+          className="flex-1 h-10 px-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+          placeholderTextColor="#9ca3af"
+        />
+        <Pressable onPress={addPair} className="w-10 h-10 bg-primary-500 rounded-lg items-center justify-center">
+          <Ionicons name="add" size={20} color="white" />
+        </Pressable>
+      </View>
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_uuid(self) -> str:
+		return """\
+import { View, Text, TextInput, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { cn } from '@lib/utils';
+
+interface UUIDFieldProps {
+  label: string;
+  value: string | null | undefined;
+  onChange: (v: string) => void;
+  error?: string;
+  required?: boolean;
+  readOnly?: boolean;
+}
+
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+export function UUIDField({ label, value, onChange, error, required, readOnly }: UUIDFieldProps) {
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <View className="flex-row gap-2 items-center">
+        <TextInput
+          value={String(value ?? '')}
+          onChangeText={onChange}
+          editable={!readOnly}
+          autoCapitalize="none"
+          autoCorrect={false}
+          className={cn(
+            'flex-1 h-12 px-4 rounded-xl border font-mono text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white',
+            error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+            readOnly && 'opacity-60',
+          )}
+          placeholderTextColor="#9ca3af"
+          placeholder="xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
+        />
+        {!readOnly && (
+          <Pressable onPress={() => onChange(generateUUID())}
+            className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-700 items-center justify-center">
+            <Ionicons name="refresh" size={20} color="#6366f1" />
+          </Pressable>
+        )}
+      </View>
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_ltree(self) -> str:
+		return """\
+import { View, Text, TextInput, Pressable, ScrollView, Modal } from 'react-native';
+import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+
+interface LTREEFieldProps {
+  label: string;
+  value: string | null | undefined;
+  onChange: (v: string) => void;
+  error?: string;
+  required?: boolean;
+}
+
+export function LTREEField({ label, value, onChange, error, required }: LTREEFieldProps) {
+  const [editing, setEditing] = useState(false);
+  const parts = (value ?? '').split('.').filter(Boolean);
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+
+      {/* Breadcrumb display */}
+      <Pressable onPress={() => setEditing(true)}
+        className="min-h-12 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-row flex-wrap items-center gap-1">
+        {parts.length === 0 && <Text className="text-gray-400">Select path...</Text>}
+        {parts.map((p, i) => (
+          <View key={i} className="flex-row items-center">
+            {i > 0 && <Ionicons name="chevron-forward" size={12} color="#9ca3af" />}
+            <Text className="text-sm font-mono text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 px-2 py-0.5 rounded">{p}</Text>
+          </View>
+        ))}
+      </Pressable>
+
+      {/* Direct text editing modal */}
+      <Modal visible={editing} animationType="slide" transparent onRequestClose={() => setEditing(false)}>
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white dark:bg-gray-900 rounded-t-3xl p-6">
+            <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{label} (dot-separated path)</Text>
+            <TextInput
+              value={value ?? ''}
+              onChangeText={onChange}
+              placeholder="parent.child.leaf"
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-mono text-base text-gray-900 dark:text-white mb-4"
+              placeholderTextColor="#9ca3af"
+            />
+            <Pressable onPress={() => setEditing(false)} className="h-12 bg-primary-500 rounded-xl items-center justify-center">
+              <Text className="text-white font-semibold">Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_numeric_range(self) -> str:
+		return """\
+import { View, Text, TextInput } from 'react-native';
+import { cn } from '@lib/utils';
+
+interface NumericRangeFieldProps {
+  label: string;
+  value: { lower?: number | null; upper?: number | null } | null | undefined;
+  onChange: (v: { lower?: number | null; upper?: number | null }) => void;
+  error?: string;
+  required?: boolean;
+}
+
+export function NumericRangeField({ label, value, onChange, error, required }: NumericRangeFieldProps) {
+  const lower = value?.lower;
+  const upper = value?.upper;
+
+  const update = (side: 'lower' | 'upper', text: string) => {
+    const n = text === '' ? null : parseFloat(text);
+    onChange({ ...value, [side]: isNaN(n as number) ? null : n });
+  };
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <View className="flex-row items-center gap-3">
+        <TextInput
+          value={lower !== null && lower !== undefined ? String(lower) : ''}
+          onChangeText={(t) => update('lower', t)}
+          keyboardType="decimal-pad"
+          placeholder="Min"
+          className={cn(
+            'flex-1 h-12 px-4 rounded-xl border bg-gray-50 dark:bg-gray-800 text-base text-gray-900 dark:text-white',
+            error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+          )}
+          placeholderTextColor="#9ca3af"
+        />
+        <Text className="text-gray-400">–</Text>
+        <TextInput
+          value={upper !== null && upper !== undefined ? String(upper) : ''}
+          onChangeText={(t) => update('upper', t)}
+          keyboardType="decimal-pad"
+          placeholder="Max"
+          className={cn(
+            'flex-1 h-12 px-4 rounded-xl border bg-gray-50 dark:bg-gray-800 text-base text-gray-900 dark:text-white',
+            error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+          )}
+          placeholderTextColor="#9ca3af"
+        />
+      </View>
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_date_range(self) -> str:
+		return """\
+import { View, Text, Pressable, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useState } from 'react';
+import { format } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
+
+interface DateRangeFieldProps {
+  label: string;
+  value: { lower?: string | null; upper?: string | null } | null | undefined;
+  onChange: (v: { lower?: string | null; upper?: string | null }) => void;
+  error?: string;
+  required?: boolean;
+}
+
+export function DateRangeField({ label, value, onChange, error, required }: DateRangeFieldProps) {
+  const [picking, setPicking] = useState<'lower' | 'upper' | null>(null);
+  const lower = value?.lower;
+  const upper = value?.upper;
+  const fmt = (d?: string | null) => d ? format(new Date(d), 'PP') : 'Select';
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <View className="flex-row items-center gap-3">
+        <Pressable onPress={() => setPicking('lower')}
+          className="flex-1 h-12 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-row items-center gap-2">
+          <Ionicons name="calendar-outline" size={16} color="#9ca3af" />
+          <Text className={lower ? 'text-gray-900 dark:text-white text-sm' : 'text-gray-400 text-sm'}>{fmt(lower)}</Text>
+        </Pressable>
+        <Text className="text-gray-400">–</Text>
+        <Pressable onPress={() => setPicking('upper')}
+          className="flex-1 h-12 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-row items-center gap-2">
+          <Ionicons name="calendar-outline" size={16} color="#9ca3af" />
+          <Text className={upper ? 'text-gray-900 dark:text-white text-sm' : 'text-gray-400 text-sm'}>{fmt(upper)}</Text>
+        </Pressable>
+      </View>
+      {picking && (
+        <DateTimePicker
+          value={new Date(value?.[picking] ?? Date.now())}
+          mode="date"
+          onChange={(_, d) => {
+            if (d) onChange({ ...value, [picking]: d.toISOString() });
+            if (Platform.OS !== 'ios') setPicking(null);
+          }}
+        />
+      )}
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_map(self) -> str:
+		return """\
+import { View, Text, Pressable, Linking } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+interface MapFieldProps {
+  label: string;
+  value: string | { coordinates?: [number, number] } | null | undefined;
+  onChange?: (v: string) => void;
+  error?: string;
+  required?: boolean;
+}
+
+export function MapField({ label, value, onChange, error, required }: MapFieldProps) {
+  // Parse coordinates from PostGIS WKT or GeoJSON
+  const coords = (() => {
+    if (!value) return null;
+    if (typeof value === 'object' && value.coordinates) {
+      const [lng, lat] = value.coordinates;
+      return { lat, lng };
+    }
+    if (typeof value === 'string') {
+      const m = value.match(/POINT\\s*\\(([0-9.\\-]+)\\s+([0-9.\\-]+)\\)/i);
+      if (m) return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+    }
+    return null;
+  })();
+
+  const openMap = () => {
+    if (!coords) return;
+    Linking.openURL(`https://maps.google.com/?q=${coords.lat},${coords.lng}`);
+  };
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <Pressable
+        onPress={openMap}
+        disabled={!coords}
+        className="h-14 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-row items-center gap-3"
+      >
+        <Ionicons name="location-outline" size={20} color={coords ? '#6366f1' : '#9ca3af'} />
+        <Text className="flex-1 text-sm text-gray-700 dark:text-gray-300" numberOfLines={1}>
+          {coords ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}` : 'No location set'}
+        </Text>
+        {coords && <Ionicons name="open-outline" size={16} color="#9ca3af" />}
+      </Pressable>
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_macaddr(self) -> str:
+		return """\
+import { View, Text, TextInput } from 'react-native';
+import { cn } from '@lib/utils';
+
+interface MacAddrFieldProps {
+  label: string;
+  value: string | null | undefined;
+  onChange: (v: string) => void;
+  error?: string;
+  required?: boolean;
+}
+
+export function MacAddrField({ label, value, onChange, error, required }: MacAddrFieldProps) {
+  const formatMac = (raw: string) => {
+    const clean = raw.replace(/[^0-9a-fA-F]/g, '').slice(0, 12);
+    return clean.match(/.{1,2}/g)?.join(':') ?? clean;
+  };
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <TextInput
+        value={String(value ?? '')}
+        onChangeText={(t) => onChange(formatMac(t))}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="aa:bb:cc:dd:ee:ff"
+        maxLength={17}
+        className={cn(
+          'h-12 px-4 rounded-xl border font-mono text-base bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white',
+          error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+        )}
+        placeholderTextColor="#9ca3af"
+      />
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_tsvector(self) -> str:
+		return """\
+import { View, Text } from 'react-native';
+
+interface TSVectorFieldProps {
+  label: string;
+  value: string | null | undefined;
+}
+
+export function TSVectorField({ label, value }: TSVectorFieldProps) {
+  // tsvector is auto-maintained by PostgreSQL — display as read-only tokens
+  const tokens = (value ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map(t => t.split(':')[0].replace(/^'|'$/g, ''))
+    .filter(Boolean);
+
+  return (
+    <View className="gap-1">
+      <Text className="text-xs text-gray-400 uppercase tracking-wide">{label} (auto-computed)</Text>
+      <View className="flex-row flex-wrap gap-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 min-h-10">
+        {tokens.length === 0 && <Text className="text-gray-400 text-sm">—</Text>}
+        {tokens.slice(0, 20).map((t, i) => (
+          <View key={i} className="bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+            <Text className="text-xs font-mono text-gray-700 dark:text-gray-300">{t}</Text>
+          </View>
+        ))}
+        {tokens.length > 20 && <Text className="text-xs text-gray-400">+{tokens.length - 20} more</Text>}
+      </View>
+    </View>
+  );
+}
+"""
+
+	def _gen_field_vector(self) -> str:
+		return """\
+import { View, Text } from 'react-native';
+
+interface VectorFieldProps {
+  label: string;
+  value: number[] | string | null | undefined;
+}
+
+export function VectorField({ label, value }: VectorFieldProps) {
+  const dims = Array.isArray(value) ? value.length :
+    typeof value === 'string' ? value.replace(/[\\[\\]]/g, '').split(',').length : 0;
+
+  return (
+    <View className="gap-1">
+      <Text className="text-xs text-gray-400 uppercase tracking-wide">{label} (embedding)</Text>
+      <View className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">
+        <Text className="text-sm text-gray-500">
+          {dims > 0 ? `${dims}-dimensional vector` : 'No vector stored'}
+        </Text>
+        {dims > 0 && (
+          <Text className="text-xs font-mono text-gray-400 mt-1" numberOfLines={2}>
+            [{Array.isArray(value) ? value.slice(0, 6).map(n => n.toFixed(4)).join(', ') : '...'}{dims > 6 ? ', ...' : ''}]
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+"""
+
+	def _gen_field_markdown(self) -> str:
+		return """\
+import { View, Text, TextInput, Pressable } from 'react-native';
+import { useState } from 'react';
+import { cn } from '@lib/utils';
+
+interface MarkdownFieldProps {
+  label: string;
+  value: string | null | undefined;
+  onChange: (v: string) => void;
+  error?: string;
+  required?: boolean;
+  lines?: number;
+}
+
+export function MarkdownField({ label, value, onChange, error, required, lines = 8 }: MarkdownFieldProps) {
+  const [tab, setTab] = useState<'edit' | 'preview'>('edit');
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+
+      {/* Tab switcher */}
+      <View className="flex-row border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden mb-1">
+        {(['edit', 'preview'] as const).map((t) => (
+          <Pressable key={t} onPress={() => setTab(t)}
+            className={cn('flex-1 py-2 items-center',
+              tab === t ? 'bg-primary-500' : 'bg-gray-50 dark:bg-gray-800')}>
+            <Text className={cn('text-sm font-medium',
+              tab === t ? 'text-white' : 'text-gray-600 dark:text-gray-400')}>
+              {t === 'edit' ? 'Write' : 'Preview'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {tab === 'edit' ? (
+        <TextInput
+          value={String(value ?? '')}
+          onChangeText={onChange}
+          multiline
+          numberOfLines={lines}
+          textAlignVertical="top"
+          autoCapitalize="sentences"
+          className={cn(
+            'px-4 py-3 rounded-xl border font-mono text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white',
+            error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+          )}
+          style={{ minHeight: lines * 20 }}
+          placeholderTextColor="#9ca3af"
+          placeholder="**Bold**, _italic_, # Heading..."
+        />
+      ) : (
+        <View className="border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 min-h-[120px] bg-white dark:bg-gray-800">
+          <Text className="text-sm text-gray-700 dark:text-gray-300 leading-6">
+            {(value ?? '').replace(/[#*_`]/g, '') || '(empty)'}
+          </Text>
+          <Text className="text-xs text-gray-400 mt-2 italic">Tip: full markdown preview requires a WebView</Text>
+        </View>
+      )}
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_icd10(self) -> str:
+		"""ICD-10-CM search field — only generated when icd10 tables are present."""
+		return """\
+import { View, Text, TextInput, Pressable, Modal, FlatList, ActivityIndicator } from 'react-native';
+import { useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@lib/api/client';
+import { Ionicons } from '@expo/vector-icons';
+import { cn } from '@lib/utils';
+
+interface ICD10FieldProps {
+  label: string;
+  value: string | null | undefined;  // ICD-10 code, e.g. "J18.9"
+  onChange: (v: string | null) => void;
+  error?: string;
+  required?: boolean;
+  billableOnly?: boolean;
+}
+
+interface ICD10Result {
+  code: string;
+  display: string;
+  short: string;
+  billable: boolean;
+}
+
+export function ICD10Field({ label, value, onChange, error, required, billableOnly = true }: ICD10FieldProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  const { data: results, isFetching } = useQuery({
+    queryKey: ['icd10-search', debouncedSearch, billableOnly],
+    queryFn: () => apiClient.get(
+      `/icd10/search?q=${encodeURIComponent(debouncedSearch)}&billable_only=${billableOnly ? 1 : 0}&limit=20`
+    ).then(r => r.data as ICD10Result[]),
+    enabled: debouncedSearch.length >= 2,
+  });
+
+  const handleSearch = (text: string) => {
+    setSearch(text);
+    const t = setTimeout(() => setDebouncedSearch(text), 300);
+    return () => clearTimeout(t);
+  };
+
+  const select = (item: ICD10Result) => {
+    onChange(item.display);
+    setOpen(false);
+    setSearch('');
+    setDebouncedSearch('');
+  };
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <Pressable onPress={() => setOpen(true)}
+        className={cn(
+          'h-12 px-4 rounded-xl border flex-row items-center gap-3 bg-gray-50 dark:bg-gray-800',
+          error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+        )}>
+        <Ionicons name="medical-outline" size={18} color={value ? '#6366f1' : '#9ca3af'} />
+        <Text className={cn('flex-1 text-base', value ? 'text-gray-900 dark:text-white' : 'text-gray-400')} numberOfLines={1}>
+          {value ?? 'Search ICD-10 code...'}
+        </Text>
+        {value && (
+          <Pressable onPress={() => onChange(null)}>
+            <Ionicons name="close-circle" size={18} color="#9ca3af" />
+          </Pressable>
+        )}
+      </Pressable>
+
+      <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View className="flex-1 bg-white dark:bg-gray-900">
+          <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-gray-100 dark:border-gray-800 gap-3">
+            <Pressable onPress={() => setOpen(false)}>
+              <Ionicons name="arrow-back" size={24} color="#6b7280" />
+            </Pressable>
+            <TextInput
+              value={search}
+              onChangeText={handleSearch}
+              placeholder="Search diagnosis..."
+              autoFocus
+              className="flex-1 h-10 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-base"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          {isFetching && <ActivityIndicator className="mt-6" />}
+          <FlatList
+            data={results ?? []}
+            keyExtractor={(item) => item.code}
+            renderItem={({ item }) => (
+              <Pressable onPress={() => select(item)}
+                className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 active:bg-gray-50">
+                <View className="flex-row items-center gap-3">
+                  <Text className="font-mono text-primary-600 dark:text-primary-400 w-20">{item.display}</Text>
+                  <View className="flex-1">
+                    <Text className="text-sm text-gray-900 dark:text-white" numberOfLines={2}>{item.short}</Text>
+                  </View>
+                  {item.billable && (
+                    <View className="bg-green-100 px-2 py-0.5 rounded-full">
+                      <Text className="text-xs text-green-700">Billable</Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              debouncedSearch.length >= 2 && !isFetching ? (
+                <View className="items-center py-12">
+                  <Text className="text-gray-400">No results for "{debouncedSearch}"</Text>
+                </View>
+              ) : (
+                <View className="items-center py-12">
+                  <Ionicons name="search" size={40} color="#d1d5db" />
+                  <Text className="text-gray-400 mt-2">Type to search ICD-10 codes</Text>
+                </View>
+              )
+            }
+          />
+        </View>
+      </Modal>
+      {error && <Text className="text-xs text-red-500">{error}</Text>}
+    </View>
+  );
+}
+"""
+
+	def _gen_field_snomed(self) -> str:
+		"""SNOMED CT concept search field — only generated when snomed_concept table is present."""
+		return """\
+import { View, Text, TextInput, Pressable, Modal, FlatList, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@lib/api/client';
+import { Ionicons } from '@expo/vector-icons';
+import { cn } from '@lib/utils';
+
+interface SNOMEDFieldProps {
+  label: string;
+  value: string | null | undefined;  // SCTID
+  onChange: (v: string | null) => void;
+  error?: string;
+  required?: boolean;
+  domainId?: string;  // e.g. "404684003" for Clinical finding
+}
+
+interface SNOMEDResult {
+  id: number;
+  preferred: string;
+  tag: string;
+  matched_term: string;
+}
+
+const DOMAINS = [
+  { id: '', label: 'All' },
+  { id: '404684003', label: 'Clinical finding' },
+  { id: '71388002', label: 'Procedure' },
+  { id: '123037004', label: 'Body structure' },
+  { id: '105590001', label: 'Substance' },
+];
+
+export function SNOMEDField({ label, value, onChange, error, required, domainId }: SNOMEDFieldProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [domain, setDomain] = useState(domainId ?? '');
+
+  const { data: results, isFetching } = useQuery({
+    queryKey: ['snomed-search', debouncedSearch, domain],
+    queryFn: () => apiClient.get(
+      `/snomed/search?q=${encodeURIComponent(debouncedSearch)}${domain ? `&domain_id=${domain}` : ''}&limit=20`
+    ).then(r => r.data as SNOMEDResult[]),
+    enabled: debouncedSearch.length >= 2,
+  });
+
+  const handleSearch = (text: string) => {
+    setSearch(text);
+    setTimeout(() => setDebouncedSearch(text), 300);
+  };
+
+  const select = (item: SNOMEDResult) => {
+    onChange(String(item.id));
+    setOpen(false);
+    setSearch('');
+    setDebouncedSearch('');
+  };
+
+  return (
+    <View className="gap-1">
+      <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}{required && <Text className="text-red-500"> *</Text>}
+      </Text>
+      <Pressable onPress={() => setOpen(true)}
+        className={cn(
+          'h-12 px-4 rounded-xl border flex-row items-center gap-3 bg-gray-50 dark:bg-gray-800',
+          error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
+        )}>
+        <Ionicons name="bandage-outline" size={18} color={value ? '#6366f1' : '#9ca3af'} />
+        <Text className={cn('flex-1 text-base', value ? 'text-gray-900 dark:text-white' : 'text-gray-400')} numberOfLines={1}>
+          {value ? `SCTID: ${value}` : 'Search SNOMED CT concept...'}
+        </Text>
+        {value && <Pressable onPress={() => onChange(null)}><Ionicons name="close-circle" size={18} color="#9ca3af" /></Pressable>}
+      </Pressable>
+
+      <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View className="flex-1 bg-white dark:bg-gray-900">
+          <View className="px-4 pt-12 pb-3 border-b border-gray-100 dark:border-gray-800">
+            <View className="flex-row items-center gap-3 mb-2">
+              <Pressable onPress={() => setOpen(false)}><Ionicons name="arrow-back" size={24} color="#6b7280" /></Pressable>
+              <TextInput
+                value={search}
+                onChangeText={handleSearch}
+                placeholder="Search clinical term..."
+                autoFocus
+                className="flex-1 h-10 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-base"
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            {/* Domain filter chips */}
+            <View className="flex-row gap-2 mt-1">
+              {DOMAINS.map(d => (
+                <Pressable key={d.id} onPress={() => setDomain(d.id)}
+                  className={cn('px-3 py-1 rounded-full text-xs',
+                    domain === d.id ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-700')}>
+                  <Text className={domain === d.id ? 'text-white text-xs font-medium' : 'text-gray-600 dark:text-gray-300 text-xs'}>
+                    {d.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          {isFetching && <ActivityIndicator className="mt-6" />}
+          <FlatList
+            data={results ?? []}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={({ item }) => (
+              <Pressable onPress={() => select(item)} className="px-4 py-3 border-b border-gray-50 dark:border-gray-800">
+                <View className="flex-row items-start gap-2">
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-gray-900 dark:text-white">{item.preferred}</Text>
+                    {item.matched_term !== item.preferred && (
+                      <Text className="text-xs text-gray-400">Also: {item.matched_term}</Text>
+                    )}
+                  </View>
+                  {item.tag && (
+                    <View className="bg-primary-100 dark:bg-primary-900/40 px-2 py-0.5 rounded-full">
+                      <Text className="text-xs text-primary-600 dark:text-primary-400">{item.tag}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text className="text-xs font-mono text-gray-300 mt-0.5">{item.id}</Text>
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              !isFetching && debouncedSearch.length >= 2 ? (
+                <View className="items-center py-12">
+                  <Text className="text-gray-400">No results for "{debouncedSearch}"</Text>
+                </View>
+              ) : (
+                <View className="items-center py-12">
+                  <Ionicons name="search" size={40} color="#d1d5db" />
+                  <Text className="text-gray-400 mt-2">Type to search SNOMED CT</Text>
+                </View>
+              )
+            }
+          />
+        </View>
+      </Modal>
       {error && <Text className="text-xs text-red-500">{error}</Text>}
     </View>
   );
