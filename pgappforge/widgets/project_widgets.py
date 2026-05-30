@@ -40,6 +40,7 @@ import json
 from datetime import date, datetime
 from typing import Any, Callable
 from markupsafe import Markup
+from pgappforge.widgets_postgresql._cdn import CYTOSCAPE_CDN as _CYTOSCAPE_CDN
 
 # ─── CDN references ────────────────────────────────────────────────────────
 
@@ -965,7 +966,7 @@ class PERTWidget:
 		h = self.height
 
 		return Markup(f"""
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.27.0/cytoscape.min.js" crossorigin=""></script>
+{_CYTOSCAPE_CDN}
 <div style="border:1px solid #dee2e6;border-radius:4px;overflow:hidden">
   <div style="padding:6px 10px;background:#f8f9fa;border-bottom:1px solid #dee2e6;font-size:0.85em">
     <span style="color:#e74c3c">&#9679;</span> Critical ({crit_count} tasks)

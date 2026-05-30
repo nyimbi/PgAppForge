@@ -22,10 +22,7 @@ from flask import request, jsonify, Response
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
 
-_CYTOSCAPE_CDN = (
-	'<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.27.0/'
-	'cytoscape.min.js" crossorigin=""></script>'
-)
+from pgappforge.widgets_postgresql._cdn import CYTOSCAPE_CDN as _CYTOSCAPE_CDN
 _D3_CDN = '<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>'
 
 

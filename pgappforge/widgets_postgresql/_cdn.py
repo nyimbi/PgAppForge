@@ -45,3 +45,9 @@ MARKED_CDN = """
 DOMPURIFY_CDN = """
 <script src="https://unpkg.com/dompurify@3/dist/purify.min.js" crossorigin=""></script>
 """
+
+CYTOSCAPE_VERSION = "3.27.0"
+
+CYTOSCAPE_CDN = f"""
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/{CYTOSCAPE_VERSION}/cytoscape.min.js" crossorigin=""></script>
+"""
