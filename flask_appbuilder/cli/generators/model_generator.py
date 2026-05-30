@@ -602,33 +602,16 @@ def before_update_{table_name}(mapper, connection, target):
         return ''.join(word.capitalize() for word in snake_str.split('_'))
 
     def _generate_imports(self):
-        """Generate import statements with PostgreSQL dialect support."""
-        base_imports = {
-            'from datetime import datetime',
-            'from typing import Optional, List, Dict, Any',
-            'from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey, Numeric, func, event',
-            'from sqlalchemy.orm import relationship, validates',
-            'from sqlalchemy.ext.hybrid import hybrid_property',
-            'from flask_appbuilder import Model'
-        }
+        """Build import set from code_headers.gen_model_header() — comprehensive PostgreSQL coverage."""
+        from flask_appbuilder.cli.generators.code_headers import gen_model_header
+        for block in gen_model_header():
+            self.import_statements.add(block.strip())
 
-        # Add PostgreSQL-specific imports based on detected types
-        if self._has_postgresql_types():
-            base_imports.add('from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY, HSTORE, INET, CIDR, MACADDR')
-            
-        if self._has_spatial_types():
-            base_imports.add('from geoalchemy2 import Geometry, Geography, Raster')
-            
-        if self._has_vector_types():
-            base_imports.add('from pgvector.sqlalchemy import Vector')
-
+        # Add Pydantic if requested
         if self.config.generate_pydantic:
-            base_imports.add('from pydantic import BaseModel, Field, validator')
-
+            self.import_statements.add('from pydantic import BaseModel, Field, validator')
         if self.config.use_dataclasses:
-            base_imports.add('from dataclasses import dataclass')
-
-        self.import_statements.update(base_imports)
+            self.import_statements.add('from dataclasses import dataclass')
 
     def _has_postgresql_types(self) -> bool:
         """Check if any PostgreSQL-specific types are used."""
