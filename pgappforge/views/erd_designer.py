@@ -435,10 +435,12 @@ ERP_MODULES: dict[str, dict] = {
 }
 
 
-def _modules_to_cytoscape() -> list[dict]:
-	"""Convert ERP_MODULES to Cytoscape.js compound node elements."""
+def _build_cytoscape_elements(modules: dict | None = None) -> list[dict]:
+	"""Convert a modules dict to Cytoscape.js compound node elements."""
+	if modules is None:
+		modules = ERP_MODULES
 	elements = []
-	for mod_key, mod in ERP_MODULES.items():
+	for mod_key, mod in modules.items():
 		color = mod["color"]
 		elements.append({"data": {
 			"id": f"mod_{mod_key}",
@@ -533,13 +535,25 @@ class ERDDesignerView(BaseView):
 		"""Return ERP template tables as Cytoscape nodes."""
 		if key not in ERP_MODULES:
 			return jsonify({"error": f"Unknown module: {key}"}), 404
-		return jsonify({"elements": _modules_to_cytoscape()[:0] or [], "module_key": key})
+		return jsonify({"elements": _build_cytoscape_elements()[:0] or [], "module_key": key})
 
 	@expose("/api/all-templates")
 	@has_access
 	def api_all_templates(self):
-		"""Return all ERP template modules as Cytoscape elements."""
-		return jsonify({"elements": _modules_to_cytoscape()})
+		"""Return all ERP template modules (built-in + installed) as Cytoscape elements."""
+		# Start with built-in ERP modules
+		all_modules = dict(ERP_MODULES)
+		# Merge installed templates from registry
+		try:
+			from pgappforge.templates import TemplateRegistry
+			registered = TemplateRegistry().load_all()
+			for k, v in registered.items():
+				if k not in all_modules:  # don't override built-ins
+					all_modules[k] = v
+		except Exception:
+			pass
+		elements = _build_cytoscape_elements(all_modules)
+		return jsonify({"elements": elements})
 
 	@expose("/api/apply-module/<string:key>", methods=["POST"])
 	@has_access

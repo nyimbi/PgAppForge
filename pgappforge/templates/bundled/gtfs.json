@@ -1,0 +1,350 @@
+{
+  "name": "gtfs",
+  "label": "GTFS (Transit)",
+  "description": "General Transit Feed Specification \u2014 used by every transit authority",
+  "color": "#27ae60",
+  "icon": "fa-bus",
+  "version": "2.0",
+  "source_url": "https://gtfs.org/reference/static/",
+  "tags": [
+    "transit",
+    "mobility",
+    "government",
+    "legal-mandate"
+  ],
+  "tables": {
+    "agency": [
+      {
+        "name": "agency_id",
+        "type": "VARCHAR(100)",
+        "pk": true
+      },
+      {
+        "name": "agency_name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "agency_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "agency_timezone",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "agency_lang",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "agency_phone",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "agency_fare_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "agency_email",
+        "type": "VARCHAR(320)"
+      }
+    ],
+    "stops": [
+      {
+        "name": "stop_id",
+        "type": "VARCHAR(100)",
+        "pk": true
+      },
+      {
+        "name": "stop_code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "stop_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "stop_desc",
+        "type": "TEXT"
+      },
+      {
+        "name": "stop_lat",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "stop_lon",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "location_type",
+        "type": "SMALLINT",
+        "default": "0"
+      },
+      {
+        "name": "parent_station",
+        "type": "VARCHAR(100)",
+        "fk": "stops.stop_id"
+      },
+      {
+        "name": "wheelchair_boarding",
+        "type": "SMALLINT",
+        "default": "0"
+      },
+      {
+        "name": "platform_code",
+        "type": "VARCHAR(50)"
+      }
+    ],
+    "routes": [
+      {
+        "name": "route_id",
+        "type": "VARCHAR(100)",
+        "pk": true
+      },
+      {
+        "name": "agency_id",
+        "type": "VARCHAR(100)",
+        "fk": "agency.agency_id"
+      },
+      {
+        "name": "route_short_name",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "route_long_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "route_desc",
+        "type": "TEXT"
+      },
+      {
+        "name": "route_type",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "route_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "route_color",
+        "type": "CHAR(6)"
+      },
+      {
+        "name": "route_text_color",
+        "type": "CHAR(6)"
+      }
+    ],
+    "calendar": [
+      {
+        "name": "service_id",
+        "type": "VARCHAR(100)",
+        "pk": true
+      },
+      {
+        "name": "monday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "tuesday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "wednesday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "thursday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "friday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "saturday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "sunday",
+        "type": "SMALLINT",
+        "nullable": false
+      },
+      {
+        "name": "start_date",
+        "type": "DATE",
+        "nullable": false
+      },
+      {
+        "name": "end_date",
+        "type": "DATE",
+        "nullable": false
+      }
+    ],
+    "trips": [
+      {
+        "name": "trip_id",
+        "type": "VARCHAR(100)",
+        "pk": true
+      },
+      {
+        "name": "route_id",
+        "type": "VARCHAR(100)",
+        "fk": "routes.route_id",
+        "nullable": false
+      },
+      {
+        "name": "service_id",
+        "type": "VARCHAR(100)",
+        "fk": "calendar.service_id"
+      },
+      {
+        "name": "trip_headsign",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "direction_id",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "block_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "shape_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "wheelchair_accessible",
+        "type": "SMALLINT",
+        "default": "0"
+      }
+    ],
+    "stop_times": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "trip_id",
+        "type": "VARCHAR(100)",
+        "fk": "trips.trip_id",
+        "nullable": false
+      },
+      {
+        "name": "stop_id",
+        "type": "VARCHAR(100)",
+        "fk": "stops.stop_id",
+        "nullable": false
+      },
+      {
+        "name": "stop_sequence",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "arrival_time",
+        "type": "INTERVAL"
+      },
+      {
+        "name": "departure_time",
+        "type": "INTERVAL"
+      },
+      {
+        "name": "stop_headsign",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "pickup_type",
+        "type": "SMALLINT",
+        "default": "0"
+      },
+      {
+        "name": "drop_off_type",
+        "type": "SMALLINT",
+        "default": "0"
+      }
+    ],
+    "calendar_dates": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "service_id",
+        "type": "VARCHAR(100)",
+        "fk": "calendar.service_id"
+      },
+      {
+        "name": "date",
+        "type": "DATE",
+        "nullable": false
+      },
+      {
+        "name": "exception_type",
+        "type": "SMALLINT",
+        "nullable": false
+      }
+    ],
+    "shapes": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "shape_id",
+        "type": "VARCHAR(100)",
+        "nullable": false
+      },
+      {
+        "name": "shape_pt_lat",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "shape_pt_lon",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "shape_pt_sequence",
+        "type": "INTEGER"
+      }
+    ],
+    "fare_attributes": [
+      {
+        "name": "fare_id",
+        "type": "VARCHAR(100)",
+        "pk": true
+      },
+      {
+        "name": "price",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "currency_type",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "payment_method",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "transfers",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "transfer_duration",
+        "type": "INTEGER"
+      }
+    ]
+  }
+}

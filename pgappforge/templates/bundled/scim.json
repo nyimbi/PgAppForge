@@ -1,0 +1,184 @@
+{
+  "name": "scim",
+  "label": "SCIM 2.0 (Identity)",
+  "description": "System for Cross-domain Identity Management \u2014 enterprise SSO standard",
+  "color": "#8e44ad",
+  "icon": "fa-user-shield",
+  "version": "2.0",
+  "source_url": "https://www.rfc-editor.org/rfc/rfc7643",
+  "tags": [
+    "identity",
+    "security",
+    "enterprise",
+    "sso",
+    "okta",
+    "azure-ad"
+  ],
+  "tables": {
+    "scim_users": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "external_id",
+        "type": "VARCHAR(255)",
+        "unique": true
+      },
+      {
+        "name": "user_name",
+        "type": "VARCHAR(255)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "formatted_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "emails",
+        "type": "JSONB"
+      },
+      {
+        "name": "phone_numbers",
+        "type": "JSONB"
+      },
+      {
+        "name": "active",
+        "type": "BOOLEAN",
+        "default": "true"
+      },
+      {
+        "name": "locale",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "organization",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "department",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "employee_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "cost_center",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "manager_id",
+        "type": "UUID",
+        "fk": "scim_users.id"
+      },
+      {
+        "name": "meta",
+        "type": "JSONB"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "last_modified_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "scim_groups": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "external_id",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "display_name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "meta",
+        "type": "JSONB"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "scim_group_members": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "group_id",
+        "type": "UUID",
+        "fk": "scim_groups.id",
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "UUID",
+        "fk": "scim_users.id",
+        "nullable": false
+      },
+      {
+        "name": "added_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "scim_schemas": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

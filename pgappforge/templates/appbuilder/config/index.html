@@ -1,0 +1,63 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-12">
+    <div class="page-header">
+      <h1>{{ title }}</h1>
+    </div>
+
+    <div class="well well-sm" style="margin-bottom:16px;">
+      <a href="{{ url_for('AppConfigView.reset') }}"
+         class="btn btn-sm btn-warning pull-right">
+        <i class="fa fa-undo"></i> Reset to Defaults
+      </a>
+      <p class="text-muted" style="margin:0;">
+        Select a category to view and edit its settings.
+      </p>
+    </div>
+
+    {% if categories %}
+      <div class="row">
+        {% for cat_name, rows in categories.items() %}
+        <div class="col-sm-6 col-md-4">
+          <div class="panel panel-default">
+            <div class="panel-heading">
+              <h3 class="panel-title">
+                <i class="fa fa-cog"></i>
+                <strong>{{ cat_name | title }}</strong>
+                <span class="badge pull-right">{{ rows | length }}</span>
+              </h3>
+            </div>
+            <div class="panel-body">
+              <ul class="list-unstyled" style="margin-bottom:8px;">
+                {% for row in rows[:4] %}
+                <li class="text-muted" style="font-size:12px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                  <strong>{{ row.label or row.key }}</strong>
+                </li>
+                {% endfor %}
+                {% if rows | length > 4 %}
+                <li class="text-muted" style="font-size:12px;">
+                  &hellip; and {{ (rows | length) - 4 }} more
+                </li>
+                {% endif %}
+              </ul>
+              <a href="{{ url_for('AppConfigView.category', name=cat_name) }}"
+                 class="btn btn-primary btn-sm btn-block">
+                <i class="fa fa-edit"></i> Edit {{ cat_name | title }}
+              </a>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        No configuration entries found.
+        <a href="{{ url_for('AppConfigView.reset') }}">Reset to defaults</a>
+        to seed the initial settings.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

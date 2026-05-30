@@ -383,6 +383,13 @@ except ImportError:
     # Workflow tools not available
     pass
 
+# Import and register chat-create command
+try:
+    from .app_creator_chat import chat_create
+    forge.add_command(chat_create)
+except ImportError:
+    pass
+
 # Register all commands with the fab group
 forge.add_command(create_app)
 forge.add_command(create_addon)

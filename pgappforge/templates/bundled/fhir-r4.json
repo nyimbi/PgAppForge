@@ -1,0 +1,467 @@
+{
+  "name": "fhir-r4",
+  "label": "HL7 FHIR R4",
+  "description": "Healthcare resources \u2014 US/EU/AU government mandated standard",
+  "color": "#3498db",
+  "icon": "fa-heartbeat",
+  "version": "4.0.1",
+  "source_url": "https://hl7.org/fhir/R4/",
+  "tags": [
+    "healthcare",
+    "hl7",
+    "regulation",
+    "us-mandate",
+    "eu-mandate"
+  ],
+  "tables": {
+    "patient": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "birth_date",
+        "type": "DATE"
+      },
+      {
+        "name": "gender",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "phone",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "active",
+        "type": "BOOLEAN",
+        "default": "true"
+      },
+      {
+        "name": "deceased_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "identifier",
+        "type": "JSONB"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "practitioner": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "npi",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "specialty",
+        "type": "VARCHAR(200)"
+      },
+      {
+        "name": "active",
+        "type": "BOOLEAN",
+        "default": "true"
+      },
+      {
+        "name": "qualification",
+        "type": "JSONB"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "organization": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "active",
+        "type": "BOOLEAN",
+        "default": "true"
+      },
+      {
+        "name": "telecom",
+        "type": "JSONB"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "npi",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "encounter": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "practitioner_id",
+        "type": "UUID",
+        "fk": "practitioner.id"
+      },
+      {
+        "name": "organization_id",
+        "type": "UUID",
+        "fk": "organization.id"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "class_code",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "type_code",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "start_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "end_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "reason_code",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "observation": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "encounter_id",
+        "type": "UUID",
+        "fk": "encounter.id"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "code_display",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "effective_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "value_quantity",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "value_unit",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "value_string",
+        "type": "TEXT"
+      },
+      {
+        "name": "interpretation",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "condition": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "encounter_id",
+        "type": "UUID",
+        "fk": "encounter.id"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "code_display",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "clinical_status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "verification_status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "onset_date",
+        "type": "DATE"
+      },
+      {
+        "name": "abatement_date",
+        "type": "DATE"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "medication_request": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "practitioner_id",
+        "type": "UUID",
+        "fk": "practitioner.id"
+      },
+      {
+        "name": "medication_code",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "medication_display",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "intent",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "authored_on",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "dosage",
+        "type": "JSONB"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "diagnostic_report": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "encounter_id",
+        "type": "UUID",
+        "fk": "encounter.id"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "code_display",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "effective_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "issued_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "conclusion",
+        "type": "TEXT"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "appointment": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "practitioner_id",
+        "type": "UUID",
+        "fk": "practitioner.id"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "service_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "start_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "end_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "comment",
+        "type": "TEXT"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ],
+    "allergy_intolerance": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "patient_id",
+        "type": "UUID",
+        "fk": "patient.id"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "code_display",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "clinical_status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "criticality",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "onset_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "reaction",
+        "type": "JSONB"
+      },
+      {
+        "name": "resource",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

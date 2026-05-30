@@ -1,0 +1,69 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8 col-md-offset-2">
+
+    <div class="page-header">
+      <h1>{{ title }}</h1>
+    </div>
+
+    <div class="alert alert-warning">
+      <strong><i class="fa fa-exclamation-triangle"></i> Warning:</strong>
+      This will overwrite all non-read-only configuration entries with the
+      built-in defaults. Custom values will be lost.
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h3 class="panel-title">Default values that will be applied</h3>
+      </div>
+      <div class="panel-body" style="max-height:400px; overflow-y:auto;">
+        <table class="table table-condensed table-striped">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Category</th>
+              <th>Default Value</th>
+              <th>Label</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key, meta in defaults.items() %}
+            <tr>
+              <td><code>{{ key }}</code></td>
+              <td>{{ meta.category }}</td>
+              <td>
+                {% set val = meta.value %}
+                {% if val is sameas true %}
+                  <span class="label label-success">True</span>
+                {% elif val is sameas false %}
+                  <span class="label label-default">False</span>
+                {% else %}
+                  <code>{{ val }}</code>
+                {% endif %}
+              </td>
+              <td class="text-muted">{{ meta.label or "" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('AppConfigView.reset') }}">
+      {% if csrf_token is defined %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% endif %}
+      <button type="submit" class="btn btn-danger">
+        <i class="fa fa-undo"></i> Yes, Reset to Defaults
+      </button>
+      <a href="{{ url_for('AppConfigView.index') }}"
+         class="btn btn-default" style="margin-left:8px;">
+        Cancel
+      </a>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

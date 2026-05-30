@@ -1,0 +1,125 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-10 col-md-offset-1">
+
+    <div class="page-header">
+      <a href="{{ url_for('AppConfigView.index') }}"
+         class="btn btn-default btn-sm pull-right" style="margin-top:8px;">
+        <i class="fa fa-arrow-left"></i> All Categories
+      </a>
+      <h1>{{ title }}</h1>
+    </div>
+
+    <form method="POST" action="{{ url_for('AppConfigView.save') }}"
+          class="form-horizontal" role="form">
+
+      {# CSRF token if flask-wtf is active #}
+      {% if csrf_token is defined %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% endif %}
+
+      <input type="hidden" name="category" value="{{ category_name }}">
+
+      {% for field in fields %}
+        {% set row = field.row %}
+        {% set itype = field.input_type %}
+
+        <div class="form-group {% if row.is_readonly %}has-warning{% endif %}">
+          <label class="col-sm-4 control-label" for="field_{{ row.key }}">
+            {{ row.label or row.key }}
+            {% if row.is_sensitive %}
+              <i class="fa fa-lock text-muted" title="Sensitive"></i>
+            {% endif %}
+            {% if row.is_readonly %}
+              <i class="fa fa-ban text-warning" title="Read-only"></i>
+            {% endif %}
+          </label>
+
+          <div class="col-sm-6">
+            {% if row.is_readonly %}
+              {# Read-only: show value, no input #}
+              <p class="form-control-static">
+                {% if row.is_sensitive %}
+                  <em class="text-muted">••••••••</em>
+                {% elif itype == "checkbox" %}
+                  {% if row.value %}<span class="label label-success">On</span>
+                  {% else %}<span class="label label-default">Off</span>{% endif %}
+                {% else %}
+                  {{ row.value }}
+                {% endif %}
+              </p>
+            {% elif itype == "checkbox" %}
+              <div class="checkbox" style="margin-top:6px;">
+                <label>
+                  <input type="checkbox"
+                         id="field_{{ row.key }}"
+                         name="{{ row.key }}"
+                         {% if row.value %}checked{% endif %}>
+                  {{ row.label or row.key }}
+                </label>
+              </div>
+            {% elif itype == "color" %}
+              <div class="input-group" style="width:200px;">
+                <input type="color"
+                       class="form-control"
+                       id="field_{{ row.key }}"
+                       name="{{ row.key }}"
+                       value="{{ row.value if not row.is_sensitive else '' }}"
+                       {% if row.is_readonly %}disabled{% endif %}>
+                <span class="input-group-addon" id="preview_{{ row.key }}"
+                      style="background:{{ row.value }}; width:36px;">&nbsp;</span>
+              </div>
+            {% elif itype == "number" %}
+              <input type="number"
+                     class="form-control"
+                     id="field_{{ row.key }}"
+                     name="{{ row.key }}"
+                     value="{{ row.value if not row.is_sensitive else '' }}"
+                     {% if row.is_readonly %}readonly{% endif %}>
+            {% else %}
+              <input type="text"
+                     class="form-control"
+                     id="field_{{ row.key }}"
+                     name="{{ row.key }}"
+                     value="{{ row.value if not row.is_sensitive else '' }}"
+                     {% if row.is_readonly %}readonly{% endif %}>
+            {% endif %}
+
+            {% if row.description %}
+              <span class="help-block">{{ row.description }}</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+
+      <div class="form-group">
+        <div class="col-sm-offset-4 col-sm-6">
+          <button type="submit" class="btn btn-primary">
+            <i class="fa fa-save"></i> Save {{ category_name | title }} Settings
+          </button>
+          <a href="{{ url_for('AppConfigView.index') }}"
+             class="btn btn-default" style="margin-left:8px;">
+            Cancel
+          </a>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script>
+  /* Live color preview: update the swatch next to each color picker */
+  document.querySelectorAll('input[type="color"]').forEach(function(input) {
+    var key = input.name;
+    var swatch = document.getElementById('preview_' + key);
+    if (swatch) {
+      input.addEventListener('input', function() {
+        swatch.style.background = input.value;
+      });
+    }
+  });
+</script>
+{% endblock %}
