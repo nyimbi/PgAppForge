@@ -1,0 +1,227 @@
+{
+  "name": "ubl-invoice",
+  "label": "UN/CEFACT UBL Invoice",
+  "description": "EU e-invoicing standard \u2014 27 EU countries mandate by 2028",
+  "color": "#2980b9",
+  "icon": "fa-file-invoice",
+  "version": "2.1",
+  "source_url": "https://www.oasis-open.org/standards#ubl",
+  "tags": [
+    "finance",
+    "invoicing",
+    "eu-mandate",
+    "oasis",
+    "regulation"
+  ],
+  "tables": {
+    "ubl_party": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "party_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "party_name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "party_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "tax_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "registration_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "address_line",
+        "type": "TEXT"
+      },
+      {
+        "name": "city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "postal_zone",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "country_code",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "electronic_mail",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "telephone",
+        "type": "VARCHAR(30)"
+      }
+    ],
+    "ubl_invoice": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "invoice_id",
+        "type": "VARCHAR(100)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "issue_date",
+        "type": "DATE",
+        "nullable": false
+      },
+      {
+        "name": "due_date",
+        "type": "DATE"
+      },
+      {
+        "name": "invoice_type_code",
+        "type": "VARCHAR(10)",
+        "default": "'380'"
+      },
+      {
+        "name": "currency_code",
+        "type": "CHAR(3)",
+        "nullable": false
+      },
+      {
+        "name": "supplier_id",
+        "type": "INTEGER",
+        "fk": "ubl_party.id"
+      },
+      {
+        "name": "customer_id",
+        "type": "INTEGER",
+        "fk": "ubl_party.id"
+      },
+      {
+        "name": "payable_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "tax_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "line_extension_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "payment_means_code",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "payment_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "note",
+        "type": "TEXT"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)",
+        "default": "'DRAFT'"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "ubl_invoice_line": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "invoice_id",
+        "type": "UUID",
+        "fk": "ubl_invoice.id",
+        "nullable": false
+      },
+      {
+        "name": "line_id",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "quantity",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "uom_code",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "unit_price",
+        "type": "NUMERIC(18,4)"
+      },
+      {
+        "name": "line_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "item_classification",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "tax_category",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "tax_rate",
+        "type": "NUMERIC(5,2)"
+      }
+    ],
+    "ubl_tax_total": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "invoice_id",
+        "type": "UUID",
+        "fk": "ubl_invoice.id"
+      },
+      {
+        "name": "tax_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "tax_category_id",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "taxable_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "tax_rate",
+        "type": "NUMERIC(5,2)"
+      },
+      {
+        "name": "tax_name",
+        "type": "VARCHAR(100)"
+      }
+    ]
+  }
+}

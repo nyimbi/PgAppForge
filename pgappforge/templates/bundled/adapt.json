@@ -1,0 +1,303 @@
+{
+  "name": "adapt",
+  "label": "ADAPT (Agriculture)",
+  "description": "Agricultural Data Application Programming Toolkit \u2014 precision farming",
+  "color": "#27ae60",
+  "icon": "fa-seedling",
+  "version": "1.0",
+  "source_url": "https://adaptframework.org/",
+  "tags": [
+    "agriculture",
+    "farming",
+    "precision-ag",
+    "iot"
+  ],
+  "tables": {
+    "adapt_farm": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "owner_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "boundary",
+        "type": "GEOGRAPHY(POLYGON, 4326)"
+      }
+    ],
+    "adapt_field": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "farm_id",
+        "type": "UUID",
+        "fk": "adapt_farm.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "area_hectares",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "boundary",
+        "type": "GEOGRAPHY(POLYGON, 4326)"
+      },
+      {
+        "name": "soil_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "irrigation_type",
+        "type": "VARCHAR(50)"
+      }
+    ],
+    "adapt_crop_zone": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "field_id",
+        "type": "UUID",
+        "fk": "adapt_field.id"
+      },
+      {
+        "name": "crop_species",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "variety",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "planting_date",
+        "type": "DATE"
+      },
+      {
+        "name": "harvest_date",
+        "type": "DATE"
+      },
+      {
+        "name": "year",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "boundary",
+        "type": "GEOGRAPHY(POLYGON, 4326)"
+      }
+    ],
+    "adapt_operation": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "field_id",
+        "type": "UUID",
+        "fk": "adapt_field.id"
+      },
+      {
+        "name": "crop_zone_id",
+        "type": "UUID",
+        "fk": "adapt_crop_zone.id"
+      },
+      {
+        "name": "operation_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "start_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "end_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "operator_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "machine_id",
+        "type": "UUID",
+        "fk": "adapt_machine.id"
+      },
+      {
+        "name": "notes",
+        "type": "TEXT"
+      }
+    ],
+    "adapt_machine": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "brand",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "model",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "serial_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "machine_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "year",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "width_meters",
+        "type": "NUMERIC(6,2)"
+      }
+    ],
+    "adapt_ag_input": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "manufacturer",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "product_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "registration_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "density",
+        "type": "NUMERIC(8,4)"
+      },
+      {
+        "name": "uom",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "active_ingredients",
+        "type": "JSONB"
+      }
+    ],
+    "adapt_time_log": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "operation_id",
+        "type": "UUID",
+        "fk": "adapt_operation.id"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT, 4326)"
+      },
+      {
+        "name": "heading_degrees",
+        "type": "NUMERIC(5,2)"
+      },
+      {
+        "name": "speed_kmh",
+        "type": "NUMERIC(6,2)"
+      },
+      {
+        "name": "section_states",
+        "type": "JSONB"
+      },
+      {
+        "name": "applied_rate",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "applied_uom",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "adapt_harvest": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "crop_zone_id",
+        "type": "UUID",
+        "fk": "adapt_crop_zone.id"
+      },
+      {
+        "name": "harvest_date",
+        "type": "DATE"
+      },
+      {
+        "name": "area_harvested_ha",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "moisture_pct",
+        "type": "NUMERIC(5,2)"
+      },
+      {
+        "name": "yield_dry_kg_ha",
+        "type": "NUMERIC(10,2)"
+      },
+      {
+        "name": "yield_wet_kg_ha",
+        "type": "NUMERIC(10,2)"
+      },
+      {
+        "name": "quality_data",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

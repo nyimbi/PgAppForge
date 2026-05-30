@@ -1,0 +1,224 @@
+{
+  "name": "acord",
+  "label": "ACORD (Insurance)",
+  "description": "Association for Cooperative Operations Research \u2014 global insurance standard",
+  "color": "#c0392b",
+  "icon": "fa-shield-alt",
+  "version": "2021",
+  "source_url": "https://www.acord.org/",
+  "tags": [
+    "insurance",
+    "acord",
+    "enterprise"
+  ],
+  "tables": {
+    "acord_party": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "party_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "full_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "tax_id",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "date_of_birth",
+        "type": "DATE"
+      },
+      {
+        "name": "gender",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "communication",
+        "type": "JSONB"
+      }
+    ],
+    "acord_policy": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "policy_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "policy_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "line_of_business",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "insurer_id",
+        "type": "INTEGER",
+        "fk": "acord_party.id"
+      },
+      {
+        "name": "insured_id",
+        "type": "INTEGER",
+        "fk": "acord_party.id"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE"
+      },
+      {
+        "name": "expiration_date",
+        "type": "DATE"
+      },
+      {
+        "name": "total_premium",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)",
+        "default": "'USD'"
+      }
+    ],
+    "acord_coverage": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "policy_id",
+        "type": "UUID",
+        "fk": "acord_policy.id"
+      },
+      {
+        "name": "coverage_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "coverage_code",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "limit_amount",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "deductible_amount",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "premium",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "terms",
+        "type": "JSONB"
+      }
+    ],
+    "acord_risk": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "policy_id",
+        "type": "UUID",
+        "fk": "acord_policy.id"
+      },
+      {
+        "name": "risk_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "location",
+        "type": "JSONB"
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "attributes",
+        "type": "JSONB"
+      }
+    ],
+    "acord_claim": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "claim_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "policy_id",
+        "type": "UUID",
+        "fk": "acord_policy.id"
+      },
+      {
+        "name": "claimant_id",
+        "type": "INTEGER",
+        "fk": "acord_party.id"
+      },
+      {
+        "name": "loss_date",
+        "type": "DATE"
+      },
+      {
+        "name": "report_date",
+        "type": "DATE"
+      },
+      {
+        "name": "cause_of_loss",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "loss_description",
+        "type": "TEXT"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "total_incurred",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "paid_to_date",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "reserve_amount",
+        "type": "NUMERIC(15,2)"
+      }
+    ]
+  }
+}

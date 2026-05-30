@@ -1,0 +1,264 @@
+{
+  "name": "ocds",
+  "label": "OCDS (Procurement)",
+  "description": "Open Contracting Data Standard \u2014 used by 70+ governments",
+  "color": "#8e44ad",
+  "icon": "fa-gavel",
+  "version": "1.1",
+  "source_url": "https://standard.open-contracting.org/",
+  "tags": [
+    "government",
+    "procurement",
+    "transparency",
+    "who",
+    "open-data"
+  ],
+  "tables": {
+    "ocds_buyer": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "identifier",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "scheme",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "contact_point",
+        "type": "JSONB"
+      }
+    ],
+    "ocds_supplier": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "identifier",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "scheme",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "contact_point",
+        "type": "JSONB"
+      },
+      {
+        "name": "roles",
+        "type": "JSONB"
+      }
+    ],
+    "ocds_tender": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "ocid",
+        "type": "VARCHAR(100)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(1024)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "buyer_id",
+        "type": "INTEGER",
+        "fk": "ocds_buyer.id"
+      },
+      {
+        "name": "procurement_method",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "procurement_method_details",
+        "type": "TEXT"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "date_published",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "tender_period_start",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "tender_period_end",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "enquiry_period_end",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "value_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "value_currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "main_procurement_category",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "number_of_tenderers",
+        "type": "INTEGER"
+      }
+    ],
+    "ocds_award": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "tender_id",
+        "type": "UUID",
+        "fk": "ocds_tender.id"
+      },
+      {
+        "name": "supplier_id",
+        "type": "INTEGER",
+        "fk": "ocds_supplier.id"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(1024)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "date",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "value_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "value_currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "items",
+        "type": "JSONB"
+      }
+    ],
+    "ocds_contract": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "award_id",
+        "type": "UUID",
+        "fk": "ocds_award.id"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(1024)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "period_start",
+        "type": "DATE"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "value_amount",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "value_currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "date_signed",
+        "type": "DATE"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      }
+    ],
+    "ocds_milestone": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "tender_id",
+        "type": "UUID",
+        "fk": "ocds_tender.id"
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "due_date",
+        "type": "DATE"
+      },
+      {
+        "name": "date_met",
+        "type": "DATE"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      }
+    ]
+  }
+}

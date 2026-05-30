@@ -1,0 +1,308 @@
+{
+  "name": "stix",
+  "label": "STIX 2.1 (Cybersecurity)",
+  "description": "Structured Threat Intelligence Expression \u2014 used by every SIEM platform",
+  "color": "#2c3e50",
+  "icon": "fa-shield-virus",
+  "version": "2.1",
+  "source_url": "https://oasis-open.github.io/cti-documentation/",
+  "tags": [
+    "security",
+    "siem",
+    "threat-intel",
+    "oasis"
+  ],
+  "tables": {
+    "stix_identity": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(50)",
+        "default": "'identity'"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "identity_class",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "sectors",
+        "type": "JSONB"
+      },
+      {
+        "name": "contact_information",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "modified_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "stix_threat_actor": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "threat_actor_types",
+        "type": "JSONB"
+      },
+      {
+        "name": "aliases",
+        "type": "JSONB"
+      },
+      {
+        "name": "first_seen",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "last_seen",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "sophistication",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "resource_level",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "primary_motivation",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "secondary_motivations",
+        "type": "JSONB"
+      }
+    ],
+    "stix_indicator": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "indicator_types",
+        "type": "JSONB"
+      },
+      {
+        "name": "pattern",
+        "type": "TEXT",
+        "nullable": false
+      },
+      {
+        "name": "pattern_type",
+        "type": "VARCHAR(30)",
+        "default": "'stix'"
+      },
+      {
+        "name": "valid_from",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "valid_until",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "confidence",
+        "type": "INTEGER"
+      },
+      {
+        "name": "labels",
+        "type": "JSONB"
+      }
+    ],
+    "stix_malware": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "malware_types",
+        "type": "JSONB"
+      },
+      {
+        "name": "aliases",
+        "type": "JSONB"
+      },
+      {
+        "name": "is_family",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "first_seen",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "last_seen",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "capabilities",
+        "type": "JSONB"
+      },
+      {
+        "name": "operating_system_refs",
+        "type": "JSONB"
+      }
+    ],
+    "stix_vulnerability": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "external_references",
+        "type": "JSONB"
+      },
+      {
+        "name": "cvss_score",
+        "type": "NUMERIC(4,1)"
+      },
+      {
+        "name": "cvss_vector",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "cve_id",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "modified_at",
+        "type": "TIMESTAMPTZ"
+      }
+    ],
+    "stix_relationship": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "relationship_type",
+        "type": "VARCHAR(50)",
+        "nullable": false
+      },
+      {
+        "name": "source_ref",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "target_ref",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "start_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "stop_time",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "confidence",
+        "type": "INTEGER"
+      }
+    ],
+    "stix_sighting": [
+      {
+        "name": "id",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "sighting_of_ref",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "count",
+        "type": "INTEGER",
+        "default": "1"
+      },
+      {
+        "name": "first_seen",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "last_seen",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "observed_data_refs",
+        "type": "JSONB"
+      },
+      {
+        "name": "where_sighted_refs",
+        "type": "JSONB"
+      },
+      {
+        "name": "summary",
+        "type": "BOOLEAN",
+        "default": "false"
+      }
+    ]
+  }
+}

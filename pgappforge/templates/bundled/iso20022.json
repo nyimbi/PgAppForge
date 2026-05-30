@@ -1,0 +1,181 @@
+{
+  "name": "iso20022",
+  "label": "ISO 20022 (Payments)",
+  "description": "Global financial messaging \u2014 bank payment mandate 2024-2026",
+  "color": "#2c3e50",
+  "icon": "fa-university",
+  "version": "2019",
+  "source_url": "https://www.iso20022.org/",
+  "tags": [
+    "finance",
+    "banking",
+    "regulation",
+    "swift"
+  ],
+  "tables": {
+    "fi_identification": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "bic",
+        "type": "VARCHAR(11)",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(140)"
+      },
+      {
+        "name": "clearing_system_id",
+        "type": "VARCHAR(35)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      }
+    ],
+    "payment_instruction": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "msg_id",
+        "type": "VARCHAR(35)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "creation_dt",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "num_txns",
+        "type": "INTEGER",
+        "default": "0"
+      },
+      {
+        "name": "ctrl_sum",
+        "type": "NUMERIC(18,2)"
+      },
+      {
+        "name": "debtor_id",
+        "type": "INTEGER",
+        "fk": "fi_identification.id"
+      },
+      {
+        "name": "debtor_account_iban",
+        "type": "VARCHAR(34)"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)",
+        "default": "'PDNG'"
+      },
+      {
+        "name": "purpose_code",
+        "type": "VARCHAR(4)"
+      }
+    ],
+    "credit_transfer_txn": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "instruction_id",
+        "type": "UUID",
+        "fk": "payment_instruction.id"
+      },
+      {
+        "name": "end_to_end_id",
+        "type": "VARCHAR(35)",
+        "nullable": false
+      },
+      {
+        "name": "uetr",
+        "type": "UUID"
+      },
+      {
+        "name": "amount",
+        "type": "NUMERIC(18,2)",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "CHAR(3)",
+        "nullable": false
+      },
+      {
+        "name": "creditor_id",
+        "type": "INTEGER",
+        "fk": "fi_identification.id"
+      },
+      {
+        "name": "creditor_account_iban",
+        "type": "VARCHAR(34)"
+      },
+      {
+        "name": "creditor_name",
+        "type": "VARCHAR(140)"
+      },
+      {
+        "name": "remittance_info",
+        "type": "TEXT"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)",
+        "default": "'PDNG'"
+      },
+      {
+        "name": "value_date",
+        "type": "DATE"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ],
+    "payment_status": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "txn_id",
+        "type": "UUID",
+        "fk": "credit_transfer_txn.id"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "status_dt",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "reason_code",
+        "type": "VARCHAR(4)"
+      },
+      {
+        "name": "reason_info",
+        "type": "TEXT"
+      }
+    ]
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "name": "hr-open",
+  "label": "HR-Open Standards",
+  "description": "IEEE/ANSI-backed cross-vendor HR data standard",
+  "color": "#16a085",
+  "icon": "fa-id-badge",
+  "version": "4.3",
+  "source_url": "https://www.hropenstandards.org/",
+  "tags": [
+    "hr",
+    "payroll",
+    "ieee",
+    "ansi",
+    "enterprise"
+  ],
+  "tables": {
+    "hro_person_profile": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "family_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "given_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "preferred_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "date_of_birth",
+        "type": "DATE"
+      },
+      {
+        "name": "gender",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "nationality",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "primary_language",
+        "type": "CHAR(5)"
+      },
+      {
+        "name": "communication",
+        "type": "JSONB"
+      },
+      {
+        "name": "primary_address",
+        "type": "JSONB"
+      }
+    ],
+    "hro_position_opening": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "job_code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "job_title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "job_category",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "position_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "full_time_equivalent",
+        "type": "NUMERIC(4,2)"
+      },
+      {
+        "name": "organization_unit",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "work_location",
+        "type": "JSONB"
+      },
+      {
+        "name": "compensation_range",
+        "type": "JSONB"
+      },
+      {
+        "name": "posting_date",
+        "type": "DATE"
+      },
+      {
+        "name": "target_start_date",
+        "type": "DATE"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(30)",
+        "default": "'Open'"
+      }
+    ],
+    "hro_candidate": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "person_id",
+        "type": "UUID",
+        "fk": "hro_person_profile.id"
+      },
+      {
+        "name": "profile_status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "employment_history",
+        "type": "JSONB"
+      },
+      {
+        "name": "education_history",
+        "type": "JSONB"
+      },
+      {
+        "name": "skills",
+        "type": "JSONB"
+      },
+      {
+        "name": "certifications",
+        "type": "JSONB"
+      },
+      {
+        "name": "references",
+        "type": "JSONB"
+      }
+    ],
+    "hro_application": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "candidate_id",
+        "type": "UUID",
+        "fk": "hro_candidate.id"
+      },
+      {
+        "name": "position_id",
+        "type": "UUID",
+        "fk": "hro_position_opening.id"
+      },
+      {
+        "name": "applied_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "stage",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "assessment_results",
+        "type": "JSONB"
+      },
+      {
+        "name": "offer",
+        "type": "JSONB"
+      }
+    ],
+    "hro_employment": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "person_id",
+        "type": "UUID",
+        "fk": "hro_person_profile.id"
+      },
+      {
+        "name": "position_id",
+        "type": "UUID",
+        "fk": "hro_position_opening.id"
+      },
+      {
+        "name": "employee_id",
+        "type": "VARCHAR(50)",
+        "unique": true
+      },
+      {
+        "name": "start_date",
+        "type": "DATE",
+        "nullable": false
+      },
+      {
+        "name": "end_date",
+        "type": "DATE"
+      },
+      {
+        "name": "employment_type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "compensation",
+        "type": "JSONB"
+      },
+      {
+        "name": "benefits",
+        "type": "JSONB"
+      },
+      {
+        "name": "work_schedule",
+        "type": "JSONB"
+      }
+    ]
+  }
+}

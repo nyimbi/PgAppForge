@@ -1,0 +1,205 @@
+{
+  "name": "gs1-epcis",
+  "label": "GS1 / EPCIS 2.0",
+  "description": "Supply chain event tracking \u2014 EU pharma mandate, retail standard",
+  "color": "#e74c3c",
+  "icon": "fa-barcode",
+  "version": "2.0",
+  "source_url": "https://www.gs1.org/standards/epcis",
+  "tags": [
+    "supply-chain",
+    "gs1",
+    "pharma",
+    "retail",
+    "eu-mandate"
+  ],
+  "tables": {
+    "gs1_location": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "gln",
+        "type": "VARCHAR(13)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "geo_location",
+        "type": "GEOGRAPHY(POINT, 4326)"
+      },
+      {
+        "name": "parent_gln",
+        "type": "VARCHAR(13)"
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "default": "true"
+      }
+    ],
+    "gs1_trade_item": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "gtin",
+        "type": "VARCHAR(14)",
+        "unique": true,
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "brand_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "gpc_category",
+        "type": "VARCHAR(8)"
+      },
+      {
+        "name": "net_content",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "uom",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "lot_tracking",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "regulated",
+        "type": "BOOLEAN",
+        "default": "false"
+      }
+    ],
+    "epcis_event": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR(30)",
+        "nullable": false
+      },
+      {
+        "name": "event_time",
+        "type": "TIMESTAMPTZ",
+        "nullable": false
+      },
+      {
+        "name": "event_timezone",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "record_time",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "biz_step",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "disposition",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "read_point_gln",
+        "type": "VARCHAR(13)",
+        "fk": "gs1_location.gln"
+      },
+      {
+        "name": "biz_location_gln",
+        "type": "VARCHAR(13)",
+        "fk": "gs1_location.gln"
+      },
+      {
+        "name": "biz_transaction",
+        "type": "JSONB"
+      },
+      {
+        "name": "extensions",
+        "type": "JSONB"
+      }
+    ],
+    "epcis_epc": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "event_id",
+        "type": "UUID",
+        "fk": "epcis_event.id"
+      },
+      {
+        "name": "epc",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "action",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "lot_number",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "serial_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "expiry_date",
+        "type": "DATE"
+      }
+    ],
+    "epcis_quantity": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "event_id",
+        "type": "UUID",
+        "fk": "epcis_event.id"
+      },
+      {
+        "name": "gtin",
+        "type": "VARCHAR(14)",
+        "fk": "gs1_trade_item.gtin"
+      },
+      {
+        "name": "quantity",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "uom",
+        "type": "VARCHAR(20)"
+      }
+    ]
+  }
+}

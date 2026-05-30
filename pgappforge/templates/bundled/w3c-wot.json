@@ -1,0 +1,267 @@
+{
+  "name": "w3c-wot",
+  "label": "W3C WoT (IoT)",
+  "description": "Web of Things Thing Description \u2014 IoT device interoperability",
+  "color": "#1a7abf",
+  "icon": "fa-microchip",
+  "version": "1.1",
+  "source_url": "https://www.w3.org/TR/wot-thing-description/",
+  "tags": [
+    "iot",
+    "w3c",
+    "smart-home",
+    "industry40"
+  ],
+  "tables": {
+    "wot_thing": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "base_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "manufacturer",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "model",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "serial_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "firmware_version",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "support_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "location",
+        "type": "GEOGRAPHY(POINT, 4326)"
+      },
+      {
+        "name": "registered_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "last_seen_at",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "is_online",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "security_definitions",
+        "type": "JSONB"
+      },
+      {
+        "name": "context",
+        "type": "JSONB"
+      }
+    ],
+    "wot_property": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "thing_id",
+        "type": "UUID",
+        "fk": "wot_thing.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "minimum",
+        "type": "NUMERIC"
+      },
+      {
+        "name": "maximum",
+        "type": "NUMERIC"
+      },
+      {
+        "name": "read_only",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "observable",
+        "type": "BOOLEAN",
+        "default": "false"
+      },
+      {
+        "name": "forms",
+        "type": "JSONB"
+      }
+    ],
+    "wot_property_value": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "property_id",
+        "type": "INTEGER",
+        "fk": "wot_property.id"
+      },
+      {
+        "name": "value_numeric",
+        "type": "NUMERIC"
+      },
+      {
+        "name": "value_text",
+        "type": "TEXT"
+      },
+      {
+        "name": "value_bool",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "value_json",
+        "type": "JSONB"
+      },
+      {
+        "name": "recorded_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "quality",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "wot_action": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "thing_id",
+        "type": "UUID",
+        "fk": "wot_thing.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "input_schema",
+        "type": "JSONB"
+      },
+      {
+        "name": "output_schema",
+        "type": "JSONB"
+      },
+      {
+        "name": "forms",
+        "type": "JSONB"
+      }
+    ],
+    "wot_event": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "thing_id",
+        "type": "UUID",
+        "fk": "wot_thing.id"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "data_schema",
+        "type": "JSONB"
+      },
+      {
+        "name": "forms",
+        "type": "JSONB"
+      }
+    ],
+    "wot_event_log": [
+      {
+        "name": "id",
+        "type": "BIGSERIAL",
+        "pk": true
+      },
+      {
+        "name": "event_id",
+        "type": "INTEGER",
+        "fk": "wot_event.id"
+      },
+      {
+        "name": "data",
+        "type": "JSONB"
+      },
+      {
+        "name": "occurred_at",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      }
+    ]
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "name": "iec-cim",
+  "label": "IEC CIM (Utilities)",
+  "description": "Common Information Model \u2014 power grid standard used by all utilities",
+  "color": "#f39c12",
+  "icon": "fa-bolt",
+  "version": "IEC 61968/61970",
+  "source_url": "https://cimug.ucaiug.org/",
+  "tags": [
+    "energy",
+    "utilities",
+    "power-grid",
+    "iec",
+    "regulation"
+  ],
+  "tables": {
+    "cim_substation": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "mrid",
+        "type": "UUID",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "geo_location",
+        "type": "GEOGRAPHY(POINT, 4326)"
+      },
+      {
+        "name": "region",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "voltage_level_kv",
+        "type": "NUMERIC(8,2)"
+      }
+    ],
+    "cim_equipment": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "mrid",
+        "type": "UUID",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "equipment_type",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "substation_id",
+        "type": "UUID",
+        "fk": "cim_substation.id"
+      },
+      {
+        "name": "in_service",
+        "type": "BOOLEAN",
+        "default": "true"
+      },
+      {
+        "name": "normal_open",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "rated_kv",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "rated_mva",
+        "type": "NUMERIC(10,3)"
+      },
+      {
+        "name": "manufacturer",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "install_date",
+        "type": "DATE"
+      }
+    ],
+    "cim_ac_line_segment": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "mrid",
+        "type": "UUID",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "length_km",
+        "type": "NUMERIC(10,3)"
+      },
+      {
+        "name": "r_ohms",
+        "type": "NUMERIC(12,6)"
+      },
+      {
+        "name": "x_ohms",
+        "type": "NUMERIC(12,6)"
+      },
+      {
+        "name": "b_siemens",
+        "type": "NUMERIC(12,9)"
+      },
+      {
+        "name": "rated_kv",
+        "type": "NUMERIC(8,2)"
+      },
+      {
+        "name": "rated_current_a",
+        "type": "NUMERIC(10,2)"
+      },
+      {
+        "name": "route",
+        "type": "GEOGRAPHY(LINESTRING, 4326)"
+      }
+    ],
+    "cim_energy_consumer": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "mrid",
+        "type": "UUID",
+        "unique": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "customer_count",
+        "type": "INTEGER"
+      },
+      {
+        "name": "p_fixed_mw",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "q_fixed_mvar",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "phase_connection",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "substation_id",
+        "type": "UUID",
+        "fk": "cim_substation.id"
+      }
+    ],
+    "cim_measurement": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "mrid",
+        "type": "UUID"
+      },
+      {
+        "name": "equipment_id",
+        "type": "UUID",
+        "fk": "cim_equipment.id"
+      },
+      {
+        "name": "measurement_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC(15,6)"
+      },
+      {
+        "name": "unit_symbol",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "phases",
+        "type": "VARCHAR(10)"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMPTZ",
+        "default": "NOW()"
+      },
+      {
+        "name": "quality",
+        "type": "VARCHAR(30)"
+      }
+    ]
+  }
+}

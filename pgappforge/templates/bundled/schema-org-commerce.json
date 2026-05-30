@@ -1,0 +1,276 @@
+{
+  "name": "schema-org-commerce",
+  "label": "Schema.org Commerce",
+  "description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "color": "#e67e22",
+  "icon": "fa-shopping-bag",
+  "version": "25.0",
+  "source_url": "https://schema.org/",
+  "tags": [
+    "ecommerce",
+    "seo",
+    "google",
+    "schema-org"
+  ],
+  "tables": {
+    "sorg_organization": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "legal_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "url",
+        "type": "TEXT"
+      },
+      {
+        "name": "logo_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(320)"
+      },
+      {
+        "name": "telephone",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB"
+      },
+      {
+        "name": "same_as",
+        "type": "JSONB"
+      }
+    ],
+    "sorg_product": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(500)",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "TEXT"
+      },
+      {
+        "name": "sku",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "gtin",
+        "type": "VARCHAR(14)"
+      },
+      {
+        "name": "mpn",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "brand_id",
+        "type": "INTEGER",
+        "fk": "sorg_organization.id"
+      },
+      {
+        "name": "category",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "image_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "additional_images",
+        "type": "JSONB"
+      },
+      {
+        "name": "aggregate_rating",
+        "type": "JSONB"
+      },
+      {
+        "name": "is_related_to",
+        "type": "JSONB"
+      },
+      {
+        "name": "is_similar_to",
+        "type": "JSONB"
+      }
+    ],
+    "sorg_offer": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "product_id",
+        "type": "INTEGER",
+        "fk": "sorg_product.id"
+      },
+      {
+        "name": "seller_id",
+        "type": "INTEGER",
+        "fk": "sorg_organization.id"
+      },
+      {
+        "name": "price",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "price_currency",
+        "type": "CHAR(3)",
+        "default": "'USD'"
+      },
+      {
+        "name": "price_valid_until",
+        "type": "DATE"
+      },
+      {
+        "name": "availability",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "item_condition",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "shipping",
+        "type": "JSONB"
+      },
+      {
+        "name": "eligible_region",
+        "type": "CHAR(2)"
+      }
+    ],
+    "sorg_order": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true
+      },
+      {
+        "name": "order_number",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "order_date",
+        "type": "TIMESTAMPTZ"
+      },
+      {
+        "name": "customer_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "order_status",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "payment_method",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "discount_code",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "price_total",
+        "type": "NUMERIC(15,4)"
+      },
+      {
+        "name": "price_currency",
+        "type": "CHAR(3)"
+      },
+      {
+        "name": "billing_address",
+        "type": "JSONB"
+      },
+      {
+        "name": "shipping_address",
+        "type": "JSONB"
+      }
+    ],
+    "sorg_order_item": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "order_id",
+        "type": "UUID",
+        "fk": "sorg_order.id"
+      },
+      {
+        "name": "offer_id",
+        "type": "INTEGER",
+        "fk": "sorg_offer.id"
+      },
+      {
+        "name": "order_quantity",
+        "type": "INTEGER"
+      },
+      {
+        "name": "order_item_status",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "unit_price",
+        "type": "NUMERIC(15,4)"
+      }
+    ],
+    "sorg_review": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true
+      },
+      {
+        "name": "product_id",
+        "type": "INTEGER",
+        "fk": "sorg_product.id"
+      },
+      {
+        "name": "author_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "rating_value",
+        "type": "NUMERIC(3,1)"
+      },
+      {
+        "name": "best_rating",
+        "type": "NUMERIC(3,1)",
+        "default": "5"
+      },
+      {
+        "name": "review_body",
+        "type": "TEXT"
+      },
+      {
+        "name": "date_published",
+        "type": "DATE"
+      },
+      {
+        "name": "is_verified",
+        "type": "BOOLEAN",
+        "default": "false"
+      }
+    ]
+  }
+}

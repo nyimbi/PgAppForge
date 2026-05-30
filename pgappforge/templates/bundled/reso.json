@@ -1,0 +1,256 @@
+{
+  "name": "reso",
+  "label": "RESO (Real Estate)",
+  "description": "Real Estate Standards Organization \u2014 MLS/IDX standard for North America",
+  "color": "#27ae60",
+  "icon": "fa-home",
+  "version": "2.0",
+  "source_url": "https://www.reso.org/",
+  "tags": [
+    "real-estate",
+    "mls",
+    "idx",
+    "north-america"
+  ],
+  "tables": {
+    "reso_property": [
+      {
+        "name": "listing_key",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "listing_id",
+        "type": "VARCHAR(100)",
+        "unique": true
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "standard_status",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "property_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "property_subtype",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "street_number",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "street_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "state_or_province",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "postal_code",
+        "type": "VARCHAR(20)"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "latitude",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "longitude",
+        "type": "DOUBLE PRECISION"
+      },
+      {
+        "name": "list_price",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "close_price",
+        "type": "NUMERIC(15,2)"
+      },
+      {
+        "name": "list_date",
+        "type": "DATE"
+      },
+      {
+        "name": "close_date",
+        "type": "DATE"
+      },
+      {
+        "name": "days_on_market",
+        "type": "INTEGER"
+      },
+      {
+        "name": "bedrooms_total",
+        "type": "INTEGER"
+      },
+      {
+        "name": "bathrooms_total_decimal",
+        "type": "NUMERIC(4,2)"
+      },
+      {
+        "name": "living_area",
+        "type": "NUMERIC(10,2)"
+      },
+      {
+        "name": "lot_size_acres",
+        "type": "NUMERIC(10,4)"
+      },
+      {
+        "name": "year_built",
+        "type": "SMALLINT"
+      },
+      {
+        "name": "public_remarks",
+        "type": "TEXT"
+      },
+      {
+        "name": "features",
+        "type": "JSONB"
+      }
+    ],
+    "reso_media": [
+      {
+        "name": "media_key",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "listing_key",
+        "type": "VARCHAR(255)",
+        "fk": "reso_property.listing_key"
+      },
+      {
+        "name": "media_url",
+        "type": "TEXT"
+      },
+      {
+        "name": "media_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "order",
+        "type": "INTEGER"
+      },
+      {
+        "name": "is_preferred",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "caption",
+        "type": "VARCHAR(255)"
+      }
+    ],
+    "reso_member": [
+      {
+        "name": "member_key",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "member_mls_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "member_first_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "member_last_name",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "member_email",
+        "type": "VARCHAR(320)",
+        "unique": true
+      },
+      {
+        "name": "member_direct_phone",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "member_license_number",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "member_status",
+        "type": "VARCHAR(30)"
+      }
+    ],
+    "reso_office": [
+      {
+        "name": "office_key",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "office_mls_id",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "office_name",
+        "type": "VARCHAR(255)"
+      },
+      {
+        "name": "office_phone",
+        "type": "VARCHAR(30)"
+      },
+      {
+        "name": "office_address",
+        "type": "TEXT"
+      },
+      {
+        "name": "office_city",
+        "type": "VARCHAR(100)"
+      },
+      {
+        "name": "office_postal_code",
+        "type": "VARCHAR(20)"
+      }
+    ],
+    "reso_open_house": [
+      {
+        "name": "open_house_key",
+        "type": "VARCHAR(255)",
+        "pk": true
+      },
+      {
+        "name": "listing_key",
+        "type": "VARCHAR(255)",
+        "fk": "reso_property.listing_key"
+      },
+      {
+        "name": "open_house_date",
+        "type": "DATE"
+      },
+      {
+        "name": "open_house_start_time",
+        "type": "TIME"
+      },
+      {
+        "name": "open_house_end_time",
+        "type": "TIME"
+      },
+      {
+        "name": "open_house_type",
+        "type": "VARCHAR(50)"
+      },
+      {
+        "name": "remarks",
+        "type": "TEXT"
+      }
+    ]
+  }
+}
