@@ -200,6 +200,30 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
             log.error(c.LOGMSG_ERR_SEC_CREATE_DB, e)
             raise RuntimeError(f"DB creation failed: {e}") from e
 
+    def auth_user_db(self, username: str, password: str):
+        """Authenticate a user by username/password against the database."""
+        from werkzeug.security import check_password_hash
+        if not username or not password:
+            return None
+        try:
+            if self.auth_username_ci:
+                user = self.get_session.execute(
+                    select(self.user_model).where(
+                        self.user_model.username.ilike(username)
+                    )
+                ).scalar_one_or_none()
+            else:
+                user = self.get_session.execute(
+                    select(self.user_model).where(
+                        self.user_model.username == username
+                    )
+                ).scalar_one_or_none()
+            if user and user.password and check_password_hash(user.password, password):
+                return user
+        except Exception as e:
+            log.warning("auth_user_db failed: %s", e)
+        return None
+
     def _create_default_roles(self) -> None:
         """Create Admin, Public, Viewer, and User roles if they don't exist."""
         app_config = self.appbuilder.app.config

@@ -58,7 +58,6 @@ class ViewsTestFormModel(Model):
 # Test Views
 class TestModelView(ModelView):
     """Test ModelView implementation"""
-    datamodel = None  # Will be set in tests
     route_base = '/test'
     
     list_columns = ['name', 'description', 'active', 'created_on']
@@ -172,13 +171,15 @@ class TestModelViewFunctionality(FABTestCase):
             self.appbuilder.sm.create_db()
             
             # Create test ModelView
-            self.model_view = TestModelView()
-            self.model_view.datamodel = SQLAInterface(ViewsTestModel)
+            class _BoundModelView(TestModelView):
+                datamodel = SQLAInterface(ViewsTestModel, self.db.session)
+            self.model_view = _BoundModelView()
             self.model_view.appbuilder = self.appbuilder
             
             # Add some test data
+            import uuid as _uuid
             self.test_item = ViewsTestModel(
-                name='Test Item 1',
+                name=f'Test Item {_uuid.uuid4().hex[:8]}',
                 description='Test description',
                 active=True
             )
@@ -342,8 +343,9 @@ class TestViewWidgets(FABTestCase):
             ViewsTestModel.__table__.create(self.db.engine, checkfirst=True)
             self.db.create_all()
             
-            self.model_view = TestModelView()
-            self.model_view.datamodel = SQLAInterface(ViewsTestModel)
+            class _BoundModelView(TestModelView):
+                datamodel = SQLAInterface(ViewsTestModel, self.db.session)
+            self.model_view = _BoundModelView()
             self.model_view.appbuilder = self.appbuilder
     
     def test_list_widget_configuration(self):
@@ -408,8 +410,9 @@ class TestViewFiltering(FABTestCase):
                 self.db.session.add(item)
             self.db.session.commit()
             
-            self.model_view = TestModelView()
-            self.model_view.datamodel = SQLAInterface(ViewsTestModel)
+            class _BoundModelView(TestModelView):
+                datamodel = SQLAInterface(ViewsTestModel, self.db.session)
+            self.model_view = _BoundModelView()
             self.model_view.appbuilder = self.appbuilder
     
     def test_filter_infrastructure(self):
@@ -449,9 +452,8 @@ class TestViewPermissions(FABTestCase):
         
         with self.app.app_context():
             self.db.create_all()
-            
-            self.model_view = TestModelView()
-            self.model_view.appbuilder = self.appbuilder
+            # Use the class itself (not instance) for permission attribute checks
+            self.model_view = TestModelView
     
     def test_base_permissions_configuration(self):
         """Test base permissions configuration"""

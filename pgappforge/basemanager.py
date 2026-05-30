@@ -65,3 +65,7 @@ class BaseManager(object):
                     self.start_background_tasks()
         """
         pass  # pragma: no cover
+
+    def before_request(self) -> None:
+        """Flask before_request hook — no-op at BaseManager level."""
+        pass

@@ -386,6 +386,27 @@ class BaseSecurityManager(AbstractSecurityManager, InputValidationMixin, RateLim
         limiter.init_app(app)
         return limiter
 
+    def before_request(self):
+        """Flask before_request hook — set g.user from the current authenticated user."""
+        from flask import g
+        g.user = current_user
+
+    def login_user(self, user, remember: bool = False) -> bool:
+        """Wrap Flask-Login's login_user and update g.user."""
+        from flask import g
+        from flask_login import login_user as _flask_login_user
+        result = _flask_login_user(user, remember=remember)
+        g.user = current_user
+        return result
+
+    def auth_user_db(self, username: str, password: str):
+        """Authenticate a user by username and password against the DB.
+
+        Returns the User object on success, None on failure.
+        Override in subclasses for custom auth logic.
+        """
+        return None
+
     def hash_password(self, password: str) -> str:
         """Hash a plaintext password using werkzeug's PBKDF2-HMAC-SHA256."""
         return generate_password_hash(password)

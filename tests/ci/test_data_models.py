@@ -122,7 +122,7 @@ class TestCategory(Model):
         return len([a for a in self.articles if a.published])
 
 
-class TestAuthor(Model, AuditMixin):
+class TestAuthor(Model):
     """Test author model with audit mixin"""
     __tablename__ = 'test_authors'
     
@@ -178,7 +178,7 @@ class TestTag(Model):
         return len(self.articles)
 
 
-class TestComment(Model, AuditMixin):
+class TestComment(Model):
     """Test comment model for one-to-many relationships"""
     __tablename__ = 'test_comments'
     
@@ -226,7 +226,8 @@ class TestDataModelCreation(FABTestCase):
     def test_model_table_creation(self):
         """Test that model tables are created correctly"""
         with self.app.app_context():
-            tables = self.__import__("sqlalchemy", fromlist=["inspect"]).inspect(db.engine).get_table_names()
+            from sqlalchemy import inspect as sa_inspect
+            tables = sa_inspect(self.db.engine).get_table_names()
             
             expected_tables = [
                 'test_articles', 'test_categories', 'test_authors',
@@ -247,8 +248,9 @@ class TestDataModelCreation(FABTestCase):
             )
             
             # Create author
+            import uuid as _uuid
             author = TestAuthor(
-                username='testauthor',
+                username=f'testauthor_{_uuid.uuid4().hex[:8]}',
                 first_name='Test',
                 last_name='Author',
                 email='test@example.com',
@@ -256,8 +258,10 @@ class TestDataModelCreation(FABTestCase):
             )
             
             # Create article
+            import uuid as _uuid
+            _suffix = _uuid.uuid4().hex[:8]
             article = TestArticle(
-                title='Test Article',
+                title=f'Test Article {_suffix}',
                 slug='test-article',
                 content='This is test content for the article',
                 category=category,

@@ -332,9 +332,7 @@ class TestAuthentication(FABTestCase):
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
-        
-            
-            # Create test user
+        with self.app.app_context():
             self.test_user = self.appbuilder.sm.add_user(
                 username='testauth',
                 first_name='Test',
@@ -343,7 +341,7 @@ class TestAuthentication(FABTestCase):
                 role=self.appbuilder.sm.find_role('Public'),
                 password='testpassword123'
             )
-    
+
     def test_authenticate_user(self):
         """Test user authentication"""
         with self.app.app_context():
@@ -391,9 +389,7 @@ class TestAuthenticationViews(FABTestCase):
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
         self.client = self.app.test_client()
-        
-            
-            # Create test user
+        with self.app.app_context():
             self.appbuilder.sm.add_user(
                 username='logintest',
                 first_name='Login',

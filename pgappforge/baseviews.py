@@ -629,6 +629,9 @@ class BaseModelView(BaseView):
         self.search_exclude_columns = self.search_exclude_columns or []
         self.search_columns = self.search_columns or []
 
+        if not self.datamodel:
+            return
+
         self._base_filters = self.datamodel.get_filters().add_filter_list(
             self.base_filters
         )
@@ -969,6 +972,8 @@ class BaseCRUDView(BaseModelView):
         self.show_exclude_columns = self.show_exclude_columns or []
         self.add_exclude_columns = self.add_exclude_columns or []
         self.edit_exclude_columns = self.edit_exclude_columns or []
+        if not self.datamodel:
+            return
         # Generate base props
         list_cols = self.datamodel.get_user_columns_list()
         self.list_columns = self.list_columns or [list_cols[0]]
