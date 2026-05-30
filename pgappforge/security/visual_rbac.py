@@ -58,7 +58,7 @@ class VisualRBACView(BaseView):
 			_MATRIX_TEMPLATE,
 			roles=roles,
 			view_menus=view_menus,
-			role_perms=json.dumps(role_perms),
+			role_perms=json.dumps(role_perms), role_perms_dict=role_perms,
 		)
 
 	@expose("/matrix/update", methods=["POST"])
@@ -70,24 +70,28 @@ class VisualRBACView(BaseView):
 		               remove: [[role_id, vm_id, perm_name], ...]}
 		"""
 		sm = self.appbuilder.sm
+		session = self.appbuilder.get_session
 		data = request.get_json() or {}
 		applied, errors = 0, []
 
+		from pgappforge.security.sqla.models import Role, ViewMenu
+
 		for role_id, vm_id, perm_name in data.get("add", []):
 			try:
-				role = sm.find_role_by_id(role_id)
-				vm = sm.find_view_menu_by_id(vm_id)
-				perm = sm.find_permission(perm_name)
-				if role and vm and perm:
-					sm.add_permission_role(role, sm.find_permission_view_menu(perm_name, vm.name))
-					applied += 1
+				role = session.get(Role, role_id)
+				vm = session.get(ViewMenu, vm_id)
+				if role and vm:
+					pv = sm.find_permission_view_menu(perm_name, vm.name)
+					if pv:
+						sm.add_permission_role(role, pv)
+						applied += 1
 			except Exception as exc:
 				errors.append(str(exc))
 
 		for role_id, vm_id, perm_name in data.get("remove", []):
 			try:
-				role = sm.find_role_by_id(role_id)
-				vm = sm.find_view_menu_by_id(vm_id)
+				role = session.get(Role, role_id)
+				vm = session.get(ViewMenu, vm_id)
 				if role and vm:
 					pv = sm.find_permission_view_menu(perm_name, vm.name)
 					if pv:
@@ -105,7 +109,8 @@ class VisualRBACView(BaseView):
 	def impact(self, role_id: int):
 		"""Show what this role grants and who would be affected by changes."""
 		sm = self.appbuilder.sm
-		role = sm.find_role_by_id(role_id)
+		from pgappforge.security.sqla.models import Role
+		role = self.appbuilder.get_session.get(Role, role_id)
 		if not role:
 			return self.render_template_string(
 				"<h3>Role not found</h3>", title="Impact Assessment"
