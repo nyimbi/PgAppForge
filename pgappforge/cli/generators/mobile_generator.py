@@ -73,7 +73,7 @@ def _zod_base(col_type: ColumnType, col_name: str) -> str:
 		return "z.number()"
 	if col_type == ColumnType.BOOLEAN:
 		return "z.boolean()"
-	if col_type in (ColumnType.DATE_TIME, ColumnType.DATE_TIME):
+	if col_type == ColumnType.DATE_TIME:
 		return "z.string().datetime({ offset: true })"
 	if col_type == ColumnType.JSONB or col_type == ColumnType.JSON:
 		return "z.record(z.unknown())"
@@ -1109,9 +1109,9 @@ export default function MFAScreen() {
 		ct = col.category
 		if ct == ColumnType.BOOLEAN:
 			return "BooleanField"
-		if ct in (ColumnType.NUMERIC, ColumnType.NUMERIC):
+		if ct == ColumnType.NUMERIC:
 			return "NumberField"
-		if ct in (ColumnType.DATE_TIME, ColumnType.DATE_TIME):
+		if ct == ColumnType.DATE_TIME:
 			return "DateField"
 		if ct in (ColumnType.JSONB, ColumnType.JSON):
 			return "JSONBField"
