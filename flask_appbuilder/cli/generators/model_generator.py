@@ -529,6 +529,7 @@ def before_update_{table_name}(mapper, connection, target):
         type_mapping = {
             ColumnType.PRIMARY_KEY: 'int',
             ColumnType.FOREIGN_KEY: 'int',
+            ColumnType.H3INDEX: 'str',  # H3 index stored as VARCHAR(16)
             ColumnType.TEXT: 'str',
             ColumnType.NUMERIC: 'int' if 'INT' in column.type.upper() else 'float',
             ColumnType.BOOLEAN: 'bool',

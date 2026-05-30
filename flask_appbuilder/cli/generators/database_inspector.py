@@ -72,6 +72,7 @@ class ColumnType(Enum):
 
     # pgVector types
     VECTOR = "vector"
+    H3INDEX = "h3index"
 
     # PostgreSQL range types
     INT4RANGE = "int4range"
@@ -619,6 +620,8 @@ class EnhancedDatabaseInspector:
         # pgVector types
         elif 'vector' in type_name:
             return ColumnType.VECTOR
+        elif type_name in ('h3index', 'h3_index', 'h3cell') or 'h3' in type_name and 'index' in type_name:
+            return ColumnType.H3INDEX
 
         # PostgreSQL range types
         elif 'int4range' in type_name:
@@ -659,7 +662,9 @@ class EnhancedDatabaseInspector:
         elif category == ColumnType.RASTER:
             return 'RasterImageWidget'  # PostGIS raster data
         elif category == ColumnType.VECTOR:
-            return 'VectorSimilarityWidget'  # pgVector similarity search
+            return 'EmbeddingWidget'  # pgvector embedding widget
+        elif category == ColumnType.H3INDEX:
+            return 'H3IndexWidget'  # Uber H3 hexagonal cell
         elif category == ColumnType.UUID:
             return 'UUIDFieldWidget'
         elif category == ColumnType.JSONB:

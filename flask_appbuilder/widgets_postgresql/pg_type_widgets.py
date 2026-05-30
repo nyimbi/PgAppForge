@@ -401,3 +401,270 @@ PG_TYPE_WIDGET_MAP: dict[str, type] = {
 	"VectorSimilarityWidget": VectorSimilarityWidget,
 	"UUIDFieldWidget": UUIDFieldWidget,
 }
+
+
+class AddressSearchWidget(BS3TextFieldWidget):
+	"""Location widget with address autocomplete and map pin preview.
+
+	Uses OpenStreetMap Nominatim for geocoding (no API key required) and
+	Leaflet.js (loaded from CDN) for the map preview. Stores the result as
+	a JSON object: {"lat": float, "lng": float, "address": str} so it pairs
+	naturally with a JSONB column or a pair of NUMERIC columns.
+
+	Usage::
+
+	    class Store(Model):
+	        location_json = Column(JSONB)  # {"lat":…, "lng":…, "address":…}
+
+	    class StoreView(ModelView):
+	        edit_form_extra_fields = {
+	            "location_json": StringField(widget=AddressSearchWidget())
+	        }
+	"""
+
+	def __init__(self, zoom: int = 14, height: int = 300):
+		self.zoom = zoom
+		self.height = height
+
+	def __call__(self, field, **kwargs) -> Markup:
+		fid = field.id
+		raw = field.data or "{}"
+		try:
+			import json as _j
+			data = _j.loads(raw) if isinstance(raw, str) else (raw or {})
+		except Exception:
+			data = {}
+		lat = data.get("lat", "")
+		lng = data.get("lng", "")
+		address = data.get("address", "")
+		zoom = self.zoom
+		height = self.height
+
+		html = f"""
+<div class="address-search-widget" id="{fid}_widget">
+  <div class="input-group">
+    <input type="text" class="form-control" id="{fid}_search"
+           placeholder="Search address or place…"
+           value="{address}"
+           aria-label="Address search">
+    <span class="input-group-btn">
+      <button type="button" class="btn btn-default" id="{fid}_btn_search"
+              title="Search">
+        <i class="fa fa-search"></i>
+      </button>
+      <button type="button" class="btn btn-default" id="{fid}_btn_gps"
+              title="Use my location">
+        <i class="fa fa-location-arrow"></i>
+      </button>
+    </span>
+  </div>
+  <div id="{fid}_map" style="height:{height}px;margin-top:8px;border:1px solid #ddd;border-radius:4px"></div>
+  <div class="row" style="margin-top:6px">
+    <div class="col-xs-5">
+      <input type="number" step="any" class="form-control input-sm"
+             id="{fid}_lat" placeholder="Latitude" value="{lat}"
+             oninput="addrSync('{fid}')" aria-label="Latitude">
+    </div>
+    <div class="col-xs-5">
+      <input type="number" step="any" class="form-control input-sm"
+             id="{fid}_lng" placeholder="Longitude" value="{lng}"
+             oninput="addrSync('{fid}')" aria-label="Longitude">
+    </div>
+    <div class="col-xs-2">
+      <button type="button" class="btn btn-sm btn-default" id="{fid}_btn_clear"
+              title="Clear">
+        <i class="fa fa-times"></i>
+      </button>
+    </div>
+  </div>
+  <input type="hidden" name="{field.name}" id="{fid}" value='{raw}'>
+</div>
+
+<!-- Leaflet CSS/JS (loaded once) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLEg=" crossorigin=""></script>
+
+<script>
+(function() {{
+  if (window._addrWidgets && window._addrWidgets['{fid}']) return;
+  if (!window._addrWidgets) window._addrWidgets = {{}};
+
+  window.addrSync = function(id) {{
+    var lat = document.getElementById(id + '_lat').value;
+    var lng = document.getElementById(id + '_lng').value;
+    var addr = document.getElementById(id + '_search').value;
+    var v = lat && lng ? JSON.stringify({{lat: parseFloat(lat), lng: parseFloat(lng), address: addr}}) : '';
+    document.getElementById(id).value = v;
+    if (window._addrWidgets[id] && lat && lng) {{
+      window._addrWidgets[id].marker.setLatLng([parseFloat(lat), parseFloat(lng)]);
+      window._addrWidgets[id].map.setView([parseFloat(lat), parseFloat(lng)], {zoom});
+    }}
+  }};
+
+  document.addEventListener('DOMContentLoaded', function() {{
+    var initLat = '{lat}' || 0, initLng = '{lng}' || 0;
+    var map = L.map('{fid}_map').setView([initLat || 20, initLng || 0], initLat ? {zoom} : 2);
+    L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
+    }}).addTo(map);
+
+    var marker = initLat ? L.marker([initLat, initLng]).addTo(map) : null;
+
+    function placeMarker(lat, lng, addr) {{
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lng]).addTo(map);
+      map.setView([lat, lng], {zoom});
+      document.getElementById('{fid}_lat').value = lat.toFixed(7);
+      document.getElementById('{fid}_lng').value = lng.toFixed(7);
+      if (addr) document.getElementById('{fid}_search').value = addr;
+      document.getElementById('{fid}').value = JSON.stringify({{lat: lat, lng: lng, address: addr || ''}});
+    }}
+
+    map.on('click', function(e) {{ placeMarker(e.latlng.lat, e.latlng.lng, document.getElementById('{fid}_search').value); }});
+
+    document.getElementById('{fid}_btn_search').addEventListener('click', function() {{
+      var q = document.getElementById('{fid}_search').value.trim();
+      if (!q) return;
+      fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(function(res) {{
+          if (res.length) placeMarker(parseFloat(res[0].lat), parseFloat(res[0].lon), res[0].display_name);
+          else alert('Address not found');
+        }});
+    }});
+
+    document.getElementById('{fid}_btn_gps').addEventListener('click', function() {{
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(function(pos) {{
+        placeMarker(pos.coords.latitude, pos.coords.longitude, 'Current location');
+      }});
+    }});
+
+    document.getElementById('{fid}_btn_clear').addEventListener('click', function() {{
+      if (marker) {{ map.removeLayer(marker); marker = null; }}
+      document.getElementById('{fid}_lat').value = '';
+      document.getElementById('{fid}_lng').value = '';
+      document.getElementById('{fid}_search').value = '';
+      document.getElementById('{fid}').value = '';
+    }});
+
+    window._addrWidgets['{fid}'] = {{map: map, marker: marker, placeMarker: placeMarker}};
+  }});
+}})();
+</script>
+"""
+		return Markup(html)
+
+
+class RouteWidget(BS3TextFieldWidget):
+	"""Multi-waypoint route widget using Leaflet.js + OpenStreetMap.
+
+	Stores a JSON array of {{lat, lng, label}} waypoints. Supports drag-to-
+	reorder, add/remove waypoints, and shows the route as a polyline.
+	"""
+
+	def __init__(self, height: int = 350):
+		self.height = height
+
+	def __call__(self, field, **kwargs) -> Markup:
+		fid = field.id
+		raw = field.data or "[]"
+		try:
+			import json as _j
+			waypoints = _j.loads(raw) if isinstance(raw, str) else (raw or [])
+			if not isinstance(waypoints, list):
+				waypoints = []
+		except Exception:
+			waypoints = []
+		import json as _j
+		wp_json = _j.dumps(waypoints)
+		height = self.height
+
+		html = f"""
+<div class="route-widget" id="{fid}_widget">
+  <div id="{fid}_map" style="height:{height}px;border:1px solid #ddd;border-radius:4px"></div>
+  <div class="route-controls" style="margin-top:6px">
+    <button type="button" class="btn btn-sm btn-primary" id="{fid}_add_wp">
+      <i class="fa fa-plus"></i> Add waypoint
+    </button>
+    <span class="help-block" style="display:inline;margin-left:8px">
+      Click the map to add waypoints
+    </span>
+  </div>
+  <ol id="{fid}_wp_list" class="list-group" style="margin-top:6px"></ol>
+  <input type="hidden" name="{field.name}" id="{fid}" value='{wp_json}'>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function() {{
+  document.addEventListener('DOMContentLoaded', function() {{
+    var waypoints = {wp_json};
+    var markers = [];
+    var map = L.map('{fid}_map').setView([20, 0], 2);
+    L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
+    }}).addTo(map);
+    var polyline = L.polyline([], {{color: '#2980b9', weight: 3}}).addTo(map);
+
+    function sync() {{
+      var pts = waypoints.map(function(w) {{ return [w.lat, w.lng]; }});
+      polyline.setLatLngs(pts);
+      document.getElementById('{fid}').value = JSON.stringify(waypoints);
+      renderList();
+    }}
+
+    function addWaypoint(lat, lng, label) {{
+      label = label || ('WP ' + (waypoints.length + 1));
+      waypoints.push({{lat: lat, lng: lng, label: label}});
+      var m = L.marker([lat, lng]).addTo(map).bindTooltip(label);
+      markers.push(m);
+      sync();
+    }}
+
+    function renderList() {{
+      var el = document.getElementById('{fid}_wp_list');
+      el.innerHTML = '';
+      waypoints.forEach(function(w, i) {{
+        var li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.innerHTML = '<b>' + (i+1) + '.</b> ' + w.label +
+          ' <small>(' + w.lat.toFixed(5) + ', ' + w.lng.toFixed(5) + ')</small>' +
+          '<button type="button" class="btn btn-xs btn-danger pull-right" onclick="removeWp{fid}(' + i + ')">×</button>';
+        el.appendChild(li);
+      }});
+    }}
+
+    window['removeWp{fid}'] = function(i) {{
+      if (markers[i]) map.removeLayer(markers[i]);
+      markers.splice(i, 1);
+      waypoints.splice(i, 1);
+      sync();
+    }};
+
+    map.on('click', function(e) {{ addWaypoint(e.latlng.lat, e.latlng.lng); }});
+
+    // Render existing waypoints
+    waypoints.forEach(function(w) {{
+      var m = L.marker([w.lat, w.lng]).addTo(map).bindTooltip(w.label || '');
+      markers.push(m);
+    }});
+    if (waypoints.length) {{
+      var pts = waypoints.map(function(w) {{ return [w.lat, w.lng]; }});
+      polyline.setLatLngs(pts);
+      map.fitBounds(polyline.getBounds().pad(0.2));
+    }}
+    renderList();
+  }});
+}})();
+</script>
+"""
+		return Markup(html)
+
+
+# Update map to include new location widgets
+PG_TYPE_WIDGET_MAP["AddressSearchWidget"] = AddressSearchWidget
+PG_TYPE_WIDGET_MAP["RouteWidget"] = RouteWidget
