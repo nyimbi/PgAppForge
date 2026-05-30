@@ -1,0 +1,476 @@
+{
+  "name": "geonames",
+  "label": "GeoNames (Geographic Database)",
+  "description": "World geographic database \u2014 11M+ place names, admin divisions, postal codes with coordinates",
+  "short_description": "World geographic database \u2014 11M+ place names, admin divisions, postal codes with coordinates",
+  "long_description": "GeoNames is the world's largest geographic database with over 11 million place names (cities, mountains, rivers, airports, landmarks) covering every country. Includes administrative division hierarchies (states/provinces/counties), postal codes for 100+ countries, alternate name translations in hundreds of languages, and elevation data. Freely available under Creative Commons CC-BY 4.0.",
+  "when_to_use": "Use for any application needing geographic lookups, address validation, timezone resolution, or administrative boundary data. Essential for country/region/city dropdowns, geosearch, and location data normalization. Load data via: flask forge templates install-data geonames (auto-downloads from geonames.org \u2014 ~1.5GB uncompressed, CC-BY 4.0 license, no registration required).",
+  "color": "#27ae60",
+  "icon": "fa-globe",
+  "version": "2024",
+  "source_url": "https://www.geonames.org/",
+  "tags": [
+    "spatial",
+    "geography",
+    "geocoding",
+    "free-download",
+    "cc-by"
+  ],
+  "table_notes": {
+    "geonames_feature": "Core table with all 11M+ geographic features. Index on country_code + feature_class for efficient filtering. The search_vector column enables full-text search across all names.",
+    "geonames_altname": "Alternative names and translations for each feature. Covers 1000+ languages and scripts plus ISO 3166 codes, IATA codes, and Wikipedia links.",
+    "geonames_country": "Country-level metadata including ISO codes, FIPS, population, area, capital, languages, and continent. One row per country/territory.",
+    "geonames_admin1": "First-level administrative divisions (states, provinces, regions). 3,900+ entries worldwide. Hierarchical code matches geonames_feature.admin1_code.",
+    "geonames_admin2": "Second-level administrative divisions (counties, districts, departments). 45,000+ entries. Hierarchical code matches geonames_feature.admin2_code.",
+    "geonames_postal_code": "15M+ postal codes with geographic coordinates. Essential for postcode-to-location lookups and delivery zone queries.",
+    "geonames_feature_code": "Reference table of all 645 GeoNames feature class/code combinations (e.g. P/PPL = populated place, T/MT = mountain).",
+    "geonames_timezone": "Timezone definitions referenced by geographic features. Includes UTC offsets for current time and DST calculations."
+  },
+  "tables": {
+    "geonames_feature": [
+      {
+        "name": "geonameid",
+        "type": "INTEGER",
+        "pk": true,
+        "description": "GeoNames unique identifier (stable across versions)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(200)",
+        "nullable": false,
+        "description": "Toponym name in UTF-8 encoding"
+      },
+      {
+        "name": "asciiname",
+        "type": "VARCHAR(200)",
+        "description": "Name in plain ASCII (for legacy systems)"
+      },
+      {
+        "name": "alternatenames",
+        "type": "TEXT",
+        "description": "Comma-separated alternate names (short form \u2014 full data in geonames_altname)"
+      },
+      {
+        "name": "latitude",
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 latitude in decimal degrees"
+      },
+      {
+        "name": "longitude",
+        "type": "DOUBLE PRECISION",
+        "description": "WGS84 longitude in decimal degrees"
+      },
+      {
+        "name": "geo_point",
+        "type": "GEOGRAPHY(POINT, 4326)",
+        "description": "PostGIS point geometry (computed from lat/lng). Enables ST_DWithin, ST_Distance queries."
+      },
+      {
+        "name": "feature_class",
+        "type": "CHAR(1)",
+        "description": "Feature class: A=admin, H=water, L=area, P=place, R=road, S=spot, T=terrain, U=ocean, V=vegetation"
+      },
+      {
+        "name": "feature_code",
+        "type": "VARCHAR(10)",
+        "fk": "geonames_feature_code.code",
+        "description": "Feature code (e.g. PPL=populated place, PPLC=capital, ADM1=admin div 1). See geonames_feature_code."
+      },
+      {
+        "name": "country_code",
+        "type": "CHAR(2)",
+        "fk": "geonames_country.iso_alpha2",
+        "description": "ISO 3166-1 alpha-2 country code"
+      },
+      {
+        "name": "cc2",
+        "type": "VARCHAR(200)",
+        "description": "Alternate country codes (comma-separated) for disputed territories"
+      },
+      {
+        "name": "admin1_code",
+        "type": "VARCHAR(20)",
+        "description": "First-level admin division code (state/province). Matches geonames_admin1.code."
+      },
+      {
+        "name": "admin2_code",
+        "type": "VARCHAR(80)",
+        "description": "Second-level admin division code (county/district). Matches geonames_admin2.code."
+      },
+      {
+        "name": "admin3_code",
+        "type": "VARCHAR(20)",
+        "description": "Third-level admin division code (municipality)"
+      },
+      {
+        "name": "admin4_code",
+        "type": "VARCHAR(20)",
+        "description": "Fourth-level admin division code"
+      },
+      {
+        "name": "population",
+        "type": "BIGINT",
+        "description": "Population count (approximate, from various sources). NULL for non-populated features."
+      },
+      {
+        "name": "elevation",
+        "type": "INTEGER",
+        "description": "Elevation in metres above sea level (from SRTM/ASTER data)"
+      },
+      {
+        "name": "dem",
+        "type": "INTEGER",
+        "description": "Digital Elevation Model (SRTM3 or GTOPO30)"
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(40)",
+        "fk": "geonames_timezone.timezone_id",
+        "description": "IANA timezone name (e.g. America/New_York, Europe/Berlin)"
+      },
+      {
+        "name": "modification_date",
+        "type": "DATE",
+        "description": "Date this record was last updated in GeoNames database"
+      },
+      {
+        "name": "search_vector",
+        "type": "TSVECTOR",
+        "description": "PostgreSQL full-text search vector over name + asciiname for fast text search"
+      }
+    ],
+    "geonames_altname": [
+      {
+        "name": "alternatenameid",
+        "type": "INTEGER",
+        "pk": true,
+        "description": "GeoNames alternate name unique ID"
+      },
+      {
+        "name": "geonameid",
+        "type": "INTEGER",
+        "fk": "geonames_feature.geonameid",
+        "description": "Reference to the geographic feature"
+      },
+      {
+        "name": "isolanguage",
+        "type": "VARCHAR(7)",
+        "description": "ISO 639 language code, or: link, abbr, iata, icao, fr_1793, historic, wkdt (Wikidata), wiki, post, phone, unlc"
+      },
+      {
+        "name": "alternate_name",
+        "type": "VARCHAR(400)",
+        "description": "Alternate name in the specified language/script or code value"
+      },
+      {
+        "name": "is_preferred_name",
+        "type": "BOOLEAN",
+        "description": "True if this is the preferred name in this language (most human-readable)"
+      },
+      {
+        "name": "is_short_name",
+        "type": "BOOLEAN",
+        "description": "True if this is the short/abbreviated form of the name"
+      },
+      {
+        "name": "is_colloquial",
+        "type": "BOOLEAN",
+        "description": "True if this is a colloquial or informal name"
+      },
+      {
+        "name": "is_historic",
+        "type": "BOOLEAN",
+        "description": "True if this was historically used but is now obsolete"
+      },
+      {
+        "name": "from_date",
+        "type": "DATE",
+        "description": "Date from which this name was/is valid"
+      },
+      {
+        "name": "to_date",
+        "type": "DATE",
+        "description": "Date until which this name was valid (NULL = still valid)"
+      }
+    ],
+    "geonames_country": [
+      {
+        "name": "iso_alpha2",
+        "type": "CHAR(2)",
+        "pk": true,
+        "description": "ISO 3166-1 alpha-2 country code (primary identifier)"
+      },
+      {
+        "name": "iso_alpha3",
+        "type": "CHAR(3)",
+        "unique": true,
+        "description": "ISO 3166-1 alpha-3 country code"
+      },
+      {
+        "name": "iso_numeric",
+        "type": "CHAR(3)",
+        "description": "ISO 3166-1 numeric code"
+      },
+      {
+        "name": "fips_code",
+        "type": "VARCHAR(3)",
+        "description": "FIPS 10-4 country code (used by US government systems)"
+      },
+      {
+        "name": "country_name",
+        "type": "VARCHAR(200)",
+        "description": "English country name"
+      },
+      {
+        "name": "capital",
+        "type": "VARCHAR(200)",
+        "description": "Capital city name"
+      },
+      {
+        "name": "area_km2",
+        "type": "NUMERIC(12,2)",
+        "description": "Total area in square kilometres"
+      },
+      {
+        "name": "population",
+        "type": "BIGINT",
+        "description": "Total population (approximate)"
+      },
+      {
+        "name": "continent",
+        "type": "CHAR(2)",
+        "description": "Continent code: AF, AS, EU, NA, OC, SA, AN"
+      },
+      {
+        "name": "tld",
+        "type": "VARCHAR(10)",
+        "description": "Country-code top-level domain (e.g. .uk, .de)"
+      },
+      {
+        "name": "currency_code",
+        "type": "CHAR(3)",
+        "description": "ISO 4217 currency code"
+      },
+      {
+        "name": "currency_name",
+        "type": "VARCHAR(20)",
+        "description": "Currency name in English"
+      },
+      {
+        "name": "phone_prefix",
+        "type": "VARCHAR(20)",
+        "description": "ITU-T calling code (e.g. +1 for US, +44 for UK)"
+      },
+      {
+        "name": "postal_code_format",
+        "type": "VARCHAR(100)",
+        "description": "Regex pattern for valid postal codes in this country"
+      },
+      {
+        "name": "postal_code_regex",
+        "type": "VARCHAR(255)",
+        "description": "Full regex for postal code validation"
+      },
+      {
+        "name": "languages",
+        "type": "VARCHAR(200)",
+        "description": "ISO 639 language codes, comma-separated (most-to-least spoken)"
+      },
+      {
+        "name": "geonameid",
+        "type": "INTEGER",
+        "fk": "geonames_feature.geonameid",
+        "description": "GeoNames feature ID for this country"
+      },
+      {
+        "name": "neighbours",
+        "type": "VARCHAR(200)",
+        "description": "Comma-separated ISO codes of bordering countries"
+      },
+      {
+        "name": "equivalent_fips_code",
+        "type": "VARCHAR(10)",
+        "description": "Equivalent FIPS region code"
+      }
+    ],
+    "geonames_admin1": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(10)",
+        "unique": true,
+        "description": "Composite code: country_code.admin1_code (e.g. US.CA, GB.ENG)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(200)",
+        "description": "English name of the administrative division"
+      },
+      {
+        "name": "asciiname",
+        "type": "VARCHAR(200)",
+        "description": "ASCII version of the name"
+      },
+      {
+        "name": "geonameid",
+        "type": "INTEGER",
+        "fk": "geonames_feature.geonameid",
+        "description": "GeoNames feature ID for this division"
+      }
+    ],
+    "geonames_admin2": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
+      },
+      {
+        "name": "code",
+        "type": "VARCHAR(15)",
+        "unique": true,
+        "description": "Composite code: country.admin1.admin2 (e.g. US.CA.085 = Santa Clara County)"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(200)",
+        "description": "English name of the second-level administrative division"
+      },
+      {
+        "name": "asciiname",
+        "type": "VARCHAR(200)",
+        "description": "ASCII version of the name"
+      },
+      {
+        "name": "geonameid",
+        "type": "INTEGER",
+        "fk": "geonames_feature.geonameid",
+        "description": "GeoNames feature ID for this division"
+      }
+    ],
+    "geonames_postal_code": [
+      {
+        "name": "id",
+        "type": "SERIAL",
+        "pk": true,
+        "description": "Auto-incremented surrogate key"
+      },
+      {
+        "name": "country_code",
+        "type": "CHAR(2)",
+        "description": "ISO 3166-1 alpha-2 country code"
+      },
+      {
+        "name": "postal_code",
+        "type": "VARCHAR(20)",
+        "description": "Postal/ZIP code string (format varies by country)"
+      },
+      {
+        "name": "place_name",
+        "type": "VARCHAR(180)",
+        "description": "Name of the place associated with this postal code"
+      },
+      {
+        "name": "admin_name1",
+        "type": "VARCHAR(100)",
+        "description": "Name of first-level admin division (state/province)"
+      },
+      {
+        "name": "admin_code1",
+        "type": "VARCHAR(20)",
+        "description": "Code for first-level admin division"
+      },
+      {
+        "name": "admin_name2",
+        "type": "VARCHAR(100)",
+        "description": "Name of second-level admin division (county/district)"
+      },
+      {
+        "name": "admin_code2",
+        "type": "VARCHAR(20)",
+        "description": "Code for second-level admin division"
+      },
+      {
+        "name": "latitude",
+        "type": "DOUBLE PRECISION",
+        "description": "Latitude of postal code centroid (WGS84)"
+      },
+      {
+        "name": "longitude",
+        "type": "DOUBLE PRECISION",
+        "description": "Longitude of postal code centroid (WGS84)"
+      },
+      {
+        "name": "geo_point",
+        "type": "GEOGRAPHY(POINT, 4326)",
+        "description": "PostGIS point for spatial queries"
+      },
+      {
+        "name": "accuracy",
+        "type": "SMALLINT",
+        "description": "Accuracy of coordinates: 1=estimated, 4=geonames, 6=centroid of addresses, 9=GPS"
+      }
+    ],
+    "geonames_feature_code": [
+      {
+        "name": "code",
+        "type": "VARCHAR(10)",
+        "pk": true,
+        "description": "Feature code (class.code format, e.g. P.PPL, T.MT, A.ADM1)"
+      },
+      {
+        "name": "feature_class",
+        "type": "CHAR(1)",
+        "description": "Feature class (A/H/L/P/R/S/T/U/V)"
+      },
+      {
+        "name": "feature_code",
+        "type": "VARCHAR(10)",
+        "description": "Feature type code within its class"
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(200)",
+        "description": "Human-readable name of this feature type"
+      },
+      {
+        "name": "description",
+        "type": "TEXT",
+        "description": "Detailed description of what this feature type represents"
+      }
+    ],
+    "geonames_timezone": [
+      {
+        "name": "timezone_id",
+        "type": "VARCHAR(40)",
+        "pk": true,
+        "description": "IANA timezone identifier (e.g. America/New_York, Europe/Berlin)"
+      },
+      {
+        "name": "gmt_offset",
+        "type": "NUMERIC(4,1)",
+        "description": "UTC offset in hours during standard time (January)"
+      },
+      {
+        "name": "dst_offset",
+        "type": "NUMERIC(4,1)",
+        "description": "UTC offset in hours during daylight saving time (July)"
+      },
+      {
+        "name": "raw_offset",
+        "type": "NUMERIC(4,1)",
+        "description": "Raw UTC offset without DST adjustment"
+      },
+      {
+        "name": "country_code",
+        "type": "CHAR(2)",
+        "description": "ISO country code where this timezone is primarily used"
+      }
+    ]
+  }
+}

@@ -261,21 +261,22 @@ def templates_install_data(name, database_uri, data_dir):
 
     The data-dir should contain the standard release ZIP files.
     """
-    supported = {
-        'snomed-ct': _load_snomed,
-        'loinc': _load_loinc,
-    }
-    if name not in supported:
+    from pgappforge.cli.data_loaders import LOADERS, DOWNLOAD_SOURCES
+    if name not in LOADERS:
         click.echo(f'❌ install-data not supported for {name!r}.', err=True)
-        click.echo(f'   Supported: {list(supported)}')
+        click.echo(f'   Supported: {sorted(LOADERS)}')
         sys.exit(1)
-    if not data_dir:
-        click.echo(f'❌ --data-dir is required. Download the data from:', err=True)
-        click.echo('   SNOMED CT: https://www.nlm.nih.gov/healthit/snomedct/us_edition.html')
-        click.echo('   LOINC:     https://loinc.org/downloads/')
+    src = DOWNLOAD_SOURCES.get(name, {})
+    auto_download = bool(src.get('files'))  # True if we can auto-download
+    if not data_dir and not auto_download:
+        click.echo(f'❌ --data-dir required for {name!r} (manual download needed).', err=True)
+        if 'register_url' in src:
+            click.echo(f'   Download from: {src["register_url"]}')
         sys.exit(1)
-    click.echo(f'Loading {name} data from {data_dir} …')
-    supported[name](database_uri, data_dir)
+    if auto_download and not data_dir:
+        click.echo(f'  No --data-dir specified — will auto-download to /tmp/{name}_data')
+    click.echo(f'Installing {name} data …')
+    LOADERS[name](database_uri, data_dir)
 
 
 def _load_snomed(database_uri: str, data_dir: str) -> None:
