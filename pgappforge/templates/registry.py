@@ -217,3 +217,132 @@ class TemplateRegistry:
 		self._scan_done = False
 		self._cache.clear()
 		self._scan_dirs()
+
+	def load_by_domain(self) -> dict[str, list[dict]]:
+		"""Return all templates grouped by domain label, sorted alphabetically within each domain.
+
+		Returns::
+
+		    {
+		      "Healthcare & Life Sciences": [
+		        {"key": "fhir-r4", "label": "HL7 FHIR R4", "color": ..., "table_count": 10, ...},
+		      ],
+		      "Finance & Banking": [...],
+		      ...
+		    }
+		"""
+		self._scan_dirs()
+		grouped: dict[str, list[dict]] = {}
+		for name, t in self._cache.items():
+			domain = classify_domain(t.get("tags", []))
+			entry = {
+				"key": name,
+				"label": t.get("label", name),
+				"color": t.get("color", "#3498db"),
+				"icon": t.get("icon", "fa-database"),
+				"description": t.get("description", ""),
+				"table_count": len(t.get("tables", {})),
+				"tables": t.get("tables", {}),
+			}
+			grouped.setdefault(domain, []).append(entry)
+		# Sort entries within each domain
+		for domain in grouped:
+			grouped[domain].sort(key=lambda x: x["label"])
+		return dict(sorted(grouped.items()))
+
+
+# ─── Domain classification ────────────────────────────────────────────────────
+
+_DOMAIN_TAG_MAP: list[tuple[str, str]] = [
+	("healthcare",    "Healthcare & Life Sciences"),
+	("hl7",           "Healthcare & Life Sciences"),
+	("clinical",      "Healthcare & Life Sciences"),
+	("radiology",     "Healthcare & Life Sciences"),
+	("laboratory",    "Healthcare & Life Sciences"),
+	("terminology",   "Healthcare & Life Sciences"),
+	("finance",       "Finance & Banking"),
+	("banking",       "Finance & Banking"),
+	("insurance",     "Finance & Banking"),
+	("contracts",     "Finance & Banking"),
+	("ontology",      "Finance & Banking"),
+	("reporting",     "Finance & Banking"),
+	("supply-chain",  "Supply Chain & Trade"),
+	("gs1",           "Supply Chain & Trade"),
+	("invoicing",     "Supply Chain & Trade"),
+	("logistics",     "Supply Chain & Trade"),
+	("retail",        "Retail & E-commerce"),
+	("ecommerce",     "Retail & E-commerce"),
+	("seo",           "Retail & E-commerce"),
+	("pos",           "Retail & E-commerce"),
+	("government",    "Government & Public Sector"),
+	("eu-mandate",    "Government & Public Sector"),
+	("us-government", "Government & Public Sector"),
+	("federal",       "Government & Public Sector"),
+	("open-data",     "Government & Public Sector"),
+	("transparency",  "Government & Public Sector"),
+	("civic",         "Government & Public Sector"),
+	("procurement",   "Government & Public Sector"),
+	("spatial",       "Geospatial & Smart Cities"),
+	("gis",           "Geospatial & Smart Cities"),
+	("smart-city",    "Geospatial & Smart Cities"),
+	("3d",            "Geospatial & Smart Cities"),
+	("hr",            "HR & Education"),
+	("payroll",       "HR & Education"),
+	("education",     "HR & Education"),
+	("lms",           "HR & Education"),
+	("credentials",   "HR & Education"),
+	("assessment",    "HR & Education"),
+	("energy",        "Energy & Utilities"),
+	("utilities",     "Energy & Utilities"),
+	("power-grid",    "Energy & Utilities"),
+	("climate",       "Environment & Science"),
+	("water",         "Environment & Science"),
+	("environmental", "Environment & Science"),
+	("ecology",       "Environment & Science"),
+	("biodiversity",  "Environment & Science"),
+	("research-data", "Environment & Science"),
+	("science",       "Environment & Science"),
+	("agriculture",   "Agriculture & Food"),
+	("farming",       "Agriculture & Food"),
+	("food-security", "Agriculture & Food"),
+	("iot",           "IoT & Automation"),
+	("smart-home",    "IoT & Automation"),
+	("appliances",    "IoT & Automation"),
+	("iiot",          "IoT & Automation"),
+	("industrial",    "IoT & Automation"),
+	("automation",    "IoT & Automation"),
+	("manufacturing", "IoT & Automation"),
+	("oil-gas",       "IoT & Automation"),
+	("telecoms",      "Telecoms & Media"),
+	("bss-oss",       "Telecoms & Media"),
+	("journalism",    "Telecoms & Media"),
+	("news",          "Telecoms & Media"),
+	("media",         "Telecoms & Media"),
+	("security",      "Security & Identity"),
+	("siem",          "Security & Identity"),
+	("identity",      "Security & Identity"),
+	("lei",           "Security & Identity"),
+	("transit",       "Transport"),
+	("mobility",      "Transport"),
+	("social",        "Social & Communication"),
+	("federated",     "Social & Communication"),
+	("contacts",      "Social & Communication"),
+	("calendar",      "Social & Communication"),
+	("legal",         "Legal"),
+	("legislation",   "Legal"),
+	("analytics",     "Analytics & Data"),
+	("dbt",           "Analytics & Data"),
+	("olap",          "Analytics & Data"),
+	("metadata",      "Analytics & Data"),
+	("provenance",    "Analytics & Data"),
+	("libraries",     "Analytics & Data"),
+]
+
+
+def classify_domain(tags: list[str]) -> str:
+	"""Return the domain label for a template based on its tags."""
+	tag_set = {t.lower() for t in (tags or [])}
+	for tag, domain in _DOMAIN_TAG_MAP:
+		if tag in tag_set:
+			return domain
+	return "General"

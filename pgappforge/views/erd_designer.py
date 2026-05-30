@@ -489,22 +489,23 @@ class ERDDesignerView(BaseView):
 	@expose("/")
 	@has_access
 	def index(self):
-		# Merge built-in ERP modules + installed templates from registry
-		all_modules = dict(ERP_MODULES)
-		try:
-			from pgappforge.templates import TemplateRegistry
-			for k, v in TemplateRegistry().load_all().items():
-				if k not in all_modules:
-					all_modules[k] = v
-		except Exception:
-			pass
-		module_list = [
+		# Built-in ERP modules grouped as "ERP Templates"
+		erp_items = [
 			{"key": k, "label": v["label"], "color": v["color"],
 			 "icon": v.get("icon", "fa-database"),
 			 "table_count": len(v["tables"]), "description": v.get("description", "")}
-			for k, v in all_modules.items()
+			for k, v in ERP_MODULES.items()
 		]
-		return self.render_template_string(_DESIGNER_HTML, modules=module_list)
+		# Domain-grouped templates from registry
+		domain_groups = {"ERP Templates": erp_items}
+		try:
+			from pgappforge.templates.registry import TemplateRegistry
+			by_domain = TemplateRegistry().load_by_domain()
+			for domain, items in by_domain.items():
+				domain_groups[domain] = items
+		except Exception:
+			pass
+		return self.render_template_string(_DESIGNER_HTML, domain_groups=domain_groups)
 
 	@expose("/api/live-schema")
 	@has_access
@@ -658,6 +659,9 @@ _DESIGNER_HTML = """
     .mod-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
     .mod-label { flex:1; font-size:0.85em; }
     .mod-count { font-size:0.75em; color:#7f8c8d; }
+    .domain-items { display:block; }
+    .domain-items.collapsed { display:none; }
+    .domain-header:hover { background:#243342 !important; }
     #toolbar { padding:8px 12px; background:#1a252f; border-top:1px solid #0d1b2a;
                display:flex; flex-direction:column; gap:6px; }
     #cy-wrap { flex:1; position:relative; background:#1a1a2e; }
@@ -688,11 +692,27 @@ _DESIGNER_HTML = """
       ERP TEMPLATES — click to add to canvas
     </div>
     <div id="module-list">
-      {% for m in modules %}
-      <div class="mod-item" onclick="addModule('{{ m.key }}')" data-label="{{ m.label }}">
-        <div class="mod-dot" style="background:{{ m.color }}"></div>
-        <span class="mod-label" title="{{ m.description }}">{{ m.label }}</span>
-        <span class="mod-count">{{ m.table_count }}t</span>
+      {% for domain, items in domain_groups.items() %}
+      <div class="domain-group">
+        <div class="domain-header" onclick="toggleDomain(this)"
+             style="padding:5px 12px;background:#1a252f;font-size:0.75em;
+                    color:#7f8c8d;letter-spacing:0.05em;cursor:pointer;
+                    display:flex;align-items:center;justify-content:space-between;
+                    border-top:1px solid #0d1b2a;user-select:none">
+          <span>{{ domain | upper }}</span>
+          <span style="font-size:0.8em">{{ items|length }} ▾</span>
+        </div>
+        <div class="domain-items">
+          {% for m in items %}
+          <div class="mod-item" onclick="addModule('{{ m.key }}')"
+               data-label="{{ m.label }}" data-domain="{{ domain }}"
+               title="{{ m.description }}">
+            <div class="mod-dot" style="background:{{ m.color }}"></div>
+            <span class="mod-label">{{ m.label }}</span>
+            <span class="mod-count">{{ m.table_count }}t</span>
+          </div>
+          {% endfor %}
+        </div>
       </div>
       {% endfor %}
     </div>
@@ -905,10 +925,27 @@ function relayout() {
 }
 
 /* ── Search/filter ── */
+function toggleDomain(header) {
+  var items = header.nextElementSibling;
+  items.classList.toggle('collapsed');
+  var arrow = header.querySelector('span:last-child');
+  if (arrow) arrow.textContent = items.classList.contains('collapsed') ?
+    header.querySelector('span:last-child').textContent.replace('▾','▸').replace('▸','▸') :
+    header.querySelector('span:last-child').textContent.replace('▸','▾');
+}
+
 function filterModules(q) {
+  var lq = q.toLowerCase();
   document.querySelectorAll('.mod-item').forEach(function(el) {
-    el.style.display = (el.dataset.label || '').toLowerCase().includes(q.toLowerCase())
-      ? '' : 'none';
+    var match = (el.dataset.label || '').toLowerCase().includes(lq)
+             || (el.dataset.domain || '').toLowerCase().includes(lq);
+    el.style.display = match ? '' : 'none';
+  });
+  // Show domain groups that have visible items
+  document.querySelectorAll('.domain-group').forEach(function(g) {
+    var visible = g.querySelectorAll('.mod-item:not([style*="none"])').length;
+    g.style.display = visible > 0 ? '' : 'none';
+    if (q && visible > 0) g.querySelector('.domain-items').classList.remove('collapsed');
   });
 }
 
