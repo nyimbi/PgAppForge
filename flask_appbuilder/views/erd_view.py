@@ -8,7 +8,7 @@ Admin-only access with full database administration capabilities.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from flask import request, jsonify, render_template, flash, redirect, url_for
 from flask_appbuilder import permission_name
@@ -685,7 +685,7 @@ class DatabaseERDView(BaseView):
                 description="Generated database schema backup",
                 details={
                     "backup_size": len(backup_sql),
-                    "generated_at": datetime.utcnow().isoformat(),
+                    "generated_at": datetime.now(tz=timezone.utc).isoformat(),
                 },
                 success=True,
             )
@@ -694,7 +694,7 @@ class DatabaseERDView(BaseView):
                 {
                     "success": True,
                     "backup_sql": backup_sql,
-                    "generated_at": datetime.utcnow().isoformat(),
+                    "generated_at": datetime.now(tz=timezone.utc).isoformat(),
                 }
             )
 

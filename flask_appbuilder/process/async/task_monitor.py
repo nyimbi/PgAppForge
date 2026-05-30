@@ -7,7 +7,7 @@ for Celery tasks with performance analytics and error tracking.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from collections import defaultdict, deque
 import threading
@@ -104,7 +104,7 @@ class TaskMonitor:
                     db.session.add(task_execution)
                 
                 task_execution.status = TaskStatus.STARTED.value
-                task_execution.started_at = datetime.utcnow()
+                task_execution.started_at = datetime.now(tz=timezone.utc)
                 
                 # Extract process context if available
                 if kwargs:
@@ -141,7 +141,7 @@ class TaskMonitor:
                     return
                 
                 task_execution.status = state.lower() if state else TaskStatus.SUCCESS.value
-                task_execution.completed_at = datetime.utcnow()
+                task_execution.completed_at = datetime.now(tz=timezone.utc)
                 task_execution.result = result if isinstance(result, (dict, list)) else None
                 
                 # Calculate duration
@@ -179,7 +179,7 @@ class TaskMonitor:
                 task_execution.status = TaskStatus.FAILURE.value
                 task_execution.error_message = error
                 task_execution.traceback = traceback
-                task_execution.completed_at = datetime.utcnow()
+                task_execution.completed_at = datetime.now(tz=timezone.utc)
                 
                 # Calculate duration if started
                 if task_execution.started_at:
@@ -226,7 +226,7 @@ class TaskMonitor:
         """Get task execution statistics."""
         try:
             tenant_id = TenantContext.get_current_tenant_id()
-            cutoff_time = datetime.utcnow() - timedelta(hours=time_range)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=time_range)
             
             # Base query
             base_query = db.session.query(TaskExecution).filter(
@@ -298,7 +298,7 @@ class TaskMonitor:
                 'average_duration': round(avg_duration, 2),
                 'task_distribution': task_distribution,
                 'queue_distribution': queue_distribution,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             }
             
         except Exception as e:
@@ -352,7 +352,7 @@ class TaskMonitor:
                 # Calculate running duration
                 running_duration = 0
                 if task.started_at:
-                    running_duration = (datetime.utcnow() - task.started_at).total_seconds()
+                    running_duration = (datetime.now(tz=timezone.utc) - task.started_at).total_seconds()
                 
                 running_task_data.append({
                     'task_id': task.task_id,
@@ -376,7 +376,7 @@ class TaskMonitor:
         """Get performance metrics for tasks."""
         try:
             tenant_id = TenantContext.get_current_tenant_id()
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=24)
             
             query = db.session.query(TaskExecution).filter(
                 TaskExecution.tenant_id == tenant_id,
@@ -508,7 +508,7 @@ class TaskMonitor:
     def cleanup_old_tasks(self, days_to_keep: int = 30):
         """Clean up old task execution records."""
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days_to_keep)
             
             deleted_count = db.session.query(TaskExecution).filter(
                 TaskExecution.created_at < cutoff_date
@@ -569,7 +569,7 @@ class TaskMonitor:
                 'queues': queue_health,
                 'total_queues': len(queue_health),
                 'healthy_queues': len([q for q in queue_health.values() if q['status'] == 'healthy']),
-                'checked_at': datetime.utcnow().isoformat()
+                'checked_at': datetime.now(tz=timezone.utc).isoformat()
             }
             
         except Exception as e:

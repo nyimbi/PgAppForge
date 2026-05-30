@@ -7,7 +7,7 @@ and processing approval requests with delegation and escalation.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from flask import request, jsonify, flash, redirect, url_for, session, current_app, g
@@ -29,6 +29,10 @@ from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 from marshmallow import fields
 
 from flask_appbuilder import db
+from ...utils.db_performance import (
+    QueryOptimizer, PaginationHelper, performance_aware_query,
+    monitor_query_performance, QueryLimits
+)
 from .validation_framework import (
     validate_approval_request, validate_user_input, validate_chain_config,
     quick_sanitize, detect_security_threats, ValidationContext,
@@ -130,12 +134,16 @@ class ApprovalChainView(ModelView):
         # Get current approval chain status
         # chain_status = manager.get_approval_chain_status(chain_id)
         
-        # Get approval requests with eager loading to eliminate N+1 queries
-        requests = db.session.query(ApprovalRequest)\
+        # Get approval requests with eager loading and performance optimization
+        optimizer = QueryOptimizer()
+        requests_query = db.session.query(ApprovalRequest)\
             .options(joinedload(ApprovalRequest.approver))\
             .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
             .filter(ApprovalRequest.chain_id == chain_id)\
-            .order_by(ApprovalRequest.order_index).all()
+            .order_by(ApprovalRequest.order_index)
+
+        # Use safe_all with limit for performance (approval chains typically small)
+        requests = optimizer.safe_all(requests_query, max_results=QueryLimits.DEFAULT_PAGE_SIZE)
         
         return self.render_template(
             'approval/chain_monitor.html',
@@ -185,7 +193,7 @@ class ApprovalRequestView(ModelView):
                         approved=True,
                         approver_id=g.user.id,
                         comment='Bulk approval action',
-                        timestamp=datetime.utcnow()
+                        timestamp=datetime.now(tz=timezone.utc)
                     )
                     
                     # Process approval decision synchronously
@@ -218,7 +226,7 @@ class ApprovalRequestView(ModelView):
                         approved=False,
                         approver_id=g.user.id,
                         comment='Bulk rejection action',
-                        timestamp=datetime.utcnow()
+                        timestamp=datetime.now(tz=timezone.utc)
                     )
                     
                     # Process approval decision synchronously
@@ -283,13 +291,16 @@ class ApprovalRequestView(ModelView):
             flash('This request cannot be delegated', 'warning')
             return redirect(url_for('ApprovalRequestView.list'))
         
-        # Get available users for delegation
+        # Get available users for delegation with performance optimization
         tenant_id = TenantContext.get_current_tenant_id()
-        available_users = db.session.query(User).filter(
+        optimizer = QueryOptimizer()
+        users_query = db.session.query(User).filter(
             User.tenant_id == tenant_id,
             User.is_active == True,
             User.id != current_user.id
-        ).all()
+        )
+        # Limit users for delegation to reasonable number
+        available_users = optimizer.safe_all(users_query, max_results=100)
         
         return self.render_template(
             'approval/delegate.html',
@@ -405,7 +416,7 @@ class ApprovalRuleView(ModelView):
         for rule in items:
             if not rule.is_active:
                 rule.is_active = True
-                rule.updated_at = datetime.utcnow()
+                rule.updated_at = datetime.now(tz=timezone.utc)
                 activated_count += 1
         
         if activated_count > 0:
@@ -427,7 +438,7 @@ class ApprovalRuleView(ModelView):
         for rule in items:
             if rule.is_active:
                 rule.is_active = False
-                rule.updated_at = datetime.utcnow()
+                rule.updated_at = datetime.now(tz=timezone.utc)
                 deactivated_count += 1
         
         if deactivated_count > 0:
@@ -496,10 +507,10 @@ class ApprovalDashboardView(BaseView):
                     ApprovalRequest.responded_at.isnot(None)\
                 ).order_by(ApprovalRequest.responded_at.desc()).limit(10).all()
             
-            # Get overdue requests with parameterized query
-            now = datetime.utcnow()
-            # Get overdue requests with eager loading to eliminate N+1 queries
-            overdue_requests = db.session.query(ApprovalRequest)\
+            # Get overdue requests with parameterized query and performance optimization
+            now = datetime.now(tz=timezone.utc)
+            optimizer = QueryOptimizer()
+            overdue_query = db.session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter(\
@@ -507,7 +518,10 @@ class ApprovalDashboardView(BaseView):
                     ApprovalRequest.approver_id == user_id,\
                     ApprovalRequest.status == ApprovalStatus.PENDING.value,\
                     ApprovalRequest.expires_at < now\
-                ).all()
+                ).order_by(ApprovalRequest.expires_at.asc())
+
+            # Limit overdue requests to prevent performance issues
+            overdue_requests = optimizer.safe_all(overdue_query, max_results=50)
             
             return self.render_template(
                 'approval/dashboard.html',
@@ -538,19 +552,32 @@ class ApprovalDashboardView(BaseView):
             tenant_id = TenantContext.get_current_tenant_id()
             user_id = g.user.id
             
-            # Get pending requests with eager loading to eliminate N+1 queries
-            pending_requests = db.session.query(ApprovalRequest)\
+            # Get pending requests with pagination for performance
+            page, per_page = PaginationHelper.get_pagination_params()
+            optimizer = QueryOptimizer()
+            pending_query = db.session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter(\
                     ApprovalRequest.tenant_id == tenant_id,\
                     ApprovalRequest.approver_id == user_id,\
                     ApprovalRequest.status == ApprovalStatus.PENDING.value\
-                ).order_by(ApprovalRequest.requested_at.desc()).all()
+                ).order_by(ApprovalRequest.requested_at.desc())
+
+            # Use pagination for better performance
+            pending_requests, total_count, has_next = optimizer.paginated_query(
+                pending_query, page=page, per_page=per_page
+            )
+
+            # Create pagination context for template
+            pagination = PaginationHelper.create_pagination_context(
+                pending_requests, total_count, page, per_page, 'ApprovalRequestView.pending'
+            )
             
             return self.render_template(
                 'approval/pending.html',
-                requests=pending_requests
+                requests=pending_requests,
+                pagination=pagination
             )
             
         except Exception as e:
@@ -574,16 +601,20 @@ class ApprovalDashboardView(BaseView):
             tenant_id = TenantContext.get_current_tenant_id()
             
             # Get approval statistics for last 30 days
-            cutoff_date = datetime.utcnow() - timedelta(days=30)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             
-            # Get requests for analytics with eager loading to eliminate N+1 queries
-            requests = db.session.query(ApprovalRequest)\
+            # Get requests for analytics with performance optimization
+            optimizer = QueryOptimizer()
+            analytics_query = db.session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter(\
                     ApprovalRequest.tenant_id == tenant_id,\
                     ApprovalRequest.requested_at >= cutoff_date\
-                ).all()
+                ).order_by(ApprovalRequest.requested_at.desc())
+
+            # Limit analytics data to prevent performance issues
+            requests = optimizer.safe_all(analytics_query, max_results=QueryLimits.BULK_OPERATION_LIMIT)
             
             # Calculate analytics
             analytics = self._calculate_approval_analytics(requests)
@@ -789,7 +820,7 @@ class ApprovalApi(ModelRestApi):
 
             # Validate request has expired
             if hasattr(approval_request, 'expires_at') and approval_request.expires_at:
-                if datetime.utcnow() > approval_request.expires_at:
+                if datetime.now(tz=timezone.utc) > approval_request.expires_at:
                     self._log_security_event('expired_request_approval_attempt', request_id, current_user.id)
                     return self.response_400('Request has expired')
 
@@ -856,7 +887,7 @@ class ApprovalApi(ModelRestApi):
                 approver_id=current_user.id,  # Use validated user
                 comment=comment,
                 response_data=response_data,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(tz=timezone.utc)
             )
 
             # Log approval attempt
@@ -875,7 +906,7 @@ class ApprovalApi(ModelRestApi):
                 'message': 'Approval processed successfully',
                 'approved': approved,
                 'request_id': request_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             })
             return self._add_security_headers(response)
             
@@ -919,7 +950,7 @@ class ApprovalApi(ModelRestApi):
 
             # Validate request has not expired
             if hasattr(approval_request, 'expires_at') and approval_request.expires_at:
-                if datetime.utcnow() > approval_request.expires_at:
+                if datetime.now(tz=timezone.utc) > approval_request.expires_at:
                     self._log_security_event('expired_request_delegation_attempt', request_id, current_user.id)
                     return self.response_400('Request has expired')
 
@@ -1024,7 +1055,7 @@ class ApprovalApi(ModelRestApi):
                 'message': 'Request delegated successfully',
                 'delegate_to_id': delegate_to_id,
                 'original_request_id': request_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -1159,7 +1190,7 @@ class ApprovalApi(ModelRestApi):
                 'escalation_reason': escalation_reason.value,
                 'escalate_to_id': escalate_to_id,
                 'original_request_id': request_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -1193,15 +1224,19 @@ class ApprovalApi(ModelRestApi):
             tenant_id = TenantContext.get_current_tenant_id()
             user_id = current_user.id
             
-            # Get pending requests with eager loading to eliminate N+1 queries  
-            requests = db.session.query(ApprovalRequest)\
+            # Get pending requests with performance optimization for API
+            optimizer = QueryOptimizer()
+            requests_query = db.session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter(\
                     ApprovalRequest.tenant_id == tenant_id,\
                     ApprovalRequest.approver_id == user_id,\
                     ApprovalRequest.status == ApprovalStatus.PENDING.value\
-                ).order_by(ApprovalRequest.requested_at.desc()).all()
+                ).order_by(ApprovalRequest.requested_at.desc())
+
+            # Limit API results to prevent performance issues
+            requests = optimizer.safe_all(requests_query, max_results=100)
             
             request_data = []
             for req in requests:
@@ -1275,12 +1310,16 @@ class ApprovalChainApi(ModelRestApi):
             # Get chain status synchronously
             # chain_status = manager.get_approval_chain_status(chain_id)
             
-            # Get requests with eager loading to eliminate N+1 queries
-            requests = db.session.query(ApprovalRequest)\
+            # Get requests with performance optimization for API
+            optimizer = QueryOptimizer()
+            requests_query = db.session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter(ApprovalRequest.chain_id == chain_id)\
-                .order_by(ApprovalRequest.order_index).all()
+                .order_by(ApprovalRequest.order_index)
+
+            # Limit chain requests (approval chains are typically small)
+            requests = optimizer.safe_all(requests_query, max_results=QueryLimits.DEFAULT_PAGE_SIZE)
             
             request_details = []
             for request in requests:

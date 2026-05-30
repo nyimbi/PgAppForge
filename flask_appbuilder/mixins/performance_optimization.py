@@ -12,7 +12,7 @@ This module provides comprehensive performance optimizations for production scal
 import logging
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 from collections import defaultdict
@@ -54,7 +54,7 @@ class PerformanceMonitor:
         self.query_stats[query_type].append({
             'duration': duration,
             'affected_rows': affected_rows,
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(tz=timezone.utc)
         })
         
         # Track slow queries
@@ -63,14 +63,14 @@ class PerformanceMonitor:
                 'type': query_type,
                 'duration': duration,
                 'affected_rows': affected_rows,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(tz=timezone.utc)
             })
     
     def record_operation(self, operation: str, duration: float):
         """Record mixin operation performance."""
         self.operation_stats[operation].append({
             'duration': duration,
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(tz=timezone.utc)
         })
     
     def record_cache_hit(self):

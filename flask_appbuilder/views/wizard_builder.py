@@ -8,7 +8,7 @@ and export capabilities.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from flask import request, render_template, jsonify, flash, redirect, url_for
 from flask_login import current_user, login_required
@@ -335,7 +335,7 @@ class WizardBuilderView(BaseView):
             'wizard_id': wizard_id,
             'config': wizard_config,
             'export_version': '1.0',
-            'exported_at': datetime.utcnow().isoformat(),
+            'exported_at': datetime.now(tz=timezone.utc).isoformat(),
             'exported_by': current_user.id if current_user.is_authenticated else None
         }
         

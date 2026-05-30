@@ -6,7 +6,7 @@ Complete replacement that uses SQLAlchemy models instead of mock data.
 
 import logging
 from typing import List, Dict, Any, Optional, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from flask import current_app
@@ -283,7 +283,7 @@ class AlertManager:
                 return []
             
             session = self.db_session()
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
             
             query = session.query(AlertHistory).filter(
                 AlertHistory.triggered_at >= cutoff_date
@@ -311,7 +311,7 @@ class AlertManager:
                 }
             
             session = self.db_session()
-            today = datetime.utcnow().date()
+            today = datetime.now(tz=timezone.utc).date()
             
             # Count total rules
             total_rules = session.query(AlertRule).count()
@@ -350,7 +350,7 @@ class AlertManager:
                 'resolved_today': resolved_today,
                 'enabled_rules': session.query(AlertRule).filter(AlertRule.enabled == True).count(),
                 'registered_metrics': len(self._metric_providers),
-                'last_evaluation': datetime.utcnow().isoformat()
+                'last_evaluation': datetime.now(tz=timezone.utc).isoformat()
             }
             
         except Exception as e:
@@ -439,7 +439,7 @@ class AlertManager:
                 severity=rule.severity,
                 status=AlertStatus.ACTIVE,
                 message=f"{rule.metric_name} {rule.condition.value} {rule.threshold_value} (current: {metric_value})",
-                triggered_at=datetime.utcnow()
+                triggered_at=datetime.now(tz=timezone.utc)
             )
             
             session.add(alert)
@@ -470,7 +470,7 @@ class AlertManager:
             snapshot = MetricSnapshot(
                 metric_name=metric_name,
                 value=value,
-                timestamp=timestamp or datetime.utcnow(),
+                timestamp=timestamp or datetime.now(tz=timezone.utc),
                 source="system"
             )
             
@@ -496,7 +496,7 @@ class AlertManager:
                 return []
             
             session = self.db_session()
-            cutoff_date = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
             
             return session.query(MetricSnapshot).filter(
                 and_(
@@ -584,7 +584,7 @@ class AlertManager:
                     and_(
                         AlertHistory.rule_id == rule.id,
                         AlertHistory.status == AlertStatus.ACTIVE,
-                        AlertHistory.triggered_at >= datetime.utcnow() - timedelta(minutes=rule.cooldown_minutes)
+                        AlertHistory.triggered_at >= datetime.now(tz=timezone.utc) - timedelta(minutes=rule.cooldown_minutes)
                     )
                 ).first()
                 
@@ -605,7 +605,7 @@ class AlertManager:
                 return 0
             
             session = self.db_session()
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
             
             # Delete old resolved alerts
             deleted_count = session.query(AlertHistory).filter(

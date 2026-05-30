@@ -7,7 +7,7 @@ for wizard forms with detailed logging and user-friendly error messages.
 
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Union, Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -58,7 +58,7 @@ class WizardError:
     
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(tz=timezone.utc)
         if self.error_id is None:
             import uuid
             self.error_id = str(uuid.uuid4())

@@ -16,7 +16,7 @@ import os
 import json
 import secrets
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
@@ -106,7 +106,7 @@ class MFACredential(Model):
     def is_locked(self) -> bool:
         """Check if credential is temporarily locked due to failed attempts."""
         return (self.locked_until is not None and 
-                self.locked_until > datetime.utcnow())
+                self.locked_until > datetime.now(tz=timezone.utc))
     
     def get_decrypted_data(self) -> Dict[str, Any]:
         """
@@ -210,7 +210,7 @@ class MFACredential(Model):
     def record_successful_use(self, ip_address: str = None, user_agent: str = None) -> None:
         """Record successful use of this credential."""
         self.use_count += 1
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(tz=timezone.utc)
         self.failed_attempts = 0  # Reset on success
         self.locked_until = None
         
@@ -222,11 +222,11 @@ class MFACredential(Model):
     def record_failed_attempt(self, ip_address: str = None) -> None:
         """Record failed authentication attempt."""
         self.failed_attempts += 1
-        self.last_failure_at = datetime.utcnow()
+        self.last_failure_at = datetime.now(tz=timezone.utc)
         
         # Lock credential after 5 failed attempts
         if self.failed_attempts >= 5:
-            self.locked_until = datetime.utcnow() + timedelta(minutes=15)
+            self.locked_until = datetime.now(tz=timezone.utc) + timedelta(minutes=15)
     
     def __repr__(self):
         return f"<MFACredential {self.user.username}:{self.method_type}:{self.name}>"
@@ -333,7 +333,7 @@ class WebAuthnCredential(Model):
     def record_use(self, ip_address: str = None, user_agent: str = None) -> None:
         """Record successful use of this credential."""
         self.use_count += 1
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(tz=timezone.utc)
         
         if ip_address:
             self.last_used_ip = ip_address
@@ -398,7 +398,7 @@ class MFAChallenge(Model):
     @hybrid_property
     def is_expired(self) -> bool:
         """Check if challenge has expired."""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(tz=timezone.utc) > self.expires_at
     
     @hybrid_property
     def is_exhausted(self) -> bool:
@@ -439,7 +439,7 @@ class MFAChallenge(Model):
         
         if is_valid:
             self.is_completed = True
-            self.completed_at = datetime.utcnow()
+            self.completed_at = datetime.now(tz=timezone.utc)
         
         return is_valid
     
@@ -541,7 +541,7 @@ class BackupCode(Model):
         # Time-constant comparison
         if hmac.compare_digest(self.code_hash, provided_hash):
             self.is_used = True
-            self.used_at = datetime.utcnow()
+            self.used_at = datetime.now(tz=timezone.utc)
             return True
         
         return False

@@ -18,13 +18,13 @@ Key Features:
 import logging
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Union, Callable, Type
 from enum import Enum
 from dataclasses import dataclass, field
 from functools import wraps
 
-from ..exceptions import FABException
+from .base import FABException
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ class StandardizedFABException(FABException):
     def _generate_error_code(self) -> str:
         """Generate unique error code based on class name and timestamp."""
         class_name = self.__class__.__name__.replace('Exception', '').replace('Error', '')
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
         return f"FAB_{class_name.upper()}_{timestamp}_{unique_id}"
 
@@ -225,7 +225,7 @@ class StandardizedFABException(FABException):
             'error_code': self.error_code,
             'error_message': self.message,
             'user_id': self.context.user_id if self.context else None,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'severity': self.severity.value,
             'client_info': self.context.client_info if self.context else None
         }

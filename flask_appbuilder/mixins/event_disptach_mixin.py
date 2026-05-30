@@ -42,7 +42,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum, auto
 from typing import Any
 
@@ -320,7 +320,7 @@ class EventDispatchMixin:
 		Returns:
 			bool: True when all applicable handlers succeeded
 		"""
-		start_time = datetime.utcnow()
+		start_time = datetime.now(tz=timezone.utc)
 
 		# Build request context metadata defensively (may run outside request context)
 		try:
@@ -386,18 +386,18 @@ class EventDispatchMixin:
 					result = await h.handle(ev)
 					success = success and bool(result)
 
-			duration = (datetime.utcnow() - start_time).total_seconds()
+			duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 			self._update_metrics(event_type, success, duration)
 
 			if not success:
 				logger.error("Event dispatch failed for %s", event_type)
 				self.event_metadata["last_error"] = {
-					"timestamp": datetime.utcnow().isoformat(),
+					"timestamp": datetime.now(tz=timezone.utc).isoformat(),
 					"event_type": event_type.name,
 				}
 				await self._handle_failed_event(ev)
 			else:
-				self.event_metadata["last_success"] = datetime.utcnow().isoformat()
+				self.event_metadata["last_success"] = datetime.now(tz=timezone.utc).isoformat()
 
 			db.session.commit()
 			return success
@@ -407,7 +407,7 @@ class EventDispatchMixin:
 			if self.event_metadata is None:
 				self.event_metadata = {}
 			self.event_metadata["last_error"] = {
-				"timestamp": datetime.utcnow().isoformat(),
+				"timestamp": datetime.now(tz=timezone.utc).isoformat(),
 				"error": "see server logs",
 			}
 			db.session.commit()
@@ -636,7 +636,7 @@ class FailedEvent(Model):
 		Args:
 			base_minutes: Base interval in minutes (multiplied by retry_count)
 		"""
-		self.next_retry = datetime.utcnow() + timedelta(
+		self.next_retry = datetime.now(tz=timezone.utc) + timedelta(
 			minutes=base_minutes * max(self.retry_count, 1)
 		)
 
@@ -647,7 +647,7 @@ class FailedEvent(Model):
 			user_id: ID of the user resolving the failure
 		"""
 		self.resolved = True
-		self.resolved_at = datetime.utcnow()
+		self.resolved_at = datetime.now(tz=timezone.utc)
 		self.resolved_by = user_id
 
 
@@ -732,7 +732,7 @@ class EventMonitor:
 			.where(
 				FailedEvent.resolved == False,  # noqa: E712
 				FailedEvent.retry_count < max_retry,
-				(FailedEvent.next_retry == None) | (FailedEvent.next_retry <= datetime.utcnow()),  # noqa: E711
+				(FailedEvent.next_retry == None) | (FailedEvent.next_retry <= datetime.now(tz=timezone.utc)),  # noqa: E711
 			)
 		)
 		failed_events: list[FailedEvent] = db.session.execute(stmt).scalars().all()

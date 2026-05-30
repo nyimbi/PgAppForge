@@ -7,7 +7,7 @@ for approval workflow operations with comprehensive threat protection.
 
 import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import hashlib
 import hmac
@@ -141,7 +141,7 @@ class ApprovalSecurityConfig:
         Returns:
             Standardized error response dictionary
         """
-        error_id = f"{operation}_{int(datetime.utcnow().timestamp())}"
+        error_id = f"{operation}_{int(datetime.now(tz=timezone.utc).timestamp())}"
         
         # Log the error
         log.error(f"Security operation '{operation}' failed [ID: {error_id}]: {str(error)}")
@@ -226,7 +226,7 @@ class ApprovalSecurityConfig:
 
             # Check if token has expired
             expiry_time = timestamp + (self.config['csrf_token_expiry_hours'] * 3600)
-            if datetime.utcnow().timestamp() > expiry_time:
+            if datetime.now(tz=timezone.utc).timestamp() > expiry_time:
                 return False
 
             # Generate expected hash
@@ -256,7 +256,7 @@ class ApprovalSecurityConfig:
         """Check if user has exceeded rate limits using persistent storage."""
         try:
             state_key = f"rate_limit:{user_id}:{operation_type}"
-            current_time = datetime.utcnow()
+            current_time = datetime.now(tz=timezone.utc)
             window_start = current_time - timedelta(minutes=self.config['rate_limit_window_minutes'])
             
             # Clean old entries
@@ -299,7 +299,7 @@ class ApprovalSecurityConfig:
         """Check if user is temporarily blocked due to suspicious activity using persistent storage."""
         try:
             state_key = f"blocked_user:{user_id}"
-            current_time = datetime.utcnow()
+            current_time = datetime.now(tz=timezone.utc)
             
             # Check for active blocks
             blocked_state = db.session.query(SecurityState).filter(
@@ -321,7 +321,7 @@ class ApprovalSecurityConfig:
         Returns True if user should be blocked.
         """
         try:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(tz=timezone.utc)
             state_key = f"failed_attempts:{user_id}:{operation_type}"
             window_start = current_time - timedelta(minutes=self.config['account_lockout_minutes'])
             
@@ -466,7 +466,7 @@ class ApprovalSecurityConfig:
             
             # Send to SIEM/security monitoring
             self._send_to_security_monitoring({
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'event_type': event_type,
                 'user_id': user_id,
                 'request_id': request_id,

@@ -15,7 +15,7 @@ management systems to provide comprehensive business functionality.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -112,7 +112,7 @@ class WorkflowMixin(AuditMixin):
         state_change = {
             'from_state': old_state,
             'to_state': new_state,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'user_id': user_id or self._get_current_user_id(),
             'reason': reason,
             'metadata': metadata or {}
@@ -319,7 +319,7 @@ class ApprovalWorkflowMixin(WorkflowMixin):
             approval_data = {
                 'user_id': user_id,
                 'step': self.current_approval_step,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'comments': comments,
                 'action': 'approved',
                 'ip_address': getattr(request, 'remote_addr', None) if 'request' in globals() else None
@@ -373,7 +373,7 @@ class ApprovalWorkflowMixin(WorkflowMixin):
         rejection_data = {
             'user_id': user_id,
             'step': self.current_approval_step,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'reason': reason,
             'action': 'rejected'
         }
@@ -473,7 +473,7 @@ class ApprovalWorkflowMixin(WorkflowMixin):
             if approval_window and hasattr(self, 'created_on'):
                 from datetime import datetime, timedelta
                 cutoff_time = self.created_on + timedelta(hours=approval_window)
-                if datetime.utcnow() > cutoff_time:
+                if datetime.now(tz=timezone.utc) > cutoff_time:
                     log.info(f"Approval window of {approval_window} hours has expired")
                     return False
             

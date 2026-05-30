@@ -8,7 +8,7 @@ escalation, conditional routing, and parallel approval processing.
 import logging
 import json
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple, Callable
 from enum import Enum
 from dataclasses import dataclass
@@ -18,6 +18,9 @@ from flask import current_app, g
 from sqlalchemy import and_, or_, desc
 from sqlalchemy.orm import joinedload
 
+from ...utils.db_performance import (
+    QueryOptimizer, QueryLimits, monitor_query_performance
+)
 from ..models.process_models import (
     ApprovalRequest, ApprovalChain, ApprovalRule, ProcessStep,
     ProcessInstance, ApprovalStatus
@@ -77,7 +80,7 @@ class ApprovalDecision:
     
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(tz=timezone.utc)
 
 
 class ApprovalChainManager:
@@ -332,7 +335,7 @@ class ApprovalChainManager:
                     order_index=i,
                     required=approver.get('required', True),
                     delegate_allowed=approver.get('delegate_allowed', False),
-                    requested_at=datetime.utcnow(),
+                    requested_at=datetime.now(tz=timezone.utc),
                     expires_at=context.due_date
                 )
                 
@@ -397,12 +400,16 @@ class ApprovalChainManager:
         from flask_appbuilder import db
         db_session = db.session
         
-        # Get all requests in the chain with eager loading to eliminate N+1 queries
-        all_requests = db_session.query(ApprovalRequest)\
+        # Get all requests in the chain with performance optimization
+        optimizer = QueryOptimizer()
+        requests_query = db_session.query(ApprovalRequest)\
             .options(joinedload(ApprovalRequest.approver))\
             .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
             .filter_by(chain_id=chain.id)\
-            .order_by(ApprovalRequest.order_index).all()
+            .order_by(ApprovalRequest.order_index)
+
+        # Approval chains are typically small, but add safety limit
+        all_requests = optimizer.safe_all(requests_query, max_results=QueryLimits.DEFAULT_PAGE_SIZE)
         
         pending_requests = [r for r in all_requests if r.status == ApprovalStatus.PENDING.value]
         approved_requests = [r for r in all_requests if r.status == ApprovalStatus.APPROVED.value]
@@ -456,7 +463,7 @@ class ApprovalChainManager:
         # Update chain status
         if chain_complete:
             chain.status = ApprovalStatus.APPROVED.value if chain_approved else ApprovalStatus.REJECTED.value
-            chain.completed_at = datetime.utcnow()
+            chain.completed_at = datetime.now(tz=timezone.utc)
         
         return {
             'chain_complete': chain_complete,
@@ -519,7 +526,7 @@ class ApprovalChainManager:
                     order_index=next_request.order_index,
                     required=next_request.required,
                     delegate_allowed=next_request.delegate_allowed,
-                    requested_at=datetime.utcnow(),
+                    requested_at=datetime.now(tz=timezone.utc),
                     expires_at=next_request.expires_at
                 )
                 db_session.add(new_request)
@@ -569,7 +576,7 @@ class ApprovalChainManager:
             step_output = {
                 'approval_result': 'approved' if approved else 'rejected',
                 'approval_chain_id': chain.id,
-                'completed_at': datetime.utcnow().isoformat()
+                'completed_at': datetime.now(tz=timezone.utc).isoformat()
             }
             
             if approved:
@@ -648,7 +655,7 @@ class ApprovalChainManager:
                 original_request.delegated_to_id = delegate_to_id
                 original_request.delegated_by_id = delegated_by_id
                 original_request.delegation_reason = reason
-                original_request.delegated_at = datetime.utcnow()
+                original_request.delegated_at = datetime.now(tz=timezone.utc)
                 
                 # Create new request for delegate
                 delegated_request = ApprovalRequest(
@@ -662,7 +669,7 @@ class ApprovalChainManager:
                     order_index=original_request.order_index,
                     required=original_request.required,
                     delegate_allowed=original_request.delegate_allowed,
-                    requested_at=datetime.utcnow(),
+                    requested_at=datetime.now(tz=timezone.utc),
                     expires_at=original_request.expires_at,
                     original_request_id=original_request.id
                 )
@@ -714,7 +721,7 @@ class ApprovalChainManager:
                 original_request.status = ApprovalStatus.ESCALATED.value
                 original_request.escalated_to_id = escalate_to_id
                 original_request.escalation_reason = escalation_reason.value
-                original_request.escalated_at = datetime.utcnow()
+                original_request.escalated_at = datetime.now(tz=timezone.utc)
                 
                 # Create escalated request
                 escalated_request = ApprovalRequest(
@@ -728,7 +735,7 @@ class ApprovalChainManager:
                     order_index=original_request.order_index,
                     required=True,  # Escalated requests are always required
                     delegate_allowed=True,
-                    requested_at=datetime.utcnow(),
+                    requested_at=datetime.now(tz=timezone.utc),
                     expires_at=original_request.expires_at,
                     original_request_id=original_request.id,
                     is_escalated=True
@@ -809,15 +816,19 @@ class ApprovalChainManager:
             
             from flask_appbuilder import db
             db_session = db.session
-            # Get pending requests with eager loading to eliminate N+1 queries
-            requests = db_session.query(ApprovalRequest)\
+            # Get pending requests with performance optimization
+            optimizer = QueryOptimizer()
+            requests_query = db_session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter(\
                     ApprovalRequest.tenant_id == tenant_id,\
                     ApprovalRequest.approver_id == user_id,\
                     ApprovalRequest.status == ApprovalStatus.PENDING.value\
-                ).order_by(desc(ApprovalRequest.requested_at)).all()
+                ).order_by(desc(ApprovalRequest.requested_at))
+
+            # Limit pending requests to prevent performance issues
+            requests = optimizer.safe_all(requests_query, max_results=100)
             
             return requests
             
@@ -834,12 +845,16 @@ class ApprovalChainManager:
             if not chain:
                 return {}
             
-            # Get requests with eager loading to eliminate N+1 queries
-            requests = db_session.query(ApprovalRequest)\
+            # Get requests with performance optimization
+            optimizer = QueryOptimizer()
+            requests_query = db_session.query(ApprovalRequest)\
                 .options(joinedload(ApprovalRequest.approver))\
                 .options(joinedload(ApprovalRequest.chain).joinedload('step').joinedload('instance').joinedload('definition'))\
                 .filter_by(chain_id=chain_id)\
-                .order_by(ApprovalRequest.order_index).all()
+                .order_by(ApprovalRequest.order_index)
+
+            # Approval chains are typically small, add safety limit
+            requests = optimizer.safe_all(requests_query, max_results=QueryLimits.DEFAULT_PAGE_SIZE)
             
             request_details = []
             for request in requests:
@@ -1185,7 +1200,7 @@ class EscalationManager:
             from ...tasks import escalate_approval_request
             
             # Calculate delay in seconds
-            delay = (escalation_time - datetime.utcnow()).total_seconds()
+            delay = (escalation_time - datetime.now(tz=timezone.utc)).total_seconds()
             if delay <= 0:
                 # Already past escalation time, escalate immediately
                 self.escalate_request(request_id)
@@ -1200,7 +1215,7 @@ class EscalationManager:
             # Track escalation job for later cancellation
             self.escalation_jobs[request_id] = {
                 'task_id': task_result.id,
-                'scheduled_at': datetime.utcnow(),
+                'scheduled_at': datetime.now(tz=timezone.utc),
                 'escalation_time': escalation_time
             }
             
@@ -1253,7 +1268,7 @@ class EscalationManager:
             
             # Mark as escalated
             request.status = 'escalated'
-            request.escalated_at = datetime.utcnow()
+            request.escalated_at = datetime.now(tz=timezone.utc)
             request.escalation_level = getattr(request, 'escalation_level', 0) + 1
             
             # Create escalated request (would need to find next approver in chain)
@@ -1271,7 +1286,7 @@ class EscalationManager:
         """Check for and handle expired approval requests."""
         try:
             tenant_id = TenantContext.get_current_tenant_id()
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             
             from flask_appbuilder import db
             db_session = db.session
@@ -1317,7 +1332,7 @@ class EscalationManager:
                     approved=False,
                     approver_id=0,  # System rejection
                     comment='Request timed out',
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.now(tz=timezone.utc)
                 )
                 
                 chain_manager = ApprovalChainManager()
@@ -1328,7 +1343,7 @@ class EscalationManager:
                     approved=True,
                     approver_id=0,  # System approval
                     comment='Request auto-approved due to timeout',
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.now(tz=timezone.utc)
                 )
                 
                 chain_manager = ApprovalChainManager()

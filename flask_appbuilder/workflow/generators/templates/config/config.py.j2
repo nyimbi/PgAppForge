@@ -1,0 +1,279 @@
+"""
+{{ workflow.name }} Workflow Configuration
+Generated from WDL on {{ timestamp }}
+
+This configuration file contains settings specific to the {{ workflow.name }} workflow.
+"""
+
+import os
+from datetime import timedelta
+
+# Base Flask-AppBuilder Configuration
+APP_NAME = "{{ workflow.name }} Workflow"
+APP_ICON = "{{ workflow.metadata.icon or 'fa-tasks' }}"
+APP_ICON_WIDTH = 20
+
+# Theme and UI Configuration
+APP_THEME = "{{ workflow.ui.theme or 'bootstrap-theme.css' }}"
+{% if workflow.ui.logo %}
+APP_LOGO = "{{ workflow.ui.logo }}"
+{% endif %}
+
+# Database Configuration
+SQLALCHEMY_DATABASE_URI = os.environ.get(
+    'SQLALCHEMY_DATABASE_URI',
+    'sqlite:///{{ workflow.name.lower() }}_workflow.db'
+)
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+SQLALCHEMY_ENGINE_OPTIONS = {
+    'pool_pre_ping': True,
+    'pool_recycle': 3600,
+}
+
+# Security Configuration
+SECRET_KEY = os.environ.get('SECRET_KEY', 'change-this-in-production')
+CSRF_ENABLED = True
+WTF_CSRF_TIME_LIMIT = None
+
+# Session Configuration
+PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Flask-AppBuilder Security Configuration
+AUTH_TYPE = {{ workflow.security.auth_type or 'AUTH_DB' }}
+AUTH_ROLE_ADMIN = '{{ workflow.security.admin_role or 'Admin' }}'
+AUTH_ROLE_PUBLIC = '{{ workflow.security.public_role or 'Public' }}'
+
+# User registration configuration
+AUTH_USER_REGISTRATION = {{ workflow.security.allow_registration | tojson }}
+AUTH_USER_REGISTRATION_ROLE = '{{ workflow.security.registration_role or 'Viewer' }}'
+
+{% if workflow.security.oauth %}
+# OAuth Configuration
+AUTH_TYPE = AUTH_OAUTH
+OAUTH_PROVIDERS = [
+    {% for provider in workflow.security.oauth %}
+    {
+        'name': '{{ provider.name }}',
+        'token_key': '{{ provider.token_key }}',
+        'icon': '{{ provider.icon }}',
+        'remote_app': {
+            'client_id': os.environ.get('{{ provider.name.upper() }}_CLIENT_ID'),
+            'client_secret': os.environ.get('{{ provider.name.upper() }}_CLIENT_SECRET'),
+            'server_metadata_url': '{{ provider.metadata_url }}',
+            'client_kwargs': {
+                'scope': '{{ provider.scope or 'openid email profile' }}'
+            }
+        }
+    },
+    {% endfor %}
+]
+{% endif %}
+
+# Email Configuration (for notifications)
+MAIL_SERVER = os.environ.get('MAIL_SERVER', 'localhost')
+MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
+MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
+MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@{{ workflow.name.lower() }}.com')
+
+# Workflow-Specific Configuration
+WORKFLOW_CONFIG = {
+    'name': '{{ workflow.name }}',
+    'version': '{{ workflow.version }}',
+    'description': '{{ workflow.description }}',
+
+    # Auto-save configuration
+    'auto_save_enabled': {{ workflow.features.auto_save | default(true) | tojson }},
+    'auto_save_interval': {{ workflow.features.auto_save_interval or 30 }},  # seconds
+
+    # Collaboration features
+    'collaboration_enabled': {{ workflow.features.collaboration | default(true) | tojson }},
+    'real_time_updates': {{ workflow.features.real_time | default(true) | tojson }},
+    'comments_enabled': {{ workflow.features.comments | default(true) | tojson }},
+
+    # Notification settings
+    'notifications_enabled': {{ workflow.features.notifications | default(true) | tojson }},
+    'email_notifications': {{ workflow.features.email_notifications | default(false) | tojson }},
+    'notification_delay': {{ workflow.features.notification_delay or 300 }},  # seconds
+
+    # Step configuration
+    'steps': {{ workflow.steps | tojson }},
+
+    # Validation settings
+    'strict_validation': {{ workflow.validation.strict | default(false) | tojson }},
+    'async_validation': {{ workflow.validation.async | default(true) | tojson }},
+
+    # Performance settings
+    'cache_enabled': {{ workflow.performance.cache | default(true) | tojson }},
+    'cache_timeout': {{ workflow.performance.cache_timeout or 3600 }},  # seconds
+    'max_concurrent_users': {{ workflow.performance.max_users or 100 }},
+
+    # Security settings
+    'step_permissions': {{ workflow.permissions | tojson }},
+    'audit_enabled': {{ workflow.security.audit | default(true) | tojson }},
+    'field_encryption': {{ workflow.security.encryption | default([]) | tojson }},
+}
+
+# Step-specific configurations
+{% for step_name, step_config in workflow.steps.items() %}
+{{ step_name.upper() }}_STEP_CONFIG = {
+    'title': '{{ step_config.title }}',
+    'description': '{{ step_config.description }}',
+    'estimated_time': '{{ step_config.get("estimatedTime", "") }}',
+    'auto_advance': {{ step_config.get("autoAdvance", false) | tojson }},
+    'allow_back': {{ step_config.get("allowBack", true) | tojson }},
+    'validation_on_change': {{ step_config.get("validateOnChange", true) | tojson }},
+    'required_roles': {{ step_config.get("permissions", {}).get("view", []) | tojson }},
+    'edit_roles': {{ step_config.get("permissions", {}).get("edit", []) | tojson }},
+}
+{% endfor %}
+
+# Redis Configuration (for caching and real-time features)
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CACHE_TYPE = 'redis'
+CACHE_REDIS_URL = REDIS_URL
+CACHE_DEFAULT_TIMEOUT = 300
+
+# Celery Configuration (for background tasks)
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/1')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2')
+
+CELERY_CONFIG = {
+    'broker_url': CELERY_BROKER_URL,
+    'result_backend': CELERY_RESULT_BACKEND,
+    'task_serializer': 'json',
+    'result_serializer': 'json',
+    'accept_content': ['json'],
+    'result_expires': 3600,
+    'timezone': 'UTC',
+    'enable_utc': True,
+
+    # Task routing for workflow-specific tasks
+    'task_routes': {
+        '{{ workflow.name.lower() }}.tasks.*': {'queue': '{{ workflow.name.lower() }}_queue'},
+        '{{ workflow.name.lower() }}.notifications.*': {'queue': 'notifications'},
+        '{{ workflow.name.lower() }}.reports.*': {'queue': 'reports'},
+    },
+}
+
+# File Upload Configuration
+{% if workflow.features.file_upload %}
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+MAX_CONTENT_LENGTH = {{ workflow.features.max_file_size or '16 * 1024 * 1024' }}  # 16MB
+ALLOWED_EXTENSIONS = {{ workflow.features.allowed_extensions | default(['pdf', 'doc', 'docx', 'txt', 'jpg', 'png']) | tojson }}
+
+# Create upload directory if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+{% endif %}
+
+# Logging Configuration
+LOGGING_CONFIG = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'default': {
+            'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+        },
+        'workflow': {
+            'format': '[%(asctime)s] [{{ workflow.name }}] %(levelname)s: %(message)s',
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'INFO',
+            'formatter': 'default',
+            'stream': 'ext://sys.stdout'
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'level': 'INFO',
+            'formatter': 'workflow',
+            'filename': 'logs/{{ workflow.name.lower() }}_workflow.log',
+            'maxBytes': 10485760,  # 10MB
+            'backupCount': 5
+        }
+    },
+    'loggers': {
+        '{{ workflow.name.lower() }}': {
+            'level': 'INFO',
+            'handlers': ['console', 'file'],
+            'propagate': False
+        }
+    },
+    'root': {
+        'level': 'WARNING',
+        'handlers': ['console']
+    }
+}
+
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
+
+# API Configuration
+RESTFUL_API_VERSION = 'v1'
+API_TITLE = '{{ workflow.name }} Workflow API'
+API_VERSION = '{{ workflow.version }}'
+OPENAPI_VERSION = '3.0.2'
+OPENAPI_URL_PREFIX = '/api/docs'
+OPENAPI_SWAGGER_UI_PATH = '/swagger'
+OPENAPI_SWAGGER_UI_URL = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist/'
+
+# Environment-specific overrides
+if os.environ.get('FLASK_ENV') == 'development':
+    # Development settings
+    DEBUG = True
+    SQLALCHEMY_ECHO = False
+    SESSION_COOKIE_SECURE = False
+    WTF_CSRF_ENABLED = False
+
+elif os.environ.get('FLASK_ENV') == 'testing':
+    # Testing settings
+    TESTING = True
+    WTF_CSRF_ENABLED = False
+    SESSION_COOKIE_SECURE = False
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+
+else:
+    # Production settings
+    DEBUG = False
+    TESTING = False
+
+    # Enhanced security for production
+    SESSION_COOKIE_SECURE = True
+    CSRF_ENABLED = True
+
+    # Performance optimizations
+    SQLALCHEMY_ENGINE_OPTIONS.update({
+        'pool_size': 20,
+        'max_overflow': 30,
+        'pool_timeout': 30,
+    })
+
+# Custom Flask-AppBuilder configuration
+FAB_ROLES = {
+    '{{ workflow.name }}_Admin': [
+        ['can_list', '{{ workflow.name }}WorkflowView'],
+        ['can_show', '{{ workflow.name }}WorkflowView'],
+        ['can_add', '{{ workflow.name }}WorkflowView'],
+        ['can_edit', '{{ workflow.name }}WorkflowView'],
+        ['can_delete', '{{ workflow.name }}WorkflowView'],
+        {% for step_name in workflow.steps.keys() %}
+        ['can_{{ step_name.lower() }}_step', '{{ workflow.name }}WorkflowView'],
+        {% endfor %}
+    ],
+    '{{ workflow.name }}_User': [
+        ['can_list', '{{ workflow.name }}WorkflowView'],
+        ['can_show', '{{ workflow.name }}WorkflowView'],
+        ['can_add', '{{ workflow.name }}WorkflowView'],
+        {% for step_name, step_config in workflow.steps.items() %}
+        {% if not step_config.get('permissions', {}).get('view') %}
+        ['can_{{ step_name.lower() }}_step', '{{ workflow.name }}WorkflowView'],
+        {% endif %}
+        {% endfor %}
+    ]
+}

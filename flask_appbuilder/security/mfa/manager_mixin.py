@@ -26,7 +26,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List, Tuple, Union
 from functools import wraps
 
@@ -121,7 +121,7 @@ class MFASessionState:
         session[MFASessionState.MFA_STATE_KEY] = MFASessionState.CHALLENGED
         session[MFASessionState.MFA_USER_ID_KEY] = user_id
         session[MFASessionState.MFA_CHALLENGE_METHOD_KEY] = method
-        session[MFASessionState.MFA_CHALLENGE_TIME_KEY] = datetime.utcnow().isoformat()
+        session[MFASessionState.MFA_CHALLENGE_TIME_KEY] = datetime.now(tz=timezone.utc).isoformat()
         session[MFASessionState.MFA_ATTEMPTS_KEY] = 0
     
     @staticmethod
@@ -135,7 +135,7 @@ class MFASessionState:
         """
         session[MFASessionState.MFA_STATE_KEY] = MFASessionState.VERIFIED
         session[MFASessionState.MFA_USER_ID_KEY] = user_id
-        session[MFASessionState.MFA_VERIFIED_TIME_KEY] = datetime.utcnow().isoformat()
+        session[MFASessionState.MFA_VERIFIED_TIME_KEY] = datetime.now(tz=timezone.utc).isoformat()
         
         # Clear challenge state
         session.pop(MFASessionState.MFA_CHALLENGE_METHOD_KEY, None)
@@ -164,7 +164,7 @@ class MFASessionState:
             duration_seconds: Duration of lockout in seconds
         """
         session[MFASessionState.MFA_STATE_KEY] = MFASessionState.LOCKED
-        lockout_until = datetime.utcnow() + timedelta(seconds=duration_seconds)
+        lockout_until = datetime.now(tz=timezone.utc) + timedelta(seconds=duration_seconds)
         session[MFASessionState.MFA_LOCKOUT_TIME_KEY] = lockout_until.isoformat()
     
     @staticmethod
@@ -183,7 +183,7 @@ class MFASessionState:
             return False
         
         lockout_time = datetime.fromisoformat(lockout_time_str)
-        return datetime.utcnow() < lockout_time
+        return datetime.now(tz=timezone.utc) < lockout_time
     
     @staticmethod
     def is_verified_and_valid() -> bool:
@@ -204,7 +204,7 @@ class MFASessionState:
         timeout_seconds = current_app.config.get('MFA_SESSION_TIMEOUT', 3600)
         session_expires = verified_time + timedelta(seconds=timeout_seconds)
         
-        return datetime.utcnow() < session_expires
+        return datetime.now(tz=timezone.utc) < session_expires
     
     @staticmethod
     def clear() -> None:

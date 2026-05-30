@@ -13,7 +13,7 @@ import threading
 import asyncio
 import ssl
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -302,7 +302,7 @@ class SecureCredentialManager:
 			return None
 		
 		# Check expiration
-		if credential.expires_at and datetime.utcnow() > credential.expires_at:
+		if credential.expires_at and datetime.now(tz=timezone.utc) > credential.expires_at:
 			logger.warning(f"Credential {credential_id} has expired")
 			return None
 		
@@ -311,7 +311,7 @@ class SecureCredentialManager:
 			decrypted_data = self._decrypt_data(credential.encrypted_data)
 			
 			# Update last used timestamp
-			credential.last_used = datetime.utcnow()
+			credential.last_used = datetime.now(tz=timezone.utc)
 			
 			return decrypted_data
 		except Exception as e:
@@ -403,7 +403,7 @@ class LDAPIntegration:
 			"use_ssl": config.get("use_ssl", True),
 			"port": config.get("port", 636 if config.get("use_ssl", True) else 389),
 			"timeout": config.get("timeout", 30),
-			"created_at": datetime.utcnow()
+			"created_at": datetime.now(tz=timezone.utc)
 		}
 		
 		with self._lock:
@@ -612,7 +612,7 @@ class APIManager:
 			"api_key": api_key,
 			"api_secret_hash": hashlib.sha256(api_secret.encode()).hexdigest(),
 			"permissions": permissions or [],
-			"created_at": datetime.utcnow(),
+			"created_at": datetime.now(tz=timezone.utc),
 			"expires_at": expires_at,
 			"is_active": True,
 			"usage_count": 0,
@@ -636,7 +636,7 @@ class APIManager:
 			return None
 		
 		# Check expiration
-		if key_info["expires_at"] and datetime.utcnow() > key_info["expires_at"]:
+		if key_info["expires_at"] and datetime.now(tz=timezone.utc) > key_info["expires_at"]:
 			return None
 		
 		# Verify secret
@@ -646,7 +646,7 @@ class APIManager:
 		
 		# Update usage
 		key_info["usage_count"] += 1
-		key_info["last_used"] = datetime.utcnow()
+		key_info["last_used"] = datetime.now(tz=timezone.utc)
 		
 		return key_info
 	
@@ -659,7 +659,7 @@ class APIManager:
 			
 			# Get rate limit for this key/endpoint
 			limit_key = f"{api_key}:{endpoint_id}"
-			current_time = datetime.utcnow()
+			current_time = datetime.now(tz=timezone.utc)
 			
 			if limit_key not in self.rate_limits:
 				self.rate_limits[limit_key] = {
@@ -760,7 +760,7 @@ class AuditLogger:
 		
 		log_entry = AuditLogEntry(
 			log_id=log_id,
-			timestamp=datetime.utcnow(),
+			timestamp=datetime.now(tz=timezone.utc),
 			user_id=user_id,
 			action=action,
 			resource=resource,
@@ -812,7 +812,7 @@ class AuditLogger:
 	
 	def get_audit_statistics(self, hours_back: int = 24) -> Dict[str, Any]:
 		"""Get audit statistics"""
-		cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+		cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours_back)
 		
 		with self._lock:
 			recent_logs = [
@@ -905,7 +905,7 @@ class ExternalConnector:
 			"connection_string": connection_string,
 			"database_type": database_type,
 			"status": ConnectorStatus.CONFIGURING,
-			"created_at": datetime.utcnow(),
+			"created_at": datetime.now(tz=timezone.utc),
 			"last_tested": None,
 			"test_results": None
 		}
@@ -930,7 +930,7 @@ class ExternalConnector:
 			"base_url": base_url,
 			"headers": headers or {},
 			"status": ConnectorStatus.CONFIGURING,
-			"created_at": datetime.utcnow(),
+			"created_at": datetime.now(tz=timezone.utc),
 			"last_tested": None,
 			"test_results": None
 		}
@@ -958,7 +958,7 @@ class ExternalConnector:
 			else:
 				result = {"success": False, "error": "Unknown connector type"}
 			
-			connector["last_tested"] = datetime.utcnow()
+			connector["last_tested"] = datetime.now(tz=timezone.utc)
 			connector["test_results"] = result
 			connector["status"] = ConnectorStatus.ACTIVE if result["success"] else ConnectorStatus.ERROR
 			
@@ -1164,7 +1164,7 @@ class EnterpriseIntegrationSuite:
 			"provider_type": provider_type,
 			"provider_name": provider_name,
 			"configuration": configuration,
-			"created_at": datetime.utcnow(),
+			"created_at": datetime.now(tz=timezone.utc),
 			"is_active": True
 		}
 		
@@ -1264,13 +1264,13 @@ class EnterpriseIntegrationSuite:
 							# Periodic health check
 							last_tested = connector.get("last_tested")
 							if (not last_tested or 
-								datetime.utcnow() - last_tested > timedelta(hours=1)):
+								datetime.now(tz=timezone.utc) - last_tested > timedelta(hours=1)):
 								self.external_connector.test_connector(connector_id)
 					
 					# Clean up expired credentials
 					for credential in list(self.credential_manager.credentials.values()):
 						if (credential.expires_at and 
-							datetime.utcnow() > credential.expires_at):
+							datetime.now(tz=timezone.utc) > credential.expires_at):
 							credential.is_active = False
 							
 							self.audit_logger.log_event(

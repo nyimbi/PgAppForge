@@ -1,0 +1,392 @@
+{% raw %}{% extends "appbuilder/general/widgets/base_list.html" %}
+{% from 'appbuilder/general/lib.html' import render_field %}
+
+{% block content %}
+<div class="workflow-container">
+    <!-- Workflow Header -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-tasks"></i>
+                        {{ workflow_state.workflow_definition.name }} - {{ workflow_state.current_step_config.title if workflow_state.current_step_config else workflow_state.current_step }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <!-- Progress Bar -->
+                    <div class="workflow-progress">
+                        {{ progress_widget() }}
+                    </div>
+
+                    <!-- Step Description -->
+                    {% if workflow_state.current_step_config %}
+                    <div class="step-description">
+                        <p class="help-block">{{ workflow_state.current_step_config.description }}</p>
+                        {% if workflow_state.current_step_config.estimated_time %}
+                        <small class="text-muted">
+                            <i class="fa fa-clock-o"></i> Estimated time: {{ workflow_state.current_step_config.estimated_time }}
+                        </small>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="row">
+        <!-- Form Section -->
+        <div class="col-md-8">
+            <div class="panel panel-default">
+                <div class="panel-body">
+                    <!-- Dynamic Step Content -->
+                    <div id="workflow-step-content">
+                        {% block step_content %}
+                        <!-- Step-specific content will be loaded here -->
+                        {% endblock %}
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        {{ button_widget() }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <!-- Workflow Information -->
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h4><i class="fa fa-info-circle"></i> Workflow Information</h4>
+                </div>
+                <div class="panel-body">
+                    <dl class="dl-horizontal">
+                        <dt>Status:</dt>
+                        <dd>
+                            <span class="label label-{{ 'success' if workflow_state.status == 'completed' else 'info' if workflow_state.status == 'in_progress' else 'default' }}">
+                                {{ workflow_state.status|title }}
+                            </span>
+                        </dd>
+
+                        <dt>Progress:</dt>
+                        <dd>{{ workflow_state.step_progress_percentage }}%</dd>
+
+                        <dt>Current Step:</dt>
+                        <dd>{{ workflow_state.current_step }}</dd>
+
+                        <dt>Started:</dt>
+                        <dd>{{ workflow_state.created_at.strftime('%Y-%m-%d %H:%M') if workflow_state.created_at else 'N/A' }}</dd>
+
+                        <dt>Last Activity:</dt>
+                        <dd>{{ workflow_state.last_activity_at.strftime('%Y-%m-%d %H:%M') if workflow_state.last_activity_at else 'N/A' }}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Step History -->
+            {% if workflow_state.completed_steps %}
+            <div class="panel panel-success">
+                <div class="panel-heading">
+                    <h4><i class="fa fa-check-circle"></i> Completed Steps</h4>
+                </div>
+                <div class="panel-body">
+                    <ul class="list-unstyled">
+                        {% for step in workflow_state.completed_steps %}
+                        <li>
+                            <i class="fa fa-check text-success"></i>
+                            {{ step }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Next Steps -->
+            {% if workflow_state.available_next_steps %}
+            <div class="panel panel-warning">
+                <div class="panel-heading">
+                    <h4><i class="fa fa-arrow-right"></i> Available Next Steps</h4>
+                </div>
+                <div class="panel-body">
+                    <ul class="list-unstyled">
+                        {% for step in workflow_state.available_next_steps %}
+                        <li>
+                            <i class="fa fa-arrow-circle-right text-warning"></i>
+                            {{ step }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Collaboration Info -->
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4><i class="fa fa-users"></i> Collaboration</h4>
+                </div>
+                <div class="panel-body">
+                    <div id="active-users">
+                        <!-- Active users will be populated via WebSocket -->
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-default" data-toggle="modal" data-target="#commentsModal">
+                        <i class="fa fa-comment"></i> Add Comment
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Comments Modal -->
+<div class="modal fade" id="commentsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title">Add Comment</h4>
+            </div>
+            <div class="modal-body">
+                <form id="commentForm">
+                    <div class="form-group">
+                        <label for="commentText">Comment:</label>
+                        <textarea class="form-control" id="commentText" rows="3" placeholder="Enter your comment..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="commentType">Type:</label>
+                        <select class="form-control" id="commentType">
+                            <option value="comment">Comment</option>
+                            <option value="suggestion">Suggestion</option>
+                            <option value="question">Question</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitComment()">Add Comment</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Workflow JavaScript functionality
+$(document).ready(function() {
+    // Initialize workflow UI
+    initializeWorkflowUI();
+
+    // Setup auto-save if enabled
+    {% if auto_save %}
+    setupAutoSave();
+    {% endif %}
+
+    // Setup collaboration features
+    initializeCollaboration();
+});
+
+function initializeWorkflowUI() {
+    // Setup form validation
+    $('form').on('submit', function(e) {
+        if (!validateCurrentStep()) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    // Setup step navigation
+    $('.workflow-nav button').on('click', function() {
+        var action = $(this).data('action');
+        handleWorkflowAction(action);
+    });
+}
+
+function validateCurrentStep() {
+    var isValid = true;
+
+    // Clear previous errors
+    $('.has-error').removeClass('has-error');
+    $('.help-block.error').remove();
+
+    // Validate required fields
+    $('[required]').each(function() {
+        if (!$(this).val().trim()) {
+            $(this).closest('.form-group').addClass('has-error');
+            $(this).after('<span class="help-block error">This field is required</span>');
+            isValid = false;
+        }
+    });
+
+    return isValid;
+}
+
+function handleWorkflowAction(action) {
+    switch(action) {
+        case 'save_draft':
+            saveDraft();
+            break;
+        case 'previous':
+            navigatePrevious();
+            break;
+        case 'next':
+            advanceWorkflow();
+            break;
+        default:
+            console.log('Unknown action:', action);
+    }
+}
+
+function saveDraft() {
+    var formData = $('form').serialize();
+
+    $.ajax({
+        url: '/api/v1/workflows/{{ workflow.name.lower() }}/{{ workflow_state.id }}/save-draft',
+        method: 'POST',
+        data: formData,
+        success: function(response) {
+            showNotification('Draft saved successfully', 'success');
+        },
+        error: function(xhr) {
+            showNotification('Failed to save draft', 'error');
+        }
+    });
+}
+
+function advanceWorkflow() {
+    if (!validateCurrentStep()) {
+        return;
+    }
+
+    var formData = $('form').serialize();
+
+    $.ajax({
+        url: '/api/v1/workflows/{{ workflow.name.lower() }}/{{ workflow_state.id }}/advance',
+        method: 'POST',
+        data: formData,
+        success: function(response) {
+            window.location.reload();
+        },
+        error: function(xhr) {
+            var response = JSON.parse(xhr.responseText);
+            showNotification('Failed to advance workflow: ' + response.message, 'error');
+        }
+    });
+}
+
+function showNotification(message, type) {
+    var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    var notification = '<div class="alert ' + alertClass + ' alert-dismissible" role="alert">' +
+        '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+        message + '</div>';
+
+    $('#notifications').html(notification);
+    setTimeout(function() {
+        $('.alert').fadeOut();
+    }, 5000);
+}
+
+function submitComment() {
+    var text = $('#commentText').val();
+    var type = $('#commentType').val();
+
+    if (!text.trim()) {
+        alert('Please enter a comment');
+        return;
+    }
+
+    $.ajax({
+        url: '/api/v1/workflows/{{ workflow.name.lower() }}/{{ workflow_state.id }}/comments',
+        method: 'POST',
+        data: JSON.stringify({
+            comment_text: text,
+            comment_type: type,
+            step_id: '{{ workflow_state.current_step }}'
+        }),
+        contentType: 'application/json',
+        success: function(response) {
+            $('#commentsModal').modal('hide');
+            $('#commentText').val('');
+            showNotification('Comment added successfully', 'success');
+        },
+        error: function(xhr) {
+            showNotification('Failed to add comment', 'error');
+        }
+    });
+}
+
+{% if auto_save %}
+function setupAutoSave() {
+    var autoSaveInterval = {{ auto_save_interval | default(30000) }};
+    var isDirty = false;
+
+    // Track form changes
+    $('form input, form textarea, form select').on('change input', function() {
+        isDirty = true;
+    });
+
+    // Auto-save timer
+    setInterval(function() {
+        if (isDirty) {
+            saveDraft();
+            isDirty = false;
+        }
+    }, autoSaveInterval);
+}
+{% endif %}
+
+function initializeCollaboration() {
+    // Setup WebSocket connection for real-time collaboration
+    // This would connect to the collaboration system
+    console.log('Collaboration features initialized');
+}
+</script>
+
+<style>
+.workflow-container {
+    margin-top: 20px;
+}
+
+.workflow-progress {
+    margin-bottom: 20px;
+}
+
+.step-description {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-left: 4px solid #337ab7;
+}
+
+.form-actions {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.workflow-nav .btn {
+    margin-right: 10px;
+}
+
+#notifications {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    z-index: 1050;
+    width: 300px;
+}
+
+.has-error .form-control {
+    border-color: #a94442;
+}
+
+.help-block.error {
+    color: #a94442;
+}
+</style>
+{% endblock %}{% endraw %}

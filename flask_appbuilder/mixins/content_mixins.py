@@ -17,7 +17,7 @@ import json
 import logging
 import mimetypes
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from flask import current_user, g
@@ -122,7 +122,7 @@ class DocumentMixin(AuditMixin):
             
             # Mark as processed
             self.is_processed = True
-            self.last_processed_at = datetime.utcnow()
+            self.last_processed_at = datetime.now(tz=timezone.utc)
             self.processing_error = None
             
         except Exception as e:

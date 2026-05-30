@@ -8,7 +8,7 @@ including account linking, transaction processing, and callback handling.
 import json
 import logging
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 from enum import Enum
 
@@ -123,7 +123,7 @@ class MPESAAccount(AuditMixin, Model):
         """Mark account as verified."""
         if verification_code and self.verification_code == verification_code:
             self.is_verified = True
-            self.verification_date = datetime.utcnow()
+            self.verification_date = datetime.now(tz=timezone.utc)
             self.verification_code = None  # Clear after use
             return True
         return False
@@ -229,7 +229,7 @@ class MPESATransaction(AuditMixin, Model):
         """Mark transaction as completed with MPESA receipt."""
         self.status = MPESATransactionStatus.COMPLETED.value
         self.mpesa_receipt_number = mpesa_receipt
-        self.transaction_date = datetime.utcnow()
+        self.transaction_date = datetime.now(tz=timezone.utc)
         
         if response_data:
             self.set_callback_data(response_data)
@@ -309,7 +309,7 @@ class MPESACallback(AuditMixin, Model):
         """Mark callback as processed."""
         self.is_processed = True
         self.processing_attempts += 1
-        self.last_processing_attempt = datetime.utcnow()
+        self.last_processing_attempt = datetime.now(tz=timezone.utc)
         if error_message:
             self.processing_error = error_message
     

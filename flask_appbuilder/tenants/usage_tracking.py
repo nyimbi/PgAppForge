@@ -7,7 +7,7 @@ and quota enforcement.
 """
 
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from functools import wraps
 from typing import Dict, Any, Optional, Callable, List
 import threading
@@ -56,7 +56,7 @@ class UsageTracker:
             'amount': amount,
             'unit': unit,
             'metadata': metadata or {},
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(tz=timezone.utc)
         }
         
         if self.async_processing and self._usage_queue:
@@ -160,7 +160,7 @@ class UsageTracker:
         if cache_key in self._metrics_cache:
             cached_data = self._metrics_cache[cache_key]
             # Return cached data if less than 5 minutes old
-            if (datetime.utcnow() - cached_data['cached_at']).seconds < 300:
+            if (datetime.now(tz=timezone.utc) - cached_data['cached_at']).seconds < 300:
                 return cached_data['data']
         
         # Calculate real-time usage
@@ -169,7 +169,7 @@ class UsageTracker:
             from ..models.tenant_models import TenantUsage
             from sqlalchemy import func
             
-            cutoff_time = datetime.utcnow() - timedelta(hours=period_hours)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=period_hours)
             
             usage_data = db.session.query(
                 func.sum(TenantUsage.usage_amount).label('total_usage'),
@@ -188,13 +188,13 @@ class UsageTracker:
                 'avg_usage': float(usage_data.avg_usage or 0),
                 'max_usage': float(usage_data.max_usage or 0),
                 'period_hours': period_hours,
-                'calculated_at': datetime.utcnow()
+                'calculated_at': datetime.now(tz=timezone.utc)
             }
             
             # Cache the result
             self._metrics_cache[cache_key] = {
                 'data': result,
-                'cached_at': datetime.utcnow()
+                'cached_at': datetime.now(tz=timezone.utc)
             }
             
             return result

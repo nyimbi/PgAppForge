@@ -12,7 +12,7 @@ import random
 import time
 from functools import wraps
 from typing import Dict, Optional, Any, List, Callable, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from enum import Enum
 from collections import defaultdict
@@ -110,7 +110,7 @@ class TenantDistributionManager:
                         'availability_zone': instance.availability_zone,
                         'status': instance.status,
                         'max_tenants': instance.max_tenants,
-                        'registered_at': datetime.utcnow().isoformat()
+                        'registered_at': datetime.now(tz=timezone.utc).isoformat()
                     }
                     self.redis_client.hset(
                         'cluster_instances', 
@@ -155,7 +155,7 @@ class TenantDistributionManager:
                         assignment_data = {
                             'tenant_id': tenant_id,
                             'instance_id': target_instance.instance_id,
-                            'assigned_at': datetime.utcnow().isoformat(),
+                            'assigned_at': datetime.now(tz=timezone.utc).isoformat(),
                             'region': target_instance.region
                         }
                         self.redis_client.hset(
@@ -357,7 +357,7 @@ class TenantDistributionManager:
     
     def _perform_health_checks(self):
         """Perform health checks on all instances."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         unhealthy_instances = []
         
         with self._lock:
@@ -411,7 +411,7 @@ class DatabaseScalingManager:
                     'region': region,
                     'weight': weight,
                     'status': 'active',
-                    'last_check': datetime.utcnow()
+                    'last_check': datetime.now(tz=timezone.utc)
                 }
                 
                 self._replica_weights[replica_id] = weight
@@ -493,7 +493,7 @@ class DatabaseScalingManager:
     
     def check_replica_health(self):
         """Check health of all read replicas."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         
         with self._lock:
             for replica_id, replica_info in self._read_replicas.items():
@@ -651,7 +651,7 @@ class AutoScalingManager:
     
     def _check_scaling_conditions(self):
         """Check if scaling actions should be triggered."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         
         # Collect current metrics
         metrics = self._collect_scaling_metrics()
@@ -709,7 +709,7 @@ class AutoScalingManager:
                 'action': 'scale_up',
                 'trigger': trigger.value,
                 'metric_value': metric_value,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'instance_count': len(self.distribution_manager._instances)
             }
             

@@ -9,7 +9,7 @@ import json
 import asyncio
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable, Set
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -117,14 +117,14 @@ class StreamingSession:
 			self.statistics = {
 				"events_sent": 0,
 				"events_filtered": 0,
-				"start_time": datetime.utcnow(),
+				"start_time": datetime.now(tz=timezone.utc),
 				"last_event_time": None
 			}
 	
 	def is_active(self) -> bool:
 		"""Check if session is still active"""
 		timeout = timedelta(minutes=30)  # 30 minute timeout
-		return datetime.utcnow() - self.last_activity < timeout
+		return datetime.now(tz=timezone.utc) - self.last_activity < timeout
 	
 	def matches_filter(self, event: GraphChangeEvent) -> bool:
 		"""Check if event matches session filters"""
@@ -361,11 +361,11 @@ class GraphChangeDetector:
 		last_scan = self.last_check_time.get(graph_name)
 		
 		if not last_scan:
-			self.last_check_time[graph_name] = datetime.utcnow()
+			self.last_check_time[graph_name] = datetime.now(tz=timezone.utc)
 			return True
 		
 		# Perform full scan every 5 minutes
-		return datetime.utcnow() - last_scan > timedelta(minutes=5)
+		return datetime.now(tz=timezone.utc) - last_scan > timedelta(minutes=5)
 	
 	def _perform_full_scan(self, graph_name: str) -> List[GraphChangeEvent]:
 		"""Perform full graph scan for changes"""
@@ -376,7 +376,7 @@ class GraphChangeDetector:
 			# In production, this would compare current state with cached state
 			
 			# For demonstration, we'll just update last check time
-			self.last_check_time[graph_name] = datetime.utcnow()
+			self.last_check_time[graph_name] = datetime.now(tz=timezone.utc)
 			
 		except Exception as e:
 			logger.error(f"Error in full scan for {graph_name}: {e}")
@@ -406,8 +406,8 @@ class GraphChangeDetector:
 					   new_data: Dict[str, Any] = None):
 		"""Simulate a graph change for testing"""
 		change_event = GraphChangeEvent(
-			id=f"sim_{datetime.utcnow().timestamp()}",
-			timestamp=datetime.utcnow(),
+			id=f"sim_{datetime.now(tz=timezone.utc).timestamp()}",
+			timestamp=datetime.now(tz=timezone.utc),
 			change_type=change_type,
 			graph_name=graph_name,
 			element_id=element_id,
@@ -451,7 +451,7 @@ class GraphStreamingManager:
 			graph_name=graph_name,
 			filters=filters or {},
 			mode=mode,
-			last_activity=datetime.utcnow()
+			last_activity=datetime.now(tz=timezone.utc)
 		)
 		
 		self.sessions[session_id] = session
@@ -489,7 +489,7 @@ class GraphStreamingManager:
 				description=f"Closed streaming session",
 				details={
 					"session_id": session_id,
-					"duration_minutes": (datetime.utcnow() - session.statistics["start_time"]).total_seconds() / 60,
+					"duration_minutes": (datetime.now(tz=timezone.utc) - session.statistics["start_time"]).total_seconds() / 60,
 					"events_sent": session.statistics["events_sent"],
 					"events_filtered": session.statistics["events_filtered"]
 				}
@@ -502,7 +502,7 @@ class GraphStreamingManager:
 		session = self.sessions.get(session_id)
 		if session:
 			session.connection = connection
-			session.last_activity = datetime.utcnow()
+			session.last_activity = datetime.now(tz=timezone.utc)
 			self.session_connections[connection] = session_id
 	
 	def unregister_connection(self, connection):
@@ -555,8 +555,8 @@ class GraphStreamingManager:
 				
 				# Update session statistics
 				session.statistics["events_sent"] += 1
-				session.statistics["last_event_time"] = datetime.utcnow()
-				session.last_activity = datetime.utcnow()
+				session.statistics["last_event_time"] = datetime.now(tz=timezone.utc)
+				session.last_activity = datetime.now(tz=timezone.utc)
 			
 		except Exception as e:
 			logger.error(f"Error sending event to session {session.session_id}: {e}")
@@ -598,7 +598,7 @@ class GraphStreamingManager:
 							"type": "broadcast",
 							"data": message,
 							"graph_name": graph_name,
-							"timestamp": datetime.utcnow().isoformat()
+							"timestamp": datetime.now(tz=timezone.utc).isoformat()
 						}
 						
 						logger.debug(f"Broadcasting to session {session.session_id}")

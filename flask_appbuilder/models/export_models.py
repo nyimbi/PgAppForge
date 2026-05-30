@@ -177,14 +177,14 @@ class ExportJob(AuditMixin, Model):
         """Check if export file has expired."""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(tz=timezone.utc) > self.expires_at
 
     @property
     def duration(self) -> Optional[timedelta]:
         """Get job execution duration."""
         if not self.started_at:
             return None
-        end_time = self.completed_at or datetime.utcnow()
+        end_time = self.completed_at or datetime.now(tz=timezone.utc)
         return end_time - self.started_at
 
     @property
@@ -225,7 +225,7 @@ class ExportJob(AuditMixin, Model):
     def start_processing(self):
         """Mark job as started."""
         self.status = ExportStatus.PROCESSING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(tz=timezone.utc)
         self.progress_percentage = 0
         self.progress_message = "Starting export..."
 
@@ -240,7 +240,7 @@ class ExportJob(AuditMixin, Model):
     def complete_successfully(self, file_path: str, file_size: int = None, download_url: str = None):
         """Mark job as completed successfully."""
         self.status = ExportStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         self.progress_percentage = 100
         self.progress_message = "Export completed successfully"
         self.file_path = file_path
@@ -254,14 +254,14 @@ class ExportJob(AuditMixin, Model):
     def fail_with_error(self, error_message: str, error_details: Dict[str, Any] = None):
         """Mark job as failed."""
         self.status = ExportStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         self.error_message = error_message
         self.error_details = error_details or {}
 
     def cancel(self):
         """Cancel the job."""
         self.status = ExportStatus.CANCELLED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         self.progress_message = "Export cancelled"
 
     def increment_download_count(self):
@@ -357,7 +357,7 @@ class ExportTemplate(AuditMixin, Model):
     def increment_usage(self):
         """Increment usage counter when template is used."""
         self.usage_count = (self.usage_count or 0) + 1
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(tz=timezone.utc)
 
     def create_job_from_template(self, name: str, user_id: int, **overrides) -> Dict[str, Any]:
         """Create export job configuration from this template."""
@@ -453,7 +453,7 @@ class ExportSchedule(AuditMixin, Model):
         """Check if schedule is due to run."""
         if not self.is_active or not self.next_run_at:
             return False
-        return datetime.utcnow() >= self.next_run_at
+        return datetime.now(tz=timezone.utc) >= self.next_run_at
 
     @property
     def is_disabled_due_to_failures(self) -> bool:
@@ -462,14 +462,14 @@ class ExportSchedule(AuditMixin, Model):
 
     def record_success(self, next_run_time: datetime):
         """Record successful execution."""
-        self.last_run_at = datetime.utcnow()
+        self.last_run_at = datetime.now(tz=timezone.utc)
         self.next_run_at = next_run_time
         self.run_count = (self.run_count or 0) + 1
         self.failure_count = 0  # Reset failure count on success
 
     def record_failure(self, next_run_time: datetime = None):
         """Record failed execution."""
-        self.last_run_at = datetime.utcnow()
+        self.last_run_at = datetime.now(tz=timezone.utc)
         self.failure_count = (self.failure_count or 0) + 1
         
         # Disable if too many failures
@@ -481,13 +481,13 @@ class ExportSchedule(AuditMixin, Model):
     def generate_filename(self, timestamp: datetime = None) -> str:
         """Generate filename for export using template."""
         if not self.file_name_template:
-            timestamp = timestamp or datetime.utcnow()
+            timestamp = timestamp or datetime.now(tz=timezone.utc)
             return f"{self.name}_{timestamp.strftime('%Y%m%d_%H%M%S')}.{self.export_format.value}"
         
         # TODO: Implement template substitution
         return self.file_name_template.format(
             name=self.name,
-            timestamp=(timestamp or datetime.utcnow()).strftime('%Y%m%d_%H%M%S'),
+            timestamp=(timestamp or datetime.now(tz=timezone.utc)).strftime('%Y%m%d_%H%M%S'),
             format=self.export_format.value
         )
 

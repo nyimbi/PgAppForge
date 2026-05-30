@@ -8,7 +8,7 @@ using Flask-SocketIO for reliable real-time communication.
 import logging
 from collections import defaultdict
 from typing import Dict, Set, Any, Optional, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
@@ -83,7 +83,7 @@ class CollaborationWebSocketManager:
             emit('connection_confirmed', {
                 'user_id': user.id,
                 'username': user.username,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             })
             
         @self.socketio.on('disconnect', namespace='/collaboration')
@@ -133,7 +133,7 @@ class CollaborationWebSocketManager:
                     'user_id': user_id,
                     'username': self._get_username(user_id),
                     'session_id': session_id,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 }, room=room_id, include_self=False, namespace='/collaboration')
                 
                 # Send current participants to new user
@@ -148,7 +148,7 @@ class CollaborationWebSocketManager:
                 emit('collaboration_joined', {
                     'room_id': room_id,
                     'participants': participants,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 })
                 
                 log.info(f"User {user_id} joined collaboration room: {room_id}")
@@ -176,7 +176,7 @@ class CollaborationWebSocketManager:
                 self.socketio.emit('user_left', {
                     'user_id': user_id,
                     'username': self._get_username(user_id),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 }, room=room_id, namespace='/collaboration')
                 
                 log.info(f"User {user_id} left collaboration room: {room_id}")
@@ -209,7 +209,7 @@ class CollaborationWebSocketManager:
                     'field_name': field_name,
                     'new_value': new_value,
                     'old_value': old_value,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 }
                 
                 self.socketio.emit('field_changed', change_event, 
@@ -241,7 +241,7 @@ class CollaborationWebSocketManager:
                     'username': self._get_username(user_id),
                     'field_name': field_name,
                     'position': position,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 }
                 
                 self.socketio.emit('cursor_moved', cursor_event,
@@ -317,7 +317,7 @@ class CollaborationWebSocketManager:
                 self.socketio.emit('user_disconnected', {
                     'user_id': user_id,
                     'username': self._get_username(user_id),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 }, room=room_id, namespace='/collaboration')
                 
         except Exception as e:

@@ -1,0 +1,228 @@
+"""
+{{ workflow.name }} Workflow Models
+Generated from WDL on {{ timestamp }}
+"""
+
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer, JSON, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+
+from flask_appbuilder import Model
+from flask_appbuilder.models.mixins import AuditMixin
+from flask_appbuilder.workflow.mixins import WorkflowMixin
+
+
+class {{ workflow.name }}WorkflowState(WorkflowMixin, AuditMixin, Model):
+    """
+    Workflow state for {{ workflow.name }} process.
+    {{ workflow.description }}
+    """
+    __tablename__ = '{{ workflow.name.lower() }}_workflow_states'
+
+    # Workflow-specific fields
+    {% for field in fields %}
+    {% set field_config = field.config %}
+    {% if field_config.type == 'string' %}
+    {{ field.name }} = Column(String({{ field_config.validation.maxLength or 255 }}),
+                            {% if field_config.required %}nullable=False{% else %}nullable=True{% endif %})
+    {% elif field_config.type == 'email' %}
+    {{ field.name }} = Column(String(255), nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% elif field_config.type == 'text' or field_config.type == 'textarea' %}
+    {{ field.name }} = Column(Text, nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% elif field_config.type == 'date' %}
+    {{ field.name }} = Column(DateTime, nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% elif field_config.type == 'select' %}
+    {{ field.name }} = Column(String(100), nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% elif field_config.type == 'multiselect' %}
+    {{ field.name }} = Column(JSON, default=lambda: [], nullable=True)
+    {% elif field_config.type == 'file' %}
+    {{ field.name }}_path = Column(String(500), nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {{ field.name }}_filename = Column(String(255), nullable=True)
+    {{ field.name }}_size = Column(Integer, nullable=True)
+    {% else %}
+    {{ field.name }} = Column(String(255), nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% endif %}
+    {% endfor %}
+
+    # Workflow configuration
+    workflow_enabled = True
+    workflow_name = '{{ workflow.name }}'
+    workflow_version = '{{ workflow.version }}'
+
+    @hybrid_property
+    def current_step_config(self) -> Optional[Dict[str, Any]]:
+        """Get configuration for current step."""
+        {% for step_name, step_config in workflow.steps.items() %}
+        if self.current_step == '{{ step_name }}':
+            return {
+                'title': '{{ step_config.title }}',
+                'description': '{{ step_config.description }}',
+                'estimated_time': '{{ step_config.get("estimatedTime", "") }}',
+                'permissions': {{ step_config.get("permissions", {}) | tojson }},
+                'navigation': {{ step_config.get("navigation", {}) | tojson }}
+            }
+        {% endfor %}
+        return None
+
+    @hybrid_property
+    def step_progress_percentage(self) -> int:
+        """Calculate progress through workflow steps."""
+        steps = {{ workflow.steps.keys() | list | tojson }}
+        if not self.current_step or self.current_step not in steps:
+            return 0
+
+        current_index = steps.index(self.current_step)
+        return int((current_index / len(steps)) * 100)
+
+    def get_field_value_for_step(self, step_name: str, field_name: str) -> Any:
+        """Get field value for specific workflow step."""
+        {% for step_name, step_config in workflow.steps.items() %}
+        if step_name == '{{ step_name }}':
+            {% for field in fields if field.step == step_name %}
+            if field_name == '{{ field.name }}':
+                return self.{{ field.name }}
+            {% endfor %}
+        {% endfor %}
+        return None
+
+    def set_field_value_for_step(self, step_name: str, field_name: str, value: Any):
+        """Set field value for specific workflow step."""
+        {% for step_name, step_config in workflow.steps.items() %}
+        if step_name == '{{ step_name }}':
+            {% for field in fields if field.step == step_name %}
+            if field_name == '{{ field.name }}':
+                self.{{ field.name }} = value
+                return
+            {% endfor %}
+        {% endfor %}
+
+    def validate_step_data(self, step_name: str) -> Dict[str, List[str]]:
+        """Validate data for specific step."""
+        errors = {}
+
+        {% for step_name, step_config in workflow.steps.items() %}
+        if step_name == '{{ step_name }}':
+            # Required field validation
+            {% for field in fields if field.step == step_name %}
+            {% if field.config.required %}
+            if not self.{{ field.name }}:
+                if '{{ field.name }}' not in errors:
+                    errors['{{ field.name }}'] = []
+                errors['{{ field.name }}'].append('This field is required')
+            {% endif %}
+
+            # Type-specific validation
+            {% if field.config.type == 'email' %}
+            if self.{{ field.name }}:
+                import re
+                if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', self.{{ field.name }}):
+                    if '{{ field.name }}' not in errors:
+                        errors['{{ field.name }}'] = []
+                    errors['{{ field.name }}'].append('Invalid email format')
+            {% endif %}
+
+            {% if field.config.validation %}
+            # Custom validation rules
+            {% if field.config.validation.minLength %}
+            if self.{{ field.name }} and len(str(self.{{ field.name }})) < {{ field.config.validation.minLength }}:
+                if '{{ field.name }}' not in errors:
+                    errors['{{ field.name }}'] = []
+                errors['{{ field.name }}'].append('Minimum length is {{ field.config.validation.minLength }} characters')
+            {% endif %}
+
+            {% if field.config.validation.maxLength %}
+            if self.{{ field.name }} and len(str(self.{{ field.name }})) > {{ field.config.validation.maxLength }}:
+                if '{{ field.name }}' not in errors:
+                    errors['{{ field.name }}'] = []
+                errors['{{ field.name }}'].append('Maximum length is {{ field.config.validation.maxLength }} characters')
+            {% endif %}
+
+            {% if field.config.validation.pattern %}
+            if self.{{ field.name }}:
+                import re
+                if not re.match(r'{{ field.config.validation.pattern }}', str(self.{{ field.name }})):
+                    if '{{ field.name }}' not in errors:
+                        errors['{{ field.name }}'] = []
+                    errors['{{ field.name }}'].append('Invalid format')
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+        {% endfor %}
+
+        return errors
+
+    def can_user_access_step(self, step_name: str, user_roles: List[str]) -> bool:
+        """Check if user can access specific step."""
+        {% for step_name, step_config in workflow.steps.items() %}
+        if step_name == '{{ step_name }}':
+            required_roles = {{ step_config.get("permissions", {}).get("view", []) | tojson }}
+            if not required_roles:
+                return True
+            return any(role in user_roles for role in required_roles)
+        {% endfor %}
+        return False
+
+    def can_user_edit_step(self, step_name: str, user_roles: List[str]) -> bool:
+        """Check if user can edit specific step."""
+        {% for step_name, step_config in workflow.steps.items() %}
+        if step_name == '{{ step_name }}':
+            required_roles = {{ step_config.get("permissions", {}).get("edit", []) | tojson }}
+            if not required_roles:
+                return True
+            return any(role in user_roles for role in required_roles)
+        {% endfor %}
+        return False
+
+    def get_next_step_for_user(self, user_roles: List[str]) -> Optional[str]:
+        """Get next available step for user."""
+        if not self.available_next_steps:
+            return None
+
+        for next_step in self.available_next_steps:
+            if self.can_user_access_step(next_step, user_roles):
+                return next_step
+
+        return None
+
+    def __repr__(self):
+        return f'<{{ workflow.name }}WorkflowState {self.id}: {self.current_step}>'
+
+    def __str__(self):
+        return f'{{ workflow.name }} Workflow - {self.current_step} ({self.status})'
+
+
+# Relationship models for workflow entities
+{% for entity_name, entity_config in workflow.entities.items() %}
+{% if entity_config != 'existing' %}
+class {{ entity_name }}(AuditMixin, Model):
+    """{{ entity_name }} entity for {{ workflow.name }} workflow."""
+    __tablename__ = '{{ entity_name.lower() }}s'
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    workflow_state_id = Column(String(36), ForeignKey('{{ workflow.name.lower() }}_workflow_states.id'), nullable=False)
+
+    {% if entity_config.fields %}
+    {% for field_name, field_config in entity_config.fields.items() %}
+    {% if field_config.type == 'string' %}
+    {{ field_name }} = Column(String({{ field_config.maxLength or 255 }}),
+                            nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% elif field_config.type == 'text' %}
+    {{ field_name }} = Column(Text, nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% elif field_config.type == 'datetime' %}
+    {{ field_name }} = Column(DateTime, nullable={% if field_config.required %}False{% else %}True{% endif %}
+                            {% if field_config.default == 'now' %}, default=datetime.utcnow{% endif %})
+    {% else %}
+    {{ field_name }} = Column(String(255), nullable={% if field_config.required %}False{% else %}True{% endif %})
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
+    # Relationship back to workflow state
+    workflow_state = relationship("{{ workflow.name }}WorkflowState", backref="{{ entity_name.lower() }}s")
+
+    def __repr__(self):
+        return f'<{{ entity_name }} {self.id}>'
+{% endif %}
+{% endfor %}

@@ -10,7 +10,7 @@ import logging
 import re
 import threading
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -441,7 +441,7 @@ class GraphAnalysisEngine:
 				data_evidence=stats,
 				recommended_actions=recommendations,
 				cypher_queries=structure_insights["queries"],
-				metadata={"analysis_timestamp": datetime.utcnow().isoformat()}
+				metadata={"analysis_timestamp": datetime.now(tz=timezone.utc).isoformat()}
 			)
 			
 			return insight
@@ -850,7 +850,7 @@ class AIAnalyticsAssistant:
 		# Check cache
 		if not force_refresh and cache_key in self.insights_cache:
 			cached_time = self.insights_cache[cache_key].get("timestamp", datetime.min)
-			if datetime.utcnow() - cached_time < timedelta(hours=1):
+			if datetime.now(tz=timezone.utc) - cached_time < timedelta(hours=1):
 				return self.insights_cache[cache_key].get("insights", [])
 		
 		insights = []
@@ -873,7 +873,7 @@ class AIAnalyticsAssistant:
 		with self._lock:
 			self.insights_cache[cache_key] = {
 				"insights": insights,
-				"timestamp": datetime.utcnow()
+				"timestamp": datetime.now(tz=timezone.utc)
 			}
 		
 		return insights

@@ -165,7 +165,7 @@ class CollaborationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "session_id": session_id,
                 "workspace_id": workspace_id,
                 "created_by": g.user.id if g.user else None,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(tz=timezone.utc).isoformat(),
                 "message": "Collaboration session created successfully"
             }
 
@@ -253,7 +253,7 @@ class CollaborationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
             response_data = {
                 "session_id": session_id,
                 "user_id": g.user.id if g.user else None,
-                "joined_at": datetime.utcnow().isoformat(),
+                "joined_at": datetime.now(tz=timezone.utc).isoformat(),
                 "active_users": [{"id": user.id, "username": user.username} for user in session_users],
                 "message": "Successfully joined collaboration session"
             }
@@ -367,7 +367,7 @@ class CollaborationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "event_type": json_data["event_type"],
                 "data": json_data["data"],
                 "user_id": g.user.id if g.user else None,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(tz=timezone.utc).isoformat()
             }
 
             # Emit the event to session participants
@@ -457,7 +457,7 @@ class CollaborationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "message": "Lock acquired successfully",
                 "resource_id": json_data["resource_id"],
                 "locked_by": g.user.id if g.user else None,
-                "locked_at": datetime.utcnow().isoformat()
+                "locked_at": datetime.now(tz=timezone.utc).isoformat()
             })
 
         except CollaborativeError as e:
@@ -600,7 +600,7 @@ class CollaborationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                     "id": user.id,
                     "username": user.username,
                     "full_name": getattr(user, 'full_name', user.username),
-                    "joined_at": getattr(user, 'session_joined_at', datetime.utcnow().isoformat())
+                    "joined_at": getattr(user, 'session_joined_at', datetime.now(tz=timezone.utc).isoformat())
                 })
 
             return self.response({

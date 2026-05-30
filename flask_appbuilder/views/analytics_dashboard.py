@@ -6,7 +6,7 @@ Integrates with DashboardConfig models and existing Flask-AppBuilder data.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 from flask import render_template, request, jsonify, flash, redirect, url_for
@@ -115,7 +115,7 @@ class DatabaseBackedDashboardView(BaseView):
                 'status': 'success',
                 'metrics': metrics_data,
                 'time_range': time_range,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -296,7 +296,7 @@ class DatabaseBackedDashboardView(BaseView):
             elif data_source == 'recent_login_count':
                 # Count recent logins (last 24 hours)
                 from flask_appbuilder.security.sqla.models import User
-                cutoff = datetime.utcnow() - timedelta(days=1)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=1)
                 return session.query(User).filter(
                     User.last_login >= cutoff
                 ).count() if hasattr(User, 'last_login') else 0
@@ -327,7 +327,7 @@ class DatabaseBackedDashboardView(BaseView):
             session = self._get_db_session()()
             
             # Get time periods
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             if time_range == '7d':
                 current_start = now - timedelta(days=7)
                 previous_start = now - timedelta(days=14)
@@ -382,7 +382,7 @@ class DatabaseBackedDashboardView(BaseView):
         """Calculate trend based on record creation counts."""
         try:
             session = self._get_db_session()()
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             
             # Get time periods
             if time_range == '7d':
@@ -461,7 +461,7 @@ class DatabaseBackedDashboardView(BaseView):
         """Get chart data from database."""
         try:
             session = self._get_db_session()()
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             
             if time_range == '7d':
                 start_date = now - timedelta(days=7)
@@ -501,7 +501,7 @@ class DatabaseBackedDashboardView(BaseView):
             total_users = session.query(User).count()
             
             return {
-                'last_updated': datetime.utcnow(),
+                'last_updated': datetime.now(tz=timezone.utc),
                 'total_users': total_users,
                 'system_status': 'operational',
                 'time_range_label': self._get_time_range_label(time_range),
@@ -515,7 +515,7 @@ class DatabaseBackedDashboardView(BaseView):
         except Exception as e:
             log.error(f"Error getting dashboard data: {e}")
             return {
-                'last_updated': datetime.utcnow(),
+                'last_updated': datetime.now(tz=timezone.utc),
                 'total_users': 0,
                 'system_status': 'error',
                 'time_range_label': self._get_time_range_label(time_range),

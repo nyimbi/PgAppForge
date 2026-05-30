@@ -12,7 +12,7 @@ import psutil
 import os
 from functools import wraps
 from typing import Dict, Optional, Any, List, Callable, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -93,7 +93,7 @@ class TenantResourceMonitor:
         if not self._monitoring_active:
             return
         
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         
         with self._lock:
             # Initialize tenant data if not exists
@@ -162,7 +162,7 @@ class TenantResourceMonitor:
     def get_usage_in_time_window(self, tenant_id: int, resource_type: ResourceType, 
                                 window_seconds: int) -> float:
         """Get usage within a specific time window."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         window_start = current_time - timedelta(seconds=window_seconds)
         
         with self._lock:
@@ -183,7 +183,7 @@ class TenantResourceMonitor:
     
     def reset_usage_counters(self, tenant_id: int, resource_type: ResourceType = None):
         """Reset usage counters for a tenant."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         
         with self._lock:
             if tenant_id not in self._usage_data:
@@ -263,7 +263,7 @@ class TenantResourceMonitor:
                     system_stats = {
                         'memory_mb': total_memory_mb,
                         'cpu_percent': cpu_percent,
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.now(tz=timezone.utc).isoformat()
                     }
                     self.redis_client.setex('system_stats', 300, json.dumps(system_stats))
                 except Exception as e:
@@ -378,7 +378,7 @@ class TenantResourceLimiter:
             if tenant_id not in self._tenant_limits:
                 return usage_statuses
             
-            current_time = datetime.utcnow()
+            current_time = datetime.now(tz=timezone.utc)
             
             for resource_type, limit in self._tenant_limits[tenant_id].items():
                 if limit.time_window > 0:
@@ -423,7 +423,7 @@ class TenantResourceLimiter:
                     'resource_type': resource_type.value,
                     'usage': usage,
                     'limit': limit,
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                     'message': warning_msg
                 }
                 self.redis_client.lpush(warning_key, json.dumps(warning_data, default=str))
@@ -445,7 +445,7 @@ class TenantResourceLimiter:
             'usage': usage,
             'limit': limit.limit_value,
             'action': limit.action.value,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'message': violation_msg
         }
         
@@ -490,7 +490,7 @@ class TenantResourceLimiter:
                     'previous_status': previous_status,
                     'suspension_reason': message,
                     'resource_type': resource_type.value,
-                    'suspended_at': datetime.utcnow().isoformat(),
+                    'suspended_at': datetime.now(tz=timezone.utc).isoformat(),
                     'suspended_by': 'resource_limiter'
                 }
                 
@@ -518,9 +518,9 @@ class TenantResourceLimiter:
                 suspension_data = {
                     'resource_type': resource_type.value,
                     'reason': message,
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                     'status': 'suspended',
-                    'expires_at': (datetime.utcnow() + timedelta(hours=24)).isoformat()  # Auto-review after 24h
+                    'expires_at': (datetime.now(tz=timezone.utc) + timedelta(hours=24)).isoformat()  # Auto-review after 24h
                 }
                 self.redis_client.setex(suspension_key, 86400, json.dumps(suspension_data, default=str))
                 
@@ -540,7 +540,7 @@ class TenantResourceLimiter:
                 'tenant_name': tenant.name,
                 'reason': message,
                 'action_required': 'Contact support to resolve resource limit violation',
-                'suspended_at': datetime.utcnow().isoformat()
+                'suspended_at': datetime.now(tz=timezone.utc).isoformat()
             }
             
             log.warning(f"TENANT SUSPENSION NOTIFICATION: {json.dumps(notification_data)}")
@@ -589,7 +589,7 @@ class TenantResourceLimiter:
                     previous_status = suspension_data.get('previous_status', 'active')
                     
                     # Add restoration metadata
-                    suspension_data['restored_at'] = datetime.utcnow().isoformat()
+                    suspension_data['restored_at'] = datetime.now(tz=timezone.utc).isoformat()
                     suspension_data['restoration_reason'] = reason
                 
                 tenant.status = previous_status

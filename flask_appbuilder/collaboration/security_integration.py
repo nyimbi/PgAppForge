@@ -220,8 +220,8 @@ class CollaborationSecurityManager:
                 return False
                 
             # Check if session has expired
-            from datetime import datetime
-            if session_obj.expires_at and session_obj.expires_at < datetime.utcnow():
+            from datetime import datetime, timezone
+            if session_obj.expires_at and session_obj.expires_at < datetime.now(tz=timezone.utc):
                 return False
             
             # Check maximum participants
@@ -353,7 +353,7 @@ class CollaborationSecurityManager:
             
             # Calculate expiration (default 4 hours from now)
             from datetime import datetime, timedelta
-            expires_at = datetime.utcnow() + timedelta(hours=4)
+            expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=4)
             
             # Create session record
             import json
@@ -466,7 +466,7 @@ class CollaborationSecurityManager:
             from datetime import datetime
             
             expired_sessions = self.db.session.query(CollaborationSecuritySession).filter(
-                CollaborationSecuritySession.expires_at < datetime.utcnow(),
+                CollaborationSecuritySession.expires_at < datetime.now(tz=timezone.utc),
                 CollaborationSecuritySession.is_active == True
             ).all()
             

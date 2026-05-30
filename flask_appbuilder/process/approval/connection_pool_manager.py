@@ -10,7 +10,7 @@ import threading
 import time
 from contextlib import contextmanager
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from functools import wraps
 
@@ -79,7 +79,7 @@ class ConnectionPoolManager:
         self.metrics = ConnectionMetrics()
         self._lock = threading.RLock()
         self._connection_registry = {}  # Track active connections
-        self._last_health_check = datetime.utcnow()
+        self._last_health_check = datetime.now(tz=timezone.utc)
         self._setup_pool_monitoring()
     
     def _setup_pool_monitoring(self):
@@ -115,8 +115,8 @@ class ConnectionPoolManager:
             self.metrics.created_connections += 1
             connection_id = id(connection_record)
             self._connection_registry[connection_id] = {
-                'created_at': datetime.utcnow(),
-                'last_used': datetime.utcnow(),
+                'created_at': datetime.now(tz=timezone.utc),
+                'last_used': datetime.now(tz=timezone.utc),
                 'usage_count': 0
             }
             log.debug(f"New database connection created: {connection_id}")
@@ -133,7 +133,7 @@ class ConnectionPoolManager:
             
             connection_id = id(connection_record)
             if connection_id in self._connection_registry:
-                self._connection_registry[connection_id]['last_used'] = datetime.utcnow()
+                self._connection_registry[connection_id]['last_used'] = datetime.now(tz=timezone.utc)
                 self._connection_registry[connection_id]['usage_count'] += 1
             
             log.debug(f"Connection checked out: {connection_id}, "
@@ -180,7 +180,7 @@ class ConnectionPoolManager:
             ConnectionTimeoutError: If connection acquisition times out
         """
         session = None
-        connection_acquired_at = datetime.utcnow()
+        connection_acquired_at = datetime.now(tz=timezone.utc)
         
         try:
             # Get session with timeout handling
@@ -217,7 +217,7 @@ class ConnectionPoolManager:
                     session.close()
                     
                     # Track session duration for monitoring
-                    duration = (datetime.utcnow() - connection_acquired_at).total_seconds()
+                    duration = (datetime.now(tz=timezone.utc) - connection_acquired_at).total_seconds()
                     if duration > 30:  # Log long-running sessions
                         log.warning(f"Long-running database session: {duration:.2f}s")
                         
@@ -322,7 +322,7 @@ class ConnectionPoolManager:
         """Perform comprehensive connection pool health check."""
         health_status = {
             'status': 'healthy',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'issues': [],
             'recommendations': []
         }
@@ -374,7 +374,7 @@ class ConnectionPoolManager:
     
     def _find_stale_connections(self) -> List[Dict]:
         """Find connections that have been idle for too long."""
-        stale_threshold = datetime.utcnow() - timedelta(hours=1)
+        stale_threshold = datetime.now(tz=timezone.utc) - timedelta(hours=1)
         stale_connections = []
         
         with self._lock:
@@ -382,7 +382,7 @@ class ConnectionPoolManager:
                 if info['last_used'] < stale_threshold:
                     stale_connections.append({
                         'connection_id': conn_id,
-                        'idle_duration': (datetime.utcnow() - info['last_used']).total_seconds(),
+                        'idle_duration': (datetime.now(tz=timezone.utc) - info['last_used']).total_seconds(),
                         'usage_count': info['usage_count']
                     })
         
@@ -405,7 +405,7 @@ class ConnectionPoolManager:
             
             # Clean up registry
             with self._lock:
-                stale_threshold = datetime.utcnow() - timedelta(hours=2)
+                stale_threshold = datetime.now(tz=timezone.utc) - timedelta(hours=2)
                 stale_keys = [
                     conn_id for conn_id, info in self._connection_registry.items()
                     if info['last_used'] < stale_threshold

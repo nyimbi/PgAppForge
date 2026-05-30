@@ -1,0 +1,304 @@
+"""
+{{ workflow.name }} Workflow Database Migration
+Generated from WDL on {{ timestamp }}
+
+Revision ID: {{ migration_id or 'auto_generated' }}
+Revises: {{ previous_revision or 'base' }}
+Create Date: {{ timestamp }}
+"""
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql, mysql, sqlite
+
+# revision identifiers
+revision = '{{ migration_id or "auto_generated" }}'
+down_revision = {{ previous_revision | tojson }}
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    """Upgrade database schema for {{ workflow.name }} workflow."""
+
+    # Create {{ workflow.name }} workflow states table
+    op.create_table(
+        '{{ workflow.name.lower() }}_workflow_states',
+
+        # Primary key
+        sa.Column('id', sa.String(36), primary_key=True, nullable=False),
+
+        # Workflow core fields (inherited from WorkflowMixin)
+        sa.Column('workflow_name', sa.String(100), nullable=False),
+        sa.Column('current_step', sa.String(100), nullable=False),
+        sa.Column('status', sa.String(50), nullable=False, default='pending'),
+        sa.Column('workflow_data', sa.JSON(), nullable=True),
+        sa.Column('step_history', sa.JSON(), nullable=True),
+        sa.Column('completed_steps', sa.JSON(), nullable=True),
+        sa.Column('available_next_steps', sa.JSON(), nullable=True),
+        sa.Column('metadata', sa.JSON(), nullable=True),
+
+        # Audit fields (inherited from AuditMixin)
+        sa.Column('created_on', sa.DateTime(), nullable=False),
+        sa.Column('changed_on', sa.DateTime(), nullable=False),
+        sa.Column('created_by_fk', sa.Integer(), nullable=True),
+        sa.Column('changed_by_fk', sa.Integer(), nullable=True),
+
+        # Workflow timing fields
+        sa.Column('started_at', sa.DateTime(), nullable=True),
+        sa.Column('last_activity_at', sa.DateTime(), nullable=True),
+        sa.Column('completion_date', sa.DateTime(), nullable=True),
+        sa.Column('estimated_completion', sa.DateTime(), nullable=True),
+
+        # Workflow-specific fields
+        {% for field in fields %}
+        {% set field_config = field.config %}
+        {% if field_config.type == 'string' %}
+        sa.Column('{{ field.name }}', sa.String({{ field_config.validation.maxLength or 255 }}),
+                 nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'email' %}
+        sa.Column('{{ field.name }}', sa.String(255), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'text' or field_config.type == 'textarea' %}
+        sa.Column('{{ field.name }}', sa.Text(), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'date' or field_config.type == 'datetime' %}
+        sa.Column('{{ field.name }}', sa.DateTime(), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'select' %}
+        sa.Column('{{ field.name }}', sa.String(100), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'multiselect' %}
+        sa.Column('{{ field.name }}', sa.JSON(), nullable=True, default=lambda: []),
+        {% elif field_config.type == 'boolean' %}
+        sa.Column('{{ field.name }}', sa.Boolean(), nullable=True, default=False),
+        {% elif field_config.type == 'integer' %}
+        sa.Column('{{ field.name }}', sa.Integer(), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'float' %}
+        sa.Column('{{ field.name }}', sa.Float(), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'file' %}
+        sa.Column('{{ field.name }}_path', sa.String(500), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        sa.Column('{{ field.name }}_filename', sa.String(255), nullable=True),
+        sa.Column('{{ field.name }}_size', sa.Integer(), nullable=True),
+        {% else %}
+        sa.Column('{{ field.name }}', sa.String(255), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% endif %}
+        {% endfor %}
+
+        # Foreign key constraints
+        sa.ForeignKeyConstraint(['created_by_fk'], ['ab_user.id'], name='fk_{{ workflow.name.lower() }}_workflow_created_by'),
+        sa.ForeignKeyConstraint(['changed_by_fk'], ['ab_user.id'], name='fk_{{ workflow.name.lower() }}_workflow_changed_by'),
+    )
+
+    # Create indexes for performance
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_workflow_states_status',
+        '{{ workflow.name.lower() }}_workflow_states',
+        ['status']
+    )
+
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_workflow_states_current_step',
+        '{{ workflow.name.lower() }}_workflow_states',
+        ['current_step']
+    )
+
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_workflow_states_created_by',
+        '{{ workflow.name.lower() }}_workflow_states',
+        ['created_by_fk']
+    )
+
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_workflow_states_created_on',
+        '{{ workflow.name.lower() }}_workflow_states',
+        ['created_on']
+    )
+
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_workflow_states_last_activity',
+        '{{ workflow.name.lower() }}_workflow_states',
+        ['last_activity_at']
+    )
+
+    # Create additional entity tables if defined
+    {% for entity_name, entity_config in workflow.entities.items() %}
+    {% if entity_config != 'existing' %}
+    op.create_table(
+        '{{ entity_name.lower() }}s',
+
+        # Primary key
+        sa.Column('id', sa.String(36), primary_key=True, nullable=False),
+
+        # Foreign key to workflow state
+        sa.Column('workflow_state_id', sa.String(36), nullable=False),
+
+        # Audit fields
+        sa.Column('created_on', sa.DateTime(), nullable=False),
+        sa.Column('changed_on', sa.DateTime(), nullable=False),
+        sa.Column('created_by_fk', sa.Integer(), nullable=True),
+        sa.Column('changed_by_fk', sa.Integer(), nullable=True),
+
+        {% if entity_config.fields %}
+        # Entity-specific fields
+        {% for field_name, field_config in entity_config.fields.items() %}
+        {% if field_config.type == 'string' %}
+        sa.Column('{{ field_name }}', sa.String({{ field_config.maxLength or 255 }}),
+                 nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'text' %}
+        sa.Column('{{ field_name }}', sa.Text(), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% elif field_config.type == 'datetime' %}
+        sa.Column('{{ field_name }}', sa.DateTime(),
+                 nullable={% if field_config.required %}False{% else %}True{% endif %}
+                 {% if field_config.default == 'now' %}, server_default=sa.func.now(){% endif %}),
+        {% else %}
+        sa.Column('{{ field_name }}', sa.String(255), nullable={% if field_config.required %}False{% else %}True{% endif %}),
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        # Foreign key constraints
+        sa.ForeignKeyConstraint(
+            ['workflow_state_id'],
+            ['{{ workflow.name.lower() }}_workflow_states.id'],
+            name='fk_{{ entity_name.lower() }}_workflow_state',
+            ondelete='CASCADE'
+        ),
+        sa.ForeignKeyConstraint(['created_by_fk'], ['ab_user.id'], name='fk_{{ entity_name.lower() }}_created_by'),
+        sa.ForeignKeyConstraint(['changed_by_fk'], ['ab_user.id'], name='fk_{{ entity_name.lower() }}_changed_by'),
+    )
+
+    # Index for entity foreign key
+    op.create_index(
+        'ix_{{ entity_name.lower() }}_workflow_state_id',
+        '{{ entity_name.lower() }}s',
+        ['workflow_state_id']
+    )
+    {% endif %}
+    {% endfor %}
+
+    # Create workflow history table for audit trail
+    op.create_table(
+        '{{ workflow.name.lower() }}_workflow_history',
+
+        sa.Column('id', sa.String(36), primary_key=True, nullable=False),
+        sa.Column('workflow_state_id', sa.String(36), nullable=False),
+        sa.Column('step_name', sa.String(100), nullable=False),
+        sa.Column('action', sa.String(50), nullable=False),  # started, completed, reverted, etc.
+        sa.Column('timestamp', sa.DateTime(), nullable=False),
+        sa.Column('user_id', sa.Integer(), nullable=True),
+        sa.Column('data', sa.JSON(), nullable=True),
+        sa.Column('notes', sa.Text(), nullable=True),
+
+        # Foreign key constraints
+        sa.ForeignKeyConstraint(
+            ['workflow_state_id'],
+            ['{{ workflow.name.lower() }}_workflow_states.id'],
+            name='fk_{{ workflow.name.lower() }}_history_workflow',
+            ondelete='CASCADE'
+        ),
+        sa.ForeignKeyConstraint(['user_id'], ['ab_user.id'], name='fk_{{ workflow.name.lower() }}_history_user'),
+    )
+
+    # Index for workflow history
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_history_workflow_id',
+        '{{ workflow.name.lower() }}_workflow_history',
+        ['workflow_state_id']
+    )
+
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_history_timestamp',
+        '{{ workflow.name.lower() }}_workflow_history',
+        ['timestamp']
+    )
+
+    # Create collaboration tables for real-time features
+    op.create_table(
+        '{{ workflow.name.lower() }}_workflow_comments',
+
+        sa.Column('id', sa.String(36), primary_key=True, nullable=False),
+        sa.Column('workflow_state_id', sa.String(36), nullable=False),
+        sa.Column('step_id', sa.String(100), nullable=False),
+        sa.Column('comment_text', sa.Text(), nullable=False),
+        sa.Column('comment_type', sa.String(50), nullable=False, default='comment'),  # comment, suggestion, question
+        sa.Column('created_on', sa.DateTime(), nullable=False),
+        sa.Column('created_by_fk', sa.Integer(), nullable=False),
+        sa.Column('resolved', sa.Boolean(), nullable=False, default=False),
+        sa.Column('resolved_by_fk', sa.Integer(), nullable=True),
+        sa.Column('resolved_on', sa.DateTime(), nullable=True),
+
+        # Foreign key constraints
+        sa.ForeignKeyConstraint(
+            ['workflow_state_id'],
+            ['{{ workflow.name.lower() }}_workflow_states.id'],
+            name='fk_{{ workflow.name.lower() }}_comments_workflow',
+            ondelete='CASCADE'
+        ),
+        sa.ForeignKeyConstraint(['created_by_fk'], ['ab_user.id'], name='fk_{{ workflow.name.lower() }}_comments_user'),
+        sa.ForeignKeyConstraint(['resolved_by_fk'], ['ab_user.id'], name='fk_{{ workflow.name.lower() }}_comments_resolver'),
+    )
+
+    # Index for comments
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_comments_workflow_id',
+        '{{ workflow.name.lower() }}_workflow_comments',
+        ['workflow_state_id']
+    )
+
+    op.create_index(
+        'ix_{{ workflow.name.lower() }}_comments_step_id',
+        '{{ workflow.name.lower() }}_workflow_comments',
+        ['step_id']
+    )
+
+
+def downgrade():
+    """Downgrade database schema for {{ workflow.name }} workflow."""
+
+    # Drop collaboration tables
+    op.drop_table('{{ workflow.name.lower() }}_workflow_comments')
+    op.drop_table('{{ workflow.name.lower() }}_workflow_history')
+
+    # Drop entity tables
+    {% for entity_name, entity_config in workflow.entities.items() %}
+    {% if entity_config != 'existing' %}
+    op.drop_table('{{ entity_name.lower() }}s')
+    {% endif %}
+    {% endfor %}
+
+    # Drop main workflow table
+    op.drop_table('{{ workflow.name.lower() }}_workflow_states')
+
+
+def get_table_names():
+    """Get list of tables created by this migration."""
+    return [
+        '{{ workflow.name.lower() }}_workflow_states',
+        '{{ workflow.name.lower() }}_workflow_history',
+        '{{ workflow.name.lower() }}_workflow_comments',
+        {% for entity_name, entity_config in workflow.entities.items() %}
+        {% if entity_config != 'existing' %}
+        '{{ entity_name.lower() }}s',
+        {% endif %}
+        {% endfor %}
+    ]
+
+
+def validate_migration():
+    """Validate migration can be applied safely."""
+    from alembic import context
+    from sqlalchemy import inspect
+
+    connection = context.get_context().bind
+    inspector = inspect(connection)
+    existing_tables = inspector.get_table_names()
+
+    # Check if tables already exist
+    for table_name in get_table_names():
+        if table_name in existing_tables:
+            raise ValueError(f"Table {table_name} already exists. Migration may have been applied already.")
+
+    # Check if required tables exist (users, roles)
+    required_tables = ['ab_user', 'ab_role']
+    for table_name in required_tables:
+        if table_name not in existing_tables:
+            raise ValueError(f"Required table {table_name} does not exist. Please run Flask-AppBuilder migrations first.")
+
+    return True

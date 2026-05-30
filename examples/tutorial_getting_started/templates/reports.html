@@ -1,0 +1,495 @@
+{% extends "appbuilder/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="page-header">
+                <i class="fa fa-line-chart"></i> Task Reports
+                <small>Detailed analytics and performance metrics</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Navigation Breadcrumb -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('TaskDashboardView.dashboard') }}">
+                            <i class="fa fa-dashboard"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        <i class="fa fa-line-chart"></i> Reports
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Time-based Metrics -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Tasks This Week
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ tasks_this_week }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-calendar-week fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Tasks This Month
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ tasks_this_month }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Completed This Week
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ completed_this_week }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Avg. Completion Time
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ avg_completion_days }} days
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-clock-o fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Summary -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-chart-line"></i> Performance Summary
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <!-- Placeholder for chart - in a real implementation, you'd use Chart.js or similar -->
+                        <div class="alert alert-info text-center">
+                            <i class="fa fa-info-circle"></i>
+                            <strong>Chart Placeholder</strong><br>
+                            In a production implementation, this would show a line chart of task completion over time.
+                            <br><br>
+                            <small class="text-muted">
+                                To implement charts, add Chart.js and create data visualizations based on your task statistics.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-trophy"></i> Performance Metrics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="performance-metric mb-3">
+                        <h6 class="text-info">Weekly Productivity</h6>
+                        {% if tasks_this_week > 0 %}
+                            {% set weekly_completion_rate = (completed_this_week / tasks_this_week * 100) if tasks_this_week > 0 else 0 %}
+                            <div class="progress mb-2">
+                                <div class="progress-bar bg-info" role="progressbar" 
+                                     style="width: {{ weekly_completion_rate }}%">
+                                </div>
+                            </div>
+                            <small class="text-muted">{{ "%.1f"|format(weekly_completion_rate) }}% completion rate this week</small>
+                        {% else %}
+                            <p class="text-muted">No tasks created this week</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="performance-metric mb-3">
+                        <h6 class="text-success">Total Completed</h6>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="h4 text-success">{{ total_completed }}</span>
+                            <i class="fa fa-check-circle fa-2x text-success"></i>
+                        </div>
+                        <small class="text-muted">Tasks completed to date</small>
+                    </div>
+
+                    <div class="performance-metric">
+                        <h6 class="text-warning">Efficiency</h6>
+                        {% if avg_completion_days > 0 %}
+                            {% if avg_completion_days <= 3 %}
+                                <span class="badge badge-success">Excellent</span>
+                                <small class="text-muted d-block">Very fast task completion</small>
+                            {% elif avg_completion_days <= 7 %}
+                                <span class="badge badge-info">Good</span>
+                                <small class="text-muted d-block">Reasonable completion time</small>
+                            {% elif avg_completion_days <= 14 %}
+                                <span class="badge badge-warning">Fair</span>
+                                <small class="text-muted d-block">Could be improved</small>
+                            {% else %}
+                                <span class="badge badge-danger">Slow</span>
+                                <small class="text-muted d-block">Consider workflow optimization</small>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge badge-secondary">No Data</span>
+                            <small class="text-muted d-block">Complete some tasks to see efficiency</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Analysis -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-calendar-check-o"></i> Task Creation Trends
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="trend-analysis">
+                        <div class="row text-center">
+                            <div class="col-md-6 mb-3">
+                                <div class="border-right">
+                                    <h4 class="text-primary">{{ tasks_this_week }}</h4>
+                                    <p class="text-muted mb-0">This Week</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <h4 class="text-success">{{ tasks_this_month }}</h4>
+                                <p class="text-muted mb-0">This Month</p>
+                            </div>
+                        </div>
+                        
+                        {% if tasks_this_month > 0 %}
+                            {% set weekly_percentage = (tasks_this_week / tasks_this_month * 100) if tasks_this_month > 0 else 0 %}
+                            <div class="mt-3">
+                                <p class="text-muted mb-2">Weekly Progress:</p>
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ weekly_percentage }}%">
+                                        {{ "%.1f"|format(weekly_percentage) }}%
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    {% if weekly_percentage > 25 %}
+                                        Strong weekly activity
+                                    {% elif weekly_percentage > 15 %}
+                                        Moderate weekly activity
+                                    {% else %}
+                                        Low weekly activity
+                                    {% endif %}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-target"></i> Completion Analysis
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="completion-analysis">
+                        <div class="row text-center">
+                            <div class="col-md-6 mb-3">
+                                <div class="border-right">
+                                    <h4 class="text-success">{{ completed_this_week }}</h4>
+                                    <p class="text-muted mb-0">Completed</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <h4 class="text-info">{{ avg_completion_days }}</h4>
+                                <p class="text-muted mb-0">Avg Days</p>
+                            </div>
+                        </div>
+
+                        {% if completed_this_week > 0 and tasks_this_week > 0 %}
+                            {% set completion_rate = (completed_this_week / tasks_this_week * 100) %}
+                            <div class="mt-3">
+                                <p class="text-muted mb-2">Weekly Completion Rate:</p>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" role="progressbar" 
+                                         style="width: {{ completion_rate }}%">
+                                        {{ "%.1f"|format(completion_rate) }}%
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    {% if completion_rate >= 80 %}
+                                        Excellent performance!
+                                    {% elif completion_rate >= 60 %}
+                                        Good performance
+                                    {% elif completion_rate >= 40 %}
+                                        Room for improvement
+                                    {% else %}
+                                        Consider workflow optimization
+                                    {% endif %}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-lightbulb-o"></i> Performance Recommendations
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="recommendation-card">
+                                <h6 class="text-info">
+                                    <i class="fa fa-clock-o"></i> Time Management
+                                </h6>
+                                {% if avg_completion_days > 7 %}
+                                    <p class="text-muted">
+                                        Your average completion time is {{ avg_completion_days }} days. 
+                                        Consider breaking larger tasks into smaller, manageable pieces.
+                                    </p>
+                                    <div class="alert alert-warning">
+                                        <small><strong>Tip:</strong> Set interim milestones for tasks taking longer than a week.</small>
+                                    </div>
+                                {% elif avg_completion_days > 0 %}
+                                    <p class="text-muted">
+                                        Great job! Your average completion time of {{ avg_completion_days }} days shows good task management.
+                                    </p>
+                                    <div class="alert alert-success">
+                                        <small><strong>Keep it up:</strong> Your current pace is efficient and sustainable.</small>
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted">
+                                        Complete more tasks to get personalized time management insights.
+                                    </p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="recommendation-card">
+                                <h6 class="text-success">
+                                    <i class="fa fa-target"></i> Productivity
+                                </h6>
+                                {% if tasks_this_week >= 5 %}
+                                    <p class="text-muted">
+                                        You're highly productive with {{ tasks_this_week }} tasks this week! 
+                                        Maintain this momentum while ensuring quality.
+                                    </p>
+                                    <div class="alert alert-success">
+                                        <small><strong>Excellent:</strong> High task volume with good organization.</small>
+                                    </div>
+                                {% elif tasks_this_week >= 2 %}
+                                    <p class="text-muted">
+                                        Good productivity with {{ tasks_this_week }} tasks this week. 
+                                        Consider setting a goal to increase your task throughput.
+                                    </p>
+                                    <div class="alert alert-info">
+                                        <small><strong>Suggestion:</strong> Try to create 1-2 more tasks weekly.</small>
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted">
+                                        Low task activity this week. Consider breaking your work into more granular tasks 
+                                        for better tracking and motivation.
+                                    </p>
+                                    <div class="alert alert-warning">
+                                        <small><strong>Tip:</strong> Small, frequent wins build momentum.</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="recommendation-card">
+                                <h6 class="text-warning">
+                                    <i class="fa fa-line-chart"></i> Growth
+                                </h6>
+                                {% if total_completed >= 10 %}
+                                    <p class="text-muted">
+                                        With {{ total_completed }} completed tasks, you're building great habits! 
+                                        Consider using AI insights for optimization.
+                                    </p>
+                                    <div class="alert alert-info">
+                                        <small><strong>Next step:</strong> Try the AI Insights feature for personalized recommendations.</small>
+                                    </div>
+                                {% elif total_completed >= 5 %}
+                                    <p class="text-muted">
+                                        Good progress with {{ total_completed }} completed tasks. 
+                                        Focus on maintaining consistency in your task management.
+                                    </p>
+                                    <div class="alert alert-success">
+                                        <small><strong>Building momentum:</strong> You're on the right track!</small>
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted">
+                                        You're just getting started! Complete more tasks to unlock detailed 
+                                        performance analytics and recommendations.
+                                    </p>
+                                    <div class="alert alert-primary">
+                                        <small><strong>Getting started:</strong> Focus on creating and completing your first 5 tasks.</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <a href="{{ url_for('TaskDashboardView.dashboard') }}" class="btn btn-secondary mr-2">
+                        <i class="fa fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                    <a href="{{ url_for('TaskModelView.list') }}" class="btn btn-primary mr-2">
+                        <i class="fa fa-list"></i> View All Tasks
+                    </a>
+                    <a href="{{ url_for('TaskDashboardView.ai_insights') }}" class="btn btn-info mr-2">
+                        <i class="fa fa-magic"></i> AI Insights
+                    </a>
+                    <a href="{{ url_for('TaskModelView.add') }}" class="btn btn-success">
+                        <i class="fa fa-plus"></i> Add New Task
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+.border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+.border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+.border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+
+.text-gray-800 { color: #5a5c69 !important; }
+.text-gray-300 { color: #dddfeb !important; }
+
+.recommendation-card {
+    height: 100%;
+    padding: 15px;
+    border: 1px solid #e3e6f0;
+    border-radius: 0.35rem;
+    background-color: #f8f9fc;
+}
+
+.performance-metric {
+    padding: 10px 0;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+.performance-metric:last-child {
+    border-bottom: none;
+}
+
+.trend-analysis, .completion-analysis {
+    padding: 10px 0;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease-in-out;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+}
+
+.breadcrumb {
+    background-color: #f8f9fc;
+    border: 1px solid #e3e6f0;
+}
+
+.alert {
+    border: none;
+    border-radius: 0.35rem;
+}
+
+.progress {
+    height: 0.5rem;
+    border-radius: 0.35rem;
+}
+
+.border-right {
+    border-right: 1px solid #e3e6f0;
+}
+
+@media (max-width: 768px) {
+    .border-right {
+        border-right: none;
+        border-bottom: 1px solid #e3e6f0;
+    }
+}
+</style>
+{% endblock %}

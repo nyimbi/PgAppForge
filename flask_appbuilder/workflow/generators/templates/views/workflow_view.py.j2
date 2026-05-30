@@ -1,0 +1,324 @@
+"""
+{{ workflow.name }} Workflow Views
+Generated from WDL on {{ timestamp }}
+"""
+
+from flask import redirect, flash, request, url_for, jsonify
+from flask_login import current_user
+from flask_babel import lazy_gettext, gettext
+from wtforms import validators
+
+from flask_appbuilder import ModelView, BaseView, expose, has_access
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.actions import action
+from flask_appbuilder.widgets import ListWidget, ShowWidget
+from flask_appbuilder.security.decorators import protect
+
+from .models.{{ workflow.name.lower() }}_models import {{ workflow.name }}WorkflowState
+from .forms.{{ workflow.name.lower() }}_forms import {% for step_name in workflow.steps.keys() %}{{ step_name }}Form{% if not loop.last %}, {% endif %}{% endfor %}
+
+from flask_appbuilder.workflow.core import get_workflow_engine
+from flask_appbuilder.workflow.views import WorkflowModelView
+from flask_appbuilder.workflow.widgets import WorkflowProgressWidget, WorkflowButtonWidget
+
+
+class {{ workflow.name }}WorkflowView(WorkflowModelView):
+    """
+    Main view for {{ workflow.name }} workflow management.
+    """
+    datamodel = SQLAInterface({{ workflow.name }}WorkflowState)
+
+    # Workflow configuration
+    workflow_name = '{{ workflow.name }}'
+    workflow_version = '{{ workflow.version }}'
+
+    # Basic view configuration
+    list_title = '{{ workflow.name }} Workflows'
+    show_title = '{{ workflow.name }} Workflow Details'
+    add_title = 'Start {{ workflow.name }} Workflow'
+    edit_title = 'Edit {{ workflow.name }} Workflow'
+
+    # List view configuration
+    list_columns = [
+        'id', 'current_step', 'status', 'progress_percentage',
+        'created_at', 'last_activity_at'
+    ]
+
+    order_columns = ['created_at', 'last_activity_at', 'current_step']
+
+    search_columns = [
+        'id', 'current_step', 'status',
+        {% for field in fields %}
+        '{{ field.name }}',
+        {% endfor %}
+    ]
+
+    # Show view configuration
+    show_columns = [
+        'id', 'workflow_name', 'current_step', 'status',
+        'progress_percentage', 'created_at', 'last_activity_at',
+        {% for field in fields %}
+        '{{ field.name }}',
+        {% endfor %}
+    ]
+
+    # Form configuration
+    add_columns = []  # Workflow starts with first step form
+    edit_columns = []  # Editing happens through step-specific forms
+
+    # Permissions
+    base_permissions = ['can_list', 'can_show', 'can_add']
+
+    {% for step_name, permissions in permissions.items() %}
+    # {{ step_name }} step permissions
+    {% if permissions.view %}
+    @has_access
+    @protect(lambda: self._check_step_access('{{ step_name }}', 'view'))
+    {% endif %}
+    def {{ step_name.lower() }}_step_access(self):
+        return self._check_user_roles({{ permissions.view | tojson if permissions.view else '[]' }})
+    {% endfor %}
+
+    def _check_step_access(self, step_name: str, action: str) -> bool:
+        """Check if current user can access step."""
+        if not current_user.is_authenticated:
+            return False
+
+        user_roles = [role.name for role in current_user.roles]
+
+        {% for step_name, permissions in permissions.items() %}
+        if step_name == '{{ step_name }}':
+            required_roles = {{ permissions.get('view', []) | tojson }}
+            if action == 'edit':
+                required_roles = {{ permissions.get('edit', []) | tojson }}
+            elif action == 'admin':
+                required_roles = {{ permissions.get('admin', []) | tojson }}
+
+            if not required_roles:
+                return True
+            return any(role in user_roles for role in required_roles)
+        {% endfor %}
+
+        return False
+
+    def _check_user_roles(self, required_roles: list) -> bool:
+        """Check if user has required roles."""
+        if not current_user.is_authenticated:
+            return False
+        if not required_roles:
+            return True
+
+        user_roles = [role.name for role in current_user.roles]
+        return any(role in user_roles for role in required_roles)
+
+    # Step-specific view methods
+    {% for step_name, step_config in workflow.steps.items() %}
+    @expose('/step/{{ step_name.lower() }}/<workflow_id>')
+    @has_access
+    def {{ step_name.lower() }}_step(self, workflow_id):
+        """{{ step_config.title }} step view."""
+        if not self._check_step_access('{{ step_name }}', 'view'):
+            flash(gettext('Access denied for this step'), 'error')
+            return redirect(url_for('{{ workflow.name }}WorkflowView.list'))
+
+        # Get or create workflow state
+        workflow_state = self.get_or_create_workflow_state(
+            workflow_id, '{{ workflow.name }}', '{{ step_name }}'
+        )
+
+        if not workflow_state:
+            flash(gettext('Workflow not found'), 'error')
+            return redirect(url_for('{{ workflow.name }}WorkflowView.list'))
+
+        # Check if user can access this step
+        user_roles = [role.name for role in current_user.roles]
+        if not workflow_state.can_user_access_step('{{ step_name }}', user_roles):
+            flash(gettext('You do not have permission to access this step'), 'error')
+            return redirect(url_for('{{ workflow.name }}WorkflowView.show', pk=workflow_id))
+
+        # Create form for this step
+        form_class = {{ step_name }}Form
+        form = form_class(obj=workflow_state)
+
+        if request.method == 'POST' and form.validate():
+            # Save form data
+            form.populate_obj(workflow_state)
+
+            # Handle workflow advancement
+            action = request.form.get('workflow_action', 'save')
+
+            if action == 'next':
+                return self._advance_workflow(workflow_state, '{{ step_name }}')
+            elif action == 'previous':
+                return self._navigate_previous(workflow_state)
+            elif action == 'save_draft':
+                return self._save_draft(workflow_state)
+
+        # Prepare template context
+        context = {
+            'workflow_state': workflow_state,
+            'step_name': '{{ step_name }}',
+            'step_config': {{ step_config | tojson }},
+            'form': form,
+            'progress_widget': WorkflowProgressWidget(
+                workflow_state=workflow_state,
+                workflow_definition=self._get_workflow_definition()
+            ),
+            'button_widget': WorkflowButtonWidget(
+                workflow_state=workflow_state,
+                workflow_definition=self._get_workflow_definition()
+            )
+        }
+
+        return self.render_template(
+            '{{ workflow.name.lower() }}/{{ step_name.lower() }}.html',
+            **context
+        )
+
+    @expose('/step/{{ step_name.lower() }}/<workflow_id>', methods=['POST'])
+    @has_access
+    def {{ step_name.lower() }}_step_post(self, workflow_id):
+        """Handle {{ step_config.title }} step form submission."""
+        return self.{{ step_name.lower() }}_step(workflow_id)
+    {% endfor %}
+
+    def _advance_workflow(self, workflow_state, current_step):
+        """Advance workflow to next step."""
+        engine = get_workflow_engine()
+
+        # Validate current step data
+        errors = workflow_state.validate_step_data(current_step)
+        if errors:
+            for field, field_errors in errors.items():
+                for error in field_errors:
+                    flash(f'{field}: {error}', 'error')
+            return redirect(request.url)
+
+        # Get next step
+        user_roles = [role.name for role in current_user.roles]
+        next_step = workflow_state.get_next_step_for_user(user_roles)
+
+        if not next_step:
+            # Workflow complete
+            workflow_state.complete_workflow()
+            flash(gettext('Workflow completed successfully!'), 'success')
+            return redirect(url_for('{{ workflow.name }}WorkflowView.show', pk=workflow_state.id))
+
+        # Advance to next step
+        success = engine.advance_workflow(workflow_state, next_step)
+
+        if success:
+            flash(gettext('Advanced to next step: ') + next_step, 'success')
+            return redirect(url_for(
+                '{{ workflow.name }}WorkflowView.{}_step'.format(next_step.lower()),
+                workflow_id=workflow_state.id
+            ))
+        else:
+            flash(gettext('Failed to advance workflow'), 'error')
+            return redirect(request.url)
+
+    def _navigate_previous(self, workflow_state):
+        """Navigate to previous step."""
+        engine = get_workflow_engine()
+
+        # Get previous step from completed steps
+        if workflow_state.completed_steps:
+            previous_step = workflow_state.completed_steps[-1]
+            success = engine.navigate_to_step(workflow_state, previous_step)
+
+            if success:
+                flash(gettext('Navigated to previous step: ') + previous_step, 'info')
+                return redirect(url_for(
+                    '{{ workflow.name }}WorkflowView.{}_step'.format(previous_step.lower()),
+                    workflow_id=workflow_state.id
+                ))
+
+        flash(gettext('Cannot navigate to previous step'), 'warning')
+        return redirect(request.url)
+
+    def _save_draft(self, workflow_state):
+        """Save workflow as draft."""
+        try:
+            self.datamodel.session.commit()
+            flash(gettext('Draft saved successfully'), 'success')
+        except Exception as e:
+            self.datamodel.session.rollback()
+            flash(gettext('Failed to save draft: ') + str(e), 'error')
+
+        return redirect(request.url)
+
+    def _get_workflow_definition(self):
+        """Get workflow definition for this workflow."""
+        engine = get_workflow_engine()
+        return engine.workflow_definitions.get('{{ workflow.name }}')
+
+    # Bulk actions
+    @action('bulk_complete', 'Complete Selected', 'Complete selected workflows?', 'fa-check')
+    def bulk_complete(self, items):
+        """Bulk complete workflows."""
+        if not self._check_user_roles(['admin', 'hr_admin']):
+            flash(gettext('Permission denied'), 'error')
+            return redirect(url_for('{{ workflow.name }}WorkflowView.list'))
+
+        for item in items:
+            item.complete_workflow()
+
+        self.datamodel.session.commit()
+        flash(gettext(f'Completed {len(items)} workflows'), 'success')
+
+    @action('bulk_archive', 'Archive Selected', 'Archive selected workflows?', 'fa-archive')
+    def bulk_archive(self, items):
+        """Bulk archive workflows."""
+        if not self._check_user_roles(['admin', 'hr_admin']):
+            flash(gettext('Permission denied'), 'error')
+            return redirect(url_for('{{ workflow.name }}WorkflowView.list'))
+
+        for item in items:
+            item.status = 'archived'
+
+        self.datamodel.session.commit()
+        flash(gettext(f'Archived {len(items)} workflows'), 'success')
+
+    # API endpoints for AJAX operations
+    @expose('/api/step-status/<workflow_id>')
+    @has_access
+    def api_step_status(self, workflow_id):
+        """Get current step status for workflow."""
+        workflow_state = self.datamodel.get(workflow_id)
+        if not workflow_state:
+            return jsonify({'error': 'Workflow not found'}), 404
+
+        return jsonify({
+            'current_step': workflow_state.current_step,
+            'status': workflow_state.status,
+            'progress_percentage': workflow_state.step_progress_percentage,
+            'available_next_steps': workflow_state.available_next_steps or [],
+            'can_navigate_back': len(workflow_state.completed_steps or []) > 0
+        })
+
+    @expose('/api/validate-step/<workflow_id>/<step_name>')
+    @has_access
+    def api_validate_step(self, workflow_id, step_name):
+        """Validate step data via API."""
+        workflow_state = self.datamodel.get(workflow_id)
+        if not workflow_state:
+            return jsonify({'error': 'Workflow not found'}), 404
+
+        errors = workflow_state.validate_step_data(step_name)
+        return jsonify({
+            'valid': len(errors) == 0,
+            'errors': errors
+        })
+
+
+# Register the view
+from flask_appbuilder import AppBuilder
+def register_{{ workflow.name.lower() }}_views(appbuilder: AppBuilder):
+    """Register all {{ workflow.name }} workflow views."""
+    appbuilder.add_view(
+        {{ workflow.name }}WorkflowView,
+        "{{ workflow.name }} Workflows",
+        icon="fa-tasks",
+        category="{{ workflow.name }}",
+        category_icon="fa-workflow"
+    )

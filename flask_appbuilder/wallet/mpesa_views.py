@@ -98,7 +98,7 @@ class MPESAAccountModelView(ModelView):
                 # In a real implementation, this would send SMS verification
                 # For now, we'll just mark as verified
                 account.is_verified = True
-                account.verification_date = datetime.utcnow()
+                account.verification_date = datetime.now(tz=timezone.utc)
                 verified_count += 1
         
         if verified_count > 0:
@@ -428,12 +428,12 @@ class MPESACallbackModelView(ModelView):
                     else:
                         callback.processing_error = message
                         callback.processing_attempts += 1
-                        callback.last_processing_attempt = datetime.utcnow()
+                        callback.last_processing_attempt = datetime.now(tz=timezone.utc)
                 
                 except Exception as e:
                     callback.processing_error = str(e)
                     callback.processing_attempts += 1
-                    callback.last_processing_attempt = datetime.utcnow()
+                    callback.last_processing_attempt = datetime.now(tz=timezone.utc)
         
         self.datamodel.session.commit()
         

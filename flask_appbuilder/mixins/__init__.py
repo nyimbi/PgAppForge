@@ -28,6 +28,7 @@ _ns: dict = {}
 _ns.update(_try_import("util_mixins", "VersionMixin", "LookupMixin", "HumanizeMixin"))
 _ns.update(_try_import("archive_mixin", "ArchiveMixin", "ArchiveQuery"))
 _ns.update(_try_import("version_control_mixin", "VersionControlMixin"))
+_ns.update(_try_import("versioning_mixin", "VersioningMixin", "ModelVersion", "ModelBranch"))
 
 # Data
 _ns.update(_try_import("cache_mixin", "CacheMixin", "CachedQuery"))
@@ -61,6 +62,9 @@ _ns.update(_try_import("event_disptach_mixin", "EventDispatchMixin"))
 # FAB integration
 _ns.update(_try_import("fab_integration", "FABIntegratedModel", "FABMixinRegistry"))
 _ns.update(_try_import("view_mixins", "EnhancedModelView"))
+
+# Encryption (requires PostgreSQL pgcrypto)
+_ns.update(_try_import("encryption_mixin", "EncryptionMixin", "KeyRing"))
 
 # Optional (requires alembic)
 _ns.update(_try_import("migration_tools", "MigrationHelper"))

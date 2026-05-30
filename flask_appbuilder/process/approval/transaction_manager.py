@@ -15,7 +15,7 @@ import logging
 import time
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Callable, List
 from enum import Enum
 from dataclasses import dataclass
@@ -124,7 +124,7 @@ class DatabaseTransactionManager:
         effective_config = config or self.config
         session = db.session
         transaction_id = self._generate_transaction_id()
-        start_time = datetime.utcnow()
+        start_time = datetime.now(tz=timezone.utc)
         
         # Log transaction start
         self.audit_logger.log_security_event('transaction_started', {
@@ -176,7 +176,7 @@ class DatabaseTransactionManager:
                 
                 try:
                     # Check timeout
-                    if (datetime.utcnow() - start_time).total_seconds() > effective_config.timeout_seconds:
+                    if (datetime.now(tz=timezone.utc) - start_time).total_seconds() > effective_config.timeout_seconds:
                         raise TransactionTimeoutError(f"Transaction timeout after {effective_config.timeout_seconds}s")
                     
                     # Store transaction context
@@ -188,7 +188,7 @@ class DatabaseTransactionManager:
                     transaction.commit()
                     
                     # Log successful completion
-                    duration = (datetime.utcnow() - start_time).total_seconds()
+                    duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
                     self.audit_logger.log_security_event('transaction_completed', {
                         'transaction_id': transaction_id,
                         'operation_name': operation_name,
@@ -298,7 +298,7 @@ class DatabaseTransactionManager:
             
             # Increment version
             entity.version = (entity.version or 0) + 1
-            entity.updated_at = datetime.utcnow()
+            entity.updated_at = datetime.now(tz=timezone.utc)
             
             return result
     

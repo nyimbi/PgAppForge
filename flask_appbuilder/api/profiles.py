@@ -231,12 +231,12 @@ class UserProfileApi(BaseApi):
     
     def pre_add(self, item: UserProfile) -> None:
         """Pre-process before adding profile"""
-        item.last_profile_update = datetime.datetime.utcnow()
+        item.last_profile_update = datetime.datetime.now(datetime.timezone.utc)
         item.update_profile_completion()
     
     def pre_update(self, item: UserProfile) -> None:
         """Pre-process before updating profile"""
-        item.last_profile_update = datetime.datetime.utcnow()
+        item.last_profile_update = datetime.datetime.now(datetime.timezone.utc)
         item.update_profile_completion()
     
     def post_add(self, item: UserProfile) -> None:
@@ -390,7 +390,7 @@ class UserProfileApi(BaseApi):
         
         # Recent activity
         recent_updates = self.datamodel.session.query(UserProfile).filter(
-            UserProfile.last_profile_update >= datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            UserProfile.last_profile_update >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
         ).count()
         
         stats = {

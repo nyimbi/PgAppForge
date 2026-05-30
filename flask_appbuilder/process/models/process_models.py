@@ -7,7 +7,7 @@ state management, approval workflows, and ML-powered triggers.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from enum import Enum
 
@@ -280,7 +280,7 @@ class ProcessInstance(TenantAwareMixin, AuditMixin, Model):
         if not self.started_at:
             return None
         
-        end_time = self.completed_at if self.completed_at else datetime.utcnow()
+        end_time = self.completed_at if self.completed_at else datetime.now(tz=timezone.utc)
         return (end_time - self.started_at).total_seconds()
     
     @hybrid_property
@@ -289,7 +289,7 @@ class ProcessInstance(TenantAwareMixin, AuditMixin, Model):
         if not self.max_duration or self.status in [ProcessInstanceStatus.COMPLETED.value, ProcessInstanceStatus.FAILED.value]:
             return False
         
-        elapsed = (datetime.utcnow() - self.started_at).total_seconds() / 60
+        elapsed = (datetime.now(tz=timezone.utc) - self.started_at).total_seconds() / 60
         return elapsed > self.max_duration
     
     @hybrid_property
@@ -315,7 +315,7 @@ class ProcessInstance(TenantAwareMixin, AuditMixin, Model):
     
     def update_activity(self):
         """Update last activity timestamp."""
-        self.last_activity_at = datetime.utcnow()
+        self.last_activity_at = datetime.now(tz=timezone.utc)
     
     def is_stuck(self, threshold_minutes: int = 60) -> bool:
         """Check if process appears stuck (no activity for threshold)."""
@@ -325,7 +325,7 @@ class ProcessInstance(TenantAwareMixin, AuditMixin, Model):
         if not self.last_activity_at:
             return False
         
-        elapsed = (datetime.utcnow() - self.last_activity_at).total_seconds() / 60
+        elapsed = (datetime.now(tz=timezone.utc) - self.last_activity_at).total_seconds() / 60
         return elapsed > threshold_minutes
     
     def __repr__(self):
@@ -395,7 +395,7 @@ class ProcessStep(TenantAwareMixin, AuditMixin, Model):
         if not self.started_at:
             return None
         
-        end_time = self.completed_at if self.completed_at else datetime.utcnow()
+        end_time = self.completed_at if self.completed_at else datetime.now(tz=timezone.utc)
         return (end_time - self.started_at).total_seconds()
     
     @hybrid_property
@@ -404,7 +404,7 @@ class ProcessStep(TenantAwareMixin, AuditMixin, Model):
         if not self.due_at or self.status in [ProcessStepStatus.COMPLETED.value, ProcessStepStatus.FAILED.value]:
             return False
         
-        return datetime.utcnow() > self.due_at
+        return datetime.now(tz=timezone.utc) > self.due_at
     
     @validates('status')
     def validate_status(self, key, status):
@@ -425,14 +425,14 @@ class ProcessStep(TenantAwareMixin, AuditMixin, Model):
     def mark_started(self, executed_by: int = None):
         """Mark step as started."""
         self.status = ProcessStepStatus.RUNNING.value
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(tz=timezone.utc)
         if executed_by:
             self.executed_by = executed_by
     
     def mark_completed(self, output_data: Dict[str, Any] = None):
         """Mark step as completed."""
         self.status = ProcessStepStatus.COMPLETED.value
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         if output_data:
             self.output_data = output_data
     
@@ -440,7 +440,7 @@ class ProcessStep(TenantAwareMixin, AuditMixin, Model):
         """Mark step as failed."""
         self.status = ProcessStepStatus.FAILED.value
         self.error_message = error_message
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         if error_details:
             self.error_details = error_details
     
@@ -561,14 +561,14 @@ class ApprovalRequest(TenantAwareMixin, AuditMixin, Model):
         """Check if approval is overdue."""
         if not self.due_at or self.status != ApprovalStatus.PENDING.value:
             return False
-        return datetime.utcnow() > self.due_at
+        return datetime.now(tz=timezone.utc) > self.due_at
     
     @hybrid_property
     def days_pending(self):
         """Calculate days pending approval."""
         if self.status != ApprovalStatus.PENDING.value:
             return 0
-        return (datetime.utcnow() - self.requested_at).days
+        return (datetime.now(tz=timezone.utc) - self.requested_at).days
     
     @validates('status')
     def validate_status(self, key, status):
@@ -596,7 +596,7 @@ class ApprovalRequest(TenantAwareMixin, AuditMixin, Model):
             'level': self.current_level,
             'approver_id': approver_id,
             'response': response,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'comments': comments
         }
         
@@ -604,7 +604,7 @@ class ApprovalRequest(TenantAwareMixin, AuditMixin, Model):
             self.responses = []
         
         self.responses.append(response_data)
-        self.responded_at = datetime.utcnow()
+        self.responded_at = datetime.now(tz=timezone.utc)
     
     def __repr__(self):
         return f'<ApprovalRequest {self.title} ({self.status})>'
@@ -686,7 +686,7 @@ class SmartTrigger(TenantAwareMixin, AuditMixin, Model):
         if not self.last_triggered_at or self.cooldown_period == 0:
             return False
         
-        elapsed = (datetime.utcnow() - self.last_triggered_at).total_seconds()
+        elapsed = (datetime.now(tz=timezone.utc) - self.last_triggered_at).total_seconds()
         return elapsed < self.cooldown_period
     
     def can_trigger(self) -> bool:
@@ -698,7 +698,7 @@ class SmartTrigger(TenantAwareMixin, AuditMixin, Model):
             return False
         
         # Check rate limit
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        one_hour_ago = datetime.now(tz=timezone.utc) - timedelta(hours=1)
         # In a real implementation, you'd query a separate trigger_executions table
         
         return True
@@ -709,7 +709,7 @@ class SmartTrigger(TenantAwareMixin, AuditMixin, Model):
         if success:
             self.success_count += 1
         
-        self.last_triggered_at = datetime.utcnow()
+        self.last_triggered_at = datetime.now(tz=timezone.utc)
         
         if confidence is not None:
             # Update average confidence using exponential moving average
@@ -1133,19 +1133,19 @@ class SubprocessExecution(TenantAwareMixin, AuditMixin, Model):
         """Check if subprocess execution has timed out."""
         if not self.timeout_at:
             return False
-        return datetime.utcnow() > self.timeout_at
+        return datetime.now(tz=timezone.utc) > self.timeout_at
     
     def mark_completed(self, output_data: Dict[str, Any] = None):
         """Mark subprocess execution as completed."""
         self.status = ProcessInstanceStatus.COMPLETED.value
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         if output_data:
             self.output_data.update(output_data)
     
     def mark_failed(self, error_message: str, error_details: Dict[str, Any] = None):
         """Mark subprocess execution as failed."""
         self.status = ProcessInstanceStatus.FAILED.value
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(tz=timezone.utc)
         self.error_message = error_message
         if error_details:
             self.error_details.update(error_details)

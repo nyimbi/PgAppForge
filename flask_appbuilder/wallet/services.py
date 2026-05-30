@@ -8,7 +8,7 @@ including transaction processing, budget management, and analytics.
 import json
 import logging
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, List, Any, Optional, Union, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -741,7 +741,7 @@ class BudgetService:
             
             # Calculate period dates
             if period_start is None:
-                period_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                period_start = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             
             if period_type == BudgetPeriod.DAILY:
                 period_end = period_start.replace(hour=23, minute=59, second=59)
@@ -858,7 +858,7 @@ class BudgetService:
                 and_(
                     WalletBudget.wallet_id == wallet_id,
                     WalletBudget.is_active == True,
-                    WalletBudget.period_end >= datetime.utcnow()
+                    WalletBudget.period_end >= datetime.now(tz=timezone.utc)
                 )
             )
             
@@ -874,7 +874,7 @@ class BudgetService:
                 
                 # Calculate analytics
                 days_total = (budget.period_end - budget.period_start).days + 1
-                days_remaining = (budget.period_end - datetime.utcnow()).days + 1
+                days_remaining = (budget.period_end - datetime.now(tz=timezone.utc)).days + 1
                 daily_avg = budget.get_daily_average_spending()
                 projected = budget.get_projected_spending()
                 
@@ -1106,7 +1106,7 @@ class AnalyticsService:
             Dictionary with spending analytics
         """
         try:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(tz=timezone.utc)
             start_date = end_date - timedelta(days=days)
             
             # Build base query
@@ -1199,7 +1199,7 @@ class AnalyticsService:
         try:
             # For this example, we'll analyze monthly trends
             trends = []
-            current_date = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            current_date = datetime.now(tz=timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             
             for i in range(periods):
                 period_start = current_date.replace(month=current_date.month - i) if current_date.month > i else current_date.replace(year=current_date.year - 1, month=12 - (i - current_date.month))

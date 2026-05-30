@@ -7,7 +7,7 @@ capabilities for multi-tenant Flask-AppBuilder applications.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
@@ -193,7 +193,7 @@ class TenantAnalyticsEngine:
     
     def get_tenant_overview(self, tenant_id: int, period: MetricPeriod = MetricPeriod.MONTH) -> Dict[str, Any]:
         """Get comprehensive tenant overview metrics."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = self._get_period_start_date(end_date, period)
         
         # Basic tenant info
@@ -249,12 +249,12 @@ class TenantAnalyticsEngine:
             'period': period.value,
             'start_date': start_date.isoformat(),
             'end_date': end_date.isoformat(),
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(tz=timezone.utc).isoformat()
         }
     
     def get_platform_overview(self, period: MetricPeriod = MetricPeriod.MONTH) -> Dict[str, Any]:
         """Get platform-wide analytics overview."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = self._get_period_start_date(end_date, period)
         
         # Tenant metrics
@@ -297,7 +297,7 @@ class TenantAnalyticsEngine:
         """Get usage trends over time."""
         
         # Generate time series data
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         periods = []
         
         for i in range(num_periods):
@@ -334,7 +334,7 @@ class TenantAnalyticsEngine:
             'period': period.value,
             'data_points': periods,
             'statistics': trend_stats,
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(tz=timezone.utc).isoformat()
         }
     
     def get_comparative_analytics(self, tenant_id: int, 
@@ -344,7 +344,7 @@ class TenantAnalyticsEngine:
         if not tenant:
             return {}
         
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = end_date - timedelta(days=30)
         
         # Get tenant metrics
@@ -866,7 +866,7 @@ def analytics_health():
     
     return jsonify({
         'status': health_status,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(tz=timezone.utc).isoformat(),
         'analytics_engine': 'operational',
         'dependencies': deps,
         'fallback_mode': not (deps['numpy'] and deps['pandas']),

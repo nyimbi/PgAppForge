@@ -7,7 +7,7 @@ performance analytics, and bottleneck detection for business processes.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict, Counter
 import threading
@@ -52,12 +52,12 @@ class ProcessAnalytics:
             # Check cache
             if cache_key in self._cache:
                 cached_data, timestamp = self._cache[cache_key]
-                if (datetime.utcnow() - timestamp).seconds < self._cache_timeout:
+                if (datetime.now(tz=timezone.utc) - timestamp).seconds < self._cache_timeout:
                     return cached_data
             
             try:
                 tenant_id = TenantContext.get_current_tenant_id()
-                cutoff_date = datetime.utcnow() - timedelta(days=time_range)
+                cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=time_range)
                 
                 # Get base metrics
                 metrics = {
@@ -71,7 +71,7 @@ class ProcessAnalytics:
                 }
                 
                 # Cache the results
-                self._cache[cache_key] = (metrics, datetime.utcnow())
+                self._cache[cache_key] = (metrics, datetime.now(tz=timezone.utc))
                 return metrics
                 
             except Exception as e:
@@ -526,7 +526,7 @@ class ProcessAnalytics:
     def _get_real_time_metrics(self, tenant_id: int) -> Dict[str, Any]:
         """Get real-time system metrics."""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             
             # Currently running processes
             running_processes = db.session.query(ProcessInstance).filter(
@@ -580,7 +580,7 @@ class ProcessAnalytics:
     
     def _get_completed_today(self, tenant_id: int) -> int:
         """Get count of processes completed today."""
-        today = datetime.utcnow().date()
+        today = datetime.now(tz=timezone.utc).date()
         return db.session.query(ProcessInstance).filter(
             ProcessInstance.tenant_id == tenant_id,
             func.date(ProcessInstance.completed_at) == today,
@@ -589,7 +589,7 @@ class ProcessAnalytics:
     
     def _get_failed_today(self, tenant_id: int) -> int:
         """Get count of processes failed today."""
-        today = datetime.utcnow().date()
+        today = datetime.now(tz=timezone.utc).date()
         return db.session.query(ProcessInstance).filter(
             ProcessInstance.tenant_id == tenant_id,
             func.date(ProcessInstance.completed_at) == today,
@@ -621,7 +621,7 @@ class ProcessAnalytics:
         try:
             # Processes running longer than expected
             threshold_hours = current_app.config.get('STUCK_PROCESS_THRESHOLD_HOURS', 24)
-            cutoff_time = datetime.utcnow() - timedelta(hours=threshold_hours)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=threshold_hours)
             
             stuck_instances = db.session.query(ProcessInstance).filter(
                 ProcessInstance.tenant_id == tenant_id,
@@ -631,7 +631,7 @@ class ProcessAnalytics:
             
             stuck_data = []
             for instance in stuck_instances:
-                duration = (datetime.utcnow() - instance.started_at).total_seconds()
+                duration = (datetime.now(tz=timezone.utc) - instance.started_at).total_seconds()
                 
                 stuck_data.append({
                     'instance_id': instance.id,
@@ -690,7 +690,7 @@ class ProcessAnalytics:
         """Get detailed analytics for a specific process definition."""
         try:
             tenant_id = TenantContext.get_current_tenant_id()
-            cutoff_date = datetime.utcnow() - timedelta(days=time_range)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=time_range)
             
             # Get process definition
             definition = db.session.query(ProcessDefinition).filter_by(

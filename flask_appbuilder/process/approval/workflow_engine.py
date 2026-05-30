@@ -8,7 +8,7 @@ without security validation or audit logging concerns.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from contextlib import contextmanager
 from collections import defaultdict
@@ -216,7 +216,7 @@ class ApprovalWorkflowEngine:
                 'step_counts': defaultdict(int),      # step -> approved_count
                 'user_approvals': defaultdict(list), # user_id -> [approval_records]
                 'total_approvals': 0,
-                'last_updated': datetime.utcnow()
+                'last_updated': datetime.now(tz=timezone.utc)
             }
         
         # Check if cache is valid
@@ -234,7 +234,7 @@ class ApprovalWorkflowEngine:
         
         # Update cache
         self._approval_cache[cache_key] = indexed_data
-        self._cache_timestamps[cache_key] = datetime.utcnow()
+        self._cache_timestamps[cache_key] = datetime.now(tz=timezone.utc)
         
         return indexed_data
     
@@ -262,7 +262,7 @@ class ApprovalWorkflowEngine:
             'step_counts': dict(step_counts),
             'user_approvals': dict(user_approvals),
             'total_approvals': len(approval_history),
-            'last_updated': datetime.utcnow()
+            'last_updated': datetime.now(tz=timezone.utc)
         }
 
     def get_step_approvals(self, instance, step: int, status_filter: str = None) -> List[Dict]:
@@ -353,7 +353,7 @@ class ApprovalWorkflowEngine:
         Returns:
             Dictionary with processing results and performance metrics
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(tz=timezone.utc)
         results = {
             'processed': 0,
             'failed': 0,
@@ -391,7 +391,7 @@ class ApprovalWorkflowEngine:
                         log.error(f"Bulk approval processing error: {e}")
                 
                 # Calculate processing time
-                end_time = datetime.utcnow()
+                end_time = datetime.now(tz=timezone.utc)
                 processing_time = (end_time - start_time).total_seconds() * 1000
                 results['processing_time_ms'] = round(processing_time, 2)
                 
@@ -418,7 +418,7 @@ class ApprovalWorkflowEngine:
         Args:
             max_age_minutes: Maximum age for cache entries in minutes
         """
-        current_time = datetime.utcnow()
+        current_time = datetime.now(tz=timezone.utc)
         cutoff_time = current_time - timedelta(minutes=max_age_minutes)
         
         stale_keys = [
@@ -449,11 +449,11 @@ class ApprovalWorkflowEngine:
             ),
             'oldest_cache_entry': min(
                 self._cache_timestamps.values(), 
-                default=datetime.utcnow()
+                default=datetime.now(tz=timezone.utc)
             ).isoformat() if self._cache_timestamps else None,
             'newest_cache_entry': max(
                 self._cache_timestamps.values(), 
-                default=datetime.utcnow()
+                default=datetime.now(tz=timezone.utc)
             ).isoformat() if self._cache_timestamps else None
         }
 
@@ -473,14 +473,14 @@ class ApprovalWorkflowEngine:
                 'metrics': pool_metrics,
                 'health': health_status,
                 'config': self.connection_pool.get_config(),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
         except Exception as e:
             log.error(f"Failed to get connection pool status: {e}")
             return {
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
     
     def cleanup_connections(self):
@@ -539,7 +539,7 @@ class ApprovalWorkflowEngine:
                     'metrics': cache_metrics,
                     'status': 'warning' if cache_size > 1000 else 'healthy'
                 },
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
         except Exception as e:
@@ -547,7 +547,7 @@ class ApprovalWorkflowEngine:
             return {
                 'overall_status': 'critical',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
     
     def is_step_complete(self, instance, step: int, step_config: Dict) -> bool:
@@ -572,7 +572,7 @@ class ApprovalWorkflowEngine:
         if completed_step >= total_steps - 1:
             # Final step completed - mark as approved
             instance.current_state = workflow_config['approved_state']
-            instance.workflow_completed_at = datetime.utcnow()
+            instance.workflow_completed_at = datetime.now(tz=timezone.utc)
         else:
             # Move to next step
             instance.current_state = f"step_{completed_step}_approved"
@@ -630,7 +630,7 @@ class ApprovalWorkflowEngine:
             'step_name': step_config['name'],
             'status': 'approved',
             'comments': comments,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(tz=timezone.utc).isoformat()
         }
         
         # Update approval history
@@ -643,7 +643,7 @@ class ApprovalWorkflowEngine:
         # Update last approval tracking
         instance.last_approval_user_id = current_user.id
         if not hasattr(instance, 'workflow_completed_at') or not instance.workflow_completed_at:
-            instance.workflow_completed_at = datetime.utcnow()
+            instance.workflow_completed_at = datetime.now(tz=timezone.utc)
         
         # Add instance to session
         db_session.add(instance)
@@ -664,7 +664,7 @@ class ApprovalWorkflowEngine:
         
         # Set initial state
         instance.current_state = workflow_config['initial_state']
-        instance.workflow_started_at = datetime.utcnow()
+        instance.workflow_started_at = datetime.now(tz=timezone.utc)
         instance.approval_history = '[]'  # Initialize empty history
         
         # Save to database

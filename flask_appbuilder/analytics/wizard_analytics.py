@@ -7,7 +7,7 @@ usage, completion rates, user behavior, and performance metrics.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict, Counter
@@ -135,7 +135,7 @@ class WizardAnalyticsEngine:
             user_id=user_id,
             event_type=event_type,
             event_data=event_data,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             step_index=step_index,
             field_id=field_id,
             user_agent=user_agent,
@@ -202,9 +202,9 @@ class WizardAnalyticsEngine:
                                    end_date: Optional[datetime] = None) -> WizardCompletionStats:
         """Get completion statistics for a wizard"""
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(tz=timezone.utc)
         
         # Filter events for this wizard and date range
         wizard_events = [
@@ -266,9 +266,9 @@ class WizardAnalyticsEngine:
                            end_date: Optional[datetime] = None) -> WizardFieldAnalytics:
         """Get detailed analytics for a specific field"""
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(tz=timezone.utc)
         
         # Filter events for this field
         field_events = [
@@ -329,9 +329,9 @@ class WizardAnalyticsEngine:
                                  end_date: Optional[datetime] = None) -> List[WizardUserJourney]:
         """Get user journey analysis for a wizard"""
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(tz=timezone.utc)
         
         return [
             journey for journey in self.user_journeys.values()
@@ -537,7 +537,7 @@ class WizardAnalyticsEngine:
         
         export_data = {
             'wizard_id': wizard_id,
-            'export_timestamp': datetime.utcnow().isoformat(),
+            'export_timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'date_range': {
                 'start': start_date.isoformat() if start_date else None,
                 'end': end_date.isoformat() if end_date else None

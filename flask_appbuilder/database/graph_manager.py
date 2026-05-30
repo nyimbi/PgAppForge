@@ -7,7 +7,7 @@ for PostgreSQL AGE extension with OpenCypher query support.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -301,7 +301,7 @@ class GraphDatabaseManager:
                     "results": parsed_results,
                     "count": len(parsed_results),
                     "query": query,
-                    "execution_time": datetime.utcnow().isoformat()
+                    "execution_time": datetime.now(tz=timezone.utc).isoformat()
                 }
                 
         except Exception as e:

@@ -8,7 +8,7 @@ and machine learning predictions with anomaly detection and optimization.
 import logging
 import json
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Callable
 from enum import Enum
 import threading
@@ -126,7 +126,7 @@ class ProcessOutcomePredictor(MLModel):
             accuracy = accuracy_score(y_test, y_pred)
             
             self.is_trained = True
-            self.last_training = datetime.utcnow()
+            self.last_training = datetime.now(tz=timezone.utc)
             
             log.info(f"Process outcome predictor trained with accuracy: {accuracy:.3f}")
             return True
@@ -199,7 +199,7 @@ class ProcessOutcomePredictor(MLModel):
         }
         
         self.is_trained = True
-        self.last_training = datetime.utcnow()
+        self.last_training = datetime.now(tz=timezone.utc)
         return True
     
     def _predict_fallback(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -254,7 +254,7 @@ class AnomalyDetector(MLModel):
             self.model.fit(X)
             
             self.is_trained = True
-            self.last_training = datetime.utcnow()
+            self.last_training = datetime.now(tz=timezone.utc)
             
             log.info("Anomaly detector trained successfully")
             return True
@@ -309,7 +309,7 @@ class AnomalyDetector(MLModel):
         }
         
         self.is_trained = True
-        self.last_training = datetime.utcnow()
+        self.last_training = datetime.now(tz=timezone.utc)
         return True
     
     def _predict_fallback(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -454,7 +454,7 @@ class SmartTriggerEngine:
         schedule = config.get('schedule', {})
         
         # Check if it's time to trigger
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         last_triggered = trigger.last_triggered_at
         
         if self._should_trigger_by_schedule(schedule, now, last_triggered):
@@ -532,7 +532,7 @@ class SmartTriggerEngine:
             log.info(f"Activating trigger: {trigger.name}")
             
             # Update trigger last activated time
-            trigger.last_triggered_at = datetime.utcnow()
+            trigger.last_triggered_at = datetime.now(tz=timezone.utc)
             trigger.trigger_count += 1
             db.session.commit()
             
@@ -590,7 +590,7 @@ class SmartTriggerEngine:
         try:
             # Only train every few hours to avoid overhead
             last_training_key = 'last_ml_training'
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             
             # Simple in-memory check (in production, use Redis or database)
             if not hasattr(self, '_last_training_check'):
@@ -625,7 +625,7 @@ class SmartTriggerEngine:
         """Get training data for ML models from process history."""
         try:
             tenant_id = TenantContext.get_current_tenant_id()
-            cutoff_date = datetime.utcnow() - timedelta(days=30)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             
             # Get completed process instances
             instances = db.session.query(ProcessInstance).filter(

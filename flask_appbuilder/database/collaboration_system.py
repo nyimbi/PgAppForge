@@ -10,7 +10,7 @@ import logging
 import threading
 import asyncio
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union, Set
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -142,7 +142,7 @@ class CollaborationPermission:
 	
 	def is_valid(self) -> bool:
 		"""Check if permission is still valid"""
-		if self.expires_at and datetime.utcnow() > self.expires_at:
+		if self.expires_at and datetime.now(tz=timezone.utc) > self.expires_at:
 			return False
 		return True
 
@@ -311,7 +311,7 @@ class RealTimeCollaborationEngine:
 			
 			self.user_connections[user_id].add(session_id)
 			self.session_participants[session_id].add(user_id)
-			session.last_activity = datetime.utcnow()
+			session.last_activity = datetime.now(tz=timezone.utc)
 		
 		# Broadcast join event
 		self._broadcast_event(session_id, "user_joined", {
@@ -334,7 +334,7 @@ class RealTimeCollaborationEngine:
 			
 			self.user_connections[user_id].discard(session_id)
 			self.session_participants[session_id].discard(user_id)
-			session.last_activity = datetime.utcnow()
+			session.last_activity = datetime.now(tz=timezone.utc)
 			
 			# Close session if no participants left
 			if not session.participants:
@@ -371,7 +371,7 @@ class RealTimeCollaborationEngine:
 			# Update session activity
 			session = self.active_sessions.get(session_id)
 			if session:
-				session.last_activity = datetime.utcnow()
+				session.last_activity = datetime.now(tz=timezone.utc)
 		
 		# Broadcast change to all session participants
 		self._broadcast_event(session_id, "change_recorded", {
@@ -433,7 +433,7 @@ class RealTimeCollaborationEngine:
 	
 	def cleanup_inactive_sessions(self, max_idle_hours: int = 24):
 		"""Clean up inactive sessions"""
-		cutoff_time = datetime.utcnow() - timedelta(hours=max_idle_hours)
+		cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=max_idle_hours)
 		
 		with self._lock:
 			inactive_sessions = []
@@ -561,7 +561,7 @@ class PermissionManager:
 	
 	def cleanup_expired_permissions(self):
 		"""Remove expired permissions"""
-		now = datetime.utcnow()
+		now = datetime.now(tz=timezone.utc)
 		
 		with self._lock:
 			# Clean up resource permissions
@@ -632,7 +632,7 @@ class CommentSystem:
 				return False
 			
 			comment.content = content
-			comment.updated_at = datetime.utcnow()
+			comment.updated_at = datetime.now(tz=timezone.utc)
 			comment.mentions = self._extract_mentions(content)
 		
 		return True
@@ -716,7 +716,7 @@ class NotificationManager:
 				return False
 			
 			notification.is_read = True
-			notification.read_at = datetime.utcnow()
+			notification.read_at = datetime.now(tz=timezone.utc)
 		
 		return True
 	

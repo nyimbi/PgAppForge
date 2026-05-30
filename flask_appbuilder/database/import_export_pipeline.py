@@ -13,7 +13,7 @@ import zipfile
 import tempfile
 import threading
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union, IO
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -290,7 +290,7 @@ class CypherScriptExporter:
 			with open(output_path, 'w', encoding='utf-8') as f:
 				# Write header
 				f.write("// Graph Export to Cypher Script\n")
-				f.write(f"// Generated at: {datetime.utcnow().isoformat()}\n\n")
+				f.write(f"// Generated at: {datetime.now(tz=timezone.utc).isoformat()}\n\n")
 				
 				# Clear existing data
 				f.write("// Clear existing data\n")
@@ -620,7 +620,7 @@ class ImportExportPipeline:
 			job = self.active_jobs.get(job_id)
 			if job and job.status in [ProcessingStatus.PENDING, ProcessingStatus.PROCESSING]:
 				job.status = ProcessingStatus.CANCELLED
-				job.completed_at = datetime.utcnow()
+				job.completed_at = datetime.now(tz=timezone.utc)
 				return True
 			return False
 	
@@ -638,7 +638,7 @@ class ImportExportPipeline:
 		"""Execute export job"""
 		try:
 			job.status = ProcessingStatus.PROCESSING
-			job.started_at = datetime.utcnow()
+			job.started_at = datetime.now(tz=timezone.utc)
 			job.progress = 10
 			
 			# Get graph data
@@ -666,7 +666,7 @@ class ImportExportPipeline:
 			
 			job.progress = 100
 			job.status = ProcessingStatus.COMPLETED
-			job.completed_at = datetime.utcnow()
+			job.completed_at = datetime.now(tz=timezone.utc)
 			
 			# Track activity
 			track_database_activity(
@@ -683,7 +683,7 @@ class ImportExportPipeline:
 		except Exception as e:
 			job.status = ProcessingStatus.FAILED
 			job.error_message = str(e)
-			job.completed_at = datetime.utcnow()
+			job.completed_at = datetime.now(tz=timezone.utc)
 			logger.error(f"Export job {job.job_id} failed: {e}")
 		
 		finally:
@@ -700,7 +700,7 @@ class ImportExportPipeline:
 		"""Execute import job"""
 		try:
 			job.status = ProcessingStatus.PROCESSING
-			job.started_at = datetime.utcnow()
+			job.started_at = datetime.now(tz=timezone.utc)
 			job.progress = 10
 			
 			# Parse mapping
@@ -747,7 +747,7 @@ class ImportExportPipeline:
 			
 			job.progress = 100
 			job.status = ProcessingStatus.COMPLETED
-			job.completed_at = datetime.utcnow()
+			job.completed_at = datetime.now(tz=timezone.utc)
 			
 			# Track activity
 			track_database_activity(
@@ -766,7 +766,7 @@ class ImportExportPipeline:
 		except Exception as e:
 			job.status = ProcessingStatus.FAILED
 			job.error_message = str(e)
-			job.completed_at = datetime.utcnow()
+			job.completed_at = datetime.now(tz=timezone.utc)
 			logger.error(f"Import job {job.job_id} failed: {e}")
 		
 		finally:

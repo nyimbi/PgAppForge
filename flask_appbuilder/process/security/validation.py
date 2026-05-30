@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Dict, Any, List, Optional, Set, Union
 from uuid import uuid4
@@ -35,7 +35,7 @@ class ProcessSecurityError(Exception):
         super().__init__(message)
         self.error_code = error_code or 'PROCESS_SECURITY_ERROR'
         self.context = context or {}
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(tz=timezone.utc)
         self.request_id = getattr(g, 'request_id', str(uuid4()))
         self.user_id = getattr(current_user, 'id', None) if current_user and not current_user.is_anonymous else None
         self.tenant_id = get_current_tenant_id()
@@ -583,7 +583,7 @@ class ProcessAuditLogger:
         try:
             # Prepare audit record
             audit_data = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'operation': operation,
                 'resource_type': resource_type,
                 'resource_id': resource_id,
@@ -613,7 +613,7 @@ class ProcessAuditLogger:
             from flask_appbuilder import db
             
             audit_log = ProcessAuditLog(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 operation=audit_data['operation'],
                 resource_type=audit_data['resource_type'],
                 resource_id=audit_data['resource_id'],

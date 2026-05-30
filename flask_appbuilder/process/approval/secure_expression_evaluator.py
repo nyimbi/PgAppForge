@@ -17,7 +17,7 @@ import logging
 from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .cache_manager import get_cache_manager, CacheKeyPrefix, cache_result
 
@@ -126,7 +126,7 @@ class SecureExpressionEvaluator:
         self._cost_center_manager_cache = {}  # Cache for cost center manager lookups
         self._manager_role_cache = {}  # Cache for role-based manager lookups
         self._cache_ttl = 300  # 5 minutes TTL for cached data
-        self._last_cache_clear = datetime.utcnow()
+        self._last_cache_clear = datetime.now(tz=timezone.utc)
         
         # SECURITY IMPROVEMENT: Configurable business logic instead of hardcoded values
         self.config = config or {}
@@ -619,7 +619,7 @@ class SecureExpressionEvaluator:
 
     def _clear_expired_cache(self):
         """Clear expired cache entries to prevent memory leaks."""
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         if (now - self._last_cache_clear).total_seconds() > self._cache_ttl:
             self._department_head_cache.clear()
             self._cost_center_manager_cache.clear()

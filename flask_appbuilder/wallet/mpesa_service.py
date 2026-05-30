@@ -29,7 +29,7 @@ import base64
 import json
 import logging
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Any, Optional, Tuple
 import secrets
@@ -91,7 +91,7 @@ class MPESAService:
         """Get or refresh MPESA OAuth access token."""
         # Check if we have a valid token
         if (self._access_token and self._token_expires_at and 
-            datetime.utcnow() < self._token_expires_at - timedelta(minutes=5)):
+            datetime.now(tz=timezone.utc) < self._token_expires_at - timedelta(minutes=5)):
             return self._access_token
         
         # Get new access token
@@ -111,7 +111,7 @@ class MPESAService:
             token_data = response.json()
             self._access_token = token_data.get('access_token')
             expires_in = int(token_data.get('expires_in', 3600))  # Default 1 hour
-            self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            self._token_expires_at = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in)
             
             log.info(f"MPESA access token obtained, expires in {expires_in} seconds")
             return self._access_token

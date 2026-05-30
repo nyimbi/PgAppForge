@@ -8,7 +8,7 @@ for text conflicts, JSON merge strategies, and user-mediated resolution.
 import logging
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Tuple, Union
 from collections import defaultdict
 import difflib
@@ -115,7 +115,7 @@ class ConflictResolutionEngine:
             )
             
             resolution['conflict_id'] = conflict_record.id if conflict_record else None
-            resolution['timestamp'] = datetime.utcnow().isoformat()
+            resolution['timestamp'] = datetime.now(tz=timezone.utc).isoformat()
             
             return resolution
             
@@ -168,7 +168,7 @@ class ConflictResolutionEngine:
             }
             conflict.resolution_method = 'manual'
             conflict.resolved_by = user_id
-            conflict.resolved_at = datetime.utcnow()
+            conflict.resolved_at = datetime.now(tz=timezone.utc)
             
             self.db.commit()
             
@@ -758,7 +758,7 @@ class ConflictResolutionEngine:
             
             # Set resolved status if automatically resolved
             if resolution.get('resolution_type') == 'automatic':
-                conflict.resolved_at = datetime.utcnow()
+                conflict.resolved_at = datetime.now(tz=timezone.utc)
                 
             self.db.add(conflict)
             self.db.commit()
@@ -790,7 +790,7 @@ class ConflictResolutionEngine:
                 'resolved_value': resolved_value,
                 'resolution_method': conflict.resolution_method,
                 'resolved_by': conflict.resolved_by,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
             self.websocket_manager.broadcast_to_room(room_id, 'conflict_resolved', resolution_event)

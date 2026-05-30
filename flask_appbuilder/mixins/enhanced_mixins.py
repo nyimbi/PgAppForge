@@ -21,7 +21,7 @@ mixins while providing significant additional functionality.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Type, Union
 
 from flask import current_app, g
@@ -149,7 +149,7 @@ class EnhancedSoftDeleteMixin(AuditMixin):
                 return False  # Already deleted
             
             self.is_deleted = True
-            self.deleted_at = datetime.utcnow()
+            self.deleted_at = datetime.now(tz=timezone.utc)
             self.deletion_reason = reason
             self.deleted_by_fk = user_id or self._get_current_user_id()
             
@@ -258,7 +258,7 @@ class EnhancedSoftDeleteMixin(AuditMixin):
         
         try:
             total_deleted = 0
-            current_time = datetime.utcnow()
+            current_time = datetime.now(tz=timezone.utc)
             
             # Get current user if not provided
             if user_id is None and current_user and hasattr(current_user, 'id'):
@@ -316,7 +316,7 @@ class EnhancedSoftDeleteMixin(AuditMixin):
         
         try:
             total_restored = 0
-            current_time = datetime.utcnow()
+            current_time = datetime.now(tz=timezone.utc)
             
             # Get current user if not provided
             if user_id is None and current_user and hasattr(current_user, 'id'):
@@ -369,7 +369,7 @@ class EnhancedSoftDeleteMixin(AuditMixin):
             'deleted_by_id': self.deleted_by_fk,
             'deleted_by_user': str(self.deleted_by) if self.deleted_by else None,
             'reason': self.deletion_reason,
-            'days_deleted': (datetime.utcnow() - self.deleted_at).days if self.deleted_at else None
+            'days_deleted': (datetime.now(tz=timezone.utc) - self.deleted_at).days if self.deleted_at else None
         }
         
         if self.deletion_metadata:

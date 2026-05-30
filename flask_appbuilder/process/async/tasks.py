@@ -6,7 +6,7 @@ monitoring, health checks, and system operations.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from celery import Celery
@@ -33,7 +33,7 @@ def health_check(self):
     """Periodic health check for the process system."""
     try:
         health_status = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'status': 'healthy',
             'checks': {}
         }
@@ -50,7 +50,7 @@ def health_check(self):
         try:
             running_processes = db.session.query(ProcessInstance).filter_by(status='running').count()
             stuck_threshold = current_app.config.get('STUCK_PROCESS_HOURS', 24)
-            cutoff_time = datetime.utcnow() - timedelta(hours=stuck_threshold)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=stuck_threshold)
             
             stuck_processes = db.session.query(ProcessInstance).filter(
                 ProcessInstance.status == 'running',
@@ -122,7 +122,7 @@ def health_check(self):
     except Exception as e:
         log.error(f"Health check failed: {str(e)}")
         return {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'status': 'unhealthy',
             'error': str(e)
         }
@@ -146,7 +146,7 @@ def cleanup_task_results(self):
             
             if isinstance(celery.backend, DatabaseBackend):
                 # Clean up old results
-                cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+                cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
                 
                 # This would depend on the specific backend implementation
                 # For now, just log the attempt
@@ -161,7 +161,7 @@ def cleanup_task_results(self):
             'success': True,
             'deleted_task_executions': deleted_count,
             'retention_days': retention_days,
-            'cleaned_at': datetime.utcnow().isoformat()
+            'cleaned_at': datetime.now(tz=timezone.utc).isoformat()
         }
         
     except Exception as e:
@@ -190,7 +190,7 @@ def process_notification_async(self, notification_type: str, recipients: List[st
             result = {
                 'recipient': recipient,
                 'status': 'sent',
-                'sent_at': datetime.utcnow().isoformat()
+                'sent_at': datetime.now(tz=timezone.utc).isoformat()
             }
             notification_results.append(result)
         
@@ -269,7 +269,7 @@ def execute_webhook_async(self, url: str, method: str = 'POST',
             'status_code': response.status_code,
             'response_headers': dict(response.headers),
             'response_body': response.text[:1000] if response.text else None,  # Truncate response
-            'executed_at': datetime.utcnow().isoformat()
+            'executed_at': datetime.now(tz=timezone.utc).isoformat()
         }
         
     except requests.exceptions.RequestException as e:
@@ -318,7 +318,7 @@ def generate_analytics_report_async(self, report_type: str, time_range: int = 30
             raise ValueError(f"Unknown report type: {report_type}")
         
         # In real implementation, might save report to file storage
-        report_id = f"report_{report_type}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        report_id = f"report_{report_type}_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         log.info(f"Generated analytics report: {report_id}")
         
@@ -328,7 +328,7 @@ def generate_analytics_report_async(self, report_type: str, time_range: int = 30
             'report_type': report_type,
             'time_range': time_range,
             'data': data,
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(tz=timezone.utc).isoformat()
         }
         
     except Exception as e:
@@ -410,7 +410,7 @@ def optimize_process_performance(self, process_id: int = None):
             'process_id': process_id,
             'optimization_targets': optimization_targets,
             'recommendations': recommendations,
-            'analyzed_at': datetime.utcnow().isoformat()
+            'analyzed_at': datetime.now(tz=timezone.utc).isoformat()
         }
         
     except Exception as e:
@@ -428,7 +428,7 @@ def backup_process_data_async(self, backup_type: str = 'incremental',
     """Create backup of process data asynchronously."""
     try:
         tenant_id = TenantContext.get_current_tenant_id()
-        backup_timestamp = datetime.utcnow()
+        backup_timestamp = datetime.now(tz=timezone.utc)
         
         # Determine what data to backup
         if backup_type == 'full':
@@ -489,13 +489,13 @@ def send_alert_async(self, alert_type: str, severity: str, message: str,
     """Send system alerts asynchronously."""
     try:
         alert_data = {
-            'alert_id': f"alert_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{hash(message) % 10000}",
+            'alert_id': f"alert_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}_{hash(message) % 10000}",
             'alert_type': alert_type,
             'severity': severity,
             'message': message,
             'context': context or {},
             'tenant_id': TenantContext.get_current_tenant_id(),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(tz=timezone.utc).isoformat()
         }
         
         # Determine alert destinations based on severity
@@ -578,12 +578,12 @@ def validate_process_integrity(self):
                 if last_step and last_step.completed_at:
                     process.completed_at = last_step.completed_at
                 else:
-                    process.completed_at = datetime.utcnow()
+                    process.completed_at = datetime.now(tz=timezone.utc)
             
             fixes_applied.append(f"Fixed completion timestamps for {len(inconsistent_processes)} processes")
         
         # Check for stuck running processes
-        stuck_threshold = datetime.utcnow() - timedelta(hours=48)  # 48 hours
+        stuck_threshold = datetime.now(tz=timezone.utc) - timedelta(hours=48)  # 48 hours
         stuck_processes = db.session.query(ProcessInstance).filter(
             ProcessInstance.tenant_id == tenant_id,
             ProcessInstance.status == 'running',
@@ -606,7 +606,7 @@ def validate_process_integrity(self):
             'issues_found': issues_found,
             'fixes_applied': fixes_applied,
             'stuck_processes_count': len(stuck_processes) if stuck_processes else 0,
-            'validated_at': datetime.utcnow().isoformat()
+            'validated_at': datetime.now(tz=timezone.utc).isoformat()
         }
         
     except Exception as e:

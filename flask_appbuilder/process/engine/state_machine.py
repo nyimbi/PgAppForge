@@ -9,7 +9,7 @@ import logging
 import asyncio
 from typing import Dict, List, Set, Tuple, Optional, Callable, Any
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 from ..models.process_models import (
@@ -159,9 +159,9 @@ class ProcessStateMachine:
                 
                 # Set specific timestamps based on new status
                 if new_status == ProcessInstanceStatus.COMPLETED.value:
-                    instance.completed_at = datetime.utcnow()
+                    instance.completed_at = datetime.now(tz=timezone.utc)
                 elif new_status == ProcessInstanceStatus.SUSPENDED.value:
-                    instance.suspended_at = datetime.utcnow()
+                    instance.suspended_at = datetime.now(tz=timezone.utc)
                 elif new_status == ProcessInstanceStatus.RUNNING.value:
                     instance.suspended_at = None  # Clear suspension
                 
@@ -214,11 +214,11 @@ class ProcessStateMachine:
                 
                 # Set specific timestamps based on new status
                 if new_status == ProcessStepStatus.RUNNING.value:
-                    step.started_at = datetime.utcnow()
+                    step.started_at = datetime.now(tz=timezone.utc)
                 elif new_status in [ProcessStepStatus.COMPLETED.value, 
                                    ProcessStepStatus.FAILED.value,
                                    ProcessStepStatus.SKIPPED.value]:
-                    step.completed_at = datetime.utcnow()
+                    step.completed_at = datetime.now(tz=timezone.utc)
                 
                 # Execute entry hooks for new status
                 await self._execute_step_entry_hooks(step, new_status, context or {})

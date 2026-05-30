@@ -10,7 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_appbuilder.baseviews import BaseView, expose
 from flask_appbuilder.security.decorators import has_access
@@ -405,7 +405,7 @@ class MyModelView(ModelView):
         export_data = {
             'widget_library_version': '1.0.0',
             'export_timestamp': json.dumps(
-                datetime.utcnow().isoformat(),
+                datetime.now(tz=timezone.utc).isoformat(),
                 default=str
             ),
             'categories': {}
@@ -570,7 +570,7 @@ class MyModelView(ModelView):
             'base_widget': base_widget,
             'config': custom_config,
             'description': description,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(tz=timezone.utc).isoformat(),
             'class': self.widget_categories[base_category]['widgets'][base_widget]['class']
         }
         

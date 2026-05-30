@@ -10,7 +10,7 @@ import logging
 import os
 import gzip
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -336,7 +336,7 @@ class DatabaseMigrationManager:
             raise RuntimeError("Database connection not available")
 
         backup_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(tz=timezone.utc)
 
         try:
             # Generate filename
@@ -415,7 +415,7 @@ class DatabaseMigrationManager:
         content_parts.append(
             f"""
 -- Database Backup
--- Generated: {datetime.utcnow().isoformat()}
+-- Generated: {datetime.now(tz=timezone.utc).isoformat()}
 -- Database: {schema.name}
 -- Backup Type: {backup_type.value}
 -- Tables: {', '.join(tables)}
@@ -731,7 +731,7 @@ SET FOREIGN_KEY_CHECKS = 0;
             name=name,
             description=description,
             migration_type=migration_type,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(tz=timezone.utc),
             created_by=created_by,
             status=MigrationStatus.PENDING,
             up_script=up_script,
@@ -793,7 +793,7 @@ SET FOREIGN_KEY_CHECKS = 0;
             migration.status = MigrationStatus.RUNNING
             self._update_migration_record(migration)
 
-            start_time = datetime.utcnow()
+            start_time = datetime.now(tz=timezone.utc)
 
             # Execute migration
             with self.engine.begin() as conn:
@@ -808,7 +808,7 @@ SET FOREIGN_KEY_CHECKS = 0;
                         conn.execute(text(statement))
 
             # Update migration as completed
-            end_time = datetime.utcnow()
+            end_time = datetime.now(tz=timezone.utc)
             execution_time = int((end_time - start_time).total_seconds() * 1000)
 
             migration.status = MigrationStatus.COMPLETED
@@ -824,7 +824,7 @@ SET FOREIGN_KEY_CHECKS = 0;
             # Mark migration as failed
             migration.status = MigrationStatus.FAILED
             migration.error_message = str(e)
-            migration.executed_at = datetime.utcnow()
+            migration.executed_at = datetime.now(tz=timezone.utc)
 
             self._update_migration_record(migration)
 
@@ -933,7 +933,7 @@ SET FOREIGN_KEY_CHECKS = 0;
         schema_version = SchemaVersion(
             version_id=version_id,
             version_number=version_number,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(tz=timezone.utc),
             created_by=created_by,
             description=description,
             schema_checksum=schema_checksum,

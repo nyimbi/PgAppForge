@@ -1,0 +1,355 @@
+name: Tutorial Tests
+
+on:
+  push:
+    branches: [ master, main, develop ]
+    paths:
+      - 'examples/tutorial_*/**'
+      - 'tests/test_tutorial*'
+      - 'tests/fixtures/**'
+      - 'tests/run_tutorial_tests.py'
+      - 'setup.py'
+      - 'requirements/**'
+      - '.github/workflows/tutorial-tests.yml'
+  pull_request:
+    branches: [ master, main, develop ]
+    paths:
+      - 'examples/tutorial_*/**'
+      - 'tests/test_tutorial*'
+      - 'tests/fixtures/**'
+      - 'tests/run_tutorial_tests.py'
+      - 'setup.py'
+      - 'requirements/**'
+  workflow_dispatch:
+    inputs:
+      test_category:
+        description: 'Test category to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - basic
+          - integration
+          - performance
+      verbosity:
+        description: 'Test verbosity level'
+        required: false
+        default: '2'
+        type: choice
+        options:
+          - '0'
+          - '1'
+          - '2'
+
+jobs:
+  tutorial-validation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11]
+        test-config: [minimal, ai-disabled, redis-disabled]
+      fail-fast: false
+
+    name: Python ${{ matrix.python-version }} - ${{ matrix.test-config }}
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          python3-dev \
+          libssl-dev \
+          libffi-dev \
+          libxml2-dev \
+          libxslt1-dev \
+          zlib1g-dev \
+          libjpeg-dev \
+          libfreetype6-dev \
+          liblcms2-dev \
+          libwebp-dev \
+          tcl8.6-dev \
+          tk8.6-dev \
+          python3-tk
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install -e .
+        pip install -r requirements/tutorial.txt
+        pip install pytest pytest-cov pytest-mock
+
+    - name: Verify installation
+      run: |
+        python -c "import flask_appbuilder; print(f'Flask-AppBuilder version: {flask_appbuilder.__version__}')"
+        python scripts/check_dependencies.py --quick
+
+    - name: Run dependency validation
+      run: |
+        python scripts/check_dependencies.py --detailed
+        echo "✅ Dependency validation completed"
+
+    - name: Validate tutorial structure
+      run: |
+        python scripts/validate_tutorials.py --tutorial tutorial_getting_started --quick
+        echo "✅ Tutorial structure validation completed"
+
+    - name: Set up test environment
+      run: |
+        mkdir -p test_results
+        export SECRET_KEY="github-actions-test-secret-key-for-ci-testing"
+        export TESTING=True
+        export WTF_CSRF_ENABLED=False
+        echo "✅ Test environment configured"
+
+    - name: Run tutorial tests - ${{ matrix.test-config }}
+      env:
+        SECRET_KEY: github-actions-test-secret-key-for-ci-testing
+        SQLALCHEMY_DATABASE_URI: sqlite:///test_tutorial.db
+        REDIS_URL: redis://localhost:6379/1
+        TESTING: true
+        WTF_CSRF_ENABLED: false
+        OPENAI_API_KEY: ${{ matrix.test-config != 'ai-disabled' && 'test-openai-key' || '' }}
+        ANTHROPIC_API_KEY: ${{ matrix.test-config != 'ai-disabled' && 'test-anthropic-key' || '' }}
+        TEST_CONFIG: ${{ matrix.test-config }}
+      run: |
+        cd tests
+        if [ "${{ github.event.inputs.test_category }}" = "performance" ]; then
+          python run_tutorial_tests.py --performance-only --verbosity ${{ github.event.inputs.verbosity || '2' }} --output-dir ../test_results
+        elif [ "${{ github.event.inputs.test_category }}" = "basic" ]; then
+          python -m pytest test_tutorial_getting_started.py -v --tb=short
+        elif [ "${{ github.event.inputs.test_category }}" = "integration" ]; then
+          python -m pytest test_tutorial_integration.py -v --tb=short
+        else
+          python run_tutorial_tests.py --verbosity ${{ github.event.inputs.verbosity || '2' }} --output-dir ../test_results
+        fi
+
+    - name: Generate test coverage report
+      if: matrix.python-version == '3.11' && matrix.test-config == 'minimal'
+      run: |
+        pip install coverage
+        coverage run -m pytest tests/test_tutorial_getting_started.py tests/test_tutorial_integration.py
+        coverage report --show-missing
+        coverage html -d test_results/coverage_html
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-python${{ matrix.python-version }}-${{ matrix.test-config }}
+        path: |
+          test_results/
+          logs/
+        retention-days: 30
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      if: matrix.python-version == '3.11' && matrix.test-config == 'minimal'
+      with:
+        name: coverage-reports
+        path: test_results/coverage_html/
+        retention-days: 30
+
+    - name: Comment test results on PR
+      if: github.event_name == 'pull_request' && matrix.python-version == '3.11' && matrix.test-config == 'minimal'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = 'test_results';
+
+          // Find the latest test results file
+          const files = fs.readdirSync(path).filter(f => f.startsWith('tutorial_test_results_'));
+          if (files.length > 0) {
+            const latestFile = files.sort().pop();
+            const results = JSON.parse(fs.readFileSync(`${path}/${latestFile}`, 'utf8'));
+
+            const summary = results.overall_summary || {};
+            const status = summary.overall_status === 'PASSED' ? '✅' : '❌';
+
+            const comment = `## ${status} Tutorial Test Results
+
+            - **Overall Status**: ${summary.overall_status || 'Unknown'}
+            - **Total Tests**: ${summary.total_tests || 0}
+            - **Success Rate**: ${(summary.overall_success_rate || 0).toFixed(1)}%
+            - **Categories Passed**: ${summary.categories_passed || 0}/${summary.total_categories || 0}
+
+            <details>
+            <summary>View detailed results</summary>
+
+            \`\`\`json
+            ${JSON.stringify(summary, null, 2)}
+            \`\`\`
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: tutorial-validation
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_category == 'all'
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: tutorial_test
+          POSTGRES_USER: tutorial_user
+          POSTGRES_PASSWORD: tutorial_pass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install -r requirements/tutorial.txt
+        pip install psycopg2-binary
+
+    - name: Run integration tests with PostgreSQL
+      env:
+        SECRET_KEY: integration-test-secret-key-for-postgresql-testing
+        SQLALCHEMY_DATABASE_URI: postgresql://tutorial_user:tutorial_pass@localhost:5432/tutorial_test
+        REDIS_URL: redis://localhost:6379/2
+        TESTING: true
+        OPENAI_API_KEY: test-openai-key
+        ANTHROPIC_API_KEY: test-anthropic-key
+      run: |
+        cd tests
+        python -m pytest test_tutorial_integration.py::TutorialWorkflowTest -v --tb=short
+
+    - name: Run performance benchmarks
+      env:
+        SECRET_KEY: performance-test-secret-key-for-benchmarking
+        SQLALCHEMY_DATABASE_URI: postgresql://tutorial_user:tutorial_pass@localhost:5432/tutorial_test
+        REDIS_URL: redis://localhost:6379/3
+        TESTING: true
+      run: |
+        cd tests
+        python -m pytest test_tutorial_integration.py::TutorialPerformanceTest -v --tb=short
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run security scan on tutorial examples
+      uses: github/super-linter@v4
+      env:
+        DEFAULT_BRANCH: master
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VALIDATE_PYTHON_BLACK: false
+        VALIDATE_PYTHON_FLAKE8: true
+        VALIDATE_PYTHON_ISORT: false
+        FILTER_REGEX_INCLUDE: examples/tutorial_.*
+        SUPPRESS_POSSUM: true
+
+    - name: Run Bandit security scan
+      run: |
+        pip install bandit
+        bandit -r examples/tutorial_getting_started/ -f json -o bandit-report.json || true
+
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-results
+        path: bandit-report.json
+
+  build-documentation:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    needs: [tutorial-validation, integration-tests]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Install documentation dependencies
+      run: |
+        pip install sphinx sphinx-rtd-theme
+        pip install -e .
+
+    - name: Build documentation
+      run: |
+        cd docs
+        make html
+
+    - name: Deploy documentation
+      if: github.ref == 'refs/heads/master'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: docs/_build/html
+        destination_dir: tutorial-docs
+
+  notify-results:
+    runs-on: ubuntu-latest
+    needs: [tutorial-validation, integration-tests, security-scan]
+    if: always()
+
+    steps:
+    - name: Notify success
+      if: needs.tutorial-validation.result == 'success' && needs.integration-tests.result == 'success'
+      run: |
+        echo "✅ All tutorial tests passed successfully!"
+
+    - name: Notify failure
+      if: needs.tutorial-validation.result == 'failure' || needs.integration-tests.result == 'failure'
+      run: |
+        echo "❌ Tutorial tests failed. Please check the logs for details."
+        exit 1

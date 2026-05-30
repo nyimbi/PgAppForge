@@ -6,7 +6,7 @@ and providing tenant onboarding and self-service functionality.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 
 from flask import render_template, request, jsonify, flash, redirect, url_for, g
@@ -369,7 +369,7 @@ class TenantOnboardingView(BaseView):
             verification_config = TenantConfig(
                 tenant_id=tenant.id,
                 config_key='verification_token',
-                config_value={'token': token, 'expires_at': (datetime.utcnow() + timedelta(hours=24)).isoformat()},
+                config_value={'token': token, 'expires_at': (datetime.now(tz=timezone.utc) + timedelta(hours=24)).isoformat()},
                 config_type='json',
                 category='onboarding',
                 is_sensitive=True

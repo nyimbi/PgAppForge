@@ -15,7 +15,7 @@ import logging
 import bleach
 from typing import Dict, List, Any, Optional
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Removed direct import to prevent circular dependency - using late import pattern
 
@@ -45,7 +45,7 @@ class ValidationContext:
         self.user_id = user_id
         self.operation = operation
         self.validation_type = validation_type
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(tz=timezone.utc)
 
 
 def validate_approval_request(data: Dict[str, Any], user_id: int, validator=None) -> Dict[str, Any]:

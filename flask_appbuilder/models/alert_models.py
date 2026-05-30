@@ -5,7 +5,7 @@ Provides database persistence for alert rules, history, and configuration
 following Flask-AppBuilder's model patterns and conventions.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
 from typing import Optional, Dict, Any, List
@@ -223,20 +223,20 @@ class AlertHistory(AuditMixin, Model):
         """Mark alert as acknowledged."""
         if self.status == AlertStatus.ACTIVE:
             self.status = AlertStatus.ACKNOWLEDGED
-            self.acknowledged_at = datetime.utcnow()
+            self.acknowledged_at = datetime.now(tz=timezone.utc)
             self.acknowledged_by_fk = user_id
 
     def resolve(self, user_id: Optional[int] = None):
         """Mark alert as resolved."""
         if self.status in [AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED]:
             self.status = AlertStatus.RESOLVED
-            self.resolved_at = datetime.utcnow()
+            self.resolved_at = datetime.now(tz=timezone.utc)
             self.resolved_by_fk = user_id
 
     def add_notification_log(self, channel: str, status: str, details: str = ""):
         """Add notification log entry."""
         log_entry = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'channel': channel,
             'status': status,
             'details': details
@@ -309,7 +309,7 @@ class MetricSnapshot(Model):
     @classmethod
     def get_recent_values(cls, metric_name: str, hours: int = 24, session=None):
         """Get recent values for a metric."""
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
         query = session.query(cls).filter(
             cls.metric_name == metric_name,
             cls.timestamp >= cutoff

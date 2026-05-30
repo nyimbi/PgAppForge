@@ -14,7 +14,7 @@ maintaining integration with Flask-AppBuilder's architecture.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
@@ -1002,7 +1002,7 @@ class VersioningMixin(AuditMixin):
             # Create version snapshot
             version_data = {
                 'version_number': self.version_number,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'user_id': user_id or (current_user.id if current_user else None),
                 'comment': comment,
                 'data': {}

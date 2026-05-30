@@ -8,7 +8,7 @@ temporal analysis, and cross-graph operations with unified interface.
 import json
 import logging
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union, Set
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -300,8 +300,8 @@ class GraphRegistry:
 				metadata = GraphMetadata(
 					name=name,
 					description=description,
-					created_at=datetime.utcnow(),
-					updated_at=datetime.utcnow(),
+					created_at=datetime.now(tz=timezone.utc),
+					updated_at=datetime.now(tz=timezone.utc),
 					tags=tags or [],
 					properties=properties or {}
 				)
@@ -430,7 +430,7 @@ class GraphRegistry:
 				if "properties" in kwargs:
 					metadata.properties.update(kwargs["properties"])
 				
-				metadata.updated_at = datetime.utcnow()
+				metadata.updated_at = datetime.now(tz=timezone.utc)
 				
 				# Update schema hash if needed
 				if kwargs.get("update_schema", False):
@@ -538,7 +538,7 @@ class MultiGraphAnalyzer:
 				graph_a=graph_a,
 				graph_b=graph_b,
 				comparison_type="full_comparison",
-				timestamp=datetime.utcnow(),
+				timestamp=datetime.now(tz=timezone.utc),
 				similarities=similarities,
 				differences=differences,
 				common_elements=common_elements,
@@ -941,7 +941,7 @@ class TemporalGraphManager:
 				raise ValueError(f"Graph '{graph_name}' is not registered")
 			
 			# Generate snapshot ID
-			snapshot_id = f"{graph_name}_snapshot_{int(datetime.utcnow().timestamp())}"
+			snapshot_id = f"{graph_name}_snapshot_{int(datetime.now(tz=timezone.utc).timestamp())}"
 			
 			# Get current graph state
 			manager = self.registry.get_graph_manager(graph_name)
@@ -952,7 +952,7 @@ class TemporalGraphManager:
 				id=snapshot_id,
 				graph_name=graph_name,
 				snapshot_type=snapshot_type,
-				timestamp=datetime.utcnow(),
+				timestamp=datetime.now(tz=timezone.utc),
 				version=version or "1.0.0",
 				schema=schema.to_dict(),
 				node_count=schema.statistics.get("total_nodes", 0),
@@ -1093,7 +1093,7 @@ class TemporalGraphManager:
 		"""Analyze temporal changes in a graph over time"""
 		try:
 			# Get snapshots from the specified time period
-			start_date = datetime.utcnow() - timedelta(days=days_back)
+			start_date = datetime.now(tz=timezone.utc) - timedelta(days=days_back)
 			snapshots = []
 			
 			if self.registry.engine:

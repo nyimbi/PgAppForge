@@ -1,9 +1,19 @@
 import os
+import secrets
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 CSRF_ENABLED = True
-SECRET_KEY = "\2\1thisismyscretkey\1\2\e\y\y\h"
+
+# SECURITY BEST PRACTICE: Use environment variable for secret key
+# For production, always set SECRET_KEY environment variable
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
+if not SECRET_KEY:
+    # For development/example purposes only - NEVER use in production
+    print("WARNING: Using development secret key. Set SECRET_KEY environment variable for production!")
+    print("Generate a secure key: python -c \"import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))\"")
+    SECRET_KEY = secrets.token_urlsafe(64)  # Generate a random key for this session
 
 SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'mysql://myapp@localhost/myapp'

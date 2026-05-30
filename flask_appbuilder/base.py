@@ -17,7 +17,7 @@ from .const import (
     LOGMSG_INF_FAB_ADDON_ADDED,
     LOGMSG_WAR_FAB_VIEW_EXISTS,
 )
-# from .filters import TemplateFilters  # Class doesn't exist
+from .filters import TemplateFilters
 from .menu import Menu, MenuApi
 from .views import IndexView, UtilView
 # Enhanced plugin system imports
@@ -325,8 +325,7 @@ class AppBuilder:
         return __version__
 
     def _add_global_filters(self) -> None:
-        # self.template_filters = TemplateFilters(self.get_app, self.sm)  # Class doesn't exist
-        self.template_filters = None
+        self.template_filters = TemplateFilters(self.get_app, self.sm)
 
     def _add_global_static(self) -> None:
         bp = Blueprint(

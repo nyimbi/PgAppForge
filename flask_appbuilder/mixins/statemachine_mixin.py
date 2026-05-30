@@ -35,7 +35,7 @@ import json
 import logging
 import os
 import textwrap
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -671,7 +671,7 @@ class HistoryManager:
 				from_state=from_state,
 				to_state=to_state,
 				changed_by=user.id if user else None,
-				changed_at=datetime.utcnow(),
+				changed_at=datetime.now(tz=timezone.utc),
 				reason=reason,
 				extra_metadata=metadata or {},
 				trace_id=trace_id,
@@ -871,7 +871,7 @@ class HistoryManager:
 			stmt = select(StateChangeHistory)
 
 			if max_age:
-				cutoff = datetime.utcnow() - timedelta(days=max_age)
+				cutoff = datetime.now(tz=timezone.utc) - timedelta(days=max_age)
 				stmt = stmt.where(StateChangeHistory.changed_at < cutoff)
 			if before:
 				stmt = stmt.where(StateChangeHistory.changed_at < before)
@@ -973,18 +973,18 @@ class StateMachineMixin:
 				.where(target.__table__.c.id == target.id)
 				.values(
 					state=workflow.initial_state.name,
-					state_changed_at=datetime.utcnow(),
+					state_changed_at=datetime.now(tz=timezone.utc),
 				)
 			)
 			target.state = workflow.initial_state.name
-			target.state_changed_at = datetime.utcnow()
+			target.state_changed_at = datetime.now(tz=timezone.utc)
 
 	def _ensure_state(self) -> None:
 		"""Seed state if not yet set (covers factory-pattern creation)."""
 		workflow: Workflow | None = getattr(self, "workflow", None)
 		if workflow and not self.state:
 			self.state = workflow.initial_state.name
-			self.state_changed_at = datetime.utcnow()
+			self.state_changed_at = datetime.now(tz=timezone.utc)
 
 	# ------------------------------------------------------------------
 	# Core transition engine
@@ -1048,7 +1048,7 @@ class StateMachineMixin:
 
 			# Execute transition
 			self.state = transition.dest
-			self.state_changed_at = datetime.utcnow()
+			self.state_changed_at = datetime.now(tz=timezone.utc)
 
 			# Custom state-entry handler
 			dest_state_def = workflow.get_state(transition.dest)
@@ -1113,7 +1113,7 @@ class StateMachineMixin:
 			)
 			if error_target and error_target != previous_state:
 				self.state = error_target
-				self.state_changed_at = datetime.utcnow()
+				self.state_changed_at = datetime.now(tz=timezone.utc)
 				try:
 					db.session.add(self)
 					db.session.commit()

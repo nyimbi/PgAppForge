@@ -5,7 +5,7 @@ Provides database persistence for dashboard configurations, widgets,
 and layout management following Flask-AppBuilder's model patterns.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 from typing import Optional, Dict, Any, List
@@ -442,12 +442,12 @@ class DashboardShare(AuditMixin, Model):
         """Check if share has expired."""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(tz=timezone.utc) > self.expires_at
 
     def record_access(self):
         """Record access to shared dashboard."""
         self.access_count = (self.access_count or 0) + 1
-        self.last_accessed_at = datetime.utcnow()
+        self.last_accessed_at = datetime.now(tz=timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""

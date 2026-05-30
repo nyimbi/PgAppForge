@@ -7,7 +7,7 @@ categorization, logging integration, and recovery mechanisms.
 
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List, Union
 from enum import Enum
 from dataclasses import dataclass, field
@@ -122,7 +122,7 @@ class ApprovalError(Exception):
     def _generate_error_code(self) -> str:
         """Generate unique error code based on class name."""
         class_name = self.__class__.__name__
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"{class_name.upper()}_{timestamp}"
     
     def _generate_user_message(self) -> str:

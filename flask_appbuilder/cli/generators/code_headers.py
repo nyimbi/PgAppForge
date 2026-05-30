@@ -49,14 +49,14 @@ import datetime
 import shutil
 from datetime import timedelta, datetime, date
 
-from sqlalchemy.orm import relationship, query, defer, deferred, column_property, mapper
+from sqlalchemy.orm import relationship, defer, deferred, column_property, DeclarativeBase, MappedColumn, mapped_column, Mapped
 from sqlalchemy.schema import FetchedValue
 from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 from sqlalchemy import (
-    create_engine, inspect, MetaData, Table, Column,  ForeignKey, Identity, Index,
+    inspect, MetaData, Table, Column, ForeignKey, Identity, Index,
     Sequence, Float, Text, BigInteger, Date, Integer, String, SmallInteger,
-    DateTime, Time, Boolean,  Interval, Numeric, LargeBinary,Enum,
-    CheckConstraint, UniqueConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, text, func
+    DateTime, Time, Boolean, Interval, Numeric, LargeBinary, Enum,
+    CheckConstraint, UniqueConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, text, func, select
 )
 
 from sqlalchemy.dialects.postgresql import *
@@ -142,28 +142,32 @@ from .models import *
 """
 
 GQL_IMPORTS = """
-
+from ariadne import QueryType, MutationType, SubscriptionType, make_executable_schema
+from ariadne.asgi import GraphQL
 """
+
+# Alias used by gen_graphql_header
+GQL_HEADER = GQL_IMPORTS
 
 
 def gen_model_header() -> List[str]:
-    """Generate the header for the models file."""
-    return [DOC_HEADER, MODEL_IMPORTS]
+	"""Generate the header for the models file."""
+	return [DOC_HEADER, MODEL_IMPORTS]
 
 
 def gen_view_header() -> List[str]:
-    """Generate the header for the views file."""
-    return [DOC_HEADER, VIEW_IMPORTS, VIEW_UTILITIES]
+	"""Generate the header for the views file."""
+	return [DOC_HEADER, VIEW_IMPORTS, VIEW_UTILITIES]
 
 
 def gen_api_header() -> List[str]:
-    """Generate the header for the API file."""
-    return [DOC_HEADER, API_IMPORTS]
+	"""Generate the header for the API file."""
+	return [DOC_HEADER, API_IMPORTS]
 
 
 def gen_graphql_header() -> List[str]:
-    """Generate the header for the GraphQL File."""
-    return [DOC_HEADER, GQL_HEADER]
+	"""Generate the header for the GraphQL file."""
+	return [DOC_HEADER, GQL_HEADER]
 
 
 def gen_photo_column(
@@ -12200,8 +12204,7 @@ def gen_db_schema_header(
         "from typing import Optional, List, Dict, Any",
         "",
         "from sqlalchemy import *",
-        "from sqlalchemy.ext.declarative import declarative_base",
-        "from sqlalchemy.orm import relationship, backref, validates",
+        "from sqlalchemy.orm import DeclarativeBase, relationship, backref, validates",
         "from sqlalchemy.sql import func, text",
         "from sqlalchemy.schema import MetaData",
     ]
@@ -12307,8 +12310,9 @@ def audit_table(table_cls):
 """
 
     header += f"""
-# Initialize SQLAlchemy base class
-Base = declarative_base(metadata=metadata)
+# Initialize SQLAlchemy base class (SQLAlchemy 2.x style)
+class Base(DeclarativeBase):
+    metadata = metadata
 """
 
     if enable_migrations:
@@ -13343,7 +13347,7 @@ class EventHandler:
             "event_type": event_type,
             "event_data": event_data,
             "error": str(error),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(tz=timezone.utc).isoformat()
         }
         with Producer(bus) as producer:
             producer.publish(
@@ -13363,7 +13367,7 @@ class EventHandler:
         self.batch.add({{
             "event_type": event_type,
             "event_data": event_data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(tz=timezone.utc).isoformat()
         }})
 
     def flush_batch(self) -> None:
@@ -14498,7 +14502,7 @@ class AuthManager:
         header += """
     def generate_token(self, user_id: str) -> Dict[str, str]:
         \"\"\"Generate JWT token pair\"\"\"
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         payload = {
             "user_id": user_id,
             "iat": now,
@@ -16205,8 +16209,7 @@ from flask import request, session, current_app
 from flask_login import current_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 class AuditManager:
     \"\"\"Audit trail manager with comprehensive features\"\"\"
@@ -16382,7 +16385,7 @@ class AuditManager:
     def archive_old_logs(self, days: int = {archive_after_days}) -> bool:
         \"\"\"Archive old audit logs\"\"\"
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
             old_logs = self.AuditLog.query.filter(
                 self.AuditLog.timestamp <= cutoff_date
             ).all()
@@ -16874,7 +16877,7 @@ class SecurityManager:
 
         try:
             event = {{
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(tz=timezone.utc),
                 'event_type': event_type,
                 'user_id': user_id,
                 'success': success,
@@ -16893,7 +16896,7 @@ class SecurityManager:
     def cleanup_audit_logs(self) -> bool:
         \"\"\"Clean up old audit logs\"\"\"
         try:
-            cutoff = datetime.utcnow() - timedelta(days={audit_settings['retention']})
+            cutoff = datetime.now(tz=timezone.utc) - timedelta(days={audit_settings['retention']})
             self.app.audit_log.delete_many({{'timestamp': {{'$lt': cutoff}}}})
             return True
         except Exception as e:

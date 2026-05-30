@@ -12,7 +12,7 @@ from flask_appbuilder import expose
 from flask_appbuilder.api import BaseApi, safe
 from flask_appbuilder.security.decorators import protect
 from marshmallow import Schema, fields, ValidationError
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..interfaces.base_interfaces import ICommunicationService
 from ..communication.notification_manager import NotificationType, NotificationPriority
@@ -188,7 +188,7 @@ class CommunicationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "sender_id": g.user.id if g.user else None,
                 "content": json_data["content"],
                 "message_type": json_data.get("message_type", "text"),
-                "sent_at": datetime.utcnow().isoformat(),
+                "sent_at": datetime.now(tz=timezone.utc).isoformat(),
                 "message": "Message sent successfully"
             }
 
@@ -294,7 +294,7 @@ class CommunicationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "name": json_data["name"],
                 "workspace_id": workspace_id,
                 "created_by": g.user.id if g.user else None,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(tz=timezone.utc).isoformat(),
                 "member_count": 1,  # Creator is automatically a member
                 "message": "Chat channel created successfully"
             }
@@ -404,7 +404,7 @@ class CommunicationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "commentable_type": json_data["commentable_type"],
                 "commentable_id": json_data["commentable_id"],
                 "created_by": g.user.id if g.user else None,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(tz=timezone.utc).isoformat(),
                 "comment_count": 1,  # Initial comment
                 "message": "Comment thread created successfully"
             }
@@ -508,7 +508,7 @@ class CommunicationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "author_id": g.user.id if g.user else None,
                 "content": json_data["content"],
                 "parent_comment_id": json_data.get("parent_comment_id"),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(tz=timezone.utc).isoformat(),
                 "message": "Reply added successfully"
             }
 
@@ -613,7 +613,7 @@ class CommunicationApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, Asy
                 "notification_type": json_data["notification_type"],
                 "title": json_data["title"],
                 "priority": json_data.get("priority", "normal"),
-                "sent_at": datetime.utcnow().isoformat(),
+                "sent_at": datetime.now(tz=timezone.utc).isoformat(),
                 "message": "Notification sent successfully"
             }
 

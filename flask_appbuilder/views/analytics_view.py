@@ -7,7 +7,7 @@ for monitoring wizard form performance, user behavior, and insights.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from flask import request, render_template, jsonify, flash, redirect, url_for
 from flask_login import current_user
@@ -38,7 +38,7 @@ class WizardAnalyticsView(BaseView):
         wizards = self._get_available_wizards()
         
         # Default date range (last 30 days)
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = end_date - timedelta(days=30)
         
         return render_template(
@@ -60,12 +60,12 @@ class WizardAnalyticsView(BaseView):
             if start_date_str:
                 start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
             else:
-                start_date = datetime.utcnow() - timedelta(days=30)
+                start_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             
             if end_date_str:
                 end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
             else:
-                end_date = datetime.utcnow()
+                end_date = datetime.now(tz=timezone.utc)
         except ValueError:
             flash('Invalid date format', 'error')
             return redirect(url_for('.dashboard'))
@@ -106,12 +106,12 @@ class WizardAnalyticsView(BaseView):
             if start_date_str:
                 start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
             else:
-                start_date = datetime.utcnow() - timedelta(days=30)
+                start_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             
             if end_date_str:
                 end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
             else:
-                end_date = datetime.utcnow()
+                end_date = datetime.now(tz=timezone.utc)
         except ValueError:
             flash('Invalid date format', 'error')
             return redirect(url_for('.dashboard'))
@@ -320,7 +320,7 @@ class WizardAnalyticsView(BaseView):
     def api_real_time_stats(self, wizard_id: str):
         """API endpoint for real-time statistics"""
         # Get stats for the last 24 hours
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = end_date - timedelta(hours=24)
         
         # Real-time metrics
@@ -353,7 +353,7 @@ class WizardAnalyticsView(BaseView):
         return jsonify({
             'success': True,
             'data': {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'active_sessions': active_sessions,
                 'recent_completions': recent_completions,
                 'error_rate': error_rate,

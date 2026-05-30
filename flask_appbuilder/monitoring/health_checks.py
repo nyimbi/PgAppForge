@@ -10,7 +10,7 @@ import time
 import threading
 import psutil
 import gc
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Callable, Union
 from dataclasses import dataclass
 from enum import Enum
@@ -96,7 +96,7 @@ class DatabaseHealthChecker:
                         "response_time_ms": response_time,
                         "database_url": str(db.engine.url).split('@')[1] if '@' in str(db.engine.url) else "configured"
                     },
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(tz=timezone.utc),
                     response_time_ms=response_time
                 )
             else:
@@ -105,7 +105,7 @@ class DatabaseHealthChecker:
                     status=HealthStatus.CRITICAL,
                     message="Database query returned unexpected result",
                     details={"expected": 1, "actual": result},
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(tz=timezone.utc),
                     response_time_ms=(time.time() - start_time) * 1000,
                     error="Unexpected query result"
                 )
@@ -116,7 +116,7 @@ class DatabaseHealthChecker:
                 status=HealthStatus.CRITICAL,
                 message=f"Database connection failed: {str(e)}",
                 details={},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000,
                 error=str(e)
             )
@@ -158,7 +158,7 @@ class DatabaseHealthChecker:
                 status=status,
                 message=message,
                 details=details,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
             
@@ -168,7 +168,7 @@ class DatabaseHealthChecker:
                 status=HealthStatus.UNKNOWN,
                 message=f"Could not check connection pool: {str(e)}",
                 details={},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000,
                 error=str(e)
             )
@@ -215,7 +215,7 @@ class DatabaseHealthChecker:
                     "average_query_time_ms": round(avg_response_time, 2),
                     "recent_queries_count": len(self.query_performance)
                 },
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
             
@@ -225,7 +225,7 @@ class DatabaseHealthChecker:
                 status=HealthStatus.CRITICAL,
                 message=f"Database performance check failed: {str(e)}",
                 details={},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000,
                 error=str(e)
             )
@@ -271,7 +271,7 @@ class SystemHealthChecker:
                     "process_memory_mb": round(process_memory.rss / 1024**2, 2),
                     "process_memory_percent": round(process_memory_percent, 2)
                 },
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
             
@@ -281,7 +281,7 @@ class SystemHealthChecker:
                 status=HealthStatus.UNKNOWN,
                 message=f"Memory check failed: {str(e)}",
                 details={},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000,
                 error=str(e)
             )
@@ -659,7 +659,7 @@ class HealthCheckOrchestrator:
         
         return {
             "overall_status": overall_status.value,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "checks_run": len(results),
             "status_counts": dict(status_counts),
             "checks": {
@@ -705,7 +705,7 @@ def health_check():
     
     return jsonify({
         "status": overall_status.value,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "checks": len(results)
     }), response_code
 
@@ -745,7 +745,7 @@ def liveness_check():
     """Kubernetes liveness probe endpoint."""
     return jsonify({
         "alive": True,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(tz=timezone.utc).isoformat()
     }), 200
 
 

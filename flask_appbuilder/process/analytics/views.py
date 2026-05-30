@@ -7,7 +7,7 @@ and business intelligence with real-time metrics and insights.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from flask import request, jsonify, flash, redirect, url_for, g, render_template_string
@@ -238,7 +238,7 @@ class AnalyticsDashboardView(BaseView):
             if format_type == 'json':
                 return jsonify({
                     'report_type': report_type,
-                    'generated_at': datetime.utcnow().isoformat(),
+                    'generated_at': datetime.now(tz=timezone.utc).isoformat(),
                     'time_range_days': time_range,
                     'data': data
                 })
@@ -271,7 +271,7 @@ class AnalyticsApi(BaseApi):
             return self.response(200, result={
                 'dashboard_data': dashboard_data,
                 'time_range_days': time_range,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -294,7 +294,7 @@ class AnalyticsApi(BaseApi):
             return self.response(200, result={
                 'process_data': process_data,
                 'time_range_days': time_range,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -332,7 +332,7 @@ class AnalyticsApi(BaseApi):
             return self.response(200, result={
                 'performance_data': performance_data,
                 'time_range_days': time_range,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -354,7 +354,7 @@ class AnalyticsApi(BaseApi):
             return self.response(200, result={
                 'bottleneck_data': bottleneck_data,
                 'time_range_days': time_range,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -376,7 +376,7 @@ class AnalyticsApi(BaseApi):
             return self.response(200, result={
                 'trend_data': trend_data,
                 'time_range_days': time_range,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -491,7 +491,7 @@ class AnalyticsApi(BaseApi):
             return self.response(200, result={
                 'alerts': alerts,
                 'alert_count': len([a for a in alerts if a['type'] in ['error', 'warning']]),
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -526,7 +526,7 @@ class AnalyticsApi(BaseApi):
                 'database_connection': True,
                 'analytics_engine': True,
                 'cache_status': 'operational',
-                'last_updated': datetime.utcnow().isoformat()
+                'last_updated': datetime.now(tz=timezone.utc).isoformat()
             }
             
             try:

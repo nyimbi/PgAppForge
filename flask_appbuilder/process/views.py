@@ -7,7 +7,7 @@ management including process definitions, instances, execution, and monitoring.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from flask import request, jsonify, flash, redirect, url_for, current_app, g
@@ -156,7 +156,7 @@ class ProcessDefinitionView(ModelView):
                     
                     if definition.status == 'draft':
                         definition.status = 'active'
-                        definition.deployed_at = datetime.utcnow()
+                        definition.deployed_at = datetime.now(tz=timezone.utc)
                         deployed_count += 1
                         
                 except ValidationError as e:
@@ -265,7 +265,7 @@ class ProcessInstanceView(ModelView):
             for instance in items:
                 if instance.status == ProcessInstanceStatus.RUNNING.value:
                     instance.status = ProcessInstanceStatus.SUSPENDED.value
-                    instance.suspended_at = datetime.utcnow()
+                    instance.suspended_at = datetime.now(tz=timezone.utc)
                     suspended_count += 1
             
             if suspended_count > 0:
@@ -333,7 +333,7 @@ class ProcessInstanceView(ModelView):
                 if instance.status in [ProcessInstanceStatus.RUNNING.value, 
                                      ProcessInstanceStatus.SUSPENDED.value]:
                     instance.status = ProcessInstanceStatus.CANCELLED.value
-                    instance.completed_at = datetime.utcnow()
+                    instance.completed_at = datetime.now(tz=timezone.utc)
                     cancelled_count += 1
             
             if cancelled_count > 0:
@@ -472,7 +472,7 @@ class ApprovalRequestView(ModelView):
                 if request.status == ApprovalStatus.PENDING.value:
                     try:
                         request.status = ApprovalStatus.APPROVED.value
-                        request.responded_at = datetime.utcnow()
+                        request.responded_at = datetime.now(tz=timezone.utc)
                         request.response_data = {'approved_by': g.user.username if g.user else 'system'}
                         
                         # Continue process execution
@@ -558,7 +558,7 @@ class ProcessApi(ModelRestApi):
                 })
             
             definition.status = 'active'
-            definition.deployed_at = datetime.utcnow()
+            definition.deployed_at = datetime.now(tz=timezone.utc)
             self.datamodel.session.commit()
             
             return self.response(200, message='Process deployed successfully')
@@ -677,7 +677,7 @@ class ProcessApi(ModelRestApi):
             
             # Update the process graph
             definition.process_graph = process_graph
-            definition.updated_at = datetime.utcnow()
+            definition.updated_at = datetime.now(tz=timezone.utc)
             
             try:
                 self.datamodel.edit(definition)
@@ -776,7 +776,7 @@ class ProcessInstanceApi(ModelRestApi):
             return self.response_400(message='Process is not running')
             
         instance.status = ProcessInstanceStatus.SUSPENDED.value
-        instance.suspended_at = datetime.utcnow()
+        instance.suspended_at = datetime.now(tz=timezone.utc)
         self.datamodel.session.commit()
         
         return self.response(200, message=lazy_gettext('Process suspended successfully'))
@@ -820,7 +820,7 @@ class ProcessInstanceApi(ModelRestApi):
             return self.response_400(message='Process cannot be cancelled in current status')
             
         instance.status = ProcessInstanceStatus.CANCELLED.value
-        instance.completed_at = datetime.utcnow()
+        instance.completed_at = datetime.now(tz=timezone.utc)
         self.datamodel.session.commit()
         
         return self.response(200, message=lazy_gettext('Process cancelled successfully'))
@@ -918,7 +918,7 @@ class ProcessMetricsApi(BaseApi):
         ).filter(and_(*base_conditions) if base_conditions else True).first()
         
         # Single optimized query for instance counts with date filtering
-        today = datetime.utcnow().date()
+        today = datetime.now(tz=timezone.utc).date()
         instance_conditions = []
         if tenant_id:
             instance_conditions.append(ProcessInstance.tenant_id == tenant_id)
@@ -936,7 +936,7 @@ class ProcessMetricsApi(BaseApi):
         ).filter(and_(*instance_conditions) if instance_conditions else True).first()
         
         # Optimized metrics query with batch loading
-        cutoff_date = datetime.utcnow() - timedelta(days=7)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=7)
         metric_conditions = [ProcessMetric.metric_date >= cutoff_date]
         if tenant_id:
             metric_conditions.append(ProcessMetric.tenant_id == tenant_id)
@@ -981,7 +981,7 @@ class ProcessMetricsApi(BaseApi):
                 return self.response_404()
             
             # Get performance data for last 30 days using datamodel
-            cutoff_date = datetime.utcnow() - timedelta(days=30)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             instance_datamodel = SQLAInterface(ProcessInstance)
             
             filters = [
@@ -1121,7 +1121,7 @@ class SubprocessDefinitionApi(ModelRestApi):
                 subprocess_definition_id=subprocess_def.id,
                 subprocess_type=subprocess_def.subprocess_type,
                 status='running',
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(tz=timezone.utc),
                 input_data=input_data,
                 tenant_id=get_current_tenant_id()
             )

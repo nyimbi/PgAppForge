@@ -14,7 +14,7 @@ STANDARDS IMPLEMENTED:
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List, Union
 from enum import Enum
 from dataclasses import dataclass, asdict
@@ -89,7 +89,7 @@ class ApprovalApiResponseFormatter:
     
     def __init__(self, api_instance: BaseApi):
         self.api = api_instance
-        self._request_start_time = datetime.utcnow()
+        self._request_start_time = datetime.now(tz=timezone.utc)
         
     def _generate_request_id(self) -> str:
         """Generate unique request ID for tracking."""
@@ -105,7 +105,7 @@ class ApprovalApiResponseFormatter:
             
     def _calculate_execution_time(self) -> float:
         """Calculate request execution time in milliseconds."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(tz=timezone.utc)
         duration = (end_time - self._request_start_time).total_seconds() * 1000
         return round(duration, 2)
         
@@ -113,7 +113,7 @@ class ApprovalApiResponseFormatter:
         """Create response metadata."""
         return ApiResponseMetadata(
             request_id=request_id,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(tz=timezone.utc).isoformat(),
             endpoint=request.endpoint or "unknown",
             method=request.method,
             user_id=self._get_current_user_id(),

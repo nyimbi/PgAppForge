@@ -7,7 +7,7 @@ intelligent process automation with analytics and monitoring.
 
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from flask import request, jsonify, flash, redirect, url_for, g
@@ -149,7 +149,7 @@ class SmartTriggerView(ModelView):
                 # Create test context
                 test_context = {
                     'test_mode': True,
-                    'test_timestamp': datetime.utcnow().isoformat()
+                    'test_timestamp': datetime.now(tz=timezone.utc).isoformat()
                 }
                 
                 # Simulate trigger activation (without actually starting process)
@@ -273,7 +273,7 @@ class MLModelView(BaseView):
             tenant_id = TenantContext.get_current_tenant_id()
             
             # Get recent process performance
-            cutoff_date = datetime.utcnow() - timedelta(days=30)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             
             instances = db.session.query(ProcessInstance).filter(
                 ProcessInstance.tenant_id == tenant_id,
@@ -447,7 +447,7 @@ class SmartTriggerApi(ModelRestApi):
             test_event = TriggerEvent(
                 event_type='test_event',
                 data=test_data,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 tenant_id=TenantContext.get_current_tenant_id(),
                 source='api_test'
             )
@@ -487,7 +487,7 @@ class SmartTriggerApi(ModelRestApi):
             event = TriggerEvent(
                 event_type=event_type,
                 data=event_data,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 tenant_id=TenantContext.get_current_tenant_id(),
                 source='api'
             )
@@ -595,7 +595,7 @@ class MLApi(BaseApi):
                 'model': model_name,
                 'input_data': input_data,
                 'prediction': prediction,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -608,7 +608,7 @@ class MLApi(BaseApi):
         """Get process analytics and insights."""
         try:
             tenant_id = TenantContext.get_current_tenant_id()
-            cutoff_date = datetime.utcnow() - timedelta(days=30)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=30)
             
             # Get process instances
             instances = db.session.query(ProcessInstance).filter(
@@ -636,7 +636,7 @@ class MLApi(BaseApi):
                 'process_analytics': analytics,
                 'trigger_statistics': trigger_stats,
                 'period_days': 30,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
         except Exception as e:
@@ -651,7 +651,7 @@ class MLApi(BaseApi):
             tenant_id = TenantContext.get_current_tenant_id()
             
             # Get recent completed processes
-            cutoff_date = datetime.utcnow() - timedelta(days=7)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=7)
             instances = db.session.query(ProcessInstance).filter(
                 ProcessInstance.tenant_id == tenant_id,
                 ProcessInstance.completed_at >= cutoff_date,

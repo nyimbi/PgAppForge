@@ -320,8 +320,8 @@ class EnhancedModelGenerator:
 @event.listens_for({class_name}, 'before_insert')
 def before_insert_{table_name}(mapper, connection, target):
     """Set creation timestamp."""
-    target.created_at = datetime.utcnow()
-    target.updated_at = datetime.utcnow()
+    target.created_at = datetime.now(tz=timezone.utc)
+    target.updated_at = datetime.now(tz=timezone.utc)
                     '''.strip()
                 })
 
@@ -331,7 +331,7 @@ def before_insert_{table_name}(mapper, connection, target):
 @event.listens_for({class_name}, 'before_update')
 def before_update_{table_name}(mapper, connection, target):
     """Update modification timestamp."""
-    target.updated_at = datetime.utcnow()
+    target.updated_at = datetime.now(tz=timezone.utc)
                     '''.strip()
                 })
 

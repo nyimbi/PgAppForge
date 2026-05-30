@@ -1,0 +1,182 @@
+EmployeeOnboarding:
+  version: "1.2.0"
+  description: "Complete employee onboarding process with approvals"
+
+  entities:
+    Employee: existing
+    Document:
+      fields:
+        - documentType: {type: string, required: true}
+        - fileName: {type: string, required: true}
+        - filePath: {type: string, required: true}
+        - uploadedAt: {type: datetime, default: now}
+        - verifiedBy: {type: string, nullable: true}
+    Equipment: existing
+
+  steps:
+    PersonalInfo:
+      title: "Personal Information"
+      description: "Collect basic employee details and emergency contacts"
+      icon: "user"
+      estimatedTime: "15 minutes"
+      fields:
+        - firstName:
+            type: string
+            required: true
+            validation: {minLength: 2, maxLength: 50}
+            placeholder: "Enter first name"
+        - lastName:
+            type: string
+            required: true
+            validation: {minLength: 2, maxLength: 50}
+            placeholder: "Enter last name"
+        - email:
+            type: email
+            required: true
+            unique: true
+            validation: {pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"}
+            placeholder: "employee@company.com"
+        - phoneNumber:
+            type: string
+            required: true
+            validation: {pattern: "^\\+?[1-9]\\d{1,14}$"}
+            placeholder: "+1 (555) 123-4567"
+        - dateOfBirth:
+            type: date
+            required: true
+            validation: {min: "1950-01-01", max: "2010-12-31"}
+        - address:
+            type: textarea
+            required: true
+            rows: 3
+            placeholder: "Full address including city, state, zip"
+
+    DocumentUpload:
+      title: "Document Upload"
+      description: "Upload required identification and background check documents"
+      icon: "upload"
+      estimatedTime: "10 minutes"
+      fields:
+        - identificationDocument:
+            type: file
+            required: true
+            accept: [".pdf", ".jpg", ".png"]
+            description: "Government-issued photo ID (passport, driver's license, etc.)"
+        - backgroundCheckDocument:
+            type: file
+            required: false
+            accept: [".pdf"]
+            description: "Background check results (if available)"
+        - educationVerification:
+            type: file
+            required: false
+            accept: [".pdf", ".doc", ".docx"]
+            description: "Diploma or transcript"
+
+    ManagerApproval:
+      title: "Manager Approval"
+      description: "Manager reviews and approves the new employee information"
+      icon: "check-circle"
+      estimatedTime: "5 minutes"
+      permissions:
+        view: ["manager", "hr_admin"]
+        edit: ["manager", "hr_admin"]
+      fields:
+        - managerNotes:
+            type: textarea
+            required: false
+            rows: 4
+            placeholder: "Additional notes or comments about the employee"
+        - approvalStatus:
+            type: select
+            required: true
+            choices: [["approved", "Approved"], ["rejected", "Rejected"], ["needs_revision", "Needs Revision"]]
+            default: "approved"
+        - startDate:
+            type: date
+            required: true
+            validation: {min: "today"}
+
+    HRProcessing:
+      title: "HR Processing"
+      description: "HR finalizes the employee setup and assigns resources"
+      icon: "users"
+      estimatedTime: "20 minutes"
+      permissions:
+        view: ["hr_admin", "hr_coordinator"]
+        edit: ["hr_admin", "hr_coordinator"]
+      fields:
+        - employeeId:
+            type: string
+            required: true
+            validation: {pattern: "^EMP[0-9]{4}$"}
+            placeholder: "EMP1234"
+        - department:
+            type: select
+            required: true
+            choices: [["engineering", "Engineering"], ["marketing", "Marketing"], ["sales", "Sales"], ["hr", "Human Resources"]]
+        - jobTitle:
+            type: string
+            required: true
+            validation: {maxLength: 100}
+        - salary:
+            type: float
+            required: true
+            validation: {min: 30000, max: 250000}
+        - equipmentAssigned:
+            type: multiselect
+            required: false
+            choices: [["laptop", "Laptop"], ["monitor", "Monitor"], ["keyboard", "Keyboard"], ["mouse", "Mouse"]]
+
+  permissions:
+    PersonalInfo:
+      view: ["employee", "manager", "hr_admin", "hr_coordinator"]
+      edit: ["employee"]
+    DocumentUpload:
+      view: ["employee", "manager", "hr_admin", "hr_coordinator"]
+      edit: ["employee"]
+    ManagerApproval:
+      view: ["manager", "hr_admin", "hr_coordinator"]
+      edit: ["manager", "hr_admin"]
+    HRProcessing:
+      view: ["hr_admin", "hr_coordinator"]
+      edit: ["hr_admin", "hr_coordinator"]
+
+  notifications:
+    email:
+      enabled: true
+      templates:
+        step_completed: "Employee {employee.firstName} has completed step {step.title}"
+        approval_needed: "Manager approval needed for {employee.firstName} {employee.lastName}"
+        workflow_completed: "Employee onboarding completed for {employee.firstName}"
+
+  features:
+    auto_save: true
+    auto_save_interval: 30
+    collaboration: true
+    real_time: true
+    comments: true
+    file_upload: true
+    max_file_size: 16777216  # 16MB
+    allowed_extensions: ["pdf", "doc", "docx", "txt", "jpg", "png"]
+
+  ui:
+    theme: "bootstrap-theme.css"
+    logo: "/static/img/company-logo.png"
+
+  security:
+    auth_type: "AUTH_DB"
+    admin_role: "Admin"
+    public_role: "Public"
+    allow_registration: false
+    registration_role: "Viewer"
+    audit: true
+    encryption: ["salary"]
+
+  metadata:
+    author: "HR Team"
+    created: "2024-01-15"
+    version_history:
+      - "1.0.0: Initial version"
+      - "1.1.0: Added document upload requirements"
+      - "1.2.0: Enhanced approval workflow"

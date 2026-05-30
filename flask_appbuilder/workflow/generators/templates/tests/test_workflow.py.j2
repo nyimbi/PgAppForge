@@ -1,0 +1,433 @@
+"""
+{{ workflow.name }} Workflow Tests
+Generated from WDL on {{ timestamp }}
+"""
+
+import pytest
+import uuid
+from datetime import datetime
+from unittest.mock import Mock, patch
+
+from flask import url_for
+from flask_login import current_user
+
+from flask_appbuilder import SQLA
+from flask_appbuilder.models.sqla import Model
+from flask_appbuilder.security.sqla.models import User
+
+from ..models.{{ workflow.name.lower() }}_models import {{ workflow.name }}WorkflowState
+from ..forms.{{ workflow.name.lower() }}_forms import {% for step_name in workflow.steps.keys() %}{{ step_name }}Form{% if not loop.last %}, {% endif %}{% endfor %}
+from ..views.{{ workflow.name.lower() }}_view import {{ workflow.name }}WorkflowView
+from ..apis.{{ workflow.name.lower() }}_api import {{ workflow.name }}WorkflowApi
+
+from flask_appbuilder.workflow.core import get_workflow_engine
+
+
+class Test{{ workflow.name }}WorkflowModels:
+    """Test {{ workflow.name }} workflow models and state management."""
+
+    def test_workflow_state_creation(self, app_context, db_session):
+        """Test creating workflow state with initial data."""
+        # Given
+        initial_data = {
+            {% for field in fields[:3] %}
+            '{{ field.name }}': '{{ field.config.get("default_value", "test_value") }}',
+            {% endfor %}
+        }
+
+        # When
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}',
+            status='in_progress',
+            **initial_data
+        )
+        db_session.add(workflow_state)
+        db_session.commit()
+
+        # Then
+        assert workflow_state.id is not None
+        assert workflow_state.workflow_name == '{{ workflow.name }}'
+        assert workflow_state.current_step == '{{ workflow.steps.keys() | list | first }}'
+        assert workflow_state.status == 'in_progress'
+        {% for field in fields[:3] %}
+        assert workflow_state.{{ field.name }} == '{{ field.config.get("default_value", "test_value") }}'
+        {% endfor %}
+
+    def test_step_progress_percentage(self, app_context, db_session):
+        """Test progress percentage calculation."""
+        # Given
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}',
+            status='in_progress'
+        )
+
+        # When
+        progress = workflow_state.step_progress_percentage
+
+        # Then
+        assert progress == 0  # First step should be 0%
+
+        # When moving to next step
+        {% if workflow.steps.keys() | list | length > 1 %}
+        workflow_state.current_step = '{{ workflow.steps.keys() | list | list[1] }}'
+        progress = workflow_state.step_progress_percentage
+
+        # Then
+        expected = int((1 / {{ workflow.steps.keys() | list | length }}) * 100)
+        assert progress == expected
+        {% endif %}
+
+    def test_step_validation(self, app_context, db_session):
+        """Test step data validation."""
+        # Given
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}'
+        )
+
+        # When validating empty required fields
+        errors = workflow_state.validate_step_data('{{ workflow.steps.keys() | list | first }}')
+
+        # Then
+        {% for field in fields if field.config.required %}
+        assert '{{ field.name }}' in errors
+        assert 'required' in errors['{{ field.name }}'][0].lower()
+        {% endfor %}
+
+    def test_user_step_access_permissions(self, app_context, db_session):
+        """Test user permission checking for workflow steps."""
+        # Given
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}'
+        )
+
+        # When checking access with no roles
+        can_access = workflow_state.can_user_access_step(
+            '{{ workflow.steps.keys() | list | first }}',
+            []
+        )
+
+        # Then
+        {% set first_step = workflow.steps[workflow.steps.keys() | list | first] %}
+        {% if first_step.get('permissions', {}).get('view') %}
+        assert not can_access  # Should require specific roles
+        {% else %}
+        assert can_access  # Should allow open access
+        {% endif %}
+
+        # When checking with required roles
+        {% if first_step.get('permissions', {}).get('view') %}
+        can_access = workflow_state.can_user_access_step(
+            '{{ workflow.steps.keys() | list | first }}',
+            {{ first_step.permissions.view | tojson }}
+        )
+        assert can_access
+        {% endif %}
+
+
+class Test{{ workflow.name }}WorkflowForms:
+    """Test {{ workflow.name }} workflow forms and validation."""
+
+    {% for step_name, step_config in workflow.steps.items() %}
+    def test_{{ step_name.lower() }}_form_validation(self, app_context):
+        """Test {{ step_config.title }} form validation."""
+        # Given valid data
+        valid_data = {
+            {% for field_name, field_config in step_config.fields.items() %}
+            '{{ field_name }}': {% if field_config.type == 'string' %}'test_{{ field_name }}'{% elif field_config.type == 'email' %}'test@example.com'{% elif field_config.type == 'integer' %}42{% elif field_config.type == 'boolean' %}True{% elif field_config.type == 'select' and field_config.choices %}{{ field_config.choices[0][0] | tojson }}{% else %}'test_value'{% endif %},
+            {% endfor %}
+        }
+
+        # When creating form
+        form = {{ step_name }}Form(data=valid_data)
+
+        # Then
+        assert form.validate(), f"Form errors: {form.errors}"
+        {% for field_name, field_config in step_config.fields.items() %}
+        assert form.{{ field_name }}.data == valid_data['{{ field_name }}']
+        {% endfor %}
+
+    def test_{{ step_name.lower() }}_form_required_fields(self, app_context):
+        """Test {{ step_config.title }} required field validation."""
+        # Given empty data
+        form = {{ step_name }}Form(data={})
+
+        # When validating
+        is_valid = form.validate()
+
+        # Then
+        {% set has_required = step_config.fields.values() | selectattr('required') | list | length > 0 %}
+        {% if has_required %}
+        assert not is_valid
+        {% for field_name, field_config in step_config.fields.items() %}
+        {% if field_config.required %}
+        assert '{{ field_name }}' in form.errors or hasattr(form.{{ field_name }}, 'errors')
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        # No required fields in this step
+        assert is_valid
+        {% endif %}
+    {% endfor %}
+
+
+class Test{{ workflow.name }}WorkflowViews:
+    """Test {{ workflow.name }} workflow views and navigation."""
+
+    def test_workflow_list_view(self, client, admin_user):
+        """Test workflow list view access."""
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+
+        response = client.get(url_for('{{ workflow.name }}WorkflowView.list'))
+        assert response.status_code == 200
+
+    def test_workflow_creation(self, client, admin_user, db_session):
+        """Test workflow creation through view."""
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+
+        # Given form data for first step
+        form_data = {
+            {% for field_name, field_config in workflow.steps[workflow.steps.keys() | list | first].fields.items() %}
+            '{{ field_name }}': {% if field_config.type == 'string' %}'test_{{ field_name }}'{% elif field_config.type == 'email' %}'test@example.com'{% else %}'test_value'{% endif %},
+            {% endfor %}
+        }
+
+        # When posting to create workflow
+        response = client.post(
+            url_for('{{ workflow.name }}WorkflowView.{{ workflow.steps.keys() | list | first | lower }}_step', workflow_id='new'),
+            data=form_data,
+            follow_redirects=True
+        )
+
+        # Then
+        assert response.status_code == 200
+        # Check workflow was created
+        workflow = db_session.query({{ workflow.name }}WorkflowState).first()
+        assert workflow is not None
+        assert workflow.current_step == '{{ workflow.steps.keys() | list | first }}'
+
+    {% for step_name, step_config in workflow.steps.items() %}
+    def test_{{ step_name.lower() }}_step_view(self, client, admin_user, db_session):
+        """Test {{ step_config.title }} step view."""
+        # Given existing workflow
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ step_name }}',
+            status='in_progress'
+        )
+        db_session.add(workflow_state)
+        db_session.commit()
+
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+
+        # When accessing step
+        response = client.get(
+            url_for('{{ workflow.name }}WorkflowView.{{ step_name.lower() }}_step',
+                   workflow_id=workflow_state.id)
+        )
+
+        # Then
+        assert response.status_code == 200
+        # Check step-specific content
+        assert '{{ step_config.title }}' in response.data.decode()
+    {% endfor %}
+
+
+class Test{{ workflow.name }}WorkflowApi:
+    """Test {{ workflow.name }} workflow REST API endpoints."""
+
+    def test_api_list_workflows(self, client, admin_user, db_session):
+        """Test API workflow listing."""
+        # Given existing workflows
+        workflow1 = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}',
+            status='in_progress'
+        )
+        workflow2 = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}',
+            status='completed'
+        )
+        db_session.add_all([workflow1, workflow2])
+        db_session.commit()
+
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+
+        # When calling API
+        response = client.get('/api/v1/{{ workflow.name.lower() }}-workflow/')
+
+        # Then
+        assert response.status_code == 200
+        data = response.get_json()
+        assert 'result' in data
+        assert len(data['result']) == 2
+        assert data['count'] == 2
+
+    def test_api_create_workflow(self, client, admin_user, db_session):
+        """Test API workflow creation."""
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+
+        # Given valid workflow data
+        workflow_data = {
+            {% for field_name, field_config in workflow.steps[workflow.steps.keys() | list | first].fields.items() %}
+            '{{ field_name }}': {% if field_config.type == 'string' %}'api_test_{{ field_name }}'{% elif field_config.type == 'email' %}'api@example.com'{% else %}'api_test_value'{% endif %},
+            {% endfor %}
+        }
+
+        # When posting to API
+        response = client.post(
+            '/api/v1/{{ workflow.name.lower() }}-workflow/',
+            json=workflow_data,
+            headers={'Content-Type': 'application/json'}
+        )
+
+        # Then
+        assert response.status_code == 201
+        data = response.get_json()
+        assert 'id' in data
+        assert data['workflow_name'] == '{{ workflow.name }}'
+
+    def test_api_advance_workflow(self, client, admin_user, db_session):
+        """Test API workflow advancement."""
+        # Given workflow in first step
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | first }}',
+            status='in_progress'
+        )
+        db_session.add(workflow_state)
+        db_session.commit()
+
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+
+        # When advancing workflow
+        response = client.post(
+            f'/api/v1/{{ workflow.name.lower() }}-workflow/{workflow_state.id}/advance'
+        )
+
+        # Then
+        {% if workflow.steps.keys() | list | length > 1 %}
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['current_step'] == '{{ workflow.steps.keys() | list | list[1] }}'
+        {% else %}
+        # Single step workflow should complete
+        assert response.status_code == 200
+        {% endif %}
+
+
+class Test{{ workflow.name }}WorkflowEngine:
+    """Test {{ workflow.name }} workflow engine integration."""
+
+    def test_workflow_engine_registration(self, app_context):
+        """Test workflow is registered with engine."""
+        engine = get_workflow_engine()
+        assert '{{ workflow.name }}' in engine.workflow_definitions
+
+    def test_workflow_state_transitions(self, app_context, db_session):
+        """Test workflow state transitions."""
+        engine = get_workflow_engine()
+
+        # Given initial workflow state
+        workflow_state = engine.create_workflow_state(
+            workflow_name='{{ workflow.name }}',
+            entity_type='{{ workflow.name }}WorkflowState',
+            entity_id=None,
+            initial_data={}
+        )
+
+        # When transitioning states
+        {% if workflow.steps.keys() | list | length > 1 %}
+        success = engine.advance_workflow(
+            workflow_state,
+            '{{ workflow.steps.keys() | list | list[1] }}'
+        )
+
+        # Then
+        assert success
+        assert workflow_state.current_step == '{{ workflow.steps.keys() | list | list[1] }}'
+        assert '{{ workflow.steps.keys() | list | first }}' in workflow_state.completed_steps
+        {% endif %}
+
+    def test_workflow_completion(self, app_context, db_session):
+        """Test workflow completion."""
+        engine = get_workflow_engine()
+
+        # Given workflow in final step
+        workflow_state = {{ workflow.name }}WorkflowState(
+            workflow_name='{{ workflow.name }}',
+            current_step='{{ workflow.steps.keys() | list | last }}',
+            status='in_progress'
+        )
+        db_session.add(workflow_state)
+        db_session.commit()
+
+        # When completing workflow
+        workflow_state.complete_workflow()
+
+        # Then
+        assert workflow_state.status == 'completed'
+        assert workflow_state.completion_date is not None
+
+
+# Fixtures
+@pytest.fixture
+def app_context(app):
+    """Application context for testing."""
+    with app.app_context():
+        yield app
+
+
+@pytest.fixture
+def db_session(app):
+    """Database session for testing."""
+    from flask_appbuilder import SQLA
+
+    with app.app_context():
+        db = SQLA(app)
+        db.create_all()
+        try:
+            yield db.session
+        finally:
+            db.session.rollback()
+            db.drop_all()
+
+
+@pytest.fixture
+def admin_user(app, db_session):
+    """Admin user for testing."""
+    from flask_appbuilder.security.sqla.models import User, Role
+
+    # Create admin role
+    admin_role = Role(name='Admin')
+    db_session.add(admin_role)
+
+    # Create admin user
+    admin_user = User(
+        username='admin',
+        email='admin@example.com',
+        first_name='Admin',
+        last_name='User',
+        active=True
+    )
+    admin_user.roles = [admin_role]
+    db_session.add(admin_user)
+    db_session.commit()
+
+    return admin_user
+
+
+@pytest.fixture
+def client(app):
+    """Test client for API testing."""
+    return app.test_client()

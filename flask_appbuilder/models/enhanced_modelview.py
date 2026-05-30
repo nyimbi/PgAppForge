@@ -23,7 +23,7 @@ Features:
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union, Callable
 from functools import lru_cache, wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import flash, request, current_app
 from flask_babel import lazy_gettext as _
@@ -103,7 +103,7 @@ class FieldAnalysisCache:
         
         # Check if cache entry has expired
         timestamp = self._cache_timestamps.get(cache_key)
-        if timestamp and datetime.utcnow() - timestamp > self.cache_ttl:
+        if timestamp and datetime.now(tz=timezone.utc) - timestamp > self.cache_ttl:
             self._invalidate_entry(cache_key)
             return None
         
@@ -122,7 +122,7 @@ class FieldAnalysisCache:
             self._evict_oldest_entries()
         
         self._cache[cache_key] = analysis_result.copy()
-        self._cache_timestamps[cache_key] = datetime.utcnow()
+        self._cache_timestamps[cache_key] = datetime.now(tz=timezone.utc)
         
         log.debug(f"Cached field analysis for {cache_key}")
     

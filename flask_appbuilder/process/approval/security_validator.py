@@ -9,7 +9,7 @@ to follow Single Responsibility Principle.
 import re
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from flask import session, request, current_user
 import bleach
@@ -824,7 +824,7 @@ class ApprovalSecurityValidator:
         
         SECURITY IMPROVEMENT: Multi-layer rate limiting to prevent abuse and DoS attacks.
         """
-        current_time = datetime.utcnow().timestamp()
+        current_time = datetime.now(tz=timezone.utc).timestamp()
         client_identifier = self._get_robust_client_identifier()
 
         # PERFORMANCE FIX: Clean up expired entries to prevent memory leaks

@@ -12,7 +12,7 @@ from flask_appbuilder import expose
 from flask_appbuilder.api import BaseApi, safe
 from flask_appbuilder.security.decorators import protect
 from marshmallow import Schema, fields, ValidationError
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..interfaces.base_interfaces import ITeamService
 from ..core.team_manager import TeamRole, TeamConfig
@@ -164,7 +164,7 @@ class TeamApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin):
                 "description": team.description,
                 "is_private": team.is_private,
                 "created_by": team.created_by_user_id,
-                "created_at": team.created_at.isoformat() if hasattr(team, 'created_at') else datetime.utcnow().isoformat(),
+                "created_at": team.created_at.isoformat() if hasattr(team, 'created_at') else datetime.now(tz=timezone.utc).isoformat(),
                 "member_count": 1,  # Creator is automatically a member
                 "message": "Team created successfully"
             }
@@ -276,7 +276,7 @@ class TeamApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin):
                 "description": team.description,
                 "is_private": getattr(team, 'is_private', False),
                 "created_by": team.created_by_user_id,
-                "created_at": team.created_at.isoformat() if hasattr(team, 'created_at') else datetime.utcnow().isoformat(),
+                "created_at": team.created_at.isoformat() if hasattr(team, 'created_at') else datetime.now(tz=timezone.utc).isoformat(),
                 "member_count": len(members_data),
                 "members": members_data
             }

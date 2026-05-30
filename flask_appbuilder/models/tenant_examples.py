@@ -6,7 +6,7 @@ models to support multi-tenant isolation using TenantAwareMixin.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
@@ -292,7 +292,7 @@ class ProjectMT(TenantAwareMixin, AuditMixin, Model):
         """Check if project is past its end date"""
         if not self.end_date:
             return False
-        return datetime.utcnow() > self.end_date and self.status not in ('completed', 'cancelled')
+        return datetime.now(tz=timezone.utc) > self.end_date and self.status not in ('completed', 'cancelled')
     
     def get_completion_percentage(self):
         """Calculate project completion based on completed tasks"""
@@ -351,4 +351,4 @@ class TaskMT(TenantAwareMixin, AuditMixin, Model):
         """Check if task is past its due date"""
         if not self.due_date:
             return False
-        return datetime.utcnow() > self.due_date and not self.is_completed
+        return datetime.now(tz=timezone.utc) > self.due_date and not self.is_completed

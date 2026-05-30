@@ -15,7 +15,7 @@ Features:
 import logging
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -127,7 +127,7 @@ class SecurityMonitor:
         Returns:
             SecurityAlert if threat pattern detected, None otherwise
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(tz=timezone.utc)
 
         # Create event record
         event = {
@@ -405,7 +405,7 @@ class SecurityMonitor:
 
     def get_security_metrics(self) -> SecurityMetrics:
         """Get current security metrics for monitoring dashboard."""
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=24)
 
         recent_events = [
             e for e in self.recent_events
@@ -444,7 +444,7 @@ class SecurityMonitor:
         metrics = self.get_security_metrics()
 
         return {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'security_metrics': {
                 'total_events_24h': metrics.total_events,
                 'threats_blocked_24h': metrics.threats_blocked,
@@ -464,7 +464,7 @@ class SecurityMonitor:
             'system_health': {
                 'security_controls_active': True,
                 'monitoring_operational': True,
-                'last_update': datetime.utcnow().isoformat()
+                'last_update': datetime.now(tz=timezone.utc).isoformat()
             }
         }
 
@@ -487,7 +487,7 @@ class SecurityMonitor:
 
     def _calculate_security_trend(self) -> str:
         """Calculate security trend (improving/stable/deteriorating)."""
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         recent_window = now - timedelta(hours=4)
         previous_window = recent_window - timedelta(hours=4)
 

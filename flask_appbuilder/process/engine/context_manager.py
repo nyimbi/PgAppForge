@@ -8,7 +8,7 @@ between nodes, and secure context isolation for multi-tenant processes.
 import logging
 import json
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Union
 import threading
 from copy import deepcopy
@@ -158,7 +158,7 @@ class ProcessContextManager:
             
             # Add metadata
             context['variables'][f'__{variable_name}__meta'] = {
-                'updated_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.now(tz=timezone.utc).isoformat(),
                 'updated_by_step': step_id,
                 'previous_value': old_value,
                 'type': type(value).__name__
@@ -222,7 +222,7 @@ class ProcessContextManager:
             
             context['step_outputs'][str(step_id)] = {
                 'data': output_data,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
             # Merge output data into process variables
@@ -282,9 +282,9 @@ class ProcessContextManager:
             context = await self._get_context(instance_id)
             
             snapshot = {
-                'snapshot_id': f"snapshot_{instance_id}_{int(datetime.utcnow().timestamp())}",
+                'snapshot_id': f"snapshot_{instance_id}_{int(datetime.now(tz=timezone.utc).timestamp())}",
                 'instance_id': instance_id,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'context': deepcopy(context)
             }
             
@@ -438,7 +438,7 @@ class ProcessContextManager:
     def _get_system_variables(self, instance: ProcessInstance) -> Dict[str, Any]:
         """Get system-provided variables."""
         return {
-            'current_time': datetime.utcnow().isoformat(),
+            'current_time': datetime.now(tz=timezone.utc).isoformat(),
             'instance_id': instance.id,
             'definition_id': instance.process_definition_id,
             'tenant_id': instance.tenant_id,
@@ -490,7 +490,7 @@ class ProcessContextManager:
         """Audit variable access for security and compliance."""
         try:
             audit_data = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'instance_id': instance_id,
                 'step_id': step_id,
                 'variable_name': variable_name,

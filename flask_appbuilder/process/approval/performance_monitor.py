@@ -9,7 +9,7 @@ import time
 import logging
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Union, Callable
 from dataclasses import dataclass, field
 from collections import defaultdict, deque
@@ -247,7 +247,7 @@ class CustomBackend(MonitoringBackend):
     def get_metric_summary(self, metric_name: str, 
                           duration_minutes: int = 60) -> Dict[str, Any]:
         """Get metric summary for specified duration."""
-        since = datetime.utcnow() - timedelta(minutes=duration_minutes)
+        since = datetime.now(tz=timezone.utc) - timedelta(minutes=duration_minutes)
         metrics = self.get_metrics(metric_name, since)
         
         if not metrics:
@@ -549,12 +549,12 @@ class ApprovalPerformanceMonitor:
             if alert.name == alert_name:
                 # Check cooldown
                 if (alert.last_triggered and 
-                    (datetime.utcnow() - alert.last_triggered).total_seconds() < alert.cooldown_seconds):
+                    (datetime.now(tz=timezone.utc) - alert.last_triggered).total_seconds() < alert.cooldown_seconds):
                     return
                 
                 # Check condition
                 if alert.condition(value):
-                    alert.last_triggered = datetime.utcnow()
+                    alert.last_triggered = datetime.now(tz=timezone.utc)
                     
                     log.log(
                         logging.WARNING if alert.level == AlertLevel.WARNING else logging.ERROR,
@@ -581,7 +581,7 @@ class ApprovalPerformanceMonitor:
                 'success': success,
                 'workflow_type': workflow_type,
                 'step': step,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(tz=timezone.utc)
             }
             
             # Store in workflow-specific history
@@ -603,7 +603,7 @@ class ApprovalPerformanceMonitor:
     
     def get_approval_metrics(self, duration_minutes: int = 60) -> ApprovalMetrics:
         """Get aggregated approval metrics for specified duration."""
-        since = datetime.utcnow() - timedelta(minutes=duration_minutes)
+        since = datetime.now(tz=timezone.utc) - timedelta(minutes=duration_minutes)
         
         # Get metrics from custom backend
         duration_metrics = self._custom_backend.get_metrics('approval_duration', since)
@@ -642,8 +642,8 @@ class ApprovalPerformanceMonitor:
         # Get recent performance trends
         recent_metrics = []
         for i in range(12):  # Last 12 hours, hourly
-            hour_start = datetime.utcnow() - timedelta(hours=i+1)
-            hour_end = datetime.utcnow() - timedelta(hours=i)
+            hour_start = datetime.now(tz=timezone.utc) - timedelta(hours=i+1)
+            hour_end = datetime.now(tz=timezone.utc) - timedelta(hours=i)
             hour_metrics = self.get_approval_metrics_for_period(hour_start, hour_end)
             recent_metrics.append({
                 'timestamp': hour_start.isoformat(),
@@ -670,7 +670,7 @@ class ApprovalPerformanceMonitor:
                     }
                     for alert in self._alerts
                     if alert.last_triggered and 
-                    (datetime.utcnow() - alert.last_triggered).total_seconds() < 3600
+                    (datetime.now(tz=timezone.utc) - alert.last_triggered).total_seconds() < 3600
                 ]
             },
             'performance_recommendations': self._generate_performance_recommendations(metrics_60min)

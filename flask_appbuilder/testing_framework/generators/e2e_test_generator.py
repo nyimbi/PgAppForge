@@ -715,7 +715,7 @@ class Test{model_name}Navigation:
 
         # Extract ID from URL (assumes format like "/model/show/123/")
         import re
-        match = re.search(r'/show/(\d+)', href)
+        match = re.search(r'/show/([0-9]+)', href)
         return match.group(1) if match else "1"
 '''
 

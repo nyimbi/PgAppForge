@@ -6,7 +6,7 @@ to replace all mock data with real database integration.
 """
 
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ..models.alert_models import AlertRule, AlertHistory, AlertStatus, AlertSeverity, MetricSnapshot
 
 
@@ -74,7 +74,7 @@ def add_database_methods_to_alert_manager():
                 return []
             
             session = self.db_session()
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
             
             query = session.query(AlertHistory).filter(
                 AlertHistory.triggered_at >= cutoff_date
@@ -102,7 +102,7 @@ def add_database_methods_to_alert_manager():
                 }
             
             session = self.db_session()
-            today = datetime.utcnow().date()
+            today = datetime.now(tz=timezone.utc).date()
             
             # Count total rules
             total_rules = session.query(AlertRule).count()
@@ -225,7 +225,7 @@ def add_database_methods_to_alert_manager():
                 severity=rule.severity,
                 status=AlertStatus.ACTIVE,
                 message=f"{rule.metric_name} {rule.condition.value} {rule.threshold_value} (current: {metric_value})",
-                triggered_at=datetime.utcnow()
+                triggered_at=datetime.now(tz=timezone.utc)
             )
             
             session.add(alert)
@@ -256,7 +256,7 @@ def add_database_methods_to_alert_manager():
             snapshot = MetricSnapshot(
                 metric_name=metric_name,
                 value=value,
-                timestamp=timestamp or datetime.utcnow(),
+                timestamp=timestamp or datetime.now(tz=timezone.utc),
                 source="system"
             )
             
@@ -282,7 +282,7 @@ def add_database_methods_to_alert_manager():
                 return []
             
             session = self.db_session()
-            cutoff_date = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
             
             return session.query(MetricSnapshot).filter(
                 and_(

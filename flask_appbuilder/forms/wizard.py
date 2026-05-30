@@ -17,7 +17,7 @@ Features:
 import json
 import uuid
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Type, Union, Tuple
 from collections import OrderedDict
 
@@ -198,9 +198,9 @@ class WizardFormData:
         self.form_data = {}
         self.current_step = 0
         self.completed_steps = set()
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
-        self.expires_at = datetime.utcnow() + timedelta(days=7)  # Default 7-day expiration
+        self.created_at = datetime.now(tz=timezone.utc)
+        self.updated_at = datetime.now(tz=timezone.utc)
+        self.expires_at = datetime.now(tz=timezone.utc) + timedelta(days=7)  # Default 7-day expiration
         self.is_submitted = False
         self.submission_id = None
     
@@ -209,7 +209,7 @@ class WizardFormData:
         self.form_data.update(step_data)
         if step_index not in self.completed_steps:
             self.completed_steps.add(step_index)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(tz=timezone.utc)
     
     def get_step_data(self, step_fields: List[str]) -> Dict[str, Any]:
         """Get form data for specific step fields"""
@@ -218,17 +218,17 @@ class WizardFormData:
     def set_current_step(self, step_index: int):
         """Set the current active step"""
         self.current_step = step_index
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(tz=timezone.utc)
     
     def mark_submitted(self, submission_id: Optional[str] = None):
         """Mark the wizard as submitted"""
         self.is_submitted = True
         self.submission_id = submission_id or str(uuid.uuid4())
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(tz=timezone.utc)
     
     def is_expired(self) -> bool:
         """Check if the wizard data has expired"""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(tz=timezone.utc) > self.expires_at
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -499,11 +499,11 @@ class WizardFormPersistence:
             
             # Delete expired records
             expired_count = session.query(wizard_model).filter(
-                wizard_model.expires_at < datetime.utcnow()
+                wizard_model.expires_at < datetime.now(tz=timezone.utc)
             ).count()
             
             session.query(wizard_model).filter(
-                wizard_model.expires_at < datetime.utcnow()
+                wizard_model.expires_at < datetime.now(tz=timezone.utc)
             ).delete()
             
             session.commit()

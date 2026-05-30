@@ -6,7 +6,7 @@ node execution, timer handling, and background process management.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from celery import Celery
@@ -118,7 +118,7 @@ def complete_timer_step(step_id: int):
             return {'success': False, 'error': 'Step not in waiting state'}
         
         # Mark step as completed
-        step.mark_completed({'timer_completed': True, 'completed_at': datetime.utcnow().isoformat()})
+        step.mark_completed({'timer_completed': True, 'completed_at': datetime.now(tz=timezone.utc).isoformat()})
         db.session.commit()
         
         # Continue process execution
@@ -159,7 +159,7 @@ def handle_step_timeout(step_id: int):
             step.mark_completed({
                 'timeout_occurred': True,
                 'timeout_action': 'complete',
-                'completed_at': datetime.utcnow().isoformat()
+                'completed_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
             # Continue process execution
@@ -174,7 +174,7 @@ def handle_step_timeout(step_id: int):
             # Skip step
             step.status = ProcessStepStatus.SKIPPED.value
             step.error_message = 'Step timed out and was skipped'
-            step.completed_at = datetime.utcnow()
+            step.completed_at = datetime.now(tz=timezone.utc)
             
             # Continue process execution
             instance = step.instance
@@ -189,7 +189,7 @@ def handle_step_timeout(step_id: int):
             step.mark_failed('Step timed out', {
                 'timeout_occurred': True,
                 'timeout_action': 'fail',
-                'timeout_at': datetime.utcnow().isoformat()
+                'timeout_at': datetime.now(tz=timezone.utc).isoformat()
             })
             
             # This will trigger error handling in the process engine
@@ -217,7 +217,7 @@ def cleanup_completed_processes():
         
         # Get cleanup configuration
         retention_days = current_app.config.get('PROCESS_RETENTION_DAYS', 90)
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
         
         # Find old completed processes
         old_processes = db.session.query(ProcessInstance).filter(
@@ -260,7 +260,7 @@ def monitor_stuck_processes():
         
         # Find processes that haven't had activity in a while
         stuck_threshold = current_app.config.get('STUCK_PROCESS_HOURS', 24)
-        cutoff_time = datetime.utcnow() - timedelta(hours=stuck_threshold)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=stuck_threshold)
         
         stuck_processes = db.session.query(ProcessInstance).filter(
             ProcessInstance.status == 'running',
@@ -277,12 +277,12 @@ def monitor_stuck_processes():
                     
                     if action == 'suspend':
                         process.status = 'suspended'
-                        process.suspended_at = datetime.utcnow()
+                        process.suspended_at = datetime.now(tz=timezone.utc)
                         log.warning(f"Suspended stuck process {process.id}")
                         
                     elif action == 'cancel':
                         process.status = 'cancelled'
-                        process.completed_at = datetime.utcnow()
+                        process.completed_at = datetime.now(tz=timezone.utc)
                         log.warning(f"Cancelled stuck process {process.id}")
                         
                     elif action == 'restart':
@@ -321,7 +321,7 @@ def generate_process_metrics():
         from sqlalchemy import func
         
         # Calculate daily metrics
-        today = datetime.utcnow().date()
+        today = datetime.now(tz=timezone.utc).date()
         
         # Throughput metrics
         completed_today = db.session.query(func.count(ProcessInstance.id)).filter(
@@ -345,17 +345,17 @@ def generate_process_metrics():
         # Store metrics
         metrics = [
             ProcessMetric(
-                metric_date=datetime.utcnow(),
+                metric_date=datetime.now(tz=timezone.utc),
                 metric_type='daily_throughput',
                 value=completed_today or 0
             ),
             ProcessMetric(
-                metric_date=datetime.utcnow(),
+                metric_date=datetime.now(tz=timezone.utc),
                 metric_type='daily_failures',
                 value=failed_today or 0
             ),
             ProcessMetric(
-                metric_date=datetime.utcnow(),
+                metric_date=datetime.now(tz=timezone.utc),
                 metric_type='avg_duration',
                 value=avg_duration or 0
             )

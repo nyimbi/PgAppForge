@@ -8,7 +8,7 @@ link prediction, anomaly detection, graph embeddings, and pattern discovery.
 import json
 import logging
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union, Set
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -457,7 +457,7 @@ class GraphMLEngine:
             }
             
             # Create model metadata
-            model_id = f"node_classifier_{graph_name}_{target_property}_{int(datetime.utcnow().timestamp())}"
+            model_id = f"node_classifier_{graph_name}_{target_property}_{int(datetime.now(tz=timezone.utc).timestamp())}"
             
             ml_model = MLModel(
                 id=model_id,
@@ -465,8 +465,8 @@ class GraphMLEngine:
                 task_type=MLTaskType.NODE_CLASSIFICATION,
                 algorithm=algorithm,
                 graph_name=graph_name,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(tz=timezone.utc),
+                updated_at=datetime.now(tz=timezone.utc),
                 parameters=kwargs,
                 metrics=metrics,
                 features=feature_names,
@@ -595,7 +595,7 @@ class GraphMLEngine:
             }
             
             # Create model metadata
-            model_id = f"link_predictor_{graph_name}_{int(datetime.utcnow().timestamp())}"
+            model_id = f"link_predictor_{graph_name}_{int(datetime.now(tz=timezone.utc).timestamp())}"
             
             ml_model = MLModel(
                 id=model_id,
@@ -603,8 +603,8 @@ class GraphMLEngine:
                 task_type=MLTaskType.LINK_PREDICTION,
                 algorithm=algorithm,
                 graph_name=graph_name,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(tz=timezone.utc),
+                updated_at=datetime.now(tz=timezone.utc),
                 parameters=kwargs,
                 metrics=metrics,
                 features=["common_neighbors", "jaccard_coefficient", "adamic_adar", "preferential_attachment"],
@@ -672,7 +672,7 @@ class GraphMLEngine:
             }
             
             # Create model metadata
-            model_id = f"anomaly_detector_{graph_name}_{int(datetime.utcnow().timestamp())}"
+            model_id = f"anomaly_detector_{graph_name}_{int(datetime.now(tz=timezone.utc).timestamp())}"
             
             ml_model = MLModel(
                 id=model_id,
@@ -680,8 +680,8 @@ class GraphMLEngine:
                 task_type=MLTaskType.ANOMALY_DETECTION,
                 algorithm=algorithm,
                 graph_name=graph_name,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(tz=timezone.utc),
+                updated_at=datetime.now(tz=timezone.utc),
                 parameters={"contamination": contamination, **kwargs},
                 metrics=metrics,
                 features=feature_names,

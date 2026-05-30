@@ -64,7 +64,7 @@ T = TypeVar("T", bound="PolymorphicMixin")
 
 
 def _utcnow() -> datetime:
-	"""Timezone-aware UTC now; avoids deprecated datetime.utcnow()."""
+	"""Timezone-aware UTC now; avoids deprecated datetime.now(tz=timezone.utc)."""
 	return datetime.now(timezone.utc)
 
 

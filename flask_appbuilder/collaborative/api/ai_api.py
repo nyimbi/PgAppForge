@@ -7,7 +7,7 @@ and knowledge base management with proper authentication and permissions.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, AsyncIterator
 
 from flask import request, g, jsonify, Response
@@ -314,7 +314,7 @@ class AIApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin, AsyncServiceMi
                 "workspace_id": workspace_id,
                 "team_id": json_data.get("team_id"),
                 "config": config.to_dict() if config else ChatbotConfig().to_dict(),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(tz=timezone.utc).isoformat(),
                 "message": "AI conversation created successfully"
             }
             

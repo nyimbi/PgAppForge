@@ -7,7 +7,7 @@ participants with conflict detection, change tracking, and event broadcasting.
 
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Set, Callable
 from collections import defaultdict
 import threading
@@ -92,7 +92,7 @@ class ModelChangeProcessor:
                 'new_values': new_values,
                 'user_id': user_id,
                 'session_id': session_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
             for handler in self.change_handlers:
@@ -355,7 +355,7 @@ class RealtimeDataSyncEngine:
                 'changes': field_changes,
                 'user_id': user_id,
                 'username': self._get_username(user_id),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
             # Broadcast to WebSocket room
@@ -374,7 +374,7 @@ class RealtimeDataSyncEngine:
                         field_name=field_name,
                         old_value=change.get('old'),
                         new_value=change.get('new'),
-                        metadata={'broadcast_timestamp': datetime.utcnow().isoformat()}
+                        metadata={'broadcast_timestamp': datetime.now(tz=timezone.utc).isoformat()}
                     )
                     self.db.add(event)
                     
@@ -504,7 +504,7 @@ class RealtimeDataSyncEngine:
                 'record_id': record_id,
                 'field_name': field_name,
                 'resolution': resolution_result,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
             
             self.websocket_manager.broadcast_to_room(room_id, 'conflict_resolved', conflict_event)

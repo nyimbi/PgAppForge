@@ -12,7 +12,7 @@ This module provides:
 import json
 import logging
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
@@ -31,7 +31,7 @@ class MixinSecurityError(Exception):
         super().__init__(message)
         self.details = details or {}
         self.user_id = user_id
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(tz=timezone.utc)
 
 
 class MixinPermissionError(MixinSecurityError):
@@ -333,7 +333,7 @@ class SecurityAuditor:
         try:
             event_data = {
                 'event_type': event_type,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'user_id': user_id,
                 'ip_address': getattr(request, 'remote_addr', None) if request else None,
                 'user_agent': getattr(request, 'headers', {}).get('User-Agent') if request else None,

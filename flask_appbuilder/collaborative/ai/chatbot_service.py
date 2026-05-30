@@ -9,7 +9,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, AsyncIterator, Callable
 
@@ -634,7 +634,7 @@ class ChatbotService:
             conversation = session.query(ChatbotConversation).get(conversation_db_id)
             if conversation:
                 conversation.message_count = sequence_number
-                conversation.last_activity = datetime.utcnow()
+                conversation.last_activity = datetime.now(tz=timezone.utc)
             
             session.commit()
             stored_message_id = message.message_id

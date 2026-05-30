@@ -7,7 +7,7 @@ views and APIs, providing a unified security layer.
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Dict, Any, Optional, List, Union
 
@@ -362,7 +362,7 @@ class PoolLaneSecurityManager:
             # Update lane with role assignment
             old_role = lane.assigned_role
             lane.assigned_role = role_name
-            lane.updated_at = datetime.utcnow()
+            lane.updated_at = datetime.now(tz=timezone.utc)
             lane.updated_by = getattr(current_user, 'id', None) if current_user else None
             
             db.session.commit()

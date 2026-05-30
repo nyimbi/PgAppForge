@@ -11,7 +11,7 @@ import hashlib
 import hmac
 import secrets
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Union
 from enum import Enum
 
@@ -176,7 +176,7 @@ class UserWallet(AuditMixin, Model):
         
         # Check if wallet is locked
         if self.is_locked:
-            if self.locked_until and self.locked_until > datetime.utcnow():
+            if self.locked_until and self.locked_until > datetime.now(tz=timezone.utc):
                 return False, f"Wallet is locked until {self.locked_until}"
             elif self.locked_until is None:
                 return False, "Wallet is permanently locked"
@@ -189,18 +189,18 @@ class UserWallet(AuditMixin, Model):
             
             # Check daily limit
             if self.daily_limit:
-                today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
                 today_expenses = self.get_transaction_total(
-                    TransactionType.EXPENSE, today_start, datetime.utcnow()
+                    TransactionType.EXPENSE, today_start, datetime.now(tz=timezone.utc)
                 )
                 if (today_expenses + amount) > self.daily_limit:
                     return False, f"Daily limit of {self.currency_code} {self.daily_limit} exceeded"
             
             # Check monthly limit
             if self.monthly_limit:
-                month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                month_start = datetime.now(tz=timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                 month_expenses = self.get_transaction_total(
-                    TransactionType.EXPENSE, month_start, datetime.utcnow()
+                    TransactionType.EXPENSE, month_start, datetime.now(tz=timezone.utc)
                 )
                 if (month_expenses + amount) > self.monthly_limit:
                     return False, f"Monthly limit of {self.currency_code} {self.monthly_limit} exceeded"
@@ -256,7 +256,7 @@ class UserWallet(AuditMixin, Model):
             self._apply_transaction_to_balance(transaction, transaction_type, amount)
         
         # Update last transaction date
-        self.last_transaction_date = datetime.utcnow()
+        self.last_transaction_date = datetime.now(tz=timezone.utc)
         
         # Add to session
         from flask_appbuilder import db
@@ -439,7 +439,7 @@ class UserWallet(AuditMixin, Model):
         
         # Create secure transfer pair with cryptographic linking
         transfer_id = secrets.token_urlsafe(32)
-        transfer_timestamp = datetime.utcnow()
+        transfer_timestamp = datetime.now(tz=timezone.utc)
         
         # Metadata for transfer linking
         outgoing_metadata = {
@@ -528,7 +528,7 @@ class UserWallet(AuditMixin, Model):
     
     def get_balance_history(self, days: int = 30) -> List[Dict]:
         """Get balance history for the specified number of days."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         # Get transactions in date range with optimized query
@@ -702,7 +702,7 @@ class UserWallet(AuditMixin, Model):
         
         # Set default date range if not provided
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(tz=timezone.utc)
         if not start_date:
             start_date = end_date - timedelta(days=30)
         
@@ -829,7 +829,7 @@ class UserWallet(AuditMixin, Model):
                 'average_transaction': float((total_income + total_expense) / transaction_count) if transaction_count > 0 else 0
             },
             'transactions': statement_transactions,
-            'generated_at': datetime.utcnow().isoformat(),
+            'generated_at': datetime.now(tz=timezone.utc).isoformat(),
             'include_balance': include_balance
         }
         
@@ -1094,7 +1094,7 @@ class WalletTransaction(AuditMixin, Model):
                 
                 # Update approval fields on the locked transaction
                 fresh_transaction.approved_by_id = approver_id
-                fresh_transaction.approved_at = datetime.utcnow()
+                fresh_transaction.approved_at = datetime.now(tz=timezone.utc)
                 fresh_transaction.status = TransactionStatus.COMPLETED.value
                 
                 # Apply balance changes to locked wallet
@@ -1111,7 +1111,7 @@ class WalletTransaction(AuditMixin, Model):
                         # Lock the target wallet for the linked transaction
                         with linked_txn.wallet._lock_wallet_for_transaction() as linked_locked_wallet:
                             linked_txn.approved_by_id = approver_id
-                            linked_txn.approved_at = datetime.utcnow()
+                            linked_txn.approved_at = datetime.now(tz=timezone.utc)
                             linked_txn.status = TransactionStatus.COMPLETED.value
                             
                             # Apply balance to target wallet
@@ -1179,14 +1179,14 @@ class WalletTransaction(AuditMixin, Model):
             
             # Update transaction on the locked instance
             fresh_transaction.approved_by_id = approver_id
-            fresh_transaction.approved_at = datetime.utcnow()
+            fresh_transaction.approved_at = datetime.now(tz=timezone.utc)
             fresh_transaction.status = TransactionStatus.CANCELLED.value
             
             # Add rejection reason to metadata
             current_metadata = fresh_transaction.metadata.copy() if fresh_transaction.metadata else {}
             current_metadata['rejection_reason'] = reason
             current_metadata['rejected_by'] = approver_id
-            current_metadata['rejected_at'] = datetime.utcnow().isoformat()
+            current_metadata['rejected_at'] = datetime.now(tz=timezone.utc).isoformat()
             fresh_transaction.metadata = current_metadata
             
             # Handle linked transactions (transfers) with proper locking
@@ -1197,14 +1197,14 @@ class WalletTransaction(AuditMixin, Model):
                 
                 if linked_txn and linked_txn.status == TransactionStatus.PENDING.value:
                     linked_txn.approved_by_id = approver_id
-                    linked_txn.approved_at = datetime.utcnow()
+                    linked_txn.approved_at = datetime.now(tz=timezone.utc)
                     linked_txn.status = TransactionStatus.CANCELLED.value
                     
                     # Add rejection reason to linked transaction
                     linked_metadata = linked_txn.metadata.copy() if linked_txn.metadata else {}
                     linked_metadata['rejection_reason'] = reason
                     linked_metadata['rejected_by'] = approver_id
-                    linked_metadata['rejected_at'] = datetime.utcnow().isoformat()
+                    linked_metadata['rejected_at'] = datetime.now(tz=timezone.utc).isoformat()
                     linked_txn.metadata = linked_metadata
             
             # Log rejection in audit trail
@@ -1422,7 +1422,7 @@ class WalletBudget(AuditMixin, Model):
         
         self.spent_amount = spent
         self.remaining_amount = self.budget_amount - spent
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(tz=timezone.utc)
         
         if auto_commit:
             from flask_appbuilder import db
@@ -1521,7 +1521,7 @@ class PaymentMethod(AuditMixin, Model):
         
         # Check daily limit
         if self.daily_limit:
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             today_total = WalletTransaction.query.filter(
                 WalletTransaction.payment_method_id == self.id,
                 WalletTransaction.transaction_date >= today_start,
@@ -1533,7 +1533,7 @@ class PaymentMethod(AuditMixin, Model):
         
         # Check monthly limit
         if self.monthly_limit:
-            month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            month_start = datetime.now(tz=timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             month_total = WalletTransaction.query.filter(
                 WalletTransaction.payment_method_id == self.id,
                 WalletTransaction.transaction_date >= month_start,
@@ -1547,7 +1547,7 @@ class PaymentMethod(AuditMixin, Model):
     
     def update_usage_stats(self, amount: Decimal, auto_commit: bool = True):
         """Update usage statistics after a transaction."""
-        self.last_used_date = datetime.utcnow()
+        self.last_used_date = datetime.now(tz=timezone.utc)
         self.total_transactions += 1
         self.total_amount += Decimal(str(amount))
         
@@ -1652,10 +1652,10 @@ class RecurringTransaction(AuditMixin, Model):
         if not self.is_active:
             return False
         
-        if self.next_execution_date > datetime.utcnow():
+        if self.next_execution_date > datetime.now(tz=timezone.utc):
             return False
         
-        if self.end_date and datetime.utcnow() > self.end_date:
+        if self.end_date and datetime.now(tz=timezone.utc) > self.end_date:
             return False
         
         if self.max_executions and self.execution_count >= self.max_executions:
@@ -1684,7 +1684,7 @@ class RecurringTransaction(AuditMixin, Model):
             )
             
             # Update recurring transaction
-            self.last_execution_date = datetime.utcnow()
+            self.last_execution_date = datetime.now(tz=timezone.utc)
             self.execution_count += 1
             self.next_execution_date = self.calculate_next_execution_date()
             self.retry_count = 0
@@ -1878,7 +1878,7 @@ class SecureWalletTransaction:
         """Create a cryptographically secure transaction."""
         
         # Generate reference number
-        reference_number = f"TXN-{datetime.utcnow().strftime('%Y%m%d')}-{secrets.token_urlsafe(8)}"
+        reference_number = f"TXN-{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}-{secrets.token_urlsafe(8)}"
         
         # Create transaction object
         transaction = WalletTransaction(
@@ -1891,7 +1891,7 @@ class SecureWalletTransaction:
             payment_method_id=payment_method_id,
             metadata_json=json.dumps(metadata) if metadata else None,
             reference_number=reference_number,
-            transaction_date=transaction_date or datetime.utcnow(),
+            transaction_date=transaction_date or datetime.now(tz=timezone.utc),
             requires_approval=requires_approval
         )
         

@@ -9,7 +9,7 @@ import time
 import json
 import logging
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, NamedTuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -251,7 +251,7 @@ class AIQuotaManager:
     def record_usage(self, user_id: int, tokens_used: int, cost: float,
                     workspace_id: Optional[int] = None, request_metadata: Optional[dict] = None):
         """Record AI usage for quota tracking."""
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(tz=timezone.utc)
 
         usage_record = {
             'user_id': user_id,
@@ -287,7 +287,7 @@ class AIQuotaManager:
             return 0
 
         try:
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             start_time = now - timedelta(minutes=window_minutes)
 
             # Aggregate usage from Redis
@@ -333,7 +333,7 @@ class AISecurityMonitor:
     def log_security_event(self, event_type: SecurityEvent, user_id: int,
                           event_data: dict, severity: str = "warning"):
         """Log security events for monitoring and alerting."""
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(tz=timezone.utc)
 
         security_event = {
             'event_type': event_type.value,
@@ -399,7 +399,7 @@ class AISecurityMonitor:
         alert = {
             'alert_type': alert_type,
             'user_id': user_id,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'data': alert_data,
             'status': 'active'
         }

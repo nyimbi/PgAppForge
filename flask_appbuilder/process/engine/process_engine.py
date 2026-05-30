@@ -8,7 +8,7 @@ error handling, and integration with Flask-AppBuilder ecosystem.
 import logging
 import json
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple, Callable
 from contextlib import asynccontextmanager
 import uuid
@@ -309,7 +309,7 @@ class ProcessEngine:
         # Set due date if specified
         if 'due_in_minutes' in node.get('properties', {}):
             due_minutes = node['properties']['due_in_minutes']
-            step.due_at = datetime.utcnow() + timedelta(minutes=due_minutes)
+            step.due_at = datetime.now(tz=timezone.utc) + timedelta(minutes=due_minutes)
         
         db.session.add(step)
         db.session.flush()  # Get ID without committing
@@ -400,7 +400,7 @@ class ProcessEngine:
         """Mark process instance as completed."""
         try:
             instance.status = ProcessInstanceStatus.COMPLETED.value
-            instance.completed_at = datetime.utcnow()
+            instance.completed_at = datetime.now(tz=timezone.utc)
             instance.update_activity()
             
             # Update context with final state
@@ -437,7 +437,7 @@ class ProcessEngine:
             instance.update_activity()
             
             if not instance.completed_at:
-                instance.completed_at = datetime.utcnow()
+                instance.completed_at = datetime.now(tz=timezone.utc)
             
             db.session.commit()
             
@@ -570,7 +570,7 @@ class ProcessEngine:
             log_entry = ProcessLog(
                 process_instance_id=instance_id,
                 process_step_id=step_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(tz=timezone.utc),
                 level=level,
                 event_type=event_type,
                 message=message,
@@ -644,7 +644,7 @@ class ProcessEngine:
             
             # Update instance status
             instance.status = ProcessInstanceStatus.SUSPENDED.value
-            instance.suspended_at = datetime.utcnow()
+            instance.suspended_at = datetime.now(tz=timezone.utc)
             instance.update_activity()
             db.session.commit()
             
@@ -672,7 +672,7 @@ class ProcessEngine:
             
             # Update instance status
             instance.status = ProcessInstanceStatus.CANCELLED.value
-            instance.completed_at = datetime.utcnow()
+            instance.completed_at = datetime.now(tz=timezone.utc)
             instance.update_activity()
             db.session.commit()
             
@@ -708,7 +708,7 @@ class ProcessEngine:
         try:
             health_status = {
                 'status': 'healthy',
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
                 'engine_stats': self.get_engine_stats(),
                 'running_instances': self.get_running_instances_count(),
                 'executors_registered': len(self.executors),
@@ -739,5 +739,5 @@ class ProcessEngine:
             return {
                 'status': 'unhealthy',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }

@@ -9,7 +9,7 @@ error reporting and examples.
 import json
 import logging
 from typing import Dict, List, Any, Optional, Union, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -847,7 +847,7 @@ def create_configuration_template(config_type: Union[str, ConfigurationType]) ->
             "title": schema.get("title", f"{config_type.title()} Configuration"),
             "description": schema.get("description", ""),
             "validation_required": True,
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.now(tz=timezone.utc).isoformat()
         },
         "_example": example,
         "_validation_notes": [

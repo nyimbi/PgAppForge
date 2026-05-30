@@ -31,7 +31,7 @@ import json
 import base64
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List, Tuple, Union
 from contextlib import contextmanager
 from functools import wraps
@@ -129,7 +129,7 @@ class CircuitBreaker:
             return True
         
         if self.state == CircuitBreakerState.OPEN:
-            if (datetime.utcnow() - self.last_failure_time).total_seconds() > self.recovery_timeout:
+            if (datetime.now(tz=timezone.utc) - self.last_failure_time).total_seconds() > self.recovery_timeout:
                 self.state = CircuitBreakerState.HALF_OPEN
                 self.success_count = 0
                 return True
@@ -151,7 +151,7 @@ class CircuitBreaker:
     def record_failure(self) -> None:
         """Record failed service call."""
         self.failure_count += 1
-        self.last_failure_time = datetime.utcnow()
+        self.last_failure_time = datetime.now(tz=timezone.utc)
         
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
@@ -322,7 +322,7 @@ class TOTPService:
         """
         try:
             totp = pyotp.TOTP(secret)
-            current_counter = totp.timecode(datetime.utcnow())
+            current_counter = totp.timecode(datetime.now(tz=timezone.utc))
             
             # Check if OTP was already used (replay protection)
             if last_counter is not None and current_counter <= last_counter:
@@ -333,7 +333,7 @@ class TOTPService:
             is_valid = totp.verify(
                 otp, 
                 valid_window=self.validity_window,
-                for_time=datetime.utcnow()
+                for_time=datetime.now(tz=timezone.utc)
             )
             
             return is_valid, current_counter
@@ -437,7 +437,7 @@ class SMSService:
         Returns:
             bool: True if within rate limits, False if exceeded
         """
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         rate_limit_window = current_app.config.get('MFA_SMS_RATE_LIMIT_WINDOW', 300)  # 5 minutes
         max_attempts = current_app.config.get('MFA_SMS_RATE_LIMIT_MAX', 3)
         
@@ -630,7 +630,7 @@ class EmailService:
         Returns:
             bool: True if within rate limits, False if exceeded
         """
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         rate_limit_window = current_app.config.get('MFA_EMAIL_RATE_LIMIT_WINDOW', 300)  # 5 minutes
         max_attempts = current_app.config.get('MFA_EMAIL_RATE_LIMIT_MAX', 5)
         
@@ -1159,7 +1159,7 @@ class TokenGenerationService:
             additional_data={
                 'email': user_email,
                 'token_type': token_type,
-                'expires_at': (datetime.utcnow() + timedelta(seconds=self.default_validity)).isoformat()
+                'expires_at': (datetime.now(tz=timezone.utc) + timedelta(seconds=self.default_validity)).isoformat()
             }
         )
         
@@ -1198,7 +1198,7 @@ class TokenGenerationService:
         
         try:
             max_age = max_age_seconds or self.default_validity
-            cutoff_time = datetime.utcnow() - timedelta(seconds=max_age)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(seconds=max_age)
             
             # Query for token with constraints
             query = db.session.query(MFAVerification).filter(
@@ -1232,7 +1232,7 @@ class TokenGenerationService:
                 }
             
             # Mark token as consumed
-            verification.consumed_at = datetime.utcnow()
+            verification.consumed_at = datetime.now(tz=timezone.utc)
             db.session.commit()
             
             return {
@@ -1264,7 +1264,7 @@ class TokenGenerationService:
         from flask_appbuilder import db
         
         try:
-            cutoff_time = datetime.utcnow() - timedelta(days=max_age_days)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(days=max_age_days)
             
             deleted_count = db.session.query(MFAVerification).filter(
                 MFAVerification.timestamp < cutoff_time
@@ -1295,7 +1295,7 @@ class TokenGenerationService:
         from flask_appbuilder import db
         
         try:
-            since_time = datetime.utcnow() - timedelta(hours=hours)
+            since_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
             
             query = db.session.query(MFAVerification).filter(
                 MFAVerification.timestamp >= since_time
@@ -1575,7 +1575,7 @@ class MFAOrchestrationService:
                 result = {
                     'verification_success': True,
                     'method_used': method,
-                    'session_expires': datetime.utcnow() + timedelta(seconds=session_timeout),
+                    'session_expires': datetime.now(tz=timezone.utc) + timedelta(seconds=session_timeout),
                     'message': 'MFA verification successful'
                 }
             else:
@@ -1696,7 +1696,7 @@ class WebAuthnService:
                 user_id=user.id,
                 challenge_type='webauthn_registration',
                 challenge_data=registration_options.challenge,
-                expires_at=datetime.utcnow() + timedelta(milliseconds=self.timeout)
+                expires_at=datetime.now(tz=timezone.utc) + timedelta(milliseconds=self.timeout)
             )
             
             db.session.add(challenge_record)
@@ -1789,7 +1789,7 @@ class WebAuthnService:
                 credential_id=base64.urlsafe_b64encode(verification.credential_id).decode('utf-8'),
                 public_key=base64.urlsafe_b64encode(verification.credential_public_key).decode('utf-8'),
                 sign_count=verification.sign_count,
-                credential_name=credential_name or f"Passkey {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+                credential_name=credential_name or f"Passkey {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}",
                 transports=getattr(registration_credential.response, 'transports', []),
                 is_active=True
             )
@@ -1870,7 +1870,7 @@ class WebAuthnService:
                 user_id=user_id,  # May be None for usernameless flow
                 challenge_type='webauthn_authentication',
                 challenge_data=authentication_options.challenge,
-                expires_at=datetime.utcnow() + timedelta(milliseconds=self.timeout)
+                expires_at=datetime.now(tz=timezone.utc) + timedelta(milliseconds=self.timeout)
             )
             
             db.session.add(challenge_record)
@@ -1961,7 +1961,7 @@ class WebAuthnService:
             
             # Update credential sign count
             webauthn_cred.sign_count = verification.new_sign_count
-            webauthn_cred.last_used = datetime.utcnow()
+            webauthn_cred.last_used = datetime.now(tz=timezone.utc)
             
             # Mark challenge as used
             challenge.mark_as_used()
@@ -2061,7 +2061,7 @@ class WebAuthnService:
                 return False
             
             credential.is_active = False
-            credential.revoked_at = datetime.utcnow()
+            credential.revoked_at = datetime.now(tz=timezone.utc)
             
             db.session.commit()
             

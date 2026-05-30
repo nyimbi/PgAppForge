@@ -8,7 +8,7 @@ ModelView with minimal configuration and seamless integration.
 import logging
 import json
 from typing import Dict, List, Any, Optional, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import g, request, jsonify, url_for, session
 from flask_appbuilder.baseviews import expose, BaseModelView
@@ -469,7 +469,7 @@ class PresenceAwareViewMixin:
                         'user_id': g.user.id if hasattr(g, 'user') and g.user else 1,
                         'username': g.user.username if hasattr(g, 'user') and g.user else 'Anonymous',
                         'activity': 'viewing',
-                        'last_seen': datetime.utcnow().isoformat()
+                        'last_seen': datetime.now(tz=timezone.utc).isoformat()
                     }
                 ]
             })

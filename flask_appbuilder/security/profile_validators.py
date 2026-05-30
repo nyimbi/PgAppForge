@@ -355,7 +355,7 @@ class ProfileAuditLogger:
             'user_id': profile.user_id,
             'editor_id': editor_user.id if editor_user else None,
             'editor_username': editor_user.username if editor_user else None,
-            'timestamp': datetime.datetime.utcnow().isoformat(),
+            'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'changed_fields': list(changed_fields.keys()),
             'sensitive_fields': [f for f in changed_fields.keys() 
                                if f in ProfileSecurityManager.SENSITIVE_FIELDS]
@@ -379,7 +379,7 @@ class ProfileAuditLogger:
                 'profile_user_id': profile.user_id,
                 'viewer_id': viewer_user.id if viewer_user else None,
                 'viewer_username': viewer_user.username if viewer_user else None,
-                'timestamp': datetime.datetime.utcnow().isoformat(),
+                'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 'sensitive_fields_accessed': sensitive_accessed
             }
             

@@ -1,8 +1,24 @@
 import os
+import secrets
+import sys
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 CSRF_ENABLED = True
-SECRET_KEY = '\2\1thisismyscretkey\1\2\e\y\y\h'
+
+# SECURITY FIX: Replace hardcoded secret key with secure environment variable reading
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
+if not SECRET_KEY:
+    print("ERROR: SECRET_KEY environment variable is required for security!")
+    print("Generate a secure key with: python -c \"import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))\"")
+    print("Then set it in your environment: export SECRET_KEY='your-generated-key'")
+    sys.exit(1)
+
+if len(SECRET_KEY) < 32:
+    print("ERROR: SECRET_KEY must be at least 32 characters long for security!")
+    print("Generate a new key with: python -c \"import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))\"")
+    sys.exit(1)
 
 OPENID_PROVIDERS = [
     { 'name': 'Google', 'url': 'https://www.google.com/accounts/o8/id' },

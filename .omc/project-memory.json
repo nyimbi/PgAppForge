@@ -1,0 +1,374 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1780127392152,
+  "projectRoot": "/Users/nyimbiodero/src/pjs/fab-ext",
+  "techStack": {
+    "languages": [
+      {
+        "name": "C/C++",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Makefile"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "make build",
+    "testCommand": "VENV=/Users/nyimbiodero/src/pjs/fab-ext/.venv\n$VENV/bin/python3.12 -m pytest tests/ci/test_codegen_pipeline.py -q 2>&1 | tail -3 &\n\n# Also update __version__ to note Python 3.14 support\npython3 -c \"\npath = 'flask_appbuilder/__init__.py'\nwith open(path) as f:\n    content = f.read()\ncontent = content.replace('__version__ = \\\"5.2.1.dev1\\\"', '__version__ = \\\"5.2.1.dev2\\\"')\nwith open(path, 'w') as f:\n    f.write(content)\nprint('bumped to 5.2.1.dev2')\n\" &\nwait",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "bin",
+      "docs",
+      "examples",
+      "scripts",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "Flask_AppBuilder.egg-info": {
+      "path": "Flask_AppBuilder.egg-info",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1780127392138,
+      "keyFiles": [
+        "PKG-INFO",
+        "SOURCES.txt",
+        "dependency_links.txt",
+        "entry_points.txt",
+        "not-zip-safe"
+      ]
+    },
+    "__pycache__": {
+      "path": "__pycache__",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1780127392139,
+      "keyFiles": [
+        "init_db.cpython-313.pyc",
+        "setup.cpython-311.pyc",
+        "setup.cpython-313.pyc",
+        "test_import_basic.cpython-311.pyc",
+        "test_security_integration.cpython-311.pyc"
+      ]
+    },
+    "babel": {
+      "path": "babel",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1780127392140,
+      "keyFiles": [
+        "babel.cfg",
+        "messages.pot"
+      ]
+    },
+    "bin": {
+      "path": "bin",
+      "purpose": "Executable scripts",
+      "fileCount": 13,
+      "lastAccessed": 1780127392140,
+      "keyFiles": [
+        "babel_extract.sh",
+        "babel_init.sh",
+        "bootswatch_update.sh",
+        "config.py",
+        "db_create.py"
+      ]
+    },
+    "docker": {
+      "path": "docker",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1780127392141,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 95,
+      "lastAccessed": 1780127392141,
+      "keyFiles": [
+        "AI_SECURITY_DEPLOYMENT_GUIDE.md",
+        "API_DOCUMENTATION.md",
+        "API_REFERENCE.md",
+        "APPROVAL_SYSTEM_MIGRATION_GUIDE.md",
+        "CODE_ANALYSIS_REPORT.md"
+      ]
+    },
+    "examples": {
+      "path": "examples",
+      "purpose": "Example code",
+      "fileCount": 15,
+      "lastAccessed": 1780127392142,
+      "keyFiles": [
+        "README.md",
+        "README.rst",
+        "approval_system_config_examples.py",
+        "approval_workflow_config_example.py",
+        "collaborative_service_example.py"
+      ]
+    },
+    "flask_appbuilder": {
+      "path": "flask_appbuilder",
+      "purpose": null,
+      "fileCount": 27,
+      "lastAccessed": 1780127392143,
+      "keyFiles": [
+        "IMPLEMENTATION_COMPLETE.md",
+        "__init__.py",
+        "_compat.py",
+        "actions.py",
+        "base.py"
+      ]
+    },
+    "images": {
+      "path": "images",
+      "purpose": null,
+      "fileCount": 23,
+      "lastAccessed": 1780127392143,
+      "keyFiles": [
+        "ListThumbnail.png",
+        "chart.png",
+        "chart_time1.png",
+        "chart_time2.png",
+        "charts.png"
+      ]
+    },
+    "init-scripts": {
+      "path": "init-scripts",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1780127392144,
+      "keyFiles": [
+        "01-init-age.sql",
+        "02-sample-data.sql"
+      ]
+    },
+    "nginx": {
+      "path": "nginx",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1780127392146,
+      "keyFiles": [
+        "nginx.conf"
+      ]
+    },
+    "requirements": {
+      "path": "requirements",
+      "purpose": null,
+      "fileCount": 17,
+      "lastAccessed": 1780127392146,
+      "keyFiles": [
+        "ai.in",
+        "base.in",
+        "base.txt",
+        "collaborative.in",
+        "dev.in"
+      ]
+    },
+    "requirements-fe": {
+      "path": "requirements-fe",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1780127392146,
+      "keyFiles": [
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 9,
+      "lastAccessed": 1780127392146,
+      "keyFiles": [
+        "babel_extract.sh",
+        "babel_init.sh",
+        "check_dependencies.py",
+        "copy_fe_dependencies.sh",
+        "create_enhanced_fab_app.py"
+      ]
+    },
+    "specs": {
+      "path": "specs",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780127392146,
+      "keyFiles": [
+        "feat-advanced-analytics-bi-platform copy.md",
+        "feat-intelligent-business-process-engine.md",
+        "feat-multi-tenant-saas-infrastructure.md",
+        "feat-realtime-collaboration-engine.md"
+      ]
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 132,
+      "lastAccessed": 1780127392147,
+      "keyFiles": [
+        "AUTHENTICATION_BYPASS_SECURITY_VALIDATION.md",
+        "COMPREHENSIVE_ISSUE_RESOLUTION_REPORT.md",
+        "COMPREHENSIVE_REMEDIATION_PLAN.md",
+        "CRITICAL_ISSUES_RESOLUTION_REPORT.md",
+        "CRITICAL_ISSUES_RESOLVED.md"
+      ]
+    },
+    "tmp": {
+      "path": "tmp",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1780127392148,
+      "keyFiles": [
+        "gen_models.py",
+        "gen_views.py",
+        "gm.sh",
+        "gv.sh",
+        "nx_widgets.py"
+      ]
+    },
+    "works": {
+      "path": "works",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1780127392148,
+      "keyFiles": [
+        "REMEDIATION_PLAN.md",
+        "REORGANIZATION_LOG.md",
+        "TODO_TRACKING.md",
+        "todo.md",
+        "web_app_dev_research_2024.md"
+      ]
+    },
+    "flask_appbuilder/api": {
+      "path": "flask_appbuilder/api",
+      "purpose": "API routes",
+      "fileCount": 5,
+      "lastAccessed": 1780127392150,
+      "keyFiles": [
+        "__init__.py",
+        "convert.py",
+        "manager.py"
+      ]
+    },
+    "tmp/utils": {
+      "path": "tmp/utils",
+      "purpose": "Utility functions",
+      "fileCount": 10,
+      "lastAccessed": 1780127392152,
+      "keyFiles": [
+        "__init__.py",
+        "additional-utils.md",
+        "case_utils.py"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "setup.py",
+      "accessCount": 4,
+      "lastAccessed": 1780129796342,
+      "type": "file"
+    },
+    {
+      "path": "docs/FEATURE_IMPLEMENTATION_MATRIX.md",
+      "accessCount": 2,
+      "lastAccessed": 1780127562772,
+      "type": "file"
+    },
+    {
+      "path": "docs/CODE_REVIEW_REPORT.md",
+      "accessCount": 2,
+      "lastAccessed": 1780128008937,
+      "type": "file"
+    },
+    {
+      "path": "docs/DEVELOPMENT_ROADMAP.md",
+      "accessCount": 1,
+      "lastAccessed": 1780127556709,
+      "type": "file"
+    },
+    {
+      "path": "docs/enhancement-proposals.md",
+      "accessCount": 1,
+      "lastAccessed": 1780127563282,
+      "type": "file"
+    },
+    {
+      "path": "docs/JHIPSTER_WORKFLOW_SYSTEM.md",
+      "accessCount": 1,
+      "lastAccessed": 1780127563981,
+      "type": "file"
+    },
+    {
+      "path": "docs/PROJECT_COMPLETION_REPORT.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128003004,
+      "type": "file"
+    },
+    {
+      "path": "docs/PRODUCTION_READINESS_CERTIFICATION.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128003441,
+      "type": "file"
+    },
+    {
+      "path": "docs/FINAL_COMPLETENESS_REPORT.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128003569,
+      "type": "file"
+    },
+    {
+      "path": "docs/COMPLETENESS_ANALYSIS_REPORT.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128009301,
+      "type": "file"
+    },
+    {
+      "path": "docs/SELF_REVIEW_IMPLEMENTATION_STATUS.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128010902,
+      "type": "file"
+    },
+    {
+      "path": "docs/QUALITY_ASSURANCE.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128011304,
+      "type": "file"
+    },
+    {
+      "path": "docs/CODE_ANALYSIS_REPORT.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128015902,
+      "type": "file"
+    },
+    {
+      "path": "docs/CRITICAL_FIXES_IMPLEMENTATION_PLAN.md",
+      "accessCount": 1,
+      "lastAccessed": 1780128016962,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

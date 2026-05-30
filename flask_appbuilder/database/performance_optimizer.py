@@ -11,7 +11,7 @@ import time
 import threading
 import hashlib
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union, Set, Callable
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -114,7 +114,7 @@ class CacheEntry:
         """Check if cache entry has expired"""
         if self.ttl_seconds <= 0:
             return False
-        return datetime.utcnow() - self.created_at > timedelta(seconds=self.ttl_seconds)
+        return datetime.now(tz=timezone.utc) - self.created_at > timedelta(seconds=self.ttl_seconds)
 
 
 class InMemoryCache:
@@ -165,7 +165,7 @@ class InMemoryCache:
                 return None
             
             # Update access metadata
-            entry.last_accessed = datetime.utcnow()
+            entry.last_accessed = datetime.now(tz=timezone.utc)
             entry.access_count += 1
             
             # Update access order for LRU
@@ -191,8 +191,8 @@ class InMemoryCache:
             entry = CacheEntry(
                 key=key,
                 value=value,
-                created_at=datetime.utcnow(),
-                last_accessed=datetime.utcnow(),
+                created_at=datetime.now(tz=timezone.utc),
+                last_accessed=datetime.now(tz=timezone.utc),
                 size_bytes=size_bytes,
                 ttl_seconds=ttl_seconds or self.default_ttl
             )
@@ -257,7 +257,7 @@ class InMemoryCache:
                     break
         elif self.strategy == CacheStrategy.TTL:
             # Find oldest expired entry
-            oldest_time = datetime.utcnow()
+            oldest_time = datetime.now(tz=timezone.utc)
             for key, entry in self.cache.items():
                 if entry.is_expired() and entry.created_at < oldest_time:
                     oldest_time = entry.created_at
@@ -653,7 +653,7 @@ class PerformanceMonitor:
     def get_performance_summary(self, operation_type: str = None,
                                hours_back: int = 24) -> Dict[str, Any]:
         """Get performance summary for operations"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours_back)
         
         relevant_metrics = [
             m for m in self.metrics_history
@@ -747,7 +747,7 @@ class DistributedGraphProcessor:
                 "id": node_id,
                 "capabilities": capabilities,
                 "status": "available",
-                "last_seen": datetime.utcnow()
+                "last_seen": datetime.now(tz=timezone.utc)
             })
     
     def distribute_graph_analysis(self, graph_name: str, analysis_type: str,
@@ -774,7 +774,7 @@ class DistributedGraphProcessor:
                 "analysis_type": analysis_type,
                 "partition_strategy": partition_strategy,
                 "status": "queued",
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(tz=timezone.utc)
             })
         
         return task_id

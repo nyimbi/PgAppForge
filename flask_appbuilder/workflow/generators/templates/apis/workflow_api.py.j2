@@ -1,0 +1,362 @@
+"""
+{{ workflow.name }} Workflow REST API
+Generated from WDL on {{ timestamp }}
+"""
+
+from flask import request, jsonify, current_app
+from flask_restx import Resource, Namespace, fields, marshal_with
+from flask_login import current_user
+from sqlalchemy.exc import IntegrityError
+
+from flask_appbuilder.api import BaseApi, expose, protect, safe
+from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.security.decorators import has_access
+
+from .models.{{ workflow.name.lower() }}_models import {{ workflow.name }}WorkflowState
+from .forms.{{ workflow.name.lower() }}_forms import {% for step_name in workflow.steps.keys() %}{{ step_name }}Form{% if not loop.last %}, {% endif %}{% endfor %}
+from flask_appbuilder.workflow.core import get_workflow_engine
+
+
+# API namespace
+api = Namespace('{{ workflow.name.lower() }}-workflow', description='{{ workflow.description }}')
+
+# Response models
+workflow_model = api.model('{{ workflow.name }}Workflow', {
+    'id': fields.String(required=True, description='Workflow ID'),
+    'workflow_name': fields.String(required=True, description='Workflow name'),
+    'current_step': fields.String(required=True, description='Current step'),
+    'status': fields.String(required=True, description='Workflow status'),
+    'progress_percentage': fields.Integer(description='Progress percentage'),
+    'created_at': fields.DateTime(description='Creation timestamp'),
+    'last_activity_at': fields.DateTime(description='Last activity timestamp'),
+    {% for field in fields %}
+    '{{ field.name }}': fields.String(description='{{ field.config.description or field.name.title() }}'),
+    {% endfor %}
+})
+
+workflow_list_model = api.model('{{ workflow.name }}WorkflowList', {
+    'count': fields.Integer(required=True, description='Total count'),
+    'result': fields.List(fields.Nested(workflow_model))
+})
+
+step_model = api.model('{{ workflow.name }}Step', {
+    'step_name': fields.String(required=True, description='Step name'),
+    'step_config': fields.Raw(description='Step configuration'),
+    'form_data': fields.Raw(description='Form data for step'),
+    'validation_errors': fields.Raw(description='Validation errors')
+})
+
+error_model = api.model('Error', {
+    'message': fields.String(required=True, description='Error message'),
+    'errors': fields.Raw(description='Detailed errors')
+})
+
+
+class {{ workflow.name }}WorkflowApi(BaseApi):
+    """{{ workflow.name }} Workflow API endpoints."""
+
+    datamodel = SQLAInterface({{ workflow.name }}WorkflowState)
+    resource_name = '{{ workflow.name.lower() }}_workflow'
+
+    @api.route('/')
+    class WorkflowList(Resource):
+        @api.doc('list_workflows')
+        @api.marshal_with(workflow_list_model)
+        @has_access
+        @protect()
+        def get(self):
+            """List all workflows."""
+            try:
+                # Get query parameters
+                page = request.args.get('page', 1, type=int)
+                per_page = min(request.args.get('per_page', 20, type=int), 100)
+
+                # Filter by user if not admin
+                query = db.session.query({{ workflow.name }}WorkflowState)
+
+                if not current_user.is_admin():
+                    query = query.filter_by(created_by_fk=current_user.id)
+
+                # Apply additional filters
+                status = request.args.get('status')
+                if status:
+                    query = query.filter_by(status=status)
+
+                current_step = request.args.get('current_step')
+                if current_step:
+                    query = query.filter_by(current_step=current_step)
+
+                # Pagination
+                total = query.count()
+                workflows = query.offset((page - 1) * per_page).limit(per_page).all()
+
+                return {
+                    'count': total,
+                    'result': [self._workflow_to_dict(w) for w in workflows]
+                }
+
+            except Exception as e:
+                api.abort(500, f"Failed to list workflows: {str(e)}")
+
+        @api.doc('create_workflow')
+        @api.expect(workflow_model)
+        @api.marshal_with(workflow_model, code=201)
+        @has_access
+        @protect()
+        def post(self):
+            """Create a new workflow."""
+            try:
+                data = request.get_json()
+
+                # Validate initial data
+                initial_step = '{{ workflow.steps.keys() | list | first }}'
+                form_class = {{ workflow.steps.keys() | list | first }}Form
+                form = form_class(data=data)
+
+                if not form.validate():
+                    api.abort(400, "Validation failed", errors=form.errors)
+
+                # Create workflow state
+                engine = get_workflow_engine()
+                workflow_state = engine.create_workflow_state(
+                    workflow_name='{{ workflow.name }}',
+                    entity_type='{{ workflow.name }}WorkflowState',
+                    entity_id=None,
+                    initial_data=data
+                )
+
+                # Set form data
+                for field_name, value in data.items():
+                    if hasattr(workflow_state, field_name):
+                        setattr(workflow_state, field_name, value)
+
+                db.session.commit()
+
+                return self._workflow_to_dict(workflow_state), 201
+
+            except IntegrityError as e:
+                db.session.rollback()
+                api.abort(400, f"Data integrity error: {str(e)}")
+            except Exception as e:
+                db.session.rollback()
+                api.abort(500, f"Failed to create workflow: {str(e)}")
+
+    @api.route('/<string:workflow_id>')
+    class WorkflowDetail(Resource):
+        @api.doc('get_workflow')
+        @api.marshal_with(workflow_model)
+        @has_access
+        @protect()
+        def get(self, workflow_id):
+            """Get workflow by ID."""
+            try:
+                workflow = db.session.query({{ workflow.name }}WorkflowState).filter_by(id=workflow_id).first()
+                if not workflow:
+                    api.abort(404, "Workflow not found")
+
+                # Check permissions
+                if not current_user.is_admin() and workflow.created_by_fk != current_user.id:
+                    api.abort(403, "Access denied")
+
+                return self._workflow_to_dict(workflow)
+
+            except Exception as e:
+                api.abort(500, f"Failed to get workflow: {str(e)}")
+
+        @api.doc('update_workflow')
+        @api.expect(workflow_model)
+        @api.marshal_with(workflow_model)
+        @has_access
+        @protect()
+        def put(self, workflow_id):
+            """Update workflow."""
+            try:
+                workflow = db.session.query({{ workflow.name }}WorkflowState).filter_by(id=workflow_id).first()
+                if not workflow:
+                    api.abort(404, "Workflow not found")
+
+                # Check permissions
+                if not self._can_edit_workflow(workflow):
+                    api.abort(403, "Access denied")
+
+                data = request.get_json()
+
+                # Update fields
+                for field_name, value in data.items():
+                    if hasattr(workflow, field_name) and field_name not in ['id', 'created_at']:
+                        setattr(workflow, field_name, value)
+
+                db.session.commit()
+
+                return self._workflow_to_dict(workflow)
+
+            except Exception as e:
+                db.session.rollback()
+                api.abort(500, f"Failed to update workflow: {str(e)}")
+
+        @api.doc('delete_workflow')
+        @has_access
+        @protect()
+        def delete(self, workflow_id):
+            """Delete workflow."""
+            try:
+                workflow = db.session.query({{ workflow.name }}WorkflowState).filter_by(id=workflow_id).first()
+                if not workflow:
+                    api.abort(404, "Workflow not found")
+
+                # Check permissions
+                if not current_user.is_admin():
+                    api.abort(403, "Only administrators can delete workflows")
+
+                db.session.delete(workflow)
+                db.session.commit()
+
+                return '', 204
+
+            except Exception as e:
+                db.session.rollback()
+                api.abort(500, f"Failed to delete workflow: {str(e)}")
+
+    {% for step_name, step_config in workflow.steps.items() %}
+    @api.route('/<string:workflow_id>/steps/{{ step_name.lower() }}')
+    class {{ step_name }}StepApi(Resource):
+        @api.doc('get_{{ step_name.lower() }}_step')
+        @api.marshal_with(step_model)
+        @has_access
+        @protect()
+        def get(self, workflow_id):
+            """Get {{ step_config.title }} step data."""
+            try:
+                workflow = self._get_workflow_or_404(workflow_id)
+
+                # Check if user can access this step
+                user_roles = [role.name for role in current_user.roles]
+                if not workflow.can_user_access_step('{{ step_name }}', user_roles):
+                    api.abort(403, "Access denied for this step")
+
+                return {
+                    'step_name': '{{ step_name }}',
+                    'step_config': {{ step_config | tojson }},
+                    'form_data': workflow.get_workflow_form_data('{{ step_name }}'),
+                    'validation_errors': {}
+                }
+
+            except Exception as e:
+                api.abort(500, f"Failed to get step data: {str(e)}")
+
+        @api.doc('update_{{ step_name.lower() }}_step')
+        @api.expect(step_model)
+        @api.marshal_with(step_model)
+        @has_access
+        @protect()
+        def put(self, workflow_id):
+            """Update {{ step_config.title }} step data."""
+            try:
+                workflow = self._get_workflow_or_404(workflow_id)
+
+                # Check permissions
+                user_roles = [role.name for role in current_user.roles]
+                if not workflow.can_user_edit_step('{{ step_name }}', user_roles):
+                    api.abort(403, "Access denied for editing this step")
+
+                data = request.get_json()
+                form_data = data.get('form_data', {})
+
+                # Validate form data
+                form = {{ step_name }}Form(data=form_data)
+                if not form.validate():
+                    return {
+                        'step_name': '{{ step_name }}',
+                        'step_config': {{ step_config | tojson }},
+                        'form_data': form_data,
+                        'validation_errors': form.errors
+                    }, 400
+
+                # Update workflow data
+                workflow.set_workflow_form_data('{{ step_name }}', form_data)
+                for field_name, value in form_data.items():
+                    if hasattr(workflow, field_name):
+                        setattr(workflow, field_name, value)
+
+                db.session.commit()
+
+                return {
+                    'step_name': '{{ step_name }}',
+                    'step_config': {{ step_config | tojson }},
+                    'form_data': form_data,
+                    'validation_errors': {}
+                }
+
+            except Exception as e:
+                db.session.rollback()
+                api.abort(500, f"Failed to update step: {str(e)}")
+    {% endfor %}
+
+    @api.route('/<string:workflow_id>/advance')
+    class WorkflowAdvance(Resource):
+        @api.doc('advance_workflow')
+        @api.marshal_with(workflow_model)
+        @has_access
+        @protect()
+        def post(self, workflow_id):
+            """Advance workflow to next step."""
+            try:
+                workflow = self._get_workflow_or_404(workflow_id)
+
+                # Check permissions
+                user_roles = [role.name for role in current_user.roles]
+                next_step = workflow.get_next_step_for_user(user_roles)
+
+                if not next_step:
+                    api.abort(400, "No available next step for user")
+
+                # Advance workflow
+                engine = get_workflow_engine()
+                success = engine.advance_workflow(workflow, next_step)
+
+                if not success:
+                    api.abort(400, "Failed to advance workflow")
+
+                db.session.commit()
+
+                return self._workflow_to_dict(workflow)
+
+            except Exception as e:
+                db.session.rollback()
+                api.abort(500, f"Failed to advance workflow: {str(e)}")
+
+    def _get_workflow_or_404(self, workflow_id):
+        """Get workflow or raise 404."""
+        workflow = db.session.query({{ workflow.name }}WorkflowState).filter_by(id=workflow_id).first()
+        if not workflow:
+            api.abort(404, "Workflow not found")
+        return workflow
+
+    def _can_edit_workflow(self, workflow):
+        """Check if current user can edit workflow."""
+        if current_user.is_admin():
+            return True
+
+        user_roles = [role.name for role in current_user.roles]
+        return workflow.can_user_edit_step(workflow.current_step, user_roles)
+
+    def _workflow_to_dict(self, workflow):
+        """Convert workflow to dictionary."""
+        return {
+            'id': workflow.id,
+            'workflow_name': workflow.workflow_name,
+            'current_step': workflow.current_step,
+            'status': workflow.status,
+            'progress_percentage': workflow.step_progress_percentage,
+            'created_at': workflow.created_at.isoformat() if workflow.created_at else None,
+            'last_activity_at': workflow.last_activity_at.isoformat() if workflow.last_activity_at else None,
+            {% for field in fields %}
+            '{{ field.name }}': getattr(workflow, '{{ field.name }}', None),
+            {% endfor %}
+        }
+
+
+# Register API endpoints
+def register_{{ workflow.name.lower() }}_api(appbuilder):
+    """Register {{ workflow.name }} workflow API endpoints."""
+    appbuilder.add_api({{ workflow.name }}WorkflowApi)

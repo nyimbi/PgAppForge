@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any
@@ -242,7 +242,7 @@ class CurrencyMixin:
 		Returns None on network / API error — callers must handle this.
 		"""
 		cache_key = (cls.__exchange_rate_api_url__, cls.__exchange_rate_api_key__)
-		now = datetime.utcnow()
+		now = datetime.now(tz=timezone.utc)
 		ttl = timedelta(seconds=cls.__exchange_rate_cache_duration__)
 
 		cached = cls._rate_cache.get(cache_key)
@@ -608,7 +608,7 @@ class ExchangeRate(Model):
 			Re-raises any database exception after rollback.
 		"""
 		try:
-			now = datetime.utcnow()
+			now = datetime.now(tz=timezone.utc)
 
 			# Expire current live rates
 			live = session.execute(

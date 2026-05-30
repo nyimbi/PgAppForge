@@ -13,7 +13,7 @@ import json
 import shutil
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import click
@@ -327,7 +327,7 @@ class TenantMigrationEngine:
         """)
         
         result = conn.execute(insert_sql, {
-            'created_on': datetime.utcnow(),
+            'created_on': datetime.now(tz=timezone.utc),
             'slug': plan.tenant_slug,
             'name': plan.tenant_name,
             'email': plan.tenant_email,

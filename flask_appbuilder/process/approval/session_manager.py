@@ -9,7 +9,7 @@ import logging
 import threading
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, Generator
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, sessionmaker, scoped_session
 from sqlalchemy.exc import SQLAlchemyError, DisconnectionError
 from sqlalchemy import event
@@ -60,7 +60,7 @@ class SessionStats:
         self.active_sessions = 0
         self.total_query_time = 0.0
         self.longest_session_time = 0.0
-        self.last_reset = datetime.utcnow()
+        self.last_reset = datetime.now(tz=timezone.utc)
         self._lock = threading.RLock()
     
     def session_created(self):
@@ -88,7 +88,7 @@ class SessionStats:
     
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:
-            uptime = (datetime.utcnow() - self.last_reset).total_seconds()
+            uptime = (datetime.now(tz=timezone.utc) - self.last_reset).total_seconds()
             return {
                 'sessions_created': self.sessions_created,
                 'sessions_committed': self.sessions_committed,
@@ -176,14 +176,14 @@ class CentralizedSessionManager:
         @event.listens_for(self._scoped_session, 'after_commit')
         def after_commit(session):
             if hasattr(self._local, 'session_start_time'):
-                duration = datetime.utcnow().timestamp() - self._local.session_start_time
+                duration = datetime.now(tz=timezone.utc).timestamp() - self._local.session_start_time
                 self.stats.session_committed(duration)
             log.debug(f"Session {id(session)} committed")
         
         @event.listens_for(self._scoped_session, 'after_rollback')  
         def after_rollback(session):
             if hasattr(self._local, 'session_start_time'):
-                duration = datetime.utcnow().timestamp() - self._local.session_start_time
+                duration = datetime.now(tz=timezone.utc).timestamp() - self._local.session_start_time
                 self.stats.session_rolled_back(duration)
             log.debug(f"Session {id(session)} rolled back")
     
@@ -205,7 +205,7 @@ class CentralizedSessionManager:
             SQLAlchemy session object
         """
         session = None
-        start_time = datetime.utcnow()
+        start_time = datetime.now(tz=timezone.utc)
         self._local.session_start_time = start_time.timestamp()
         
         try:
@@ -243,7 +243,7 @@ class CentralizedSessionManager:
                 self._cleanup_session(session, scope)
                 
                 # Log session duration
-                duration = (datetime.utcnow() - start_time).total_seconds()
+                duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
                 if duration > 1.0:  # Log slow sessions
                     log.warning(f"Slow session {id(session)}: {duration:.2f}s")
     
@@ -403,14 +403,14 @@ class CentralizedSessionManager:
                 'active_sessions': stats.get('active_sessions', 0),
                 'success_rate': stats.get('success_rate', 0),
                 'average_session_time': stats.get('average_session_time', 0),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
         
         except Exception as e:
             return {
                 'status': 'unhealthy',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
     
     def reset_stats(self):

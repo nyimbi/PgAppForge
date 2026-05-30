@@ -403,7 +403,7 @@ class MyProfileView(SimpleFormView):
                         setattr(profile, key, new_value)
                 
                 if changed_fields:
-                    profile.last_profile_update = datetime.datetime.utcnow()
+                    profile.last_profile_update = datetime.datetime.now(datetime.timezone.utc)
                     profile.update_profile_completion()
                     
                     # Log the change

@@ -7,7 +7,7 @@ for the ERD management system with complete audit logging capabilities.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -240,7 +240,7 @@ class DatabaseActivityTracker:
             description=description,
             details=details or {},
             severity=severity,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             ip_address=ip_address,
             user_agent=user_agent,
             success=success,
@@ -322,7 +322,7 @@ class DatabaseActivityTracker:
             # Build query conditions
             conditions = ["timestamp >= :since"]
             params = {
-                "since": datetime.utcnow() - timedelta(hours=hours_back),
+                "since": datetime.now(tz=timezone.utc) - timedelta(hours=hours_back),
                 "limit": limit,
             }
 
@@ -388,7 +388,7 @@ class DatabaseActivityTracker:
             return {}
 
         try:
-            since = datetime.utcnow() - timedelta(hours=hours_back)
+            since = datetime.now(tz=timezone.utc) - timedelta(hours=hours_back)
 
             with self.engine.connect() as conn:
                 # Get total activity count
@@ -471,7 +471,7 @@ class DatabaseActivityTracker:
             return
 
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days_to_keep)
 
             with self.engine.begin() as conn:
                 result = conn.execute(

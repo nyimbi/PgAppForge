@@ -176,7 +176,7 @@ class CollaborationPresence(Model):
     
     def update_activity(self):
         """Update last activity timestamp"""
-        self.last_activity = datetime.datetime.utcnow()
+        self.last_activity = datetime.datetime.now(datetime.timezone.utc)
 
 
 class CollaborationComment(Model):

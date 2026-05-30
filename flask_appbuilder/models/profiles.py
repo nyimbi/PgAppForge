@@ -225,7 +225,7 @@ class UserProfile(Model, AuditMixin, ExtendedProfileMixin):
         if not self.custom_fields:
             self.custom_fields = {}
         self.custom_fields[key] = value
-        self.last_profile_update = datetime.datetime.utcnow()
+        self.last_profile_update = datetime.datetime.now(datetime.timezone.utc)
     
     def is_profile_public(self) -> bool:
         """Check if profile is publicly viewable"""

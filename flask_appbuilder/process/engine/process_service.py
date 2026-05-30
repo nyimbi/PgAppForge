@@ -221,7 +221,7 @@ class ProcessService:
         """
         try:
             from flask_appbuilder import db
-            from datetime import datetime
+            from datetime import datetime, timezone
             
             instance = ProcessInstance.query.get(instance_id)
             if not instance:
@@ -230,7 +230,7 @@ class ProcessService:
             # Update instance status
             if instance.status in ['running', 'suspended', 'pending']:
                 instance.status = 'cancelled'
-                instance.completed_at = datetime.utcnow()
+                instance.completed_at = datetime.now(tz=timezone.utc)
                 if reason:
                     instance.error_message = f"Cancelled: {reason}"
                 

@@ -57,7 +57,7 @@ class WizardExportData:
     
     def __post_init__(self):
         if not self.created_at:
-            self.created_at = datetime.utcnow().isoformat()
+            self.created_at = datetime.now(tz=timezone.utc).isoformat()
         if not self.checksum:
             self.checksum = self._calculate_checksum()
     
@@ -148,7 +148,7 @@ class WizardExporter:
         # Create metadata
         metadata = MigrationMetadata(
             version="1.0",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(tz=timezone.utc).isoformat(),
             created_by="wizard_exporter",
             source_system="flask-appbuilder-wizard",
             wizard_count=len(export_data)
@@ -159,7 +159,7 @@ class WizardExporter:
             "metadata": asdict(metadata),
             "wizards": [asdict(data) for data in export_data],
             "format_version": "1.0",
-            "export_timestamp": datetime.utcnow().isoformat()
+            "export_timestamp": datetime.now(tz=timezone.utc).isoformat()
         }
         
         if compress:
@@ -189,8 +189,8 @@ class WizardExporter:
                 "navigation": {"show_progress": True},
                 "validation": {"validate_on_change": True}
             },
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
+            "updated_at": datetime.now(tz=timezone.utc).isoformat()
         }
     
     def _export_form_data(self, wizard_id: str) -> Dict[str, Any]:

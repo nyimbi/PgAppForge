@@ -9,7 +9,7 @@ import logging
 import json
 import os
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List, Tuple
 from urllib.parse import urlparse
 from io import BytesIO
@@ -313,7 +313,7 @@ class BrandingManager:
         if use_cache and cache_key in self._branding_cache:
             cached_data = self._branding_cache[cache_key]
             # Use cached data if less than 5 minutes old
-            if (datetime.utcnow() - cached_data['cached_at']).seconds < 300:
+            if (datetime.now(tz=timezone.utc) - cached_data['cached_at']).seconds < 300:
                 return cached_data['branding']
         
         try:
@@ -341,7 +341,7 @@ class BrandingManager:
             if use_cache:
                 self._branding_cache[cache_key] = {
                     'branding': branding,
-                    'cached_at': datetime.utcnow()
+                    'cached_at': datetime.now(tz=timezone.utc)
                 }
             
             return branding
@@ -370,7 +370,7 @@ class BrandingManager:
                 log.info(f"Resized logo for tenant {tenant_id} to {image.size}")
             
             # Generate unique filename
-            timestamp = int(datetime.utcnow().timestamp())
+            timestamp = int(datetime.now(tz=timezone.utc).timestamp())
             filename = f"tenant-{tenant_id}/logo-{timestamp}.png"
             
             # Upload to storage
@@ -400,7 +400,7 @@ class BrandingManager:
             image = image.resize(favicon_size, Image.Resampling.LANCZOS)
             
             # Generate filename
-            timestamp = int(datetime.utcnow().timestamp())
+            timestamp = int(datetime.now(tz=timezone.utc).timestamp())
             filename = f"tenant-{tenant_id}/favicon-{timestamp}.ico"
             
             # Upload as ICO

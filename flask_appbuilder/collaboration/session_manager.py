@@ -7,7 +7,7 @@ and session lifecycle with database persistence and Redis caching.
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Set, List, Optional, Any
 from collections import defaultdict
 import json
@@ -98,7 +98,7 @@ class CollaborationSessionManager:
                     'model_name': model_name,
                     'record_id': record_id or '',
                     'created_by': str(user_id),
-                    'created_at': datetime.utcnow().isoformat(),
+                    'created_at': datetime.now(tz=timezone.utc).isoformat(),
                     'participants': [str(user_id)],
                     'status': 'active'
                 }
@@ -156,7 +156,7 @@ class CollaborationSessionManager:
                     'user_id': user_id,
                     'username': self._get_username(user_id),
                     'session_id': session_id,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(tz=timezone.utc).isoformat()
                 })
                 
             log.info(f"User {user_id} joined collaboration session {session_id}")
@@ -312,7 +312,7 @@ class CollaborationSessionManager:
     def cleanup_expired_sessions(self):
         """Clean up expired and inactive sessions"""
         try:
-            cutoff_time = datetime.utcnow() - self.session_timeout
+            cutoff_time = datetime.now(tz=timezone.utc) - self.session_timeout
             
             # Find expired sessions
             expired_sessions = self.db.query(CollaborationSession).filter(

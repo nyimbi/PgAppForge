@@ -8,7 +8,7 @@ live updates, and change notifications.
 import json
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from flask import request, jsonify, render_template, flash
 from flask_appbuilder import permission_name
@@ -525,7 +525,7 @@ class GraphWebSocketHandler:
         """Handle ping request"""
         self._send_message(websocket, {
             "type": "pong",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(tz=timezone.utc).isoformat()
         })
     
     def _send_message(self, websocket, message):
@@ -541,7 +541,7 @@ class GraphWebSocketHandler:
         self._send_message(websocket, {
             "type": "error",
             "error": error_message,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(tz=timezone.utc).isoformat()
         })
 
 

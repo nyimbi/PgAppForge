@@ -6,7 +6,7 @@ Provides complete tenant isolation, subscription management, and usage tracking.
 """
 
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 from enum import Enum as PyEnum
@@ -238,7 +238,7 @@ class Tenant(AuditMixin, Model):
     def suspend(self, reason: str = None):
         """Suspend tenant access"""
         self.status = TenantStatus.SUSPENDED.value
-        self.suspended_at = datetime.utcnow()
+        self.suspended_at = datetime.now(tz=timezone.utc)
         
         # Log suspension
         log.info(f"Tenant {self.slug} suspended. Reason: {reason}")
@@ -246,7 +246,7 @@ class Tenant(AuditMixin, Model):
     def activate(self):
         """Activate suspended tenant"""
         self.status = TenantStatus.ACTIVE.value
-        self.activated_at = datetime.utcnow()
+        self.activated_at = datetime.now(tz=timezone.utc)
         self.suspended_at = None
         
         log.info(f"Tenant {self.slug} activated")
@@ -584,7 +584,7 @@ class TenantUsage(AuditMixin, Model):
     total_cost = Column(Numeric(10, 2))
     
     # Metadata
-    metadata = Column(JSONBType, default=dict)
+    usage_metadata = Column(JSONBType, default=dict)
     
     # Relationships
     tenant = relationship("Tenant", back_populates="usage_records")

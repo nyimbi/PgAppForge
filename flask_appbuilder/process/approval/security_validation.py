@@ -22,7 +22,7 @@ import json
 import hmac
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from .crypto_config import SecureCryptoConfig, SecureSessionManager, WeakSecretKeyError
@@ -355,7 +355,7 @@ class SecurityValidationSuite:
                 # Build session info for validation
                 session_info = {
                     'user_id': 123,
-                    'created_at': datetime.utcnow().isoformat(),
+                    'created_at': datetime.now(tz=timezone.utc).isoformat(),
                     'session_token': session_data['session_token'],
                     'fingerprint': session_data['session_data']['fingerprint']
                 }

@@ -1,0 +1,404 @@
+{% extends "appbuilder/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="page-header">
+                <i class="fa fa-magic"></i> AI Insights
+                <small>Intelligent task analysis and recommendations</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Navigation Breadcrumb -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('TaskDashboardView.dashboard') }}">
+                            <i class="fa fa-dashboard"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        <i class="fa fa-magic"></i> AI Insights
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Analysis Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-brain"></i> AI Analysis Summary
+                    </h6>
+                    <div class="d-flex align-items-center">
+                        <span class="badge badge-info mr-2">
+                            <i class="fa fa-tasks"></i> {{ task_count }} tasks analyzed
+                        </span>
+                        {% if stats %}
+                        <span class="badge badge-success">
+                            <i class="fa fa-percentage"></i> {{ "%.1f"|format(stats.completion_rate) }}% completion rate
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if task_count > 0 %}
+                    <div class="alert alert-info">
+                        <i class="fa fa-info-circle"></i>
+                        <strong>Analysis Scope:</strong> 
+                        This analysis is based on your {{ task_count }} most recent tasks from the last 30 days.
+                        The AI has examined task patterns, priorities, and completion trends to provide actionable insights.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fa fa-warning"></i>
+                        <strong>No Data Available:</strong> 
+                        Create some tasks first to get AI-generated insights about your workflow and productivity patterns.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Insights Content -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-lightbulb-o"></i> AI-Generated Insights
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if insights and task_count > 0 %}
+                    <div class="ai-insights-content">
+                        <!-- Process insights with basic formatting -->
+                        {% set insight_sections = insights.split('\n\n') %}
+                        {% for section in insight_sections %}
+                            {% if section.strip() %}
+                                {% if section.startswith('**') or section.startswith('##') %}
+                                    <h5 class="text-primary mt-4 mb-3">
+                                        <i class="fa fa-angle-right"></i> 
+                                        {{ section.replace('**', '').replace('##', '').strip() }}
+                                    </h5>
+                                {% elif section.startswith('###') %}
+                                    <h6 class="text-secondary mt-3 mb-2">
+                                        {{ section.replace('###', '').strip() }}
+                                    </h6>
+                                {% elif section.strip().startswith('-') or section.strip().startswith('•') %}
+                                    <ul class="list-unstyled ml-3">
+                                        {% for line in section.split('\n') %}
+                                            {% if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•')) %}
+                                                <li class="mb-2">
+                                                    <i class="fa fa-check-circle text-success mr-2"></i>
+                                                    {{ line.strip().lstrip('-•').strip() }}
+                                                </li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                {% elif section.strip().startswith('1.') or section.strip().startswith('2.') %}
+                                    <ol class="ml-3">
+                                        {% for line in section.split('\n') %}
+                                            {% if line.strip() and line.strip()[0].isdigit() %}
+                                                <li class="mb-2">{{ line.strip().split('.', 1)[1].strip() if '.' in line else line.strip() }}</li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ol>
+                                {% else %}
+                                    <p class="mb-3">{{ section.strip() }}</p>
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fa fa-robot fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Insights Available</h5>
+                        <p class="text-muted">
+                            Create some tasks and come back to get AI-powered insights about your productivity patterns and workflow optimization.
+                        </p>
+                        <a href="{{ url_for('TaskModelView.add') }}" class="btn btn-primary">
+                            <i class="fa fa-plus"></i> Create Your First Task
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards (if available) -->
+    {% if stats and task_count > 0 %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Tasks
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.total_tasks }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-tasks fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-left-success shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Completed
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.completed_tasks }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-left-danger shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Overdue
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.overdue_tasks }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-left-info shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Completion Rate
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ "%.1f"|format(stats.completion_rate) }}%
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa fa-pie-chart fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fa fa-cogs"></i> Take Action
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('TaskDashboardView.dashboard') }}" class="btn btn-secondary btn-block">
+                                <i class="fa fa-arrow-left"></i> Back to Dashboard
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('TaskModelView.list') }}" class="btn btn-primary btn-block">
+                                <i class="fa fa-list"></i> View All Tasks
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('TaskModelView.add') }}" class="btn btn-success btn-block">
+                                <i class="fa fa-plus"></i> Add New Task
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('TaskDashboardView.reports') }}" class="btn btn-info btn-block">
+                                <i class="fa fa-bar-chart"></i> View Reports
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Features Info -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow border-left-info">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="text-info font-weight-bold mb-1">
+                                <i class="fa fa-magic"></i> Powered by Artificial Intelligence
+                            </h6>
+                            <p class="text-muted mb-0">
+                                These insights are generated using advanced AI analysis of your task patterns, 
+                                productivity trends, and workflow efficiency. The AI considers task priorities, 
+                                completion rates, and timing patterns to provide personalized recommendations.
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <i class="fa fa-robot fa-3x text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.ai-insights-content {
+    line-height: 1.7;
+    font-size: 1.05em;
+}
+
+.ai-insights-content h5 {
+    border-left: 4px solid #4e73df;
+    padding-left: 15px;
+    margin-left: -15px;
+}
+
+.ai-insights-content h6 {
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.ai-insights-content p {
+    color: #5a5c69;
+}
+
+.ai-insights-content ul li,
+.ai-insights-content ol li {
+    color: #5a5c69;
+    padding: 0.25rem 0;
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+
+.text-gray-800 {
+    color: #5a5c69 !important;
+}
+
+.text-gray-300 {
+    color: #dddfeb !important;
+}
+
+.breadcrumb {
+    background-color: #f8f9fc;
+    border: 1px solid #e3e6f0;
+}
+
+.card {
+    border: 1px solid #e3e6f0;
+    border-radius: 0.35rem;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+/* Smooth animations */
+.card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease-in-out;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+}
+
+/* Icon styling */
+.fa-robot {
+    opacity: 0.6;
+}
+
+/* List styling */
+.list-unstyled li {
+    position: relative;
+    padding-left: 0;
+}
+
+/* Button hover effects */
+.btn:hover {
+    transform: translateY(-1px);
+    transition: transform 0.1s ease-in-out;
+}
+</style>
+
+<script>
+// Add some interactive features
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth scrolling to any anchors
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.querySelector(this.getAttribute('href')).scrollIntoView({
+                behavior: 'smooth'
+            });
+        });
+    });
+    
+    // Add fade-in animation to insights content
+    const insightsContent = document.querySelector('.ai-insights-content');
+    if (insightsContent) {
+        insightsContent.style.opacity = '0';
+        insightsContent.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            insightsContent.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            insightsContent.style.opacity = '1';
+            insightsContent.style.transform = 'translateY(0)';
+        }, 100);
+    }
+});
+</script>
+{% endblock %}

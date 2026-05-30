@@ -9,7 +9,7 @@ import logging
 import json
 import hashlib
 import ipaddress
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Union
 from functools import wraps
 from dataclasses import dataclass
@@ -228,7 +228,7 @@ class SecurityAuditLogger:
         self._max_buffer_size = 1000
         self._critical_buffer_size = 1500  # Hard limit to prevent memory exhaustion
         self._auto_flush_interval = 30  # seconds
-        self._last_flush = datetime.utcnow()
+        self._last_flush = datetime.now(tz=timezone.utc)
         self._suspicious_patterns = {}
         self._flush_failure_count = 0
         self._max_flush_failures = 5  # After this many failures, start dropping events
@@ -312,7 +312,7 @@ class SecurityAuditLogger:
             ip_address=request.remote_addr if request else None,
             user_agent=request.headers.get('User-Agent') if request else None,
             session_id=session.get('session_id') if session else None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             risk_level=RiskLevel.HIGH if not success else RiskLevel.MEDIUM,
             success=success
         )
@@ -335,7 +335,7 @@ class SecurityAuditLogger:
             ip_address=request.remote_addr if request else None,
             user_agent=request.headers.get('User-Agent') if request else None,
             session_id=session.get('session_id') if session else None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             risk_level=RiskLevel.HIGH,
             success=True
         )
@@ -370,7 +370,7 @@ class SecurityAuditLogger:
             ip_address=request.remote_addr if request else None,
             user_agent=request.headers.get('User-Agent') if request else None,
             session_id=session.get('session_id') if session else None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             risk_level=risk_level,
             success=True
         )
@@ -396,7 +396,7 @@ class SecurityAuditLogger:
             ip_address=request.remote_addr if request else None,
             user_agent=request.headers.get('User-Agent') if request else None,
             session_id=session.get('session_id') if session else None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             risk_level=RiskLevel.CRITICAL,
             success=False,
             error_message=f"Security violation: {violation_type}"
@@ -435,7 +435,7 @@ class SecurityAuditLogger:
         from flask_appbuilder import db
         from sqlalchemy import func
         
-        end_date = datetime.utcnow()
+        end_date = datetime.now(tz=timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         # Get event counts by type
@@ -476,7 +476,7 @@ class SecurityAuditLogger:
             'risk_levels': {risk_level: count for risk_level, count in risk_counts},
             'failed_events': failed_count,
             'unique_ip_addresses': unique_ips,
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(tz=timezone.utc).isoformat()
         }
     
     def _analyze_security_patterns(self, event: AuditEvent):
@@ -538,7 +538,7 @@ class SecurityAuditLogger:
             db.session.commit()
             
             log.debug(f"Flushed {len(events_to_flush)} audit events to database")
-            self._last_flush = datetime.utcnow()
+            self._last_flush = datetime.now(tz=timezone.utc)
             self._flush_failure_count = 0  # Reset failure counter on success
             
         except Exception as e:
@@ -577,7 +577,7 @@ class SecurityAuditLogger:
         def flush_worker():
             while True:
                 try:
-                    time_since_flush = (datetime.utcnow() - self._last_flush).total_seconds()
+                    time_since_flush = (datetime.now(tz=timezone.utc) - self._last_flush).total_seconds()
                     
                     # More aggressive flushing if buffer is getting full or we have failures
                     flush_threshold = self._auto_flush_interval
@@ -826,7 +826,7 @@ def audit_data_access(action: str, resource_type: str):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(tz=timezone.utc)
             success = True
             error_msg = None
             result = None
@@ -852,7 +852,7 @@ def audit_data_access(action: str, resource_type: str):
                 # Log the data access
                 audit_logger = get_audit_logger()
                 
-                processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
                 
                 audit_logger.log_data_access(
                     action=action,
@@ -875,7 +875,7 @@ def audit_tenant_operation(event_type: AuditEventType, action: str):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(tz=timezone.utc)
             success = True
             error_msg = None
             
@@ -892,7 +892,7 @@ def audit_tenant_operation(event_type: AuditEventType, action: str):
                 tenant_id = get_current_tenant_id()
                 if tenant_id:
                     audit_logger = get_audit_logger()
-                    processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                    processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
                     
                     audit_logger.log_tenant_operation(
                         event_type=event_type,

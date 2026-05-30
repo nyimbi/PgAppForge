@@ -1,0 +1,266 @@
+"""
+{{ workflow.name }} Workflow Forms
+Generated from WDL on {{ timestamp }}
+"""
+
+from wtforms import StringField, TextAreaField, SelectField, BooleanField, IntegerField
+from wtforms import DateField, DateTimeField, FloatField, FileField, SelectMultipleField
+from wtforms.validators import DataRequired, Optional, Length, Email, NumberRange, Regexp
+from wtforms.widgets import TextInput, TextArea, Select, CheckboxInput, NumberInput, DateInput
+
+from flask_appbuilder.forms import DynamicForm
+from flask_appbuilder.fieldwidgets import BS3TextFieldWidget, BS3TextAreaFieldWidget
+from flask_appbuilder.fieldwidgets import BS3SelectFieldWidget, BS3DatePickerWidget
+from flask_appbuilder.workflow.widgets import ConditionalFieldWidget, WorkflowStepFieldWidget
+
+
+{% for step_name, step_config in workflow.steps.items() %}
+class {{ step_name }}Form(DynamicForm):
+    """
+    {{ step_config.title }} form for {{ workflow.name }} workflow.
+    {{ step_config.description }}
+    """
+
+    {% for field_name, field_config in step_config.fields.items() %}
+    {% set field_type = field_config.type %}
+    {% set validators = [] %}
+
+    {# Build validators list #}
+    {% if field_config.required %}
+        {% set _ = validators.append("DataRequired()") %}
+    {% else %}
+        {% set _ = validators.append("Optional()") %}
+    {% endif %}
+
+    {% if field_config.validation %}
+        {% if field_config.validation.minLength and field_config.validation.maxLength %}
+            {% set _ = validators.append("Length(min=" + field_config.validation.minLength|string + ", max=" + field_config.validation.maxLength|string + ")") %}
+        {% elif field_config.validation.minLength %}
+            {% set _ = validators.append("Length(min=" + field_config.validation.minLength|string + ")") %}
+        {% elif field_config.validation.maxLength %}
+            {% set _ = validators.append("Length(max=" + field_config.validation.maxLength|string + ")") %}
+        {% endif %}
+
+        {% if field_config.validation.pattern %}
+            {% set _ = validators.append("Regexp(r'" + field_config.validation.pattern + "')") %}
+        {% endif %}
+
+        {% if field_config.validation.min and field_config.validation.max %}
+            {% set _ = validators.append("NumberRange(min=" + field_config.validation.min|string + ", max=" + field_config.validation.max|string + ")") %}
+        {% elif field_config.validation.min %}
+            {% set _ = validators.append("NumberRange(min=" + field_config.validation.min|string + ")") %}
+        {% elif field_config.validation.max %}
+            {% set _ = validators.append("NumberRange(max=" + field_config.validation.max|string + ")") %}
+        {% endif %}
+    {% endif %}
+
+    {% if field_type == 'email' %}
+        {% set _ = validators.append("Email()") %}
+    {% endif %}
+
+    {# Generate field definition #}
+    {% if field_type == 'string' %}
+    {{ field_name }} = StringField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.placeholder %}render_kw={'placeholder': '{{ field_config.placeholder }}'},{% endif %}
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        {% if field_config.default_value %}default='{{ field_config.default_value }}',{% endif %}
+        widget=BS3TextFieldWidget()
+    )
+
+    {% elif field_type == 'email' %}
+    {{ field_name }} = StringField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.placeholder %}render_kw={'placeholder': '{{ field_config.placeholder }}'},{% endif %}
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        widget=BS3TextFieldWidget()
+    )
+
+    {% elif field_type in ['text', 'textarea'] %}
+    {{ field_name }} = TextAreaField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.placeholder %}render_kw={'placeholder': '{{ field_config.placeholder }}', {% endif %}
+        {% if field_config.rows %}'rows': {{ field_config.rows }}{% if field_config.placeholder %}},{% else %},{% endif %}{% endif %}
+        {% if field_config.placeholder or field_config.rows %}{% endif %}
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        widget=BS3TextAreaFieldWidget()
+    )
+
+    {% elif field_type == 'select' %}
+    {{ field_name }} = SelectField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.choices %}choices={{ field_config.choices | tojson }},{% endif %}
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        {% if field_config.default_value %}default='{{ field_config.default_value }}',{% endif %}
+        widget=BS3SelectFieldWidget()
+    )
+
+    {% elif field_type == 'multiselect' %}
+    {{ field_name }} = SelectMultipleField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.choices %}choices={{ field_config.choices | tojson }},{% endif %}
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        widget=BS3SelectFieldWidget()
+    )
+
+    {% elif field_type == 'boolean' %}
+    {{ field_name }} = BooleanField(
+        label='{{ field_config.label or field_name.title() }}',
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        {% if field_config.default_value %}default={{ field_config.default_value }},{% endif %}
+        widget=CheckboxInput()
+    )
+
+    {% elif field_type == 'integer' %}
+    {{ field_name }} = IntegerField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        {% if field_config.default_value %}default={{ field_config.default_value }},{% endif %}
+        widget=NumberInput()
+    )
+
+    {% elif field_type == 'float' %}
+    {{ field_name }} = FloatField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        {% if field_config.default_value %}default={{ field_config.default_value }},{% endif %}
+        widget=NumberInput()
+    )
+
+    {% elif field_type == 'date' %}
+    {{ field_name }} = DateField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        widget=BS3DatePickerWidget()
+    )
+
+    {% elif field_type == 'datetime' %}
+    {{ field_name }} = DateTimeField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        widget=BS3DatePickerWidget()
+    )
+
+    {% elif field_type == 'file' %}
+    {{ field_name }} = FileField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        {% if field_config.accept %}render_kw={'accept': '{{ field_config.accept|join(",") }}'},{% endif %}
+    )
+
+    {% else %}
+    # Default to string field for unknown types
+    {{ field_name }} = StringField(
+        label='{{ field_config.label or field_name.title() }}',
+        validators=[{{ validators|join(', ') }}],
+        {% if field_config.placeholder %}render_kw={'placeholder': '{{ field_config.placeholder }}'},{% endif %}
+        {% if field_config.description %}description='{{ field_config.description }}',{% endif %}
+        widget=BS3TextFieldWidget()
+    )
+    {% endif %}
+
+    {% endfor %}
+
+    def validate(self):
+        """Custom validation for {{ step_name }} step."""
+        if not super().validate():
+            return False
+
+        {% if step_config.validation and step_config.validation.business %}
+        # Business logic validation
+        {% for validation_rule in step_config.validation.business %}
+        if not self._validate_{{ validation_rule }}():
+            return False
+        {% endfor %}
+        {% endif %}
+
+        {% if step_config.validation and step_config.validation.custom %}
+        # Custom validation
+        if not self._validate_{{ step_config.validation.custom }}():
+            return False
+        {% endif %}
+
+        return True
+
+    {% if step_config.validation and step_config.validation.business %}
+    {% for validation_rule in step_config.validation.business %}
+    def _validate_{{ validation_rule }}(self):
+        """Validate {{ validation_rule }} business rule."""
+        # TODO: Implement {{ validation_rule }} validation logic
+        return True
+    {% endfor %}
+    {% endif %}
+
+    {% if step_config.validation and step_config.validation.custom %}
+    def _validate_{{ step_config.validation.custom }}(self):
+        """Custom validation for {{ step_name }} step."""
+        # TODO: Implement {{ step_config.validation.custom }} validation logic
+        return True
+    {% endif %}
+
+    def get_layout_sections(self):
+        """Get form layout sections."""
+        {% if step_config.layout and step_config.layout.sections %}
+        return {{ step_config.layout.sections | tojson }}
+        {% else %}
+        # Default single section with all fields
+        return [{
+            'title': '{{ step_config.title }}',
+            'fields': [{% for field_name in step_config.fields.keys() %}'{{ field_name }}'{% if not loop.last %}, {% endif %}{% endfor %}]
+        }]
+        {% endif %}
+
+{% endfor %}
+
+
+# Form validation helper functions
+def validate_workflow_step_data(step_name: str, form_data: dict, workflow_state=None) -> dict:
+    """Validate workflow step data and return errors."""
+    errors = {}
+
+    {% for step_name, step_config in workflow.steps.items() %}
+    if step_name == '{{ step_name }}':
+        form = {{ step_name }}Form(data=form_data)
+        if not form.validate():
+            errors.update(form.errors)
+
+        {% if step_config.validation and step_config.validation.business %}
+        # Additional business validation
+        {% for rule in step_config.validation.business %}
+        try:
+            if not globals().get('validate_{{ rule }}', lambda **kwargs: True)(
+                form_data=form_data,
+                workflow_state=workflow_state
+            ):
+                errors.setdefault('general', []).append('{{ rule }} validation failed')
+        except Exception as e:
+            errors.setdefault('general', []).append(f'{{ rule }} validation error: {e}')
+        {% endfor %}
+        {% endif %}
+    {% endfor %}
+
+    return errors
+
+
+# Business validation functions (to be implemented)
+{% for step_name, step_config in workflow.steps.items() %}
+{% if step_config.validation and step_config.validation.business %}
+{% for rule in step_config.validation.business %}
+def validate_{{ rule }}(form_data: dict, workflow_state=None) -> bool:
+    """Validate {{ rule }} business rule."""
+    # TODO: Implement business logic for {{ rule }}
+    return True
+
+{% endfor %}
+{% endif %}
+{% endfor %}

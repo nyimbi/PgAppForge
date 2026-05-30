@@ -10,7 +10,7 @@ import logging
 import hashlib
 import hmac
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 from flask import request, session, current_app
 from .crypto_config import SecureCryptoConfig, SecureSessionManager
@@ -37,7 +37,7 @@ class ApprovalAuditLogger:
         """Log security events for audit trail with comprehensive context."""
         audit_record = {
             'event_type': event_type,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'session_id': session.get('_id') if session else None,
             'user_agent': request.user_agent.string if request else None,
             'ip_address': request.remote_addr if request else None,
@@ -60,7 +60,7 @@ class ApprovalAuditLogger:
             'step_name': step_config['name'],
             'workflow_name': workflow_name,
             'has_comments': bool(comments),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
             'session_id': self._get_secure_session_id(),
             'ip_address': request.remote_addr if request else 'unknown'
         })
@@ -80,7 +80,7 @@ class ApprovalAuditLogger:
             'instance_id': getattr(instance, 'id', 'unknown'),
             'instance_type': instance.__class__.__name__ if instance else 'unknown',
             'violation_details': details,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(tz=timezone.utc).isoformat()
         })
     
     def calculate_approval_integrity_hash(self, approval_data: Dict) -> str:
@@ -163,7 +163,7 @@ class ApprovalAuditLogger:
     def create_secure_approval_record(self, user, step: int, step_config: Dict, comments: Optional[str]) -> Dict:
         """Create approval record with cryptographic integrity protection."""
         approval_id = self.generate_approval_id()
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(tz=timezone.utc)
         
         approval_data = {
             'approval_id': approval_id,

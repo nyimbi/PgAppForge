@@ -12,7 +12,7 @@ import secrets
 import os
 from typing import Optional, Dict, Any
 from flask import current_app
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from .constants import SecurityConstants
 
 
@@ -163,7 +163,7 @@ class SecureCryptoConfig:
         Returns:
             str: Secure token
         """
-        timestamp = int(datetime.utcnow().timestamp() * 1000000)
+        timestamp = int(datetime.now(tz=timezone.utc).timestamp() * 1000000)
         random_part = secrets.token_hex(16)
         return f"{purpose}_{timestamp}_{random_part}"
 
@@ -258,7 +258,7 @@ class SecureSessionManager:
 
         # Generate base token with proper entropy
         base_token = SecureCryptoConfig.generate_secure_token(f"{session_type}_session")
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(tz=timezone.utc).isoformat()
 
         # Create session fingerprint from user context
         session_fingerprint = cls._create_session_fingerprint(user_id, user_context)
@@ -281,7 +281,7 @@ class SecureSessionManager:
         return {
             'session_token': secure_token,
             'session_data': session_data,
-            'expires_at': (datetime.utcnow() + timedelta(minutes=cls.SESSION_TIMEOUT_MINUTES)).isoformat()
+            'expires_at': (datetime.now(tz=timezone.utc) + timedelta(minutes=cls.SESSION_TIMEOUT_MINUTES)).isoformat()
         }
 
     @classmethod
@@ -311,7 +311,7 @@ class SecureSessionManager:
             created_at = datetime.fromisoformat(session_data['created_at'])
             timeout_minutes = cls.MFA_SESSION_TIMEOUT_MINUTES if session_data.get('session_type') == 'mfa' else cls.SESSION_TIMEOUT_MINUTES
 
-            if datetime.utcnow() - created_at > timedelta(minutes=timeout_minutes):
+            if datetime.now(tz=timezone.utc) - created_at > timedelta(minutes=timeout_minutes):
                 return False
         except (ValueError, KeyError):
             return False
@@ -419,7 +419,7 @@ class SecureSessionManager:
             audit_logger = ApprovalAuditLogger()
             audit_logger.log_security_event('session_invalidated', {
                 'session_token_prefix': session_token.split('.')[0][:16],  # Log prefix only for security
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             })
         except Exception:
             pass  # Don't fail invalidation if logging fails

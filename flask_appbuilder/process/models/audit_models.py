@@ -5,7 +5,7 @@ Database models for tracking and auditing process operations
 for compliance, security monitoring, and troubleshooting.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import json
 
@@ -193,7 +193,7 @@ class ProcessSecurityEvent(Base, Model):
     def resolve(self, resolved_by_user_id: int, notes: str = None):
         """Mark security event as resolved."""
         self.resolved = True
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = datetime.now(tz=timezone.utc)
         self.resolved_by = resolved_by_user_id
         self.resolution_notes = notes
     
@@ -326,7 +326,7 @@ class ProcessComplianceLog(Base, Model):
     def archive(self):
         """Mark compliance log as archived."""
         self.archived = True
-        self.archived_at = datetime.utcnow()
+        self.archived_at = datetime.now(tz=timezone.utc)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""

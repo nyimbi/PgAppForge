@@ -7,7 +7,7 @@ real-time editing, sharing, commenting, and version control.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -198,8 +198,8 @@ class WizardCollaborationManager:
         self.user_locations[session_id] = {
             'wizard_id': wizard_id,
             'user_id': user_id,
-            'joined_at': datetime.utcnow(),
-            'last_activity': datetime.utcnow(),
+            'joined_at': datetime.now(tz=timezone.utc),
+            'last_activity': datetime.now(tz=timezone.utc),
             'current_step': None,
             'cursor_position': None
         }
@@ -247,7 +247,7 @@ class WizardCollaborationManager:
                 'current_step': step_id,
                 'current_field': field_id,
                 'cursor_position': cursor_position,
-                'last_activity': datetime.utcnow()
+                'last_activity': datetime.now(tz=timezone.utc)
             })
     
     def get_active_users(self, wizard_id: str) -> List[CollaborationUser]:
@@ -289,7 +289,7 @@ class WizardCollaborationManager:
             user_id=user_id,
             permission=permission,
             granted_by=granted_by,
-            granted_at=datetime.utcnow(),
+            granted_at=datetime.now(tz=timezone.utc),
             expires_at=expires_at
         )
         
@@ -332,7 +332,7 @@ class WizardCollaborationManager:
         for permission in self.permissions[wizard_id]:
             if permission.user_id == user_id:
                 # Check if permission has expired
-                if permission.expires_at and datetime.utcnow() > permission.expires_at:
+                if permission.expires_at and datetime.now(tz=timezone.utc) > permission.expires_at:
                     return None
                 return permission.permission
         
@@ -370,7 +370,7 @@ class WizardCollaborationManager:
             wizard_id=wizard_id,
             user_id=user_id,
             content=content,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(tz=timezone.utc),
             step_id=step_id,
             field_id=field_id,
             position=position
@@ -421,7 +421,7 @@ class WizardCollaborationManager:
             wizard_id=wizard_id,
             user_id=user_id,
             content=content,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(tz=timezone.utc)
         )
         
         original_comment.replies.append(reply)
@@ -448,7 +448,7 @@ class WizardCollaborationManager:
                     
                     comment.resolved = True
                     comment.resolved_by = user_id
-                    comment.resolved_at = datetime.utcnow()
+                    comment.resolved_at = datetime.now(tz=timezone.utc)
                     return True
         
         return False
@@ -501,7 +501,7 @@ class WizardCollaborationManager:
             wizard_id=wizard_id,
             version_number=version_number,
             created_by=user_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(tz=timezone.utc),
             description=description,
             configuration=configuration,
             changes_summary=changes_summary,
@@ -713,7 +713,7 @@ class WizardCollaborationManager:
             share_id=share_id,
             wizard_id=wizard_id,
             created_by=user_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(tz=timezone.utc),
             scope=scope,
             permissions=permissions,
             access_token=access_token,
@@ -737,7 +737,7 @@ class WizardCollaborationManager:
         share = self.shares[share_id]
         
         # Check if expired
-        if share.expires_at and datetime.utcnow() > share.expires_at:
+        if share.expires_at and datetime.now(tz=timezone.utc) > share.expires_at:
             raise ValueError("Share link has expired")
         
         # Check max uses
@@ -774,7 +774,7 @@ class WizardCollaborationManager:
             wizard_id=wizard_id,
             user_id=user_id,
             activity_type=activity_type,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             description=description,
             details=details
         )

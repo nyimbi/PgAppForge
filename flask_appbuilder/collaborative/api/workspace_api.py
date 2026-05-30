@@ -12,7 +12,7 @@ from flask_appbuilder import expose
 from flask_appbuilder.api import BaseApi, safe
 from flask_appbuilder.security.decorators import protect
 from marshmallow import Schema, fields, ValidationError
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..interfaces.base_interfaces import IWorkspaceService
 from ..core.workspace_manager import WorkspaceType, AccessLevel
@@ -172,7 +172,7 @@ class WorkspaceApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin):
                 "workspace_type": workspace.workspace_type.value if isinstance(workspace.workspace_type, WorkspaceType) else workspace.workspace_type,
                 "owner_id": workspace.owner_id,
                 "team_id": workspace.team_id,
-                "created_at": workspace.created_at.isoformat() if hasattr(workspace, 'created_at') else datetime.utcnow().isoformat(),
+                "created_at": workspace.created_at.isoformat() if hasattr(workspace, 'created_at') else datetime.now(tz=timezone.utc).isoformat(),
                 "collaborator_count": 1,  # Owner is automatically a collaborator
                 "message": "Workspace created successfully"
             }
@@ -284,7 +284,7 @@ class WorkspaceApi(BaseApi, ErrorHandlingMixin, CollaborativeAuditMixin):
                 "workspace_type": workspace.workspace_type.value if isinstance(workspace.workspace_type, WorkspaceType) else workspace.workspace_type,
                 "owner_id": workspace.owner_id,
                 "team_id": workspace.team_id,
-                "created_at": workspace.created_at.isoformat() if hasattr(workspace, 'created_at') else datetime.utcnow().isoformat(),
+                "created_at": workspace.created_at.isoformat() if hasattr(workspace, 'created_at') else datetime.now(tz=timezone.utc).isoformat(),
                 "collaborator_count": len(collaborators_data),
                 "collaborators": collaborators_data
             }

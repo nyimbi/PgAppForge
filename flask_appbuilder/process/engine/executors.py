@@ -10,7 +10,7 @@ import logging
 import asyncio
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Callable
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -132,7 +132,7 @@ class NodeExecutor(ABC):
             'node_id': node.get('id'),
             'node_type': node.get('type'),
             'step_id': step.id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(tz=timezone.utc).isoformat()
         }
         
         # Store error details
@@ -158,7 +158,7 @@ class NodeExecutor(ABC):
             metric = ProcessMetric(
                 process_definition_id=instance.process_definition_id,
                 process_instance_id=instance.id,
-                metric_date=datetime.utcnow(),
+                metric_date=datetime.now(tz=timezone.utc),
                 metric_type='step_duration',
                 value=execution_time,
                 node_id=node.get('id'),
@@ -209,7 +209,7 @@ class TaskExecutor(NodeExecutor):
         # Set due date
         if 'due_in_hours' in task_config:
             hours = task_config['due_in_hours']
-            step.due_at = datetime.utcnow() + timedelta(hours=hours)
+            step.due_at = datetime.now(tz=timezone.utc) + timedelta(hours=hours)
         
         # Mark step as waiting for user action
         step.status = 'waiting'
@@ -793,7 +793,7 @@ class ApprovalExecutor(NodeExecutor):
         # Set due date
         if 'due_in_hours' in config:
             hours = config['due_in_hours']
-            approval.due_at = datetime.utcnow() + timedelta(hours=hours)
+            approval.due_at = datetime.now(tz=timezone.utc) + timedelta(hours=hours)
         
         # Set current approver
         if chain_definition.get('levels'):
@@ -1019,7 +1019,7 @@ class TimerExecutor(NodeExecutor):
         
         # Mark step as waiting
         step.status = 'waiting'
-        step.due_at = datetime.utcnow() + timedelta(seconds=total_delay)
+        step.due_at = datetime.now(tz=timezone.utc) + timedelta(seconds=total_delay)
         db.session.commit()
         
         # Schedule completion using Celery if available
@@ -1059,7 +1059,7 @@ class TimerExecutor(NodeExecutor):
             raise NodeExecutionError(f"Invalid schedule time format: {schedule_time}")
         
         # Calculate delay
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         if scheduled_at <= now:
             # Time already passed, complete immediately
             return {'timer_completed': True, 'scheduled_for': scheduled_at.isoformat()}
@@ -1092,7 +1092,7 @@ class TimerExecutor(NodeExecutor):
         
         # Mark step as waiting with timeout
         step.status = 'waiting'
-        step.due_at = datetime.utcnow() + timedelta(seconds=timeout_seconds)
+        step.due_at = datetime.now(tz=timezone.utc) + timedelta(seconds=timeout_seconds)
         step.configuration['timeout_action'] = config.get('timeout_action', 'fail')
         db.session.commit()
         
@@ -1163,7 +1163,7 @@ class SubprocessExecutor(NodeExecutor):
             parent_step_id=step.id,
             subprocess_type='embedded',
             status='running',
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(tz=timezone.utc),
             input_data=input_data,
             tenant_id=get_current_tenant_id()
         )
@@ -1178,7 +1178,7 @@ class SubprocessExecutor(NodeExecutor):
             
             # Mark subprocess execution as completed
             subprocess_exec.status = 'completed'
-            subprocess_exec.completed_at = datetime.utcnow()
+            subprocess_exec.completed_at = datetime.now(tz=timezone.utc)
             subprocess_exec.output_data = output_data
             db.session.commit()
             
@@ -1192,7 +1192,7 @@ class SubprocessExecutor(NodeExecutor):
         except Exception as e:
             # Mark subprocess execution as failed
             subprocess_exec.status = 'failed'
-            subprocess_exec.completed_at = datetime.utcnow()
+            subprocess_exec.completed_at = datetime.now(tz=timezone.utc)
             subprocess_exec.error_message = str(e)
             db.session.commit()
             
@@ -1239,7 +1239,7 @@ class SubprocessExecutor(NodeExecutor):
             called_instance_id=called_instance.id,
             subprocess_type='call_activity',
             status='running',
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(tz=timezone.utc),
             input_data=input_data,
             tenant_id=get_current_tenant_id()
         )
@@ -1249,7 +1249,7 @@ class SubprocessExecutor(NodeExecutor):
         try:
             # Start the called process instance using the process engine
             called_instance.status = 'running'
-            called_instance.started_at = datetime.utcnow()
+            called_instance.started_at = datetime.now(tz=timezone.utc)
             db.session.commit()
             
             # Execute called process asynchronously
@@ -1259,7 +1259,7 @@ class SubprocessExecutor(NodeExecutor):
                 
                 # Update subprocess execution
                 subprocess_exec.status = called_instance.status
-                subprocess_exec.completed_at = datetime.utcnow()
+                subprocess_exec.completed_at = datetime.now(tz=timezone.utc)
                 subprocess_exec.output_data = output_data
                 db.session.commit()
                 
@@ -1286,10 +1286,10 @@ class SubprocessExecutor(NodeExecutor):
         except Exception as e:
             # Mark subprocess execution as failed
             subprocess_exec.status = 'failed'
-            subprocess_exec.completed_at = datetime.utcnow()
+            subprocess_exec.completed_at = datetime.now(tz=timezone.utc)
             subprocess_exec.error_message = str(e)
             called_instance.status = 'failed'
-            called_instance.completed_at = datetime.utcnow()
+            called_instance.completed_at = datetime.now(tz=timezone.utc)
             db.session.commit()
             
             raise NodeExecutionError(f"Call activity failed: {str(e)}")
@@ -1325,7 +1325,7 @@ class SubprocessExecutor(NodeExecutor):
             parent_step_id=step.id,
             subprocess_type='event',
             status='waiting_for_event',
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(tz=timezone.utc),
             input_data=input_data,
             tenant_id=get_current_tenant_id(),
             event_configuration={
@@ -1344,7 +1344,7 @@ class SubprocessExecutor(NodeExecutor):
         # Set timeout if specified
         timeout_seconds = config.get('timeout_seconds')
         if timeout_seconds:
-            step.due_at = datetime.utcnow() + timedelta(seconds=timeout_seconds)
+            step.due_at = datetime.now(tz=timezone.utc) + timedelta(seconds=timeout_seconds)
             step.configuration['timeout_action'] = config.get('timeout_action', 'fail')
             
             # Schedule timeout handling
@@ -1426,7 +1426,7 @@ class SubprocessExecutor(NodeExecutor):
                 name=current_node.get('name', f'Subprocess Node {node_id}'),
                 node_type=node_type,
                 status='running',
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(tz=timezone.utc),
                 input_data=data
             )
             
@@ -1508,7 +1508,7 @@ class SubprocessExecutor(NodeExecutor):
                     
                     # Complete subprocess execution
                     subprocess_exec.status = 'completed'
-                    subprocess_exec.completed_at = datetime.utcnow()
+                    subprocess_exec.completed_at = datetime.now(tz=timezone.utc)
                     subprocess_exec.output_data = output_data
                     
                     # Update parent step
@@ -1516,7 +1516,7 @@ class SubprocessExecutor(NodeExecutor):
                     if parent_step:
                         parent_step.status = 'completed'
                         parent_step.output_data = output_data
-                        parent_step.completed_at = datetime.utcnow()
+                        parent_step.completed_at = datetime.now(tz=timezone.utc)
                     
                     db.session.commit()
                     
@@ -1529,7 +1529,7 @@ class SubprocessExecutor(NodeExecutor):
                     
                 except Exception as e:
                     subprocess_exec.status = 'failed'
-                    subprocess_exec.completed_at = datetime.utcnow()
+                    subprocess_exec.completed_at = datetime.now(tz=timezone.utc)
                     subprocess_exec.error_message = str(e)
                     db.session.commit()
                     

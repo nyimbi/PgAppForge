@@ -41,26 +41,55 @@ def check_engine_support(conn):
         exit()
 
 def add_column(conn, table, column):
+    """
+    SECURITY FIX: Add column with SQL injection protection.
+
+    This function was updated to fix critical SQL injection vulnerabilities
+    where string formatting was used directly in SQL statements.
+    """
+    from flask_appbuilder.security.sql_utils import SecureDDLExecutor
+
     table_name = table.__tablename__
     column_name = column.key
     column_type = column.type.compile(conn.dialect)
+
     try:
-        log.info("Going to alter Column {0} on {1}".format(column_name, table_name))
-        conn.execute(add_column_stmt[conn.engine.name] % (table_name, column_name, column_type))
-        log.info("Added Column {0} on {1}".format(column_name, table_name))
+        # Use secure DDL executor instead of vulnerable string formatting
+        ddl_executor = SecureDDLExecutor(conn)
+        success = ddl_executor.safe_add_column(table_name, column_name, str(column_type))
+
+        if success:
+            log.info("Added Column {0} on {1}".format(column_name, table_name))
+        else:
+            log.warning("Column {0} on {1} was not added (may already exist)".format(column_name, table_name))
+
     except Exception as e:
         log.error("Error adding Column {0} on {1}: {2}".format(column_name, table_name, str(e)))
 
 
 def alter_column(conn, table, column):
+    """
+    SECURITY FIX: Alter column with SQL injection protection.
+
+    This function was updated to fix critical SQL injection vulnerabilities
+    where string formatting was used directly in SQL statements.
+    """
+    from flask_appbuilder.security.sql_utils import SecureDDLExecutor
+
     table_name = table.__tablename__
     column_name = column.key
     column_type = column.type.compile(conn.dialect)
 
-    log.info("Going to alter Column {0} on {1}".format(column_name, table_name))
     try:
-        conn.execute(mod_column_stmt[conn.engine.name] % (table_name, column_name, column_type))
-        log.info("Altered Column {0} on {1}".format(column_name, table_name))
+        # Use secure DDL executor instead of vulnerable string formatting
+        ddl_executor = SecureDDLExecutor(conn)
+        success = ddl_executor.safe_alter_column(table_name, column_name, str(column_type))
+
+        if success:
+            log.info("Altered Column {0} on {1}".format(column_name, table_name))
+        else:
+            log.warning("Column {0} on {1} was not altered (operation may not be supported)".format(column_name, table_name))
+
     except Exception as e:
         log.error("Error altering Column {0} on {1}: {2}".format(column_name, table_name, str(e)))
 

@@ -9,7 +9,7 @@ import asyncio
 import logging
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Callable, Tuple
 import json
@@ -105,7 +105,7 @@ class IndexedContent(Model, AuditMixin):
     def mark_completed(self, chunks_created: int):
         """Mark content as successfully indexed."""
         self.status = IndexingStatus.COMPLETED.value
-        self.indexed_at = datetime.utcnow()
+        self.indexed_at = datetime.now(tz=timezone.utc)
         self.chunks_created = chunks_created
         self.error_message = None
     
@@ -369,7 +369,7 @@ class KnowledgeBaseManager:
             stats["content_by_source"] = source_counts
             
             # Get recent activity
-            one_day_ago = datetime.utcnow() - timedelta(days=1)
+            one_day_ago = datetime.now(tz=timezone.utc) - timedelta(days=1)
             stats["indexed_last_24h"] = query.filter(
                 IndexedContent.indexed_at >= one_day_ago
             ).count()
@@ -634,7 +634,7 @@ class KnowledgeBaseManager:
                 existing.content_source = task.content_source.value
                 existing.status = IndexingStatus.IN_PROGRESS.value
                 existing.content_length = len(task.content_text)
-                existing.last_modified = datetime.utcnow()
+                existing.last_modified = datetime.now(tz=timezone.utc)
                 existing.retry_count = 0
                 existing.error_message = None
                 indexed_content = existing
@@ -648,7 +648,7 @@ class KnowledgeBaseManager:
                     team_id=task.team_id,
                     status=IndexingStatus.IN_PROGRESS.value,
                     content_length=len(task.content_text),
-                    last_modified=datetime.utcnow(),
+                    last_modified=datetime.now(tz=timezone.utc),
                     created_by_user_id=task.user_id
                 )
                 session.add(indexed_content)
@@ -692,7 +692,7 @@ class KnowledgeBaseManager:
                 session = self.session_factory()
                 
                 # Clean up old failed records (older than 7 days)
-                seven_days_ago = datetime.utcnow() - timedelta(days=7)
+                seven_days_ago = datetime.now(tz=timezone.utc) - timedelta(days=7)
                 deleted_failed = session.query(IndexedContent).filter(
                     IndexedContent.status == IndexingStatus.FAILED.value,
                     IndexedContent.created_at < seven_days_ago,
@@ -700,7 +700,7 @@ class KnowledgeBaseManager:
                 ).delete(synchronize_session=False)
                 
                 # Clean up very old completed records (older than 90 days)
-                ninety_days_ago = datetime.utcnow() - timedelta(days=90)
+                ninety_days_ago = datetime.now(tz=timezone.utc) - timedelta(days=90)
                 deleted_old = session.query(IndexedContent).filter(
                     IndexedContent.status == IndexingStatus.COMPLETED.value,
                     IndexedContent.created_at < ninety_days_ago

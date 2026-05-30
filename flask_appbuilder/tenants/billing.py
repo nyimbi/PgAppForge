@@ -6,7 +6,7 @@ usage tracking, and billing calculations for the multi-tenant SaaS platform.
 """
 
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -533,7 +533,7 @@ def track_api_usage(tenant_id: int, endpoint: str, method: str = 'GET'):
             metadata={
                 'endpoint': endpoint,
                 'method': method,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
         )
     except Exception as e:
@@ -555,7 +555,7 @@ def track_storage_usage(tenant_id: int, size_bytes: int, operation: str = 'uploa
             metadata={
                 'operation': operation,
                 'size_bytes': size_bytes,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
         )
     except Exception as e:
@@ -574,7 +574,7 @@ def track_user_activity(tenant_id: int, user_id: int, activity_type: str):
             metadata={
                 'user_id': user_id,
                 'activity_type': activity_type,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(tz=timezone.utc).isoformat()
             }
         )
     except Exception as e:

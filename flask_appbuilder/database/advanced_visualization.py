@@ -10,7 +10,7 @@ import logging
 import math
 import threading
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -1177,7 +1177,7 @@ class AdvancedVisualizationEngine:
 				"layout": layout_result,
 				"graph_data": styled_data,
 				"metadata": {
-					"generated_at": datetime.utcnow().isoformat(),
+					"generated_at": datetime.now(tz=timezone.utc).isoformat(),
 					"node_count": len(graph_data["nodes"]),
 					"edge_count": len(graph_data["edges"])
 				}
