@@ -27,7 +27,16 @@ from flask import abort, current_app, request, jsonify, Response
 from flask_login import current_user
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
-from pgappforge.widgets_postgresql._cdn import CYTOSCAPE_CDN as _CY
+from pgappforge.widgets_postgresql._cdn import (
+	CYTOSCAPE_CDN as _CY,
+	CYTOSCAPE_FCOSE_CDN as _FCOSE,
+	CYTOSCAPE_DAGRE_CDN as _DAGRE,
+	CYTOSCAPE_EDGEHANDLES_CDN as _EDGEHANDLES,
+	CYTOSCAPE_NAVIGATOR_CDN as _NAVIGATOR,
+)
+
+# Combined extension CDN block injected into _DESIGNER_HTML
+_CYTOSCAPE_EXTENSIONS_CDN = _FCOSE + _DAGRE + _EDGEHANDLES + _NAVIGATOR
 
 
 # ─── Security helpers ─────────────────────────────────────────────────────────
@@ -564,7 +573,27 @@ class ERDDesignerView(BaseView):
 				domain_groups[domain] = items
 		except Exception:
 			pass
-		return self.render_template_string(_DESIGNER_HTML, domain_groups=domain_groups)
+		# Build ERD_CONFIG for the static JS file
+		from flask_wtf.csrf import generate_csrf
+		try:
+			csrf_token = generate_csrf()
+		except Exception:
+			csrf_token = ""
+		erd_config = {
+			"apiBase":       "/erd-designer",
+			"csrfToken":     csrf_token,
+			"ddlEnabled":    current_app.config.get("FAB_ERD_DDL_ENABLED", False),
+			"isAdmin":       any(getattr(r, "name", "") in ("Admin", "admin")
+			                     for r in getattr(current_user, "roles", [])),
+			"currentUser":   getattr(current_user, "username", ""),
+			"designId":      None,   # populated when a saved design is opened
+		}
+		import json as _json
+		return self.render_template_string(
+			_DESIGNER_HTML,
+			domain_groups=domain_groups,
+			erd_config_json=_json.dumps(erd_config),
+		)
 
 	@expose("/api/live-schema")
 	@has_access
@@ -804,7 +833,25 @@ class ERDDesignerView(BaseView):
 			d.schema_json = data["schema_json"]
 			flag_modified(d, "schema_json")
 		session.commit()
+		# Broadcast canvas update to other SSE clients for this design
+		if "canvas_json" in data:
+			self._sse_broadcast(design_id, {
+				"type": "update",
+				"user": getattr(current_user, "username", ""),
+				"canvas_json": data["canvas_json"],
+			})
 		return jsonify({"ok": True})
+
+	def _sse_broadcast(self, design_id: int, payload: dict) -> None:
+		"""Broadcast a JSON payload to all SSE listeners for *design_id*."""
+		import json as _json
+		clients = getattr(ERDDesignerView, "_sse_clients", {}).get(design_id, [])
+		msg = _json.dumps(payload)
+		for q in list(clients):
+			try:
+				q.put_nowait(msg)
+			except Exception:
+				pass
 
 	@expose("/api/designs/<int:design_id>", methods=["DELETE"])
 	@has_access
@@ -840,10 +887,528 @@ class ERDDesignerView(BaseView):
 			for e in entries
 		]})
 
+	@expose("/api/migration-log/<int:entry_id>/rollback", methods=["POST"])
+	@has_access
+	def api_migration_rollback(self, entry_id: int):
+		"""Execute the rollback SQL for a migration log entry."""
+		_require_schema_admin()
+		_validate_csrf()
+		from pgappforge.models.erd_models import ErdMigrationLog
+		import sqlalchemy as sa
+		session = self._db_session()
+		entry = session.get(ErdMigrationLog, entry_id)
+		if not entry:
+			return jsonify({"ok": False, "error": "Entry not found"}), 404
+		rollback_stmts = entry.rollback_sql or []
+		if not rollback_stmts:
+			return jsonify({"ok": False, "error": "No rollback SQL available for this migration"})
+		mgr = self._schema_manager()
+		try:
+			from sqlalchemy import text
+			with mgr.engine.begin() as conn:
+				for stmt in rollback_stmts:
+					conn.execute(text(stmt))
+		except Exception as exc:
+			return jsonify({"ok": False, "error": str(exc)})
+		return jsonify({"ok": True})
+
+	# ── Phase 4: Schema diff ───────────────────────────────────────────────────
+
+	@expose("/api/schema/diff", methods=["POST"])
+	@has_access
+	def api_schema_diff(self):
+		"""Compute diff between proposed ops and live DB. Returns SQL + changed entities."""
+		data = request.get_json(silent=True) or {}
+		ops  = data.get("ops", [])
+		try:
+			mgr    = self._schema_manager()
+			result = mgr.apply_changes(ops, dry_run=True)
+			schema = mgr.get_schema()
+			live_tables = {t["name"] for t in schema.get("tables", [])}
+			tables_added   = [op["table"] for op in ops if op.get("op") == "create_table"]
+			tables_dropped = [op["table"] for op in ops if op.get("op") == "drop_table"]
+			tables_altered = [op["table"] for op in ops
+			                  if op.get("op") in ("add_column", "drop_column", "alter_column")]
+			return jsonify({
+				"sql":            result.get("sql", []),
+				"tables_added":   tables_added,
+				"tables_dropped": tables_dropped,
+				"tables_altered": list(set(tables_altered)),
+				"dry_run":        True,
+			})
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	# ── Phase 4: Alembic migration export ─────────────────────────────────────
+
+	@expose("/api/export/alembic")
+	@has_access
+	def api_export_alembic(self):
+		"""Generate an Alembic migration script from pending ops in session."""
+		from pgappforge.views.erd_schema_manager import _generate_rollback
+		ops = request.args.get("ops")
+		if ops:
+			import json as _json
+			try:
+				ops_list = _json.loads(ops)
+			except Exception:
+				ops_list = []
+		else:
+			ops_list = []
+		try:
+			mgr       = self._schema_manager()
+			result    = mgr.apply_changes(ops_list, dry_run=True)
+			sql_stmts = result.get("sql", [])
+			rollback  = _generate_rollback(ops_list, sql_stmts)
+		except Exception as exc:
+			sql_stmts, rollback = [], []
+		upgrade_body   = "\n    ".join(
+			f'op.execute("{s.replace(chr(34), chr(39))}")'
+			for s in sql_stmts
+		) or "    pass"
+		downgrade_body = "\n    ".join(
+			f'op.execute("{s.replace(chr(34), chr(39))}")'
+			for s in rollback
+		) or "    pass"
+		from datetime import datetime
+		ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+		script = f'''"""Auto-generated ERD migration — {ts}
+
+Revision ID: {ts}
+Created: {datetime.now().isoformat(timespec="seconds")}
+"""
+
+from alembic import op
+import sqlalchemy as sa
+
+
+def upgrade() -> None:
+    {upgrade_body}
+
+
+def downgrade() -> None:
+    {downgrade_body}
+'''
+		filename = f"migrate_{ts}.py"
+		return Response(
+			script, mimetype="text/plain",
+			headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+		)
+
+	# ── Phase 7: ORM model code export ────────────────────────────────────────
+
+	@expose("/api/export/orm")
+	@has_access
+	def api_export_orm(self):
+		"""Export current DB schema as ORM model code (sqlalchemy | django | prisma)."""
+		fmt = request.args.get("format", "sqlalchemy").lower()
+		schema_name = request.args.get("schema", "public")
+		try:
+			mgr    = self._schema_manager()
+			schema = mgr.get_schema()
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+		lines: list[str] = []
+		if fmt == "sqlalchemy":
+			lines.append("from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Numeric, ForeignKey")
+			lines.append("from sqlalchemy.dialects.postgresql import JSONB, UUID")
+			lines.append("from sqlalchemy.orm import DeclarativeBase, relationship\n")
+			lines.append("class Base(DeclarativeBase): pass\n")
+			for tbl in schema.get("tables", []):
+				lines.append(f"class {tbl['name'].title().replace('_','')}(Base):")
+				lines.append(f"    __tablename__ = {tbl['name']!r}")
+				for col in tbl.get("columns", []):
+					sa_type = _pg_to_sa_type(col.get("type", "TEXT"))
+					pk = ", primary_key=True" if col.get("pk") else ""
+					null = ", nullable=False" if not col.get("nullable", True) else ""
+					fk = f', ForeignKey("{col["fk"]}")' if col.get("fk") else ""
+					lines.append(f"    {col['name']} = Column({sa_type}{fk}{pk}{null})")
+				lines.append("")
+		elif fmt == "django":
+			lines.append("from django.db import models\n")
+			for tbl in schema.get("tables", []):
+				lines.append(f"class {tbl['name'].title().replace('_','')}(models.Model):")
+				for col in tbl.get("columns", []):
+					if col.get("pk"):
+						continue
+					dj_type = _pg_to_django_type(col.get("type", "TEXT"))
+					lines.append(f"    {col['name']} = {dj_type}")
+				lines.append("    class Meta:")
+				lines.append(f"        db_table = {tbl['name']!r}")
+				lines.append("")
+		elif fmt == "prisma":
+			lines.append('datasource db { provider = "postgresql"; url = env("DATABASE_URL") }')
+			lines.append('generator client { provider = "prisma-client-js" }\n')
+			for tbl in schema.get("tables", []):
+				lines.append(f"model {tbl['name'].title().replace('_','')} {{")
+				for col in tbl.get("columns", []):
+					prisma_type = _pg_to_prisma_type(col.get("type", "String"))
+					decorators = ""
+					if col.get("pk"):  decorators += " @id @default(autoincrement())"
+					if col.get("unique"): decorators += " @unique"
+					lines.append(f"  {col['name']}  {prisma_type}{decorators}")
+				lines.append(f"  @@map({tbl['name']!r})")
+				lines.append("}\n")
+
+		code = "\n".join(lines)
+		return Response(
+			code, mimetype="text/plain",
+			headers={"Content-Disposition": f'attachment; filename="models_{fmt}.py"'},
+		)
+
+	# ── Phase 5: Intelligence endpoints ───────────────────────────────────────
+
+	@expose("/api/ai/generate-schema", methods=["POST"])
+	@has_access
+	def api_ai_generate_schema(self):
+		"""Generate create_table ops from a business description via Ollama."""
+		data = request.get_json(silent=True) or {}
+		desc = (data.get("description") or "").strip()
+		if not desc:
+			return jsonify({"error": "description is required"}), 400
+		try:
+			from pgappforge.plugins.reports.ai_augment import augment_text
+			import json as _json
+			prompt = (
+				f"Generate a PostgreSQL database schema for: {desc}\n\n"
+				"Return a JSON array of create_table operations with this EXACT format — no markdown:\n"
+				'[{"op":"create_table","table":"table_name","columns":['
+				'{"name":"id","type":"SERIAL","pk":true},'
+				'{"name":"col","type":"TEXT","nullable":true,"fk":"other_table.id"}]}]\n'
+				"Include realistic FK relationships. Use SERIAL PKs. Return ONLY the JSON array."
+			)
+			result = augment_text(prompt, {}, current_app, max_tokens=3000)
+			if result.startswith("Error:"):
+				return jsonify({"error": result}), 500
+			# Strip markdown fences
+			import re as _re
+			result = _re.sub(r"^```\w*\n?|```$", "", result.strip(), flags=_re.MULTILINE).strip()
+			ops = _json.loads(result)
+			# Validate each op's table/column names through _qi for safety
+			from pgappforge.views.erd_schema_manager import _qi
+			for op in ops:
+				_qi(op.get("table", ""))
+			return jsonify({"ops": ops, "count": len(ops)})
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/ai/suggest-fks")
+	@has_access
+	def api_suggest_fks(self):
+		"""Suggest FK relationships from _id column naming conventions."""
+		try:
+			mgr    = self._schema_manager()
+			schema = mgr.get_schema()
+		except Exception as exc:
+			return jsonify({"suggestions": [], "error": str(exc)})
+
+		tables = {t["name"] for t in schema.get("tables", [])}
+		suggestions = []
+		for tbl in schema.get("tables", []):
+			existing_fks = {rel["column"] for rel in schema.get("relationships", [])
+			                if rel.get("table") == tbl["name"]}
+			for col in tbl.get("columns", []):
+				name = col.get("name", "")
+				if not name.endswith("_id"):
+					continue
+				if name in existing_fks:
+					continue
+				prefix = name[:-3]
+				for candidate in (prefix + "s", prefix, prefix + "es"):
+					if candidate in tables:
+						suggestions.append({
+							"op":         "add_fk",
+							"table":      tbl["name"],
+							"column":     name,
+							"ref_table":  candidate,
+							"ref_column": "id",
+							"confidence": "high" if candidate == prefix + "s" else "medium",
+						})
+						break
+		return jsonify({"suggestions": suggestions})
+
+	@expose("/api/analysis/normalize")
+	@has_access
+	def api_analysis_normalize(self):
+		"""Detect potential normalization issues in the live schema."""
+		try:
+			mgr    = self._schema_manager()
+			schema = mgr.get_schema()
+		except Exception as exc:
+			return jsonify({"warnings": [], "error": str(exc)})
+
+		warnings: list[dict] = []
+		col_registry: dict[str, list[str]] = {}  # col_name → [table, ...]
+
+		for tbl in schema.get("tables", []):
+			cols = tbl.get("columns", [])
+			has_pk = any(c.get("pk") for c in cols)
+			if not has_pk:
+				warnings.append({"level": "1NF", "table": tbl["name"],
+				                 "message": "No primary key defined.",
+				                 "suggestion": "Add an id SERIAL PRIMARY KEY column."})
+			for col in cols:
+				cname = col.get("name", "")
+				# Flag generic column names
+				if cname in ("data", "info", "value", "field", "col") or \
+				   cname.startswith("col") and cname[3:].isdigit():
+					warnings.append({"level": "1NF", "table": tbl["name"],
+					                 "message": f"Generic column name: {cname!r}",
+					                 "suggestion": "Use a descriptive column name."})
+				# Track repeated column names for 2NF analysis
+				col_registry.setdefault(cname, []).append(tbl["name"])
+
+		# Flag columns that appear in >3 tables (potential 2NF violation)
+		for cname, tbls in col_registry.items():
+			if len(tbls) > 3 and cname not in ("id", "created_at", "updated_at",
+			                                    "created_on", "changed_on", "is_active"):
+				warnings.append({"level": "2NF",
+				                 "table": tbls[0],
+				                 "message": f"Column {cname!r} appears in {len(tbls)} tables.",
+				                 "suggestion": f"Consider extracting {cname!r} into a separate reference table."})
+
+		return jsonify({"warnings": warnings})
+
+	@expose("/api/analysis/recommend-indexes")
+	@has_access
+	def api_recommend_indexes(self):
+		"""Recommend missing indexes based on FK columns and naming conventions."""
+		import sqlalchemy as sa
+		try:
+			mgr    = self._schema_manager()
+			schema = mgr.get_schema()
+			engine = self._schema_manager().engine
+		except Exception as exc:
+			return jsonify({"recommendations": [], "error": str(exc)})
+
+		# Get existing indexes from PostgreSQL
+		try:
+			with engine.connect() as conn:
+				existing_idx = conn.execute(sa.text(
+					"SELECT tablename, indexname, indexdef FROM pg_indexes "
+					"WHERE schemaname = 'public'"
+				)).fetchall()
+			indexed_cols: set[tuple[str, str]] = set()
+			for row in existing_idx:
+				import re as _re
+				cols = _re.findall(r'\(([^)]+)\)', row[2])
+				for c in cols:
+					for col in c.split(","):
+						indexed_cols.add((row[0], col.strip().strip('"')))
+		except Exception:
+			indexed_cols = set()
+
+		recommendations = []
+		_idx_keywords = ("_at", "_date", "_status", "_created", "_updated",
+		                 "_type", "_state", "_code", "_key", "_ref")
+
+		for tbl in schema.get("tables", []):
+			tname = tbl["name"]
+			for col in tbl.get("columns", []):
+				cname = col.get("name", "")
+				if col.get("pk") or (tname, cname) in indexed_cols:
+					continue
+				# FK columns should always be indexed
+				if col.get("fk") or cname.endswith("_id"):
+					recommendations.append({
+						"op": "add_index", "table": tname, "columns": [cname],
+						"unique": False,
+						"reason": "FK column — improves JOIN performance",
+					})
+					continue
+				# Common query-target naming patterns
+				if any(cname.endswith(k) for k in _idx_keywords):
+					recommendations.append({
+						"op": "add_index", "table": tname, "columns": [cname],
+						"unique": False,
+						"reason": f"Likely WHERE/ORDER BY target (ends in {cname.split('_')[-1]!r})",
+					})
+
+		return jsonify({"recommendations": recommendations})
+
+	# ── Phase 6: Collaboration ─────────────────────────────────────────────────
+
+	@expose("/api/events/<int:design_id>")
+	@has_access
+	def api_sse_events(self, design_id: int):
+		"""Server-Sent Events stream for real-time collaborative canvas updates."""
+		import queue, threading
+		from flask import stream_with_context
+
+		# Module-level broadcast registry: design_id → list of queue.Queue
+		if not hasattr(ERDDesignerView, "_sse_clients"):
+			ERDDesignerView._sse_clients = {}
+		q: queue.Queue = queue.Queue(maxsize=50)
+		ERDDesignerView._sse_clients.setdefault(design_id, []).append(q)
+
+		def event_generator():
+			import json as _json
+			try:
+				yield f"data: {_json.dumps({'type': 'connected', 'design_id': design_id})}\n\n"
+				while True:
+					try:
+						msg = q.get(timeout=25)
+						yield f"data: {msg}\n\n"
+					except queue.Empty:
+						yield "data: {\"type\":\"ping\"}\n\n"
+			finally:
+				clients = ERDDesignerView._sse_clients.get(design_id, [])
+				if q in clients:
+					clients.remove(q)
+
+		return Response(
+			stream_with_context(event_generator()),
+			mimetype="text/event-stream",
+			headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+		)
+
+	@expose("/api/designs/<int:design_id>/share", methods=["POST"])
+	@has_access
+	def api_share_design(self, design_id: int):
+		"""Create a read-only share link for a saved design."""
+		from pgappforge.plugins.reports.acl import generate_token
+		from pgappforge.models.erd_models import ErdDesign
+		session = self._db_session()
+		design  = session.get(ErdDesign, design_id)
+		if design is None:
+			return jsonify({"error": "Design not found"}), 404
+		data    = request.get_json(silent=True) or {}
+		expires = int(data.get("expires_hours", 48))
+		tok     = generate_token(
+			session, report_id=0, created_by=getattr(current_user, "id", None),
+			max_uses=data.get("max_uses"),
+			expires_hours=expires,
+			params={"erd_design_id": design_id},
+		)
+		url = f"/erd-designer/view/{tok}"
+		return jsonify({"ok": True, "url": url, "expires_hours": expires})
+
+	@expose("/view/<token>")
+	def api_view_shared(self, token: str):
+		"""Read-only shared view of a saved ERD design (no login required)."""
+		from pgappforge.plugins.reports.acl import check_token as _check_token
+		from pgappforge.models.erd_models import ErdDesign
+		session = self._db_session()
+		try:
+			_report, params = _check_token(token, session)
+		except Exception:
+			return Response("Link expired or invalid.", status=403)
+		design_id = params.get("erd_design_id")
+		if not design_id:
+			return Response("No design ID in token.", status=400)
+		design = session.get(ErdDesign, int(design_id))
+		if design is None:
+			return Response("Design not found.", status=404)
+		import json as _json
+		canvas_json = _json.dumps(design.canvas_json or {})
+		return Response(
+			f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>{design.name} — ERD View (read-only)</title>
+<link rel="stylesheet" href="/static/appbuilder/css/bootstrap.min.css">
+{_CY}</head>
+<body style="margin:0;background:#1a1a2e">
+<div id="cy" style="width:100vw;height:100vh"></div>
+<script>
+var cy = cytoscape({{container:document.getElementById('cy'),
+  style:[{{selector:'node[type="table"]',style:{{'label':'data(label)','background-color':'#2c3e50','color':'#ecf0f1','font-size':'11px','border-width':1.5,'border-color':'data(color)','width':110,'height':40,'shape':'rectangle'}}}},
+  {{selector:'edge[type="fk"]',style:{{'curve-style':'bezier','target-arrow-shape':'triangle','line-color':'#555','width':1.5}}}}],
+  layout:{{name:'cose',animate:false}}
+}});
+var data = {canvas_json};
+if (data && data.elements) cy.json(data); else if (Array.isArray(data)) cy.add(data);
+cy.fit();
+</script>
+</body></html>""",
+			mimetype="text/html",
+		)
+
+	# ── Phase 7: pg_dump import ────────────────────────────────────────────────
+
+	@expose("/api/schema/import-sql", methods=["POST"])
+	@has_access
+	def api_import_sql(self):
+		"""Import DDL from a SQL file (supports pg_dump output format)."""
+		_require_schema_admin()
+		_validate_csrf()
+		data    = request.get_json(silent=True) or {}
+		sql     = (data.get("sql") or "").strip()
+		dry_run = bool(data.get("dry_run", False))
+		if not sql:
+			return jsonify({"error": "sql is required"}), 400
+		mgr    = self._schema_manager()
+		result = mgr.import_sql(sql)
+		return jsonify(result)
+
+	# ── Phase 5: Schema namespace list ────────────────────────────────────────
+
+	@expose("/api/schema-list")
+	@has_access
+	def api_schema_list(self):
+		"""Return list of PostgreSQL schemas accessible to the current connection."""
+		try:
+			import sqlalchemy as sa
+			engine  = self._schema_manager().engine
+			with engine.connect() as conn:
+				rows = conn.execute(sa.text(
+					"SELECT schema_name FROM information_schema.schemata "
+					"WHERE schema_name NOT IN ('pg_catalog','information_schema','pg_toast') "
+					"ORDER BY schema_name"
+				)).fetchall()
+			schemas = [r[0] for r in rows]
+		except Exception:
+			schemas = ["public"]
+		return jsonify({"schemas": schemas})
+
+
+# ─── ORM type mapping helpers ────────────────────────────────────────────────
+
+def _pg_to_sa_type(pg_type: str) -> str:
+	"""Map a PostgreSQL type string to a SQLAlchemy Column type."""
+	t = pg_type.upper().split("(")[0].strip()
+	mapping = {
+		"SERIAL": "Integer", "BIGSERIAL": "BigInteger", "INTEGER": "Integer",
+		"BIGINT": "BigInteger", "SMALLINT": "SmallInteger", "BOOLEAN": "Boolean",
+		"TEXT": "Text", "VARCHAR": "String", "CHAR": "String",
+		"NUMERIC": "Numeric", "DECIMAL": "Numeric", "FLOAT": "Float",
+		"REAL": "Float", "DOUBLE": "Float", "DATE": "Date",
+		"TIMESTAMP": "DateTime", "TIMESTAMPTZ": "DateTime", "TIME": "Time",
+		"UUID": "UUID", "JSONB": "JSONB", "JSON": "JSON", "BYTEA": "LargeBinary",
+		"INET": "String", "CIDR": "String",
+	}
+	return mapping.get(t, "String")
+
+
+def _pg_to_django_type(pg_type: str) -> str:
+	t = pg_type.upper().split("(")[0].strip()
+	mapping = {
+		"SERIAL": "models.AutoField()", "BIGSERIAL": "models.BigAutoField()",
+		"INTEGER": "models.IntegerField()", "BIGINT": "models.BigIntegerField()",
+		"BOOLEAN": "models.BooleanField()", "TEXT": "models.TextField()",
+		"VARCHAR": "models.CharField(max_length=255)", "DATE": "models.DateField()",
+		"TIMESTAMP": "models.DateTimeField()", "TIMESTAMPTZ": "models.DateTimeField()",
+		"NUMERIC": "models.DecimalField(max_digits=10, decimal_places=2)",
+		"FLOAT": "models.FloatField()", "UUID": "models.UUIDField()",
+		"JSONB": "models.JSONField()", "JSON": "models.JSONField()",
+	}
+	return mapping.get(t, "models.TextField()")
+
+
+def _pg_to_prisma_type(pg_type: str) -> str:
+	t = pg_type.upper().split("(")[0].strip()
+	mapping = {
+		"SERIAL": "Int", "BIGSERIAL": "BigInt", "INTEGER": "Int",
+		"BIGINT": "BigInt", "BOOLEAN": "Boolean", "TEXT": "String",
+		"VARCHAR": "String", "DATE": "DateTime", "TIMESTAMP": "DateTime",
+		"TIMESTAMPTZ": "DateTime", "NUMERIC": "Decimal", "FLOAT": "Float",
+		"UUID": "String", "JSONB": "Json", "JSON": "Json",
+	}
+	return mapping.get(t, "String")
+
 
 # ─── HTML Template ────────────────────────────────────────────────────────────
 
-_DESIGNER_HTML = """
+_DESIGNER_HTML = ("""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -852,65 +1417,133 @@ _DESIGNER_HTML = """
   <link rel="stylesheet"
     href="{{ url_for('static', filename='appbuilder/css/bootstrap.min.css') }}">
   """ + _CY + """
+  """ + _CYTOSCAPE_EXTENSIONS_CDN + """
   <style>
-    * { box-sizing: border-box; }
-    body { margin:0; overflow:hidden; font-size:13px; }
+    :root {
+      --bg:#1a1a2e; --sidebar-bg:#2c3e50; --sidebar-hdr:#1a252f;
+      --cy-bg:#1a1a2e; --node-bg:#2c3e50; --text:#ecf0f1;
+      --border:#34495e; --muted:#7f8c8d;
+    }
+    [data-theme="light"] {
+      --bg:#f0f2f5; --sidebar-bg:#2c3e50; --sidebar-hdr:#1a252f;
+      --cy-bg:#f9fafb; --node-bg:#ffffff; --text:#2c3e50;
+      --border:#dce0e6; --muted:#888;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; overflow:hidden; font-size:13px; background:var(--bg); }
     #layout { display:flex; height:100vh; }
-    #sidebar { width:260px; min-width:220px; background:#2c3e50; color:#ecf0f1;
-                overflow-y:auto; display:flex; flex-direction:column; }
-    #sidebar-header { padding:12px; background:#1a252f; font-size:0.9em; font-weight:600; }
+    /* Sidebar */
+    #sidebar { width:260px; min-width:220px; background:var(--sidebar-bg);
+               color:var(--text); overflow-y:auto; display:flex; flex-direction:column; }
+    #sidebar-header { padding:10px 12px; background:var(--sidebar-hdr);
+                      font-size:.9em; font-weight:600; display:flex;
+                      align-items:center; justify-content:space-between; }
     #search-box { width:100%; padding:6px 10px; background:#34495e;
-                  border:none; color:#ecf0f1; font-size:0.85em; outline:none; }
-    #search-box::placeholder { color:#7f8c8d; }
+                  border:none; color:#ecf0f1; font-size:.85em; outline:none; }
+    #search-box::placeholder { color:var(--muted); }
+    #canvas-search { width:100%; padding:4px 8px; background:#34495e; border:none;
+                     color:#ecf0f1; font-size:.8em; outline:none; border-top:1px solid var(--border); }
     #module-list { flex:1; overflow-y:auto; }
-    .mod-item { padding:8px 12px; cursor:pointer; border-bottom:1px solid #34495e;
+    .mod-item { padding:7px 12px; cursor:pointer; border-bottom:1px solid var(--border);
                 display:flex; align-items:center; gap:8px; }
     .mod-item:hover { background:#34495e; }
     .mod-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-    .mod-label { flex:1; font-size:0.85em; }
-    .mod-count { font-size:0.75em; color:#7f8c8d; }
+    .mod-label { flex:1; font-size:.85em; }
+    .mod-count { font-size:.75em; color:var(--muted); }
     .domain-items { display:block; }
     .domain-items.collapsed { display:none; }
     .domain-header:hover { background:#243342 !important; }
-    #toolbar { padding:8px 12px; background:#1a252f; border-top:1px solid #0d1b2a;
-               display:flex; flex-direction:column; gap:6px; }
-    #cy-wrap { flex:1; position:relative; background:#1a1a2e; }
+    /* Toolbar */
+    #toolbar { padding:8px 10px; background:var(--sidebar-hdr);
+               border-top:1px solid #0d1b2a; display:flex; flex-direction:column; gap:4px; }
+    .tb-sect { font-size:.72em; color:var(--muted); margin:6px 0 2px; letter-spacing:.04em; }
+    .tb-row  { display:flex; gap:4px; }
+    .tb-row button { flex:1; }
+    /* Canvas */
+    #cy-wrap { flex:1; position:relative; background:var(--cy-bg); }
     #cy { width:100%; height:100%; }
+    #cy-nav { position:absolute; bottom:28px; right:8px; width:180px; height:120px;
+              border:1px solid var(--border); border-radius:4px; overflow:hidden; z-index:5; }
     #status-bar { position:absolute; bottom:0; left:0; right:0;
-                  background:rgba(0,0,0,0.7); color:#aaa; padding:3px 8px;
-                  font-size:0.75em; pointer-events:none; }
-    #info-panel { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.8);
-                  color:#ecf0f1; border-radius:6px; padding:10px 14px;
-                  font-size:0.8em; max-width:260px; display:none;
-                  max-height:300px; overflow-y:auto; }
-    .btn-block { display:block; width:100%; margin-bottom:4px; text-align:left; }
-    #context-menu { position:fixed; background:#2c3e50; border:1px solid #34495e;
-                    border-radius:4px; z-index:9999; display:none; min-width:160px; }
-    #context-menu .cm-item { padding:6px 14px; cursor:pointer; font-size:0.85em;
-                              color:#ecf0f1; }
-    #context-menu .cm-item:hover { background:#34495e; }
-    #context-menu .cm-sep { border-top:1px solid #34495e; margin:2px 0; }
+                  background:rgba(0,0,0,.65); color:#aaa; padding:3px 8px;
+                  font-size:.75em; pointer-events:none; }
+    /* Info panel */
+    #info-panel { position:absolute; top:8px; right:8px; background:rgba(20,30,50,.92);
+                  color:#ecf0f1; border-radius:8px; padding:10px 14px; font-size:.8em;
+                  max-width:270px; display:none; max-height:340px; overflow-y:auto;
+                  box-shadow:0 4px 16px rgba(0,0,0,.4); }
+    .ip-title { font-weight:700; font-size:.95em; margin-bottom:6px; color:#3498db; }
+    .col-row  { display:flex; align-items:center; gap:4px; padding:2px 0;
+                border-bottom:1px solid rgba(255,255,255,.06); }
+    .col-badge { font-size:.65em; padding:1px 4px; border-radius:3px; font-weight:700; }
+    .col-badge.pk { background:#f39c12; color:#000; }
+    .col-badge.fk { background:#3498db; color:#fff; }
+    .col-badge.uq { background:#27ae60; color:#fff; }
+    .col-name  { flex:1; }
+    .col-type  { color:var(--muted); font-size:.85em; }
+    .ip-actions { margin-top:6px; }
+    .ip-btn { font-size:.75em; padding:2px 8px; }
+    /* Context menu */
+    #context-menu { position:fixed; background:#2c3e50; border:1px solid var(--border);
+                    border-radius:6px; z-index:9999; display:none; min-width:160px;
+                    box-shadow:0 4px 12px rgba(0,0,0,.4); }
+    .cm-item { padding:7px 14px; cursor:pointer; font-size:.85em; color:#ecf0f1; }
+    .cm-item:hover { background:#34495e; }
+    .cm-sep { border-top:1px solid var(--border); margin:2px 0; }
+    /* Generic modals */
+    .erd-modal { position:fixed; inset:0; background:rgba(0,0,0,.6);
+                 display:none; align-items:center; justify-content:center; z-index:10000; }
+    .erd-modal-box { background:#1e2a3a; border-radius:10px; padding:24px;
+                     min-width:340px; max-width:640px; width:90%; color:#ecf0f1;
+                     max-height:80vh; overflow-y:auto;
+                     box-shadow:0 8px 32px rgba(0,0,0,.6); }
+    .erd-modal-box h5 { margin:0 0 14px; font-size:1em; color:#3498db; }
+    .erd-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+    /* Column editor table */
+    #col-editor-rows td { padding:2px 3px; }
+    #col-editor-rows input[type=text],
+    #col-editor-rows input:not([type]) { background:#253545; border:1px solid #445566;
+      color:#ecf0f1; padding:2px 6px; border-radius:3px; width:100%; font-size:.8em; }
+    .del-btn { background:#c0392b; color:#fff; border:none; border-radius:3px;
+               padding:1px 5px; cursor:pointer; font-size:.8em; }
+    /* Diff badges */
+    .diff-legend { display:flex; gap:12px; font-size:.8em; margin-bottom:8px; }
+    .diff-dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+    /* Analysis warning nodes */
+    .analysis-warn { border-color:#e67e22 !important; border-width:4px !important; }
+    /* Undo/redo */
+    #btn-undo:disabled, #btn-redo:disabled { opacity:.4; }
+    /* pg types datalist */
+    #pg-types-list { display:none; }
+    button { cursor:pointer; }
   </style>
 </head>
 <body>
 <div id="layout">
   <!-- Left sidebar -->
   <div id="sidebar">
-    <div id="sidebar-header">&#9673; ERD Designer</div>
-    <input id="search-box" placeholder="Search tables..." oninput="filterModules(this.value)">
-    <div style="padding:8px 12px;font-size:0.75em;color:#7f8c8d;border-bottom:1px solid #34495e">
-      ERP TEMPLATES — click to add to canvas
+    <div id="sidebar-header">
+      <span>&#9673; ERD Designer</span>
+      <button id="btn-theme" onclick="applyTheme(_theme==='dark'?'light':'dark')"
+              style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:.8em">
+        ☀ Light
+      </button>
+    </div>
+    <input id="search-box" placeholder="&#128270; Filter modules…" oninput="filterModules(this.value)">
+    <input id="canvas-search" placeholder="&#128270; Search canvas…" oninput="canvasSearch(this.value)">
+    <div style="padding:6px 12px;font-size:.72em;color:#7f8c8d;border-bottom:1px solid #34495e;letter-spacing:.04em">
+      ERP TEMPLATES — click to add
     </div>
     <div id="module-list">
       {% for domain, items in domain_groups.items() %}
       <div class="domain-group">
         <div class="domain-header" onclick="toggleDomain(this)"
-             style="padding:5px 12px;background:#1a252f;font-size:0.75em;
-                    color:#7f8c8d;letter-spacing:0.05em;cursor:pointer;
+             style="padding:5px 12px;background:#1a252f;font-size:.72em;
+                    color:#7f8c8d;letter-spacing:.05em;cursor:pointer;
                     display:flex;align-items:center;justify-content:space-between;
                     border-top:1px solid #0d1b2a;user-select:none">
           <span>{{ domain | upper }}</span>
-          <span style="font-size:0.8em">{{ items|length }} ▾</span>
+          <span>{{ items|length }} ▾</span>
         </div>
         <div class="domain-items">
           {% for m in items %}
@@ -926,40 +1559,73 @@ _DESIGNER_HTML = """
       </div>
       {% endfor %}
     </div>
+
     <div id="toolbar">
-      <div style="font-size:0.75em;color:#7f8c8d;margin-bottom:4px">CANVAS</div>
+      <!-- Schema -->
+      <div class="tb-sect">SCHEMA</div>
+      <select id="schema-switcher" onchange="loadLiveSchema(this.value)"
+              style="background:#34495e;border:1px solid #4a6278;color:#ecf0f1;
+                     padding:3px;font-size:.8em;width:100%;margin-bottom:2px">
+        <option value="public">public</option>
+      </select>
       <button class="btn btn-xs btn-default btn-block" onclick="loadLiveSchema()">
         &#9654; Load live DB schema
       </button>
-      <button class="btn btn-xs btn-default btn-block" onclick="cy.fit()">
-        &#9636; Fit all
-      </button>
-      <button class="btn btn-xs btn-default btn-block" onclick="relayout()">
-        &#8853; Re-layout
-      </button>
-      <button class="btn btn-xs btn-default btn-block" onclick="cy.elements().remove()">
-        &#215; Clear canvas
-      </button>
-      <div style="font-size:0.75em;color:#7f8c8d;margin:8px 0 4px">EXPORT</div>
-      <button class="btn btn-xs btn-default btn-block"
-              onclick="window.open('/erd-designer/api/export/mermaid')">
-        &#10515; Mermaid
-      </button>
-      <div style="font-size:0.75em;color:#7f8c8d;margin:8px 0 4px">GENERATE APP</div>
+      <!-- Canvas controls -->
+      <div class="tb-sect">CANVAS</div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="cy.fit()" title="Fit all (Ctrl+Shift+F)">&#9636;</button>
+        <button class="btn btn-xs btn-default" onclick="relayout()" title="Re-layout">&#8853;</button>
+        <button id="btn-undo" class="btn btn-xs btn-default" onclick="undoAction()" title="Undo (Ctrl+Z)" disabled>&#8630;</button>
+        <button id="btn-redo" class="btn btn-xs btn-default" onclick="redoAction()" title="Redo (Ctrl+Y)" disabled>&#8631;</button>
+        <button class="btn btn-xs btn-danger" onclick="if(confirm('Clear canvas?'))cy.elements().remove()" title="Clear">&#215;</button>
+      </div>
+      <!-- Export -->
+      <div class="tb-sect">EXPORT</div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/mermaid')">Mermaid</button>
+        <button class="btn btn-xs btn-default" onclick="exportCanvas('png')">PNG</button>
+        <button class="btn btn-xs btn-default" onclick="exportCanvas('svg')">SVG</button>
+      </div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/alembic')">Alembic</button>
+        <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/orm?format=sqlalchemy')">ORM</button>
+      </div>
+      <!-- Save / Load designs -->
+      <div class="tb-sect">DESIGN</div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-primary" onclick="saveCurrentDesign()" title="Save (Ctrl+Shift+S)">&#128190; Save</button>
+        <button class="btn btn-xs btn-default" onclick="document.getElementById('design-load-modal').style.display='flex'">&#128193; Load</button>
+      </div>
+      <!-- Analysis -->
+      <div class="tb-sect">ANALYSIS</div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="suggestFKs()" title="Suggest FK from _id columns">FK Hints</button>
+        <button class="btn btn-xs btn-default" onclick="runNormalizationAnalysis()">Normalize</button>
+      </div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="recommendIndexes()">&#9660; Indexes</button>
+        <button class="btn btn-xs btn-info"    onclick="aiGenerateSchema()">&#129302; AI Gen</button>
+      </div>
+      <!-- Diff -->
+      <div class="tb-sect">MIGRATION</div>
+      <button class="btn btn-xs btn-warning btn-block" onclick="showDiff([])">Preview Diff</button>
+      <button class="btn btn-xs btn-default btn-block" onclick="document.getElementById('mig-log-modal').style.display='flex'">Migration Log</button>
+      <!-- Generate app -->
+      <div class="tb-sect">GENERATE APP</div>
       <input id="gen-name" class="form-control input-sm" placeholder="App name" value="MyApp"
              style="margin-bottom:4px;background:#34495e;border-color:#4a6278;color:#ecf0f1">
-      <button class="btn btn-xs btn-success btn-block" onclick="generateApp()">
-        &#9654;&#9654; Generate App
-      </button>
+      <button class="btn btn-xs btn-success btn-block" onclick="generateApp()">&#9654;&#9654; Generate</button>
     </div>
   </div>
 
   <!-- Canvas -->
   <div id="cy-wrap">
     <div id="cy"></div>
+    <div id="cy-nav"></div>
     <div id="status-bar">
-      Click a module in the sidebar to add it. Double-click a module group to fold/unfold.
-      Right-click any node for options.
+      Click a module to add it. Double-click a table to edit columns. Drag from a node handle to create a FK.
+      Right-click for context menu. Ctrl+Z undo.
     </div>
     <div id="info-panel"></div>
   </div>
@@ -970,221 +1636,238 @@ _DESIGNER_HTML = """
   <div class="cm-item" id="cm-fold">&#9654; Fold module</div>
   <div class="cm-item" id="cm-remove">&#215; Remove</div>
   <div class="cm-sep"></div>
-  <div class="cm-item" id="cm-fit-sel">&#9636; Fit to selection</div>
+  <div class="cm-item" id="cm-fit-sel">&#9636; Fit selection</div>
+  <div class="cm-item" id="cm-mn" style="display:none">&#8853; Create M:N junction</div>
+</div>
+
+<!-- FK modal -->
+<div id="fk-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:420px">
+    <h5>&#128279; Create Foreign Key</h5>
+    <p style="font-size:.85em;color:#aaa">
+      <b id="fk-src-table"></b> → <b id="fk-tgt-table"></b>
+    </p>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <label style="font-size:.8em">Source column</label>
+        <select id="fk-src-col" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566"></select>
+      </div>
+      <div style="flex:1">
+        <label style="font-size:.8em">References column</label>
+        <select id="fk-tgt-col" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566"></select>
+      </div>
+    </div>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('fk-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-sm btn-primary" id="fk-ok">Add FK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Column editor modal -->
+<div id="col-editor-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:680px">
+    <h5>&#9998; Edit Columns: <span id="col-editor-title"></span></h5>
+    <div style="overflow-x:auto">
+      <table class="table table-condensed" style="font-size:.8em;color:#ecf0f1">
+        <thead style="color:#7f8c8d">
+          <tr><th>Name</th><th>Type</th><th>PK</th><th>UQ</th><th>NN</th><th>Default</th><th></th></tr>
+        </thead>
+        <tbody id="col-editor-rows"></tbody>
+      </table>
+    </div>
+    <!-- PG type autocomplete list -->
+    <datalist id="pg-types-list">
+      <option>SERIAL</option><option>BIGSERIAL</option><option>INTEGER</option>
+      <option>BIGINT</option><option>TEXT</option><option>VARCHAR(255)</option>
+      <option>BOOLEAN</option><option>NUMERIC(10,2)</option><option>DATE</option>
+      <option>TIMESTAMPTZ</option><option>UUID</option><option>JSONB</option>
+      <option>INET</option><option>BYTEA</option>
+    </datalist>
+    <button id="col-editor-add" class="btn btn-xs btn-default">+ Add column</button>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('col-editor-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-sm btn-primary" id="col-editor-save">&#10003; Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI schema generation modal -->
+<div id="ai-gen-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:500px">
+    <h5>&#129302; AI Schema Generator</h5>
+    <p style="font-size:.85em;color:#aaa">Describe your system and AI will design the schema.</p>
+    <textarea id="ai-gen-desc" class="form-control" rows="4"
+      style="background:#253545;color:#ecf0f1;border-color:#445566"
+      placeholder="e.g. Hospital appointment system with doctors, patients, specialties and appointments"></textarea>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('ai-gen-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-sm btn-info" id="ai-gen-go">&#9654; Generate</button>
+    </div>
+    <div id="ai-gen-preview" style="margin-top:10px;font-size:.8em;color:#aaa"></div>
+    <button id="ai-gen-confirm" class="btn btn-sm btn-success" style="display:none;margin-top:8px">&#10003; Apply to Database</button>
+  </div>
+</div>
+
+<!-- FK suggestion modal -->
+<div id="fk-suggest-modal" class="erd-modal">
+  <div class="erd-modal-box">
+    <h5>&#128279; Suggested Foreign Keys</h5>
+    <p style="font-size:.8em;color:#aaa">These FK relationships were detected from column naming conventions.</p>
+    <ul id="fk-suggest-list" style="font-size:.85em;list-style:none;padding:0;max-height:300px;overflow-y:auto"></ul>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('fk-suggest-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-sm btn-primary" id="fk-suggest-apply">&#10003; Apply Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Normalization analysis modal -->
+<div id="analysis-modal" class="erd-modal">
+  <div class="erd-modal-box">
+    <h5>&#9888; Normalization Analysis</h5>
+    <ul id="analysis-list" style="font-size:.85em;max-height:350px;overflow-y:auto;padding-left:18px"></ul>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('analysis-modal').style.display='none';clearDiff()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Index recommendation modal -->
+<div id="index-rec-modal" class="erd-modal">
+  <div class="erd-modal-box">
+    <h5>&#9660; Recommended Indexes</h5>
+    <ul id="index-rec-list" style="font-size:.85em;list-style:none;padding:0;max-height:320px;overflow-y:auto"></ul>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('index-rec-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-sm btn-primary" id="index-rec-apply">&#10003; Apply Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Diff preview modal -->
+<div id="diff-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:600px">
+    <h5>&#9651; Schema Diff Preview</h5>
+    <div class="diff-legend">
+      <span><span class="diff-dot" style="background:#2ecc71"></span> New</span>
+      <span><span class="diff-dot" style="background:#e74c3c"></span> Dropped</span>
+      <span><span class="diff-dot" style="background:#f39c12"></span> Altered</span>
+    </div>
+    <pre id="diff-sql-preview" style="background:#111;padding:10px;font-size:.75em;
+         max-height:300px;overflow:auto;color:#00ff99;border-radius:4px"></pre>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('diff-modal').style.display='none';clearDiff()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Design load modal -->
+<div id="design-load-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:500px">
+    <h5>&#128193; Load Saved Design</h5>
+    <div id="design-list" style="max-height:300px;overflow-y:auto;font-size:.85em">
+      <div style="color:#7f8c8d">Loading…</div>
+    </div>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('design-load-modal').style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Migration log modal -->
+<div id="mig-log-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:680px">
+    <h5>&#128196; Migration Log</h5>
+    <div id="mig-log-list" style="max-height:380px;overflow-y:auto;font-size:.8em">
+      Loading…
+    </div>
+    <div class="erd-modal-actions">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('mig-log-modal').style.display='none'">Close</button>
+    </div>
+  </div>
 </div>
 
 <script src="{{ url_for('static', filename='appbuilder/js/jquery-latest.js') }}"></script>
+<!-- Dynamic config: API base, CSRF token, user context -->
 <script>
-/* ── Cytoscape init ── */
-var cy = cytoscape({
-  container: document.getElementById('cy'),
-  style: [
-    { selector: 'node[type="module"]',
-      style: { 'label': 'data(label)', 'text-halign': 'center', 'text-valign': 'top',
-               'font-size': '13px', 'font-weight': 'bold', 'color': '#ecf0f1',
-               'text-margin-y': -6,
-               'background-color': 'data(color)', 'background-opacity': 0.15,
-               'border-width': 2, 'border-color': 'data(color)',
-               'padding': '14px', 'shape': 'round-rectangle' } },
-    { selector: 'node[type="table"]',
-      style: { 'label': 'data(label)', 'text-halign': 'center', 'text-valign': 'center',
-               'font-size': '11px', 'color': '#ecf0f1',
-               'background-color': '#2c3e50', 'border-width': 1.5,
-               'border-color': 'data(color)', 'width': 110, 'height': 40,
-               'shape': 'rectangle' } },
-    { selector: 'node[type="table"]:selected',
-      style: { 'background-color': '#34495e', 'border-width': 3 } },
-    { selector: 'edge[type="fk"]',
-      style: { 'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
-               'line-color': '#555', 'target-arrow-color': '#555',
-               'width': 1.5, 'label': 'data(label)',
-               'font-size': '9px', 'color': '#777', 'text-background-opacity': 0 } },
-  ],
-  layout: { name: 'cose', animate: false },
-  wheelSensitivity: 0.2,
-});
-
-/* Collapsed module tracking */
-var collapsed = {};
-
-function _collapseModule(modId) {
-  var children = cy.nodes('[parent="' + modId + '"]');
-  if (collapsed[modId]) {
-    children.style({ 'display': 'element' });
-    cy.edges().style({ 'display': 'element' });
-    collapsed[modId] = false;
-  } else {
-    children.style({ 'display': 'none' });
-    cy.edges('[source][target]').forEach(function(e) {
-      if (children.map(function(n){return n.id();}).indexOf(e.data('source')) >= 0 ||
-          children.map(function(n){return n.id();}).indexOf(e.data('target')) >= 0) {
-        e.style({ 'display': 'none' });
-      }
-    });
-    collapsed[modId] = true;
+window.ERD_CONFIG = {{ erd_config_json | tojson | safe }};
+</script>
+<script src="{{ url_for('static', filename='appbuilder/js/erd_designer.js') }}"></script>
+<script>
+/* ── Design load modal populate ── */
+document.addEventListener('DOMContentLoaded', function() {
+  var m = document.getElementById('design-load-modal');
+  if (m) {
+    m.addEventListener('show', function() { loadDesignList(); }, false);
   }
-}
-
-cy.on('dblclick', 'node[type="module"]', function(e) {
-  _collapseModule(e.target.id());
+  // Populate when the modal is opened
+  document.getElementById('design-load-modal').__origDisplay = 'none';
+  var origShowFn = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'display');
+  // Simpler: load on first interaction via button click override
+  var loadBtn = document.querySelector('[onclick*="design-load-modal"]');
+  if (loadBtn) {
+    var orig = loadBtn.getAttribute('onclick');
+    loadBtn.setAttribute('onclick', orig + '; loadDesignList();');
+  }
 });
 
-/* XSS-safe HTML escape — used wherever user-controlled data enters innerHTML */
-function _esc(s) {
-  return String(s||'').replace(/[&<>"']/g, function(m) {
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+function loadDesignList() {
+  var el = document.getElementById('design-list');
+  if (!el) return;
+  apiFetch('GET', '/api/designs').then(function(d) {
+    var designs = d.designs || [];
+    if (!designs.length) { el.innerHTML = '<div style="color:#7f8c8d">No saved designs.</div>'; return; }
+    el.innerHTML = designs.map(function(ds) {
+      return '<div style="padding:6px;border-bottom:1px solid #34495e;cursor:pointer" onclick="loadDesign(' + ds.id + ');document.getElementById(\'design-load-modal\').style.display=\'none\'">' +
+        '<b>' + _esc(ds.name) + '</b>' +
+        '<span style="color:#7f8c8d;font-size:.8em;margin-left:8px">' + _esc(ds.changed_on || '') + '</span>' +
+        '</div>';
+    }).join('');
   });
 }
 
-cy.on('tap', 'node[type="table"]', function(e) {
-  var d = e.target.data();
-  var cols = (d.columns || []).slice(0, 12).map(function(c) {
-    var color = c.pk ? '#f39c12' : c.fk ? '#3498db' : '#aaa';
-    return '<span style="color:' + color + '">' + _esc(c.name) +
-           '</span> <small>' + _esc(c.type || '') + '</small>';
-  }).join('<br>');
-  document.getElementById('info-panel').innerHTML =
-    '<b>' + _esc(d.label) + '</b><br><hr style="margin:4px 0">' + cols;
-  document.getElementById('info-panel').style.display = 'block';
+/* ── Migration log populate ── */
+function loadMigrationLog() {
+  var el = document.getElementById('mig-log-list');
+  if (!el) return;
+  apiFetch('GET', '/api/migration-log').then(function(d) {
+    var entries = d.entries || [];
+    if (!entries.length) { el.innerHTML = '<div style="color:#7f8c8d">No migrations yet.</div>'; return; }
+    el.innerHTML = entries.map(function(e) {
+      var statusColor = e.status === 'success' ? '#2ecc71' : '#e74c3c';
+      return '<div style="padding:6px;border-bottom:1px solid #2c3e50">' +
+        '<span style="color:' + statusColor + ';font-weight:700">' + _esc(e.status) + '</span> ' +
+        '<span style="color:#7f8c8d">' + _esc(e.applied_at || '') + '</span>' +
+        '<details><summary style="cursor:pointer;color:#7f8c8d;font-size:.8em">' +
+        (e.sql || []).length + ' statements</summary>' +
+        '<pre style="background:#111;padding:4px;font-size:.7em;color:#0f0;max-height:100px;overflow:auto">' +
+        _esc((e.sql || []).join('\n')) + '</pre>' +
+        (e.rollback_sql && e.rollback_sql.length ? '<button class="btn btn-xs btn-danger" onclick="rollbackMigration(' + e.id + ')">↩ Rollback</button>' : '') +
+        '</details></div>';
+    }).join('');
+  }).catch(function(){ el.innerHTML = '<div style="color:#e74c3c">Admin access required.</div>'; });
+}
+
+var migLogModal = document.getElementById('mig-log-modal');
+if (migLogModal) {
+  migLogModal.addEventListener('transitionend', loadMigrationLog);
+}
+// Override migration log button to also load data
+document.addEventListener('DOMContentLoaded', function() {
+  var logBtn = document.querySelector('[onclick*="mig-log-modal"]');
+  if (logBtn) logBtn.setAttribute('onclick', logBtn.getAttribute('onclick') + '; loadMigrationLog();');
 });
 
-cy.on('tap', function(e) {
-  if (e.target === cy) {
-    document.getElementById('info-panel').style.display = 'none';
-    hideContextMenu();
-  }
-});
-
-/* ── Context menu ── */
-var _ctxTarget = null;
-cy.on('cxttap', 'node', function(e) {
-  _ctxTarget = e.target;
-  var cm = document.getElementById('context-menu');
-  cm.style.display = 'block';
-  cm.style.left = e.originalEvent.clientX + 'px';
-  cm.style.top = e.originalEvent.clientY + 'px';
-  document.getElementById('cm-fold').textContent =
-    e.target.data('type') === 'module'
-      ? (collapsed[e.target.id()] ? '&#9660; Unfold module' : '&#9654; Fold module')
-      : '&#9654; Fold parent';
-});
-
-function hideContextMenu() { document.getElementById('context-menu').style.display='none'; }
-document.getElementById('cm-fold').onclick = function() {
-  if (_ctxTarget) {
-    var mid = _ctxTarget.data('type') === 'module' ? _ctxTarget.id() : _ctxTarget.data('parent');
-    if (mid) _collapseModule(mid);
-  }
-  hideContextMenu();
-};
-document.getElementById('cm-remove').onclick = function() {
-  if (_ctxTarget) {
-    if (_ctxTarget.data('type') === 'module') {
-      var modId = _ctxTarget.id();
-      cy.nodes('[parent="' + modId + '"]').remove();
-      // Remove only edges connected to nodes in this module (not all edges)
-      cy.edges().filter(function(e) {
-        return e.source().data('parent') === modId ||
-               e.target().data('parent') === modId;
-      }).remove();
-    }
-    _ctxTarget.remove();
-  }
-  hideContextMenu();
-};
-document.getElementById('cm-fit-sel').onclick = function() {
-  var sel = cy.$(':selected');
-  if (sel.length) cy.fit(sel, 40);
-  hideContextMenu();
-};
-document.addEventListener('click', hideContextMenu);
-
-/* ── Status bar ── */
-function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
-
-/* ── Load ERP module onto canvas ── */
-var _loadedModules = {};
-
-function addModule(key) {
-  setStatus('Loading ' + key + '…');
-  fetch('/erd-designer/api/all-templates')
-    .then(function(r){return r.json();})
-    .then(function(d) {
-      var filtered = d.elements.filter(function(el) {
-        return el.data.id === 'mod_' + key
-            || el.data.parent === 'mod_' + key
-            || (el.data.source && el.data.target && (
-               (cy.getElementById(el.data.source).length && cy.getElementById(el.data.target).length)
-               || (!cy.getElementById(el.data.source).length && !cy.getElementById(el.data.target).length)
-            ));
-      });
-      // Only add elements not already on canvas
-      var toAdd = filtered.filter(function(el){ return !cy.getElementById(el.data.id).length; });
-      cy.add(toAdd);
-      relayout();
-      _loadedModules[key] = true;
-      setStatus('Added module: ' + key + ' | Nodes: ' + cy.nodes().length + ' | Edges: ' + cy.edges().length);
-    });
-}
-
-/* ── Load live schema ── */
-function loadLiveSchema() {
-  setStatus('Loading live database schema…');
-  fetch('/erd-designer/api/live-schema')
-    .then(function(r){return r.json();})
-    .then(function(d) {
-      if (d.error) { setStatus('Error: ' + d.error); return; }
-      var toAdd = (d.elements||[]).filter(function(el){ return !cy.getElementById(el.data.id).length; });
-      cy.add(toAdd);
-      relayout();
-      setStatus('Live schema: ' + cy.nodes().length + ' nodes, ' + cy.edges().length + ' edges');
-    });
-}
-
-/* ── Layout ── */
-function relayout() {
-  cy.layout({ name: 'cose', animate: true, animationDuration: 500,
-               nodeRepulsion: 8000, idealEdgeLength: 80, edgeElasticity: 32 }).run();
-}
-
-/* ── Search/filter ── */
-function toggleDomain(header) {
-  var items = header.nextElementSibling;
-  items.classList.toggle('collapsed');
-  var arrow = header.querySelector('span:last-child');
-  if (arrow) arrow.textContent = items.classList.contains('collapsed') ? '▸' : '▾';
-}
-
-function filterModules(q) {
-  var lq = q.toLowerCase();
-  document.querySelectorAll('.mod-item').forEach(function(el) {
-    var match = (el.dataset.label || '').toLowerCase().includes(lq)
-             || (el.dataset.domain || '').toLowerCase().includes(lq);
-    el.style.display = match ? '' : 'none';
-  });
-  // Show domain groups that have visible items
-  document.querySelectorAll('.domain-group').forEach(function(g) {
-    var visible = g.querySelectorAll('.mod-item:not([style*="none"])').length;
-    g.style.display = visible > 0 ? '' : 'none';
-    if (q && visible > 0) g.querySelector('.domain-items').classList.remove('collapsed');
-  });
-}
-
-/* ── Generate app ── */
-function generateApp() {
-  var name = document.getElementById('gen-name').value.trim() || 'GeneratedApp';
-  setStatus('Generating app…');
-  fetch('/erd-designer/api/generate-app', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({app_name: name, output_dir: '/tmp/' + name.toLowerCase()})
-  }).then(function(r){return r.json();}).then(function(d) {
-    setStatus((d.status === 'success')
-      ? '✓ App generated: ' + d.files_generated + ' files → ' + d.output_dir
-      : '✗ ' + d.error);
+function rollbackMigration(id) {
+  if (!confirm('Roll back this migration? This will execute the inverse DDL.')) return;
+  apiFetch('POST', '/api/migration-log/' + id + '/rollback').then(function(d) {
+    setStatus(d.ok ? '↩ Rollback applied' : '✗ Rollback failed: ' + (d.error || ''));
+    if (d.ok) refreshCanvas();
   });
 }
 </script>
+
 </body>
 </html>
-"""
+""")

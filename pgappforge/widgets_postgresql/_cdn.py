@@ -52,6 +52,28 @@ CYTOSCAPE_CDN = f"""
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/{CYTOSCAPE_VERSION}/cytoscape.min.js" crossorigin=""></script>
 """
 
+# Cytoscape.js extension CDNs — used by the ERD Designer
+# fcose: O(n log n) force-directed layout — replaces cose for >30 nodes
+CYTOSCAPE_FCOSE_CDN = """
+<script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js" crossorigin=""></script>
+"""
+# Dagre: hierarchical layout for deep tree schemas
+CYTOSCAPE_DAGRE_CDN = """
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js" crossorigin=""></script>
+"""
+# Edge handles: drag-from-node to create edges visually
+CYTOSCAPE_EDGEHANDLES_CDN = """
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-edgehandles@4.0.1/cytoscape-edgehandles.js" crossorigin=""></script>
+"""
+# Navigator: minimap overview in corner
+CYTOSCAPE_NAVIGATOR_CDN = """
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cytoscape-navigator@2.0.1/cytoscape.js-navigator.css">
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-navigator@2.0.1/cytoscape.js-navigator.js" crossorigin=""></script>
+"""
+
 JSBARCODE_VERSION = "3.11.6"
 JSBARCODE_CDN_URL = f"https://cdn.jsdelivr.net/npm/jsbarcode@{JSBARCODE_VERSION}/dist/JsBarcode.all.min.js"
 
