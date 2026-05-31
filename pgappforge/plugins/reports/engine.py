@@ -454,7 +454,7 @@ class ReportEngine:
 		"""
 		report = self._load_report(report_id)
 		params  = self._resolve_params(report, params or {})
-		rows    = self._execute_query(report, params, limit=self._preview_row_limit)
+		rows    = self._execute_query(report, params, limit=self.preview_row_limit)
 
 		parts: list[str] = [
 			"<!DOCTYPE html>",
@@ -520,10 +520,10 @@ class ReportEngine:
 						val = _fmt(raw, fmt_map.get(binding))
 						parts.append(f'<td>{_escape(val)}</td>')
 					parts.append("</tr>")
-				if len(rows) == self._preview_row_limit:
+				if len(rows) == self.preview_row_limit:
 					parts.append(
 						f'<tr><td colspan="{len(bindings)}" class="rpt-preview-note">'
-						f'Preview limited to {self._preview_row_limit} rows</td></tr>'
+						f'Preview limited to {self.preview_row_limit} rows</td></tr>'
 					)
 				parts.append("</tbody></table>")
 

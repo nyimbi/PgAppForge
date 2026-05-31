@@ -230,8 +230,12 @@ def _add_docx_watermark(doc: Any, text: str, opacity: float) -> None:
 		header.add_paragraph()
 	p = header.paragraphs[0]._p
 
-	# Build VML watermark XML
-	opacity_int = max(0, min(65536, int((1.0 - opacity) * 65536)))
+	# Build VML watermark XML.
+	# opacity_int would be (1-opacity)*65536 for VML fillcolor alpha, but the
+	# fill colour lightness achieves the same effect more reliably across renderers.
+	# Derive a light grey from opacity: higher opacity → darker grey.
+	grey_level = max(160, min(230, int(255 * (1.0 - opacity * 2))))
+	fill_color = f"#{grey_level:02X}{grey_level:02X}{grey_level:02X}"
 	ns = {
 		"v": "urn:schemas-microsoft-com:vml",
 		"o": "urn:schemas-microsoft-com:office:office",
@@ -248,7 +252,7 @@ def _add_docx_watermark(doc: Any, text: str, opacity: float) -> None:
 			"mso-position-vertical-relative:margin;"
 			"rotation:315;"
 		),
-		"fillcolor": "#d0d0d0",
+		"fillcolor": fill_color,
 		"stroked": "f",
 	})
 	txbx = etree.SubElement(pict, "{urn:schemas-microsoft-com:vml}textbox")
