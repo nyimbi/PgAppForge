@@ -2,7 +2,7 @@
   "name": "activitypub",
   "schema": "activitypub",
   "label": "ActivityPub / ActivityStreams 2.0",
-  "description": "W3C federated social networking standard \u2014 Mastodon, Lemmy, PeerTube, Pixelfed",
+  "description": "W3C federated social networking standard — Mastodon, Lemmy, PeerTube, Pixelfed",
   "color": "#6c3483",
   "icon": "fa-users",
   "version": "1.0",
@@ -149,7 +149,7 @@
         "name": "attributed_to_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id \u2014 the actor who authored or owns this object"
+        "description": "References ap_actor.id — the actor who authored or owns this object"
       },
       {
         "name": "content",
@@ -254,13 +254,13 @@
         "name": "actor_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id \u2014 the actor who performed this activity"
+        "description": "References ap_actor.id — the actor who performed this activity"
       },
       {
         "name": "object_id",
         "type": "UUID",
         "fk": "ap_object.id",
-        "description": "References ap_object.id \u2014 the object this activity was performed on (NULL for Follow)"
+        "description": "References ap_object.id — the object this activity was performed on (NULL for Follow)"
       },
       {
         "name": "target_url",
@@ -285,13 +285,13 @@
         "name": "follower_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id \u2014 the actor initiating the follow"
+        "description": "References ap_actor.id — the actor initiating the follow"
       },
       {
         "name": "following_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id \u2014 the actor being followed"
+        "description": "References ap_actor.id — the actor being followed"
       },
       {
         "name": "state",
@@ -306,7 +306,31 @@
       }
     ]
   },
-  "short_description": "W3C federated social networking standard \u2014 Mastodon, Lemmy, PeerTube, Pixelfed",
-  "long_description": "ActivityPub 1.0 is the W3C standard protocol for federated social networking, enabling decentralized social applications to interoperate. The schema covers actor profiles (people, organizations, bots), content objects (posts, articles, notes, images), activity records (Create, Like, Announce/boost, Follow), and follower relationships \u2014 the complete ActivityStreams 2.0 vocabulary.",
-  "when_to_use": "Use for federated social platforms, community discussion tools, or any social application that wants to be part of the Fediverse (Mastodon, Lemmy, PeerTube, Pixelfed ecosystem). ActivityPub implementations are growing rapidly following Twitter/X changes. Required for EU Digital Services Act compliance for large platforms needing interoperability APIs under consideration."
+  "short_description": "W3C federated social networking standard — Mastodon, Lemmy, PeerTube, Pixelfed",
+  "long_description": "ActivityPub 1.0 is the W3C standard protocol for federated social networking, enabling decentralized social applications to interoperate. The schema covers actor profiles (people, organizations, bots), content objects (posts, articles, notes, images), activity records (Create, Like, Announce/boost, Follow), and follower relationships — the complete ActivityStreams 2.0 vocabulary.",
+  "when_to_use": "Use for federated social platforms, community discussion tools, or any social application that wants to be part of the Fediverse (Mastodon, Lemmy, PeerTube, Pixelfed ecosystem). ActivityPub implementations are growing rapidly following Twitter/X changes. Required for EU Digital Services Act compliance for large platforms needing interoperability APIs under consideration.",
+  "actor": {
+    "role": "actor",
+    "table": "ap_actor",
+    "primary": true,
+    "display": {
+      "singular": "Actor",
+      "plural": "Actors",
+      "icon": "fa-user"
+    },
+    "field_map": {
+      "display_name": "name",
+      "external_ids": {
+        "url": "actor_url"
+      }
+    },
+    "related_collections": [
+      "ap_activity",
+      "ap_follow"
+    ],
+    "tags": [
+      "social",
+      "federated"
+    ]
+  }
 }

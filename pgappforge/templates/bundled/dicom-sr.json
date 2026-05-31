@@ -2,7 +2,7 @@
   "name": "dicom-sr",
   "schema": "dicom_sr",
   "label": "DICOM SR (Medical Imaging)",
-  "description": "DICOM Structured Reporting \u2014 medical imaging studies, series, instances for radiology apps",
+  "description": "DICOM Structured Reporting — medical imaging studies, series, instances for radiology apps",
   "color": "#1a7abf",
   "icon": "fa-x-ray",
   "version": "2024c",
@@ -32,7 +32,7 @@
         "name": "patient_id",
         "type": "VARCHAR(64)",
         "unique": true,
-        "description": "DICOM Patient ID (tag 0010,0020) \u2014 typically MRN assigned by issuing institution"
+        "description": "DICOM Patient ID (tag 0010,0020) — typically MRN assigned by issuing institution"
       },
       {
         "name": "patient_name",
@@ -67,13 +67,13 @@
         "type": "VARCHAR(64)",
         "unique": true,
         "nullable": false,
-        "description": "DICOM Study Instance UID (tag 0020,000D) \u2014 globally unique identifier assigned by the modality"
+        "description": "DICOM Study Instance UID (tag 0020,000D) — globally unique identifier assigned by the modality"
       },
       {
         "name": "patient_id",
         "type": "UUID",
         "fk": "dicom_patient.id",
-        "description": "References dicom_patient \u2014 the subject of this imaging study"
+        "description": "References dicom_patient — the subject of this imaging study"
       },
       {
         "name": "study_date",
@@ -93,7 +93,7 @@
       {
         "name": "modalities",
         "type": "JSONB",
-        "description": "Array of modality codes present in this study (e.g. [\"CT\", \"SR\"]) \u2014 DICOM Modalities in Study (0008,0061)"
+        "description": "Array of modality codes present in this study (e.g. [\"CT\", \"SR\"]) — DICOM Modalities in Study (0008,0061)"
       },
       {
         "name": "accession_number",
@@ -129,13 +129,13 @@
         "type": "VARCHAR(64)",
         "unique": true,
         "nullable": false,
-        "description": "DICOM Series Instance UID (tag 0020,000E) \u2014 globally unique identifier for this acquisition run"
+        "description": "DICOM Series Instance UID (tag 0020,000E) — globally unique identifier for this acquisition run"
       },
       {
         "name": "study_id",
         "type": "UUID",
         "fk": "dicom_study.id",
-        "description": "References dicom_study \u2014 the parent study this series belongs to"
+        "description": "References dicom_study — the parent study this series belongs to"
       },
       {
         "name": "series_number",
@@ -145,12 +145,12 @@
       {
         "name": "series_description",
         "type": "VARCHAR(255)",
-        "description": "Free-text description of the series (e.g. 'Axial T1 post-contrast') \u2014 DICOM tag 0008,103E"
+        "description": "Free-text description of the series (e.g. 'Axial T1 post-contrast') — DICOM tag 0008,103E"
       },
       {
         "name": "modality",
         "type": "VARCHAR(16)",
-        "description": "DICOM modality code for this series (e.g. CT, MR, PT, SR, US) \u2014 tag 0008,0060"
+        "description": "DICOM modality code for this series (e.g. CT, MR, PT, SR, US) — tag 0008,0060"
       },
       {
         "name": "body_part",
@@ -181,13 +181,13 @@
         "type": "VARCHAR(64)",
         "unique": true,
         "nullable": false,
-        "description": "DICOM SOP Instance UID (tag 0008,0018) \u2014 globally unique identifier for this image or document"
+        "description": "DICOM SOP Instance UID (tag 0008,0018) — globally unique identifier for this image or document"
       },
       {
         "name": "series_id",
         "type": "UUID",
         "fk": "dicom_series.id",
-        "description": "References dicom_series \u2014 the series this instance belongs to"
+        "description": "References dicom_series — the series this instance belongs to"
       },
       {
         "name": "sop_class_uid",
@@ -222,7 +222,7 @@
       {
         "name": "metadata",
         "type": "JSONB",
-        "description": "Supplementary DICOM tag values as JSONB {tag: value} \u2014 pixel spacing, slice thickness, window center/width, etc."
+        "description": "Supplementary DICOM tag values as JSONB {tag: value} — pixel spacing, slice thickness, window center/width, etc."
       }
     ],
     "dicom_report": [
@@ -236,7 +236,7 @@
         "name": "study_id",
         "type": "UUID",
         "fk": "dicom_study.id",
-        "description": "References dicom_study \u2014 the imaging study this report describes"
+        "description": "References dicom_study — the imaging study this report describes"
       },
       {
         "name": "report_type",
@@ -261,7 +261,7 @@
       {
         "name": "impression",
         "type": "TEXT",
-        "description": "Clinical interpretation summary and conclusions \u2014 the referring physician's primary read target"
+        "description": "Clinical interpretation summary and conclusions — the referring physician's primary read target"
       },
       {
         "name": "created_at",
@@ -276,7 +276,33 @@
       }
     ]
   },
-  "short_description": "DICOM Structured Reporting \u2014 medical imaging studies, series, instances for radiology apps",
+  "short_description": "DICOM Structured Reporting — medical imaging studies, series, instances for radiology apps",
   "long_description": "DICOM (Digital Imaging and Communications in Medicine) is the universal ISO/IEEE standard for medical imaging, used in every hospital radiology department worldwide. The Structured Reporting schema covers the four-level DICOM hierarchy: patient demographics, imaging study metadata, series within a study, and individual image instances, plus radiologist report content.",
-  "when_to_use": "Use for PACS (Picture Archiving and Communication System) software, radiology AI tools, teleradiology platforms, or any clinical application that handles medical images. Required by FDA for medical device software (SaMD) that processes medical images. The HL7 FHIR ImagingStudy resource references DICOM UIDs, making this the bridge between clinical records and imaging."
+  "when_to_use": "Use for PACS (Picture Archiving and Communication System) software, radiology AI tools, teleradiology platforms, or any clinical application that handles medical images. Required by FDA for medical device software (SaMD) that processes medical images. The HL7 FHIR ImagingStudy resource references DICOM UIDs, making this the bridge between clinical records and imaging.",
+  "actor": {
+    "role": "patient",
+    "table": "dicom_patient",
+    "primary": true,
+    "display": {
+      "singular": "Patient",
+      "plural": "Patients",
+      "icon": "fa-user-injured"
+    },
+    "field_map": {
+      "display_name": "patient_name",
+      "external_ids": {
+        "patient_id": "patient_id",
+        "fhir_id": "fhir_patient_id"
+      }
+    },
+    "related_collections": [
+      "dicom_study",
+      "dicom_report"
+    ],
+    "tags": [
+      "hipaa",
+      "person",
+      "radiology"
+    ]
+  }
 }

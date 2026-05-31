@@ -2,7 +2,7 @@
   "name": "open-badges",
   "schema": "open_badges",
   "label": "Open Badges / Verifiable Credentials",
-  "description": "W3C digital credentials \u2014 professional development, micro-credentials, certificates",
+  "description": "W3C digital credentials — professional development, micro-credentials, certificates",
   "color": "#f39c12",
   "icon": "fa-award",
   "version": "3.0",
@@ -16,7 +16,7 @@
   "table_notes": {
     "ob_issuer": "Organisations or individuals authorised to award badges; each badge class traces back to one issuer for provenance.",
     "ob_badge_class": "The badge definition (template): what it represents, how it is earned, and optional alignment to external frameworks such as O*NET or CASE.",
-    "ob_assertion": "A single awarded badge \u2014 ties one recipient to one badge class with evidence, issuance date, and revocation state.",
+    "ob_assertion": "A single awarded badge — ties one recipient to one badge class with evidence, issuance date, and revocation state.",
     "ob_endorsement": "A third-party claim by an issuer attesting that a specific assertion is credible or high-quality."
   },
   "tables": {
@@ -70,7 +70,7 @@
         "name": "issuer_id",
         "type": "UUID",
         "fk": "ob_issuer.id",
-        "description": "References ob_issuer \u2014 the organisation that owns and awards this badge"
+        "description": "References ob_issuer — the organisation that owns and awards this badge"
       },
       {
         "name": "name",
@@ -126,18 +126,18 @@
         "name": "badge_class_id",
         "type": "UUID",
         "fk": "ob_badge_class.id",
-        "description": "References ob_badge_class \u2014 the definition being awarded"
+        "description": "References ob_badge_class — the definition being awarded"
       },
       {
         "name": "recipient_id",
         "type": "VARCHAR(320)",
-        "description": "Identifier for the recipient \u2014 typically an email address or hashed email"
+        "description": "Identifier for the recipient — typically an email address or hashed email"
       },
       {
         "name": "recipient_type",
         "type": "VARCHAR(30)",
         "default": "'email'",
-        "description": "Coding: type of recipient identifier \u2014 'email', 'url', 'telephone', 'did'"
+        "description": "Coding: type of recipient identifier — 'email', 'url', 'telephone', 'did'"
       },
       {
         "name": "issued_on",
@@ -162,7 +162,7 @@
       {
         "name": "verification_type",
         "type": "VARCHAR(30)",
-        "description": "Coding: how the assertion can be verified \u2014 'HostedBadge', 'SignedBadge', or 'JWS'"
+        "description": "Coding: how the assertion can be verified — 'HostedBadge', 'SignedBadge', or 'JWS'"
       },
       {
         "name": "revoked",
@@ -187,13 +187,13 @@
         "name": "assertion_id",
         "type": "UUID",
         "fk": "ob_assertion.id",
-        "description": "References ob_assertion \u2014 the specific awarded badge being endorsed"
+        "description": "References ob_assertion — the specific awarded badge being endorsed"
       },
       {
         "name": "issuer_id",
         "type": "UUID",
         "fk": "ob_issuer.id",
-        "description": "References ob_issuer \u2014 the third party making the endorsement claim"
+        "description": "References ob_issuer — the third party making the endorsement claim"
       },
       {
         "name": "claim",
@@ -207,7 +207,31 @@
       }
     ]
   },
-  "short_description": "W3C digital credentials \u2014 professional development, micro-credentials, certificates",
+  "short_description": "W3C digital credentials — professional development, micro-credentials, certificates",
   "long_description": "Open Badges 3.0 is the W3C Verifiable Credentials-based standard for digital credentials. The schema covers the complete badge lifecycle: issuer identity, badge class definitions (criteria, alignment to standards), assertions (issued badges with recipient), and endorsements from third parties verifying badge quality.",
-  "when_to_use": "Use for professional development platforms, certification systems, workforce development tools, or any app that issues verifiable digital credentials. Adopted by LinkedIn, Acclaim, Credly, and major certification bodies. Required for compliance with US workforce development grants that mandate portable credentials. Growing adoption in EU Digital Credentials for Learning."
+  "when_to_use": "Use for professional development platforms, certification systems, workforce development tools, or any app that issues verifiable digital credentials. Adopted by LinkedIn, Acclaim, Credly, and major certification bodies. Required for compliance with US workforce development grants that mandate portable credentials. Growing adoption in EU Digital Credentials for Learning.",
+  "actor": {
+    "role": "issuer",
+    "table": "ob_issuer",
+    "primary": true,
+    "display": {
+      "singular": "Issuer",
+      "plural": "Issuers",
+      "icon": "fa-certificate"
+    },
+    "field_map": {
+      "display_name": "name",
+      "contact_email": "email",
+      "external_ids": {
+        "url": "url"
+      }
+    },
+    "related_collections": [
+      "ob_badge_class",
+      "ob_assertion"
+    ],
+    "tags": [
+      "education"
+    ]
+  }
 }

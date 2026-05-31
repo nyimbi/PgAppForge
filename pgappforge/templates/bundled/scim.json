@@ -2,7 +2,7 @@
   "name": "scim",
   "schema": "scim",
   "label": "SCIM 2.0 (Identity)",
-  "description": "System for Cross-domain Identity Management \u2014 enterprise SSO standard",
+  "description": "System for Cross-domain Identity Management — enterprise SSO standard",
   "color": "#8e44ad",
   "icon": "fa-user-shield",
   "version": "2.0",
@@ -16,8 +16,8 @@
     "azure-ad"
   ],
   "table_notes": {
-    "scim_users": "Core SCIM user resource (RFC 7643 \u00a74.1) with enterprise extension \u2014 stores identity, org hierarchy, and provisioning metadata for IdP-pushed accounts.",
-    "scim_groups": "SCIM group resource (RFC 7643 \u00a74.2) representing role or team collections; membership is normalised into scim_group_members.",
+    "scim_users": "Core SCIM user resource (RFC 7643 §4.1) with enterprise extension — stores identity, org hierarchy, and provisioning metadata for IdP-pushed accounts.",
+    "scim_groups": "SCIM group resource (RFC 7643 §4.2) representing role or team collections; membership is normalised into scim_group_members.",
     "scim_group_members": "Junction table resolving the many-to-many relationship between scim_groups and scim_users; each row records when a user was added.",
     "scim_schemas": "Registry of SCIM schema URNs and their attribute definitions; used by /Schemas endpoint and custom extension negotiation."
   },
@@ -27,7 +27,7 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "SCIM resource ID \u2014 stable UUID assigned by the service provider on creation"
+        "description": "SCIM resource ID — stable UUID assigned by the service provider on creation"
       },
       {
         "name": "external_id",
@@ -40,7 +40,7 @@
         "type": "VARCHAR(255)",
         "unique": true,
         "nullable": false,
-        "description": "Unique login identifier (usually email or sAMAccountName) \u2014 SCIM userName attribute"
+        "description": "Unique login identifier (usually email or sAMAccountName) — SCIM userName attribute"
       },
       {
         "name": "display_name",
@@ -117,7 +117,7 @@
         "name": "manager_id",
         "type": "UUID",
         "fk": "scim_users.id",
-        "description": "Self-referencing FK to scim_users.id \u2014 the user's direct manager in the org hierarchy"
+        "description": "Self-referencing FK to scim_users.id — the user's direct manager in the org hierarchy"
       },
       {
         "name": "meta",
@@ -141,7 +141,7 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "SCIM resource ID \u2014 stable UUID assigned by the service provider on group creation"
+        "description": "SCIM resource ID — stable UUID assigned by the service provider on group creation"
       },
       {
         "name": "external_id",
@@ -183,14 +183,14 @@
         "type": "UUID",
         "fk": "scim_groups.id",
         "nullable": false,
-        "description": "FK to scim_groups.id \u2014 the group this membership belongs to"
+        "description": "FK to scim_groups.id — the group this membership belongs to"
       },
       {
         "name": "user_id",
         "type": "UUID",
         "fk": "scim_users.id",
         "nullable": false,
-        "description": "FK to scim_users.id \u2014 the user being added to the group"
+        "description": "FK to scim_users.id — the user being added to the group"
       },
       {
         "name": "added_at",
@@ -223,7 +223,31 @@
       }
     ]
   },
-  "short_description": "System for Cross-domain Identity Management \u2014 enterprise SSO standard",
+  "short_description": "System for Cross-domain Identity Management — enterprise SSO standard",
   "long_description": "SCIM 2.0 (RFC 7643/7644) defines how enterprise identity systems provision, manage, and deprovision user and group accounts across applications. The schema covers the core SCIM user profile with enterprise extension (manager hierarchy, org structure, employee ID), group memberships, and the SCIM schema registry for custom extensions.",
-  "when_to_use": "Use for any enterprise application that needs to synchronize users with corporate identity providers. Okta, Azure AD, Google Workspace, and OneLogin all push users via SCIM. Required for SSO integrations with enterprise customers \u2014 most B2B SaaS companies must implement SCIM to close enterprise deals. Essential for Just-In-Time user provisioning."
+  "when_to_use": "Use for any enterprise application that needs to synchronize users with corporate identity providers. Okta, Azure AD, Google Workspace, and OneLogin all push users via SCIM. Required for SSO integrations with enterprise customers — most B2B SaaS companies must implement SCIM to close enterprise deals. Essential for Just-In-Time user provisioning.",
+  "actor": {
+    "role": "user",
+    "table": "scim_users",
+    "primary": true,
+    "display": {
+      "singular": "User",
+      "plural": "Users",
+      "icon": "fa-user"
+    },
+    "field_map": {
+      "display_name": "display_name",
+      "external_ids": {
+        "external_id": "external_id",
+        "username": "user_name"
+      }
+    },
+    "related_collections": [
+      "scim_groups"
+    ],
+    "tags": [
+      "identity",
+      "person"
+    ]
+  }
 }

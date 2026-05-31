@@ -2,7 +2,7 @@
   "name": "arts",
   "schema": "arts",
   "label": "ARTS (Retail Technology)",
-  "description": "Association for Retail Technology Standards \u2014 POS, transactions, inventory for large retailers",
+  "description": "Association for Retail Technology Standards — POS, transactions, inventory for large retailers",
   "color": "#e67e22",
   "icon": "fa-cash-register",
   "version": "7.0",
@@ -295,10 +295,34 @@
       }
     ]
   },
-  "short_description": "Association for Retail Technology Standards \u2014 POS, transactions, inventory for large retailers",
+  "short_description": "Association for Retail Technology Standards — POS, transactions, inventory for large retailers",
   "long_description": "ARTS (Association for Retail Technology Standards) provides the data standards used by large retailers for POS, loss prevention, and inventory management. The schema covers the complete in-store transaction lifecycle: workstation registration, transaction headers with operator/customer context, individual sale/return/void line items, and tender settlements.",
   "when_to_use": "Use for POS (point-of-sale) software, retail analytics platforms, loss prevention tools, or retail integration middleware. ARTS standards are implemented by Oracle Retail, NCR, Toshiba, and Diebold Nixdorf POS systems. Required for integration with major retailers' inventory and reporting systems. The xTill standard (used in UK retail) is ARTS-aligned.",
   "extensions": [
     "postgis"
-  ]
+  ],
+  "actor": {
+    "role": "store",
+    "table": "arts_retail_store",
+    "primary": true,
+    "display": {
+      "singular": "Store",
+      "plural": "Stores",
+      "icon": "fa-store"
+    },
+    "field_map": {
+      "display_name": "name",
+      "status_field": "is_active",
+      "status_map": {
+        "true": "active",
+        "false": "inactive"
+      }
+    },
+    "related_collections": [
+      "arts_transaction"
+    ],
+    "tags": [
+      "retail"
+    ]
+  }
 }

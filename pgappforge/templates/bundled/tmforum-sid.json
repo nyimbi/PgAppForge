@@ -2,10 +2,10 @@
   "name": "tmforum-sid",
   "schema": "tmforum_sid",
   "label": "TM Forum Open API / SID",
-  "description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
-  "short_description": "Telecom BSS/OSS standard \u2014 used by every telecom operator globally",
-  "long_description": "TM Forum's Open API suite (formerly SID) provides the universal data model for telecommunications BSS/OSS systems, covering the complete telco product/service/resource stack. The schema covers party management, customer accounts, product catalog, service instances, resource inventory, and trouble ticket management \u2014 aligned with TMF620/TMF622/TMF629/TMF632 APIs.",
-  "when_to_use": "Use for any telecom BSS/OSS application, MVNO platform, or telco API integration. TM Forum Open APIs are implemented by 850+ companies including AT&T, Deutsche Telekom, Orange, and Telef\u00f3nica. Required for TM Forum Open API certification. Essential for MVNO management systems and telecom-as-a-service platforms.",
+  "description": "Telecom BSS/OSS standard — used by every telecom operator globally",
+  "short_description": "Telecom BSS/OSS standard — used by every telecom operator globally",
+  "long_description": "TM Forum's Open API suite (formerly SID) provides the universal data model for telecommunications BSS/OSS systems, covering the complete telco product/service/resource stack. The schema covers party management, customer accounts, product catalog, service instances, resource inventory, and trouble ticket management — aligned with TMF620/TMF622/TMF629/TMF632 APIs.",
+  "when_to_use": "Use for any telecom BSS/OSS application, MVNO platform, or telco API integration. TM Forum Open APIs are implemented by 850+ companies including AT&T, Deutsche Telekom, Orange, and Telefónica. Required for TM Forum Open API certification. Essential for MVNO management systems and telecom-as-a-service platforms.",
   "color": "#e74c3c",
   "icon": "fa-network-wired",
   "version": "22.5",
@@ -314,5 +314,57 @@
         "description": "Timestamp when the fault was resolved or request fulfilled (NULL if still open)"
       }
     ]
-  }
+  },
+  "actors": [
+    {
+      "role": "customer",
+      "table": "tmf_customer",
+      "primary": true,
+      "display": {
+        "singular": "Customer",
+        "plural": "Customers",
+        "icon": "fa-user"
+      },
+      "field_map": {
+        "display_name": "account_number",
+        "status_field": "status",
+        "status_map": {
+          "active": "active",
+          "inactive": "inactive",
+          "suspended": "inactive"
+        },
+        "external_ids": {
+          "party_id": "party_id"
+        }
+      },
+      "related_collections": [
+        "tmf_product",
+        "tmf_service"
+      ],
+      "tags": [
+        "telecoms",
+        "billable"
+      ]
+    },
+    {
+      "role": "party",
+      "table": "tmf_party",
+      "primary": false,
+      "display": {
+        "singular": "Party",
+        "plural": "Parties",
+        "icon": "fa-users"
+      },
+      "field_map": {
+        "display_name": "name"
+      },
+      "related_collections": [
+        "tmf_customer"
+      ],
+      "tags": [
+        "telecoms",
+        "person"
+      ]
+    }
+  ]
 }

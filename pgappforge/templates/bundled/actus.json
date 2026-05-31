@@ -31,7 +31,7 @@
         "name": "lei",
         "type": "VARCHAR(20)",
         "unique": true,
-        "description": "Legal Entity Identifier (ISO 17442) \u2014 globally unique 20-character code for the legal entity"
+        "description": "Legal Entity Identifier (ISO 17442) — globally unique 20-character code for the legal entity"
       },
       {
         "name": "name",
@@ -56,7 +56,7 @@
       {
         "name": "default_probability",
         "type": "NUMERIC(8,6)",
-        "description": "Annualised probability of default used in credit risk calculations (0.0\u20131.0)"
+        "description": "Annualised probability of default used in credit risk calculations (0.0–1.0)"
       }
     ],
     "actus_contract": [
@@ -82,7 +82,7 @@
       {
         "name": "contract_role",
         "type": "VARCHAR(10)",
-        "description": "ACTUS contract role (RPA=receive principal, RPL=pay principal) \u2014 determines cash flow direction"
+        "description": "ACTUS contract role (RPA=receive principal, RPL=pay principal) — determines cash flow direction"
       },
       {
         "name": "counterparty_id",
@@ -113,7 +113,7 @@
       {
         "name": "initial_exchange_date",
         "type": "DATE",
-        "description": "Date of the first exchange of principal \u2014 marks the start of the contract"
+        "description": "Date of the first exchange of principal — marks the start of the contract"
       },
       {
         "name": "maturity_date",
@@ -204,6 +204,29 @@
     ]
   },
   "short_description": "Algorithmic Contract Types Unified Standards",
-  "long_description": "ACTUS (Algorithmic Contract Types Unified Standards) provides mathematically precise definitions for all financial contract types \u2014 from simple loans (PAM) to complex derivatives. Unlike accounting-focused schemas, ACTUS captures the complete cash flow algorithm for each contract type, enabling deterministic simulation of future cash flows under any market scenario. Widely adopted for stress testing and IRRBB compliance.",
-  "when_to_use": "Use for fintech applications modeling loan portfolios, bond analytics, derivative pricing, or regulatory stress testing. EU Solvency II and Basel IV implementations benefit from ACTUS-aligned data models. Essential for any system that needs to calculate future cash flows algorithmically rather than storing static schedules."
+  "long_description": "ACTUS (Algorithmic Contract Types Unified Standards) provides mathematically precise definitions for all financial contract types — from simple loans (PAM) to complex derivatives. Unlike accounting-focused schemas, ACTUS captures the complete cash flow algorithm for each contract type, enabling deterministic simulation of future cash flows under any market scenario. Widely adopted for stress testing and IRRBB compliance.",
+  "when_to_use": "Use for fintech applications modeling loan portfolios, bond analytics, derivative pricing, or regulatory stress testing. EU Solvency II and Basel IV implementations benefit from ACTUS-aligned data models. Essential for any system that needs to calculate future cash flows algorithmically rather than storing static schedules.",
+  "actor": {
+    "role": "counterparty",
+    "table": "actus_counterparty",
+    "primary": true,
+    "display": {
+      "singular": "Counterparty",
+      "plural": "Counterparties",
+      "icon": "fa-handshake"
+    },
+    "field_map": {
+      "display_name": "name",
+      "external_ids": {
+        "lei": "lei"
+      }
+    },
+    "related_collections": [
+      "actus_contract"
+    ],
+    "tags": [
+      "finance",
+      "billable"
+    ]
+  }
 }

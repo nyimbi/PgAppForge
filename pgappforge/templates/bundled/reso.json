@@ -2,7 +2,7 @@
   "name": "reso",
   "schema": "reso",
   "label": "RESO (Real Estate)",
-  "description": "Real Estate Standards Organization \u2014 MLS/IDX standard for North America",
+  "description": "Real Estate Standards Organization — MLS/IDX standard for North America",
   "color": "#27ae60",
   "icon": "fa-home",
   "version": "2.0",
@@ -316,7 +316,40 @@
       }
     ]
   },
-  "short_description": "Real Estate Standards Organization \u2014 MLS/IDX standard for North America",
-  "long_description": "RESO (Real Estate Standards Organization) defines the data dictionary used by all Multiple Listing Services (MLS) in North America. The schema includes the core property listing fields (status, price, features), media assets, agent/member details, brokerage office data, and open house records \u2014 all aligned with RESO Data Dictionary 2.0.",
-  "when_to_use": "Use for real estate portals, MLS applications, property management systems, or any real estate API integration. IDX (Internet Data Exchange) compliance is legally required by NAR rules for all MLS participants. The RESO API standard is used by Zillow, Realtor.com, and all major US/Canadian real estate platforms."
+  "short_description": "Real Estate Standards Organization — MLS/IDX standard for North America",
+  "long_description": "RESO (Real Estate Standards Organization) defines the data dictionary used by all Multiple Listing Services (MLS) in North America. The schema includes the core property listing fields (status, price, features), media assets, agent/member details, brokerage office data, and open house records — all aligned with RESO Data Dictionary 2.0.",
+  "when_to_use": "Use for real estate portals, MLS applications, property management systems, or any real estate API integration. IDX (Internet Data Exchange) compliance is legally required by NAR rules for all MLS participants. The RESO API standard is used by Zillow, Realtor.com, and all major US/Canadian real estate platforms.",
+  "actor": {
+    "role": "member",
+    "table": "reso_member",
+    "primary": true,
+    "display": {
+      "singular": "Member",
+      "plural": "Members",
+      "icon": "fa-id-badge"
+    },
+    "field_map": {
+      "display_name": [
+        "member_first_name",
+        "member_last_name"
+      ],
+      "contact_email": "member_email",
+      "contact_phone": "member_direct_phone",
+      "status_field": "member_status",
+      "status_map": {
+        "active": "active",
+        "inactive": "inactive",
+        "pending": "inactive"
+      },
+      "external_ids": {
+        "mls_id": "member_mls_id",
+        "license": "member_license_number"
+      }
+    },
+    "tags": [
+      "real-estate",
+      "person",
+      "licensed"
+    ]
+  }
 }

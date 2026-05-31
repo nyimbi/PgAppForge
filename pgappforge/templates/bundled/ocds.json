@@ -2,7 +2,7 @@
   "name": "ocds",
   "schema": "ocds",
   "label": "OCDS (Procurement)",
-  "description": "Open Contracting Data Standard \u2014 used by 70+ governments",
+  "description": "Open Contracting Data Standard — used by 70+ governments",
   "color": "#8e44ad",
   "icon": "fa-gavel",
   "version": "1.1",
@@ -123,7 +123,7 @@
         "name": "buyer_id",
         "type": "INTEGER",
         "fk": "ocds_buyer.id",
-        "description": "References ocds_buyer \u2014 the procuring entity initiating this contracting process"
+        "description": "References ocds_buyer — the procuring entity initiating this contracting process"
       },
       {
         "name": "procurement_method",
@@ -192,13 +192,13 @@
         "name": "tender_id",
         "type": "UUID",
         "fk": "ocds_tender.id",
-        "description": "References ocds_tender \u2014 the contracting process this award belongs to"
+        "description": "References ocds_tender — the contracting process this award belongs to"
       },
       {
         "name": "supplier_id",
         "type": "INTEGER",
         "fk": "ocds_supplier.id",
-        "description": "References ocds_supplier \u2014 the winning bidder receiving this award"
+        "description": "References ocds_supplier — the winning bidder receiving this award"
       },
       {
         "name": "title",
@@ -242,7 +242,7 @@
         "name": "award_id",
         "type": "UUID",
         "fk": "ocds_award.id",
-        "description": "References ocds_award \u2014 the award decision that gave rise to this contract"
+        "description": "References ocds_award — the award decision that gave rise to this contract"
       },
       {
         "name": "title",
@@ -296,7 +296,7 @@
         "name": "tender_id",
         "type": "UUID",
         "fk": "ocds_tender.id",
-        "description": "References ocds_tender \u2014 the contracting process this milestone belongs to"
+        "description": "References ocds_tender — the contracting process this milestone belongs to"
       },
       {
         "name": "type",
@@ -325,7 +325,44 @@
       }
     ]
   },
-  "short_description": "Open Contracting Data Standard \u2014 used by 70+ governments",
-  "long_description": "OCDS (Open Contracting Data Standard) defines how governments publish their procurement data \u2014 from tender announcement through contract award and implementation. The schema covers the complete contracting lifecycle: tenders with item descriptions, award decisions, contracts with values, and milestone tracking.",
-  "when_to_use": "Use for government procurement platforms, anti-corruption monitoring tools, or any system working with public sector purchasing data. Mandatory for public procurement in Ukraine, Moldova, Colombia, and many other countries. Used by World Bank, UNDP, and 70+ national governments. Required for EU public procurement portal data feeds."
+  "short_description": "Open Contracting Data Standard — used by 70+ governments",
+  "long_description": "OCDS (Open Contracting Data Standard) defines how governments publish their procurement data — from tender announcement through contract award and implementation. The schema covers the complete contracting lifecycle: tenders with item descriptions, award decisions, contracts with values, and milestone tracking.",
+  "when_to_use": "Use for government procurement platforms, anti-corruption monitoring tools, or any system working with public sector purchasing data. Mandatory for public procurement in Ukraine, Moldova, Colombia, and many other countries. Used by World Bank, UNDP, and 70+ national governments. Required for EU public procurement portal data feeds.",
+  "actor": {
+    "role": "buyer",
+    "table": "ocds_buyer",
+    "primary": true,
+    "display": {
+      "singular": "Buyer",
+      "plural": "Buyers",
+      "icon": "fa-university"
+    },
+    "field_map": {
+      "display_name": "name",
+      "external_ids": {
+        "identifier": "identifier"
+      }
+    },
+    "related_collections": [
+      "ocds_tender",
+      "ocds_contract"
+    ],
+    "tags": [
+      "government",
+      "procurement"
+    ],
+    "sub_roles": {
+      "supplier": {
+        "filter_field": "type",
+        "filter_values": [
+          "supplier"
+        ],
+        "display": {
+          "singular": "Supplier",
+          "plural": "Suppliers",
+          "icon": "fa-truck"
+        }
+      }
+    }
+  }
 }

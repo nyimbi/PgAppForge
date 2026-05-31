@@ -2,7 +2,7 @@
   "name": "gtfs",
   "schema": "gtfs",
   "label": "GTFS (Transit)",
-  "description": "General Transit Feed Specification \u2014 used by every transit authority",
+  "description": "General Transit Feed Specification — used by every transit authority",
   "color": "#27ae60",
   "icon": "fa-bus",
   "version": "2.0",
@@ -21,7 +21,7 @@
     "trips": "A single vehicle run along a route; links a route, a calendar service, and an optional shape for map display.",
     "stop_times": "Ordered arrival/departure schedule for every stop on a trip; the largest table in any GTFS feed.",
     "calendar_dates": "Exceptions to the regular calendar (added or removed service), e.g. public holidays or special events.",
-    "shapes": "Ordered sequence of lat/lng waypoints describing the on-road geometry of a trip\u2019s path for map rendering.",
+    "shapes": "Ordered sequence of lat/lng waypoints describing the on-road geometry of a trip’s path for map rendering.",
     "fare_attributes": "Pricing rules per fare class including currency, payment method, and transfer allowance."
   },
   "tables": {
@@ -122,7 +122,7 @@
       {
         "name": "platform_code",
         "type": "VARCHAR(50)",
-        "description": "Platform identifier within a multi-platform station (e.g. \u201c3A\u201d, \u201cNorth\u201d)"
+        "description": "Platform identifier within a multi-platform station (e.g. “3A”, “North”)"
       }
     ],
     "routes": [
@@ -141,17 +141,17 @@
       {
         "name": "route_short_name",
         "type": "VARCHAR(50)",
-        "description": "Short public designation shown on vehicles and signage (e.g. \u201c42\u201d, \u201cRed Line\u201d)"
+        "description": "Short public designation shown on vehicles and signage (e.g. “42”, “Red Line”)"
       },
       {
         "name": "route_long_name",
         "type": "VARCHAR(255)",
-        "description": "Full descriptive name of the route shown in schedules (e.g. \u201cDowntown Express\u201d)"
+        "description": "Full descriptive name of the route shown in schedules (e.g. “Downtown Express”)"
       },
       {
         "name": "route_desc",
         "type": "TEXT",
-        "description": "Additional description of the route\u2019s purpose or operating pattern"
+        "description": "Additional description of the route’s purpose or operating pattern"
       },
       {
         "name": "route_type",
@@ -260,7 +260,7 @@
       {
         "name": "trip_headsign",
         "type": "VARCHAR(255)",
-        "description": "Destination text displayed on the vehicle\u2019s front sign (e.g. \u201cDowntown\u201d)"
+        "description": "Destination text displayed on the vehicle’s front sign (e.g. “Downtown”)"
       },
       {
         "name": "direction_id",
@@ -428,7 +428,29 @@
       }
     ]
   },
-  "short_description": "General Transit Feed Specification \u2014 used by every transit authority",
-  "long_description": "GTFS (General Transit Feed Specification) is the universal format for publishing public transit schedules and geographic data. The schema covers agencies, stops, routes, calendar service patterns, trips, and stop times \u2014 the complete set of GTFS Static tables plus fare attributes.",
-  "when_to_use": "Use for transit applications, trip planning tools, mobility-as-a-service (MaaS) platforms, or any system that needs to work with public transit data. Cities and transit agencies in 100+ countries publish GTFS. Many jurisdictions legally require agencies to publish GTFS data. Google Maps, Apple Maps, and all major navigation apps consume GTFS."
+  "short_description": "General Transit Feed Specification — used by every transit authority",
+  "long_description": "GTFS (General Transit Feed Specification) is the universal format for publishing public transit schedules and geographic data. The schema covers agencies, stops, routes, calendar service patterns, trips, and stop times — the complete set of GTFS Static tables plus fare attributes.",
+  "when_to_use": "Use for transit applications, trip planning tools, mobility-as-a-service (MaaS) platforms, or any system that needs to work with public transit data. Cities and transit agencies in 100+ countries publish GTFS. Many jurisdictions legally require agencies to publish GTFS data. Google Maps, Apple Maps, and all major navigation apps consume GTFS.",
+  "actor": {
+    "role": "agency",
+    "table": "agency",
+    "primary": true,
+    "display": {
+      "singular": "Agency",
+      "plural": "Agencies",
+      "icon": "fa-bus"
+    },
+    "field_map": {
+      "display_name": "agency_name",
+      "contact_email": "agency_email",
+      "contact_phone": "agency_phone"
+    },
+    "related_collections": [
+      "routes",
+      "trips"
+    ],
+    "tags": [
+      "transit"
+    ]
+  }
 }

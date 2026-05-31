@@ -2,7 +2,7 @@
   "name": "vcard-ical",
   "schema": "vcard_ical",
   "label": "vCard 4.0 + iCal",
-  "description": "RFC standards for contacts and calendar data \u2014 interoperable with every phone/email client",
+  "description": "RFC standards for contacts and calendar data — interoperable with every phone/email client",
   "color": "#16a085",
   "icon": "fa-address-book",
   "version": "RFC 6350/5545",
@@ -15,11 +15,11 @@
     "scheduling"
   ],
   "table_notes": {
-    "vcard_contact": "Core contact record per RFC 6350 vCard 4.0 \u2014 one row per person or organization, with structured name components and JSONB fields for multi-value properties.",
+    "vcard_contact": "Core contact record per RFC 6350 vCard 4.0 — one row per person or organization, with structured name components and JSONB fields for multi-value properties.",
     "vcard_email": "Multi-valued EMAIL property for a contact; each row is one address with RFC-defined type tags (work, home, etc.) and a preference rank.",
-    "vcard_phone": "Multi-valued TEL property for a contact; each row is one phone number with type tags and preference rank per RFC 6350 \u00a76.4.1.",
-    "ical_calendar": "Top-level VCALENDAR container per RFC 5545 \u2014 one row per calendar feed, grouping events under an owner and timezone.",
-    "ical_event": "Individual VEVENT records per RFC 5545 \u2014 stores timing, recurrence, attendees, and geolocation for a single event instance or recurring series."
+    "vcard_phone": "Multi-valued TEL property for a contact; each row is one phone number with type tags and preference rank per RFC 6350 §6.4.1.",
+    "ical_calendar": "Top-level VCALENDAR container per RFC 5545 — one row per calendar feed, grouping events under an owner and timezone.",
+    "ical_event": "Individual VEVENT records per RFC 5545 — stores timing, recurrence, attendees, and geolocation for a single event instance or recurring series."
   },
   "tables": {
     "vcard_contact": [
@@ -33,12 +33,12 @@
         "name": "uid",
         "type": "VARCHAR(255)",
         "unique": true,
-        "description": "RFC 6350 UID property \u2014 globally unique identifier used for CardDAV sync and import/export"
+        "description": "RFC 6350 UID property — globally unique identifier used for CardDAV sync and import/export"
       },
       {
         "name": "fn",
         "type": "VARCHAR(500)",
-        "description": "RFC 6350 FN (formatted name) \u2014 the display name as a single pre-formatted string"
+        "description": "RFC 6350 FN (formatted name) — the display name as a single pre-formatted string"
       },
       {
         "name": "family_name",
@@ -68,7 +68,7 @@
       {
         "name": "nickname",
         "type": "JSONB",
-        "description": "RFC 6350 NICKNAME property \u2014 array of nickname strings, e.g. [\"Jim\", \"Jimmy\"]"
+        "description": "RFC 6350 NICKNAME property — array of nickname strings, e.g. [\"Jim\", \"Jimmy\"]"
       },
       {
         "name": "photo_url",
@@ -93,7 +93,7 @@
       {
         "name": "org",
         "type": "JSONB",
-        "description": "RFC 6350 ORG property \u2014 array of org unit strings, e.g. [\"Acme Corp\", \"Engineering\"]"
+        "description": "RFC 6350 ORG property — array of org unit strings, e.g. [\"Acme Corp\", \"Engineering\"]"
       },
       {
         "name": "title",
@@ -108,7 +108,7 @@
       {
         "name": "url",
         "type": "JSONB",
-        "description": "RFC 6350 URL property \u2014 JSONB array of {value, type} objects, one per web address"
+        "description": "RFC 6350 URL property — JSONB array of {value, type} objects, one per web address"
       },
       {
         "name": "note",
@@ -118,12 +118,12 @@
       {
         "name": "categories",
         "type": "JSONB",
-        "description": "RFC 6350 CATEGORIES property \u2014 array of keyword strings used for grouping/tagging contacts"
+        "description": "RFC 6350 CATEGORIES property — array of keyword strings used for grouping/tagging contacts"
       },
       {
         "name": "rev",
         "type": "TIMESTAMPTZ",
-        "description": "RFC 6350 REV property \u2014 timestamp of the last revision of the vCard record"
+        "description": "RFC 6350 REV property — timestamp of the last revision of the vCard record"
       },
       {
         "name": "created_at",
@@ -143,7 +143,7 @@
         "name": "contact_id",
         "type": "UUID",
         "fk": "vcard_contact.id",
-        "description": "Foreign key to vcard_contact \u2014 the contact that owns this email address"
+        "description": "Foreign key to vcard_contact — the contact that owns this email address"
       },
       {
         "name": "address",
@@ -160,7 +160,7 @@
         "name": "preference",
         "type": "INTEGER",
         "default": "100",
-        "description": "RFC 6350 PREF parameter \u2014 1 (most preferred) to 100 (least preferred); lower wins"
+        "description": "RFC 6350 PREF parameter — 1 (most preferred) to 100 (least preferred); lower wins"
       },
       {
         "name": "label",
@@ -179,7 +179,7 @@
         "name": "contact_id",
         "type": "UUID",
         "fk": "vcard_contact.id",
-        "description": "Foreign key to vcard_contact \u2014 the contact that owns this phone number"
+        "description": "Foreign key to vcard_contact — the contact that owns this phone number"
       },
       {
         "name": "number",
@@ -195,7 +195,7 @@
         "name": "preference",
         "type": "INTEGER",
         "default": "100",
-        "description": "RFC 6350 PREF parameter \u2014 1 (most preferred) to 100 (least preferred); lower wins"
+        "description": "RFC 6350 PREF parameter — 1 (most preferred) to 100 (least preferred); lower wins"
       }
     ],
     "ical_calendar": [
@@ -233,7 +233,7 @@
       {
         "name": "prodid",
         "type": "VARCHAR(255)",
-        "description": "RFC 5545 PRODID \u2014 software product identifier that created this calendar feed"
+        "description": "RFC 5545 PRODID — software product identifier that created this calendar feed"
       }
     ],
     "ical_event": [
@@ -247,28 +247,28 @@
         "name": "calendar_id",
         "type": "UUID",
         "fk": "ical_calendar.id",
-        "description": "Foreign key to ical_calendar \u2014 the calendar this event belongs to"
+        "description": "Foreign key to ical_calendar — the calendar this event belongs to"
       },
       {
         "name": "uid",
         "type": "VARCHAR(255)",
         "unique": true,
-        "description": "RFC 5545 UID property \u2014 globally unique event identifier used for CalDAV sync and deduplication"
+        "description": "RFC 5545 UID property — globally unique event identifier used for CalDAV sync and deduplication"
       },
       {
         "name": "summary",
         "type": "TEXT",
-        "description": "RFC 5545 SUMMARY \u2014 short one-line title/subject of the event (shown in calendar grid)"
+        "description": "RFC 5545 SUMMARY — short one-line title/subject of the event (shown in calendar grid)"
       },
       {
         "name": "description",
         "type": "TEXT",
-        "description": "RFC 5545 DESCRIPTION \u2014 detailed notes or body text for the event"
+        "description": "RFC 5545 DESCRIPTION — detailed notes or body text for the event"
       },
       {
         "name": "location",
         "type": "TEXT",
-        "description": "RFC 5545 LOCATION \u2014 venue name or address string for the event"
+        "description": "RFC 5545 LOCATION — venue name or address string for the event"
       },
       {
         "name": "geo_point",
@@ -278,18 +278,18 @@
       {
         "name": "dtstart",
         "type": "TIMESTAMPTZ",
-        "description": "RFC 5545 DTSTART \u2014 event start date/time in UTC (all-day events store midnight UTC)"
+        "description": "RFC 5545 DTSTART — event start date/time in UTC (all-day events store midnight UTC)"
       },
       {
         "name": "dtend",
         "type": "TIMESTAMPTZ",
-        "description": "RFC 5545 DTEND \u2014 event end date/time in UTC (exclusive end per RFC 5545 \u00a73.8.2.2)"
+        "description": "RFC 5545 DTEND — event end date/time in UTC (exclusive end per RFC 5545 §3.8.2.2)"
       },
       {
         "name": "all_day",
         "type": "BOOLEAN",
         "default": "false",
-        "description": "True when DTSTART/DTEND are DATE values (no time component) \u2014 renders as all-day in UIs"
+        "description": "True when DTSTART/DTEND are DATE values (no time component) — renders as all-day in UIs"
       },
       {
         "name": "rrule",
@@ -314,29 +314,57 @@
       {
         "name": "attendees",
         "type": "JSONB",
-        "description": "RFC 5545 ATTENDEE list \u2014 array of {cn, email, partstat, role} objects per invitee"
+        "description": "RFC 5545 ATTENDEE list — array of {cn, email, partstat, role} objects per invitee"
       },
       {
         "name": "categories",
         "type": "JSONB",
-        "description": "RFC 5545 CATEGORIES \u2014 array of keyword strings for tagging and filtering events"
+        "description": "RFC 5545 CATEGORIES — array of keyword strings for tagging and filtering events"
       },
       {
         "name": "created_at",
         "type": "TIMESTAMPTZ",
-        "description": "RFC 5545 CREATED \u2014 timestamp when the event was first added to the calendar store"
+        "description": "RFC 5545 CREATED — timestamp when the event was first added to the calendar store"
       },
       {
         "name": "last_modified",
         "type": "TIMESTAMPTZ",
-        "description": "RFC 5545 LAST-MODIFIED \u2014 timestamp of the most recent change to this event"
+        "description": "RFC 5545 LAST-MODIFIED — timestamp of the most recent change to this event"
       }
     ]
   },
-  "short_description": "RFC standards for contacts and calendar data \u2014 interoperable with every phone/email client",
+  "short_description": "RFC standards for contacts and calendar data — interoperable with every phone/email client",
   "long_description": "vCard 4.0 (RFC 6350) and iCalendar (RFC 5545) are the IETF standards for contacts and calendar data interchange, supported natively by every phone, email client, and calendar application. The schema covers the complete vCard data model with typed email/phone fields, iCalendar event records with RRULE recurrence, attendees, and geolocation.",
   "when_to_use": "Use for CRM systems, address book applications, scheduling/booking platforms, calendar sharing tools, or any application that needs to import/export contacts and events. vCard/iCal support is required for CalDAV/CardDAV server compatibility (used by iOS, Android, Thunderbird, Outlook). Essential for multi-platform calendar sync and contact migration tools.",
   "extensions": [
     "postgis"
-  ]
+  ],
+  "actor": {
+    "role": "contact",
+    "table": "vcard_contact",
+    "primary": true,
+    "display": {
+      "singular": "Contact",
+      "plural": "Contacts",
+      "icon": "fa-address-card"
+    },
+    "field_map": {
+      "display_name": [
+        "given_name",
+        "family_name"
+      ],
+      "external_ids": {
+        "uid": "uid"
+      }
+    },
+    "related_collections": [
+      "vcard_email",
+      "vcard_phone",
+      "ical_event"
+    ],
+    "tags": [
+      "social",
+      "person"
+    ]
+  }
 }

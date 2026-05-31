@@ -2,7 +2,7 @@
   "name": "iati",
   "schema": "iati",
   "label": "IATI (International Aid)",
-  "description": "International Aid Transparency Initiative \u2014 1500+ NGOs and governments publish aid data",
+  "description": "International Aid Transparency Initiative — 1500+ NGOs and governments publish aid data",
   "color": "#1abc9c",
   "icon": "fa-hands-helping",
   "version": "2.03",
@@ -266,7 +266,30 @@
       }
     ]
   },
-  "short_description": "International Aid Transparency Initiative \u2014 1500+ NGOs and governments publish aid data",
+  "short_description": "International Aid Transparency Initiative — 1500+ NGOs and governments publish aid data",
   "long_description": "IATI (International Aid Transparency Initiative) 2.03 defines the open data standard for publishing development cooperation activities. The schema covers reporting organizations, activities with titles/descriptions/status, individual financial transactions (commitments, disbursements, expenditures), budget breakdowns by period, and result indicators with target/actual values.",
-  "when_to_use": "Use for donor management systems, project management tools for NGOs, aid coordination platforms, or M&E systems. Over 1,700 publishers including USAID, UKAID, World Bank, and UNICEF publish IATI data. Many bilateral donors require IATI-compatible reporting as a grant condition. Required for integration with d-portal.org, the IATI Datastore, and DevTracker."
+  "when_to_use": "Use for donor management systems, project management tools for NGOs, aid coordination platforms, or M&E systems. Over 1,700 publishers including USAID, UKAID, World Bank, and UNICEF publish IATI data. Many bilateral donors require IATI-compatible reporting as a grant condition. Required for integration with d-portal.org, the IATI Datastore, and DevTracker.",
+  "actor": {
+    "role": "organisation",
+    "table": "iati_organisation",
+    "primary": true,
+    "display": {
+      "singular": "Organisation",
+      "plural": "Organisations",
+      "icon": "fa-globe"
+    },
+    "field_map": {
+      "display_name": "name",
+      "external_ids": {
+        "ref": "ref"
+      }
+    },
+    "related_collections": [
+      "iati_activity"
+    ],
+    "tags": [
+      "government",
+      "regulated"
+    ]
+  }
 }

@@ -2,7 +2,7 @@
   "name": "gleif",
   "schema": "gleif",
   "label": "GLEIF LEI (Entity IDs)",
-  "description": "Global Legal Entity Identifier Foundation \u2014 universal business ID used in financial regulation worldwide",
+  "description": "Global Legal Entity Identifier Foundation — universal business ID used in financial regulation worldwide",
   "color": "#2c3e50",
   "icon": "fa-id-card",
   "version": "2.1",
@@ -16,7 +16,7 @@
   ],
   "table_notes": {
     "gleif_lei_record": "Core entity table holding one row per Legal Entity Identifier (LEI) with legal name, registered and HQ addresses, legal form, entity status, and LEI lifecycle dates.",
-    "gleif_relationship": "Level 2 ownership relationships between LEI holders \u2014 child_lei is owned/controlled by parent_lei under the stated relationship_type (DIRECT_CHILD or ULTIMATE_CHILD)."
+    "gleif_relationship": "Level 2 ownership relationships between LEI holders — child_lei is owned/controlled by parent_lei under the stated relationship_type (DIRECT_CHILD or ULTIMATE_CHILD)."
   },
   "tables": {
     "gleif_lei_record": [
@@ -31,7 +31,7 @@
         "type": "VARCHAR(20)",
         "unique": true,
         "nullable": false,
-        "description": "20-character Legal Entity Identifier (ISO 17442) \u2014 globally unique business ID"
+        "description": "20-character Legal Entity Identifier (ISO 17442) — globally unique business ID"
       },
       {
         "name": "entity_legal_name",
@@ -66,7 +66,7 @@
       {
         "name": "registered_address_line",
         "type": "TEXT",
-        "description": "Street address lines of the entity\u2019s registered legal address, newline-separated"
+        "description": "Street address lines of the entity’s registered legal address, newline-separated"
       },
       {
         "name": "registered_address_city",
@@ -86,7 +86,7 @@
       {
         "name": "hq_address_line",
         "type": "TEXT",
-        "description": "Street address lines of the entity\u2019s headquarters (may differ from registered address)"
+        "description": "Street address lines of the entity’s headquarters (may differ from registered address)"
       },
       {
         "name": "hq_city",
@@ -106,7 +106,7 @@
       {
         "name": "registration_id",
         "type": "VARCHAR(100)",
-        "description": "Entity\u2019s identifier within its registration authority (e.g. company number)"
+        "description": "Entity’s identifier within its registration authority (e.g. company number)"
       },
       {
         "name": "lei_status",
@@ -180,7 +180,35 @@
       }
     ]
   },
-  "short_description": "Global Legal Entity Identifier Foundation \u2014 universal business ID used in financial regulation worldwide",
-  "long_description": "GLEIF (Global Legal Entity Identifier Foundation) maintains the LEI (Legal Entity Identifier) system \u2014 the universal business identifier mandated by G20 financial regulations. The schema covers LEI records with legal/headquarters addresses, entity status, and corporate ownership hierarchy (parent/child relationships via Level 1/Level 2 data).",
-  "when_to_use": "Use for any financial application requiring entity identification \u2014 KYC compliance, counterparty risk management, transaction reporting, or financial reference data management. LEI codes are required by MiFID II, EMIR, SFTR, and Dodd-Frank for OTC derivatives reporting. Also used for SWIFT payments, Basel reporting, and EU DORA (Digital Operational Resilience Act) compliance."
+  "short_description": "Global Legal Entity Identifier Foundation — universal business ID used in financial regulation worldwide",
+  "long_description": "GLEIF (Global Legal Entity Identifier Foundation) maintains the LEI (Legal Entity Identifier) system — the universal business identifier mandated by G20 financial regulations. The schema covers LEI records with legal/headquarters addresses, entity status, and corporate ownership hierarchy (parent/child relationships via Level 1/Level 2 data).",
+  "when_to_use": "Use for any financial application requiring entity identification — KYC compliance, counterparty risk management, transaction reporting, or financial reference data management. LEI codes are required by MiFID II, EMIR, SFTR, and Dodd-Frank for OTC derivatives reporting. Also used for SWIFT payments, Basel reporting, and EU DORA (Digital Operational Resilience Act) compliance.",
+  "actor": {
+    "role": "legal-entity",
+    "table": "gleif_lei_record",
+    "primary": true,
+    "display": {
+      "singular": "Legal Entity",
+      "plural": "Legal Entities",
+      "icon": "fa-landmark"
+    },
+    "field_map": {
+      "display_name": "entity_legal_name",
+      "status_field": "entity_status",
+      "status_map": {
+        "active": "active",
+        "inactive": "inactive",
+        "annulled": "inactive",
+        "merged": "inactive"
+      },
+      "external_ids": {
+        "lei": "lei"
+      }
+    },
+    "tags": [
+      "finance",
+      "identity",
+      "regulated"
+    ]
+  }
 }

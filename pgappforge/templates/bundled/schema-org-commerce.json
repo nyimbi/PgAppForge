@@ -2,9 +2,9 @@
   "name": "schema-org-commerce",
   "schema": "schema_org_commerce",
   "label": "Schema.org Commerce",
-  "description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
-  "short_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
-  "long_description": "Google/Bing/Yahoo semantic markup \u2014 required for Google Shopping",
+  "description": "Google/Bing/Yahoo semantic markup — required for Google Shopping",
+  "short_description": "Google/Bing/Yahoo semantic markup — required for Google Shopping",
+  "long_description": "Google/Bing/Yahoo semantic markup — required for Google Shopping",
   "when_to_use": "Use when building applications that need to conform to the Schema.org Commerce standard.",
   "color": "#e67e22",
   "icon": "fa-shopping-bag",
@@ -340,6 +340,30 @@
         "default": "false",
         "description": "True if the reviewer was verified as a confirmed purchaser of the product"
       }
+    ]
+  },
+  "actor": {
+    "role": "organization",
+    "table": "sorg_organization",
+    "primary": true,
+    "display": {
+      "singular": "Organization",
+      "plural": "Organizations",
+      "icon": "fa-store"
+    },
+    "field_map": {
+      "display_name": "name",
+      "contact_email": "email",
+      "contact_phone": "telephone"
+    },
+    "related_collections": [
+      "sorg_product",
+      "sorg_offer",
+      "sorg_order"
+    ],
+    "tags": [
+      "retail",
+      "ecommerce"
     ]
   }
 }

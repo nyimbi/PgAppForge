@@ -2,7 +2,7 @@
   "name": "niem",
   "schema": "niem",
   "label": "NIEM (US Government)",
-  "description": "National Information Exchange Model \u2014 mandatory for US federal agency data exchange",
+  "description": "National Information Exchange Model — mandatory for US federal agency data exchange",
   "color": "#1a3a5c",
   "icon": "fa-flag-usa",
   "version": "6.0",
@@ -107,7 +107,7 @@
       {
         "name": "state_id",
         "type": "VARCHAR(50)",
-        "description": "State-issued driver\u2019s license or ID number for secondary identity matching"
+        "description": "State-issued driver’s license or ID number for secondary identity matching"
       }
     ],
     "niem_location": [
@@ -215,7 +215,7 @@
         "name": "case_number",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Court-assigned docket or case number; unique within the court\u2019s jurisdiction"
+        "description": "Court-assigned docket or case number; unique within the court’s jurisdiction"
       },
       {
         "name": "case_type",
@@ -256,10 +256,34 @@
       }
     ]
   },
-  "short_description": "National Information Exchange Model \u2014 mandatory for US federal agency data exchange",
+  "short_description": "National Information Exchange Model — mandatory for US federal agency data exchange",
   "long_description": "NIEM (National Information Exchange Model) is the US federal government's framework for sharing information across agencies and jurisdictions. The schema implements core NIEM justice and public safety entities: organizations (agencies), persons with biographic and identifier data, geographic locations, incidents (reported events), and legal cases with charge/disposition tracking.",
   "when_to_use": "Use for law enforcement records management systems, court case management, emergency dispatch (CAD) systems, or any federal contractor building inter-agency data sharing solutions. NIEM compliance is required for NCIC (National Crime Information Center) integration, DOJ grants, and DHS/FEMA contracts. State courts increasingly mandate NIEM-aligned data exchange for criminal justice systems.",
   "extensions": [
     "postgis"
-  ]
+  ],
+  "actor": {
+    "role": "person",
+    "table": "niem_person",
+    "primary": true,
+    "display": {
+      "singular": "Person",
+      "plural": "Persons",
+      "icon": "fa-id-card"
+    },
+    "field_map": {
+      "display_name": [
+        "given_name",
+        "family_name"
+      ]
+    },
+    "related_collections": [
+      "niem_incident",
+      "niem_case"
+    ],
+    "tags": [
+      "government",
+      "person"
+    ]
+  }
 }

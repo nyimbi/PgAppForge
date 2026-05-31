@@ -2,7 +2,7 @@
   "name": "datacite",
   "schema": "datacite",
   "label": "DataCite Metadata",
-  "description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
+  "description": "Research data repository standard — used by Zenodo, Figshare, DRYAD, institutional repos",
   "color": "#9b59b6",
   "icon": "fa-microscope",
   "version": "4.5",
@@ -215,7 +215,33 @@
       }
     ]
   },
-  "short_description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
-  "long_description": "Research data repository standard \u2014 used by Zenodo, Figshare, DRYAD, institutional repos",
-  "when_to_use": "Use when building applications that need to conform to the DataCite Metadata standard."
+  "short_description": "Research data repository standard — used by Zenodo, Figshare, DRYAD, institutional repos",
+  "long_description": "Research data repository standard — used by Zenodo, Figshare, DRYAD, institutional repos",
+  "when_to_use": "Use when building applications that need to conform to the DataCite Metadata standard.",
+  "actor": {
+    "role": "creator",
+    "table": "dc_creator",
+    "primary": true,
+    "display": {
+      "singular": "Creator",
+      "plural": "Creators",
+      "icon": "fa-user-edit"
+    },
+    "field_map": {
+      "display_name": [
+        "given_name",
+        "family_name"
+      ],
+      "external_ids": {
+        "orcid": "orcid"
+      }
+    },
+    "related_collections": [
+      "dc_resource"
+    ],
+    "tags": [
+      "research",
+      "person"
+    ]
+  }
 }

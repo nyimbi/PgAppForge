@@ -2,7 +2,7 @@
   "name": "acord",
   "schema": "acord",
   "label": "ACORD (Insurance)",
-  "description": "Association for Cooperative Operations Research \u2014 global insurance standard",
+  "description": "Association for Cooperative Operations Research — global insurance standard",
   "color": "#c0392b",
   "icon": "fa-shield-alt",
   "version": "2021",
@@ -13,7 +13,7 @@
     "enterprise"
   ],
   "table_notes": {
-    "acord_party": "Any entity (person or organization) that participates in an insurance transaction \u2014 insurer, insured, claimant, agent, or broker.",
+    "acord_party": "Any entity (person or organization) that participates in an insurance transaction — insurer, insured, claimant, agent, or broker.",
     "acord_policy": "Master insurance contract record linking insurer and insured parties with coverage period, line of business, and total premium.",
     "acord_coverage": "Individual coverage component within a policy, defining what is covered, up to what limit, and at what deductible and premium.",
     "acord_risk": "Insured object or exposure (property, vehicle, person, liability) attached to a policy with its assessed value and attributes.",
@@ -90,13 +90,13 @@
         "name": "insurer_id",
         "type": "INTEGER",
         "fk": "acord_party.id",
-        "description": "References acord_party \u2014 the carrier issuing this policy"
+        "description": "References acord_party — the carrier issuing this policy"
       },
       {
         "name": "insured_id",
         "type": "INTEGER",
         "fk": "acord_party.id",
-        "description": "References acord_party \u2014 the named insured on this policy"
+        "description": "References acord_party — the named insured on this policy"
       },
       {
         "name": "status",
@@ -136,7 +136,7 @@
         "name": "policy_id",
         "type": "UUID",
         "fk": "acord_policy.id",
-        "description": "References acord_policy \u2014 the policy this coverage belongs to"
+        "description": "References acord_policy — the policy this coverage belongs to"
       },
       {
         "name": "coverage_type",
@@ -180,7 +180,7 @@
         "name": "policy_id",
         "type": "UUID",
         "fk": "acord_policy.id",
-        "description": "References acord_policy \u2014 the policy insuring this risk"
+        "description": "References acord_policy — the policy insuring this risk"
       },
       {
         "name": "risk_type",
@@ -225,13 +225,13 @@
         "name": "policy_id",
         "type": "UUID",
         "fk": "acord_policy.id",
-        "description": "References acord_policy \u2014 the policy under which this claim is filed"
+        "description": "References acord_policy — the policy under which this claim is filed"
       },
       {
         "name": "claimant_id",
         "type": "INTEGER",
         "fk": "acord_party.id",
-        "description": "References acord_party \u2014 the party seeking payment under this claim"
+        "description": "References acord_party — the party seeking payment under this claim"
       },
       {
         "name": "loss_date",
@@ -275,7 +275,32 @@
       }
     ]
   },
-  "short_description": "Association for Cooperative Operations Research \u2014 global insurance standard",
-  "long_description": "ACORD (Association for Cooperative Operations Research and Development) is the foundational data standard for the global insurance industry, covering P&C, life, health, and commercial lines. The schema models the complete insurance lifecycle: parties, policies, coverages, risks, claims, and payments \u2014 matching the ACORD 1/2 form data elements used in US commercial insurance.",
-  "when_to_use": "Use for any insurance management system, agency portal, or insurtech application. ACORD standards are implemented by 90%+ of US insurance carriers and are widely used globally. Required for carrier data feeds, comparative rating platforms, and state DOI reporting submissions."
+  "short_description": "Association for Cooperative Operations Research — global insurance standard",
+  "long_description": "ACORD (Association for Cooperative Operations Research and Development) is the foundational data standard for the global insurance industry, covering P&C, life, health, and commercial lines. The schema models the complete insurance lifecycle: parties, policies, coverages, risks, claims, and payments — matching the ACORD 1/2 form data elements used in US commercial insurance.",
+  "when_to_use": "Use for any insurance management system, agency portal, or insurtech application. ACORD standards are implemented by 90%+ of US insurance carriers and are widely used globally. Required for carrier data feeds, comparative rating platforms, and state DOI reporting submissions.",
+  "actor": {
+    "role": "policyholder",
+    "table": "acord_party",
+    "primary": true,
+    "display": {
+      "singular": "Policyholder",
+      "plural": "Policyholders",
+      "icon": "fa-shield-alt"
+    },
+    "field_map": {
+      "display_name": "full_name",
+      "external_ids": {
+        "tax_id": "tax_id"
+      }
+    },
+    "related_collections": [
+      "acord_policy",
+      "acord_claim"
+    ],
+    "tags": [
+      "insurance",
+      "person",
+      "billable"
+    ]
+  }
 }

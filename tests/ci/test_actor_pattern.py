@@ -278,9 +278,8 @@ def test_template_registry_get_actor_config():
 
 def test_template_registry_get_actor_config_none_when_absent():
 	reg = TemplateRegistry()
-	# A template without an actor section should return None
-	# Use a template we know has no actor (e.g. activitypub)
-	cfg = reg.get_actor_config("activitypub")
+	# icd10 is a code classification — no person actor
+	cfg = reg.get_actor_config("icd10")
 	assert cfg is None
 
 
