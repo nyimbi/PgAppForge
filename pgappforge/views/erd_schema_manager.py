@@ -12,6 +12,8 @@ inside a transaction with rollback on error and full audit logging.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 from pathlib import Path
@@ -109,6 +111,48 @@ def _quote_default(val: Any) -> str:
 		return s
 	# Plain string literal — single-quote and escape internal quotes
 	return "'" + s.replace("'", "''") + "'"
+
+
+_SAFE_VALUE_RE = re.compile(r"""^[A-Za-z0-9_, .'"\\:@/-]+$""")
+
+_PG_TYPE_RE = re.compile(
+	r"^[A-Za-z][A-Za-z0-9_ ]*"
+	r"(\(\s*\d+(\s*,\s*\d+)?\s*\))?"
+	r"(\[\])?$"
+)
+
+
+def _safe_type(t: str) -> str:
+	t = t.strip()
+	if not _PG_TYPE_RE.match(t):
+		raise ValueError(f"Invalid PostgreSQL type: {t!r}")
+	return t
+
+
+def _validate_pred_expr(expr: str) -> str:
+	e = expr.strip().rstrip(";")
+	if ";" in e:
+		raise ValueError("predicate expression must not contain semicolons")
+	_BANNED_PRED = re.compile(
+		r"\b(pg_read_file|pg_ls_dir|lo_export|lo_import|copy\s+|"
+		r"do\s+\$|create\s+|drop\s+|alter\s+|insert\b|"
+		r"update\b|delete\b)\b",
+		re.IGNORECASE,
+	)
+	if _BANNED_PRED.search(e):
+		raise ValueError("predicate expression contains disallowed keyword")
+	depth = sum((1 if ch == "(" else -1) if ch in "()" else 0 for ch in e)
+	if depth != 0:
+		raise ValueError("predicate expression has unbalanced parentheses")
+	return e
+
+
+def _gen_constraint_name(prefix: str, *parts: str) -> str:
+	full = f"{prefix}_{'_'.join(parts)}"
+	if len(full) <= 63:
+		return full
+	digest = hashlib.md5(full.encode()).hexdigest()[:8]
+	return f"{full[:54]}_{digest}"
 
 
 def _generate_rollback(ops: list[dict], sql_stmts: list[str]) -> list[str]:
@@ -286,6 +330,7 @@ class ERDSchemaManager:
 				"errors": [],
 			}
 
+		rollback = _generate_rollback(operations, sql_stmts)
 		try:
 			with self.engine.begin() as conn:
 				# Apply configurable DDL statement timeout to prevent runaway ALTER TABLE
@@ -298,12 +343,24 @@ class ERDSchemaManager:
 				for stmt in sql_stmts:
 					log.info("ERD DDL: %s", stmt)
 					conn.execute(text(stmt))
+				# Write migration log inside the same transaction so log and DDL are atomic
+				try:
+					conn.execute(text(
+						"INSERT INTO erd_migration_log "
+						"(user_id, applied_at, ops_json, sql_json, status, rollback_sql, error) "
+						"VALUES (:uid, NOW(), :ops, :sql, 'success', :rb, NULL)"
+					), {
+						"uid": user_id,
+						"ops": json.dumps(operations),
+						"sql": json.dumps(sql_stmts),
+						"rb": json.dumps(rollback),
+					})
+				except Exception as log_exc:
+					log.debug("ERD migration log insert failed (non-fatal): %s", log_exc)
 		except Exception as exc:
 			log.error("ERD apply_changes failed: %s", exc)
+			self._write_migration_log(user_id, operations, sql_stmts, "error", str(exc))
 			return {"applied": 0, "sql": sql_stmts, "errors": [str(exc)], "dry_run": False}
-
-		# Persist audit log and auto-rollback SQL
-		self._write_migration_log(user_id, operations, sql_stmts, "success")
 
 		return {"applied": len(sql_stmts), "sql": sql_stmts, "errors": [], "dry_run": False}
 
@@ -358,7 +415,7 @@ class ERDSchemaManager:
 			fk_stmts: list[str] = []
 			for c in cols:
 				qcol = _qi(c["name"])
-				defn = f"{qcol} {c['type']}"
+				defn = f"{qcol} {_safe_type(c['type'])}"
 				if c.get("pk"):
 					defn += " PRIMARY KEY"
 				if not c.get("nullable", True):
@@ -374,7 +431,7 @@ class ERDSchemaManager:
 					parts     = fk_spec.split(".") if isinstance(fk_spec, str) else []
 					ref_table = parts[0] if parts else fk_spec
 					ref_col   = parts[1] if len(parts) > 1 else "id"
-					cname     = f"{tbl}_{c['name']}_{ref_table}_fkey"
+					cname     = _gen_constraint_name(tbl, c['name'], ref_table, "fkey")
 					try:
 						fk_stmts.append(
 							f"ALTER TABLE {qtbl} "
@@ -396,7 +453,7 @@ class ERDSchemaManager:
 		if kind == "add_column":
 			c    = op["column"]
 			qcol = _qi(c["name"])
-			defn = f"{qcol} {c['type']}"
+			defn = f"{qcol} {_safe_type(c['type'])}"
 			if not c.get("nullable", True):
 				defn += " NOT NULL"
 			if c.get("unique"):
@@ -414,9 +471,10 @@ class ERDSchemaManager:
 			qcol  = _qi(op["column"])
 			stmts: list[str] = []
 			if op.get("new_type"):
+				new_type = _safe_type(op["new_type"])
 				stmts.append(
 					f"ALTER TABLE {qtbl} ALTER COLUMN {qcol} "
-					f"TYPE {op['new_type']} USING {qcol}::{op['new_type']}"
+					f"TYPE {new_type} USING {qcol}::{new_type}"
 				)
 			if "nullable" in op:
 				clause = "DROP NOT NULL" if op["nullable"] else "SET NOT NULL"
@@ -481,8 +539,9 @@ class ERDSchemaManager:
 
 		if kind == "add_check_constraint":
 			expr  = op.get("expression", "").strip()
-			if not expr or ";" in expr:
-				raise ValueError("CHECK expression must be non-empty and must not contain ';'")
+			if not expr:
+				raise ValueError("CHECK expression must be non-empty")
+			expr = _validate_pred_expr(expr)
 			cname = op.get("name") or f"chk_{tbl}_{abs(hash(expr)) % 10000}"
 			return [f"ALTER TABLE {qtbl} ADD CONSTRAINT {_qi(cname)} CHECK ({expr})"]
 
@@ -494,7 +553,14 @@ class ERDSchemaManager:
 			if not cols:
 				raise ValueError("set_composite_pk requires at least one column")
 			return [
-				f"ALTER TABLE {qtbl} DROP CONSTRAINT IF EXISTS {_qi(tbl + '_pkey')}",
+				(
+					f"DO $$ DECLARE _pk TEXT; BEGIN "
+					f"SELECT conname INTO _pk FROM pg_constraint "
+					f"WHERE conrelid = '{qtbl}'::regclass AND contype = 'p'; "
+					f"IF _pk IS NOT NULL THEN "
+					f"EXECUTE format('ALTER TABLE {qtbl} DROP CONSTRAINT %%I', _pk); "
+					f"END IF; END $$;"
+				),
 				f"ALTER TABLE {qtbl} ADD PRIMARY KEY ({', '.join(cols)})",
 			]
 
@@ -1184,7 +1250,6 @@ class TriggerProcedureManager:
 
 		# Validate all identifier-like params to prevent format-string injection.
 		# Multi-column params (search_columns) are validated element-by-element.
-		_SAFE_VALUE_RE = re.compile(r"^[A-Za-z0-9_, .'\"\-:@/]+$")
 		for key, val in ctx.items():
 			if isinstance(val, str) and not _SAFE_VALUE_RE.match(val):
 				raise ValueError(

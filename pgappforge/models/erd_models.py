@@ -62,6 +62,9 @@ class ErdDesign(Model):
 		onupdate=lambda: datetime.now(timezone.utc),
 		nullable=False,
 	)
+	version     = Column(Integer, nullable=False, default=1)
+
+	__mapper_args__ = {"version_id_col": version, "version_id_generator": False}
 
 	owner = relationship("User", foreign_keys=[owner_id])
 

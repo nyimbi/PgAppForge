@@ -343,3 +343,140 @@ def test_erd_models_importable():
     from pgappforge.models.erd_models import ErdDesign, ErdMigrationLog
     assert ErdDesign.__tablename__ == "erd_design"
     assert ErdMigrationLog.__tablename__ == "erd_migration_log"
+
+
+# ─── _safe_type() security ────────────────────────────────────────────────────
+
+def test_safe_type_valid():
+    from pgappforge.views.erd_schema_manager import _safe_type
+    assert _safe_type("TEXT") == "TEXT"
+    assert _safe_type("VARCHAR(255)") == "VARCHAR(255)"
+    assert _safe_type("NUMERIC(18,4)") == "NUMERIC(18,4)"
+    assert _safe_type("INTEGER[]") == "INTEGER[]"
+    assert _safe_type("TIMESTAMP WITH TIME ZONE") == "TIMESTAMP WITH TIME ZONE"
+
+
+@pytest.mark.parametrize("bad_type", [
+    "TEXT; DROP TABLE users; --",
+    "TEXT, evil TEXT",
+    "'; SELECT * FROM users; --",
+    "<script>",
+])
+def test_safe_type_rejects_injection(bad_type):
+    from pgappforge.views.erd_schema_manager import _safe_type
+    with pytest.raises(ValueError):
+        _safe_type(bad_type)
+
+
+# ─── _validate_pred_expr() security ──────────────────────────────────────────
+
+def test_validate_pred_expr_valid():
+    from pgappforge.views.erd_schema_manager import _validate_pred_expr
+    assert _validate_pred_expr("amount > 0") == "amount > 0"
+    assert _validate_pred_expr("user_id = current_setting('app.user')::integer") == \
+        "user_id = current_setting('app.user')::integer"
+
+
+@pytest.mark.parametrize("bad_expr", [
+    "amount > 0; DROP TABLE x",
+    "1=1) UNION SELECT password FROM users --",
+    "col = 'x'; DELETE FROM users",
+    "CREATE TABLE evil (id int)",
+])
+def test_validate_pred_expr_rejects_injection(bad_expr):
+    from pgappforge.views.erd_schema_manager import _validate_pred_expr
+    with pytest.raises(ValueError):
+        _validate_pred_expr(bad_expr)
+
+
+# ─── apply_object_template injection prevention ───────────────────────────────
+
+def test_apply_object_template_rejects_injection_in_name():
+    import unittest.mock as mock
+    from pgappforge.views.erd_object_manager import DatabaseObjectManager
+    engine = mock.MagicMock()
+    engine.begin.return_value.__enter__ = mock.MagicMock(return_value=mock.MagicMock())
+    engine.begin.return_value.__exit__ = mock.MagicMock(return_value=False)
+    mgr = DatabaseObjectManager(engine)
+    with pytest.raises((ValueError, Exception)):
+        mgr.apply_object_template("domain_email", name="evil; DROP TABLE users; --")
+
+
+def test_apply_object_template_rejects_unknown_key():
+    import unittest.mock as mock
+    from pgappforge.views.erd_object_manager import DatabaseObjectManager
+    engine = mock.MagicMock()
+    mgr = DatabaseObjectManager(engine)
+    with pytest.raises(ValueError, match="Unknown object template"):
+        mgr.apply_object_template("does_not_exist_template_key")
+
+
+# ─── _safe_output_dir prefix-bypass fix ──────────────────────────────────────
+
+def test_safe_output_dir_prefix_bypass():
+    """Old startswith() check allowed /tmp/pgaf_root_evil to pass."""
+    from flask import Flask
+    app = Flask(__name__)
+    app.config["FAB_CODEGEN_OUTPUT_ROOT"] = "/tmp/pgaf_test_root_safe"
+    with app.app_context():
+        from pgappforge.views.erd_designer import _safe_output_dir
+        from werkzeug.exceptions import BadRequest
+        with pytest.raises((BadRequest, SystemExit, Exception)):
+            _safe_output_dir("/tmp/pgaf_test_root_safe_evil/app", "app")
+
+
+# ─── create_view body validation ─────────────────────────────────────────────
+
+def test_create_view_rejects_non_select_body():
+    import unittest.mock as mock
+    from pgappforge.views.erd_object_manager import DatabaseObjectManager
+    engine = mock.MagicMock()
+    mgr = DatabaseObjectManager(engine)
+    with pytest.raises(ValueError, match="SELECT"):
+        mgr.create_view("evil_view", "DELETE FROM users RETURNING *")
+
+
+def test_create_view_rejects_semicolons():
+    import unittest.mock as mock
+    from pgappforge.views.erd_object_manager import DatabaseObjectManager
+    engine = mock.MagicMock()
+    mgr = DatabaseObjectManager(engine)
+    with pytest.raises(ValueError):
+        mgr.create_view("evil_view", "SELECT 1; DROP TABLE users")
+
+
+# ─── create_policy validation ─────────────────────────────────────────────────
+
+def test_create_policy_rejects_invalid_command():
+    import unittest.mock as mock
+    from pgappforge.views.erd_object_manager import DatabaseObjectManager
+    engine = mock.MagicMock()
+    mgr = DatabaseObjectManager(engine)
+    with pytest.raises(ValueError):
+        mgr.create_policy("users", "evil_pol", "1=1", command="DROP TABLE")
+
+
+def test_create_policy_rejects_injected_using_expr():
+    import unittest.mock as mock
+    from pgappforge.views.erd_object_manager import DatabaseObjectManager
+    engine = mock.MagicMock()
+    mgr = DatabaseObjectManager(engine)
+    with pytest.raises(ValueError):
+        mgr.create_policy("users", "p", "1=1; DELETE FROM users")
+
+
+# ─── _gen_constraint_name truncation ─────────────────────────────────────────
+
+def test_gen_constraint_name_short():
+    from pgappforge.views.erd_schema_manager import _gen_constraint_name
+    assert _gen_constraint_name("orders", "customer_id", "customers", "fkey") == \
+        "orders_customer_id_customers_fkey"
+
+
+def test_gen_constraint_name_truncates_at_63():
+    from pgappforge.views.erd_schema_manager import _gen_constraint_name
+    result = _gen_constraint_name(
+        "very_long_table_name_here", "very_long_column_name_here",
+        "another_very_long_table", "fkey"
+    )
+    assert len(result) <= 63

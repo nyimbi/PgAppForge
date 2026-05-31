@@ -13,8 +13,8 @@
  */
 
 /* ── Configuration ────────────────────────────────────────────────────────── */
-var CFG = window.ERD_CONFIG || {};
-var API = CFG.apiBase || '/erd-designer';
+const CFG = window.ERD_CONFIG || {};
+const API = CFG.apiBase || '/erd-designer';
 
 /* ── Utilities ────────────────────────────────────────────────────────────── */
 
@@ -50,7 +50,7 @@ if (window.cytoscapeFcose)   cytoscape.use(cytoscapeFcose);
 if (window.cytoscapeDagre)   cytoscape.use(cytoscapeDagre);
 if (window.cytoscapeEdgehandles) cytoscape.use(cytoscapeEdgehandles);
 
-var cy = cytoscape({
+const cy = cytoscape({
   container: document.getElementById('cy'),
   style: [
     { selector: 'node[type="module"]',
@@ -94,7 +94,7 @@ if (cy.navigator) {
 }
 
 /* ── Theme toggle ─────────────────────────────────────────────────────────── */
-var _theme = localStorage.getItem('erd-theme') || 'dark';
+let _theme = localStorage.getItem('erd-theme') || 'dark';
 
 function applyTheme(t) {
   _theme = t;
@@ -112,7 +112,7 @@ function applyTheme(t) {
 applyTheme(_theme);
 
 /* ── Undo / redo stack ────────────────────────────────────────────────────── */
-var _undoStack = [], _redoStack = [];
+const _undoStack = [], _redoStack = [];
 
 function pushUndo(op, inverseOp) {
   _undoStack.push({op: op, inv: inverseOp});
@@ -195,7 +195,7 @@ function closeAllModals() {
 }
 
 /* ── Collapsed module tracking ────────────────────────────────────────────── */
-var collapsed = {};
+const collapsed = {};
 
 function _collapseModule(modId) {
   var children = cy.nodes('[parent="' + modId + '"]');
@@ -252,7 +252,7 @@ cy.on('dbltap', 'node[type="table"]', function(e) {
 });
 
 /* ── Context menu ─────────────────────────────────────────────────────────── */
-var _ctxTarget = null;
+let _ctxTarget = null;
 
 cy.on('cxttap', 'node', function(e) {
   _ctxTarget = e.target;
@@ -558,7 +558,7 @@ function clearDiff() {
 }
 
 /* ── Load ERP module onto canvas ──────────────────────────────────────────── */
-var _loadedModules = {};
+const _loadedModules = {};
 
 function addModule(key) {
   setStatus('Loading ' + key + '…');
@@ -612,8 +612,8 @@ function loadSchemaList() {
 loadSchemaList();
 
 /* ── Design save / load ───────────────────────────────────────────────────── */
-var _currentDesignId = null;
-var _autoSaveTimer   = null;
+let _currentDesignId = null;
+let _autoSaveTimer   = null;
 
 function saveCurrentDesign(name) {
   var canvasJson = cy.json();
@@ -812,12 +812,17 @@ function _populateSelect(id, options, defaultVal) {
 }
 
 /* ── Collaboration: Server-Sent Events ────────────────────────────────────── */
-var _sseSource = null;
+let _sseSource = null;
+var _sseBackoff = 1000;
 
 function connectSSE(designId) {
   if (_sseSource) _sseSource.close();
-  _sseSource = new EventSource(API + '/api/events/' + designId);
-  _sseSource.onmessage = function(e) {
+  var es = new EventSource(API + '/api/events/' + designId);
+  _sseSource = es;
+  es.onopen = function() {
+    _sseBackoff = 1000;
+  };
+  es.onmessage = function(e) {
     try {
       var data = JSON.parse(e.data);
       if (data.type === 'update' && data.canvas_json) {
@@ -829,6 +834,14 @@ function connectSSE(designId) {
         }
       }
     } catch(_) {}
+  };
+  es.onerror = function() {
+    es.close();
+    _sseSource = null;
+    setTimeout(function() {
+      if (_currentDesignId) connectSSE(_currentDesignId);
+    }, _sseBackoff);
+    _sseBackoff = Math.min(_sseBackoff * 2, 30000);
   };
 }
 

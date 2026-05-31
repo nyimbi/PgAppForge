@@ -22,9 +22,15 @@ Usage::
 from __future__ import annotations
 
 import json
+import json as _json
 import pathlib
-from flask import abort, current_app, request, jsonify, Response
+import threading as _threading
+import queue as _queue
+from flask import abort, current_app, request, jsonify, Response, make_response
 from flask_login import current_user
+
+_SSE_CLIENTS: dict = {}
+_SSE_LOCK = _threading.Lock()
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
 from pgappforge.widgets_postgresql._cdn import (
@@ -47,34 +53,37 @@ def _require_schema_admin() -> None:
 	Gate-keeps all mutating DDL endpoints so that:
 	  - Production databases can disable the ERD DDL path entirely via config.
 	  - Even with it enabled, only users with the Admin role can apply changes.
+	Returns JSON 403 responses instead of HTML error pages.
 	"""
 	if not current_app.config.get("FAB_ERD_DDL_ENABLED", False):
-		abort(403, description=(
-			"ERD schema mutations are disabled. "
-			"Set FAB_ERD_DDL_ENABLED = True in your Flask config to enable."
-		))
+		abort(make_response(jsonify({
+			"ok": False,
+			"error": "ERD schema mutations are disabled.",
+			"hint": "Set FAB_ERD_DDL_ENABLED = True in Flask config.",
+			"code": "ddl_disabled",
+		}), 403))
 	if not current_user or not current_user.is_authenticated:
-		abort(403, description="Login required.")
-	if not any(
-		getattr(r, "name", "") in ("Admin", "admin")
-		for r in getattr(current_user, "roles", [])
-	):
-		abort(403, description="ERD schema mutations require the Admin role.")
+		abort(make_response(jsonify({"ok": False, "error": "Login required.", "code": "login_required"}), 403))
+	roles = [getattr(r, "name", "") for r in getattr(current_user, "roles", [])]
+	if not any(r in ("Admin", "admin") for r in roles):
+		abort(make_response(jsonify({"ok": False, "error": "Admin role required.", "code": "admin_required"}), 403))
 
 
 def _validate_csrf() -> None:
 	"""Validate CSRF token on JSON POST endpoints.
 
 	Expects the ``X-CSRFToken`` request header (set by JS from the meta tag).
-	Falls back gracefully if Flask-WTF CSRF is not configured.
+	Fails closed if Flask-WTF is not installed.
 	"""
 	try:
-		from flask_wtf.csrf import validate_csrf
-		validate_csrf(request.headers.get("X-CSRFToken", ""))
+		from flask_wtf.csrf import validate_csrf, ValidationError
 	except ImportError:
-		pass  # Flask-WTF not installed — skip CSRF check
-	except Exception as exc:
-		abort(400, description=f"CSRF validation failed: {exc}")
+		abort(500, description="CSRF protection requires flask-wtf. Install it or set FAB_ERD_DDL_ENABLED=False.")
+	token = request.headers.get("X-CSRFToken") or request.form.get("csrf_token", "")
+	try:
+		validate_csrf(token)
+	except Exception:
+		abort(400, description="CSRF validation failed")
 
 
 def _safe_output_dir(raw: str | None, app_name: str) -> pathlib.Path:
@@ -91,7 +100,9 @@ def _safe_output_dir(raw: str | None, app_name: str) -> pathlib.Path:
 	else:
 		safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in app_name.lower())
 		candidate = (root / safe_name).resolve()
-	if not str(candidate).startswith(str(root)):
+	try:
+		candidate.relative_to(root)
+	except ValueError:
 		abort(400, description=f"output_dir must be under {root}")
 	return candidate
 
@@ -844,14 +855,25 @@ class ERDDesignerView(BaseView):
 
 	def _sse_broadcast(self, design_id: int, payload: dict) -> None:
 		"""Broadcast a JSON payload to all SSE listeners for *design_id*."""
-		import json as _json
-		clients = getattr(ERDDesignerView, "_sse_clients", {}).get(design_id, [])
 		msg = _json.dumps(payload)
-		for q in list(clients):
+		import time
+		now = time.monotonic()
+		with _SSE_LOCK:
+			clients = list(_SSE_CLIENTS.get(design_id, []))
+		for q in clients:
+			if (now - getattr(q, "_last_active", now)) > 120:
+				with _SSE_LOCK:
+					lst = _SSE_CLIENTS.get(design_id, [])
+					if q in lst:
+						lst.remove(q)
+				continue
 			try:
 				q.put_nowait(msg)
 			except Exception:
-				pass
+				with _SSE_LOCK:
+					lst = _SSE_CLIENTS.get(design_id, [])
+					if q in lst:
+						lst.remove(q)
 
 	@expose("/api/designs/<int:design_id>", methods=["DELETE"])
 	@has_access
@@ -963,11 +985,11 @@ class ERDDesignerView(BaseView):
 		except Exception as exc:
 			sql_stmts, rollback = [], []
 		upgrade_body   = "\n    ".join(
-			f'op.execute("{s.replace(chr(34), chr(39))}")'
+			f"op.execute({_json.dumps(s)})"
 			for s in sql_stmts
 		) or "    pass"
 		downgrade_body = "\n    ".join(
-			f'op.execute("{s.replace(chr(34), chr(39))}")'
+			f"op.execute({_json.dumps(s)})"
 			for s in rollback
 		) or "    pass"
 		from datetime import datetime
@@ -1233,29 +1255,39 @@ def downgrade() -> None:
 	@has_access
 	def api_sse_events(self, design_id: int):
 		"""Server-Sent Events stream for real-time collaborative canvas updates."""
-		import queue, threading
+		from pgappforge.models.erd_models import ErdDesign
 		from flask import stream_with_context
+		session = self._db_session()
+		d = session.get(ErdDesign, design_id)
+		if d is None:
+			return jsonify({"error": "Design not found"}), 404
+		uid = getattr(current_user, "id", None)
+		if d.owner_id != uid and not d.is_public:
+			return jsonify({"error": "Access denied"}), 403
 
-		# Module-level broadcast registry: design_id → list of queue.Queue
-		if not hasattr(ERDDesignerView, "_sse_clients"):
-			ERDDesignerView._sse_clients = {}
-		q: queue.Queue = queue.Queue(maxsize=50)
-		ERDDesignerView._sse_clients.setdefault(design_id, []).append(q)
+		import time
+		q: _queue.Queue = _queue.Queue(maxsize=50)
+		q._last_active = time.monotonic()
+		with _SSE_LOCK:
+			_SSE_CLIENTS.setdefault(design_id, []).append(q)
 
 		def event_generator():
-			import json as _json
 			try:
 				yield f"data: {_json.dumps({'type': 'connected', 'design_id': design_id})}\n\n"
 				while True:
 					try:
 						msg = q.get(timeout=25)
+						q._last_active = time.monotonic()
 						yield f"data: {msg}\n\n"
-					except queue.Empty:
+					except _queue.Empty:
 						yield "data: {\"type\":\"ping\"}\n\n"
 			finally:
-				clients = ERDDesignerView._sse_clients.get(design_id, [])
-				if q in clients:
-					clients.remove(q)
+				with _SSE_LOCK:
+					lst = _SSE_CLIENTS.get(design_id, [])
+					if q in lst:
+						lst.remove(q)
+					if not lst:
+						_SSE_CLIENTS.pop(design_id, None)
 
 		return Response(
 			stream_with_context(event_generator()),
@@ -1267,12 +1299,16 @@ def downgrade() -> None:
 	@has_access
 	def api_share_design(self, design_id: int):
 		"""Create a read-only share link for a saved design."""
+		_validate_csrf()
 		from pgappforge.plugins.reports.acl import generate_token
 		from pgappforge.models.erd_models import ErdDesign
 		session = self._db_session()
 		design  = session.get(ErdDesign, design_id)
 		if design is None:
 			return jsonify({"error": "Design not found"}), 404
+		uid = getattr(current_user, "id", None)
+		if design.owner_id != uid and not design.is_public:
+			return jsonify({"error": "Access denied"}), 403
 		data    = request.get_json(silent=True) or {}
 		expires = int(data.get("expires_hours", 48))
 		tok     = generate_token(
@@ -1300,11 +1336,13 @@ def downgrade() -> None:
 		design = session.get(ErdDesign, int(design_id))
 		if design is None:
 			return Response("Design not found.", status=404)
-		import json as _json
-		canvas_json = _json.dumps(design.canvas_json or {})
+		import json as _json2
+		canvas_json_safe = _json2.dumps(design.canvas_json or {}).replace("</", "<\\/")
+		from markupsafe import escape as _html_escape
+		design_name_safe = str(_html_escape(design.name or ""))
 		return Response(
 			f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>{design.name} — ERD View (read-only)</title>
+<title>{design_name_safe} — ERD View (read-only)</title>
 <link rel="stylesheet" href="/static/appbuilder/css/bootstrap.min.css">
 {_CY}</head>
 <body style="margin:0;background:#1a1a2e">
@@ -1315,7 +1353,7 @@ var cy = cytoscape({{container:document.getElementById('cy'),
   {{selector:'edge[type="fk"]',style:{{'curve-style':'bezier','target-arrow-shape':'triangle','line-color':'#555','width':1.5}}}}],
   layout:{{name:'cose',animate:false}}
 }});
-var data = {canvas_json};
+var data = {canvas_json_safe};
 if (data && data.elements) cy.json(data); else if (Array.isArray(data)) cy.add(data);
 cy.fit();
 </script>
@@ -1436,9 +1474,11 @@ cy.fit();
 		schema = data.get("schema", "public")
 		if not name or not body:
 			return jsonify({"error": "name and body required"}), 400
+		if lang not in ("plpgsql", "sql"):
+			return jsonify({"error": f"language must be plpgsql or sql"}), 400
 		try:
 			mgr    = TriggerProcedureManager(self._schema_manager().engine)
-			result = mgr.create_function(name, args=args, return_type=ret,
+			result = mgr.create_function(name, args=args, returns=ret,
 			                             body=body, language=lang, schema=schema)
 			return jsonify(result)
 		except Exception as exc:
