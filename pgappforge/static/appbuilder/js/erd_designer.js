@@ -848,16 +848,27 @@ function openTriggerPanel(tab) {
   if (m) { m.style.display = 'flex'; switchTriggerTab(tab || 'templates'); }
 }
 
+/** All 10 tabs: triggers, live, functions, editor, domains, evtrig, matviews, views, policies, objtpl */
+var _ALL_TABS = ['templates','live','functions','editor',
+                 'domains','evtrig','matviews','views','policies','objtpl'];
+
 function switchTriggerTab(tab) {
-  ['templates','live','functions','editor'].forEach(function(t) {
+  _ALL_TABS.forEach(function(t) {
     var p  = document.getElementById('tpanel-' + t);
     var bt = document.getElementById('tab-' + t);
     if (p)  p.style.display = t === tab ? '' : 'none';
     if (bt) bt.className = bt.className.replace(' active','') + (t === tab ? ' active' : '');
   });
+  // Lazy-load on first open
   if (tab === 'templates') loadTriggerTemplates();
   if (tab === 'live')      loadLiveTriggers();
   if (tab === 'functions') loadFunctions();
+  if (tab === 'domains')   loadDomains();
+  if (tab === 'evtrig')    loadEventTriggers();
+  if (tab === 'matviews')  loadMatViews();
+  if (tab === 'views')     loadViews();
+  if (tab === 'policies')  loadPolicies();
+  if (tab === 'objtpl')    loadObjectTemplates();
 }
 
 /* Templates grid */
@@ -1061,30 +1072,6 @@ function submitCustomFunction() {
     }
   });
 }
-
-/* ── Update switchTriggerTab to handle new tabs ──────────────────────────── */
-(function patchSwitchTriggerTab() {
-  var _orig = switchTriggerTab;
-  switchTriggerTab = function(tab) {
-    var newTabs = ['domains','evtrig','matviews','views','policies','objtpl'];
-    var allTabs = ['templates','live','functions','editor'].concat(newTabs);
-    allTabs.forEach(function(t) {
-      var p  = document.getElementById('tpanel-' + t);
-      var bt = document.getElementById('tab-' + t);
-      if (p)  p.style.display = t === tab ? '' : 'none';
-      if (bt) bt.className = bt.className.replace(' active','') + (t === tab ? ' active' : '');
-    });
-    if (tab === 'templates')  loadTriggerTemplates();
-    if (tab === 'live')       loadLiveTriggers();
-    if (tab === 'functions')  loadFunctions();
-    if (tab === 'domains')    loadDomains();
-    if (tab === 'evtrig')     loadEventTriggers();
-    if (tab === 'matviews')   loadMatViews();
-    if (tab === 'views')      loadViews();
-    if (tab === 'policies')   loadPolicies();
-    if (tab === 'objtpl')     loadObjectTemplates();
-  };
-})();
 
 /* ── Object Template grid ──────────────────────────────────────────────────── */
 var _objectTemplates = null;
