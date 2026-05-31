@@ -1340,6 +1340,130 @@ cy.fit();
 		result = mgr.import_sql(sql)
 		return jsonify(result)
 
+	# ── Trigger/Function panel ─────────────────────────────────────────────────
+
+	@expose("/api/triggers/templates")
+	@has_access
+	def api_trigger_templates(self):
+		"""List all available trigger/function templates with metadata."""
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		mgr = TriggerProcedureManager(self._schema_manager().engine)
+		return jsonify({"templates": mgr.list_templates()})
+
+	@expose("/api/triggers/list")
+	@has_access
+	def api_trigger_list(self):
+		"""List all triggers in the live database, optionally filtered by table."""
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		table  = request.args.get("table")
+		mgr    = TriggerProcedureManager(self._schema_manager().engine)
+		result = mgr.list_triggers(table=table)
+		return jsonify({"triggers": result})
+
+	@expose("/api/functions/list")
+	@has_access
+	def api_function_list(self):
+		"""List all user-defined functions/procedures."""
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		schema = request.args.get("schema", "public")
+		mgr    = TriggerProcedureManager(self._schema_manager().engine)
+		return jsonify({"functions": mgr.list_functions(schema=schema)})
+
+	@expose("/api/functions/source")
+	@has_access
+	def api_function_source(self):
+		"""Return the source code of a function."""
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		name   = request.args.get("name", "")
+		schema = request.args.get("schema", "public")
+		if not name:
+			return jsonify({"error": "name required"}), 400
+		mgr = TriggerProcedureManager(self._schema_manager().engine)
+		src = mgr.get_function_source(name, schema)
+		return jsonify({"source": src or ""})
+
+	@expose("/api/triggers/apply-template", methods=["POST"])
+	@has_access
+	def api_trigger_apply_template(self):
+		"""Apply a trigger template with given parameters."""
+		_require_schema_admin()
+		_validate_csrf()
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		data         = request.get_json(silent=True) or {}
+		template_key = data.get("template_key", "")
+		params       = {k: v for k, v in data.items() if k != "template_key"}
+		if not template_key:
+			return jsonify({"error": "template_key required"}), 400
+		try:
+			mgr    = TriggerProcedureManager(self._schema_manager().engine)
+			result = mgr.apply_template(template_key, **params)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/triggers/drop", methods=["POST"])
+	@has_access
+	def api_trigger_drop(self):
+		"""Drop a trigger from a table."""
+		_require_schema_admin()
+		_validate_csrf()
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		data         = request.get_json(silent=True) or {}
+		table        = data.get("table", "")
+		trigger_name = data.get("trigger_name", "")
+		if not table or not trigger_name:
+			return jsonify({"error": "table and trigger_name required"}), 400
+		try:
+			mgr    = TriggerProcedureManager(self._schema_manager().engine)
+			result = mgr.drop_trigger(table, trigger_name)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/functions/create", methods=["POST"])
+	@has_access
+	def api_function_create(self):
+		"""Create or replace a custom function/procedure."""
+		_require_schema_admin()
+		_validate_csrf()
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		data   = request.get_json(silent=True) or {}
+		name   = data.get("name", "")
+		body   = data.get("body", "")
+		args   = data.get("args", "")
+		ret    = data.get("returns", "void")
+		lang   = data.get("language", "plpgsql")
+		schema = data.get("schema", "public")
+		if not name or not body:
+			return jsonify({"error": "name and body required"}), 400
+		try:
+			mgr    = TriggerProcedureManager(self._schema_manager().engine)
+			result = mgr.create_function(name, args=args, return_type=ret,
+			                             body=body, language=lang, schema=schema)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/functions/drop", methods=["POST"])
+	@has_access
+	def api_function_drop(self):
+		"""Drop a function/procedure."""
+		_require_schema_admin()
+		_validate_csrf()
+		from pgappforge.views.erd_schema_manager import TriggerProcedureManager
+		data   = request.get_json(silent=True) or {}
+		name   = data.get("name", "")
+		args   = data.get("args", "")
+		schema = data.get("schema", "public")
+		if not name:
+			return jsonify({"error": "name required"}), 400
+		try:
+			mgr    = TriggerProcedureManager(self._schema_manager().engine)
+			result = mgr.drop_function(name, args=args, schema=schema)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
 	# ── Phase 5: Schema namespace list ────────────────────────────────────────
 
 	@expose("/api/schema-list")
@@ -1474,6 +1598,21 @@ _DESIGNER_HTML = ("""
     .analysis-warn { border-color:#e67e22 !important; border-width:4px !important; }
     /* Undo/redo */
     #btn-undo:disabled, #btn-redo:disabled { opacity:.4; }
+    /* Trigger panel */
+    .tpanel { min-height:200px; }
+    .tpl-card { background:#253545; border:1px solid #34495e; border-radius:6px;
+                padding:10px; cursor:pointer; transition:border-color .2s; }
+    .tpl-card:hover { border-color:#3498db; }
+    .tpl-card h6 { margin:0 0 4px; font-size:.82em; color:#3498db; }
+    .tpl-card p  { margin:0; font-size:.74em; color:#7f8c8d; line-height:1.3; }
+    .tpl-card.selected { border-color:#27ae60; background:#1e3a2f; }
+    .tcat.active { background:#3498db; border-color:#3498db; color:#fff; }
+    .trigger-row { padding:5px 8px; border-bottom:1px solid #253545; display:flex;
+                   align-items:center; justify-content:space-between; font-size:.8em; }
+    .trigger-row b { color:#e67e22; }
+    .fn-row { padding:5px 8px; border-bottom:1px solid #253545; cursor:pointer;
+              font-size:.8em; display:flex; align-items:center; justify-content:space-between; }
+    .fn-row:hover { background:#1e2a3a; }
     /* pg types datalist */
     #pg-types-list { display:none; }
     button { cursor:pointer; }
@@ -1568,6 +1707,28 @@ _DESIGNER_HTML = ("""
         <button class="btn btn-xs btn-default" onclick="recommendIndexes()">&#9660; Indexes</button>
         <button class="btn btn-xs btn-info"    onclick="aiGenerateSchema()">&#129302; AI Gen</button>
       </div>
+      <!-- Triggers & Functions -->
+      <div class="tb-sect">TRIGGERS &amp; FUNCTIONS</div>
+      <button class="btn btn-xs btn-default btn-block"
+              onclick="openTriggerPanel('templates')"
+              title="Apply a trigger template to any table">
+        &#9889; Template Library
+      </button>
+      <button class="btn btn-xs btn-default btn-block"
+              onclick="openTriggerPanel('live')"
+              title="List existing triggers in the database">
+        &#128295; Live Triggers
+      </button>
+      <button class="btn btn-xs btn-default btn-block"
+              onclick="openTriggerPanel('functions')"
+              title="Browse and view function/procedure source">
+        &#402; Functions
+      </button>
+      <button class="btn btn-xs btn-primary btn-block"
+              onclick="openTriggerPanel('editor')"
+              title="Write a custom function/procedure">
+        &#9998; Function Editor
+      </button>
       <!-- Diff -->
       <div class="tb-sect">MIGRATION</div>
       <button class="btn btn-xs btn-warning btn-block" onclick="showDiff([])">Preview Diff</button>
@@ -1735,6 +1896,122 @@ _DESIGNER_HTML = ("""
     </div>
   </div>
 </div>
+
+<!-- ─── Trigger / Function panel modal ─────────────────────────────── -->
+<div id="trigger-modal" class="erd-modal">
+  <div class="erd-modal-box" style="max-width:820px;width:96vw">
+    <h5 style="display:flex;align-items:center;justify-content:space-between">
+      <span>&#9889; Triggers &amp; Functions</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-xs btn-default" id="tab-templates" onclick="switchTriggerTab('templates')">Templates</button>
+        <button class="btn btn-xs btn-default" id="tab-live"      onclick="switchTriggerTab('live')">Live Triggers</button>
+        <button class="btn btn-xs btn-default" id="tab-functions"  onclick="switchTriggerTab('functions')">Functions</button>
+        <button class="btn btn-xs btn-primary" id="tab-editor"    onclick="switchTriggerTab('editor')">&#9998; Editor</button>
+      </div>
+    </h5>
+
+    <!-- TEMPLATES tab -->
+    <div id="tpanel-templates" class="tpanel">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap" id="tpl-category-filters">
+        <button class="btn btn-xs btn-default tcat active" onclick="filterTplCategory('all')" data-cat="all">All</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('timestamps')" data-cat="timestamps">Timestamps</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('audit')" data-cat="audit">Audit</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('validation')" data-cat="validation">Validation</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('search')" data-cat="search">Search</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('security')" data-cat="security">Security</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('workflow')" data-cat="workflow">Workflow</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('finance')" data-cat="finance">Finance</button>
+        <button class="btn btn-xs btn-default tcat" onclick="filterTplCategory('performance')" data-cat="performance">Performance</button>
+      </div>
+      <div id="tpl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:50vh;overflow-y:auto">
+        <div style="color:#7f8c8d;font-size:.85em">Loading templates…</div>
+      </div>
+    </div>
+
+    <!-- LIVE TRIGGERS tab -->
+    <div id="tpanel-live" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="trigger-table-filter" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;max-width:200px"
+               placeholder="Filter by table…" oninput="loadLiveTriggers()">
+        <button class="btn btn-xs btn-default" onclick="loadLiveTriggers()">&#8635; Refresh</button>
+      </div>
+      <div id="live-triggers-list" style="max-height:50vh;overflow-y:auto;font-size:.8em">
+        <div style="color:#7f8c8d">Loading…</div>
+      </div>
+    </div>
+
+    <!-- FUNCTIONS tab -->
+    <div id="tpanel-functions" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="fn-schema-filter" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;max-width:150px" onchange="loadFunctions()">
+          <option>public</option>
+        </select>
+        <button class="btn btn-xs btn-default" onclick="loadFunctions()">&#8635; Refresh</button>
+      </div>
+      <div id="functions-list" style="max-height:50vh;overflow-y:auto;font-size:.8em">
+        <div style="color:#7f8c8d">Loading…</div>
+      </div>
+      <!-- Function source viewer -->
+      <div id="fn-source-view" style="display:none;margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <b id="fn-source-name" style="font-size:.85em;color:#3498db"></b>
+          <button class="btn btn-xs btn-danger" id="fn-drop-btn">Drop Function</button>
+        </div>
+        <pre id="fn-source-code" style="background:#0d1b2a;padding:10px;font-size:.72em;max-height:240px;overflow:auto;color:#00ff99;border-radius:4px"></pre>
+      </div>
+    </div>
+
+    <!-- FUNCTION EDITOR tab -->
+    <div id="tpanel-editor" class="tpanel" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+        <div>
+          <label style="font-size:.75em;color:#7f8c8d">Function name</label>
+          <input id="fn-edit-name" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566" placeholder="my_function">
+        </div>
+        <div>
+          <label style="font-size:.75em;color:#7f8c8d">Schema</label>
+          <input id="fn-edit-schema" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566" value="public">
+        </div>
+        <div>
+          <label style="font-size:.75em;color:#7f8c8d">Arguments</label>
+          <input id="fn-edit-args" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566" placeholder="p_id INTEGER">
+        </div>
+        <div>
+          <label style="font-size:.75em;color:#7f8c8d">Returns</label>
+          <input id="fn-edit-returns" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566" value="TRIGGER">
+        </div>
+      </div>
+      <label style="font-size:.75em;color:#7f8c8d">Function body (PL/pgSQL)</label>
+      <textarea id="fn-edit-body" style="width:100%;height:220px;background:#0d1b2a;color:#00ff99;border:1px solid #445566;border-radius:4px;padding:8px;font-family:monospace;font-size:.8em;resize:vertical"
+        placeholder="BEGIN&#10;  -- your logic here&#10;  RETURN NEW;&#10;END;"></textarea>
+      <div class="erd-modal-actions">
+        <button class="btn btn-sm btn-default" onclick="clearFunctionEditor()">Clear</button>
+        <button class="btn btn-sm btn-primary" onclick="submitCustomFunction()">&#10003; Create / Replace</button>
+      </div>
+    </div>
+
+    <!-- Template parameter form (shown when a template is selected) -->
+    <div id="tpl-params-form" style="display:none;margin-top:12px;padding:12px;background:#0d1b2a;border-radius:6px">
+      <h6 id="tpl-params-title" style="margin:0 0 10px;color:#3498db"></h6>
+      <p id="tpl-params-desc" style="font-size:.8em;color:#7f8c8d;margin-bottom:10px"></p>
+      <div id="tpl-params-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+      <div style="margin-top:8px;font-size:.75em;color:#7f8c8d">
+        <b>Preview SQL:</b>
+        <pre id="tpl-sql-preview" style="background:#111;padding:6px;font-size:.85em;color:#00ff99;max-height:140px;overflow:auto;border-radius:3px;margin:4px 0 0"></pre>
+      </div>
+      <div class="erd-modal-actions">
+        <button class="btn btn-sm btn-default" onclick="document.getElementById('tpl-params-form').style.display='none'">Cancel</button>
+        <button class="btn btn-sm btn-warning" onclick="previewTriggerTemplate()">Preview SQL</button>
+        <button class="btn btn-sm btn-success" id="tpl-apply-btn">&#9889; Apply to Database</button>
+      </div>
+    </div>
+
+    <div class="erd-modal-actions" style="margin-top:8px">
+      <button class="btn btn-sm btn-default" onclick="document.getElementById('trigger-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+<!-- ─── end trigger modal ──────────────────────────────────────────── -->
 
 <!-- Migration log modal -->
 <div id="mig-log-modal" class="erd-modal">

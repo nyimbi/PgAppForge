@@ -837,3 +837,227 @@ if (CFG.designId) {
   _currentDesignId = CFG.designId;
   connectSSE(CFG.designId);
 }
+
+/* ── Trigger / Function Panel ─────────────────────────────────────────────── */
+
+var _triggerTemplates = null;
+var _selectedTplKey   = null;
+
+function openTriggerPanel(tab) {
+  var m = document.getElementById('trigger-modal');
+  if (m) { m.style.display = 'flex'; switchTriggerTab(tab || 'templates'); }
+}
+
+function switchTriggerTab(tab) {
+  ['templates','live','functions','editor'].forEach(function(t) {
+    var p  = document.getElementById('tpanel-' + t);
+    var bt = document.getElementById('tab-' + t);
+    if (p)  p.style.display = t === tab ? '' : 'none';
+    if (bt) bt.className = bt.className.replace(' active','') + (t === tab ? ' active' : '');
+  });
+  if (tab === 'templates') loadTriggerTemplates();
+  if (tab === 'live')      loadLiveTriggers();
+  if (tab === 'functions') loadFunctions();
+}
+
+/* Templates grid */
+function loadTriggerTemplates() {
+  if (_triggerTemplates) { renderTplGrid(_triggerTemplates); return; }
+  apiFetch('GET', '/api/triggers/templates').then(function(d) {
+    _triggerTemplates = d.templates || [];
+    renderTplGrid(_triggerTemplates);
+  });
+}
+
+function renderTplGrid(templates, category) {
+  var grid = document.getElementById('tpl-grid');
+  if (!grid) return;
+  var filtered = category && category !== 'all'
+    ? templates.filter(function(t){ return t.category === category; })
+    : templates;
+  if (!filtered.length) { grid.innerHTML = '<div style="color:#7f8c8d">No templates in this category.</div>'; return; }
+  grid.innerHTML = filtered.map(function(t) {
+    var icon = t.icon ? '<i class="fas ' + _esc(t.icon) + ' me-1"></i>' : '&#9889;';
+    var cardId = 'tplcard-' + _esc(t.key || '');
+    return '<div class="tpl-card" id="' + cardId + '" onclick="selectTemplate(\'' + _esc(t.key || '') + '\')">' +
+      '<h6>' + icon + ' ' + _esc(t.label) + '</h6>' +
+      '<p>' + _esc(t.description || '') + '</p>' +
+      (t.category ? '<span style="font-size:.68em;color:#7f8c8d">' + _esc(t.category) + '</span>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function filterTplCategory(cat) {
+  document.querySelectorAll('.tcat').forEach(function(b){
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  renderTplGrid(_triggerTemplates || [], cat);
+}
+
+function selectTemplate(templateKey) {
+  _selectedTplKey = templateKey;
+  document.querySelectorAll('.tpl-card').forEach(function(c){
+    c.classList.toggle('selected', c.id === 'tplcard-' + templateKey);
+  });
+  var tmpl = (_triggerTemplates || []).find(function(t){ return t.key === templateKey; });
+  if (!tmpl) return;
+
+  document.getElementById('tpl-params-title').textContent = tmpl.label;
+  document.getElementById('tpl-params-desc').textContent  = tmpl.description || '';
+  document.getElementById('tpl-sql-preview').textContent  = '';
+
+  var fields = document.getElementById('tpl-params-fields');
+  fields.innerHTML = (tmpl.params || []).map(function(p) {
+    var dflt = (tmpl.defaults || {})[p] || '';
+    if (p === 'table') {
+      var sel = cy.$('node[type="table"]:selected');
+      if (sel.length === 1) dflt = sel[0].id();
+    }
+    return '<div><label style="font-size:.75em;color:#7f8c8d">' + _esc(p) + '</label>' +
+      '<input id="tpl-param-' + _esc(p) + '" class="form-control input-sm" ' +
+      'style="background:#253545;color:#ecf0f1;border-color:#445566" value="' + _esc(dflt) + '"></div>';
+  }).join('');
+
+  document.getElementById('tpl-params-form').style.display = '';
+  document.getElementById('tpl-apply-btn').onclick = function() { applyTriggerTemplate(); };
+}
+
+function _getTplParams() {
+  var tmpl = (_triggerTemplates || []).find(function(t){ return t.key === _selectedTplKey; });
+  if (!tmpl) return null;
+  var params = { template_key: _selectedTplKey };
+  (tmpl.params || []).forEach(function(p) {
+    var el = document.getElementById('tpl-param-' + p);
+    if (el) params[p] = el.value.trim();
+  });
+  return params;
+}
+
+function previewTriggerTemplate() {
+  var tmpl = (_triggerTemplates || []).find(function(t){ return t.key === _selectedTplKey; });
+  var params = _getTplParams();
+  if (!tmpl || !params) return;
+  var sql = [tmpl.function_sql || '', tmpl.trigger_sql || ''].filter(Boolean).join('\n\n');
+  Object.keys(params).forEach(function(k) {
+    sql = sql.split('{' + k + '}').join(params[k]);
+  });
+  document.getElementById('tpl-sql-preview').textContent = sql || '(preview after applying)';
+}
+
+function applyTriggerTemplate() {
+  var params = _getTplParams();
+  if (!params) return;
+  setStatus('Applying trigger template…');
+  apiFetch('POST', '/api/triggers/apply-template', params).then(function(d) {
+    if (d.errors && d.errors.length) {
+      setStatus('✗ Template error: ' + d.errors[0]);
+    } else {
+      setStatus('✓ Trigger applied: ' + _selectedTplKey);
+      document.getElementById('tpl-params-form').style.display = 'none';
+      loadLiveTriggers();
+    }
+  });
+}
+
+/* Live triggers */
+function loadLiveTriggers() {
+  var tbl  = (document.getElementById('trigger-table-filter') || {}).value || '';
+  var qs   = tbl ? '?table=' + encodeURIComponent(tbl) : '';
+  var list = document.getElementById('live-triggers-list');
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/triggers/list' + qs).then(function(d) {
+    var rows = d.triggers || [];
+    if (!list) return;
+    if (!rows.length) { list.innerHTML = '<div style="color:#7f8c8d">No triggers found.</div>'; return; }
+    list.innerHTML = rows.map(function(t) {
+      return '<div class="trigger-row">' +
+        '<span><b>' + _esc(t.trigger_name) + '</b> on <i>' + _esc(t.event_object_table) + '</i>' +
+        ' (' + _esc(t.event_manipulation) + ' ' + _esc(t.action_timing) + ')</span>' +
+        '<button class="btn btn-xs btn-danger" onclick="dropTrigger(' +
+        JSON.stringify(t.event_object_table) + ',' + JSON.stringify(t.trigger_name) +
+        ')">Drop</button></div>';
+    }).join('');
+  });
+}
+
+function dropTrigger(table, triggerName) {
+  if (!confirm('Drop trigger "' + triggerName + '" from "' + table + '"?')) return;
+  apiFetch('POST', '/api/triggers/drop', {table: table, trigger_name: triggerName}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped: ' + triggerName);
+    loadLiveTriggers();
+  });
+}
+
+/* Functions list */
+function loadFunctions() {
+  var schema = (document.getElementById('fn-schema-filter') || {}).value || 'public';
+  var list   = document.getElementById('functions-list');
+  var src    = document.getElementById('fn-source-view');
+  if (src) src.style.display = 'none';
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/functions/list?schema=' + encodeURIComponent(schema)).then(function(d) {
+    var fns = d.functions || [];
+    if (!list) return;
+    if (!fns.length) { list.innerHTML = '<div style="color:#7f8c8d">No functions found.</div>'; return; }
+    list.innerHTML = fns.map(function(f) {
+      return '<div class="fn-row" onclick="loadFunctionSource(' +
+        JSON.stringify(f.name) + ',' + JSON.stringify(schema) + ',' + JSON.stringify(f.args || '') + ')">' +
+        '<span><b>' + _esc(f.name) + '</b>(' + _esc(f.args || '') + ') → <i>' + _esc(f.returns || 'void') + '</i></span>' +
+        '<span style="color:#7f8c8d;font-size:.75em">' + _esc(f.language || '') + '</span>' +
+        '</div>';
+    }).join('');
+  });
+}
+
+function loadFunctionSource(name, schema, args) {
+  var srcView = document.getElementById('fn-source-view');
+  document.getElementById('fn-source-name').textContent = schema + '.' + name + '(' + args + ')';
+  document.getElementById('fn-source-code').textContent = 'Loading…';
+  srcView.style.display = '';
+  apiFetch('GET', '/api/functions/source?name=' + encodeURIComponent(name) + '&schema=' + encodeURIComponent(schema))
+    .then(function(d) { document.getElementById('fn-source-code').textContent = d.source || '(unavailable)'; });
+  document.getElementById('fn-drop-btn').onclick = function() {
+    if (!confirm('Drop function ' + schema + '.' + name + '?')) return;
+    apiFetch('POST', '/api/functions/drop', {name: name, args: args, schema: schema}).then(function(d) {
+      setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped: ' + name);
+      srcView.style.display = 'none';
+      loadFunctions();
+    });
+  };
+  // Copy into editor
+  document.getElementById('fn-edit-name').value   = name;
+  document.getElementById('fn-edit-schema').value = schema;
+  document.getElementById('fn-edit-args').value   = args;
+}
+
+/* Function editor */
+function clearFunctionEditor() {
+  ['fn-edit-name','fn-edit-args','fn-edit-body'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  var s = document.getElementById('fn-edit-schema'); if (s) s.value = 'public';
+  var r = document.getElementById('fn-edit-returns'); if (r) r.value = 'TRIGGER';
+}
+
+function submitCustomFunction() {
+  var payload = {
+    name:     (document.getElementById('fn-edit-name')    || {}).value || '',
+    schema:   (document.getElementById('fn-edit-schema')  || {}).value || 'public',
+    args:     (document.getElementById('fn-edit-args')    || {}).value || '',
+    returns:  (document.getElementById('fn-edit-returns') || {}).value || 'void',
+    body:     (document.getElementById('fn-edit-body')    || {}).value || '',
+    language: 'plpgsql',
+  };
+  if (!payload.name || !payload.body) { alert('Name and body are required.'); return; }
+  setStatus('Creating function ' + payload.name + '…');
+  apiFetch('POST', '/api/functions/create', payload).then(function(d) {
+    if (d.errors && d.errors.length) {
+      setStatus('✗ Function error: ' + d.errors[0]);
+    } else {
+      setStatus('✓ Function created: ' + payload.name);
+      clearFunctionEditor();
+      loadFunctions();
+      switchTriggerTab('functions');
+    }
+  });
+}

@@ -780,18 +780,18 @@ FOR EACH ROW EXECUTE FUNCTION {schema}.notify_{table}_change();""",
         "defaults": {"schema": "public", "channel": "pgappforge_changes"},
     },
     "tsvector_search": {
-        "label": "Maintain tsvector full-text search column",
+        "label": "Full-text search column (tsvector)",
         "description": "Keeps a tsvector column current for fast full-text search.",
+        "icon": "fa-search",
+        "category": "search",
         "function": """
--- Add the search column if it doesn't exist
 ALTER TABLE {table} ADD COLUMN IF NOT EXISTS search_vector TSVECTOR;
 CREATE INDEX IF NOT EXISTS ix_{table}_search ON {table} USING GIN(search_vector);
 
 CREATE OR REPLACE FUNCTION {schema}.update_{table}_search()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    NEW.search_vector = to_tsvector('english',
-        COALESCE({search_columns}, ''));
+    NEW.search_vector = to_tsvector('english', COALESCE({search_columns}, ''));
     RETURN NEW;
 END;
 $$;""",
@@ -801,6 +801,321 @@ BEFORE INSERT OR UPDATE ON {table}
 FOR EACH ROW EXECUTE FUNCTION {schema}.update_{table}_search();""",
         "params": ["table", "schema", "search_columns"],
         "defaults": {"schema": "public", "search_columns": "''"},
+    },
+
+    # ── 7 — Auto-set created_at on INSERT ────────────────────────────────────
+    "created_at_auto": {
+        "label": "Auto-set created_at on INSERT",
+        "description": "Ensures created_at is never overwritten after the first insert.",
+        "icon": "fa-calendar-plus",
+        "category": "timestamps",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.set_created_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.created_at IS NULL THEN
+        NEW.created_at = NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_created_at
+BEFORE INSERT ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.set_created_at();""",
+        "params": ["table", "schema"],
+        "defaults": {"schema": "public"},
+    },
+
+    # ── 8 — Validate email format ─────────────────────────────────────────────
+    "validate_email": {
+        "label": "Validate email format (RFC-5322 pattern)",
+        "description": "Raises an exception if an email column doesn't match a basic pattern.",
+        "icon": "fa-envelope-circle-check",
+        "category": "validation",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.validate_{table}_email()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.{email_column} IS NOT NULL AND
+       NEW.{email_column} !~ '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$' THEN
+        RAISE EXCEPTION 'Invalid email address: %', NEW.{email_column};
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_email_check
+BEFORE INSERT OR UPDATE OF {email_column} ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.validate_{table}_email();""",
+        "params": ["table", "schema", "email_column"],
+        "defaults": {"schema": "public", "email_column": "email"},
+    },
+
+    # ── 9 — Auto-generate URL slug ────────────────────────────────────────────
+    "slugify": {
+        "label": "Auto-generate URL slug from title/name",
+        "description": "Creates a url-friendly slug from a source column on INSERT (skips if slug already set).",
+        "icon": "fa-link",
+        "category": "derived",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.slugify_{table}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.{slug_column} IS NULL OR NEW.{slug_column} = '' THEN
+        NEW.{slug_column} = lower(
+            regexp_replace(
+                regexp_replace(NEW.{source_column}, '[^a-zA-Z0-9\\s-]', '', 'g'),
+            '\\s+', '-', 'g')
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_slugify
+BEFORE INSERT ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.slugify_{table}();""",
+        "params": ["table", "schema", "source_column", "slug_column"],
+        "defaults": {"schema": "public", "source_column": "title", "slug_column": "slug"},
+    },
+
+    # ── 10 — Immutable field guard ────────────────────────────────────────────
+    "immutable_field": {
+        "label": "Protect immutable field after creation",
+        "description": "Raises an error if a field is changed after the row is first inserted.",
+        "icon": "fa-lock",
+        "category": "validation",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.guard_{table}_{guard_column}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.{guard_column} IS DISTINCT FROM NEW.{guard_column} THEN
+        RAISE EXCEPTION '% is immutable after creation', '{guard_column}';
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_{guard_column}_immutable
+BEFORE UPDATE OF {guard_column} ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.guard_{table}_{guard_column}();""",
+        "params": ["table", "schema", "guard_column"],
+        "defaults": {"schema": "public", "guard_column": "created_at"},
+    },
+
+    # ── 11 — Version/history table ────────────────────────────────────────────
+    "version_history": {
+        "label": "Append-only version history",
+        "description": "Copies every UPDATE to a {table}_history table for full row history.",
+        "icon": "fa-clock-rotate-left",
+        "category": "audit",
+        "function": """
+CREATE TABLE IF NOT EXISTS {table}_history (
+    history_id  BIGSERIAL PRIMARY KEY,
+    action      TEXT NOT NULL,
+    changed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    changed_by  TEXT DEFAULT current_user,
+    data        JSONB NOT NULL
+);
+
+CREATE OR REPLACE FUNCTION {schema}.archive_{table}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO {table}_history(action, data)
+    VALUES (TG_OP, row_to_json(OLD)::jsonb);
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_history
+BEFORE UPDATE OR DELETE ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.archive_{table}();""",
+        "params": ["table", "schema"],
+        "defaults": {"schema": "public"},
+    },
+
+    # ── 12 — UUID primary key auto-generate ───────────────────────────────────
+    "uuid_pk": {
+        "label": "Auto-generate UUID primary key",
+        "description": "Generates a gen_random_uuid() value if id is NULL on INSERT.",
+        "icon": "fa-fingerprint",
+        "category": "identity",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.set_uuid_{table}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.id IS NULL THEN
+        NEW.id = gen_random_uuid();
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_uuid
+BEFORE INSERT ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.set_uuid_{table}();""",
+        "params": ["table", "schema"],
+        "defaults": {"schema": "public"},
+    },
+
+    # ── 13 — Ledger running balance ───────────────────────────────────────────
+    "ledger_balance": {
+        "label": "Running balance for financial ledger",
+        "description": "Computes a cumulative SUM(amount) running balance on INSERT.",
+        "icon": "fa-scale-balanced",
+        "category": "finance",
+        "function": """
+ALTER TABLE {table} ADD COLUMN IF NOT EXISTS balance NUMERIC(18,2) DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION {schema}.update_{table}_balance()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    prev_balance NUMERIC(18,2);
+BEGIN
+    SELECT COALESCE(MAX(balance), 0) INTO prev_balance FROM {table}
+    WHERE {account_column} = NEW.{account_column};
+    NEW.balance = prev_balance + NEW.{amount_column};
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_balance
+BEFORE INSERT ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.update_{table}_balance();""",
+        "params": ["table", "schema", "account_column", "amount_column"],
+        "defaults": {"schema": "public", "account_column": "account_id", "amount_column": "amount"},
+    },
+
+    # ── 14 — JSONB schema validation ──────────────────────────────────────────
+    "jsonb_schema_validate": {
+        "label": "Validate JSONB against required keys",
+        "description": "Raises an error if a required key is missing from a JSONB column.",
+        "icon": "fa-code",
+        "category": "validation",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.validate_{table}_{json_column}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    required_key TEXT;
+BEGIN
+    FOREACH required_key IN ARRAY STRING_TO_ARRAY('{required_keys}', ',') LOOP
+        IF NOT (NEW.{json_column} ? trim(required_key)) THEN
+            RAISE EXCEPTION 'Missing required key "%" in {json_column}', trim(required_key);
+        END IF;
+    END LOOP;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_{json_column}_schema
+BEFORE INSERT OR UPDATE OF {json_column} ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.validate_{table}_{json_column}();""",
+        "params": ["table", "schema", "json_column", "required_keys"],
+        "defaults": {"schema": "public", "json_column": "metadata", "required_keys": "type,version"},
+    },
+
+    # ── 15 — Encrypt sensitive column hint ────────────────────────────────────
+    "encrypt_column": {
+        "label": "Encrypt sensitive column (pgcrypto)",
+        "description": "Encrypts a column value with pgp_sym_encrypt before storage. Requires pgcrypto.",
+        "icon": "fa-user-secret",
+        "category": "security",
+        "function": """
+-- Requires: CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE OR REPLACE FUNCTION {schema}.encrypt_{table}_{column}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    encryption_key TEXT := current_setting('app.encryption_key', true);
+BEGIN
+    IF NEW.{column} IS NOT NULL AND encryption_key IS NOT NULL THEN
+        NEW.{column} = encode(
+            pgp_sym_encrypt(NEW.{column}, encryption_key), 'base64'
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_{column}_encrypt
+BEFORE INSERT OR UPDATE OF {column} ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.encrypt_{table}_{column}();""",
+        "params": ["table", "schema", "column"],
+        "defaults": {"schema": "public", "column": "ssn"},
+    },
+
+    # ── 16 — Prevent update after publish/finalize ────────────────────────────
+    "publish_lock": {
+        "label": "Lock row after published/finalized status",
+        "description": "Prevents editing rows once they reach a terminal status (published, finalized, etc).",
+        "icon": "fa-file-circle-check",
+        "category": "workflow",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.lock_{table}_on_publish()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.{status_column} = '{locked_status}' THEN
+        RAISE EXCEPTION 'Cannot modify a {locked_status} {table} row (id=%)', OLD.id;
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_publish_lock
+BEFORE UPDATE ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.lock_{table}_on_publish();""",
+        "params": ["table", "schema", "status_column", "locked_status"],
+        "defaults": {"schema": "public", "status_column": "status", "locked_status": "published"},
+    },
+
+    # ── 17 — Row-count quota guard ────────────────────────────────────────────
+    "quota_guard": {
+        "label": "Enforce row-count quota per parent",
+        "description": "Prevents adding more than N rows for a given parent_id (e.g. ≤5 addresses per user).",
+        "icon": "fa-gauge-high",
+        "category": "validation",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.check_{table}_quota()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    current_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO current_count
+    FROM {table} WHERE {parent_column} = NEW.{parent_column};
+    IF current_count >= {max_rows} THEN
+        RAISE EXCEPTION 'Quota exceeded: maximum {max_rows} {table} rows per {parent_column}';
+    END IF;
+    RETURN NEW;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_quota
+BEFORE INSERT ON {table}
+FOR EACH ROW EXECUTE FUNCTION {schema}.check_{table}_quota();""",
+        "params": ["table", "schema", "parent_column", "max_rows"],
+        "defaults": {"schema": "public", "parent_column": "user_id", "max_rows": "10"},
+    },
+
+    # ── 18 — Materialized summary refresh ────────────────────────────────────
+    "refresh_summary": {
+        "label": "Refresh materialized view on data change",
+        "description": "Calls REFRESH MATERIALIZED VIEW CONCURRENTLY after INSERT/UPDATE/DELETE.",
+        "icon": "fa-rotate",
+        "category": "performance",
+        "function": """
+CREATE OR REPLACE FUNCTION {schema}.refresh_{view_name}()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW CONCURRENTLY {schema}.{view_name};
+    RETURN NULL;
+END;
+$$;""",
+        "trigger": """
+CREATE TRIGGER trg_{table}_refresh_{view_name}
+AFTER INSERT OR UPDATE OR DELETE ON {table}
+FOR EACH STATEMENT EXECUTE FUNCTION {schema}.refresh_{view_name}();""",
+        "params": ["table", "schema", "view_name"],
+        "defaults": {"schema": "public", "view_name": "mv_summary"},
     },
 }
 
