@@ -463,7 +463,7 @@ class DesktopGenerator:
 			"fi\n"
 			"echo \"   Python $(python3 --version) ✓\"\n\n"
 			"# Install deps\n"
-			f"pip install {' '.join(deps)}\n"
+			f"python3 -m pip install --user {' '.join(deps)}\n"
 			"echo '   Dependencies installed ✓'\n\n"
 			"echo ''\n"
 			"echo '✓  Setup complete!'\n"
@@ -473,17 +473,25 @@ class DesktopGenerator:
 
 	def _gen_run_script(self) -> str:
 		c = self.config
-		entry = "run_desktop.py" if c.target in ("pywebview", "both") else "run_desktop_qt.py"
+		has_both = c.target == "both"
+		primary = "run_desktop.py" if c.target in ("pywebview", "both") else "run_desktop_qt.py"
+		both_block = (
+			'if [ "${1:-}" = "--qt" ]; then\n'
+			f'  shift; exec python3 run_desktop_qt.py "$@"\n'
+			'fi\n'
+		) if has_both else ""
 		return (
 			"#!/usr/bin/env bash\n"
 			f"# run_desktop.sh — launch {c.app_name}\n"
-			"set -euo pipefail\n\n"
+			"set -euo pipefail\n"
+			'cd "$(dirname "$0")/.."' + "\n\n"
 			"# Check desktop.config.json exists\n"
 			"if [ ! -f desktop.config.json ]; then\n"
 			"  echo '✗  desktop.config.json not found. Run setup first.' && exit 1\n"
 			"fi\n\n"
-			f"echo '▶  Launching {c.app_name}...'\n"
-			f"python3 {entry} \"$@\"\n"
+			+ both_block
+			+ f"echo '▶  Launching {c.app_name}...'\n"
+			f"exec python3 {primary} \"$@\"\n"
 		)
 
 	def _write_files(self, files: dict[str, str]) -> None:
