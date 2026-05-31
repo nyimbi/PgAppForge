@@ -71,84 +71,90 @@ def _snapshot(report, session) -> dict:
 
 
 def _restore(report, snap: dict, session) -> None:
-	"""Restore a report from a snapshot dict, replacing all bands/fields/params."""
+	"""Restore a report from a snapshot dict, replacing all bands/fields/params.
+
+	Wrapped in a savepoint so a partial failure rolls back cleanly — the report
+	is never left in a half-restored, data-corrupted state.
+
+	NOTE: snapshot deliberately excludes governance fields (category_id,
+	is_public, owner_id, grants, subscriptions) — only content is versioned.
+	"""
 	from .models import (
 		ReportBand, ReportField, ReportParameter,
 		BandType, FieldType, ParameterType,
 	)
-	# Delete existing bands and params (cascade deletes fields)
-	session.execute(
-		sa.delete(ReportBand).where(ReportBand.report_id == report.id)
-	)
-	session.execute(
-		sa.delete(ReportParameter).where(ReportParameter.report_id == report.id)
-	)
-	session.flush()
-
-	# Restore scalar fields
-	for key in ("name", "description", "data_source", "group_field",
-	            "company_name", "logo_url", "primary_color", "secondary_color",
-	            "watermark_text", "template_key"):
-		if key in snap:
-			setattr(report, key, snap[key])
-	if "page_config" in snap:
-		report.page_config = snap["page_config"]
-
-	# Restore bands + fields
-	for pos, band_def in enumerate(snap.get("bands", [])):
-		try:
-			btype = BandType(band_def["band_type"])
-		except ValueError:
-			btype = BandType.DETAIL
-		band = ReportBand(
-			report_id=report.id,
-			band_type=btype,
-			position=pos,
-			height_mm=float(band_def.get("height_mm", 20)),
-			background_color=band_def.get("background_color", "#ffffff"),
-			style=band_def.get("style", {}),
-		)
-		session.add(band)
+	sp = session.begin_nested()
+	try:
+		# 1. Clear existing content
+		session.execute(sa.delete(ReportBand).where(ReportBand.report_id == report.id))
+		session.execute(sa.delete(ReportParameter).where(ReportParameter.report_id == report.id))
 		session.flush()
-		for field_def in band_def.get("fields", []):
+
+		# 2. Restore scalar fields
+		for key in ("name", "description", "data_source", "group_field",
+		            "company_name", "logo_url", "primary_color", "secondary_color",
+		            "watermark_text", "template_key"):
+			if key in snap:
+				setattr(report, key, snap[key])
+		if "page_config" in snap:
+			report.page_config = snap["page_config"]
+
+		# 3. Restore bands + fields
+		for pos, band_def in enumerate(snap.get("bands", [])):
 			try:
-				ftype = FieldType(field_def["field_type"])
+				btype = BandType(band_def["band_type"])
 			except ValueError:
-				ftype = FieldType.TEXT
-			f = ReportField(
-				band_id=band.id,
-				field_type=ftype,
-				x_mm=float(field_def.get("x_mm", 0)),
-				y_mm=float(field_def.get("y_mm", 0)),
-				width_mm=float(field_def.get("width_mm", 40)),
-				height_mm=float(field_def.get("height_mm", 8)),
-				data_binding=field_def.get("data_binding"),
-				format_string=field_def.get("format_string"),
-				compute=field_def.get("compute"),
-				link_url_template=field_def.get("link_url_template"),
-				style=field_def.get("style", {}),
+				btype = BandType.DETAIL
+			band = ReportBand(
+				report_id=report.id,
+				band_type=btype,
+				position=pos,
+				height_mm=float(band_def.get("height_mm", 20)),
+				background_color=band_def.get("background_color", "#ffffff"),
+				style=band_def.get("style", {}),
 			)
-			session.add(f)
+			session.add(band)
+			session.flush()
+			for field_def in band_def.get("fields", []):
+				try:
+					ftype = FieldType(field_def["field_type"])
+				except ValueError:
+					ftype = FieldType.TEXT
+				session.add(ReportField(
+					band_id=band.id,
+					field_type=ftype,
+					x_mm=float(field_def.get("x_mm", 0)),
+					y_mm=float(field_def.get("y_mm", 0)),
+					width_mm=float(field_def.get("width_mm", 40)),
+					height_mm=float(field_def.get("height_mm", 8)),
+					data_binding=field_def.get("data_binding"),
+					format_string=field_def.get("format_string"),
+					compute=field_def.get("compute"),
+					link_url_template=field_def.get("link_url_template"),
+					style=field_def.get("style", {}),
+				))
 
-	# Restore parameters
-	for param_def in snap.get("params", []):
-		try:
-			ptype = ParameterType(param_def.get("type", "string"))
-		except ValueError:
-			ptype = ParameterType.STRING
-		p = ReportParameter(
-			report_id=report.id,
-			name=param_def["name"],
-			param_type=ptype,
-			label=param_def.get("label"),
-			default_value=param_def.get("default_value"),
-			required=bool(param_def.get("required", False)),
-			options_sql=param_def.get("options_sql"),
-			depends_on=param_def.get("depends_on"),
-		)
-		session.add(p)
+		# 4. Restore parameters
+		for param_def in snap.get("params", []):
+			try:
+				ptype = ParameterType(param_def.get("type", "string"))
+			except ValueError:
+				ptype = ParameterType.STRING
+			session.add(ReportParameter(
+				report_id=report.id,
+				name=param_def["name"],
+				param_type=ptype,
+				label=param_def.get("label"),
+				default_value=param_def.get("default_value"),
+				required=bool(param_def.get("required", False)),
+				options_sql=param_def.get("options_sql"),
+				depends_on=param_def.get("depends_on"),
+			))
 
-	session.commit()
+		sp.commit()
+	except Exception:
+		sp.rollback()
+		raise  # caller returns HTTP 500
 
 
 class ReportVersionView(BaseView):
@@ -246,10 +252,13 @@ async function restoreV(v){{
 	def publish(self, report_id: int):
 		from flask_login import current_user
 		from .models import Report, ReportVersion
+		from .acl import can as _can
 		session = self._get_session()
 		report  = session.get(Report, report_id)
 		if report is None:
 			abort(404)
+		if not _can(current_user, report, "edit", session):
+			abort(403)
 
 		# Determine next version number
 		last = session.execute(
@@ -276,8 +285,13 @@ async function restoreV(v){{
 	@expose("/<int:report_id>/versions/<int:version>/restore", methods=["POST"])
 	@has_access
 	def restore(self, report_id: int, version: int):
+		from flask_login import current_user
 		from .models import Report, ReportVersion
+		from .acl import can as _can
 		session = self._get_session()
+		report_check = session.get(Report, report_id)
+		if report_check is not None and not _can(current_user, report_check, "edit", session):
+			abort(403)
 		rv = session.execute(
 			sa.select(ReportVersion)
 			.where(ReportVersion.report_id == report_id)

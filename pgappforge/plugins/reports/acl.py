@@ -178,6 +178,7 @@ def check_token(token_str: str, session) -> tuple[Any, dict]:
 	from .models import ReportShareToken
 	import sqlalchemy as sa
 
+	# First verify the token exists at all
 	tok = session.execute(
 		sa.select(ReportShareToken).where(ReportShareToken.token == token_str)
 	).scalar_one_or_none()
@@ -187,12 +188,22 @@ def check_token(token_str: str, session) -> tuple[Any, dict]:
 	now = datetime.now(timezone.utc)
 	if tok.expires_at and tok.expires_at.replace(tzinfo=timezone.utc) < now:
 		abort(403)
-	if tok.uses_remaining is not None and tok.uses_remaining <= 0:
-		abort(403)
 
-	# Decrement
+	# Atomic decrement: UPDATE … WHERE uses_remaining > 0 RETURNING id
+	# This prevents the read-modify-write race when max_uses=1 tokens are
+	# accessed concurrently (two requests both read uses_remaining=1 without
+	# this guard would both succeed).
 	if tok.uses_remaining is not None:
-		tok.uses_remaining -= 1
+		result = session.execute(
+			sa.update(ReportShareToken)
+			.where(ReportShareToken.token == token_str)
+			.where(ReportShareToken.uses_remaining > 0)
+			.values(uses_remaining=ReportShareToken.uses_remaining - 1)
+			.returning(ReportShareToken.id)
+		)
+		if result.scalar_one_or_none() is None:
+			session.rollback()
+			abort(403)  # quota exhausted (race: another request got the last use)
 	session.commit()
 
 	return tok.report, tok.params_json or {}

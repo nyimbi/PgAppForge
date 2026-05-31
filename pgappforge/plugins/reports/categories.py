@@ -161,11 +161,15 @@ async function delCat(id){{
 	@expose("/<int:cat_id>", methods=["DELETE"])
 	@has_access
 	def delete(self, cat_id: int):
+		from flask_login import current_user
 		from .models import ReportCategory
+		from .acl import _is_admin
 		session = self._get_session()
 		cat = session.get(ReportCategory, cat_id)
 		if cat is None:
 			abort(404)
+		if cat.owner_id != getattr(current_user, "id", None) and not _is_admin(current_user):
+			abort(403)
 		session.delete(cat)
 		session.commit()
 		return jsonify({"ok": True})
@@ -173,12 +177,16 @@ async function delCat(id){{
 	@expose("/<int:cat_id>", methods=["PATCH"])
 	@has_access
 	def update(self, cat_id: int):
+		from flask_login import current_user
 		from .models import ReportCategory
+		from .acl import _is_admin
 		data    = request.get_json(silent=True) or {}
 		session = self._get_session()
 		cat     = session.get(ReportCategory, cat_id)
 		if cat is None:
 			abort(404)
+		if cat.owner_id != getattr(current_user, "id", None) and not _is_admin(current_user):
+			abort(403)
 		if "name"      in data: cat.name      = data["name"]
 		if "parent_id" in data: cat.parent_id = data["parent_id"]
 		if "color"     in data: cat.color     = data["color"]

@@ -37,18 +37,7 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
-def _compute_next_rrule(rule_str: str, after_dt: datetime) -> datetime | None:
-	"""
-	Compute the next occurrence after *after_dt* for an RRULE string.
-	Returns None when the rule is exhausted or dateutil is unavailable.
-	"""
-	try:
-		from dateutil.rrule import rrulestr
-		rule = rrulestr(rule_str, dtstart=after_dt, ignoretz=False)
-		return rule.after(after_dt)
-	except Exception as exc:
-		log.warning("ReportForge: RRULE computation failed (%r): %s", rule_str, exc)
-		return None
+from ._recurrence import next_occurrence as _compute_next_rrule
 
 
 def process_scheduled_dispatches(
@@ -155,9 +144,6 @@ def run_all(session=None, app: Any = None) -> int:
 	"""
 	count = 0
 	count += process_scheduled_dispatches(session=session, app=app)
-	try:
-		from .subscriptions import process_subscriptions
-		count += process_subscriptions(session=session, app=app)
-	except Exception as exc:
-		log.warning("ReportForge scheduler: subscriptions run failed: %s", exc)
+	from .subscriptions import process_subscriptions
+	count += process_subscriptions(session=session, app=app)
 	return count

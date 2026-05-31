@@ -129,14 +129,25 @@ async function createBoard(){{
 		if board is None:
 			abort(404)
 
-		layout = board.layout_json or []
-		engine = ReportEngine(session, preview_row_limit=20)
+		from flask import current_app as _ca
+
+		layout  = board.layout_json or []
+		db_bind = None
+		try:
+			ab = _ca.extensions.get("appbuilder")
+			db_bind = ab.session.bind if ab else _ca.extensions["sqlalchemy"].engine
+		except Exception:
+			pass
 
 		def render_tile(tile: dict) -> tuple[dict, str]:
+			"""Each worker uses its own session — SQLAlchemy Session is not thread-safe."""
+			from sqlalchemy.orm import Session as _Sess
 			rid    = tile.get("report_id")
 			params = tile.get("params", {})
 			try:
-				html = engine.generate_html(rid, params=params)
+				with _Sess(bind=db_bind) as worker_session:
+					worker_engine = ReportEngine(worker_session, preview_row_limit=20)
+					html = worker_engine.generate_html(rid, params=params)
 			except Exception as exc:
 				html = f'<div class="alert alert-danger">{_he(str(exc))}</div>'
 			return tile, html
@@ -218,13 +229,17 @@ async function createBoard(){{
 	@expose("/<int:board_id>", methods=["PUT"])
 	@has_access
 	def update(self, board_id: int):
+		from flask_login import current_user
 		from .models import Dashboard
+		from .acl import _is_admin
 		from sqlalchemy.orm.attributes import flag_modified
 		data    = request.get_json(silent=True) or {}
 		session = self._get_session()
 		board   = session.get(Dashboard, board_id)
 		if board is None:
 			abort(404)
+		if board.owner_id != getattr(current_user, "id", None) and not _is_admin(current_user):
+			abort(403)
 		if "name"        in data: board.name        = data["name"]
 		if "description" in data: board.description = data["description"]
 		if "is_public"   in data: board.is_public   = bool(data["is_public"])

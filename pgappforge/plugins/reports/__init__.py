@@ -80,7 +80,7 @@ from .designer import ReportDesignerView
 from .engine import ReportEngine
 from .wizard import ReportWizardView
 from .sql_editor import SqlEditorView
-from .acl import can as _acl_can, log_access as _log_access, check_token, generate_token
+from .acl import can as _acl_can, log_access as _log_access, check_token, generate_token, _is_admin
 from .categories import ReportCategoryView
 from .versioning import ReportVersionView
 from .dashboard import DashboardView
@@ -245,15 +245,15 @@ class ReportPreviewView(BaseView):
 		if report is None:
 			abort(404)
 
-		# ACL check
+		# ACL check — fail-closed: only catch import errors, not logic bugs
+		from flask_login import current_user
+		if not _acl_can(current_user, report, "run", session):
+			abort(403)
 		try:
-			from flask_login import current_user
-			if not _acl_can(current_user, report, "run", session):
-				abort(403)
 			_log_access(session, getattr(current_user, "id", None), report_id,
 			            "run", dict(request.args), request.remote_addr)
-		except Exception:
-			pass
+		except Exception as exc:
+			log.warning("ReportForge: access log failed: %s", exc)
 
 		params = {k: v for k, v in request.args.items()}
 
@@ -326,22 +326,22 @@ class ReportPreviewView(BaseView):
 		params  = {k: v for k, v in request.args.items() if k != "format"}
 		session = self._get_session()
 		engine  = ReportEngine(session)
-		# ACL + audit log
+		# ACL + audit log — fail-closed
+		from flask_login import current_user
+		import sqlalchemy as sa
+		report_check = session.execute(
+			sa.select(Report).where(Report.id == report_id)
+		).scalar_one_or_none()
+		if report_check is None:
+			abort(404)
+		if not _acl_can(current_user, report_check, "download", session):
+			abort(403)
 		try:
-			from flask_login import current_user
-			import sqlalchemy as sa
-			report_check = session.execute(
-				sa.select(Report).where(Report.id == report_id)
-			).scalar_one_or_none()
-			if report_check is None:
-				abort(404)
-			if not _acl_can(current_user, report_check, "download", session):
-				abort(403)
 			_log_access(session, getattr(current_user, "id", None), report_id,
 			            "download", {k: v for k, v in request.args.items() if k != "format"},
 			            request.remote_addr, fmt=fmt)
-		except Exception:
-			pass  # degrade gracefully if auth unavailable
+		except Exception as exc:
+			log.warning("ReportForge: access log failed: %s", exc)
 
 		try:
 			if fmt == "pdf":
@@ -579,8 +579,9 @@ class ReportPreviewView(BaseView):
 		sub = session.get(ReportSubscription, subscription_id)
 		if sub is None:
 			abort(404)
-		uid = getattr(current_user, "id", None)
-		if sub.user_id != uid:
+		uid      = getattr(current_user, "id", None)
+		is_admin = _is_admin(current_user)
+		if sub.user_id != uid and not is_admin:
 			abort(403)
 		sub.is_active = False
 		session.commit()
@@ -596,11 +597,17 @@ class ReportPreviewView(BaseView):
 		Poll GET /reports/jobs/<job_id>/status for result.
 		"""
 		from flask_login import current_user
-		from .models import ReportJob, JobStatus
+		from .models import ReportJob, JobStatus, Report
 		import sqlalchemy as sa
 		session = self._get_session()
-		fmt     = request.form.get("format", "pdf")
-		params  = {k: v for k, v in request.form.items() if k != "format"}
+		# ACL check — fail-closed
+		report_obj = session.execute(sa.select(Report).where(Report.id == report_id)).scalar_one_or_none()
+		if report_obj is None:
+			abort(404)
+		if not _acl_can(current_user, report_obj, "download", session):
+			abort(403)
+		fmt    = request.form.get("format", "pdf")
+		params = {k: v for k, v in request.form.items() if k != "format"}
 		job = ReportJob(
 			report_id=report_id,
 			format=fmt,
@@ -610,77 +617,91 @@ class ReportPreviewView(BaseView):
 		)
 		session.add(job)
 		session.commit()
-		# Kick off background thread
 		self._run_job_async(job.id)
 		return jsonify({"ok": True, "job_id": job.id})
 
 	@expose("/jobs/<int:job_id>/status")
 	@has_access
 	def job_status(self, job_id: int):
-		"""Poll render job status."""
+		"""Poll render job status. Only the job owner or an Admin can view."""
+		from flask_login import current_user
 		from .models import ReportJob
-		import sqlalchemy as sa
 		session = self._get_session()
 		job = session.get(ReportJob, job_id)
 		if job is None:
 			abort(404)
+		# Ownership check — prevents enumeration of others' job results
+		if job.created_by != getattr(current_user, "id", None) and not _is_admin(current_user):
+			abort(403)
 		result = {"status": job.status.value, "error": job.error}
 		if job.result_token:
 			result["download_url"] = f"/reports/share/{job.result_token}"
 		return jsonify(result)
 
 	def _run_job_async(self, job_id: int) -> None:
-		"""Spawn a daemon thread to render the report and store a share token."""
-		import threading
-		from flask import copy_current_request_context
+		"""Spawn a daemon thread to render the report and store a share token.
 
-		@copy_current_request_context
+		Uses a fresh SQLAlchemy session bound to the app's engine — not the
+		request-scoped session, which is closed when the response is sent.
+		"""
+		import threading
+		from flask import current_app
+
+		app = current_app._get_current_object()
+
 		def _run():
-			from .models import ReportJob, JobStatus
+			"""Job runner — executed in a daemon thread with its own session."""
+			from .models import ReportJob, JobStatus, ReportShareToken
 			from .engine import ReportEngine
-			from .acl import generate_token
-			from datetime import datetime, timezone
-			import sqlalchemy as sa
-			session = self._get_session()
-			job = session.get(ReportJob, job_id)
-			if not job:
-				return
+			from datetime import datetime, timezone, timedelta
+			from sqlalchemy.orm import Session as _Session
+			import secrets
+
+			# Open a fresh session — request session is closed by the time this runs
 			try:
-				job.status = JobStatus.RUNNING
-				session.commit()
-				engine = ReportEngine(session)
-				if job.format == "pdf":
-					data = engine.generate_pdf(job.report_id, job.params_json)
-					ext  = "pdf"
-				elif job.format == "xlsx":
-					data = engine.generate_excel(job.report_id, job.params_json)
-					ext  = "xlsx"
-				else:
-					data = engine.generate_csv(job.report_id, job.params_json).encode()
-					ext  = "csv"
-				# Store as share token (15 min TTL, 1 use)
-				from .models import ReportShareToken
-				import secrets
-				tok_str  = secrets.token_urlsafe(24)
-				from datetime import timedelta
-				expires  = datetime.now(timezone.utc) + timedelta(minutes=15)
-				tok = ReportShareToken(
-					token=tok_str, report_id=job.report_id,
-					max_uses=1, uses_remaining=1,
-					expires_at=expires,
-					params_json=job.params_json or {},
-					created_by=job.created_by,
-				)
-				session.add(tok)
-				job.result_token = tok_str
-				job.status       = JobStatus.DONE
-				job.finished_at  = datetime.now(timezone.utc)
-				session.commit()
+				ab = app.extensions.get("appbuilder")
+				db_bind = ab.session.bind if ab else app.extensions["sqlalchemy"].engine
 			except Exception as exc:
-				log.exception("ReportForge job %s failed", job_id)
-				job.status = JobStatus.FAILED
-				job.error  = str(exc)
-				session.commit()
+				log.error("ReportForge job %s: cannot get DB engine: %s", job_id, exc)
+				return
+
+			with _Session(bind=db_bind) as session:
+				job = session.get(ReportJob, job_id)
+				if not job:
+					return
+				try:
+					job.status = JobStatus.RUNNING
+					session.commit()
+					engine = ReportEngine(session)
+					if job.format == "pdf":
+						data = engine.generate_pdf(job.report_id, job.params_json)
+					elif job.format == "xlsx":
+						data = engine.generate_excel(job.report_id, job.params_json)
+					else:
+						data = engine.generate_csv(job.report_id, job.params_json).encode()
+					# Store result as a 1-use 15-min share token
+					tok_str = secrets.token_urlsafe(24)
+					expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+					tok = ReportShareToken(
+						token=tok_str, report_id=job.report_id,
+						max_uses=1, uses_remaining=1,
+						expires_at=expires,
+						params_json=job.params_json or {},
+						created_by=job.created_by,
+					)
+					session.add(tok)
+					job.result_token = tok_str
+					job.status       = JobStatus.DONE
+					job.finished_at  = datetime.now(timezone.utc)
+					session.commit()
+				except Exception as exc:
+					log.exception("ReportForge job %s failed", job_id)
+					try:
+						job.status = JobStatus.FAILED
+						job.error  = str(exc)
+						session.commit()
+					except Exception:
+						session.rollback()
 
 		threading.Thread(target=_run, daemon=True).start()
 

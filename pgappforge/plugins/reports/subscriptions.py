@@ -16,26 +16,7 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
-def _next_occurrence(frequency: str, after_dt: datetime) -> datetime | None:
-	"""
-	Compute the next occurrence for a subscription frequency.
-
-	``frequency`` is an RRULE fragment (no RRULE: prefix needed), e.g.:
-	  - ``FREQ=DAILY``
-	  - ``FREQ=WEEKLY;BYDAY=MO``
-	  - ``FREQ=MONTHLY;BYMONTHDAY=1``
-
-	Returns None when the rule is exhausted or dateutil is unavailable.
-	"""
-	try:
-		from dateutil.rrule import rrulestr
-		# Ensure it has the RRULE prefix
-		rule_str = frequency if frequency.upper().startswith("RRULE:") else frequency
-		rule = rrulestr(rule_str, dtstart=after_dt, ignoretz=False)
-		return rule.after(after_dt)
-	except Exception as exc:
-		log.warning("ReportForge subscriptions: frequency parse failed (%r): %s", frequency, exc)
-		return None
+from ._recurrence import next_occurrence as _next_occurrence
 
 
 def _subscriber_email(user) -> str | None:

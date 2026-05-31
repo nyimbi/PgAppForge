@@ -40,11 +40,15 @@ _DEFAULT_MAX_ROWS = 50_000
 # Optional-dep guards
 # ---------------------------------------------------------------------------
 
+_NumberedCanvas = None               # module-scope fallback; overwritten if reportlab available
+_NUMBERED_CANVAS_MAX_PAGES = 2000    # hard cap to bound memory use
+
 try:
 	from reportlab.lib import colors
 	from reportlab.lib.pagesizes import A3, A4, LETTER, LEGAL
 	from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 	from reportlab.lib.units import mm
+	from reportlab.pdfbase import pdfmetrics  # required for font registration
 	from reportlab.platypus import (
 		HRFlowable,
 		PageBreak,
@@ -269,22 +273,34 @@ def _compute_aggregate(rows: list[dict], expr: str) -> str:
 if _HAS_REPORTLAB:
 	from reportlab.pdfgen import canvas as _rl_canvas_module
 
+	# Hard cap to avoid unbounded memory growth on pathologically large reports.
+	_NUMBERED_CANVAS_MAX_PAGES = 2000
+
 	class _NumberedCanvas(_rl_canvas_module.Canvas):
+		"""
+		Two-pass canvas enabling "Page N of M" footers.
+
+		showPage() buffers page state (a shallow copy — drawing commands are
+		shared references, not duplicated).  save() replays all pages with
+		_total_pages injected so the per-page callback can read it.
+
+		Memory: O(n_pages × ~5-50 KB for drawing operators).  Hard-capped at
+		_NUMBERED_CANVAS_MAX_PAGES; reports beyond that fall back to "Page N".
+		"""
+
 		def __init__(self, *args, **kwargs):
 			super().__init__(*args, **kwargs)
 			self._page_states: list[dict] = []
 
 		def showPage(self):
-			self._page_states.append(dict(self.__dict__))
+			if len(self._page_states) < _NUMBERED_CANVAS_MAX_PAGES:
+				self._page_states.append(dict(self.__dict__))
 			self._startPage()
 
 		def save(self):
 			total = len(self._page_states)
-			for i, state in enumerate(self._page_states, 1):
+			for state in self._page_states:
 				self.__dict__.update(state)
-				# Patch "Page N" placeholders written by the page callback
-				# (callback uses doc.page which is correct at call time)
-				# Inject total into __dict__ so callback can read it
 				self._total_pages = total
 				super().showPage()
 			super().save()
@@ -337,14 +353,30 @@ class ReportEngine:
 			log.debug("cache_get failed: %s", exc)
 			return None
 
+	# Rendered bytes larger than this are not cached (avoids OOM on huge PDFs)
+	_CACHE_MAX_BYTES_DEFAULT = 10 * 1024 * 1024  # 10 MB
+
 	def _cache_set(self, key: str, fmt: str, data: bytes, report_id: int) -> None:
-		"""Persist rendered bytes into the render cache."""
+		"""Persist rendered bytes into the render cache.
+
+		Skips caching when ``len(data) > REPORTFORGE_CACHE_MAX_BYTES`` (default
+		10 MB) to prevent OOM on large reports being written to PostgreSQL BYTEA.
+		"""
 		try:
+			from flask import current_app
+			max_bytes = current_app.config.get(
+				"REPORTFORGE_CACHE_MAX_BYTES", self._CACHE_MAX_BYTES_DEFAULT
+			)
+			if len(data) > max_bytes:
+				log.debug(
+					"cache_set: skipping %d bytes (> %d byte cap) for key %s",
+					len(data), max_bytes, key,
+				)
+				return
 			from .models import ReportRenderCache
 			import sqlalchemy as sa
 			from datetime import timedelta, timezone
 			expires = datetime.now(timezone.utc) + timedelta(hours=self.cache_ttl_hours)
-			# Upsert: delete existing then insert
 			self._session.execute(
 				sa.delete(ReportRenderCache).where(
 					sa.and_(

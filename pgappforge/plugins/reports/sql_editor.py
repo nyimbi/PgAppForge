@@ -530,6 +530,15 @@ class SqlEditorView(BaseView):
 		if not sql:
 			return jsonify({"ok": False, "error": "sql is required"}), 400
 
+		# Apply the same safety checks as api_execute to prevent stored SQL injection
+		stripped = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
+		stripped = re.sub(r"--[^\n]*", "", stripped).strip()
+		first_word = stripped.split()[0].upper() if stripped.split() else ""
+		if first_word not in ("SELECT", "WITH", "EXPLAIN"):
+			return jsonify({"ok": False, "error": "Only SELECT queries can be saved as reports"}), 403
+		if _FORBIDDEN_RE.search(stripped):
+			return jsonify({"ok": False, "error": "Query contains a forbidden statement"}), 403
+
 		appbuilder = current_app.extensions.get("appbuilder")
 		if not appbuilder:
 			return jsonify({"ok": False, "error": "appbuilder not found"}), 500

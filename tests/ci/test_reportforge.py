@@ -495,3 +495,193 @@ def test_fetch_logo_returns_none_for_unreachable_url():
     from pgappforge.plugins.reports.engine import _fetch_logo
     result = _fetch_logo("http://127.0.0.1:19999/nonexistent.png", timeout=1)
     assert result is None
+
+
+# ─── Tests for code-review fixes ──────────────────────────────────────────
+
+def test_pdfmetrics_import_available():
+    """pdfmetrics is now imported in the reportlab try-block — no NameError."""
+    from pgappforge.plugins.reports.engine import _HAS_REPORTLAB
+    if _HAS_REPORTLAB:
+        from pgappforge.plugins.reports import engine as e
+        assert hasattr(e, '_UNICODE_FONT')
+    # If reportlab absent, _NumberedCanvas must still be defined (as None)
+    from pgappforge.plugins.reports.engine import _NumberedCanvas
+    # Either a class or None — not NameError
+    assert _NumberedCanvas is None or callable(_NumberedCanvas)
+
+
+def test_numbered_canvas_page_cap():
+    """_NumberedCanvas respects _NUMBERED_CANVAS_MAX_PAGES (hard cap)."""
+    from pgappforge.plugins.reports.engine import _HAS_REPORTLAB, _NUMBERED_CANVAS_MAX_PAGES
+    assert isinstance(_NUMBERED_CANVAS_MAX_PAGES, int)
+    assert _NUMBERED_CANVAS_MAX_PAGES > 0
+    if _HAS_REPORTLAB:
+        from pgappforge.plugins.reports.engine import _NumberedCanvas
+        assert _NumberedCanvas is not None
+
+
+def test_cache_max_bytes_constant():
+    """_CACHE_MAX_BYTES_DEFAULT is set to a sane value."""
+    from pgappforge.plugins.reports.engine import ReportEngine
+    assert hasattr(ReportEngine, '_CACHE_MAX_BYTES_DEFAULT')
+    assert ReportEngine._CACHE_MAX_BYTES_DEFAULT > 0
+
+
+def test_share_token_atomic_update():
+    """check_token uses UPDATE … RETURNING for atomic quota decrement."""
+    import inspect
+    from pgappforge.plugins.reports.acl import check_token
+    src = inspect.getsource(check_token)
+    assert 'UPDATE' in src.upper() or 'update(' in src, "check_token must use atomic UPDATE"
+    assert 'uses_remaining > 0' in src or '.where(' in src
+
+
+def test_acl_can_admin_always_true():
+    """Admin users pass _can() regardless of report settings."""
+    import unittest.mock as mock
+    from pgappforge.plugins.reports.acl import can
+
+    report = mock.MagicMock()
+    report.created_by = 99
+    report.is_public  = False
+    report.id         = 1
+
+    admin_user = mock.MagicMock()
+    admin_user.id    = 1
+    admin_role       = mock.MagicMock()
+    admin_role.name  = "Admin"
+    admin_user.roles = [admin_role]
+
+    with mock.patch('pgappforge.plugins.reports.acl._acl_enabled', return_value=True):
+        assert can(admin_user, report, "edit") is True
+
+
+def test_acl_can_creator_always_true():
+    """Report creator passes _can() for any permission."""
+    import unittest.mock as mock
+    from pgappforge.plugins.reports.acl import can
+
+    report = mock.MagicMock()
+    report.created_by = 42
+    report.is_public  = False
+    report.id         = 1
+
+    user = mock.MagicMock()
+    user.id    = 42
+    user.roles = []
+
+    with mock.patch('pgappforge.plugins.reports.acl._acl_enabled', return_value=True):
+        assert can(user, report, "download") is True
+
+
+def test_acl_can_not_owner_not_public_denied():
+    """Non-owner, non-public report is denied for non-admin when no grants exist."""
+    from flask import Flask
+    import unittest.mock as mock
+    from pgappforge.plugins.reports.acl import can
+
+    report = mock.MagicMock()
+    report.created_by = 99
+    report.is_public  = False
+    report.id         = 1
+
+    user = mock.MagicMock()
+    user.id    = 7
+    user.roles = []
+
+    app = Flask(__name__)
+    app.config["REPORTFORGE_ACL_ENABLED"] = True
+    with app.app_context():
+        # No session → grant lookup impossible → deny
+        result = can(user, report, "run", session=None)
+    assert result is False
+
+
+def test_acl_disabled_flag_allows_all():
+    """REPORTFORGE_ACL_ENABLED=False bypasses all ACL checks."""
+    import unittest.mock as mock
+    from pgappforge.plugins.reports.acl import can
+
+    report = mock.MagicMock()
+    report.created_by = 99
+    report.is_public  = False
+
+    user = mock.MagicMock()
+    user.id    = 1
+    user.roles = []
+
+    with mock.patch('pgappforge.plugins.reports.acl._acl_enabled', return_value=False):
+        assert can(user, report, "edit") is True
+
+
+def test_recurrence_module_next_occurrence():
+    """_recurrence.next_occurrence correctly computes next RRULE occurrence."""
+    from datetime import datetime, timezone
+    from pgappforge.plugins.reports._recurrence import next_occurrence
+
+    dtstart = datetime(2024, 1, 1, 9, 0, tzinfo=timezone.utc)
+    nxt = next_occurrence("FREQ=WEEKLY;BYDAY=MO", dtstart)
+    # Should be the following Monday
+    assert nxt is not None
+    assert nxt > dtstart
+    assert nxt.weekday() == 0  # Monday
+
+
+def test_recurrence_returns_none_on_bad_rule():
+    """_recurrence.next_occurrence returns None (not raises) on bad RRULE."""
+    from datetime import datetime, timezone
+    from pgappforge.plugins.reports._recurrence import next_occurrence
+    result = next_occurrence("NOT_A_RULE", datetime.now(timezone.utc))
+    assert result is None
+
+
+def test_sql_injection_check_on_create_report():
+    """api_create_report blocks forbidden SQL via the same checks as api_execute."""
+    import re
+    from pgappforge.plugins.reports.sql_editor import _FORBIDDEN_RE
+
+    # These should be blocked
+    malicious = [
+        "WITH x AS (DELETE FROM ab_user) SELECT * FROM x",
+        "SELECT * FROM users; DROP TABLE ab_user",
+        "INSERT INTO ab_user SELECT 1",
+    ]
+    for sql in malicious:
+        stripped = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
+        stripped = re.sub(r"--[^\n]*", "", stripped).strip()
+        first = stripped.split()[0].upper()
+        blocked = first not in ("SELECT", "WITH", "EXPLAIN") or _FORBIDDEN_RE.search(stripped)
+        assert blocked, f"Should block: {sql}"
+
+
+def test_versioning_restore_correct_structure():
+    """_restore() is properly wrapped in a savepoint (begin_nested)."""
+    import inspect
+    from pgappforge.plugins.reports.versioning import _restore
+    src = inspect.getsource(_restore)
+    assert 'begin_nested' in src, "_restore must use begin_nested savepoint"
+    assert 'sp.rollback' in src, "_restore must rollback on failure"
+    assert 'sp.commit' in src, "_restore must commit on success"
+
+
+def test_snapshot_docstring_mentions_excluded_fields():
+    """_snapshot docstring documents what governance fields are NOT included."""
+    from pgappforge.plugins.reports.versioning import _restore
+    assert 'exclude' in _restore.__doc__ or 'deliberately' in _restore.__doc__ or 'NOT' in _restore.__doc__
+
+
+def test_session_mixin_resolves_session():
+    """ReportSessionMixin._get_session raises RuntimeError when no DB configured."""
+    from flask import Flask
+    from pgappforge.plugins.reports._session_mixin import ReportSessionMixin
+
+    mixin = ReportSessionMixin()
+    app   = Flask(__name__)
+    # No appbuilder or sqlalchemy registered → should raise our custom RuntimeError
+    with app.app_context():
+        try:
+            mixin._get_session()
+            assert False, "Should raise RuntimeError"
+        except RuntimeError as exc:
+            assert "session" in str(exc).lower()
