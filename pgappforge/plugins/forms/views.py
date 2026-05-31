@@ -1,191 +1,559 @@
-"""Form Builder views."""
+"""Form Builder views.
+
+FormBuilderView: drag-and-drop designer with full 26-type widget palette,
+type-specific config panels, table integration (FK pickers, auto-save to model),
+submissions viewer, and form-level security.
+
+PublicFormView: unauthenticated form renderer and submission handler with
+share-token enforcement (expiry, max_submissions) and target_model auto-save.
+"""
 from __future__ import annotations
 import json
 import re
 import secrets
 import logging
-from flask import abort, request, jsonify, Response
+from datetime import datetime, timezone
+from flask import abort, current_app, request, jsonify, Response
 from flask_login import current_user
 from pgappforge import BaseView, expose, has_access
 
 log = logging.getLogger(__name__)
 
+
+def _resolve_model_cls(name: str):
+	"""Resolve a SQLAlchemy model class by table name or class name."""
+	from pgappforge import Model
+	seen: set = set()
+	def _walk(cls):
+		if cls in seen:
+			return None
+		seen.add(cls)
+		if (getattr(cls, "__tablename__", "") == name or cls.__name__ == name):
+			if hasattr(cls, "__table__"):
+				return cls
+		for sub in cls.__subclasses__():
+			result = _walk(sub)
+			if result is not None:
+				return result
+		return None
+	return _walk(Model)
+
+# ─── Builder SPA ─────────────────────────────────────────────────────────────
+
 _BUILDER_HTML = """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Form Builder</title>
 <style>
+*{box-sizing:border-box;}
 body{font-family:system-ui,sans-serif;background:#0f1117;color:#e0e0e0;margin:0;display:flex;flex-direction:column;height:100vh;}
-#tb{background:#1a1d2e;padding:10px 16px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #2e3250;}
-#tb h1{font-size:1rem;color:#7c83ff;margin:0;margin-right:16px;}
-.btn{background:#1e2140;color:#b0b8ff;border:1px solid #3a3f6e;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;}
-.btn:hover{background:#2a2f5a;}
-#main{display:flex;flex:1;overflow:hidden;}
-#palette{width:200px;background:#13162a;border-right:1px solid #2e3250;padding:12px;overflow-y:auto;}
-#palette h3{font-size:0.8rem;color:#7c83ff;margin-bottom:8px;}
-.field-chip{background:#1e2140;border:1px solid #3a3f6e;border-radius:6px;padding:7px 10px;margin-bottom:6px;cursor:grab;font-size:0.8rem;display:flex;align-items:center;gap:6px;}
-.field-chip:hover{background:#2a2f5a;}
-#canvas{flex:1;padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
-#canvas-empty{color:#555;text-align:center;margin-top:80px;}
-.field-card{background:#1a1d2e;border:1px solid #2e3250;border-radius:8px;padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
-.field-card:hover{border-color:#7c83ff;}
-.field-card.selected{border-color:#7c83ff;background:#1e2245;}
-.field-card-label{font-size:0.85rem;font-weight:500;}
-.field-card-type{font-size:0.75rem;color:#888;}
-#config-panel{width:280px;background:#13162a;border-left:1px solid #2e3250;padding:16px;overflow-y:auto;}
-#config-panel h3{color:#7c83ff;font-size:0.9rem;margin-bottom:12px;}
-.config-row{margin-bottom:12px;}
-.config-label{font-size:0.75rem;color:#888;margin-bottom:3px;}
-.config-input{width:100%;background:#0f1117;border:1px solid #3a3f6e;color:#e0e0e0;padding:5px 8px;border-radius:4px;font-size:0.82rem;box-sizing:border-box;}
-#forms-list{padding:20px;}
-.form-row{background:#1a1d2e;border:1px solid #2e3250;border-radius:8px;padding:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+#tb{background:#1a1d2e;padding:8px 14px;display:flex;gap:5px;align-items:center;border-bottom:1px solid #2e3250;flex-shrink:0;}
+#tb h1{font-size:0.92rem;color:#7c83ff;margin:0 10px 0 0;}
+.btn{background:#1e2140;color:#b0b8ff;border:1px solid #3a3f6e;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:0.78rem;}
+.btn:hover{background:#252a4a;}.btn.pri{background:#3a3f6e;}
+.sep{width:1px;height:18px;background:#2e3250;margin:0 3px;}
+#save-st{font-size:0.7rem;color:#555;margin-left:6px;}
+/* views */
+.view{display:none;flex:1;overflow:hidden;}
+.view.on{display:flex;}
+.view.scroll{overflow-y:auto;}
+#v-list{flex-direction:column;padding:20px;}
+#v-list h2{color:#7c83ff;font-size:1rem;margin-bottom:14px;}
+.frow{background:#1a1d2e;border:1px solid #2e3250;border-radius:7px;padding:11px 14px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;}
+.frow-meta{font-size:0.72rem;color:#888;margin-top:2px;}
+/* builder 3-panel */
+#v-build{flex-direction:row;overflow:hidden;}
+#palette{width:186px;background:#13162a;border-right:1px solid #2e3250;overflow-y:auto;padding:9px 7px;flex-shrink:0;}
+.pg{font-size:0.66rem;font-weight:700;color:#7c83ff;letter-spacing:.06em;margin:9px 0 4px 2px;}
+.pg:first-child{margin-top:0;}
+.chip{background:#1e2140;border:1px solid #2e3250;border-radius:5px;padding:5px 7px;margin-bottom:3px;cursor:grab;font-size:0.77rem;display:flex;align-items:center;gap:5px;user-select:none;}
+.chip:hover{background:#252a4a;border-color:#5a60a0;}
+#canvas{flex:1;padding:18px;overflow-y:auto;background:#0f1117;display:flex;flex-direction:column;gap:5px;min-height:0;}
+#cv-empty{color:#3a3f6e;text-align:center;margin-top:80px;font-size:0.88rem;}
+.fcard{background:#1a1d2e;border:1px solid #2e3250;border-radius:7px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+.fcard:hover{border-color:#5a60a0;}.fcard.sel{border-color:#7c83ff;background:#1e2245;}
+.fc-lbl{font-size:0.83rem;font-weight:500;}.fc-type{font-size:0.7rem;color:#888;margin-top:1px;}
+.fc-map{font-size:0.67rem;color:#4caf50;}
+.fc-acts{display:flex;gap:3px;}
+.fc-btn{background:#0f1117;border:1px solid #2e3250;color:#666;border-radius:3px;padding:1px 5px;cursor:pointer;font-size:0.7rem;}
+#cfg{width:268px;background:#13162a;border-left:1px solid #2e3250;padding:12px 13px;overflow-y:auto;flex-shrink:0;}
+#cfg h3{color:#7c83ff;font-size:0.83rem;margin:0 0 10px;}
+.cr{margin-bottom:9px;}.cl{font-size:0.7rem;color:#888;margin-bottom:2px;}
+.ci{width:100%;background:#0f1117;border:1px solid #3a3f6e;color:#e0e0e0;padding:4px 7px;border-radius:4px;font-size:0.79rem;}
+.ci:focus{outline:none;border-color:#7c83ff;}
+.csec{border-top:1px solid #1e2245;margin-top:10px;padding-top:9px;}
+.csh{font-size:0.69rem;color:#7c83ff;font-weight:700;letter-spacing:.05em;margin-bottom:7px;}
+/* settings */
+#v-set{flex-direction:column;padding:22px;max-width:660px;}
+#v-set h2{color:#7c83ff;font-size:0.95rem;margin-bottom:16px;}
+#v-set h3{color:#7c83ff;font-size:0.82rem;margin:20px 0 10px;}
+.sr{margin-bottom:12px;}.sl{font-size:0.79rem;color:#888;margin-bottom:3px;}
+.si{width:100%;background:#1a1d2e;border:1px solid #3a3f6e;color:#e0e0e0;padding:6px 9px;border-radius:5px;font-size:0.8rem;}
+#map-tbl{width:100%;border-collapse:collapse;font-size:0.78rem;margin-top:6px;}
+#map-tbl th{background:#1a1d2e;color:#7c83ff;padding:5px 9px;text-align:left;}
+#map-tbl td{padding:4px 7px;border-bottom:1px solid #1a1d2e;}
+/* submissions */
+#v-subs{flex-direction:column;padding:20px;}
+#v-subs h2{color:#7c83ff;font-size:0.95rem;margin-bottom:14px;}
+.subr{background:#1a1d2e;border:1px solid #2e3250;border-radius:6px;padding:9px 12px;margin-bottom:5px;font-size:0.78rem;}
+.subm{color:#888;font-size:0.7rem;margin-bottom:3px;}
+.subd{font-family:monospace;font-size:0.73rem;color:#b0b8ff;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow:auto;}
 </style></head>
 <body>
 <div id="tb">
-<h1>Form Builder</h1>
-<button class="btn" onclick="showBuilder()">+ New Form</button>
-<button class="btn" id="btn-save" style="display:none" onclick="saveForm()">Save</button>
-<button class="btn" id="btn-publish" style="display:none" onclick="publishForm()">Publish</button>
-<button class="btn" id="btn-share" style="display:none" onclick="getShareLink()">Share Link</button>
-<button class="btn" onclick="showList()">All Forms</button>
+  <h1>&#127912; Form Builder</h1>
+  <button class="btn" onclick="doNew()">+ New Form</button>
+  <div class="sep"></div>
+  <button class="btn pri" id="b-save" style="display:none" onclick="saveForm()">Save</button>
+  <button class="btn" id="b-pub" style="display:none" onclick="publishForm()">Publish</button>
+  <button class="btn" id="b-share" style="display:none" onclick="shareForm()">Share</button>
+  <button class="btn" id="b-set" style="display:none" onclick="showV('set')">&#9881; Settings</button>
+  <button class="btn" id="b-subs" style="display:none" onclick="showSubs()">Submissions</button>
+  <div class="sep"></div>
+  <button class="btn" onclick="showV('list')">All Forms</button>
+  <span id="save-st"></span>
 </div>
-<div id="forms-list">
-<h2 style="color:#7c83ff">My Forms</h2>
-<div id="form-rows">Loading...</div>
+
+<!-- LIST -->
+<div id="v-list" class="view scroll on" style="flex-direction:column">
+  <div style="padding:20px">
+    <h2 style="color:#7c83ff;font-size:1rem;margin-bottom:14px">My Forms</h2>
+    <div id="form-rows">Loading...</div>
+  </div>
 </div>
-<div id="builder" style="display:none;flex:1;flex-direction:row">
-<div id="palette">
-<h3>FIELDS</h3>
-<div class="field-chip" draggable="true" data-type="text">&#128221; Text</div>
-<div class="field-chip" draggable="true" data-type="textarea">&#128196; Text Area</div>
-<div class="field-chip" draggable="true" data-type="email">&#128231; Email</div>
-<div class="field-chip" draggable="true" data-type="number">&#128290; Number</div>
-<div class="field-chip" draggable="true" data-type="date">&#128197; Date</div>
-<div class="field-chip" draggable="true" data-type="select">&#9660; Dropdown</div>
-<div class="field-chip" draggable="true" data-type="radio">&#9673; Radio</div>
-<div class="field-chip" draggable="true" data-type="checkbox">&#9745; Checkboxes</div>
-<div class="field-chip" draggable="true" data-type="file">&#128206; File Upload</div>
-<div class="field-chip" draggable="true" data-type="hidden">&#128065; Hidden</div>
-<h3 style="margin-top:12px">STRUCTURE</h3>
-<div class="field-chip" draggable="true" data-type="page_break">&#128214; Page Break</div>
-<div class="field-chip" draggable="true" data-type="section">&#128204; Section</div>
+
+<!-- BUILDER -->
+<div id="v-build" class="view" style="flex-direction:row">
+  <div id="palette"></div>
+  <div id="canvas" ondrop="onDrop(event)" ondragover="event.preventDefault()">
+    <div id="cv-empty">Drop fields here to build your form</div>
+  </div>
+  <div id="cfg">
+    <h3>Field Settings</h3>
+    <div id="cfg-mt" style="color:#444;font-size:0.8rem">Select a field to configure</div>
+    <div id="cfg-f" style="display:none">
+      <div class="cr"><div class="cl">Label</div><input class="ci" id="ci-lbl" oninput="upd()"></div>
+      <div class="cr"><div class="cl">Placeholder</div><input class="ci" id="ci-ph" oninput="upd()"></div>
+      <div class="cr"><div class="cl">Help text</div><input class="ci" id="ci-help" oninput="upd()"></div>
+      <div class="cr" style="display:flex;align-items:center;gap:7px">
+        <input type="checkbox" id="ci-req" onchange="upd()">
+        <label for="ci-req" style="font-size:0.79rem">Required</label>
+      </div>
+      <div class="cr"><div class="cl">Default value</div><input class="ci" id="ci-def" oninput="upd()"></div>
+      <div class="cr" id="rw-mf" style="display:none">
+        <div class="cl">Map to model field</div>
+        <select class="ci" id="ci-mf" onchange="upd()"><option value="">-- none --</option></select>
+      </div>
+
+      <div class="csec" id="s-opts" style="display:none">
+        <div class="csh">OPTIONS</div>
+        <div class="cl">One per line &nbsp; (label or label:value)</div>
+        <textarea class="ci" id="ci-opts" rows="5" oninput="upd()"></textarea>
+        <div class="cr" style="margin-top:5px;display:flex;gap:6px;align-items:center">
+          <input type="checkbox" id="ci-other" onchange="upd()">
+          <label for="ci-other" style="font-size:0.77rem">Allow &ldquo;Other&rdquo; text entry</label>
+        </div>
+      </div>
+
+      <div class="csec" id="s-fk" style="display:none">
+        <div class="csh">RELATIONSHIP</div>
+        <div class="cr"><div class="cl">Source table / model</div>
+          <select class="ci" id="ci-fk-m" onchange="onFkMdl()"><option value="">-- select --</option></select>
+        </div>
+        <div class="cr"><div class="cl">Display column (shown to user)</div>
+          <select class="ci" id="ci-fk-d" onchange="updFk()"><option value="">--</option></select>
+        </div>
+        <div class="cr"><div class="cl">Value column (stored as answer)</div>
+          <select class="ci" id="ci-fk-s" onchange="updFk()"><option value="">id</option></select>
+        </div>
+        <div class="cr"><div class="cl">Min chars to trigger search</div>
+          <input class="ci" type="number" id="ci-fk-mc" value="2" min="0" max="5" oninput="upd()">
+        </div>
+      </div>
+
+      <div class="csec" id="s-rat" style="display:none">
+        <div class="csh">RATING</div>
+        <div class="cr"><div class="cl">Maximum stars (2–10)</div>
+          <input class="ci" type="number" id="ci-stars" value="5" min="2" max="10" oninput="upd()">
+        </div>
+      </div>
+
+      <div class="csec" id="s-cur" style="display:none">
+        <div class="csh">CURRENCY</div>
+        <div class="cr"><div class="cl">Currency</div>
+          <select class="ci" id="ci-cur" onchange="upd()">
+            <option>USD</option><option>EUR</option><option>GBP</option>
+            <option>KES</option><option>ZAR</option><option>NGN</option>
+            <option>JPY</option><option>CAD</option><option>AUD</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="csec" id="s-sl" style="display:none">
+        <div class="csh">SLIDER</div>
+        <div class="cr"><div class="cl">Min</div><input class="ci" type="number" id="ci-smin" value="0" oninput="upd()"></div>
+        <div class="cr"><div class="cl">Max</div><input class="ci" type="number" id="ci-smax" value="100" oninput="upd()"></div>
+        <div class="cr"><div class="cl">Step</div><input class="ci" type="number" id="ci-sstep" value="1" oninput="upd()"></div>
+      </div>
+
+      <div class="csec" id="s-fml" style="display:none">
+        <div class="csh">FORMULA</div>
+        <div class="cl">Expression &mdash; use {field_id} to reference other fields</div>
+        <textarea class="ci" id="ci-expr" rows="3" placeholder="{price} * {quantity}" oninput="upd()"></textarea>
+      </div>
+
+      <div class="csec" id="s-html" style="display:none">
+        <div class="csh">HTML CONTENT</div>
+        <textarea class="ci" id="ci-html" rows="6" placeholder="&lt;p&gt;Your HTML here&lt;/p&gt;" oninput="upd()"></textarea>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:5px;flex-wrap:wrap">
+        <button class="btn" onclick="moveUp()">&#8593; Up</button>
+        <button class="btn" onclick="moveDn()">&#8595; Down</button>
+        <button class="btn" style="color:#ef5350;margin-left:auto" onclick="removeF()">Remove</button>
+      </div>
+    </div>
+  </div>
 </div>
-<div id="canvas" ondrop="onDrop(event)" ondragover="event.preventDefault()">
-<div id="canvas-empty">Drag fields here to build your form</div>
+
+<!-- SETTINGS -->
+<div id="v-set" class="view scroll" style="flex-direction:column;padding:22px;max-width:660px">
+  <h2 style="color:#7c83ff;font-size:0.95rem">&#9881; Form Settings</h2>
+  <div class="sr"><div class="sl">Form title</div><input class="si" id="st-title" oninput="stUpd()"></div>
+  <div class="sr"><div class="sl">Description (shown under title)</div><textarea class="si" id="st-desc" rows="2" oninput="stUpd()"></textarea></div>
+  <div class="sr"><div class="sl">Submit button label</div><input class="si" id="st-sub" value="Submit" oninput="stUpd()"></div>
+  <div class="sr"><div class="sl">Success message</div><input class="si" id="st-ok" oninput="stUpd()"></div>
+  <div class="sr"><div class="sl">Redirect URL after submit (optional)</div><input class="si" id="st-redir" placeholder="https://..." oninput="stUpd()"></div>
+  <h3 style="color:#7c83ff;font-size:0.82rem;margin:20px 0 8px">&#128204; Auto-save to Model</h3>
+  <p style="font-size:0.8rem;color:#888;margin-bottom:10px">When set, each submission automatically creates a record in the target model.</p>
+  <div class="sr"><div class="sl">Target model</div>
+    <select class="si" id="st-mdl" onchange="onTgtMdl()"><option value="">-- none --</option></select>
+  </div>
+  <div id="map-wrap" style="display:none">
+    <div class="sl" style="margin-bottom:5px">Field mapping (form field &#8594; model column)</div>
+    <table id="map-tbl"><thead><tr><th>Form Field</th><th>Model Column</th></tr></thead><tbody id="map-body"></tbody></table>
+  </div>
+  <div style="margin-top:18px">
+    <button class="btn pri" onclick="showV('build')">&#8592; Back to Canvas</button>
+  </div>
 </div>
-<div id="config-panel">
-<h3>Field Settings</h3>
-<div id="no-selection" style="color:#555;font-size:0.8rem">Select a field to configure</div>
-<div id="config-form" style="display:none">
-<div class="config-row"><div class="config-label">Label</div><input class="config-input" id="cfg-label" oninput="updateSelected()"></div>
-<div class="config-row"><div class="config-label">Placeholder</div><input class="config-input" id="cfg-placeholder" oninput="updateSelected()"></div>
-<div class="config-row"><div class="config-label">Required</div><input type="checkbox" id="cfg-required" onchange="updateSelected()"></div>
-<div class="config-row"><div class="config-label">Help text</div><input class="config-input" id="cfg-help" oninput="updateSelected()"></div>
-<div id="options-section" style="display:none">
-<div class="config-label">Options (one per line)</div>
-<textarea class="config-input" id="cfg-options" rows="5" oninput="updateSelected()"></textarea>
+
+<!-- SUBMISSIONS -->
+<div id="v-subs" class="view scroll" style="flex-direction:column;padding:20px">
+  <h2 style="color:#7c83ff;font-size:0.95rem">Submissions</h2>
+  <div id="sub-list">Loading...</div>
 </div>
-<div style="margin-top:14px">
-<button class="btn" style="color:#ef5350" onclick="removeSelected()">Remove Field</button>
-</div>
-</div>
-</div>
-</div>
+
 <script>
-let fields=[], selectedIdx=-1, formId=null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let fields=[], sel=-1, formId=null;
+let fs={title:'Untitled Form',description:'',submit_label:'Submit',
+  success_message:'Thank you!',redirect_url:'',target_model:'',field_mapping:{}};
+let mfCache={}, avModels=[];
+
+// ── Palette (all 26 field types) ──────────────────────────────────────────────
+const PAL=[
+  {g:'TEXT',f:[{t:'text',i:'T',l:'Text'},{t:'email',i:'@',l:'Email'},{t:'phone',i:'#',l:'Phone'},
+    {t:'url',i:'&#128279;',l:'URL'},{t:'textarea',i:'&#9776;',l:'Long Text'},{t:'rich_text',i:'&#10000;',l:'Rich Text'}]},
+  {g:'NUMBER',f:[{t:'number',i:'123',l:'Number'},{t:'currency',i:'$',l:'Currency'},{t:'slider',i:'&#8596;',l:'Slider'}]},
+  {g:'DATE &amp; TIME',f:[{t:'date',i:'&#128197;',l:'Date'},{t:'datetime',i:'&#128336;',l:'Date &amp; Time'},
+    {t:'time',i:'&#9200;',l:'Time'},{t:'date_range',i:'&#128198;',l:'Date Range'}]},
+  {g:'CHOICE',f:[{t:'select',i:'&#9660;',l:'Dropdown'},{t:'radio',i:'&#9673;',l:'Radio Buttons'},
+    {t:'checkbox',i:'&#9745;',l:'Checkboxes'},{t:'toggle',i:'&#9889;',l:'Toggle'},
+    {t:'rating',i:'&#11088;',l:'Rating Stars'}]},
+  {g:'RELATIONSHIP',f:[{t:'fk_lookup',i:'&#128269;',l:'Record Lookup'},{t:'m2n',i:'&#128279;',l:'Multi-Lookup'}]},
+  {g:'FILE',f:[{t:'file',i:'&#128206;',l:'File Upload'},{t:'image',i:'&#128247;',l:'Image'},
+    {t:'signature',i:'&#10000;',l:'Signature Pad'}]},
+  {g:'COMPUTED',f:[{t:'formula',i:'=',l:'Formula'},{t:'hidden',i:'&#128065;',l:'Hidden'}]},
+  {g:'STRUCTURE',f:[{t:'section',i:'&#128204;',l:'Section Header'},{t:'page_break',i:'&#128214;',l:'Page Break'},
+    {t:'html_block',i:'&#10064;',l:'HTML Block'},{t:'repeating',i:'&#8635;',l:'Repeating Group'}]},
+];
+(function(){
+  const p=document.getElementById('palette');
+  PAL.forEach(g=>{
+    const h=document.createElement('div');h.className='pg';h.innerHTML=g.g;p.appendChild(h);
+    g.f.forEach(fd=>{
+      const c=document.createElement('div');c.className='chip';c.draggable=true;c.dataset.type=fd.t;
+      c.innerHTML='<span style="font-size:0.73rem;width:16px;text-align:center">'+fd.i+'</span>'+fd.l;
+      c.addEventListener('dragstart',e=>e.dataTransfer.setData('type',fd.t));
+      p.appendChild(c);
+    });
+  });
+})();
+
+// ── View routing ──────────────────────────────────────────────────────────────
+function showV(v){
+  document.querySelectorAll('.view').forEach(el=>{el.classList.remove('on');el.style.display='none';});
+  const el=document.getElementById('v-'+v);
+  el.style.display='flex';el.classList.add('on');
+  ['b-save','b-pub','b-share','b-set','b-subs'].forEach(b=>{
+    document.getElementById(b).style.display=['build','set','subs'].includes(v)?'':'none';});
+  if(v==='list')loadForms();
+  if(v==='set')initSet();
+}
+function showSubs(){showV('subs');loadSubs();}
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
 function uid(){return 'f_'+Math.random().toString(36).slice(2,10);}
-function showBuilder(id,def){
-  document.getElementById('forms-list').style.display='none';
-  document.getElementById('builder').style.display='flex';
-  ['btn-save','btn-publish','btn-share'].forEach(b=>document.getElementById(b).style.display='');
-  if(def){fields=[...def.fields||[]];formId=id;}else{fields=[];formId=null;}
-  renderCanvas();
-}
-function showList(){
-  document.getElementById('builder').style.display='none';
-  document.getElementById('forms-list').style.display='block';
-  ['btn-save','btn-publish','btn-share'].forEach(b=>document.getElementById(b).style.display='none');
-  loadForms();
-}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
 function onDrop(e){
   e.preventDefault();
-  const type=e.dataTransfer.getData('type')||'text';
-  fields.push({id:uid(),type,label:'New '+type,required:false,placeholder:'',options:[]});
-  renderCanvas();
+  const t=e.dataTransfer.getData('type')||'text';
+  fields.push({id:uid(),type:t,label:t.replace('_',' ').replace(/\b./g,c=>c.toUpperCase()),
+    required:false,placeholder:'',help:'',default:'',options:[],model_field:''});
+  sel=fields.length-1;renderCanvas();renderCfg();
 }
-document.querySelectorAll('.field-chip').forEach(c=>{
-  c.addEventListener('dragstart',e=>e.dataTransfer.setData('type',c.dataset.type));
-});
+
 function renderCanvas(){
   const cv=document.getElementById('canvas');
-  cv.innerHTML=fields.length?'':'<div id="canvas-empty">Drag fields here to build your form</div>';
+  if(!fields.length){cv.innerHTML='<div id="cv-empty">Drop fields here to build your form</div>';return;}
+  cv.innerHTML='';
   fields.forEach((f,i)=>{
-    const d=document.createElement('div');
-    d.className='field-card'+(i===selectedIdx?' selected':'');
-    d.innerHTML='<div><div class="field-card-label">'+f.label+'</div><div class="field-card-type">'+f.type+'</div></div>';
-    d.onclick=()=>selectField(i);
+    const d=document.createElement('div');d.className='fcard'+(i===sel?' sel':'');
+    const mp=f.model_field?'<span class="fc-map">&#8594;'+esc(f.model_field)+'</span>':'';
+    d.innerHTML='<div style="flex:1;cursor:pointer" onclick="selF('+i+')">'+
+      '<div class="fc-lbl">'+esc(f.label)+'</div>'+
+      '<div class="fc-type">'+f.type+' '+mp+'</div></div>'+
+      '<div class="fc-acts">'+
+      '<button class="fc-btn" onclick="mvUp('+i+')" title="Up">&#8593;</button>'+
+      '<button class="fc-btn" onclick="mvDn('+i+')" title="Down">&#8595;</button>'+
+      '<button class="fc-btn" style="color:#ef5350" onclick="rmF('+i+')" title="Remove">&#10005;</button>'+
+      '</div>';
     cv.appendChild(d);
   });
 }
-function selectField(i){
-  selectedIdx=i;const f=fields[i];
-  document.getElementById('no-selection').style.display='none';
-  document.getElementById('config-form').style.display='block';
-  document.getElementById('cfg-label').value=f.label||'';
-  document.getElementById('cfg-placeholder').value=f.placeholder||'';
-  document.getElementById('cfg-required').checked=!!f.required;
-  document.getElementById('cfg-help').value=f.help||'';
-  const hasOpts=['select','radio','checkbox'].includes(f.type);
-  document.getElementById('options-section').style.display=hasOpts?'block':'none';
-  document.getElementById('cfg-options').value=(f.options||[]).map(o=>o.label||o.value||o).join('\\n');
+
+// ── Config panel ──────────────────────────────────────────────────────────────
+const OPTS_T=['select','radio','checkbox','toggle'];
+const FK_T=['fk_lookup','m2n'];
+const SEC_MAP={
+  's-opts':OPTS_T,'s-fk':FK_T,'s-rat':['rating'],'s-cur':['currency'],
+  's-sl':['slider'],'s-fml':['formula'],'s-html':['html_block']
+};
+
+function selF(i){sel=i;renderCanvas();renderCfg();}
+function renderCfg(){
+  const empty=document.getElementById('cfg-mt'),form=document.getElementById('cfg-f');
+  if(sel<0||sel>=fields.length){empty.style.display='';form.style.display='none';return;}
+  const f=fields[sel];empty.style.display='none';form.style.display='block';
+  document.getElementById('ci-lbl').value=f.label||'';
+  document.getElementById('ci-ph').value=f.placeholder||'';
+  document.getElementById('ci-help').value=f.help||'';
+  document.getElementById('ci-req').checked=!!f.required;
+  document.getElementById('ci-def').value=f.default||'';
+  // model field mapper
+  const rwmf=document.getElementById('rw-mf'),mfs=document.getElementById('ci-mf');
+  if(fs.target_model&&mfCache[fs.target_model]){
+    rwmf.style.display='';
+    const cols=mfCache[fs.target_model];
+    mfs.innerHTML='<option value="">-- none --</option>'+
+      cols.map(c=>'<option'+(f.model_field===c.name?' selected':'')+' value="'+c.name+'">'+c.name+'</option>').join('');
+  }else rwmf.style.display='none';
+  // show/hide type sections
+  Object.entries(SEC_MAP).forEach(([id,types])=>
+    document.getElementById(id).style.display=types.includes(f.type)?'':'none');
+  if(OPTS_T.includes(f.type)){
+    document.getElementById('ci-opts').value=(f.options||[]).map(o=>(o.label||'')+(o.value&&o.value!==o.label?':'+o.value:'')).join('\n');
+    document.getElementById('ci-other').checked=!!f.allow_other;
+  }
+  if(FK_T.includes(f.type)) populateFk(f);
+  if(f.type==='rating') document.getElementById('ci-stars').value=f.max_stars||5;
+  if(f.type==='currency') document.getElementById('ci-cur').value=f.currency||'USD';
+  if(f.type==='slider'){document.getElementById('ci-smin').value=f.slider_min??0;document.getElementById('ci-smax').value=f.slider_max??100;document.getElementById('ci-sstep').value=f.slider_step??1;}
+  if(f.type==='formula') document.getElementById('ci-expr').value=f.expression||'';
+  if(f.type==='html_block') document.getElementById('ci-html').value=f.html||'';
+}
+
+function upd(){
+  if(sel<0)return;const f=fields[sel];
+  f.label=document.getElementById('ci-lbl').value;
+  f.placeholder=document.getElementById('ci-ph').value;
+  f.help=document.getElementById('ci-help').value;
+  f.required=document.getElementById('ci-req').checked;
+  f.default=document.getElementById('ci-def').value;
+  f.model_field=document.getElementById('ci-mf').value||'';
+  if(OPTS_T.includes(f.type)){
+    const raw=document.getElementById('ci-opts').value.split('\n').filter(Boolean);
+    f.options=raw.map(o=>{const p=o.split(':');return{label:p[0].trim(),value:(p[1]||p[0]).trim()};});
+    f.allow_other=document.getElementById('ci-other').checked;
+  }
+  if(f.type==='rating')f.max_stars=parseInt(document.getElementById('ci-stars').value)||5;
+  if(f.type==='currency')f.currency=document.getElementById('ci-cur').value;
+  if(f.type==='slider'){f.slider_min=+document.getElementById('ci-smin').value;f.slider_max=+document.getElementById('ci-smax').value;f.slider_step=+document.getElementById('ci-sstep').value;}
+  if(f.type==='formula')f.expression=document.getElementById('ci-expr').value;
+  if(f.type==='html_block')f.html=document.getElementById('ci-html').value;
   renderCanvas();
 }
-function updateSelected(){
-  if(selectedIdx<0) return;
-  const f=fields[selectedIdx];
-  f.label=document.getElementById('cfg-label').value;
-  f.placeholder=document.getElementById('cfg-placeholder').value;
-  f.required=document.getElementById('cfg-required').checked;
-  f.help=document.getElementById('cfg-help').value;
-  const optsRaw=document.getElementById('cfg-options').value.split('\\n').filter(Boolean);
-  f.options=optsRaw.map(o=>({label:o,value:o}));
+
+// ── FK picker ─────────────────────────────────────────────────────────────────
+async function populateFk(f){
+  if(!avModels.length)await fetchModels();
+  const ms=document.getElementById('ci-fk-m');
+  ms.innerHTML='<option value="">-- select table --</option>'+avModels.map(m=>'<option'+(f.fk_model===m?' selected':'')+' value="'+m+'">'+m+'</option>').join('');
+  if(f.fk_model)await populateFkCols(f.fk_model,f.fk_display||'',f.fk_store||'');
+}
+
+async function onFkMdl(){
+  const m=document.getElementById('ci-fk-m').value;
+  if(sel>=0){fields[sel].fk_model=m;fields[sel].fk_display='';fields[sel].fk_store='';}
+  await populateFkCols(m,'','');
+}
+
+async function populateFkCols(model,disp,store){
+  if(!model)return;
+  if(!mfCache[model])await fetchFields(model);
+  const cols=mfCache[model]||[];
+  const opt='<option value="">--</option>'+cols.map(c=>'<option value="'+c.name+'">'+c.name+' ('+c.type+')</option>').join('');
+  const ds=document.getElementById('ci-fk-d'),ss=document.getElementById('ci-fk-s');
+  ds.innerHTML=opt;ss.innerHTML='<option value="">id (default)</option>'+cols.map(c=>'<option value="'+c.name+'">'+c.name+'</option>').join('');
+  if(disp)ds.value=disp;if(store)ss.value=store;
+}
+
+function updFk(){
+  if(sel<0)return;
+  fields[sel].fk_display=document.getElementById('ci-fk-d').value;
+  fields[sel].fk_store=document.getElementById('ci-fk-s').value;
   renderCanvas();
 }
-function removeSelected(){if(selectedIdx>=0){fields.splice(selectedIdx,1);selectedIdx=-1;renderCanvas();document.getElementById('config-form').style.display='none';document.getElementById('no-selection').style.display='block';}}
-async function saveForm(){
-  const title=prompt('Form title:','My Form');if(!title) return;
-  const def={fields,steps:[],settings:{title,submit_label:'Submit'},conditions:[]};
-  const res=await fetch('/form-builder/api/forms'+(formId?'/'+formId:''),{
-    method:formId?'PUT':'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({title,definition:def})
+
+// ── Move / remove ─────────────────────────────────────────────────────────────
+function mvUp(i){const idx=i??sel;if(idx<=0)return;[fields[idx-1],fields[idx]]=[fields[idx],fields[idx-1]];if(sel===idx)sel=idx-1;else if(sel===idx-1)sel=idx;renderCanvas();}
+function mvDn(i){const idx=i??sel;if(idx>=fields.length-1)return;[fields[idx],fields[idx+1]]=[fields[idx+1],fields[idx]];if(sel===idx)sel=idx+1;else if(sel===idx+1)sel=idx;renderCanvas();}
+function rmF(i){const idx=i??sel;fields.splice(idx,1);if(sel>=fields.length)sel=fields.length-1;renderCanvas();renderCfg();}
+function moveUp(){mvUp();}function moveDn(){mvDn();}function removeF(){rmF();}
+
+// ── Settings panel ────────────────────────────────────────────────────────────
+function initSet(){
+  document.getElementById('st-title').value=fs.title||'';
+  document.getElementById('st-desc').value=fs.description||'';
+  document.getElementById('st-sub').value=fs.submit_label||'Submit';
+  document.getElementById('st-ok').value=fs.success_message||'Thank you!';
+  document.getElementById('st-redir').value=fs.redirect_url||'';
+  fetchModels().then(()=>{
+    const ms=document.getElementById('st-mdl');
+    ms.innerHTML='<option value="">-- none --</option>'+avModels.map(m=>'<option'+(fs.target_model===m?' selected':'')+' value="'+m+'">'+m+'</option>').join('');
+    if(fs.target_model)onTgtMdl();
   });
-  const d=await res.json();formId=d.id;
-  alert('Saved! ID: '+d.id);
 }
+
+function stUpd(){
+  fs.title=document.getElementById('st-title').value;
+  fs.description=document.getElementById('st-desc').value;
+  fs.submit_label=document.getElementById('st-sub').value;
+  fs.success_message=document.getElementById('st-ok').value;
+  fs.redirect_url=document.getElementById('st-redir').value;
+}
+
+async function onTgtMdl(){
+  const m=document.getElementById('st-mdl').value;fs.target_model=m;
+  const wrap=document.getElementById('map-wrap');
+  if(!m){wrap.style.display='none';return;}
+  await fetchFields(m);
+  const cols=mfCache[m]||[];
+  const tbody=document.getElementById('map-body');
+  tbody.innerHTML=fields.filter(f=>!['section','page_break','html_block'].includes(f.type)).map(f=>{
+    const cur=fs.field_mapping[f.id]||'';
+    return '<tr><td>'+esc(f.label)+'<br><span style="color:#555;font-size:0.68rem">'+f.type+'</span></td>'+
+      '<td><select class="ci" style="padding:3px 6px" onchange="setMap(\''+f.id+'\',this.value)">'+
+      '<option value="">-- skip --</option>'+cols.map(c=>'<option'+(cur===c.name?' selected':'')+' value="'+c.name+'">'+c.name+'</option>').join('')+
+      '</select></td></tr>';
+  }).join('');
+  wrap.style.display='';
+}
+
+function setMap(fid,col){if(col)fs.field_mapping[fid]=col;else delete fs.field_mapping[fid];}
+
+// ── Model/field API ───────────────────────────────────────────────────────────
+async function fetchModels(){
+  if(avModels.length)return;
+  const r=await fetch('/form-builder/api/models');const d=await r.json();avModels=d.models||[];
+}
+
+async function fetchFields(model){
+  if(mfCache[model])return;
+  const r=await fetch('/form-builder/api/model-fields?model='+encodeURIComponent(model));
+  const d=await r.json();mfCache[model]=d.fields||[];
+  // Refresh model-field dropdown in config if active
+  const mfs=document.getElementById('ci-mf');
+  if(mfs&&fs.target_model===model){
+    const cols=mfCache[model];const cur=sel>=0?fields[sel].model_field||'':'';
+    mfs.innerHTML='<option value="">-- none --</option>'+cols.map(c=>'<option'+(cur===c.name?' selected':'')+' value="'+c.name+'">'+c.name+'</option>').join('');
+    document.getElementById('rw-mf').style.display='';
+  }
+}
+
+// ── Save / publish / share ────────────────────────────────────────────────────
+function buildDef(){return{fields,settings:fs,conditions:[],steps:[]};}
+function setSt(msg,ms=2000){const el=document.getElementById('save-st');el.textContent=msg;if(ms)setTimeout(()=>el.textContent='',ms);}
+
+function doNew(){
+  fields=[];sel=-1;formId=null;
+  fs={title:'Untitled Form',description:'',submit_label:'Submit',success_message:'Thank you!',redirect_url:'',target_model:'',field_mapping:{}};
+  avModels=[];mfCache={};
+  showV('build');renderCanvas();renderCfg();
+}
+
+async function saveForm(){
+  setSt('Saving...',0);
+  const res=await fetch('/form-builder/api/forms'+(formId?'/'+formId:''),{
+    method:formId?'PUT':'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title:fs.title||'Untitled',definition:buildDef()})});
+  const d=await res.json();
+  if(d.id){formId=d.id;setSt('Saved &#10003;');}else setSt('Error: '+(d.error||'?'));
+}
+
 async function publishForm(){
-  if(!formId) return alert('Save first');
-  const res=await fetch('/form-builder/api/forms/'+formId+'/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  const d=await res.json();alert('Published version '+d.version);
+  if(!formId)await saveForm();
+  const r=await fetch('/form-builder/api/forms/'+formId+'/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();alert('Published v'+d.version);
 }
-async function getShareLink(){
-  if(!formId) return alert('Publish first');
-  const res=await fetch('/form-builder/api/forms/'+formId+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  const d=await res.json();
-  if(d.url) prompt('Public URL (copy this):',window.location.origin+d.url);
+
+async function shareForm(){
+  if(!formId)await saveForm();
+  const r=await fetch('/form-builder/api/forms/'+formId+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();
+  if(d.url)prompt('Public URL (copy this):',location.origin+d.url);
 }
+
+// ── Submissions ───────────────────────────────────────────────────────────────
+async function loadSubs(){
+  const sl=document.getElementById('sub-list');
+  if(!formId){sl.innerHTML='<p style="color:#555">Save the form first to see submissions.</p>';return;}
+  sl.innerHTML='Loading...';
+  const r=await fetch('/form-builder/api/forms/'+formId+'/submissions');
+  const d=await r.json();
+  sl.innerHTML=d.submissions&&d.submissions.length?
+    d.submissions.map(s=>'<div class="subr"><div class="subm">#'+s.id+' &mdash; '+new Date(s.submitted_at).toLocaleString()+' &mdash; IP: '+s.submitter_ip+(s.score!=null?' &mdash; Score: '+s.score:'')+'</div><div class="subd">'+esc(JSON.stringify(s.data,null,2))+'</div></div>').join(''):
+    '<p style="color:#555">No submissions yet.</p>';
+}
+
+// ── Form list ─────────────────────────────────────────────────────────────────
 async function loadForms(){
-  const res=await fetch('/form-builder/api/forms');
-  const d=await res.json();
+  const r=await fetch('/form-builder/api/forms');const d=await r.json();
   document.getElementById('form-rows').innerHTML=d.forms.map(f=>
-    '<div class="form-row"><div><b>'+f.title+'</b> <span style="color:#888;font-size:0.78rem">'+f.status+'</span></div>'+
-    '<div style="display:flex;gap:6px">'+
-    '<button class="btn" onclick=\'showBuilder('+f.id+','+JSON.stringify(f.definition)+')\'>Edit</button>'+
+    '<div class="frow"><div>'+
+    '<div style="font-weight:500">'+esc(f.title)+'</div>'+
+    '<div class="frow-meta">'+f.status+' &mdash; '+new Date(f.created_at).toLocaleDateString()+'</div></div>'+
+    '<div style="display:flex;gap:5px">'+
+    '<button class="btn" onclick="loadEdit('+f.id+')">Edit</button>'+
     '<a class="btn" href="/forms/public/'+f.id+'/preview" target="_blank">Preview</a>'+
     '</div></div>'
-  ).join('')||'<p style="color:#666">No forms yet. Click + New Form.</p>';
+  ).join('')||'<p style="color:#444">No forms yet.</p>';
 }
-showList();
+
+async function loadEdit(id){
+  const r=await fetch('/form-builder/api/forms/'+id);const d=await r.json();
+  formId=id;fields=[...(d.definition?.fields||[])];
+  fs=Object.assign({title:'',description:'',submit_label:'Submit',success_message:'Thank you!',redirect_url:'',target_model:'',field_mapping:{}},d.definition?.settings||{});
+  sel=-1;showV('build');renderCanvas();renderCfg();
+  // Pre-fetch model fields if target_model set
+  if(fs.target_model)fetchFields(fs.target_model);
+}
+
+showV('list');
 </script></body></html>"""
 
+
+# ─── View classes ─────────────────────────────────────────────────────────────
 
 class FormBuilderView(BaseView):
 	route_base = "/form-builder"
@@ -202,7 +570,7 @@ class FormBuilderView(BaseView):
 		from sqlalchemy import select, desc
 		session = self.appbuilder.get_session
 		forms = session.execute(
-			select(Form).order_by(desc(Form.created_at)).limit(100)
+			select(Form).order_by(desc(Form.created_at)).limit(200)
 		).scalars().all()
 		return jsonify({"forms": [
 			{"id": f.id, "title": f.title, "slug": f.slug,
@@ -210,6 +578,21 @@ class FormBuilderView(BaseView):
 			 "created_at": f.created_at.isoformat() if f.created_at else None}
 			for f in forms
 		]})
+
+	@expose("/api/forms/<int:form_id>", methods=["GET"])
+	@has_access
+	def api_get_form(self, form_id: int):
+		from pgappforge.plugins.forms.models import Form
+		from sqlalchemy import select
+		session = self.appbuilder.get_session
+		form = session.execute(select(Form).where(Form.id == form_id)).scalar()
+		if not form:
+			return jsonify({"error": "Not found"}), 404
+		return jsonify({
+			"id": form.id, "title": form.title, "slug": form.slug,
+			"status": form.status, "definition": form.definition,
+			"created_at": form.created_at.isoformat() if form.created_at else None,
+		})
 
 	@expose("/api/forms", methods=["POST"])
 	@has_access
@@ -237,11 +620,22 @@ class FormBuilderView(BaseView):
 		form = session.execute(select(Form).where(Form.id == form_id)).scalar()
 		if not form:
 			return jsonify({"error": "Not found"}), 404
+		uid = getattr(current_user, "id", None)
+		admin_role = current_app.config.get("AUTH_ROLE_ADMIN", "Admin")
+		is_admin = any(
+			r.name == admin_role for r in getattr(current_user, "roles", [])
+		)
+		if form.created_by_id and form.created_by_id != uid and not is_admin:
+			abort(403)
 		data = request.get_json(silent=True) or {}
 		if "title" in data:
 			form.title = data["title"]
 		if "definition" in data:
 			form.definition = data["definition"]
+			# Sync title from settings if embedded
+			embedded_title = data["definition"].get("settings", {}).get("title")
+			if embedded_title:
+				form.title = embedded_title
 		session.commit()
 		return jsonify({"id": form.id})
 
@@ -264,7 +658,6 @@ class FormBuilderView(BaseView):
 			published_by_id=getattr(current_user, "id", None),
 		)
 		form.status = "published"
-		form.current_version_id = None  # updated after flush
 		session.add(ver)
 		session.flush()
 		form.current_version_id = ver.id
@@ -286,9 +679,77 @@ class FormBuilderView(BaseView):
 		session.commit()
 		return jsonify({"url": f"/forms/public/{token}", "token": token})
 
+	@expose("/api/models")
+	@has_access
+	def api_list_models(self):
+		"""Return list of application model table names available for FK fields."""
+		try:
+			from pgappforge import Model
+			names = sorted(set(
+				m.__tablename__
+				for m in self._iter_model_classes()
+				if not m.__tablename__.startswith("pgaf_") and not m.__tablename__.startswith("ab_")
+			))
+			return jsonify({"models": names})
+		except Exception as exc:
+			log.warning("api_list_models: %s", exc)
+			return jsonify({"models": []})
+
+	@expose("/api/model-fields")
+	@has_access
+	def api_model_fields(self):
+		"""Return column metadata for a model (for FK pickers and field mapping)."""
+		model_name = request.args.get("model", "")
+		cls = self._resolve_model(model_name)
+		if not cls:
+			return jsonify({"fields": []})
+		from sqlalchemy import inspect as sa_inspect
+		fields_meta = []
+		try:
+			for col in sa_inspect(cls).columns:
+				fields_meta.append({
+					"name": col.key,
+					"type": str(col.type).split("(")[0],
+					"nullable": col.nullable,
+					"is_fk": bool(col.foreign_keys),
+				})
+		except Exception as exc:
+			log.warning("api_model_fields %s: %s", model_name, exc)
+		return jsonify({"fields": fields_meta})
+
+	@expose("/api/forms/<int:form_id>/submissions")
+	@has_access
+	def api_form_submissions(self, form_id: int):
+		"""Return recent submissions for a form."""
+		from pgappforge.plugins.forms.models import FormSubmission
+		from sqlalchemy import select, desc
+		session = self.appbuilder.get_session
+		subs = session.execute(
+			select(FormSubmission)
+			.where(FormSubmission.form_id == form_id)
+			.order_by(desc(FormSubmission.submitted_at))
+			.limit(200)
+		).scalars().all()
+		return jsonify({"submissions": [
+			{
+				"id": s.id,
+				"data": s.data,
+				"score": float(s.score) if s.score is not None else None,
+				"outcome": s.outcome,
+				"submitter_ip": s.submitter_ip,
+				"submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+			}
+			for s in subs
+		]})
+
+	# ── helpers ──────────────────────────────────────────────────────────────
+
+	def _resolve_model(self, name: str):
+		return _resolve_model_cls(name)
+
 
 class PublicFormView(BaseView):
-	"""Public (unauthenticated) form renderer and submission handler."""
+	"""Unauthenticated form renderer and submission handler."""
 	route_base = "/forms"
 
 	@expose("/public/<string:token>")
@@ -301,11 +762,27 @@ class PublicFormView(BaseView):
 		).scalar()
 		if not share:
 			abort(404)
+		# Enforce expiry
+		now = datetime.now(timezone.utc)
+		if share.expires_at and share.expires_at.replace(tzinfo=timezone.utc) < now:
+			return Response(
+				"<html><body><h2>This form link has expired.</h2></body></html>",
+				mimetype="text/html", status=410,
+			)
+		# Enforce submission cap
+		if share.max_submissions and (share.submissions_used or 0) >= share.max_submissions:
+			return Response(
+				"<html><body><h2>This form has reached its submission limit.</h2></body></html>",
+				mimetype="text/html", status=410,
+			)
 		form = session.execute(
 			select(Form).where(Form.id == share.form_id)
 		).scalar()
 		if not form or form.status != "published":
-			return Response("<h1>This form is not available.</h1>", mimetype="text/html")
+			return Response(
+				"<html><body><h2>This form is not available.</h2></body></html>",
+				mimetype="text/html",
+			)
 		from pgappforge.plugins.forms.renderer import render_form
 		try:
 			from flask_wtf.csrf import generate_csrf
@@ -325,23 +802,54 @@ class PublicFormView(BaseView):
 		).scalar()
 		if not share:
 			abort(404)
+		now = datetime.now(timezone.utc)
+		if share.expires_at and share.expires_at.replace(tzinfo=timezone.utc) < now:
+			return Response("<h2>This form link has expired.</h2>", mimetype="text/html", status=410)
+		if share.max_submissions and (share.submissions_used or 0) >= share.max_submissions:
+			return Response("<h2>Submission limit reached.</h2>", mimetype="text/html", status=410)
 		form = session.execute(
 			select(Form).where(Form.id == share.form_id)
 		).scalar()
 		if not form:
 			abort(404)
-		data = dict(request.form)
+		raw = dict(request.form)
+		clean = {k: (v[0] if len(v) == 1 else v) for k, v in raw.items() if k != "csrf_token"}
 		submission = FormSubmission(
 			form_id=share.form_id,
 			version_id=form.current_version_id,
-			data={k: (v[0] if len(v) == 1 else v) for k, v in data.items() if k != "csrf_token"},
+			data=clean,
 			submitter_ip=request.remote_addr,
 			submitter_ua=request.user_agent.string[:512],
 		)
 		share.submissions_used = (share.submissions_used or 0) + 1
 		session.add(submission)
+		# Auto-save to target_model if configured
+		settings = (form.definition or {}).get("settings", {})
+		target = settings.get("target_model")
+		mapping = settings.get("field_mapping", {})
+		if target and mapping:
+			model_cls = self._resolve_model(session, target)
+			if model_cls:
+				kwargs: dict = {}
+				for field_id, col_name in mapping.items():
+					if field_id in clean and col_name:
+						kwargs[col_name] = clean[field_id]
+				if kwargs:
+					try:
+						record = model_cls(**kwargs)
+						session.add(record)
+					except Exception as exc:
+						log.warning("auto-save to %s failed: %s", target, exc)
 		session.commit()
-		success_msg = form.definition.get("settings", {}).get(
-			"success_message", "Thank you for your submission!"
+		success_msg = settings.get("success_message", "Thank you for your submission!")
+		redirect_url = settings.get("redirect_url", "")
+		if redirect_url:
+			from flask import redirect as _redirect
+			return _redirect(redirect_url)
+		return Response(
+			f"<html><body style='font-family:system-ui;padding:40px'><h2>{success_msg}</h2></body></html>",
+			mimetype="text/html",
 		)
-		return Response(f"<html><body><h2>{success_msg}</h2></body></html>", mimetype="text/html")
+
+	def _resolve_model(self, session, name: str):
+		return _resolve_model_cls(name)
