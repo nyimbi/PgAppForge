@@ -22,10 +22,69 @@ Usage::
 from __future__ import annotations
 
 import json
-from flask import request, jsonify, Response
+import pathlib
+from flask import abort, current_app, request, jsonify, Response
+from flask_login import current_user
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
 from pgappforge.widgets_postgresql._cdn import CYTOSCAPE_CDN as _CY
+
+
+# ─── Security helpers ─────────────────────────────────────────────────────────
+
+def _require_schema_admin() -> None:
+	"""Abort 403 unless current user is Admin and FAB_ERD_DDL_ENABLED is True.
+
+	Gate-keeps all mutating DDL endpoints so that:
+	  - Production databases can disable the ERD DDL path entirely via config.
+	  - Even with it enabled, only users with the Admin role can apply changes.
+	"""
+	if not current_app.config.get("FAB_ERD_DDL_ENABLED", False):
+		abort(403, description=(
+			"ERD schema mutations are disabled. "
+			"Set FAB_ERD_DDL_ENABLED = True in your Flask config to enable."
+		))
+	if not current_user or not current_user.is_authenticated:
+		abort(403, description="Login required.")
+	if not any(
+		getattr(r, "name", "") in ("Admin", "admin")
+		for r in getattr(current_user, "roles", [])
+	):
+		abort(403, description="ERD schema mutations require the Admin role.")
+
+
+def _validate_csrf() -> None:
+	"""Validate CSRF token on JSON POST endpoints.
+
+	Expects the ``X-CSRFToken`` request header (set by JS from the meta tag).
+	Falls back gracefully if Flask-WTF CSRF is not configured.
+	"""
+	try:
+		from flask_wtf.csrf import validate_csrf
+		validate_csrf(request.headers.get("X-CSRFToken", ""))
+	except ImportError:
+		pass  # Flask-WTF not installed — skip CSRF check
+	except Exception as exc:
+		abort(400, description=f"CSRF validation failed: {exc}")
+
+
+def _safe_output_dir(raw: str | None, app_name: str) -> pathlib.Path:
+	"""Resolve and validate an output directory for code generation.
+
+	All paths must be under FAB_CODEGEN_OUTPUT_ROOT (default /tmp/pgaf_generated)
+	to prevent path traversal attacks.
+	"""
+	root = pathlib.Path(
+		current_app.config.get("FAB_CODEGEN_OUTPUT_ROOT", "/tmp/pgaf_generated")
+	).resolve()
+	if raw:
+		candidate = pathlib.Path(raw).resolve()
+	else:
+		safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in app_name.lower())
+		candidate = (root / safe_name).resolve()
+	if not str(candidate).startswith(str(root)):
+		abort(400, description=f"output_dir must be under {root}")
+	return candidate
 
 # ─── ERP Module Templates ────────────────────────────────────────────────────
 
@@ -568,7 +627,13 @@ class ERDDesignerView(BaseView):
 	@expose("/api/apply-module/<string:key>", methods=["POST"])
 	@has_access
 	def api_apply_module(self, key: str):
-		"""CREATE TABLE SQL for all tables in an ERP module."""
+		"""CREATE TABLE SQL for all tables in an ERP module.
+
+		Requires Admin role + FAB_ERD_DDL_ENABLED=True.
+		FK columns are now forwarded so foreign key constraints are emitted.
+		"""
+		_require_schema_admin()
+		_validate_csrf()
 		if key not in ERP_MODULES:
 			return jsonify({"error": f"Unknown module: {key}"}), 404
 		mod = ERP_MODULES[key]
@@ -577,17 +642,19 @@ class ERDDesignerView(BaseView):
 			pg_cols = []
 			for c in cols:
 				pg_cols.append({
-					"name": c["name"],
-					"type": c.get("type", "TEXT"),
-					"pk": c.get("pk", False),
+					"name":     c["name"],
+					"type":     c.get("type", "TEXT"),
+					"pk":       c.get("pk", False),
 					"nullable": c.get("nullable", True),
-					"default": c.get("default"),
-					"unique": c.get("unique", False),
+					"default":  c.get("default"),
+					"unique":   c.get("unique", False),
+					"fk":       c.get("fk"),      # ← was stripped before; now forwarded
 				})
 			ops.append({"op": "create_table", "table": tname, "columns": pg_cols})
 		try:
-			mgr = self._schema_manager()
-			result = mgr.apply_changes(ops)
+			mgr    = self._schema_manager()
+			uid    = getattr(current_user, "id", None)
+			result = mgr.apply_changes(ops, user_id=uid)
 			return jsonify(result)
 		except Exception as exc:
 			return jsonify({"error": str(exc)}), 500
@@ -595,11 +662,19 @@ class ERDDesignerView(BaseView):
 	@expose("/api/schema/apply", methods=["POST"])
 	@has_access
 	def api_schema_apply(self):
-		"""Apply schema operations from the ERD canvas."""
-		ops = request.get_json() or []
+		"""Apply schema operations from the ERD canvas.
+
+		Requires Admin role + FAB_ERD_DDL_ENABLED=True.
+		Add ``?dry_run=1`` to preview SQL without executing.
+		"""
+		_require_schema_admin()
+		_validate_csrf()
+		ops      = request.get_json() or []
+		dry_run  = request.args.get("dry_run", "0").strip() in ("1", "true", "yes")
+		uid      = getattr(current_user, "id", None)
 		try:
-			mgr = self._schema_manager()
-			result = mgr.apply_changes(ops)
+			mgr    = self._schema_manager()
+			result = mgr.apply_changes(ops, dry_run=dry_run, user_id=uid)
 			return jsonify(result)
 		except Exception as exc:
 			return jsonify({"error": str(exc)}), 500
@@ -619,13 +694,23 @@ class ERDDesignerView(BaseView):
 	@expose("/api/generate-app", methods=["POST"])
 	@has_access
 	def api_generate_app(self):
-		"""Trigger pgappforge codegen on the current schema."""
-		body = request.get_json() or {}
-		output_dir = body.get("output_dir", "/tmp/generated_app")
+		"""Trigger pgappforge codegen on the current schema.
+
+		Requires Admin role + FAB_ERD_DDL_ENABLED=True.
+		Output path is validated against FAB_CODEGEN_OUTPUT_ROOT to prevent
+		path traversal (all paths must be under the configured root).
+		"""
+		_require_schema_admin()
+		_validate_csrf()
+		body     = request.get_json() or {}
 		app_name = body.get("app_name", "GeneratedApp")
 		try:
-			mgr = self._schema_manager()
-			result = mgr.generate_app(output_dir, app_name)
+			output_dir = _safe_output_dir(body.get("output_dir"), app_name)
+		except Exception as exc:
+			return jsonify({"status": "error", "error": str(exc)}), 400
+		try:
+			mgr    = self._schema_manager()
+			result = mgr.generate_app(str(output_dir), app_name)
 			return jsonify(result)
 		except Exception as exc:
 			return jsonify({"status": "error", "error": str(exc)}), 500
@@ -819,14 +904,22 @@ cy.on('dblclick', 'node[type="module"]', function(e) {
   _collapseModule(e.target.id());
 });
 
+/* XSS-safe HTML escape — used wherever user-controlled data enters innerHTML */
+function _esc(s) {
+  return String(s||'').replace(/[&<>"']/g, function(m) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+}
+
 cy.on('tap', 'node[type="table"]', function(e) {
   var d = e.target.data();
   var cols = (d.columns || []).slice(0, 12).map(function(c) {
-    return '<span style="color:' + (c.pk ? '#f39c12' : c.fk ? '#3498db' : '#aaa') + '">'
-      + c.name + '</span> <small>' + (c.type || '') + '</small>';
+    var color = c.pk ? '#f39c12' : c.fk ? '#3498db' : '#aaa';
+    return '<span style="color:' + color + '">' + _esc(c.name) +
+           '</span> <small>' + _esc(c.type || '') + '</small>';
   }).join('<br>');
   document.getElementById('info-panel').innerHTML =
-    '<b>' + d.label + '</b><br><hr style="margin:4px 0">' + cols;
+    '<b>' + _esc(d.label) + '</b><br><hr style="margin:4px 0">' + cols;
   document.getElementById('info-panel').style.display = 'block';
 });
 
@@ -862,8 +955,13 @@ document.getElementById('cm-fold').onclick = function() {
 document.getElementById('cm-remove').onclick = function() {
   if (_ctxTarget) {
     if (_ctxTarget.data('type') === 'module') {
-      cy.nodes('[parent="' + _ctxTarget.id() + '"]').remove();
-      cy.edges().remove();
+      var modId = _ctxTarget.id();
+      cy.nodes('[parent="' + modId + '"]').remove();
+      // Remove only edges connected to nodes in this module (not all edges)
+      cy.edges().filter(function(e) {
+        return e.source().data('parent') === modId ||
+               e.target().data('parent') === modId;
+      }).remove();
     }
     _ctxTarget.remove();
   }
@@ -929,9 +1027,7 @@ function toggleDomain(header) {
   var items = header.nextElementSibling;
   items.classList.toggle('collapsed');
   var arrow = header.querySelector('span:last-child');
-  if (arrow) arrow.textContent = items.classList.contains('collapsed') ?
-    header.querySelector('span:last-child').textContent.replace('▾','▸').replace('▸','▸') :
-    header.querySelector('span:last-child').textContent.replace('▸','▾');
+  if (arrow) arrow.textContent = items.classList.contains('collapsed') ? '▸' : '▾';
 }
 
 function filterModules(q) {

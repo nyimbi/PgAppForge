@@ -17,6 +17,7 @@ from flask import current_app, jsonify, render_template_string, Response
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
 from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
+from pgappforge.views.erd_schema_manager import _to_mermaid_str
 
 _log_ = logging.getLogger(__name__)
 
@@ -306,36 +307,12 @@ class ERDView(BaseView):
 
 	@staticmethod
 	def _to_mermaid(data: dict[str, Any]) -> str:
-		"""Render ERD data as Mermaid erDiagram syntax."""
-		lines: list[str] = ["erDiagram"]
+		"""Render ERD data as Mermaid erDiagram syntax.
 
-		for table in data["tables"]:
-			name = table["name"].upper()
-			lines.append(f"    {name} {{")
-			for col in table["columns"]:
-				# Mermaid column syntax: type name [PK|FK]
-				col_type = col["type"].split("(")[0].replace(" ", "_") or "string"
-				col_name = col["name"]
-				attrs: list[str] = []
-				if col["pk"]:
-					attrs.append("PK")
-				if col["fk"]:
-					attrs.append("FK")
-				suffix = " " + ",".join(attrs) if attrs else ""
-				lines.append(f"        {col_type} {col_name}{suffix}")
-			lines.append("    }")
-
-		# Deduplicate relationship pairs (inspector emits per-FK-column)
-		seen: set[tuple[str, str]] = set()
-		for rel in data["relationships"]:
-			pair = (rel["from_table"].upper(), rel["to_table"].upper())
-			if pair in seen:
-				continue
-			seen.add(pair)
-			# N:1 — many source rows place on one target
-			lines.append(f'    {pair[1]} ||--o{{ {pair[0]} : "has"')
-
-		return "\n".join(lines)
+		Delegates to the shared ``_to_mermaid_str`` in erd_schema_manager
+		so both the designer and the viewer produce identical output.
+		"""
+		return _to_mermaid_str(data)
 
 	@staticmethod
 	def _to_sql(data: dict[str, Any]) -> str:

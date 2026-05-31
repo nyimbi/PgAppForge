@@ -23,6 +23,123 @@ from sqlalchemy.engine import Engine
 log = logging.getLogger(__name__)
 
 
+# ─── Shared Mermaid serialiser ────────────────────────────────────────────────
+
+def _to_mermaid_str(schema: dict) -> str:
+	"""Convert a schema dict to Mermaid erDiagram syntax.
+
+	This is the canonical implementation — both ERDSchemaManager.to_mermaid()
+	and ERDView._to_mermaid() delegate here to ensure consistent output.
+
+	Relationships are deduplicated so composite FK columns don't produce
+	multiple relationship lines for the same table pair.
+	"""
+	lines: list[str] = ["erDiagram"]
+	for tbl in schema.get("tables", []):
+		tname = tbl["name"].upper()
+		lines.append(f"    {tname} {{")
+		for col in tbl.get("columns", []):
+			col_type = re.sub(r"\(.*\)", "", col.get("type", "text")).lower().replace(" ", "_") or "text"
+			col_name = col.get("name", "?")
+			attrs: list[str] = []
+			if col.get("pk"):
+				attrs.append("PK")
+			if col.get("fk"):
+				attrs.append("FK")
+			suffix = " " + ",".join(attrs) if attrs else ""
+			lines.append(f"        {col_type} {col_name}{suffix}")
+		lines.append("    }")
+
+	# Deduplicate relationship pairs
+	seen: set[tuple[str, str]] = set()
+	for rel in schema.get("relationships", []):
+		from_t = (rel.get("from_table") or rel.get("table", "")).upper()
+		to_t   = (rel.get("to_table")   or rel.get("ref_table", "")).upper()
+		if not from_t or not to_t:
+			continue
+		pair = (from_t, to_t)
+		if pair in seen:
+			continue
+		seen.add(pair)
+		lines.append(f'    {to_t} ||--o{{ {from_t} : "has"')
+
+	return "\n".join(lines)
+
+
+# ─── DDL identifier safety helpers ──────────────────────────────────────────
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+
+def _qi(name: str) -> str:
+	"""Quote a single PostgreSQL identifier and reject dangerous names.
+
+	Raises ValueError for names that don't match the safe identifier pattern
+	(letter/underscore start, alphanumeric/underscore body, ≤63 chars).
+	Double-quotes any valid name so reserved words are handled safely.
+	"""
+	if not isinstance(name, str) or not _IDENT_RE.match(name):
+		raise ValueError(
+			f"Invalid PostgreSQL identifier {name!r}. "
+			f"Must match ^[A-Za-z_][A-Za-z0-9_]{{0,62}}$"
+		)
+	return f'"{name}"'
+
+
+def _qschema(table: str, schema: str | None = None) -> str:
+	"""Return a schema-qualified, double-quoted table reference."""
+	return f"{_qi(schema)}.{_qi(table)}" if schema else _qi(table)
+
+
+def _quote_default(val: Any) -> str:
+	"""Safely quote a column DEFAULT value.
+
+	SQL expressions (function calls, keywords, numeric literals) pass through
+	unchanged.  Plain strings are single-quoted with internal quotes escaped.
+	This prevents unintended SQL injection via user-supplied default values.
+	"""
+	s = str(val).strip()
+	# Numeric literal
+	if s.lstrip("-+").replace(".", "", 1).isdigit():
+		return s
+	# SQL expression markers — pass through as-is
+	_expr_markers = ("(", "now", "current_", "gen_random", "nextval",
+	                 "true", "false", "null", "interval")
+	if any(s.lower().startswith(m) for m in _expr_markers):
+		return s
+	# Plain string literal — single-quote and escape internal quotes
+	return "'" + s.replace("'", "''") + "'"
+
+
+def _generate_rollback(ops: list[dict], sql_stmts: list[str]) -> list[str]:
+	"""Generate inverse DDL for each operation where it is safe and deterministic."""
+	rollback: list[str] = []
+	for op in reversed(ops):
+		kind = op.get("op", "")
+		tbl  = op.get("table", "")
+		schema = op.get("schema", "")
+		try:
+			qtbl = _qschema(tbl, schema or None)
+		except ValueError:
+			continue
+		if kind == "create_table":
+			rollback.append(f"DROP TABLE IF EXISTS {qtbl} CASCADE")
+		elif kind == "add_column":
+			c = op.get("column", {})
+			try:
+				rollback.append(f"ALTER TABLE {qtbl} DROP COLUMN IF EXISTS {_qi(c['name'])} CASCADE")
+			except (ValueError, KeyError):
+				pass
+		elif kind == "add_fk":
+			cname = f"{tbl}_{op.get('column', '')}_{op.get('ref_table', '')}_fkey"
+			try:
+				rollback.append(f"ALTER TABLE {qtbl} DROP CONSTRAINT IF EXISTS {_qi(cname)}")
+			except ValueError:
+				pass
+		# drop_table, drop_column, alter_column, rename_* — no safe auto-rollback
+	return rollback
+
+
 # ─── Schema diff types ─────────────────────────────────────────────────────
 
 # Accepted operations in the diff payload from the ERD UI:
@@ -124,155 +241,231 @@ class ERDSchemaManager:
 
 	def to_mermaid(self) -> str:
 		"""Convert the live database schema to Mermaid erDiagram syntax."""
-		schema = self.get_schema()
-		lines = ["erDiagram"]
-		for tbl in schema["tables"]:
-			lines.append(f"  {tbl['name']} {{")
-			for col in tbl["columns"]:
-				pk_mark = " PK" if col["pk"] else ""
-				fk_mark = " FK" if col["fk"] else ""
-				type_clean = re.sub(r"\(.*\)", "", col["type"]).lower().replace(" ", "_")
-				lines.append(f"    {type_clean} {col['name']}{pk_mark}{fk_mark}")
-			lines.append("  }")
-		for rel in schema["relationships"]:
-			if rel["from_table"] and rel["to_table"]:
-				lines.append(
-					f'  {rel["from_table"]} ||--o{{ {rel["to_table"]} : "FK"'
-				)
-		return "\n".join(lines)
+		return _to_mermaid_str(self.get_schema())
 
 	# ─── Apply changes ────────────────────────────────────────────────────────
 
-	def apply_changes(self, operations: list[dict]) -> dict[str, Any]:
+	def apply_changes(
+		self,
+		operations: list[dict],
+		dry_run: bool = False,
+		user_id: int | None = None,
+	) -> dict[str, Any]:
 		"""Apply a list of schema change operations to the database.
 
-		All operations run in a single transaction — any failure rolls back all.
+		All operations run in a single transaction — any failure rolls back ALL.
+		The inner try/except has been intentionally removed so that exceptions
+		propagate to ``engine.begin()`` and trigger a full rollback.
 
 		Args:
 		    operations: List of operation dicts (see module docstring).
+		    dry_run:    If True, generate SQL but do not execute.
+		    user_id:    Optional caller ID for migration audit log.
 
 		Returns:
-		    {"applied": N, "sql": [generated SQL strings], "errors": [...]}
+		    {"applied": N, "sql": [...], "errors": [], "dry_run": bool}
 		"""
-		sql_stmts = []
+		sql_stmts: list[str] = []
 		errors: list[str] = []
 
 		for op in operations:
 			try:
-				stmt = self._op_to_sql(op)
-				if stmt:
-					sql_stmts.append(stmt)
+				stmts = self._op_to_sql_list(op)
+				sql_stmts.extend(s for s in stmts if s)
 			except ValueError as exc:
-				errors.append(f"Invalid op {op.get('op')}: {exc}")
+				errors.append(f"Invalid op {op.get('op')!r}: {exc}")
 
 		if errors:
-			return {"applied": 0, "sql": [], "errors": errors}
+			return {"applied": 0, "sql": [], "errors": errors, "dry_run": dry_run}
 
-		with self.engine.begin() as conn:
-			try:
+		if dry_run:
+			return {
+				"dry_run": True,
+				"would_apply": len(sql_stmts),
+				"sql": sql_stmts,
+				"errors": [],
+			}
+
+		try:
+			with self.engine.begin() as conn:
 				for stmt in sql_stmts:
-					log.info("ERD schema change: %s", stmt)
+					log.info("ERD DDL: %s", stmt)
 					conn.execute(text(stmt))
-				return {"applied": len(sql_stmts), "sql": sql_stmts, "errors": []}
-			except Exception as exc:
-				return {"applied": 0, "sql": sql_stmts, "errors": [str(exc)]}
+		except Exception as exc:
+			log.error("ERD apply_changes failed: %s", exc)
+			return {"applied": 0, "sql": sql_stmts, "errors": [str(exc)], "dry_run": False}
 
-	def _op_to_sql(self, op: dict) -> str | None:
-		"""Convert a single operation dict to a SQL DDL string."""
-		kind = op.get("op", "")
-		tbl = op.get("table", "")
+		# Persist audit log and auto-rollback SQL
+		self._write_migration_log(user_id, operations, sql_stmts, "success")
 
+		return {"applied": len(sql_stmts), "sql": sql_stmts, "errors": [], "dry_run": False}
+
+	def _write_migration_log(
+		self,
+		user_id: int | None,
+		ops: list[dict],
+		sql_stmts: list[str],
+		status: str,
+		error: str | None = None,
+	) -> None:
+		"""Append an entry to ErdMigrationLog. Non-fatal on failure."""
+		try:
+			from pgappforge.models.erd_models import ErdMigrationLog
+			from datetime import datetime, timezone
+			from sqlalchemy.orm import Session
+			rollback = _generate_rollback(ops, sql_stmts)
+			entry = ErdMigrationLog(
+				user_id=user_id,
+				applied_at=datetime.now(timezone.utc),
+				ops_json=ops,
+				sql_json=sql_stmts,
+				status=status,
+				error=error,
+				rollback_sql=rollback,
+			)
+			with Session(self.engine) as s:
+				s.add(entry)
+				s.commit()
+		except Exception as exc:
+			log.debug("ERD migration log write failed (non-fatal): %s", exc)
+
+	def _op_to_sql_list(self, op: dict) -> list[str]:
+		"""Convert a single operation dict to one or more SQL DDL strings.
+
+		Returns a list (usually one item) so that ``create_table`` can emit the
+		main CREATE followed by separate ADD CONSTRAINT FOREIGN KEY statements.
+		All identifiers are quoted via ``_qi``/``_qschema`` to prevent DDL injection.
+		"""
+		kind   = op.get("op", "")
+		tbl    = op.get("table", "")
+		schema = op.get("schema", "") or None
+		qtbl   = _qschema(tbl, schema)
+
+		# ── CREATE TABLE ──────────────────────────────────────────────────────
 		if kind == "create_table":
-			schema = op.get("schema", "")
-			qualified = f"{schema}.{tbl}" if schema else tbl
 			cols = op.get("columns", [])
-			col_defs = []
+			col_defs: list[str] = []
+			fk_stmts: list[str] = []
 			for c in cols:
-				col_name = f'"{c["name"]}"'  # always quote — handles reserved words
-				defn = f"{col_name} {c['type']}"
+				qcol = _qi(c["name"])
+				defn = f"{qcol} {c['type']}"
 				if c.get("pk"):
 					defn += " PRIMARY KEY"
 				if not c.get("nullable", True):
 					defn += " NOT NULL"
+				if c.get("unique") and not c.get("pk"):
+					defn += " UNIQUE"
 				if c.get("default") is not None:
-					defn += f" DEFAULT {c['default']}"
+					defn += f" DEFAULT {_quote_default(c['default'])}"
 				col_defs.append(defn)
-			return f"CREATE TABLE IF NOT EXISTS {qualified} ({', '.join(col_defs)})"
+				# Defer FK constraints to ALTER TABLE (avoids ordering issues)
+				if c.get("fk"):
+					fk_spec   = c["fk"]  # "other_table.col" or "other_table"
+					parts     = fk_spec.split(".") if isinstance(fk_spec, str) else []
+					ref_table = parts[0] if parts else fk_spec
+					ref_col   = parts[1] if len(parts) > 1 else "id"
+					cname     = f"{tbl}_{c['name']}_{ref_table}_fkey"
+					try:
+						fk_stmts.append(
+							f"ALTER TABLE {qtbl} "
+							f"ADD CONSTRAINT {_qi(cname)} "
+							f"FOREIGN KEY ({qcol}) "
+							f"REFERENCES {_qi(ref_table)} ({_qi(ref_col)})"
+						)
+					except ValueError as exc:
+						log.warning("ERD: skipping FK due to invalid identifier: %s", exc)
+			result = [f"CREATE TABLE IF NOT EXISTS {qtbl} ({', '.join(col_defs)})"]
+			result.extend(fk_stmts)
+			return result
 
+		# ── DROP TABLE ────────────────────────────────────────────────────────
 		if kind == "drop_table":
-			schema = op.get("schema", "")
-			qualified = f"{schema}.{tbl}" if schema else tbl
-			return f"DROP TABLE IF EXISTS {qualified} CASCADE"
+			return [f"DROP TABLE IF EXISTS {qtbl} CASCADE"]
 
+		# ── ADD COLUMN ────────────────────────────────────────────────────────
 		if kind == "add_column":
-			schema = op.get("schema", "")
-			qualified = f"{schema}.{tbl}" if schema else tbl
-			c = op["column"]
-			col_name = f'"{c["name"]}"'
-			defn = f"{col_name} {c['type']}"
+			c    = op["column"]
+			qcol = _qi(c["name"])
+			defn = f"{qcol} {c['type']}"
 			if not c.get("nullable", True):
 				defn += " NOT NULL"
+			if c.get("unique"):
+				defn += " UNIQUE"
 			if c.get("default") is not None:
-				defn += f" DEFAULT {c['default']}"
-			return f"ALTER TABLE {qualified} ADD COLUMN IF NOT EXISTS {defn}"
+				defn += f" DEFAULT {_quote_default(c['default'])}"
+			return [f"ALTER TABLE {qtbl} ADD COLUMN IF NOT EXISTS {defn}"]
 
+		# ── DROP COLUMN ───────────────────────────────────────────────────────
 		if kind == "drop_column":
-			schema = op.get("schema", "")
-			qualified = f"{schema}.{tbl}" if schema else tbl
-			col_name = f'"{op["column"]}"'
-			return f"ALTER TABLE {qualified} DROP COLUMN IF EXISTS {col_name} CASCADE"
+			return [f"ALTER TABLE {qtbl} DROP COLUMN IF EXISTS {_qi(op['column'])} CASCADE"]
 
+		# ── ALTER COLUMN ──────────────────────────────────────────────────────
 		if kind == "alter_column":
-			schema = op.get("schema", "")
-			qualified = f"{schema}.{tbl}" if schema else tbl
-			col = f'"{op["column"]}"'
-			stmts = []
+			qcol  = _qi(op["column"])
+			stmts: list[str] = []
 			if op.get("new_type"):
 				stmts.append(
-					f"ALTER TABLE {qualified} ALTER COLUMN {col} TYPE {op['new_type']} "
-					f"USING {col}::{op['new_type']}"
+					f"ALTER TABLE {qtbl} ALTER COLUMN {qcol} "
+					f"TYPE {op['new_type']} USING {qcol}::{op['new_type']}"
 				)
 			if "nullable" in op:
-				if op["nullable"]:
-					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} DROP NOT NULL")
-				else:
-					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} SET NOT NULL")
+				clause = "DROP NOT NULL" if op["nullable"] else "SET NOT NULL"
+				stmts.append(f"ALTER TABLE {qtbl} ALTER COLUMN {qcol} {clause}")
 			if "default" in op:
 				if op["default"] is None:
-					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} DROP DEFAULT")
+					stmts.append(f"ALTER TABLE {qtbl} ALTER COLUMN {qcol} DROP DEFAULT")
 				else:
-					stmts.append(f"ALTER TABLE {qualified} ALTER COLUMN {col} SET DEFAULT {op['default']}")
-			return "; ".join(stmts) if stmts else None
+					stmts.append(
+						f"ALTER TABLE {qtbl} ALTER COLUMN {qcol} "
+						f"SET DEFAULT {_quote_default(op['default'])}"
+					)
+			return stmts if stmts else []
 
+		# ── ADD FOREIGN KEY ───────────────────────────────────────────────────
 		if kind == "add_fk":
-			col = op["column"]
-			ref = op["ref_table"]
-			ref_col = op.get("ref_column", "id")
-			cname = f"{tbl}_{col}_fkey"
-			return (
-				f"ALTER TABLE {tbl} ADD CONSTRAINT {cname} "
-				f"FOREIGN KEY ({col}) REFERENCES {ref}({ref_col})"
-			)
+			qcol      = _qi(op["column"])
+			ref_table = op["ref_table"]
+			ref_col   = op.get("ref_column", "id")
+			cname     = op.get("constraint_name", f"{tbl}_{op['column']}_{ref_table}_fkey")
+			return [
+				f"ALTER TABLE {qtbl} ADD CONSTRAINT {_qi(cname)} "
+				f"FOREIGN KEY ({qcol}) REFERENCES {_qi(ref_table)} ({_qi(ref_col)})"
+			]
 
+		# ── DROP FOREIGN KEY ──────────────────────────────────────────────────
 		if kind == "drop_fk":
-			return f"ALTER TABLE {tbl} DROP CONSTRAINT {op['constraint_name']}"
+			return [f"ALTER TABLE {qtbl} DROP CONSTRAINT {_qi(op['constraint_name'])}"]
 
+		# ── RENAME TABLE ──────────────────────────────────────────────────────
 		if kind == "rename_table":
-			return f"ALTER TABLE {tbl} RENAME TO {op['new_name']}"
+			return [f"ALTER TABLE {qtbl} RENAME TO {_qi(op['new_name'])}"]
 
+		# ── RENAME COLUMN ─────────────────────────────────────────────────────
 		if kind == "rename_column":
-			return f"ALTER TABLE {tbl} RENAME COLUMN {op['column']} TO {op['new_name']}"
+			return [
+				f"ALTER TABLE {qtbl} RENAME COLUMN {_qi(op['column'])} TO {_qi(op['new_name'])}"
+			]
 
+		# ── ADD INDEX ─────────────────────────────────────────────────────────
 		if kind == "add_index":
-			cols = ", ".join(op.get("columns", []))
-			unique = "UNIQUE " if op.get("unique") else ""
-			iname = op.get("name", f"ix_{tbl}_{cols.replace(', ', '_')}")
-			return f"CREATE {unique}INDEX IF NOT EXISTS {iname} ON {tbl} ({cols})"
+			raw_cols = op.get("columns", [])
+			qcols    = ", ".join(_qi(c) for c in raw_cols)
+			unique   = "UNIQUE " if op.get("unique") else ""
+			iname    = op.get("name", f"ix_{tbl}_{'_'.join(raw_cols)}")
+			return [f"CREATE {unique}INDEX IF NOT EXISTS {_qi(iname)} ON {qtbl} ({qcols})"]
 
+		# ── DROP INDEX ────────────────────────────────────────────────────────
 		if kind == "drop_index":
-			return f"DROP INDEX IF EXISTS {op['name']}"
+			return [f"DROP INDEX IF EXISTS {_qi(op['name'])}"]
 
-		raise ValueError(f"Unknown operation: {kind}")
+		raise ValueError(f"Unknown operation: {kind!r}")
+
+	def _op_to_sql(self, op: dict) -> str | None:
+		"""Legacy single-string variant — delegates to _op_to_sql_list."""
+		stmts = self._op_to_sql_list(op)
+		if not stmts:
+			return None
+		return "; ".join(stmts)
 
 	# ─── Import from external formats ────────────────────────────────────────
 
@@ -339,19 +532,15 @@ class ERDSchemaManager:
 		if rejected:
 			return {"applied": 0, "sql": [], "errors": [f"Rejected unsafe SQL: {r}" for r in rejected]}
 
-		applied = 0
-		errors: list[str] = []
-		with self.engine.begin() as conn:
-			for stmt in stmts:
-				try:
+		try:
+			with self.engine.begin() as conn:
+				for stmt in stmts:
 					conn.execute(text(stmt))
-					applied += 1
-				except Exception as exc:
-					errors.append(str(exc))
-					if errors:
-						break
+		except Exception as exc:
+			log.error("ERD import_sql failed: %s", exc)
+			return {"applied": 0, "sql": [], "errors": [str(exc)]}
 
-		return {"applied": applied, "sql": stmts[:applied], "errors": errors}
+		return {"applied": len(stmts), "sql": stmts, "errors": []}
 
 	# ─── Codegen trigger ─────────────────────────────────────────────────────
 
@@ -629,6 +818,15 @@ class TriggerProcedureManager:
 		# Apply defaults then override with provided params
 		ctx = {**tmpl["defaults"], **params}
 
+		# Validate all identifier-like params to prevent format-string injection.
+		# Multi-column params (search_columns) are validated element-by-element.
+		_SAFE_VALUE_RE = re.compile(r"^[A-Za-z0-9_, .'\"\-:@/]+$")
+		for key, val in ctx.items():
+			if isinstance(val, str) and not _SAFE_VALUE_RE.match(val):
+				raise ValueError(
+					f"Template parameter {key!r} contains unsafe characters: {val!r}"
+				)
+
 		func_sql = tmpl["function"].format(**ctx).strip()
 		trig_sql = tmpl["trigger"].format(**ctx).strip() if tmpl["trigger"] else None
 
@@ -692,18 +890,31 @@ class TriggerProcedureManager:
 		return self._execute_ddl([sql])
 
 	def list_triggers(self, table: str | None = None) -> list[dict]:
-		"""List all triggers, optionally filtered by table."""
-		where = f"AND event_object_table = '{table}'" if table else ""
-		q = f"""
-		    SELECT trigger_name, event_object_table, event_manipulation,
-		           action_timing, action_statement
-		    FROM information_schema.triggers
-		    WHERE trigger_schema NOT IN ('pg_catalog', 'information_schema')
-		    {where}
-		    ORDER BY event_object_table, trigger_name
+		"""List all triggers, optionally filtered by table.
+
+		Uses parameterized binding for the table name to prevent SQL injection.
 		"""
+		if table is not None:
+			q = """
+			    SELECT trigger_name, event_object_table, event_manipulation,
+			           action_timing, action_statement
+			    FROM information_schema.triggers
+			    WHERE trigger_schema NOT IN ('pg_catalog', 'information_schema')
+			      AND event_object_table = :table
+			    ORDER BY event_object_table, trigger_name
+			"""
+			params: dict = {"table": table}
+		else:
+			q = """
+			    SELECT trigger_name, event_object_table, event_manipulation,
+			           action_timing, action_statement
+			    FROM information_schema.triggers
+			    WHERE trigger_schema NOT IN ('pg_catalog', 'information_schema')
+			    ORDER BY event_object_table, trigger_name
+			"""
+			params = {}
 		with self.engine.connect() as conn:
-			rows = conn.execute(text(q)).fetchall()
+			rows = conn.execute(text(q), params).fetchall()
 		return [dict(r._mapping) for r in rows]
 
 	def list_functions(self, schema: str = "public") -> list[dict]:

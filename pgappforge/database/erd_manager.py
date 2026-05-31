@@ -614,17 +614,9 @@ class DatabaseERDManager:
             return []
 
     def _get_stored_procedures(self) -> List[Dict[str, Any]]:
-        """Get stored procedures (database-specific implementation)"""
+        """Get stored procedures — PostgreSQL only."""
         try:
-            # This is database-specific - implement based on your database
-            if self.engine.dialect.name == "mysql":
-                return self._get_mysql_procedures()
-            elif self.engine.dialect.name == "postgresql":
-                return self._get_postgresql_procedures()
-            elif self.engine.dialect.name == "mssql":
-                return self._get_mssql_procedures()
-            else:
-                return []
+            return self._get_postgresql_procedures()
         except Exception as e:
             logger.warning(f"Error getting stored procedures: {e}")
             return []
@@ -642,15 +634,9 @@ class DatabaseERDManager:
             return []
 
     def _get_triggers(self) -> List[Dict[str, Any]]:
-        """Get database triggers"""
+        """Get database triggers — PostgreSQL only."""
         try:
-            # Database-specific implementation
-            if self.engine.dialect.name == "mysql":
-                return self._get_mysql_triggers()
-            elif self.engine.dialect.name == "postgresql":
-                return self._get_postgresql_triggers()
-            else:
-                return []
+            return self._get_postgresql_triggers()
         except Exception as e:
             logger.warning(f"Error getting triggers: {e}")
             return []
@@ -897,15 +883,15 @@ class DatabaseERDManager:
             # Create table
             table = Table(table_definition.name, self.metadata, *columns)
 
-            # Add foreign key constraints after table creation
-            for fk_def in table_definition.foreign_keys:
-                self._add_foreign_key_to_table(conn, table_definition.name, fk_def)
-
             # Generate and execute CREATE TABLE statement
             create_sql = CreateTable(table)
 
             with self.engine.begin() as conn:
                 conn.execute(create_sql)
+
+                # Add foreign key constraints inside the transaction
+                for fk_def in table_definition.foreign_keys:
+                    self._add_foreign_key_to_table(conn, table_definition.name, fk_def)
 
                 # Create additional indexes
                 for idx_def in table_definition.indexes:
