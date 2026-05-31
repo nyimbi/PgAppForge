@@ -748,6 +748,14 @@ docker-compose up -d
 ### Production Deployment
 See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions.
 
+## Security Designer
+
+An interactive graph-based UI for managing roles and permissions is available at:
+- **Security Designer**: http://localhost:8080/security-designer
+
+Requires Admin role. Supports role CRUD, permission grant/revoke, YAML import/export,
+role templates, health checks, and point-in-time snapshots with diff.
+
 ## API Documentation
 
 When running, visit:
@@ -1364,6 +1372,14 @@ def register_views(appbuilder):
     """Register all views with AppBuilder."""
     from app.navigation import register_navigation
     register_navigation(appbuilder)
+    try:
+        from pgappforge.views.security_designer import SecurityDesignerView
+        appbuilder.add_view(
+            SecurityDesignerView, "Security Designer",
+            icon="fa-shield", category="Security",
+        )
+    except ImportError:
+        pass  # SecurityDesignerView optional — skip if widgets_postgresql unavailable
 '''
 
     def _generate_api_init(self) -> str:
@@ -1683,6 +1699,15 @@ AUTH_LDAP_UID_FIELD = "uid"
                     f'    appbuilder.add_view({cls}, "{table_info.display_name}", '
                     f'icon="{icon}", category="{category}")'
                 )
+        # Add SecurityDesignerView import and registration
+        view_imports.append(
+            "from pgappforge.views.security_designer import SecurityDesignerView"
+        )
+        registrations.append(
+            "    appbuilder.add_view(SecurityDesignerView, 'Security Designer',"
+            " icon='fa-shield', category='Security')"
+        )
+
         # Build file: module-level imports first, then function body
         lines = ['"""Navigation menu registration."""', 'from pgappforge import AppBuilder']
         if view_imports:

@@ -34,21 +34,22 @@ log = logging.getLogger(__name__)
 
 
 def _require_security_admin() -> None:
-	"""Abort 403 unless the current user holds the Admin role."""
+	"""Abort 403 unless the current user holds the configured Admin role."""
 	if not current_user or not current_user.is_authenticated:
 		abort(make_response(jsonify({"ok": False, "error": "Login required", "code": "login_required"}), 403))
-	admin_role = current_app.config.get("AUTH_ROLE_ADMIN", "Admin")
-	role_names = {getattr(r, "name", "") for r in getattr(current_user, "roles", [])}
-	if admin_role not in role_names and "admin" not in role_names:
+	admin_role = (current_app.config.get("AUTH_ROLE_ADMIN") or "Admin").strip()
+	user_roles = {(getattr(r, "name", "") or "").casefold()
+				  for r in getattr(current_user, "roles", [])}
+	if admin_role.casefold() not in user_roles:
 		abort(make_response(jsonify({"ok": False, "error": "Admin role required", "code": "admin_required"}), 403))
 
 
 def _validate_csrf() -> None:
-	"""Validate the X-CSRFToken header. Falls back to no-op when flask-wtf is absent."""
+	"""Validate X-CSRFToken header. Fails closed when flask-wtf is unavailable."""
 	try:
-		from flask_wtf.csrf import validate_csrf, ValidationError
+		from flask_wtf.csrf import validate_csrf
 	except ImportError:
-		return
+		abort(500, description="CSRF protection requires flask-wtf")
 	token = request.headers.get("X-CSRFToken") or request.form.get("csrf_token", "")
 	try:
 		validate_csrf(token)
@@ -109,6 +110,7 @@ _DESIGNER_HTML = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Security Designer</title>
+<meta name="csrf-token" content="{csrf_token}">
 {cytoscape_cdn}
 {jsyaml_cdn}
 {fcose_cdn}
@@ -213,6 +215,10 @@ _DESIGNER_HTML = """<!DOCTYPE html>
 <div id="toast"></div>
 
 <script>
+window.SD_CONFIG = {{
+  roleTemplates: {role_templates_json},
+  csrfToken: {csrf_token_json}
+}};
 const BASE = window.location.pathname.replace(/\\/$/, '');
 
 const SD = (() => {
@@ -230,8 +236,12 @@ const SD = (() => {
     setTimeout(() => { el.style.display = 'none'; }, 3500);
   }
 
+  const CSRF = (document.querySelector('meta[name="csrf-token"]') || {{}}).content || '';
+  const esc = s => String(s ?? '').replace(/[&<>"']/g,
+    c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
+
   async function api(method, path, body) {
-    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    const opts = {{ method, headers: {{ 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }} }};
     if (body !== undefined) opts.body = JSON.stringify(body);
     const r = await fetch(BASE + path, opts);
     const data = await r.json().catch(() => ({}));
@@ -309,17 +319,17 @@ const SD = (() => {
     if (d.type === 'role') {
       panel.innerHTML = `
         <div class="info-field"><div class="info-label">Type</div><div class="info-value">Role</div></div>
-        <div class="info-field"><div class="info-label">Name</div><div class="info-value">${d.label}</div></div>
-        <div class="info-field"><div class="info-label">Permissions</div><div class="info-value">${d.perm_count}</div></div>
+        <div class="info-field"><div class="info-label">Name</div><div class="info-value">${{esc(d.label)}}</div></div>
+        <div class="info-field"><div class="info-label">Permissions</div><div class="info-value">${{esc(d.perm_count)}}</div></div>
         <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
-          <button class="tb-btn" onclick="SD.deleteRoleById('${d.id}')">Delete Role</button>
-          <button class="tb-btn" onclick="SD.grantPermissionToRole('${d.id}','${d.label}')">Add Permission</button>
-          <button class="tb-btn" onclick="SD.simulateRole('${d.id}','${d.label}')">Simulate Access</button>
+          <button class="tb-btn" onclick="SD.deleteRoleById('${{esc(d.id)}}')">Delete Role</button>
+          <button class="tb-btn" onclick="SD.grantPermissionToRole('${{esc(d.id)}}','${{esc(d.label)}}')">Add Permission</button>
+          <button class="tb-btn" onclick="SD.simulateRole('${{esc(d.id)}}','${{esc(d.label)}}')">Simulate Access</button>
         </div>`;
     } else {
       panel.innerHTML = `
         <div class="info-field"><div class="info-label">Type</div><div class="info-value">View / Menu</div></div>
-        <div class="info-field"><div class="info-label">Name</div><div class="info-value">${d.label}</div></div>`;
+        <div class="info-field"><div class="info-label">Name</div><div class="info-value">${{esc(d.label)}}</div></div>`;
     }
   }
 
@@ -327,9 +337,9 @@ const SD = (() => {
     const panel = document.getElementById('info-content');
     panel.innerHTML = `
       <div class="info-field"><div class="info-label">Type</div><div class="info-value">Permission</div></div>
-      <div class="info-field"><div class="info-label">Permission</div><div class="info-value">${d.perm_name}</div></div>
+      <div class="info-field"><div class="info-label">Permission</div><div class="info-value">${{esc(d.perm_name)}}</div></div>
       <div style="margin-top:12px;">
-        <button class="tb-btn danger" onclick="SD.revokePermById('${d.id}')">Revoke</button>
+        <button class="tb-btn danger" onclick="SD.revokePermById('${{esc(d.id)}}','${{esc(d.source)}}')">Revoke</button>
       </div>`;
   }
 
@@ -346,7 +356,7 @@ const SD = (() => {
     const roles = (data.nodes || []).filter(n => n.type === 'role');
     roles.forEach(r => {
       const li = document.createElement('li');
-      li.innerHTML = `<span>${r.label}</span><span class="badge-count">${r.perm_count}</span>`;
+      li.innerHTML = `<span>${{esc(r.label)}}</span><span class="badge-count">${{esc(r.perm_count)}}</span>`;
       li.onclick = () => {
         ul.querySelectorAll('li').forEach(x => x.classList.remove('selected'));
         li.classList.add('selected');
@@ -381,10 +391,10 @@ const SD = (() => {
     });
 
     let html = '<div style="overflow:auto;max-height:calc(100vh - 200px)"><table class="matrix-table"><thead><tr><th>Role</th>';
-    views.forEach(vid => { html += `<th title="${viewNames[vid] || vid}">${(viewNames[vid] || vid).slice(0,12)}</th>`; });
+    views.forEach(vid => { html += `<th title="${{esc(viewNames[vid] || vid)}}">${{esc((viewNames[vid] || vid).slice(0,12))}}</th>`; });
     html += '</tr></thead><tbody>';
     roles.forEach(r => {
-      html += `<tr><td>${r.label}</td>`;
+      html += `<tr><td>${{esc(r.label)}}</td>`;
       views.forEach(vid => {
         if (access[r.id] && access[r.id].has(vid)) {
           html += '<td class="matrix-cell-yes">&#x2714;</td>';
@@ -482,10 +492,11 @@ const SD = (() => {
     });
   }
 
-  async function revokePermById(edgeId) {
+  async function revokePermById(edgeId, sourceNodeId) {
     const pvId = parseInt(edgeId.replace('pv_', ''), 10);
+    const roleId = sourceNodeId ? parseInt(sourceNodeId.replace('role_', ''), 10) : null;
     if (!confirm('Revoke this permission?')) return;
-    await api('DELETE', '/api/permissions/' + pvId);
+    await api('DELETE', '/api/permissions/' + pvId, roleId ? { role_id: roleId } : undefined);
     toast('Permission revoked');
     loadGraph();
   }
@@ -525,9 +536,9 @@ const SD = (() => {
     const rows = list.map(f => {
       const color = f.severity === 'critical' ? '#ff6060' : f.severity === 'warning' ? '#ffc060' : '#60c0ff';
       return `<div style="border-left:3px solid ${color};padding:6px 10px;margin-bottom:8px;background:#1a1d2e;border-radius:0 6px 6px 0">
-        <strong style="color:${color};font-size:0.78rem">${f.severity.toUpperCase()}</strong>
-        <span style="color:#888;font-size:0.75rem;margin-left:8px">${f.rule}</span>
-        <div style="margin-top:4px;font-size:0.8rem;color:#ccc">${f.message}</div>
+        <strong style="color:${color};font-size:0.78rem">${{esc(f.severity).toUpperCase()}}</strong>
+        <span style="color:#888;font-size:0.75rem;margin-left:8px">${{esc(f.rule)}}</span>
+        <div style="margin-top:4px;font-size:0.8rem;color:#ccc">${{esc(f.message)}}</div>
       </div>`;
     }).join('');
     openModal('Health Check Results', rows || '<div style="color:#4caf50">No issues found.</div>', closeModal);
@@ -547,7 +558,7 @@ const SD = (() => {
     const data = await api('POST', '/api/simulate', { role_id: rid });
     const views = (data.accessible_views || []);
     const html = views.length
-      ? views.map(v => `<div style="padding:3px 0;border-bottom:1px solid #1e2245;font-size:0.82rem">${v}</div>`).join('')
+      ? views.map(v => `<div style="padding:3px 0;border-bottom:1px solid #1e2245;font-size:0.82rem">${{esc(v)}}</div>`).join('')
       : '<div style="color:#888">No accessible views found.</div>';
     openModal('Accessible views for: ' + roleName, html, closeModal);
   }
@@ -555,7 +566,7 @@ const SD = (() => {
   async function applyTemplate() {
     const tplData = await api('GET', '/api/templates');
     const keys = tplData.templates || [];
-    const opts = keys.map(k => `<option value="${k}">${k}</option>`).join('');
+    const opts = keys.map(k => `<option value="${{esc(k)}}">${{esc(k)}}</option>`).join('');
     openModal('Apply Role Template', `
       <select class="modal-input" id="m-tpl-name">${opts}</select>
       <input class="modal-input" id="m-tpl-role" placeholder="New role name (leave blank to use template name)">
@@ -587,10 +598,10 @@ const SD = (() => {
     const rows = snaps.map(s => `
       <div style="padding:8px;border-bottom:1px solid #1e2245;font-size:0.82rem;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="color:#b0b8ff;font-weight:600">${s.name}</div>
-          <div style="color:#666;font-size:0.74rem">${s.taken_at || ''}</div>
+          <div style="color:#b0b8ff;font-weight:600">${{esc(s.name)}}</div>
+          <div style="color:#666;font-size:0.74rem">${{esc(s.taken_at || '')}}</div>
         </div>
-        <button class="tb-btn" onclick="SD.showDiff(${s.id})">Diff</button>
+        <button class="tb-btn" onclick="SD.showDiff(${{parseInt(s.id, 10)}})">Diff</button>
       </div>`).join('');
     openModal('Snapshots', rows || '<div style="color:#888">No snapshots yet.</div>', closeModal);
   }
@@ -600,10 +611,10 @@ const SD = (() => {
     const added = (data.added_roles || []).concat(data.added_permissions || []);
     const removed = (data.removed_roles || []).concat(data.removed_permissions || []);
     const html = `
-      <div style="font-size:0.8rem;color:#888;margin-bottom:8px">Comparing current state to snapshot #${snapshotId}</div>
-      ${added.length ? '<div style="color:#4caf50;margin-bottom:6px">+ ' + added.join('<br>+ ') + '</div>' : ''}
-      ${removed.length ? '<div style="color:#ff6060">- ' + removed.join('<br>- ') + '</div>' : ''}
-      ${!added.length && !removed.length ? '<div style="color:#888">No differences.</div>' : ''}
+      <div style="font-size:0.8rem;color:#888;margin-bottom:8px">Comparing current state to snapshot #${{parseInt(snapshotId, 10)}}</div>
+      ${{added.length ? '<div style="color:#4caf50;margin-bottom:6px">+ ' + added.map(esc).join('<br>+ ') + '</div>' : ''}}
+      ${{removed.length ? '<div style="color:#ff6060">- ' + removed.map(esc).join('<br>- ') + '</div>' : ''}}
+      ${{!added.length && !removed.length ? '<div style="color:#888">No differences.</div>' : ''}}
     `;
     openModal('Diff vs Snapshot #' + snapshotId, html, closeModal);
   }
@@ -649,10 +660,16 @@ class SecurityDesignerView(BaseView):
 	@expose("/")
 	@has_access
 	def index(self):
+		_require_security_admin()
+		from flask_wtf.csrf import generate_csrf as _generate_csrf
+		import json as _json
+		merged = self._merged_templates()
 		html = _DESIGNER_HTML.format(
 			cytoscape_cdn=_CY,
 			jsyaml_cdn=_JSYAML,
 			fcose_cdn=_FCOSE,
+			role_templates_json=_json.dumps(merged),
+			csrf_token_json=_json.dumps(_generate_csrf()),
 		)
 		return Response(html, mimetype="text/html")
 
@@ -661,6 +678,7 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/graph")
 	@has_access
 	def api_graph(self):
+		_require_security_admin()
 		sm = self._secman()
 		nodes = []
 		edges = []
@@ -698,10 +716,13 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/roles", methods=["POST"])
 	@has_access
 	def api_create_role(self):
+		_require_security_admin()
+		_validate_csrf()
+		from pgappforge.security.sqla.manager import _ROLE_NAME_RE
 		body = request.get_json(force=True) or {}
 		name = (body.get("name") or "").strip()
-		if not name:
-			return jsonify({"error": "name is required"}), 400
+		if not name or not _ROLE_NAME_RE.match(name):
+			return jsonify({"error": "Invalid name format"}), 400
 		sm = self._secman()
 		role = sm.find_role(name)
 		if role:
@@ -712,11 +733,16 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/roles/<int:role_id>", methods=["DELETE"])
 	@has_access
 	def api_delete_role(self, role_id: int):
+		_require_security_admin()
+		_validate_csrf()
 		sm = self._secman()
 		session = self._get_session()
 		role = session.get(sm.role_model, role_id)
 		if not role:
 			return jsonify({"error": "Role not found"}), 404
+		admin_name = (current_app.config.get("AUTH_ROLE_ADMIN") or "Admin").strip()
+		if role.name.casefold() in {admin_name.casefold(), "public"}:
+			return jsonify({"error": f"Cannot delete protected role '{role.name}'"}), 403
 		try:
 			session.delete(role)
 			session.commit()
@@ -731,6 +757,8 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/permissions", methods=["POST"])
 	@has_access
 	def api_grant_permission(self):
+		_require_security_admin()
+		_validate_csrf()
 		body = request.get_json(force=True) or {}
 		role_id = body.get("role_id")
 		view_name = (body.get("view_name") or "").strip()
@@ -751,13 +779,29 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/permissions/<int:pv_id>", methods=["DELETE"])
 	@has_access
 	def api_revoke_permission(self, pv_id: int):
+		_require_security_admin()
+		_validate_csrf()
 		sm = self._secman()
 		session = self._get_session()
 		pv = session.get(sm.permissionview_model, pv_id)
 		if not pv:
 			return jsonify({"error": "PermissionView not found"}), 404
-		for role in getattr(pv, "role", []):
-			sm.del_permission_role(role, pv)
+		# Snapshot the role list BEFORE mutation to avoid iteration issues
+		roles_snapshot = list(getattr(pv, "role", []))
+		# Only remove from the specific role if role_id is provided
+		body = request.get_json(silent=True) or {}
+		role_id = body.get("role_id")
+		if role_id:
+			target_role = next((r for r in roles_snapshot if r.id == int(role_id)), None)
+			if target_role:
+				sm.del_permission_role(target_role, pv)
+			else:
+				return jsonify({"error": "Role does not have this permission"}), 404
+		else:
+			# Legacy: remove from all roles (keep for backwards compat but log warning)
+			log.warning("api_revoke_permission called without role_id - removing from all roles")
+			for role in roles_snapshot:
+				sm.del_permission_role(role, pv)
 		return jsonify({"ok": True})
 
 	# ── YAML export / import ───────────────────────────────────────────────────
@@ -765,6 +809,7 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/export/yaml")
 	@has_access
 	def api_export_yaml(self):
+		_require_security_admin()
 		sm = self._secman()
 		try:
 			yaml_text = sm.export_yaml()
@@ -775,6 +820,8 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/import/yaml", methods=["POST"])
 	@has_access
 	def api_import_yaml(self):
+		_require_security_admin()
+		_validate_csrf()
 		body = request.get_json(force=True) or {}
 		yaml_text = body.get("yaml_text", "")
 		dry_run = bool(body.get("dry_run", False))
@@ -790,6 +837,7 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/health-check")
 	@has_access
 	def api_health_check(self):
+		_require_security_admin()
 		sm = self._secman()
 		findings = sm.security_health_check()
 		return jsonify({"findings": findings})
@@ -799,6 +847,8 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/simulate", methods=["POST"])
 	@has_access
 	def api_simulate(self):
+		_require_security_admin()
+		_validate_csrf()
 		body = request.get_json(force=True) or {}
 		role_id = body.get("role_id")
 		if not role_id:
@@ -819,22 +869,40 @@ class SecurityDesignerView(BaseView):
 
 	# ── Templates ──────────────────────────────────────────────────────────────
 
+	def _merged_templates(self) -> dict:
+		"""Return built-in ROLE_TEMPLATES merged with FAB_SECURITY_ROLE_TEMPLATES config.
+
+		User-defined templates take priority over built-ins with the same key.
+		"""
+		user_templates = current_app.config.get("FAB_SECURITY_ROLE_TEMPLATES") or {}
+		if user_templates:
+			return {**ROLE_TEMPLATES, **user_templates}
+		return ROLE_TEMPLATES
+
 	@expose("/api/templates")
 	@has_access
 	def api_list_templates(self):
-		return jsonify({"templates": list(ROLE_TEMPLATES.keys())})
+		_require_security_admin()
+		return jsonify({"templates": list(self._merged_templates().keys())})
 
 	@expose("/api/templates/apply", methods=["POST"])
 	@has_access
 	def api_apply_template(self):
+		_require_security_admin()
+		_validate_csrf()
 		body = request.get_json(force=True) or {}
 		template_name = (body.get("template_name") or "").strip()
 		role_name = (body.get("role_name") or template_name).strip()
 		if not template_name:
 			return jsonify({"error": "template_name required"}), 400
-		tpl = ROLE_TEMPLATES.get(template_name)
+		merged = self._merged_templates()
+		tpl = merged.get(template_name)
 		if not tpl:
 			return jsonify({"error": f"Template '{template_name}' not found"}), 404
+		admin_name = (current_app.config.get("AUTH_ROLE_ADMIN") or "Admin").strip()
+		# Prevent using Admin template to escalate non-Admin roles
+		if template_name == "Admin" and (role_name or "").casefold() != admin_name.casefold():
+			return jsonify({"error": f"Admin template can only be applied to the '{admin_name}' role"}), 403
 
 		sm = self._secman()
 		role = sm.find_role(role_name) or sm.add_role(role_name)
@@ -863,10 +931,13 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/snapshots", methods=["POST"])
 	@has_access
 	def api_take_snapshot(self):
+		_require_security_admin()
+		_validate_csrf()
+		from pgappforge.security.sqla.manager import _ROLE_NAME_RE
 		body = request.get_json(force=True) or {}
 		name = (body.get("name") or "").strip()
-		if not name:
-			return jsonify({"error": "name required"}), 400
+		if not name or not _ROLE_NAME_RE.match(name):
+			return jsonify({"error": "Invalid name format"}), 400
 
 		sm = self._secman()
 		session = self._get_session()
@@ -879,8 +950,12 @@ class SecurityDesignerView(BaseView):
 		from pgappforge.models.security_designer_models import SecuritySnapshot
 		snap = SecuritySnapshot()
 		snap.name = name
-		snap.snapshot_json = {"yaml": yaml_text}
-		snap.taken_at = datetime.now(timezone.utc).replace(tzinfo=None)
+		import yaml as _yaml_mod
+		try:
+			structured = _yaml_mod.safe_load(yaml_text) or {}
+		except Exception:
+			structured = {"_raw_yaml": yaml_text}
+		snap.snapshot_json = structured
 		try:
 			uid = current_user.id if current_user and current_user.is_authenticated else None
 		except Exception:
@@ -900,6 +975,7 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/snapshots")
 	@has_access
 	def api_list_snapshots(self):
+		_require_security_admin()
 		from sqlalchemy import select as sa_select
 		from pgappforge.models.security_designer_models import SecuritySnapshot
 		session = self._get_session()
@@ -922,6 +998,7 @@ class SecurityDesignerView(BaseView):
 	@expose("/api/diff")
 	@has_access
 	def api_diff(self):
+		_require_security_admin()
 		snapshot_id = request.args.get("snapshot_id")
 		if not snapshot_id:
 			return jsonify({"error": "snapshot_id query param required"}), 400
@@ -934,11 +1011,21 @@ class SecurityDesignerView(BaseView):
 			return jsonify({"error": "Snapshot not found"}), 404
 
 		sm = self._secman()
-		try:
-			import yaml as _yaml
-			old_data = _yaml.safe_load(snap.snapshot_json.get("yaml", "")) or {}
-		except Exception:
-			old_data = {}
+		# Read structured dict directly; fall back for old-format snapshots that stored {"yaml": "..."}
+		old_data = snap.snapshot_json or {}
+		if "_raw_yaml" in old_data:
+			try:
+				import yaml as _yaml
+				old_data = _yaml.safe_load(old_data["_raw_yaml"]) or {}
+			except Exception:
+				old_data = {}
+		elif "yaml" in old_data and set(old_data.keys()) == {"yaml"}:
+			# Legacy format written before structured storage
+			try:
+				import yaml as _yaml
+				old_data = _yaml.safe_load(old_data["yaml"]) or {}
+			except Exception:
+				old_data = {}
 
 		# Build sets of role names and perm strings from old snapshot
 		old_roles: set[str] = {r["name"] for r in old_data.get("roles", [])}
@@ -958,10 +1045,15 @@ class SecurityDesignerView(BaseView):
 				if vname and pname:
 					cur_perms.add(f"{role.name}:{pname}@{vname}")
 
+		roles_added = sorted(cur_roles - old_roles)
+		roles_removed = sorted(old_roles - cur_roles)
+		permissions_added = sorted(cur_perms - old_perms)
+		permissions_removed = sorted(old_perms - cur_perms)
 		return jsonify({
 			"snapshot_id": int(snapshot_id),
-			"added_roles": sorted(cur_roles - old_roles),
-			"removed_roles": sorted(old_roles - cur_roles),
-			"added_permissions": sorted(cur_perms - old_perms),
-			"removed_permissions": sorted(old_perms - cur_perms),
+			"roles_added": roles_added,
+			"roles_removed": roles_removed,
+			"permissions_added": permissions_added,
+			"permissions_removed": permissions_removed,
+			"total_changes": len(roles_added) + len(roles_removed) + len(permissions_added) + len(permissions_removed),
 		})

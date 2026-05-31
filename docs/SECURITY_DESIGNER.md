@@ -95,6 +95,32 @@ presets:
 
 Templates are applied against all currently registered `ViewMenu` entries.
 
+#### Built-in template permission strings
+
+| Template | `view_pattern` | Actions granted |
+|----------|---------------|------------------|
+| `Admin` | `*` (all views) | `can_list`, `can_show`, `can_add`, `can_edit`, `can_delete`, `menu_access` |
+| `Editor` | `*` (all views) | `can_list`, `can_show`, `can_add`, `can_edit`, `menu_access` |
+| `Viewer` | `*` (all views) | `can_list`, `can_show`, `menu_access` |
+| `API-only` | `*` (all views) | `can_get`, `can_post`, `can_put`, `can_delete` |
+| `Auditor` | `*` (all views) | `can_list`, `can_show` |
+| `Auditor` | `Security*` | `can_list`, `can_show`, `menu_access` |
+
+User-defined templates (via `FAB_SECURITY_ROLE_TEMPLATES`) follow the same schema:
+
+```python
+FAB_SECURITY_ROLE_TEMPLATES = {
+    "DataScientist": {
+        "label": "Data Scientist",
+        "description": "Read access plus ability to run reports.",
+        "permissions": [
+            {"view_pattern": "*", "actions": ["can_list", "can_show"]},
+            {"view_pattern": "Report*", "actions": ["can_list", "can_show", "can_add"]},
+        ],
+    }
+}
+```
+
 ### 9. Snapshots
 
 Click **Snapshot** to capture the current security state (as a YAML blob) into
@@ -152,7 +178,8 @@ users:
 ## REST API Endpoint Reference
 
 All endpoints are mounted under `/security-designer/` and require an authenticated
-session with `has_access` permission.
+session. Access is gated by `_require_security_admin()`, which enforces that the
+current user holds the Admin role (configured via `AUTH_ROLE_ADMIN`, default `'Admin'`).
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -192,6 +219,19 @@ session with `has_access` permission.
 }
 ```
 
+### `/api/diff` response shape
+
+```json
+{
+  "snapshot_id": 3,
+  "roles_added": ["NewRole"],
+  "roles_removed": [],
+  "permissions_added": ["NewRole:can_list@UserModelView"],
+  "permissions_removed": ["OldRole:can_delete@UserModelView"],
+  "total_changes": 2
+}
+```
+
 ### `/api/health-check` finding shape
 
 ```json
@@ -219,7 +259,7 @@ security_snapshot
   id            SERIAL PRIMARY KEY
   name          VARCHAR(255) NOT NULL
   description   VARCHAR(500)
-  snapshot_json JSON
+  snapshot_json JSONB
   taken_at      TIMESTAMP NOT NULL  (UTC)
   taken_by_id   INTEGER REFERENCES ab_user(id) ON DELETE SET NULL
 ```
@@ -234,13 +274,31 @@ config keys:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `FAB_SECURITY_DESIGNER_ENABLED` | `True` | Set to `False` to disable the view entirely (not yet enforced — gate at registration) |
+| `FAB_SECURITY_ROLE_TEMPLATES` | `{}` | Dict of user-defined role templates that extend the built-in 5. Keys are template names; values follow the same schema as `ROLE_TEMPLATES` (see below). User entries take priority over built-ins with the same key. |
 
 ---
 
+---
+
+## CSRF Requirements
+
+All mutating endpoints (`POST`, `DELETE`) validate the `X-CSRFToken` request header.
+The token is generated server-side via Flask-WTF and exposed in `window.SD_CONFIG.csrfToken`
+on the designer page.
+
+| Endpoint type | CSRF required |
+|---------------|---------------|
+| `GET` reads   | No |
+| `POST` / `DELETE` mutations | Yes — include `X-CSRFToken: <token>` header |
+
+If the header is missing or invalid the server returns `400 Bad Request`.
+Flask-WTF must be installed; the server returns `500` if it is absent.
+
 ## Security Considerations
 
-- All endpoints are protected by `@has_access` — only users with the correct
-  permission on `SecurityDesignerView` can access them.
+- All endpoints require the Admin role (configured via `AUTH_ROLE_ADMIN`, default
+  `'Admin'`). The `_require_security_admin()` guard enforces this on every handler;
+  `@has_access` is a secondary Flask-AppBuilder gate that requires a valid session.
 - Destructive operations (role delete, permission revoke) require the same access
   level; there is no separate write permission today — add one via
   `appbuilder.security_manager.add_permission_view_menu("can_write", "SecurityDesignerView")`

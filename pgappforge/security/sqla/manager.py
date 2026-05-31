@@ -1030,8 +1030,21 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         if not _HAS_YAML:
             raise RuntimeError("PyYAML is required for export_yaml(). pip install pyyaml")
 
+        from sqlalchemy import select as sa_select
+        from sqlalchemy.orm import selectinload
+
+        session = self.get_session
+        roles = session.execute(
+            sa_select(self.role_model).options(
+                selectinload(self.role_model.permissions).options(
+                    selectinload(self.permissionview_model.view_menu),
+                    selectinload(self.permissionview_model.permission),
+                )
+            )
+        ).scalars().unique().all()
+
         roles_data = []
-        for role in self.get_all_roles():
+        for role in roles:
             perms = []
             for pvm in getattr(role, "permissions", []):
                 view_name = getattr(getattr(pvm, "view_menu", None), "name", None)
@@ -1043,7 +1056,12 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         config: dict = {"roles": roles_data}
         if include_users:
             users_data = []
-            for user in self.get_all_users():
+            users = session.execute(
+                sa_select(self.user_model)
+                .options(selectinload(self.user_model.roles))
+                .limit(10_000)
+            ).scalars().unique().all()
+            for user in users:
                 role_names = [r.name for r in getattr(user, "roles", [])]
                 users_data.append({"username": user.username, "roles": role_names})
             config["users"] = users_data
@@ -1069,51 +1087,73 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         added_permissions: List[str] = []
         skipped: List[str] = []
 
-        for role_entry in data.get("roles", []):
-            role_name = role_entry.get("name", "").strip()
-            if not role_name:
-                continue
-            if not _ROLE_NAME_RE.match(role_name):
-                skipped.append(f"role:{role_name} (invalid name)")
-                continue
-            # Never create or overwrite the Admin role from untrusted YAML
-            if role_name.lower() == "admin":
-                skipped.append(f"role:{role_name} (reserved Admin role)")
-                continue
-            existing_role = self.find_role(role_name)
-            if existing_role is None:
-                if not dry_run:
-                    existing_role = self.add_role(role_name)
-                added_roles.append(role_name)
-            else:
-                skipped.append(f"role:{role_name}")
+        def _run_import():
+            for role_entry in data.get("roles", []):
+                role_name = role_entry.get("name", "").strip()
+                if not role_name:
+                    continue
+                if not _ROLE_NAME_RE.match(role_name):
+                    skipped.append(f"role:{role_name} (invalid name)")
+                    continue
+                # Never create or overwrite the Admin role from untrusted YAML
+                admin_name = (
+                    (getattr(self, 'appbuilder', None) and
+                     self.appbuilder.app.config.get("AUTH_ROLE_ADMIN")) or "Admin"
+                ).strip().casefold()
+                if role_name.casefold() in {"admin", admin_name}:
+                    skipped.append(f"role:{role_name} (reserved Admin role)")
+                    continue
+                existing_role = self.find_role(role_name)
+                if existing_role is None:
+                    if not dry_run:
+                        existing_role = self.add_role(role_name)
+                    added_roles.append(role_name)
+                else:
+                    skipped.append(f"role:{role_name}")
 
-            if dry_run:
+                if dry_run:
+                    for pvm_entry in role_entry.get("permissions", []):
+                        view = pvm_entry.get("view", "")
+                        perm = pvm_entry.get("permission", "")
+                        if view and perm:
+                            added_permissions.append(f"{perm}@{view}")
+                    continue
+
+                # Refresh role after possible creation
+                role_obj = self.find_role(role_name)
+                if role_obj is None:
+                    continue
                 for pvm_entry in role_entry.get("permissions", []):
                     view = pvm_entry.get("view", "")
                     perm = pvm_entry.get("permission", "")
-                    if view and perm:
+                    if not (view and perm):
+                        continue
+                    pv = self.find_permission_view_menu(perm, view)
+                    if pv is None:
+                        pv = self.add_permission_view_menu(perm, view)
                         added_permissions.append(f"{perm}@{view}")
-                continue
+                    if pv and pv not in role_obj.permissions:
+                        self.add_permission_role(role_obj, pv)
+                        added_permissions.append(f"{perm}@{view}")
+                    else:
+                        skipped.append(f"perm:{perm}@{view}")
 
-            # Refresh role after possible creation
-            role_obj = self.find_role(role_name)
-            if role_obj is None:
-                continue
-            for pvm_entry in role_entry.get("permissions", []):
-                view = pvm_entry.get("view", "")
-                perm = pvm_entry.get("permission", "")
-                if not (view and perm):
-                    continue
-                pv = self.find_permission_view_menu(perm, view)
-                if pv is None:
-                    pv = self.add_permission_view_menu(perm, view)
-                    added_permissions.append(f"{perm}@{view}")
-                if pv and pv not in role_obj.permissions:
-                    self.add_permission_role(role_obj, pv)
-                    added_permissions.append(f"{perm}@{view}")
-                else:
-                    skipped.append(f"perm:{perm}@{view}")
+        if dry_run:
+            _run_import()
+        else:
+            try:
+                session = self.get_session
+                with session.begin_nested():  # savepoint for atomicity
+                    _run_import()
+            except Exception as exc:
+                return {
+                    "ok": False,
+                    "error": f"Import failed: {exc}",
+                    "added_roles": [],
+                    "added_permissions": [],
+                    "skipped": [],
+                    "dry_run": False,
+                }
 
         return {
             "ok": True,
@@ -1161,33 +1201,59 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         except Exception as exc:
             log.warning("security_health_check: admin check failed: %s", exc)
 
-        # 2. Roles with zero permissions
+        # 2. Roles with zero permissions (SQL anti-join)
         try:
-            for role in self.get_all_roles():
-                if not getattr(role, "permissions", None):
-                    findings.append({
-                        "severity": "warning",
-                        "rule": "empty_role",
-                        "message": f"Role '{role.name}' has no permissions assigned.",
-                    })
+            from sqlalchemy import select as sa_select
+            from sqlalchemy.orm import joinedload
+
+            session = self.get_session
+            empty_role_names = session.execute(
+                sa_select(self.role_model.name)
+                .outerjoin(
+                    assoc_permissionview_role,
+                    assoc_permissionview_role.c.role_id == self.role_model.id,
+                )
+                .where(assoc_permissionview_role.c.permission_view_id.is_(None))
+                .where(self.role_model.name.notin_(["Public"]))
+            ).scalars().all()
+            for role_name in empty_role_names:
+                findings.append({
+                    "severity": "warning",
+                    "rule": "empty_role",
+                    "message": f"Role '{role_name}' has no permissions assigned.",
+                })
         except Exception as exc:
             log.warning("security_health_check: empty_role check failed: %s", exc)
 
-        # 3. PermissionView objects assigned to no role
+        # 3. PermissionView objects assigned to no role (SQL anti-join)
         try:
-            all_pvms = self.get_session.query(self.permissionview_model).all()
-            for pvm in all_pvms:
-                if not getattr(pvm, "role", None):
-                    view_name = getattr(getattr(pvm, "view_menu", None), "name", "?")
-                    perm_name = getattr(getattr(pvm, "permission", None), "name", "?")
-                    findings.append({
-                        "severity": "info",
-                        "rule": "orphan_permission_view",
-                        "message": (
-                            f"PermissionView '{perm_name} on {view_name}' "
-                            "is not assigned to any role."
-                        ),
-                    })
+            from sqlalchemy import select as sa_select
+            from sqlalchemy.orm import joinedload
+
+            session = self.get_session
+            orphans = session.execute(
+                sa_select(self.permissionview_model)
+                .outerjoin(
+                    assoc_permissionview_role,
+                    assoc_permissionview_role.c.permission_view_id == self.permissionview_model.id,
+                )
+                .where(assoc_permissionview_role.c.role_id.is_(None))
+                .options(
+                    joinedload(self.permissionview_model.permission),
+                    joinedload(self.permissionview_model.view_menu),
+                )
+            ).scalars().unique().all()
+            for pvm in orphans:
+                view_name = getattr(getattr(pvm, "view_menu", None), "name", "?")
+                perm_name = getattr(getattr(pvm, "permission", None), "name", "?")
+                findings.append({
+                    "severity": "info",
+                    "rule": "orphan_permission_view",
+                    "message": (
+                        f"PermissionView '{perm_name} on {view_name}' "
+                        "is not assigned to any role."
+                    ),
+                })
         except Exception as exc:
             log.warning("security_health_check: orphan_pvm check failed: %s", exc)
 
