@@ -196,38 +196,7 @@ class SchemaState:
 		return f"✓ Applied template '{template_name}': added tables {added}."
 
 	def get_capabilities(self) -> str:
-		"""Return accurate description of what pgappforge generates."""
-		return """pgappforge generates a complete production application from your PostgreSQL schema:
-
-BACKEND (Python/Flask):
-  - Flask 3.x web application with SQLAlchemy 2.x models
-  - Automatic CRUD views for every table (list, detail, add, edit, delete)
-  - REST API with OpenAPI/Swagger documentation
-  - Role-based access control (RBAC), JWT authentication, MFA, passkeys
-  - Alembic database migrations
-
-MOBILE (React Native / Expo SDK 52):
-  - iOS + Android app compiled from TypeScript
-  - Screens: FlashList with infinite scroll, detail view, create/edit forms
-  - FK columns → SelectField with live options from API
-  - PostgreSQL-specific field UIs: JSONB editor, HSTORE, date ranges, map pins
-  - ICD-10 search (if icd10 schema) / SNOMED CT search (if snomed schema)
-  - Run: cd <output> && npm install && npx expo start
-
-DESKTOP:
-  - Native window (pywebview, ~10MB binary) pointing to deployed backend URL
-  - Or PySide6+QtWebEngine for richer native integration
-  - Packaged with PyInstaller: make -C desktop dist
-
-INFRASTRUCTURE:
-  - Docker + docker-compose
-  - GitHub Actions CI/CD pipeline
-  - requirements.txt, Makefile, .env.example
-
-GENERATED IN SECONDS with:
-  flask forge gen all --uri postgresql://... --name MyApp --output-dir ./app
-  flask forge gen all ... --platform all  (web + mobile + desktop)
-"""
+		return _get_pgappforge_capabilities()
 
 	def undo(self) -> str:
 		if not self._undo_log:
@@ -353,6 +322,41 @@ GENERATED IN SECONDS with:
 
 
 # ─── Rendering ────────────────────────────────────────────────────────────────
+
+def _get_pgappforge_capabilities() -> str:
+	"""Return accurate description of what pgappforge generates."""
+	return """pgappforge generates a complete production application from your PostgreSQL schema:
+
+BACKEND (Python/Flask):
+  - Flask 3.x web application with SQLAlchemy 2.x models
+  - Automatic CRUD views for every table (list, detail, add, edit, delete)
+  - REST API with OpenAPI/Swagger documentation
+  - Role-based access control (RBAC), JWT authentication, MFA, passkeys
+  - Alembic database migrations
+
+MOBILE (React Native / Expo SDK 52):
+  - iOS + Android app compiled from TypeScript
+  - Screens: FlashList with infinite scroll, detail view, create/edit forms
+  - FK columns → SelectField with live options from API
+  - PostgreSQL-specific field UIs: JSONB editor, HSTORE, date ranges, map pins
+  - ICD-10 search (if icd10 schema) / SNOMED CT search (if snomed schema)
+  - Run: cd <output> && npm install && npx expo start
+
+DESKTOP:
+  - Native window (pywebview, ~10MB binary) pointing to deployed backend URL
+  - Or PySide6+QtWebEngine for richer native integration
+  - Packaged with PyInstaller: make -C desktop dist
+
+INFRASTRUCTURE:
+  - Docker + docker-compose
+  - GitHub Actions CI/CD pipeline
+  - requirements.txt, Makefile, .env.example
+
+GENERATED IN SECONDS with:
+  flask forge gen all --uri postgresql://... --name MyApp --output-dir ./app
+  flask forge gen all ... --platform all  (web + mobile + desktop)
+"""
+
 
 def _render_schema(state: SchemaState) -> str:
 	lines: list[str] = [
