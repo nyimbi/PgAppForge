@@ -53,8 +53,8 @@ class SyncLog(_Base):
 	)
 
 	id:          int      = Column(Integer, primary_key=True, autoincrement=True)
-	model_name:  str      = Column(String(100), nullable=False, index=True)
-	client_id:   str      = Column(String(100), nullable=False, index=True)
+	model_name:  str      = Column(String(100), nullable=False)  # indexed via __table_args__
+	client_id:   str      = Column(String(100), nullable=False)  # indexed via __table_args__
 	synced_at:   datetime = Column(
 		DateTime(timezone=True),
 		nullable=False,

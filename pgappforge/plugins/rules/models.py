@@ -46,7 +46,7 @@ class RuleSet(Model):
 	id          = Column(Integer, primary_key=True, autoincrement=True)
 	name        = Column(String(255), nullable=False, unique=True)
 	description = Column(Text, nullable=True)
-	model_name  = Column(String(255), nullable=False, index=True)
+	model_name  = Column(String(255), nullable=False)  # indexed by ix_rules_ruleset_model_name in __table_args__
 	enabled     = Column(Boolean, nullable=False, default=True)
 	priority    = Column(Integer, nullable=False, default=100)
 

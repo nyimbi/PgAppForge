@@ -18,8 +18,9 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from flask import current_app, request, jsonify, Response
+from flask import abort, current_app, make_response, request, jsonify, Response
 from flask_login import current_user
+from markupsafe import escape as _html_escape
 
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
@@ -30,6 +31,30 @@ from pgappforge.widgets_postgresql._cdn import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def _require_security_admin() -> None:
+	"""Abort 403 unless the current user holds the Admin role."""
+	if not current_user or not current_user.is_authenticated:
+		abort(make_response(jsonify({"ok": False, "error": "Login required", "code": "login_required"}), 403))
+	admin_role = current_app.config.get("AUTH_ROLE_ADMIN", "Admin")
+	role_names = {getattr(r, "name", "") for r in getattr(current_user, "roles", [])}
+	if admin_role not in role_names and "admin" not in role_names:
+		abort(make_response(jsonify({"ok": False, "error": "Admin role required", "code": "admin_required"}), 403))
+
+
+def _validate_csrf() -> None:
+	"""Validate the X-CSRFToken header. Falls back to no-op when flask-wtf is absent."""
+	try:
+		from flask_wtf.csrf import validate_csrf, ValidationError
+	except ImportError:
+		return
+	token = request.headers.get("X-CSRFToken") or request.form.get("csrf_token", "")
+	try:
+		validate_csrf(token)
+	except Exception:
+		abort(400, description="CSRF validation failed")
+
 
 # ---------------------------------------------------------------------------
 # Role templates

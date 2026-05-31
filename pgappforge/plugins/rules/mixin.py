@@ -8,92 +8,91 @@ Usage
 -----
     class Invoice(Model, RulesMixin):
         __tablename__ = "invoices"
-        ...
+        _rules_mutable_fields = frozenset({"status", "amount"})
 
-Rules are evaluated lazily: the first time an instance of the class is
-created the mixin registers SQLAlchemy event listeners on the *class*
-(not the instance), so the overhead is exactly one check per class.
+Rules fire at class-definition time via __init_subclass__, not per-instance,
+so there is no per-instantiation overhead and no thread-safety race.
+
+Teardown (for testing)
+----------------------
+    Invoice._unregister_rules()
 """
 from __future__ import annotations
 
 import logging
+import threading
 
 log = logging.getLogger(__name__)
 
+_REGISTRATION_LOCK = threading.Lock()
+
 
 class RulesMixin:
-	"""
-	Mixin that wires SQLAlchemy after_insert / after_update / after_delete
-	events to the rules engine for any model that inherits from it.
+	"""Mixin that wires SQLAlchemy after_insert/after_update/after_delete events
+	to the rules engine for any model that inherits from it.
 
-	Class-level attributes
-	----------------------
-	_rules_registered : bool
-	    Set to True once event listeners have been attached.  Prevents
-	    duplicate listener registration across multiple instances.
+	Subclasses may declare:
+	    _rules_mutable_fields: frozenset[str]
+	to restrict which columns the set_field action may modify.
 	"""
 
-	# Populated by __init_subclass__ on every concrete subclass
+	_rules_mutable_fields: frozenset[str] = frozenset()
 	_rules_registered: bool = False
+	_rules_listeners: tuple | None = None
 
 	def __init_subclass__(cls, **kwargs: object) -> None:
 		super().__init_subclass__(**kwargs)
-		cls._rules_registered = False
-
-	# ------------------------------------------------------------------
-
-	def _ensure_rules_registered(self) -> None:
-		"""Register SQLAlchemy event listeners on the model class (once only)."""
-		cls = type(self)
-		if cls._rules_registered:
-			return
-
-		try:
-			from sqlalchemy import event as sa_event
-
-			model_name = cls.__name__
-
-			@sa_event.listens_for(cls, "after_insert")
-			def _after_insert(mapper, connection, target):
-				_fire(model_name, "on_create", target)
-
-			@sa_event.listens_for(cls, "after_update")
-			def _after_update(mapper, connection, target):
-				_fire(model_name, "on_update", target)
-
-			@sa_event.listens_for(cls, "after_delete")
-			def _after_delete(mapper, connection, target):
-				_fire(model_name, "on_delete", target)
-
+		with _REGISTRATION_LOCK:
+			if cls.__dict__.get("_rules_registered"):
+				return
 			cls._rules_registered = True
-			log.debug("RulesMixin: registered event listeners for %r", model_name)
+			_register_listeners(cls)
 
-		except Exception as exc:
-			log.warning(
-				"RulesMixin: could not register event listeners for %r: %s",
-				cls.__name__,
-				exc,
-			)
+	@classmethod
+	def _unregister_rules(cls) -> None:
+		"""Remove event listeners — use in test teardown to prevent pollution."""
+		with _REGISTRATION_LOCK:
+			if not cls._rules_registered or not cls._rules_listeners:
+				return
+			from sqlalchemy import event as sa_event
+			ai, au, ad = cls._rules_listeners
+			for event_name, fn in (("after_insert", ai), ("after_update", au), ("after_delete", ad)):
+				try:
+					sa_event.remove(cls, event_name, fn)
+				except Exception:
+					pass
+			cls._rules_registered = False
+			cls._rules_listeners = None
 
-	def __init__(self, *args: object, **kwargs: object) -> None:
-		super().__init__(*args, **kwargs)
-		self._ensure_rules_registered()
 
+def _register_listeners(cls: type) -> None:
+	from sqlalchemy import event as sa_event
+	model_name = cls.__name__
 
-# ---------------------------------------------------------------------------
-# Internal helper (module scope keeps closures light)
-# ---------------------------------------------------------------------------
+	def _ai(mapper, connection, target):
+		_fire(model_name, "on_create", target)
+
+	def _au(mapper, connection, target):
+		_fire(model_name, "on_update", target)
+
+	def _ad(mapper, connection, target):
+		_fire(model_name, "on_delete", target)
+
+	sa_event.listen(cls, "after_insert", _ai)
+	sa_event.listen(cls, "after_update", _au)
+	sa_event.listen(cls, "after_delete", _ad)
+	cls._rules_listeners = (_ai, _au, _ad)
+
 
 def _fire(model_name: str, event: str, target: object) -> None:
-	"""Call the rules engine; swallow non-blocking exceptions."""
+	"""Invoke the rules engine; swallow non-blocking exceptions."""
 	try:
 		from .engine import get_rules_engine, RulesValidationError
-		get_rules_engine().evaluate(model_name, event, target)
-	except RulesValidationError:
-		# Re-raise so the ORM session rolls back
-		raise
+		from flask import current_app
+		session = current_app.appbuilder.get_session
+		get_rules_engine().evaluate(model_name, event, target, session=session)
 	except Exception as exc:
-		log.warning(
-			"RulesMixin: error evaluating rules for %r/%s: %s",
-			model_name, event, exc,
-		)
+		from .engine import RulesValidationError
+		if isinstance(exc, RulesValidationError):
+			raise
+		log.error("RulesMixin._fire(%s, %s) failed: %s", model_name, event, exc)

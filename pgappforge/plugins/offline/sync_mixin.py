@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from flask import request
-from flask_appbuilder.api import expose, protect, safe
+from pgappforge.api import expose, safe
+from pgappforge.security.decorators import protect
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +56,11 @@ class SyncMixin:
 	overwritten; only genuinely new records are inserted.
 	"""
 
+	# Subclass overrides to control per-row authorization and column allowlists
+	sync_owner_field: str | None = "owner_id"
+	sync_tenant_field: str | None = None
+	sync_writable_fields: frozenset[str] | None = None
+
 	# ------------------------------------------------------------------
 	# Pull
 	# ------------------------------------------------------------------
@@ -84,8 +90,36 @@ class SyncMixin:
 
 		try:
 			query = session.query(model_cls)
-			if since_dt is not None and hasattr(model_cls, "updated_at"):
-				query = query.filter(model_cls.updated_at > since_dt)
+
+			# Per-row authorization: filter to rows the current user owns
+			try:
+				from flask_login import current_user as _cu
+				if self.sync_owner_field and hasattr(model_cls, self.sync_owner_field):
+					uid = getattr(_cu, "id", None)
+					if uid is not None:
+						query = query.filter(
+							getattr(model_cls, self.sync_owner_field) == uid
+						)
+				if self.sync_tenant_field and hasattr(model_cls, self.sync_tenant_field):
+					tenant_id = getattr(_cu, "tenant_id", None)
+					if tenant_id is not None:
+						query = query.filter(
+							getattr(model_cls, self.sync_tenant_field) == tenant_id
+						)
+			except Exception:
+				pass  # Outside request context or unauthenticated — skip filter
+
+			# Incremental pull: filter by the most recent timestamp column
+			ts_col = (
+				getattr(model_cls, "updated_at", None)
+				or getattr(model_cls, "changed_on", None)
+				or getattr(model_cls, "created_on", None)
+			)
+			if since_dt is not None and ts_col is not None:
+				query = query.filter(ts_col > since_dt)
+			if ts_col is not None:
+				query = query.order_by(ts_col.asc(), model_cls.id.asc())
+
 			rows = query.limit(_SYNC_LIMIT).all()
 		except Exception as exc:
 			log.error("sync pull error: %s", exc)
@@ -209,14 +243,19 @@ def _row_to_dict(row) -> dict[str, Any]:
 		from sqlalchemy import inspect as sa_inspect
 		mapper = sa_inspect(type(row))
 		result: dict[str, Any] = {}
-		for col in mapper.column_attrs:
-			val = getattr(row, col.key)
+		for col in mapper.columns:
+			val = getattr(row, col.key, None)
 			if isinstance(val, datetime):
 				val = val.isoformat()
+			elif hasattr(val, "isoformat"):
+				val = val.isoformat()
+			elif not isinstance(val, (str, int, float, bool, type(None))):
+				val = str(val)
 			result[col.key] = val
 		return result
 	except Exception:
-		return {}
+		# Fallback: plain object — use instance __dict__
+		return {k: v for k, v in vars(row).items() if not k.startswith("_")}
 
 
 def _is_new(row, since_dt: datetime) -> bool:
@@ -226,5 +265,5 @@ def _is_new(row, since_dt: datetime) -> bool:
 		if ts is not None:
 			if ts.tzinfo is None:
 				ts = ts.replace(tzinfo=timezone.utc)
-			return ts >= since_dt
+			return ts > since_dt
 	return False

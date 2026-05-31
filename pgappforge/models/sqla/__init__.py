@@ -108,6 +108,15 @@ class SQLA(SQLAlchemy):
                 result.append(tables[key])
         return result
 
+    def create_all(self, bind_key="__all__", app=None):
+        """Override Flask-SQLAlchemy create_all to use checkfirst=True.
+
+        Without checkfirst=True, calling create_all after AppBuilder has already
+        run _safe_create_all (which also calls create_all) raises DuplicateTable
+        when both attempts try to create the same indexes in the same session.
+        """
+        Model.metadata.create_all(self.engine, checkfirst=True)
+
     def create_session(self, options):
         """
         Custom Session factory to support SQLALchemy>=1.4 with flask-sqlalchemy 2.X

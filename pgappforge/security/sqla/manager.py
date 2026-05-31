@@ -1,8 +1,11 @@
 from datetime import datetime
 import json
 import logging
+import re as _re
 from typing import Dict, List, Optional, Tuple, Union
 import uuid
+
+_ROLE_NAME_RE = _re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_ \-\.]{0,62}$")
 
 try:
 	import yaml as _yaml
@@ -178,7 +181,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         # Use checkfirst=True (the default) so existing tables and their indexes
         # are skipped. This prevents DuplicateTable errors from extend_existing
         # models while ensuring all tables are created even if one is already present.
-        Base.metadata.create_all(engine)
+        Base.metadata.create_all(engine, checkfirst=True)
 
     def _create_db_tables(self):
         try:
@@ -1012,10 +1015,10 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         session.add_all(roles)
         session.commit()
 
-    def export_yaml(self) -> str:
-        """Export all roles, permissions, and user-role assignments as YAML text.
+    def export_yaml(self, include_users: bool = False) -> str:
+        """Export roles, permissions, and optionally user assignments as YAML.
 
-        Returns a YAML string with keys ``roles`` and ``users``.
+        :param include_users: When True, include a ``users`` block.
         Raises RuntimeError if PyYAML is not installed.
         """
         if not _HAS_YAML:
@@ -1031,12 +1034,13 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
                     perms.append({"view": view_name, "permission": perm_name})
             roles_data.append({"name": role.name, "permissions": perms})
 
-        users_data = []
-        for user in self.get_all_users():
-            role_names = [r.name for r in getattr(user, "roles", [])]
-            users_data.append({"username": user.username, "roles": role_names})
-
-        config = {"roles": roles_data, "users": users_data}
+        config: dict = {"roles": roles_data}
+        if include_users:
+            users_data = []
+            for user in self.get_all_users():
+                role_names = [r.name for r in getattr(user, "roles", [])]
+                users_data.append({"username": user.username, "roles": role_names})
+            config["users"] = users_data
         return _yaml.dump(config, default_flow_style=False, allow_unicode=True)
 
     def import_yaml(self, yaml_text: str, dry_run: bool = False) -> dict:
@@ -1051,6 +1055,8 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         """
         if not _HAS_YAML:
             raise RuntimeError("PyYAML is required for import_yaml(). pip install pyyaml")
+        if len(yaml_text) > 256_000:
+            raise ValueError("YAML payload too large (max 256 KB)")
 
         data = _yaml.safe_load(yaml_text) or {}
         added_roles: List[str] = []
@@ -1060,6 +1066,13 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
         for role_entry in data.get("roles", []):
             role_name = role_entry.get("name", "").strip()
             if not role_name:
+                continue
+            if not _ROLE_NAME_RE.match(role_name):
+                skipped.append(f"role:{role_name} (invalid name)")
+                continue
+            # Never create or overwrite the Admin role from untrusted YAML
+            if role_name.lower() == "admin":
+                skipped.append(f"role:{role_name} (reserved Admin role)")
                 continue
             existing_role = self.find_role(role_name)
             if existing_role is None:
@@ -1097,6 +1110,7 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
                     skipped.append(f"perm:{perm}@{view}")
 
         return {
+            "ok": True,
             "added_roles": added_roles,
             "added_permissions": added_permissions,
             "skipped": skipped,
