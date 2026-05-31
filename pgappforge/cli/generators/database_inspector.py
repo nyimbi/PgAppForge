@@ -180,6 +180,11 @@ class TableInfo:
     is_association_table: bool
     view_types: List[str]
     security_level: str
+    # Relation type flags (default False for regular tables)
+    is_view: bool = False
+    is_matview: bool = False
+    is_readonly: bool = False       # True for views and matviews (no INSERT/UPDATE/DELETE)
+    display_column: str = ""        # Best column to use as human-readable label
 
 
 class EnhancedDatabaseInspector:
@@ -349,8 +354,23 @@ class EnhancedDatabaseInspector:
         for table_name in tables:
             if not table_name.startswith('ab_'):  # Skip PgForge system tables
                 table_info = self.analyze_table(table_name)
+                table_info.display_column = self._pick_display_column(table_info)
                 analysis['tables'][table_name] = table_info
                 analysis['relationships'][table_name] = table_info.relationships
+
+        # Also analyze views and materialized views (read-only relations)
+        _view_names = set(self.inspector.get_view_names())
+        for view_name in self.get_all_views():
+            if not view_name.startswith('ab_'):
+                try:
+                    view_info = self.analyze_table(view_name)
+                    view_info.is_view = view_name in _view_names
+                    view_info.is_matview = view_name not in _view_names
+                    view_info.is_readonly = True
+                    view_info.display_column = self._pick_display_column(view_info)
+                    analysis['tables'][view_name] = view_info
+                except Exception as exc:
+                    logger.debug("Skipping view %s: %s", view_name, exc)
 
         # Synthesize parent-side ONE_TO_MANY relationships from the reverse-FK index
         self._synthesize_parent_relationships(analysis)
@@ -857,8 +877,72 @@ class EnhancedDatabaseInspector:
         return rules
 
     def get_all_tables(self) -> List[str]:
-        """Get all table names."""
+        """Get all table names (regular tables only, not views)."""
         return self.inspector.get_table_names()
+
+    def get_all_views(self) -> List[str]:
+        """Get all view names (regular views and materialized views)."""
+        views = list(self.inspector.get_view_names())
+        try:
+            from sqlalchemy import text as _text_v
+            with self.engine.connect() as conn:
+                rows = conn.execute(_text_v(
+                    "SELECT matviewname FROM pg_matviews "
+                    "WHERE schemaname = ANY(current_schemas(false))"
+                )).fetchall()
+                views.extend(r[0] for r in rows)
+        except Exception:
+            pass
+        return views
+
+    def get_all_relations(self) -> List[str]:
+        """Get tables, views, and materialized views combined."""
+        return self.get_all_tables() + self.get_all_views()
+
+    def _pick_display_column(self, table_info: 'TableInfo') -> str:
+        """Return the best column name to use as human-readable label for a record.
+
+        Preference order:
+        1. A column literally named name/title/label/display_name/full_name
+        2. A column named <singular_table>_name (e.g. product_name for products)
+        3. First non-PK, non-FK, non-audit TEXT/VARCHAR column
+        4. email column
+        5. code/slug column
+        6. Fall back to the primary key column name
+        """
+        _PREFERRED = ('name', 'title', 'label', 'display_name', 'full_name', 'username')
+        _AUDIT = frozenset({'created_on', 'changed_on', 'created_at', 'updated_at',
+                            'deleted_at', 'created_by_fk', 'changed_by_fk'})
+        singular = table_info.name.rstrip('s')
+        text_cols = [
+            c for c in table_info.columns
+            if not c.primary_key and not c.foreign_key and c.name not in _AUDIT
+        ]
+        # 1. Exact preferred names
+        for pref in _PREFERRED:
+            for c in text_cols:
+                if c.name.lower() == pref:
+                    return c.name
+        # 2. <singular>_name pattern
+        target = f"{singular}_name"
+        for c in text_cols:
+            if c.name.lower() == target:
+                return c.name
+        # 3. First TEXT column
+        for c in text_cols:
+            if c.category == ColumnType.TEXT:
+                return c.name
+        # 4. email column
+        for c in text_cols:
+            if 'email' in c.name.lower():
+                return c.name
+        # 5. code/slug
+        for c in text_cols:
+            if c.name.lower() in ('code', 'slug', 'ref', 'reference'):
+                return c.name
+        # 6. Fall back to primary key
+        pk_cols = [c for c in table_info.columns if c.primary_key]
+        return pk_cols[0].name if pk_cols else 'id'
 
     def _get_database_info(self) -> Dict[str, Any]:
         """Get basic database information."""

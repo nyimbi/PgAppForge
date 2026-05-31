@@ -1362,7 +1362,8 @@ def _register_views(app):
 
 def register_views(appbuilder):
     """Register all views with AppBuilder."""
-    pass  # View modules are imported individually from app/views/
+    from app.navigation import register_navigation
+    register_navigation(appbuilder)
 '''
 
     def _generate_api_init(self) -> str:
@@ -1393,7 +1394,7 @@ setup(
         name = self.config.app_name
         return f'''[build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "{name.lower()}"
@@ -1669,13 +1670,31 @@ AUTH_LDAP_UID_FIELD = "uid"
     # ─── Navigation ──────────────────────────────────────────────────────────
 
     def _generate_navigation_config(self, categories) -> str:
-        lines = ['"""Navigation menu registration."""', 'from pgappforge import AppBuilder', '']
-        lines.append('def register_navigation(appbuilder: AppBuilder):')
-        lines.append('    """Register views grouped by category."""')
+        # Collect view imports and registrations first
+        view_imports = []
+        registrations = []
         for category, tables in categories.items():
             for table_info in tables:
                 cls = ''.join(w.title() for w in table_info.name.split('_')) + 'View'
-                lines.append(f'    # appbuilder.add_view({cls}, "{table_info.display_name}", category="{category}")')
+                module = '_'.join(table_info.name.split('_')) + '_view'
+                view_imports.append(f'from app.views.{module} import {cls}')
+                icon = getattr(table_info, 'icon', 'fa-table')
+                registrations.append(
+                    f'    appbuilder.add_view({cls}, "{table_info.display_name}", '
+                    f'icon="{icon}", category="{category}")'
+                )
+        # Build file: module-level imports first, then function body
+        lines = ['"""Navigation menu registration."""', 'from pgappforge import AppBuilder']
+        if view_imports:
+            lines.append('')
+            lines.extend(view_imports)
+        lines.append('')
+        lines.append('def register_navigation(appbuilder: AppBuilder):')
+        lines.append('    """Register all views grouped by category."""')
+        if registrations:
+            lines.extend(registrations)
+        else:
+            lines.append('    pass  # No views to register')
         lines.append('')
         return '\n'.join(lines)
 

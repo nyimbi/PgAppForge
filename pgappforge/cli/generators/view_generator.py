@@ -3075,7 +3075,28 @@ class {{ class_name }}BulkWizardView(BaseView):
         """Generate master-detail view code."""
         child_info = self.inspector.analyze_table(pattern.child_table)
         template = self._get_master_detail_view_template()
-        
+
+        # Pre-compute field types so the Jinja template doesn't have to use
+        # broken filter chains like |selectattr(...)|first|attr('form_field_type')
+        _BOOL_TYPES = {ColumnType.BOOLEAN}
+        _INT_TYPES  = {ColumnType.NUMERIC}
+        _DT_TYPES   = {ColumnType.DATE_TIME}
+        def _field_type(col) -> str:
+            cat = getattr(col, 'category', None)
+            if cat in _BOOL_TYPES:
+                return 'BooleanField'
+            if cat in _INT_TYPES:
+                return 'IntegerField'
+            if cat in _DT_TYPES:
+                return 'DateTimeField'
+            return 'StringField'
+
+        child_field_type_map = {
+            col.name: _field_type(col)
+            for col in getattr(child_info, 'columns', [])
+            if not getattr(col, 'primary_key', False) and not getattr(col, 'foreign_key', False)
+        }
+
         return self.jinja_env.from_string(template).render(
             parent_info=parent_info,
             child_info=child_info,
@@ -3083,7 +3104,8 @@ class {{ class_name }}BulkWizardView(BaseView):
             parent_class_name=self._to_pascal_case(parent_info.name),
             child_class_name=self._to_pascal_case(pattern.child_table),
             master_detail_class_name=f"{self._to_pascal_case(parent_info.name)}{self._to_pascal_case(pattern.child_table)}MasterDetailView",
-            inline_formset_class=f"{self._to_pascal_case(pattern.child_table)}InlineFormSet"
+            inline_formset_class=f"{self._to_pascal_case(pattern.child_table)}InlineFormSet",
+            child_field_type_map=child_field_type_map,
         )
     
     def _generate_reference_view(self, table_info: TableInfo, relationship: 'RelationshipInfo') -> str:
@@ -3112,19 +3134,19 @@ from pgappforge import ModelView, BaseView, expose
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.widgets import FormWidget, ShowWidget
 from pgappforge.forms import DynamicForm
-from wtforms import FieldList, FormField
+from wtforms import FieldList, FormField, HiddenField, BooleanField, StringField, IntegerField, DateTimeField
 from wtforms.validators import DataRequired, Optional
 from ..models import {{ parent_class_name }}, {{ child_class_name }}
 
 
 class {{ inline_formset_class }}(DynamicForm):
     """Inline formset for {{ child_class_name }} records."""
-    
-    # Child record fields
-{% for field in pattern.child_display_fields %}
-    {{ field }} = {{ child_info.columns|selectattr('name', 'equalto', field)|first|attr('form_field_type'|default('StringField')) }}()
+
+    # Child record fields (type derived at generation time)
+{% for field, field_type in child_field_type_map.items() %}
+    {{ field }} = {{ field_type }}()
 {% endfor %}
-    
+
     # Hidden fields for tracking
     id = HiddenField()
     delete = BooleanField('Delete')

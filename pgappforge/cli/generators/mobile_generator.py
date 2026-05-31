@@ -1187,6 +1187,56 @@ export default function MFAScreen() {
 				f"        </View>\n"
 			)
 
+		# M:N relationships — find association tables that reference this table
+		many_many: list[dict] = []
+		if hasattr(self.inspector, "_association_tables"):
+			for assoc_name in self.inspector._association_tables:
+				try:
+					assoc_fks = self.inspector.inspector.get_foreign_keys(assoc_name)
+					local_fk = [fk for fk in assoc_fks if fk.get("referred_table") == tinfo.name]
+					remote_fk = [fk for fk in assoc_fks if fk.get("referred_table") != tinfo.name]
+					if local_fk and remote_fk:
+						remote_table = remote_fk[0]["referred_table"]
+						many_many.append({
+							"assoc": assoc_name,
+							"remote": remote_table,
+							"remote_pascal": _pascal(remote_table),
+							"remote_camel": _camel(remote_table),
+							"remote_label": _label(remote_table),
+							"remote_kebab": _kebab(remote_table),
+							"local_col": local_fk[0]["constrained_columns"][0] if local_fk[0].get("constrained_columns") else "id",
+						})
+				except Exception:
+					pass
+
+		# Build M:N chip sections for detail screen
+		for mm in many_many:
+			child_imports += f"import {{ list{mm['remote_pascal']} }} from '@lib/api/{mm['remote_camel']}';\n"
+			child_queries += (
+				f"  const {{ data: {mm['remote_camel']}Chips }} = useQuery({{\n"
+				f"    queryKey: ['{mm['remote']}', 'rel', String(id)],\n"
+				f"    queryFn: () => list{mm['remote_pascal']}({{ {mm['local_col']}: String(id), page_size: 50 }})\n"
+				f"      .then(r => r.result as unknown as Record<string,unknown>[] ?? []),\n"
+				f"    enabled: !!id,\n"
+				f"  }});\n"
+			)
+			child_sections += (
+				f"        <View className=\"mt-6\">\n"
+				f"          <Text className=\"text-base font-semibold text-gray-900 dark:text-white mb-2\">{mm['remote_label']}</Text>\n"
+				f"          <View className=\"flex-row flex-wrap gap-2\">\n"
+				f"            {{{mm['remote_camel']}Chips?.map((item, i) => (\n"
+				f"              <Pressable key={{i}} onPress={{() => router.push(`/(app)/{mm['remote_kebab']}/${{item.id}}` as never)}}\n"
+				f"                className=\"px-3 py-1 bg-primary-100 dark:bg-primary-900 rounded-full\">\n"
+				f"                <Text className=\"text-primary-800 dark:text-primary-200 text-sm\">\n"
+				f"                  {{String(item.name ?? item.title ?? item.code ?? item.id)}}\n"
+				f"                </Text>\n"
+				f"              </Pressable>\n"
+				f"            ))}}  \n"
+				f"            {{!{mm['remote_camel']}Chips?.length && <Text className=\"text-sm text-gray-400 italic\">None</Text>}}\n"
+				f"          </View>\n"
+				f"        </View>\n"
+			)
+
 		# Build field rows — resolve FK names
 		field_rows = ""
 		for col in non_pk:
