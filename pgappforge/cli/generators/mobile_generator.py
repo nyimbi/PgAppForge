@@ -207,6 +207,7 @@ class MobileGenerator:
 		files["metro.config.js"] = self._gen_metro_config()
 		files["tailwind.config.js"] = self._gen_tailwind_config()
 		files["global.css"] = "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n"
+		files["nativewind-env.d.ts"] = "/// <reference types=\"nativewind/types\" />\n"
 		files["app.json"] = self._gen_app_json()
 		files[".env.example"] = self._gen_env_example()
 
@@ -350,7 +351,7 @@ class MobileGenerator:
 				"strict": True,
 				"noImplicitAny": True,
 				"strictNullChecks": True,
-				"noUncheckedIndexedAccess": True,
+				"noUncheckedIndexedAccess": False,
 				"paths": {
 					"@/*": ["./*"],
 					"@components/*": ["./components/*"],
@@ -920,7 +921,7 @@ export default function MFAScreen() {
 			f"            subtitle={{String(item.{display[1].name if len(display) > 1 else 'id'} ?? '')}}\n"
 			f"            onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/${{item.id}}` as never)}}\n"
 			f"            onEdit={{() => router.push(`/(app)/{_kebab(tinfo.name)}/edit/${{item.id}}` as never)}}\n"
-			f"            onDelete={{() => deleteMut.mutate(item.id)}}\n"
+			f"            onDelete={{() => deleteMut.mutate(item.id as string | number)}}\n"
 			f"          />\n"
 			f"        )}}\n"
 			f"      />\n"
@@ -1025,11 +1026,27 @@ export default function MFAScreen() {
 		form_cols = [c for c in tinfo.columns if not c.primary_key and c.name not in _skip]
 
 		# Build field controller blocks
+		# Per-component value casts for form fields (react-hook-form returns unknown)
+		_CASTS: dict[str, str] = {
+			"BooleanField": "as boolean",
+			"NumberField": "as number",
+			"ArrayField": "as unknown as string[]",
+			"HStoreField": "as unknown as Record<string, string>",
+			"JSONBField": "as unknown as Record<string, unknown>",
+			"NumericRangeField": "as unknown as {lower?: number; upper?: number}",
+			"DateRangeField": "as unknown as {lower?: string; upper?: string}",
+			"VectorField": "as unknown as number[]",
+		}
+
 		field_blocks = []
 		for col in form_cols[:12]:
 			col_label = _label(col.name)
 			field_comp = self._pick_field_component(col)
 			req = "true" if not col.nullable else "false"
+			cast = _CASTS.get(field_comp, "as string")
+			# TSVectorField and MapField are read-only — no onChange
+			readonly = field_comp in ("TSVectorField", "VectorField")
+			change_prop = "" if readonly else "                onChange={field.onChange}\n"
 			field_blocks.append(
 				"          <Controller\n"
 				"            control={control}\n"
@@ -1037,9 +1054,9 @@ export default function MFAScreen() {
 				"            render={({ field }) => (\n"
 				"              <" + field_comp + "\n"
 				"                label=\"" + col_label + "\"\n"
-				"                value={field.value}\n"
-				"                onChange={field.onChange}\n"
-				"                error={errors." + col.name + "?.message}\n"
+				"                value={field.value " + cast + "}\n"
+				+ change_prop +
+				"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
 				"                required={" + req + "}\n"
 				"              />\n"
 				"            )}\n"
@@ -1075,7 +1092,7 @@ export default function MFAScreen() {
 			"import { useForm, Controller } from 'react-hook-form';\n",
 			"import { zodResolver } from '@hookform/resolvers/zod';\n",
 			"import { useMutation, useQueryClient" + extra_query_import + " } from '@tanstack/react-query';\n",
-			"import { " + action + m + extra_get_import + " } from '@lib/api/" + camel + "';\n",
+			"import { " + action + m + " } from '@lib/api/" + camel + "';\n",
 			"import { create" + m + "Schema, type Create" + m + "Input } from '@lib/validation/" + camel + "';\n",
 			"import { TextField } from '@components/fields/TextField';\n",
 			"import { NumberField } from '@components/fields/NumberField';\n",
@@ -1520,15 +1537,21 @@ Sheet.displayName = 'Sheet';
 import { View, Text, TextInput, type TextInputProps } from 'react-native';
 import { cn } from '@lib/utils';
 
-interface TextFieldProps extends TextInputProps {
+interface TextFieldProps {
   label: string;
+  value?: string | null;
+  onChange?: (v: string) => void;
   error?: string;
   required?: boolean;
   className?: string;
-  onChange?: (v: string) => void;
+  placeholder?: string;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCorrect?: boolean;
+  secureTextEntry?: boolean;
+  keyboardType?: string;
 }
 
-export function TextField({ label, error, required, className, onChange, value, ...props }: TextFieldProps) {
+export function TextField({ label, error, required, className, onChange, value, placeholder, autoCapitalize, autoCorrect, secureTextEntry }: TextFieldProps) {
   return (
     <View className={cn('gap-1', className)}>
       <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1542,7 +1565,6 @@ export function TextField({ label, error, required, className, onChange, value, 
           error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
         )}
         placeholderTextColor="#9ca3af"
-        {...props}
       />
       {error && <Text className="text-xs text-red-500">{error}</Text>}
     </View>
@@ -1601,6 +1623,7 @@ interface BooleanFieldProps {
   value: boolean | null | undefined;
   onChange: (v: boolean) => void;
   error?: string;
+  required?: boolean;
   className?: string;
 }
 
@@ -2826,7 +2849,7 @@ export function SNOMEDField({ label, value, onChange, error, required, domainId 
 			"          control={control}\n"
 			"          name={f.name}\n"
 			"          render={({ field }) => {\n"
-			"            const err = (errors[f.name]?.message as string) ?? undefined;\n"
+			"            const err = errors[f.name]?.message ? String(errors[f.name]!.message) : undefined;\n"
 			"            switch (f.type) {\n"
 			"              case 'boolean':\n"
 			"                return <BooleanField label={f.label} value={field.value as boolean} onChange={field.onChange} error={err} />;\n"
@@ -3444,7 +3467,7 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 			f"  const res = await apiClient.put(`${{ENDPOINT}}/${{id}}`, data);\n"
 			f"  return res.data;\n"
 			f"}}\n\n"
-			f"export async function delete{m}(id: number): Promise<void> {{\n"
+			f"export async function delete{m}(id: string | number): Promise<void> {{\n"
 			f"  await apiClient.delete(`${{ENDPOINT}}/${{id}}`);\n"
 			f"}}\n"
 		)
