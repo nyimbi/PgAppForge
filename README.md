@@ -51,7 +51,7 @@ appbuilder = AppBuilder(app, db.session)
 
 ## Core features
 
-### Database → Application codegen
+### Database -> Application codegen
 
 ```bash
 flask forge gen all  postgresql://...  --name MyApp --output-dir ./app/
@@ -186,8 +186,8 @@ processor = SpeechProcessor(
 )
 processor.init_app(app)
 app.register_blueprint(create_speech_blueprint(processor), url_prefix='/voice')
-# POST /voice/stt  — audio → text
-# POST /voice/tts  — text  → audio
+# POST /voice/stt  — audio -> text
+# POST /voice/tts  — text  -> audio
 ```
 
 ### Voice input/output plugin
@@ -238,7 +238,7 @@ Available plugins:
 | `tenancy` | Multi-tenant SaaS: data isolation, Stripe billing, white-label | `pgappforge[tenancy]` |
 | `realtime` | WebSocket collaboration, live cursors, conflict resolution | `pgappforge[realtime]` |
 | `offline` | PWA offline mode, IndexedDB sync, conflict resolution | `pgappforge[offline]` |
-| `classify` | 8-level data classification (Unclassified → SAP) | `pgappforge[classify]` |
+| `classify` | 8-level data classification (Unclassified -> SAP) | `pgappforge[classify]` |
 
 ### HTTP access logging + analytics
 
@@ -318,6 +318,71 @@ flask forge training start getting-started
 
 ---
 
+## Visual Designers
+
+```
+ERD Designer      — browser-based schema editor with DDL apply engine
+Security Designer — RBAC visual editor with role templates and YAML import/export
+Form Builder      — drag-and-drop form canvas with 91 field types
+```
+
+---
+
+## Plugins
+
+| Plugin | Enable with | What it does |
+|--------|-------------|--------------|
+| Audit Trail | `AuditPlugin` | Cryptographic hash chain, PII masking, GDPR erasure, timeline viewer |
+| Data Hub | `DataHubPlugin` | Import CSV/Excel/JSON/Parquet, export with column mapping, data quality |
+| Real-Time Collab | `RealtimePlugin` | PostgreSQL LISTEN/NOTIFY, presence indicators, field locking, SSE |
+| Form Builder | `FormsPlugin` | 91-type palette, public embeds, scoring, `register_field_type()` |
+| Integration Hub | `IntegrationHubPlugin` | OAuth 2.0, webhook registry, AES-256-GCM vault, Slack connector |
+
+```python
+# Enable plugins in your app factory
+from pgappforge.plugins.audit import AuditPlugin
+from pgappforge.plugins.forms import FormsPlugin, register_field_type
+
+AuditPlugin().initialize(app, appbuilder)
+FormsPlugin().register_views(appbuilder)
+```
+
+---
+
+## Schema Templates
+
+62 bundled templates covering international standards and operational business domains:
+
+```bash
+flask forge templates list
+# FHIR-R4, GTFS, ISO 20022, UBL Invoice, XBRL/IFRS, HR-Open, TM Forum SID,
+# GS1, ARTS Retail, and 7 operational templates (AR, AP, GL, CRM, HRM, inventory, ecommerce)
+
+flask forge templates apply ar     # Apply Accounts Receivable schema (8 tables)
+flask forge templates apply crm    # Apply CRM schema (12 tables)
+```
+
+---
+
+## Custom form widgets
+
+```python
+from pgappforge.plugins.forms import register_field_type, FieldTypeSpec
+
+register_field_type(FieldTypeSpec(
+    type="icd10_picker",
+    label="ICD-10 Code",
+    group="MEDICAL",
+    icon="&#128138;",
+    description="ICD-10 diagnosis code search with autocomplete",
+    config_schema={
+        "context": {"type": "select", "options": ["diagnosis", "procedure"], "default": "diagnosis"},
+    },
+))
+```
+
+---
+
 ## Security
 
 ### Role-based access control
@@ -347,13 +412,13 @@ schema = sd.export_schema(appbuilder)
 from pgappforge.plugins.classify import ClassificationPlugin, ClassificationMixin
 
 class Document(Model, ClassificationMixin):
-    # Adds classification_level column (0=Unclassified … 7=SAP)
+    # Adds classification_level column (0=Unclassified ... 7=SAP)
     # Automatically enforces read access via PostgreSQL RLS
     __tablename__ = 'documents'
 ```
 
-Levels: `UNCLASSIFIED` → `CUI` → `PUBLIC_TRUST` → `CONFIDENTIAL` →
-`SECRET` → `TOP_SECRET` → `SCI` → `SAP`
+Levels: `UNCLASSIFIED` -> `CUI` -> `PUBLIC_TRUST` -> `CONFIDENTIAL` ->
+`SECRET` -> `TOP_SECRET` -> `SCI` -> `SAP`
 
 ### MFA support
 
@@ -525,15 +590,15 @@ PgAppForge started as a fork of [Flask-AppBuilder](https://github.com/dpgaspar/F
 | | Flask-AppBuilder | PgAppForge |
 |---|---|---|
 | Database | SQLite / MySQL / PostgreSQL / MSSQL / Oracle | **PostgreSQL only** |
-| Code generation | Manual | **DB → complete app in seconds** |
-| Graph database | ❌ | **Apache AGE + OpenCypher** |
+| Code generation | Manual | **DB -> complete app in seconds** |
+| Graph database | No | **Apache AGE + OpenCypher** |
 | Widget library | ~15 widgets | **80+ including PostGIS, H3, pgvector** |
-| AI integration | ❌ | **14 LLM providers + RAG + STT/TTS** |
+| AI integration | No | **14 LLM providers + RAG + STT/TTS** |
 | Plugin system | Addon managers | **Formal plugin protocol + hooks** |
-| Deploy tooling | ❌ | **Docker + SSH deploy CLI** |
-| Classification | ❌ | **8-level (Unclassified → SAP)** |
-| Mobile generation | ❌ | **React Native (Expo)** |
-| Voice interface | ❌ | **Web Speech API + faster-whisper** |
+| Deploy tooling | No | **Docker + SSH deploy CLI** |
+| Classification | No | **8-level (Unclassified -> SAP)** |
+| Mobile generation | No | **React Native (Expo)** |
+| Voice interface | No | **Web Speech API + faster-whisper** |
 | Python | 3.8+ | **3.12+ (3.14.5 tested)** |
 | Flask | 2.x | **3.x** |
 
@@ -541,22 +606,29 @@ PgAppForge started as a fork of [Flask-AppBuilder](https://github.com/dpgaspar/F
 
 ## Roadmap
 
-The following from the original README represent real intent (not marketing copy):
+### v0.91 (planned)
 
-- [ ] **ERD visual designer** — drag-and-drop schema editor with auto-generation from live database
+- [ ] **ERD visual designer** — complete browser-based schema editor with live DDL apply and diff preview
+- [ ] **Security Designer** — full YAML import/export for role templates; Keycloak and SpiceDB sync
+- [ ] **Form Builder** — public embed URLs, conditional logic, scoring rules
 - [ ] **Knowledge graph construction** — extract entities + relationships from text using spaCy/NER
 - [ ] **Graph import/export** — GraphML, GEXF, Pajek, GML formats
 - [ ] **Community detection** — Louvain, Label Propagation on AGE graphs
-- [ ] **Visual RBAC** — complete implementation (matrix + impact assessment + D3 hierarchy)
-- [ ] **Offline sync** — complete PWA implementation with IndexedDB
-- [ ] **Full responsive/theming** — Bootstrap 5 migration, CSS variables, theme switcher
-- [ ] **App configuration page** — database-backed runtime settings UI
+- [ ] **Offline sync** — complete PWA implementation with IndexedDB and server-wins / client-wins strategies
+- [ ] **Bootstrap 5 migration** — CSS variables, dark mode, theme switcher UI
+- [ ] **App configuration page** — database-backed runtime settings with audit log
+
+---
+
+## Community
+
+- **Questions and discussion**: [GitHub Discussions](https://github.com/nyimbi/PgAppForge/discussions)
+- **Bug reports and feature requests**: [GitHub Issues](https://github.com/nyimbi/PgAppForge/issues)
+- **Security vulnerabilities**: email nyimbi+pgaf@gmail.com (do not file public issues)
 
 ---
 
 ## Contributing
-
-Issues and PRs welcome at [github.com/nyimbi/PgAppForge](https://github.com/nyimbi/PgAppForge).
 
 ```bash
 git clone https://github.com/nyimbi/PgAppForge.git
@@ -565,6 +637,20 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest tests/ci/test_codegen_pipeline.py -v
 ```
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for code style, branch naming, and PR checklist.
+
+---
+
+## Links
+
+- [Documentation](https://pgappforge.readthedocs.io/)
+- [Wiki](https://github.com/nyimbi/PgAppForge/wiki)
+- [Plugins](https://github.com/nyimbi/PgAppForge/tree/master/pgappforge/plugins)
+- [Schema Templates](https://github.com/nyimbi/PgAppForge/tree/master/pgappforge/templates)
+- [Contributing](.github/CONTRIBUTING.md)
+- [Security Policy](.github/SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 

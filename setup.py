@@ -24,15 +24,15 @@ def desc():
 setup(
     name="pgappforge",
     version=version,
-    url="https://github.com/dpgaspar/flask-appbuilder/",
+    url="https://github.com/pgappforge/pgappforge",
     license="BSD",
-    author="Daniel Vaz Gaspar",
-    author_email="danielvazgaspar@gmail.com",
+    author="Nyimbi Odero",
+    author_email="nyimbi+pgaf@gmail.com",
     description=(
-        "Enhanced application development framework, built on top of Flask."
-        " Includes detailed security, auto CRUD generation, advanced analytics dashboards,"
-        " multi-format data export (CSV/Excel/PDF), alerting system, MFA authentication,"
-        " customizable widgets, and comprehensive business intelligence tools."
+        "PostgreSQL-native RAD framework: generate complete web, mobile, and desktop "
+        "applications from your database schema. Includes ERD Designer, Security Designer, "
+        "Audit Trail, Data Hub, Real-Time Collaboration, Form Builder, Integration Hub, "
+        "62 schema templates, actor pattern, multi-tenant support, and AI augmentation."
     ),
     long_description=desc(),
     long_description_content_type="text/x-rst",

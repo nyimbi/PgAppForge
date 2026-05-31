@@ -1,18 +1,24 @@
+## Summary
+<!-- One or two sentences describing what this PR does and why. -->
 
-<!--- Thank you for contributing to Flask-Appbuilder. -->
-<!--- This repo uses a PR lint bot (https://github.com/apps/prlint), make sure to prefix your PR title with one of: -->
-<!--- build|chore|ci|docs|feat|fix|perf|refactor|style|test|other -->
+## Type of change
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Documentation update
+- [ ] Refactoring (no functional change)
 
-### Description
+## Testing
+- [ ] Existing tests pass (`pytest tests/ci/ -q`)
+- [ ] New tests added for new functionality
+- [ ] Manual testing completed
 
-<!--- Describe the change below, including rationale and design decisions -->
+## Documentation
+- [ ] CHANGELOG.md updated under `[Unreleased]`
+- [ ] Docstrings updated for new/changed public APIs
+- [ ] `docs/` updated if behaviour changed
 
-### ADDITIONAL INFORMATION
-<!--- Check any relevant boxes with "x" -->
-<!--- HINT: Include "Fixes #nnn" if you are fixing an existing issue -->
-- [ ] Has associated issue:
-- [ ] Is CRUD MVC related.
-- [ ] Is Auth, RBAC security related.
-- [ ] Changes the security db schema.
-- [ ] Introduces new feature
-- [ ] Removes existing feature
+## Checklist
+- [ ] Code follows the project style (black + flake8, 90-char lines)
+- [ ] No temporary debug code or print statements left in
+- [ ] Self-reviewed before requesting review

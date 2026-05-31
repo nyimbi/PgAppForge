@@ -25,3 +25,6 @@ venv
 # pgappforge project-local tools (not for public repo)
 .omc/
 CLAUDE.md
+hardware_store/
+.DS_Store
+**/.DS_Store
