@@ -407,3 +407,110 @@ def test_actor_to_dict_includes_sub_role():
 	assert d["sub_role"] == "nurse"
 	assert d["display_name"] == "Jane Smith"
 	assert d["is_active"] is True
+
+
+# ─── search_all() integration test ────────────────────────────────────────
+# Uses the pgaf_test PostgreSQL database — skipped if unavailable.
+
+import os
+
+SEARCH_URI = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
+SKIP_DB = pytest.mark.skipif(
+    not SEARCH_URI.startswith("postgresql"),
+    reason="requires PostgreSQL",
+)
+
+@SKIP_DB
+def test_search_all_integration():
+	"""search_all() returns matching actors from a real SQLAlchemy session."""
+	import sqlalchemy as sa
+	from sqlalchemy.orm import Session, DeclarativeBase
+
+	class _Base(DeclarativeBase):
+		pass
+
+	SEARCH_CONFIG = ActorConfig(
+		role="search-test-person",
+		table="ci_actor_search_test",
+		display=ActorDisplay(singular="Person", plural="Persons"),
+		field_map=ActorFieldMap(
+			display_name=["given_name", "family_name"],
+			contact_email="email",
+			status_field="active",
+			status_map={"true": "active", "false": "inactive"},
+		),
+	)
+
+	class CiActorSearchTest(ActorMixin, _Base):
+		__tablename__ = "ci_actor_search_test"
+		__actor_config__ = SEARCH_CONFIG
+		id         = sa.Column(sa.Integer, sa.Sequence("ci_actor_search_id_seq"), primary_key=True)
+		given_name  = sa.Column(sa.String(100))
+		family_name = sa.Column(sa.String(100))
+		email       = sa.Column(sa.String(255))
+		active      = sa.Column(sa.Boolean, default=True)
+
+	engine = sa.create_engine(SEARCH_URI)
+	_Base.metadata.drop_all(engine)   # clean slate
+	_Base.metadata.create_all(engine)
+
+	try:
+		with Session(engine) as session:
+			session.add_all([
+				CiActorSearchTest(given_name="Jane",  family_name="Smith",  email="jane@example.com",  active=True),
+				CiActorSearchTest(given_name="John",  family_name="Smith",  email="john@example.com",  active=True),
+				CiActorSearchTest(given_name="Alice", family_name="Jones",  email="alice@example.com", active=False),
+			])
+			session.commit()
+
+			reg = ActorRegistry.instance()
+			# CiActorSearchTest auto-registered via __init_subclass__
+
+			# Search by family name
+			results = reg.search_all("Smith", session, limit_per_actor=10)
+			smith_names = {r.display_name for r in results if r.role == "search-test-person"}
+			assert "Jane Smith" in smith_names
+			assert "John Smith" in smith_names
+			assert "Alice Jones" not in smith_names
+
+			# Search by email fragment
+			results2 = reg.search_all("alice@", session, limit_per_actor=10)
+			found = [r for r in results2 if r.role == "search-test-person"]
+			assert len(found) == 1
+			assert found[0].display_name == "Alice Jones"
+			assert found[0].status == "inactive"
+			assert found[0].contact_email == "alice@example.com"
+
+			# No match returns empty
+			results3 = reg.search_all("zzznomatch", session, limit_per_actor=10)
+			actor_results = [r for r in results3 if r.role == "search-test-person"]
+			assert len(actor_results) == 0
+	finally:
+		_Base.metadata.drop_all(engine)
+
+
+@SKIP_DB
+def test_actor_schema_state_set_actor():
+	"""SchemaState.set_actor() marks a table as primary actor and emits correct snippet."""
+	from pgappforge.cli.app_creator_chat import SchemaState
+	s = SchemaState()
+	s.create_table("patient", [
+		{"name": "given_name", "type": "varchar(100)"},
+		{"name": "family_name", "type": "varchar(100)"},
+		{"name": "email", "type": "varchar(255)"},
+		{"name": "active", "type": "boolean"},
+	])
+	result = s.set_actor("patient", "Patient", "Patients", "patient")
+	assert "Patient" in result
+	assert s.primary_actor == "patient"
+	assert s.actor_display_singular == "Patient"
+	assert s.actor_role == "patient"
+
+	snippet = s._actor_mixin_snippet()
+	assert "ActorMixin" in snippet
+	assert "ActorConfig" in snippet
+	assert 'role="patient"' in snippet
+	assert 'given_name' in snippet   # auto-detected display_name
+	assert 'contact_email="email"' in snippet
+	assert 'status_field="active"' in snippet
+

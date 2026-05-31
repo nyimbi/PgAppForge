@@ -79,6 +79,10 @@ class SchemaState:
 	tables: dict[str, _Table] = field(default_factory=dict)
 	relationships: list[_Relationship] = field(default_factory=list)
 	_undo_log: list[tuple] = field(default_factory=list)  # (op, payload)
+	primary_actor: str | None = None       # table name of the primary actor
+	actor_display_singular: str = ""       # e.g. "Patient"
+	actor_display_plural: str = ""         # e.g. "Patients"
+	actor_role: str = ""                   # role slug e.g. "patient"
 
 	# ── Tool implementations ─────────────────────────────────────────────────
 
@@ -160,6 +164,27 @@ class SchemaState:
 		self._undo_log.append(("set_description", None))
 		return "✓ Description updated."
 
+	def set_actor(self, table: str, singular: str = "", plural: str = "",
+	              role: str = "") -> str:
+		"""Mark which table is the primary actor for this application."""
+		table = table.strip().lower().replace(" ", "_")
+		if table not in self.tables:
+			return (
+				f"Table '{table}' does not exist — create it first, then call set_actor."
+			)
+		self.primary_actor = table
+		self.actor_display_singular = singular.strip() or table.replace("_", " ").title()
+		self.actor_display_plural = plural.strip() or (self.actor_display_singular + "s")
+		import re
+		self.actor_role = (role.strip().lower() or
+		                   re.sub(r"[^a-z0-9-]", "-", table.replace("_", "-")))
+		self._undo_log.append(("set_actor", (None, None, None, None)))
+		return (
+			f"✓ Primary actor set: '{table}' → {self.actor_display_singular} "
+			f"(role={self.actor_role!r}). "
+			f"The generated code will include ActorMixin for this model."
+		)
+
 	def show_schema(self) -> str:
 		return _render_schema(self)
 
@@ -181,7 +206,8 @@ class SchemaState:
 		"""Import a bundled pgappforge template into the current schema."""
 		try:
 			from pgappforge.templates.registry import TemplateRegistry
-			tmpl = TemplateRegistry().get(template_name)
+			reg = TemplateRegistry()
+			tmpl = reg.get(template_name)
 		except Exception as exc:
 			return f"Template '{template_name}' not found: {exc}"
 		added = []
@@ -191,9 +217,24 @@ class SchemaState:
 			self.create_table(tname, [c for c in cols if c.get("name") != "id"])
 			added.append(tname)
 		self._undo_log.append(("apply_template", template_name))
+		# Auto-register the primary actor if the template declares one
+		actor_note = ""
+		try:
+			actor_cfg = reg.get_actor_config(template_name)
+			if actor_cfg and self.primary_actor is None:
+				self.primary_actor = actor_cfg.table
+				self.actor_display_singular = actor_cfg.display.singular
+				self.actor_display_plural = actor_cfg.display.plural
+				self.actor_role = actor_cfg.role
+				actor_note = (
+					f" Primary actor auto-set: {actor_cfg.display.singular} "
+					f"(table={actor_cfg.table!r}, role={actor_cfg.role!r})."
+				)
+		except Exception:
+			pass
 		if not added:
-			return f"All tables from '{template_name}' already exist."
-		return f"✓ Applied template '{template_name}': added tables {added}."
+			return f"All tables from '{template_name}' already exist.{actor_note}"
+		return f"✓ Applied template '{template_name}': added tables {added}.{actor_note}"
 
 	def get_capabilities(self) -> str:
 		return _get_pgappforge_capabilities()
@@ -233,6 +274,70 @@ class SchemaState:
 			return "✓ Note: template application cannot be selectively undone."
 		return f"✓ Undone: {op}."
 
+	def _actor_mixin_snippet(self) -> str:
+		"""Return a Python code snippet showing how to use ActorMixin for the primary actor."""
+		if not self.primary_actor or self.primary_actor not in self.tables:
+			return ""
+		tbl = self.tables[self.primary_actor]
+		col_names = [c["name"] for c in tbl.columns if c["name"] != "id"]
+		singular = self.actor_display_singular
+		plural = self.actor_display_plural
+		role = self.actor_role
+		cls_name = "".join(w.title() for w in self.primary_actor.split("_"))
+
+		# Auto-detect common field names
+		name_fields = [c for c in col_names if c in ("given_name", "first_name")]
+		name_fields += [c for c in col_names if c in ("family_name", "last_name", "surname")]
+		if not name_fields:
+			name_fields = next((
+				[c] for c in col_names if c in ("full_name", "name", "display_name", "label")
+			), col_names[:1])
+		display_name_val = (
+			str(name_fields) if len(name_fields) > 1 else f'"{name_fields[0]}"'
+		) if name_fields else '"id"'
+
+		email_field = next((c for c in col_names if "email" in c), None)
+		phone_field = next((c for c in col_names if "phone" in c or "mobile" in c), None)
+		status_field = next((c for c in col_names if c in ("active", "status", "is_active", "enabled")), None)
+		status_map_val = ""
+		if status_field in ("active", "is_active", "enabled"):
+			status_map_val = ', status_map={"true": "active", "false": "inactive"}'
+		elif status_field == "status":
+			status_map_val = ', status_map={"active": "active", "inactive": "inactive"}'
+
+		lines = [
+			f"# Add ActorMixin to your {cls_name} model in models.py:",
+			f"from pgappforge.templates import ActorMixin, ActorConfig, ActorDisplay, ActorFieldMap",
+			f"",
+			f"class {cls_name}(ActorMixin, Base):",
+			f'    __tablename__ = "{self.primary_actor}"',
+			f"    __actor_config__ = ActorConfig(",
+			f'        role="{role}",',
+			f'        table="{self.primary_actor}",',
+			f"        display=ActorDisplay(",
+			f'            singular="{singular}", plural="{plural}", icon="fa-user"',
+			f"        ),",
+			f"        field_map=ActorFieldMap(",
+			f"            display_name={display_name_val},",
+		]
+		if email_field:
+			lines.append(f'            contact_email="{email_field}",')
+		if phone_field:
+			lines.append(f'            contact_phone="{phone_field}",')
+		if status_field:
+			lines.append(f'            status_field="{status_field}"{status_map_val},')
+		lines += [
+			"        ),",
+			"    )",
+			"    # ... your columns here",
+			"",
+			f"# This gives every {singular} instance:",
+			f"#   {self.primary_actor}.actor_display_name  → '{singular} full name'",
+			f"#   {self.primary_actor}.actor_status         → 'active' | 'inactive' | 'unknown'",
+			f"#   {self.primary_actor}.actor_is_active      → True/False",
+		]
+		return "\n".join(lines)
+
 	def generate_app(self, output_dir: str, database_uri: str = "") -> str:
 		"""
 		Generate the full pgappforge application from the accumulated schema.
@@ -257,10 +362,12 @@ class SchemaState:
 		if database_uri and database_uri.startswith("postgresql"):
 			return self._generate_with_uri(database_uri, output_dir, app_slug, cmd_lines)
 
+		actor_snippet = self._actor_mixin_snippet()
 		return (
 			"Schema is ready! Run this command to generate your application:\n\n"
 			+ "\n".join(cmd_lines)
 			+ "\n\n"
+			+ (actor_snippet + "\n\n" if actor_snippet else "")
 			+ "Or provide the database URI to generate directly:\n"
 			+ "  generate_app(output_dir='./myapp', database_uri='postgresql:///mydb')"
 		)
@@ -498,6 +605,29 @@ _TOOLS: list[dict[str, Any]] = [
 				"type": "object",
 				"properties": {"text": {"type": "string"}},
 				"required": ["text"],
+			},
+		},
+	},
+	{
+		"type": "function",
+		"function": {
+			"name": "set_actor",
+			"description": (
+				"Mark which table is the PRIMARY ACTOR — the main subject of the application. "
+				"Every domain has one: Patient in healthcare, Customer in retail, Employee in HR, "
+				"Tenant in real estate. The generated code will include ActorMixin for this model, "
+				"enabling canonical actor_display_name, actor_status, actor_contact_email properties "
+				"and cross-actor search. Call this AFTER creating the actor table."
+			),
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"table": {"type": "string", "description": "Table name of the primary actor."},
+					"singular": {"type": "string", "description": "Singular display name, e.g. 'Patient'."},
+					"plural": {"type": "string", "description": "Plural display name, e.g. 'Patients'."},
+					"role": {"type": "string", "description": "Role slug, e.g. 'patient'. Auto-derived from table name if omitted."},
+				},
+				"required": ["table"],
 			},
 		},
 	},
@@ -810,6 +940,10 @@ class AppCreatorChat:
 			),
 			"set_app_name": lambda: self.state.set_app_name(args.get("name", "")),
 			"set_description": lambda: self.state.set_description(args.get("text", "")),
+			"set_actor": lambda: self.state.set_actor(
+				args.get("table", ""), args.get("singular", ""),
+				args.get("plural", ""), args.get("role", ""),
+			),
 			"show_schema": lambda: self.state.show_schema(),
 			"list_templates": lambda: self.state.list_templates(),
 			"apply_template": lambda: self.state.apply_template(args.get("template_name", "")),
