@@ -288,6 +288,13 @@ class ERDSchemaManager:
 
 		try:
 			with self.engine.begin() as conn:
+				# Apply configurable DDL statement timeout to prevent runaway ALTER TABLE
+				try:
+					from flask import current_app
+					timeout_ms = int(current_app.config.get("FAB_ERD_DDL_TIMEOUT_MS", 30_000))
+					conn.execute(text(f"SET LOCAL statement_timeout = {timeout_ms}"))
+				except Exception:
+					pass  # outside request context — skip timeout
 				for stmt in sql_stmts:
 					log.info("ERD DDL: %s", stmt)
 					conn.execute(text(stmt))
@@ -339,7 +346,10 @@ class ERDSchemaManager:
 		kind   = op.get("op", "")
 		tbl    = op.get("table", "")
 		schema = op.get("schema", "") or None
-		qtbl   = _qschema(tbl, schema)
+		# qtbl is only needed for table-based ops; some ops (create_enum) have no table
+		qtbl: str = ""
+		if tbl:
+			qtbl = _qschema(tbl, schema)
 
 		# ── CREATE TABLE ──────────────────────────────────────────────────────
 		if kind == "create_table":
@@ -457,6 +467,36 @@ class ERDSchemaManager:
 		# ── DROP INDEX ────────────────────────────────────────────────────────
 		if kind == "drop_index":
 			return [f"DROP INDEX IF EXISTS {_qi(op['name'])}"]
+
+		if kind == "create_enum":
+			schema = op.get("schema") or None
+			qname  = f"{_qi(schema)}.{_qi(op['name'])}" if schema else _qi(op["name"])
+			values = ", ".join(f"'{v.replace(chr(39), chr(39)*2)}'" for v in op.get("values", []))
+			return [f"CREATE TYPE {qname} AS ENUM ({values})"]
+
+		if kind == "drop_enum":
+			schema = op.get("schema") or None
+			qname  = f"{_qi(schema)}.{_qi(op['name'])}" if schema else _qi(op["name"])
+			return [f"DROP TYPE IF EXISTS {qname}"]
+
+		if kind == "add_check_constraint":
+			expr  = op.get("expression", "").strip()
+			if not expr or ";" in expr:
+				raise ValueError("CHECK expression must be non-empty and must not contain ';'")
+			cname = op.get("name") or f"chk_{tbl}_{abs(hash(expr)) % 10000}"
+			return [f"ALTER TABLE {qtbl} ADD CONSTRAINT {_qi(cname)} CHECK ({expr})"]
+
+		if kind == "drop_check_constraint":
+			return [f"ALTER TABLE {qtbl} DROP CONSTRAINT {_qi(op['name'])}"]
+
+		if kind == "set_composite_pk":
+			cols = [_qi(c) for c in op.get("columns", [])]
+			if not cols:
+				raise ValueError("set_composite_pk requires at least one column")
+			return [
+				f"ALTER TABLE {qtbl} DROP CONSTRAINT IF EXISTS {_qi(tbl + '_pkey')}",
+				f"ALTER TABLE {qtbl} ADD PRIMARY KEY ({', '.join(cols)})",
+			]
 
 		raise ValueError(f"Unknown operation: {kind!r}")
 
@@ -963,3 +1003,47 @@ class TriggerProcedureManager:
 			errors.append(str(exc))
 			applied = 0  # full rollback — none applied
 		return {"applied": applied, "sql": stmts[:applied], "errors": errors}
+
+
+# ─── ORM type mapping helpers (shared with erd_designer.py) ─────────────────
+
+def _pg_to_sa_type(pg_type: str) -> str:
+	"""Map a PostgreSQL type string to a SQLAlchemy Column type."""
+	t = pg_type.upper().split("(")[0].strip()
+	return {
+		"SERIAL": "Integer", "BIGSERIAL": "BigInteger", "INTEGER": "Integer",
+		"BIGINT": "BigInteger", "SMALLINT": "SmallInteger", "BOOLEAN": "Boolean",
+		"TEXT": "Text", "VARCHAR": "String", "CHAR": "String",
+		"NUMERIC": "Numeric", "DECIMAL": "Numeric", "FLOAT": "Float",
+		"REAL": "Float", "DOUBLE": "Float", "DATE": "Date",
+		"TIMESTAMP": "DateTime", "TIMESTAMPTZ": "DateTime", "TIME": "Time",
+		"UUID": "UUID", "JSONB": "JSONB", "JSON": "JSON", "BYTEA": "LargeBinary",
+		"INET": "String", "CIDR": "String",
+	}.get(t, "String")
+
+
+def _pg_to_django_type(pg_type: str) -> str:
+	"""Map a PostgreSQL type string to a Django model field."""
+	t = pg_type.upper().split("(")[0].strip()
+	return {
+		"SERIAL": "models.AutoField()", "BIGSERIAL": "models.BigAutoField()",
+		"INTEGER": "models.IntegerField()", "BIGINT": "models.BigIntegerField()",
+		"BOOLEAN": "models.BooleanField()", "TEXT": "models.TextField()",
+		"VARCHAR": "models.CharField(max_length=255)", "DATE": "models.DateField()",
+		"TIMESTAMP": "models.DateTimeField()", "TIMESTAMPTZ": "models.DateTimeField()",
+		"NUMERIC": "models.DecimalField(max_digits=10, decimal_places=2)",
+		"FLOAT": "models.FloatField()", "UUID": "models.UUIDField()",
+		"JSONB": "models.JSONField()", "JSON": "models.JSONField()",
+	}.get(t, "models.TextField()")
+
+
+def _pg_to_prisma_type(pg_type: str) -> str:
+	"""Map a PostgreSQL type string to a Prisma schema type."""
+	t = pg_type.upper().split("(")[0].strip()
+	return {
+		"SERIAL": "Int", "BIGSERIAL": "BigInt", "INTEGER": "Int",
+		"BIGINT": "BigInt", "BOOLEAN": "Boolean", "TEXT": "String",
+		"VARCHAR": "String", "DATE": "DateTime", "TIMESTAMP": "DateTime",
+		"TIMESTAMPTZ": "DateTime", "NUMERIC": "Decimal", "FLOAT": "Float",
+		"UUID": "String", "JSONB": "Json", "JSON": "Json",
+	}.get(t, "String")

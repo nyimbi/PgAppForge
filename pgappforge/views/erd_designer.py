@@ -1361,49 +1361,10 @@ cy.fit();
 		return jsonify({"schemas": schemas})
 
 
-# ─── ORM type mapping helpers ────────────────────────────────────────────────
-
-def _pg_to_sa_type(pg_type: str) -> str:
-	"""Map a PostgreSQL type string to a SQLAlchemy Column type."""
-	t = pg_type.upper().split("(")[0].strip()
-	mapping = {
-		"SERIAL": "Integer", "BIGSERIAL": "BigInteger", "INTEGER": "Integer",
-		"BIGINT": "BigInteger", "SMALLINT": "SmallInteger", "BOOLEAN": "Boolean",
-		"TEXT": "Text", "VARCHAR": "String", "CHAR": "String",
-		"NUMERIC": "Numeric", "DECIMAL": "Numeric", "FLOAT": "Float",
-		"REAL": "Float", "DOUBLE": "Float", "DATE": "Date",
-		"TIMESTAMP": "DateTime", "TIMESTAMPTZ": "DateTime", "TIME": "Time",
-		"UUID": "UUID", "JSONB": "JSONB", "JSON": "JSON", "BYTEA": "LargeBinary",
-		"INET": "String", "CIDR": "String",
-	}
-	return mapping.get(t, "String")
-
-
-def _pg_to_django_type(pg_type: str) -> str:
-	t = pg_type.upper().split("(")[0].strip()
-	mapping = {
-		"SERIAL": "models.AutoField()", "BIGSERIAL": "models.BigAutoField()",
-		"INTEGER": "models.IntegerField()", "BIGINT": "models.BigIntegerField()",
-		"BOOLEAN": "models.BooleanField()", "TEXT": "models.TextField()",
-		"VARCHAR": "models.CharField(max_length=255)", "DATE": "models.DateField()",
-		"TIMESTAMP": "models.DateTimeField()", "TIMESTAMPTZ": "models.DateTimeField()",
-		"NUMERIC": "models.DecimalField(max_digits=10, decimal_places=2)",
-		"FLOAT": "models.FloatField()", "UUID": "models.UUIDField()",
-		"JSONB": "models.JSONField()", "JSON": "models.JSONField()",
-	}
-	return mapping.get(t, "models.TextField()")
-
-
-def _pg_to_prisma_type(pg_type: str) -> str:
-	t = pg_type.upper().split("(")[0].strip()
-	mapping = {
-		"SERIAL": "Int", "BIGSERIAL": "BigInt", "INTEGER": "Int",
-		"BIGINT": "BigInt", "BOOLEAN": "Boolean", "TEXT": "String",
-		"VARCHAR": "String", "DATE": "DateTime", "TIMESTAMP": "DateTime",
-		"TIMESTAMPTZ": "DateTime", "NUMERIC": "Decimal", "FLOAT": "Float",
-		"UUID": "String", "JSONB": "Json", "JSON": "Json",
-	}
-	return mapping.get(t, "String")
+# ORM type helpers live in erd_schema_manager — import from canonical location
+from pgappforge.views.erd_schema_manager import (
+	_pg_to_sa_type, _pg_to_django_type, _pg_to_prisma_type,
+)
 
 
 # ─── HTML Template ────────────────────────────────────────────────────────────
