@@ -107,6 +107,15 @@ except ImportError:
 	_HAS_OPENPYXL = False
 	log.debug("reports engine: openpyxl not installed — XLSX generation disabled")
 
+try:
+	import matplotlib
+	matplotlib.use("Agg")  # headless — no GUI
+	import matplotlib.pyplot as plt
+	_HAS_MATPLOTLIB = True
+except ImportError:
+	_HAS_MATPLOTLIB = False
+	log.debug("reports engine: matplotlib not installed — chart rendering disabled")
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -146,6 +155,54 @@ def _fmt(value: Any, format_string: str | None) -> str:
 	return str(value)
 
 
+def _cache_key(report_id: int, params: dict, changed_on, fmt: str) -> str:
+	"""SHA-256 hex digest (32 chars) for the render cache."""
+	import hashlib, json as _json
+	changed = changed_on.isoformat() if changed_on else "none"
+	raw = f"{report_id}:{_json.dumps(sorted((params or {}).items()))}:{changed}:{fmt}"
+	return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def _chart_png(chart_config: dict, rows: list[dict]) -> bytes | None:
+	"""
+	Render a simple chart to PNG bytes using matplotlib.
+	chart_config keys: type (bar|line|pie), data_field, label_field, title
+	Returns None when matplotlib is not available or config is invalid.
+	"""
+	if not _HAS_MATPLOTLIB:
+		return None
+	try:
+		ctype       = chart_config.get("type", "bar")
+		data_field  = chart_config.get("data_field", "")
+		label_field = chart_config.get("label_field", "")
+		title       = chart_config.get("title", "")
+		labels = [str(r.get(label_field, i)) for i, r in enumerate(rows)]
+		values = [float(r.get(data_field, 0) or 0) for r in rows]
+		fig, ax = plt.subplots(figsize=(5, 3), dpi=96)
+		if ctype == "pie":
+			ax.pie(values, labels=labels, autopct="%1.0f%%")
+		elif ctype == "line":
+			ax.plot(labels, values, marker="o")
+			ax.set_xticks(range(len(labels)))
+			ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
+		else:  # bar (default)
+			ax.bar(labels, values)
+			ax.set_xticks(range(len(labels)))
+			ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
+		if title:
+			ax.set_title(title, fontsize=10)
+		ax.tick_params(labelsize=8)
+		fig.tight_layout()
+		buf = io.BytesIO()
+		fig.savefig(buf, format="png", bbox_inches="tight")
+		plt.close(fig)
+		buf.seek(0)
+		return buf.read()
+	except Exception as exc:
+		log.warning("ReportForge: chart render failed: %s", exc)
+		return None
+
+
 def _pdf_font(bold: bool = False) -> str:
 	"""Return the registered Unicode-capable font name for PDF."""
 	return _UNICODE_FONT_BOLD if bold else _UNICODE_FONT  # type: ignore[name-defined]
@@ -177,6 +234,62 @@ def _fetch_logo(logo_url: str, timeout: int = 5) -> bytes | None:
 # ReportEngine
 # ---------------------------------------------------------------------------
 
+def _compute_aggregate(rows: list[dict], expr: str) -> str:
+	"""
+	Evaluate a compute expression against a list of row dicts.
+	Supported: sum(col), count(*), avg(col), min(col), max(col).
+	Returns formatted string or "" on error.
+	"""
+	if not expr or not rows:
+		return ""
+	import re as _re
+	m = _re.match(r"^\s*(\w+)\((\w+|\*)\)\s*$", expr.strip().lower())
+	if not m:
+		return ""
+	func, col = m.group(1), m.group(2)
+	try:
+		if func == "count":
+			return str(len(rows))
+		vals = [float(r.get(col, 0) or 0) for r in rows]
+		if func == "sum":
+			return f"{sum(vals):,.2f}"
+		if func == "avg":
+			return f"{sum(vals)/len(vals):,.2f}" if vals else ""
+		if func == "min":
+			return f"{min(vals):,.2f}" if vals else ""
+		if func == "max":
+			return f"{max(vals):,.2f}" if vals else ""
+	except Exception:
+		pass
+	return ""
+
+
+# NumberedCanvas enables "Page N of M" in PDF output.
+# Uses a two-stage save: showPage() buffers state; save() patches totals.
+if _HAS_REPORTLAB:
+	from reportlab.pdfgen import canvas as _rl_canvas_module
+
+	class _NumberedCanvas(_rl_canvas_module.Canvas):
+		def __init__(self, *args, **kwargs):
+			super().__init__(*args, **kwargs)
+			self._page_states: list[dict] = []
+
+		def showPage(self):
+			self._page_states.append(dict(self.__dict__))
+			self._startPage()
+
+		def save(self):
+			total = len(self._page_states)
+			for i, state in enumerate(self._page_states, 1):
+				self.__dict__.update(state)
+				# Patch "Page N" placeholders written by the page callback
+				# (callback uses doc.page which is correct at call time)
+				# Inject total into __dict__ so callback can read it
+				self._total_pages = total
+				super().showPage()
+			super().save()
+
+
 class ReportEngine:
 	"""
 	Renders Report records into various output formats.
@@ -193,11 +306,75 @@ class ReportEngine:
 		session: Session,
 		preview_row_limit: int = 10,
 		download_row_limit: int | None = None,
+		cache_ttl_hours: int = 1,
 	) -> None:
 		assert isinstance(session, Session), "session must be a SQLAlchemy Session"
 		self._session = session
-		self.preview_row_limit = preview_row_limit
+		self.preview_row_limit  = preview_row_limit
 		self.download_row_limit = download_row_limit
+		self.cache_ttl_hours    = cache_ttl_hours
+
+	# ── Render cache helpers ──────────────────────────────────────────────
+
+	def _cache_get(self, key: str, fmt: str) -> bytes | None:
+		"""Return cached bytes for (key, fmt) if valid, else None."""
+		try:
+			from .models import ReportRenderCache
+			import sqlalchemy as sa
+			from datetime import timezone
+			now = datetime.now(timezone.utc)
+			row = self._session.execute(
+				sa.select(ReportRenderCache).where(
+					sa.and_(
+						ReportRenderCache.cache_key == key,
+						ReportRenderCache.format    == fmt,
+						ReportRenderCache.expires_at > now,
+					)
+				)
+			).scalar_one_or_none()
+			return row.data if row else None
+		except Exception as exc:
+			log.debug("cache_get failed: %s", exc)
+			return None
+
+	def _cache_set(self, key: str, fmt: str, data: bytes, report_id: int) -> None:
+		"""Persist rendered bytes into the render cache."""
+		try:
+			from .models import ReportRenderCache
+			import sqlalchemy as sa
+			from datetime import timedelta, timezone
+			expires = datetime.now(timezone.utc) + timedelta(hours=self.cache_ttl_hours)
+			# Upsert: delete existing then insert
+			self._session.execute(
+				sa.delete(ReportRenderCache).where(
+					sa.and_(
+						ReportRenderCache.cache_key == key,
+						ReportRenderCache.format    == fmt,
+					)
+				)
+			)
+			row = ReportRenderCache(
+				cache_key=key, report_id=report_id, format=fmt,
+				data=data, size_bytes=len(data), expires_at=expires,
+			)
+			self._session.add(row)
+			self._session.commit()
+		except Exception as exc:
+			log.debug("cache_set failed: %s", exc)
+
+	def cache_invalidate(self, report_id: int) -> None:
+		"""Evict all cached renders for a report (call after design changes)."""
+		try:
+			from .models import ReportRenderCache
+			import sqlalchemy as sa
+			self._session.execute(
+				sa.delete(ReportRenderCache).where(
+					ReportRenderCache.report_id == report_id
+				)
+			)
+			self._session.commit()
+		except Exception as exc:
+			log.debug("cache_invalidate failed: %s", exc)
 
 	# ------------------------------------------------------------------ #
 	# Public API                                                           #
@@ -216,30 +393,45 @@ class ReportEngine:
 				"reportlab is required for PDF generation. "
 				"Install it with: pip install reportlab"
 			)
-		report = self._load_report(report_id)
+		report  = self._load_report(report_id)
 		params  = self._resolve_params(report, params or {})
-		rows    = self._execute_query(report, params)
-		groups  = self._group_data(rows, report.group_field)
 
-		buf    = io.BytesIO()
-		ps     = _page_size_for(report.paper_size.value, report.orientation.value)
-		pc     = report.page_config or {}
-		doc    = SimpleDocTemplate(
+		# ── Cache check ───────────────────────────────────────────────────
+		ck = _cache_key(report_id, params, report.changed_on, "pdf")
+		cached = self._cache_get(ck, "pdf")
+		if cached:
+			return cached
+
+		rows   = self._execute_query(report, params)
+		groups = self._group_data(rows, report.group_field)
+
+		buf = io.BytesIO()
+		ps  = _page_size_for(report.paper_size.value, report.orientation.value)
+		pc  = report.page_config or {}
+		doc = SimpleDocTemplate(
 			buf,
-			pagesize    = ps,
-			topMargin   = pc.get("margin_top_mm",    10) * mm,
-			bottomMargin= pc.get("margin_bottom_mm", 10) * mm,
-			leftMargin  = pc.get("margin_left_mm",   15) * mm,
-			rightMargin = pc.get("margin_right_mm",  15) * mm,
-			title       = report.name,
+			pagesize     = ps,
+			topMargin    = pc.get("margin_top_mm",    10) * mm,
+			bottomMargin = pc.get("margin_bottom_mm", 10) * mm,
+			leftMargin   = pc.get("margin_left_mm",   15) * mm,
+			rightMargin  = pc.get("margin_right_mm",  15) * mm,
+			title        = report.name,
 		)
 
-		story = self._build_pdf_story(report, rows, groups)
-
-		# ── Combined per-page callback: header, footer, logo, watermark ─────
+		story   = self._build_pdf_story(report, rows, groups)
 		page_fn = self._make_page_callback(report, ps, pc)
-		doc.build(story, onFirstPage=page_fn, onLaterPages=page_fn)
-		return buf.getvalue()
+
+		# _NumberedCanvas enables "Page N of M" by buffering all pages
+		canvas_cls = _NumberedCanvas if _HAS_REPORTLAB else None
+		if canvas_cls:
+			doc.build(story, onFirstPage=page_fn, onLaterPages=page_fn,
+			          canvasmaker=canvas_cls)
+		else:
+			doc.build(story, onFirstPage=page_fn, onLaterPages=page_fn)
+
+		data = buf.getvalue()
+		self._cache_set(ck, "pdf", data, report_id)
+		return data
 
 	def _make_page_callback(self, report, ps, pc):
 		"""
@@ -353,7 +545,7 @@ class ReportEngine:
 			canvas_obj.drawRightString(
 				page_w - margin_left,
 				margin_bottom - 6 * mm,
-				f"Page {doc_obj.page}",
+				f"Page {doc_obj.page} of {getattr(canvas_obj, '_total_pages', '?')}",
 			)
 
 			canvas_obj.restoreState()
@@ -378,13 +570,24 @@ class ReportEngine:
 				"openpyxl is required for XLSX generation. "
 				"Install it with: pip install openpyxl"
 			)
-		report = self._load_report(report_id)
+		report  = self._load_report(report_id)
 		params  = self._resolve_params(report, params or {})
-		rows    = self._execute_query(report, params)
 
-		# write_only=True enables streaming — avoids loading everything into RAM
+		# ── Cache check ───────────────────────────────────────────────────
+		ck = _cache_key(report_id, params, report.changed_on, "xlsx")
+		cached = self._cache_get(ck, "xlsx")
+		if cached:
+			return cached
+
+		rows = self._execute_query(report, params)
+
+		# write_only=True enables streaming — avoids loading the full workbook into RAM
 		wb = openpyxl.Workbook(write_only=True)
 		ws = wb.create_sheet(title=report.name[:31])
+
+		# Set worksheet properties BEFORE writing any rows
+		ws.freeze_panes = "A2"   # freeze header row
+		ws.auto_filter.ref = "A1"  # Excel will expand to data range on open
 
 		columns: list[str] = list(rows[0].keys()) if rows else []
 
@@ -392,6 +595,22 @@ class ReportEngine:
 		header_fill  = PatternFill("solid", fgColor="4472C4")
 		title_fill   = PatternFill("solid", fgColor="336699")
 		title_font   = Font(bold=True, color="FFFFFF", size=13)
+
+		# Python format_string → Excel number format
+		def _xl_numfmt(fmt_str: str | None) -> str | None:
+			if not fmt_str:
+				return None
+			if "{:,.2f}" in fmt_str or "{:.2f}" in fmt_str:
+				return "#,##0.00"
+			if "{:,.0f}" in fmt_str or "{:.0f}" in fmt_str:
+				return "#,##0"
+			if "{:,}" in fmt_str:
+				return "#,##0"
+			if "%Y" in fmt_str or ":%Y" in fmt_str:
+				return "YYYY-MM-DD"
+			if "%d/%m/%Y" in fmt_str:
+				return "DD/MM/YYYY"
+			return None
 
 		for band in report.band_list():
 			fields = band.field_list()
@@ -403,8 +622,8 @@ class ReportEngine:
 					if fields else btype.title()
 				)
 				cell = openpyxl.cell.WriteOnlyCell(ws, value=label)
-				cell.font  = title_font
-				cell.fill  = title_fill
+				cell.font      = title_font
+				cell.fill      = title_fill
 				cell.alignment = Alignment(horizontal="center")
 				ws.append([cell])
 
@@ -416,8 +635,8 @@ class ReportEngine:
 				row_cells = []
 				for label in labels:
 					c = openpyxl.cell.WriteOnlyCell(ws, value=label)
-					c.font  = header_style
-					c.fill  = header_fill
+					c.font      = header_style
+					c.fill      = header_fill
 					c.alignment = Alignment(horizontal="center")
 					row_cells.append(c)
 				ws.append(row_cells)
@@ -426,24 +645,29 @@ class ReportEngine:
 				bindings = [
 					f.data_binding for f in fields if f.data_binding
 				] or columns
-				fmt_map  = {
+				fmt_map = {
 					f.data_binding: f.format_string
-					for f in fields if f.data_binding
+					for f in fields if f.data_binding and f.data_binding
 				}
 				for r_idx, row_data in enumerate(rows):
 					fill_color = "F2F2F2" if r_idx % 2 == 0 else "FFFFFF"
 					row_cells  = []
 					for binding in bindings:
 						raw = row_data.get(binding)
-						val = _fmt(raw, fmt_map.get(binding))
-						c   = openpyxl.cell.WriteOnlyCell(ws, value=val)
+						# Write raw Python type (int/float/date) so Excel can sort/filter
+						c = openpyxl.cell.WriteOnlyCell(ws, value=raw)
 						c.fill = PatternFill("solid", fgColor=fill_color)
+						xl_fmt = _xl_numfmt(fmt_map.get(binding))
+						if xl_fmt:
+							c.number_format = xl_fmt
 						row_cells.append(c)
 					ws.append(row_cells)
 
 		out = io.BytesIO()
 		wb.save(out)
-		return out.getvalue()
+		data = out.getvalue()
+		self._cache_set(ck, "xlsx", data, report_id)
+		return data
 
 	def generate_html(self, report_id: int, params: dict[str, Any] | None = None) -> str:
 		"""
@@ -703,15 +927,16 @@ class ReportEngine:
 
 		Rendering pass:
 		  1. TITLE band (once)
-		  2. PAGE_HEADER (once — reportlab repeats via frame callbacks when needed)
+		  2. PAGE_HEADER (skipped here — drawn by page callback on every page)
 		  3. For each group:
 		       a. GROUP_HEADER
 		       b. COLUMN_HEADER (once per group)
 		       c. DETAIL rows
-		       d. GROUP_FOOTER
+		       d. GROUP_FOOTER (with compute aggregates)
 		  4. SUMMARY (once)
-		  5. PAGE_FOOTER (note)
+		  5. PAGE_FOOTER (skipped here — drawn by page callback on every page)
 		"""
+		self._last_rows = rows  # for CHART fields in summary bands
 		story: list = []
 		styles = getSampleStyleSheet()
 
@@ -736,19 +961,20 @@ class ReportEngine:
 		for group_key, group_rows in groups.items():
 			# GROUP_HEADER
 			for band in bands_by_type.get("group_header", []):
-				story.extend(self._pdf_group_band(band, group_key, styles))
+				story.extend(self._pdf_group_band(band, group_key, styles, group_rows))
 
 			# COLUMN_HEADER
 			for band in col_header_bands:
 				story.extend(self._pdf_column_header_band(band, columns, styles))
 
 			# DETAIL rows
+			self._last_rows = group_rows  # allow CHART fields in footers to reference data
 			for band in bands_by_type.get("detail", []):
 				story.extend(self._pdf_detail_band(band, group_rows, columns, styles))
 
-			# GROUP_FOOTER
+			# GROUP_FOOTER (with compute aggregates)
 			for band in bands_by_type.get("group_footer", []):
-				story.extend(self._pdf_group_band(band, group_key, styles))
+				story.extend(self._pdf_group_band(band, group_key, styles, group_rows))
 
 		# --- SUMMARY ---
 		for band in bands_by_type.get("summary", []):
@@ -812,6 +1038,26 @@ class ReportEngine:
 							log.debug("ReportForge: image render failed: %s", exc)
 				continue
 
+			# CHART
+			if ftype == "chart":
+				chart_cfg = field.style.get("chart_config", {})
+				if chart_cfg and _HAS_MATPLOTLIB:
+					# Rows come from the last group/all rows — passed via style for summary charts
+					# Use self._last_rows if available (set in _build_pdf_story)
+					chart_rows = getattr(self, "_last_rows", [])
+					png = _chart_png(chart_cfg, chart_rows)
+					if png:
+						try:
+							from reportlab.platypus import Image as RLImage
+							result.append(RLImage(
+								io.BytesIO(png),
+								width=field.width_mm * mm,
+								height=field.height_mm * mm,
+							))
+						except Exception as exc:
+							log.debug("ReportForge: chart embed failed: %s", exc)
+				continue
+
 			# TEXT / NUMBER / DATE (default)
 			text = field.style.get("text") or field.data_binding or ""
 			fs   = field.style.get("font_size", 12)
@@ -832,18 +1078,56 @@ class ReportEngine:
 		result.append(Spacer(1, band.height_mm * 0.3 * mm))
 		return result
 
-	def _pdf_group_band(self, band, group_key: Any, styles) -> list:
-		"""Render GROUP_HEADER / GROUP_FOOTER with the group key value."""
-		text = f"{band.band_type.value.replace('_', ' ').title()}: {group_key}"
-		ps   = ParagraphStyle(
-			f"rpt_group_{band.id}",
-			parent    = styles["Normal"],
-			fontSize  = 11,
-			fontName  = "Helvetica-Bold",
-			backColor = _rl_color(band.background_color),
-			spaceAfter= 2,
-		)
-		return [Paragraph(_escape_rl(text), ps), Spacer(1, 2 * mm)]
+	def _pdf_group_band(
+		self, band, group_key: Any, styles,
+		group_rows: list | None = None,
+	) -> list:
+		"""Render GROUP_HEADER / GROUP_FOOTER.
+
+		For GROUP_FOOTER bands, fields with a ``compute`` expression are evaluated
+		against *group_rows* and rendered as aggregate values.
+		"""
+		fields = band.field_list()
+		bg     = _rl_color(band.background_color)
+		result: list = []
+
+		# If fields define their own layout, render them; else fall back to a
+		# plain "Group: value" paragraph.
+		if fields and band.band_type.value == "group_footer" and group_rows:
+			# Render each field, substituting compute expressions
+			for field in fields:
+				compute_val = ""
+				if getattr(field, "compute", None) and group_rows:
+					compute_val = _compute_aggregate(group_rows, field.compute)
+				text = compute_val or field.style.get("text") or str(group_key)
+				fs   = field.style.get("font_size", 10)
+				bold = bool(field.style.get("bold", True))
+				ps   = ParagraphStyle(
+					f"rpt_gf_{field.id}",
+					parent    = styles["Normal"],
+					fontSize  = fs,
+					fontName  = _pdf_font(bold),
+					textColor = _rl_color(field.style.get("color", "#000000")),
+					backColor = bg,
+					alignment = _rl_align(field.style.get("align", "right")),
+					spaceAfter= 2,
+				)
+				result.append(Paragraph(_escape_rl(text), ps))
+		else:
+			# Default: "Group Header/Footer: <group_key_value>"
+			label = f"{band.band_type.value.replace('_', ' ').title()}: {group_key}"
+			ps    = ParagraphStyle(
+				f"rpt_group_{band.id}",
+				parent    = styles["Normal"],
+				fontSize  = 11,
+				fontName  = _pdf_font(True),
+				backColor = bg,
+				spaceAfter= 2,
+			)
+			result.append(Paragraph(_escape_rl(label), ps))
+
+		result.append(Spacer(1, 2 * mm))
+		return result
 
 	def _pdf_column_header_band(self, band, columns: list[str], styles) -> list:
 		"""Render COLUMN_HEADER as a styled single-row table."""

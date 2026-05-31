@@ -926,6 +926,12 @@ class ReportDesignerView(BaseView):
 			field.style = existing
 			flag_modified(field, "style")  # JSONB in-place mutation must be flagged
 		session.commit()
+		# Invalidate render cache so next download re-renders with new layout
+		try:
+			from .engine import ReportEngine
+			ReportEngine(session).cache_invalidate(report_id)
+		except Exception:
+			pass
 		return jsonify({"ok": True})
 
 	@expose("/<int:report_id>/field/<int:field_id>", methods=("DELETE",))
