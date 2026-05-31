@@ -54,20 +54,35 @@ from pgappforge.plugins.base_plugin import BasePlugin, PluginMetadata, PluginPri
 
 from .models import (
 	BandType,
+	Dashboard,
+	DispatchStatus,
 	FieldType,
+	JobStatus,
 	Orientation,
 	ParameterType,
 	PaperSize,
 	Report,
+	ReportAccessLog,
 	ReportBand,
+	ReportCategory,
+	ReportDatasource,
 	ReportField,
+	ReportGrant,
+	ReportJob,
 	ReportParameter,
+	ReportRenderCache,
+	ReportShareToken,
+	ReportSubscription,
+	ReportVersion,
 )
 from .designer import ReportDesignerView
 from .engine import ReportEngine
 from .wizard import ReportWizardView
 from .sql_editor import SqlEditorView
-from .models import ReportDispatch, SavedQuery
+from .models import (
+	ReportDispatch,
+	SavedQuery,
+)
 
 log = logging.getLogger(__name__)
 
@@ -544,7 +559,10 @@ class ReportsPlugin(BasePlugin):
 	def register_models(self) -> list:
 		"""Return model classes for Alembic autogenerate discovery."""
 		return [Report, ReportBand, ReportField, ReportParameter,
-		        ReportDispatch, SavedQuery]
+		        ReportDispatch, SavedQuery,
+		        ReportDatasource, ReportCategory, ReportGrant,
+		        ReportAccessLog, ReportShareToken, ReportVersion,
+		        ReportSubscription, Dashboard, ReportRenderCache, ReportJob]
 
 	# ------------------------------------------------------------------ #
 	# Config schema                                                       #
