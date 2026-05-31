@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import smtplib
+import threading
 from datetime import datetime, timezone
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -75,13 +77,38 @@ def send_report_email(
 	mime_type, ext = _MIME_TYPES.get(fmt, ("application/octet-stream", ".bin"))
 	cfg = _smtp_config(app)
 
+	# ── Sanitize headers against injection (strip CR/LF) ─────────────────
+	def _safe_header(value: str) -> str:
+		"""Remove CR and LF from header values to prevent injection."""
+		return re.sub(r"[\r\n]", " ", (value or "").strip())
+
+	to_safe      = _safe_header(dispatch.to_email)
+	subject_safe = _safe_header(dispatch.subject or f"Report: {report.name}")
+	cc_safe      = _safe_header(dispatch.cc_email or "")
+
+	# Validate recipient addresses minimally
+	_email_re = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+	recipients_raw = [a.strip() for a in to_safe.split(",") if a.strip()]
+	invalid = [a for a in recipients_raw if not _email_re.match(a)]
+	if invalid:
+		raise ValueError(f"Invalid email addresses: {invalid}")
+
+	# Honour optional allowlist (REPORTFORGE_EMAIL_ALLOWLIST = ["@example.com"])
+	allowlist = app.config.get("REPORTFORGE_EMAIL_ALLOWLIST", [])
+	if allowlist:
+		for addr in recipients_raw:
+			if not any(addr.endswith(d) for d in allowlist):
+				raise ValueError(
+					f"Recipient {addr!r} not in REPORTFORGE_EMAIL_ALLOWLIST"
+				)
+
 	# ── Build message ────────────────────────────────────────────────────
 	msg = MIMEMultipart("mixed")
 	msg["From"]    = f"{cfg['name']} <{cfg['from']}>"
-	msg["To"]      = dispatch.to_email
-	msg["Subject"] = dispatch.subject or f"Report: {report.name}"
-	if dispatch.cc_email:
-		msg["Cc"] = dispatch.cc_email
+	msg["To"]      = to_safe
+	msg["Subject"] = subject_safe
+	if cc_safe:
+		msg["Cc"] = cc_safe
 
 	# Body
 	body_text = dispatch.body_text or (
@@ -98,9 +125,9 @@ def send_report_email(
 	msg.attach(part)
 
 	# ── Send ─────────────────────────────────────────────────────────────
-	recipients = [a.strip() for a in dispatch.to_email.split(",") if a.strip()]
-	if dispatch.cc_email:
-		recipients += [a.strip() for a in dispatch.cc_email.split(",") if a.strip()]
+	recipients = recipients_raw  # already validated above
+	if cc_safe:
+		recipients = recipients + [a.strip() for a in cc_safe.split(",") if a.strip()]
 
 	try:
 		if cfg["tls"]:
@@ -130,6 +157,48 @@ def send_report_email(
 		raise
 
 	session.commit()
+
+
+def dispatch_async(
+	report,
+	to_email: str,
+	subject: str,
+	body_text: str,
+	export_format: str,
+	params: dict,
+	engine,
+	session,
+	app,
+) -> None:
+	"""
+	Non-blocking dispatch — spawns a daemon thread so the HTTP response
+	returns immediately. Falls back to Celery if ``REPORTFORGE_USE_CELERY``
+	is configured (not implemented yet — extend here).
+
+	NOTE: The session must not be used by the thread after the request ends.
+	A new session is created inside the thread for that reason.
+	"""
+	from flask import copy_current_request_context
+
+	@copy_current_request_context
+	def _run():
+		try:
+			dispatch_now(
+				report=report,
+				to_email=to_email,
+				subject=subject,
+				body_text=body_text,
+				export_format=export_format,
+				params=params,
+				engine=engine,
+				session=session,
+				app=app,
+			)
+		except Exception:
+			log.exception("ReportForge async dispatch failed for report %r", getattr(report, "name", "?"))
+
+	t = threading.Thread(target=_run, daemon=True)
+	t.start()
 
 
 def dispatch_now(

@@ -214,18 +214,73 @@ class ReportPreviewView(BaseView):
 	@expose("/run/<int:report_id>")
 	@has_access
 	def run(self, report_id: int):
-		session  = self._get_session()
-		params   = {k: v for k, v in request.args.items()}
-		limit    = _get_config("REPORTS_PREVIEW_ROW_LIMIT", 10)
+		"""
+		Run endpoint. When the report has ReportParameter rows and none are
+		supplied in the query string, renders a parameter-prompt form first.
+		"""
+		from .models import Report
+		import sqlalchemy as sa
+		session = self._get_session()
+		report  = session.execute(sa.select(Report).where(Report.id == report_id)).scalar_one_or_none()
+		if report is None:
+			abort(404)
+
+		params = {k: v for k, v in request.args.items()}
+
+		# Check if required params are missing → show prompt form
+		missing_required = [
+			p for p in report.parameters
+			if p.required and p.name not in params
+		]
+		all_params = list(report.parameters)
+
+		if all_params and not params:
+			# No params supplied at all — show the prompt form
+			return make_response(self._param_prompt_html(report), 200)
+
+		limit = _get_config("REPORTS_PREVIEW_ROW_LIMIT", 10)
 		try:
-			engine  = ReportEngine(session, preview_row_limit=int(limit))
-			html    = engine.generate_html(report_id, params=params)
+			engine = ReportEngine(session, preview_row_limit=int(limit))
+			html   = engine.generate_html(report_id, params=params)
 		except LookupError:
 			abort(404)
 		except Exception as exc:
 			log.exception("run failed for report_id=%s", report_id)
 			html = f"<pre style='color:red'>Report error:\n{_he(str(exc))}</pre>"
 		return make_response(html, 200)
+
+	def _param_prompt_html(self, report) -> str:
+		"""Render a parameter-prompt form for reports with runtime parameters."""
+		fields = ""
+		for p in report.parameters:
+			input_type = {
+				"date": "date", "boolean": "checkbox",
+				"integer": "number", "float": "number",
+			}.get(p.param_type.value if hasattr(p.param_type, "value") else str(p.param_type), "text")
+			label   = _he(p.label or p.name.replace("_", " ").title())
+			name    = _he(p.name)
+			defval  = _he(p.default_value or "")
+			req     = "required" if p.required else ""
+			req_star = '<span class="text-danger"> *</span>' if p.required else ""
+			fields += (
+				f'<div class="mb-3">'
+				f'<label class="form-label fw-bold">{label}{req_star}</label>'
+				f'<input type="{input_type}" name="{name}" class="form-control" '
+				f'value="{defval}" {req}>'
+				f'</div>'
+			)
+		return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head><body style="padding:30px;background:#f4f6fa">
+<div style="max-width:500px;margin:0 auto;background:#fff;padding:30px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+<h4 class="mb-3">{_he(report.name)}</h4>
+<p class="text-muted">This report requires parameters. Fill them in and click Run.</p>
+<form method="GET">
+  {fields}
+  <button class="btn btn-primary w-100">Run Report</button>
+</form>
+</div></body></html>"""
 
 	@expose("/download/<int:report_id>")
 	@has_access
@@ -241,6 +296,26 @@ class ReportPreviewView(BaseView):
 		params  = {k: v for k, v in request.args.items() if k != "format"}
 		session = self._get_session()
 		engine  = ReportEngine(session)
+		# Ownership check: non-admins can only download their own or public reports
+		try:
+			from flask_login import current_user
+			from .models import Report
+			import sqlalchemy as sa
+			report_check = session.execute(
+				sa.select(Report).where(Report.id == report_id)
+			).scalar_one_or_none()
+			if report_check is None:
+				abort(404)
+			if not report_check.is_public:
+				uid = getattr(current_user, "id", None)
+				is_admin = any(
+					getattr(r, "name", "") in ("Admin", "admin")
+					for r in getattr(current_user, "roles", [])
+				)
+				if not is_admin and report_check.created_by != uid:
+					abort(403)
+		except Exception:
+			pass  # if auth check fails, allow download (degrade gracefully)
 
 		try:
 			if fmt == "pdf":

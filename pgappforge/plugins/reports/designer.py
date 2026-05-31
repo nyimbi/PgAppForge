@@ -818,8 +818,14 @@ class ReportDesignerView(BaseView):
 		if band is None or band.report_id != report_id:
 			abort(404)
 		data = request.get_json(force=True) or {}
+		from sqlalchemy.orm.attributes import flag_modified
 		if "height_mm"        in data: band.height_mm        = float(data["height_mm"])
 		if "background_color" in data: band.background_color = data["background_color"]
+		if "style"            in data:
+			merged = dict(band.style or {})
+			merged.update(data["style"])
+			band.style = merged
+			flag_modified(band, "style")
 		session.commit()
 		return jsonify({"ok": True})
 
@@ -907,9 +913,11 @@ class ReportDesignerView(BaseView):
 		if "data_binding"  in data: field.data_binding  = data["data_binding"]
 		if "format_string" in data: field.format_string = data["format_string"]
 		if "style"         in data:
+			from sqlalchemy.orm.attributes import flag_modified
 			existing = dict(field.style or {})
 			existing.update(data["style"])
 			field.style = existing
+			flag_modified(field, "style")  # JSONB in-place mutation must be flagged
 		session.commit()
 		return jsonify({"ok": True})
 
@@ -924,6 +932,40 @@ class ReportDesignerView(BaseView):
 		session.delete(field)
 		session.commit()
 		return jsonify({"ok": True})
+
+	@expose("/<int:report_id>/field/<int:field_id>/ai-augment", methods=("POST",))
+	@has_access
+	def ai_augment_field(self, report_id: int, field_id: int):
+		"""
+		Generate or rewrite the text content of a text field via Ollama.
+
+		POST body: {"prompt": "Write a 2-sentence intro for this invoice."}
+		Returns:   {"ok": True, "text": "...generated text..."}
+		"""
+		from flask import current_app
+		from .ai_augment import augment_text
+		from .models import ReportField, Report
+
+		session = self._get_session()
+		field   = session.get(ReportField, field_id)
+		if field is None or field.band.report_id != report_id:
+			abort(404)
+
+		report  = session.get(Report, report_id)
+		data    = request.get_json(silent=True) or {}
+		prompt  = (data.get("prompt") or "").strip()
+		if not prompt:
+			return jsonify({"ok": False, "error": "prompt is required"}), 400
+
+		context = {
+			"Report name":    getattr(report, "name", ""),
+			"Company":        getattr(report, "company_name", "") or "",
+			"Document type":  getattr(report, "template_key", "") or "report",
+		}
+		result = augment_text(prompt, context, current_app)
+		if result.startswith("Error:"):
+			return jsonify({"ok": False, "error": result}), 500
+		return jsonify({"ok": True, "text": result})
 
 	# ------------------------------------------------------------------ #
 	# Preview                                                             #

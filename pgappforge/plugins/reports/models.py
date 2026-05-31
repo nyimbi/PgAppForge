@@ -156,19 +156,23 @@ class Report(Model):
 		nullable=False,
 	)
 
-	# relationships
+	# ── Visibility ─────────────────────────────────────────────────────────
+	is_public = Column(Boolean, nullable=False, default=False)
+
+	# relationships — lazy="select" so changes to bands are tracked by
+	# SQLAlchemy attribute events (flag_modified works); "dynamic" broke that.
 	bands      = relationship(
 		"ReportBand",
 		back_populates="report",
 		cascade="all, delete-orphan",
 		order_by="ReportBand.position",
-		lazy="dynamic",
+		lazy="select",
 	)
 	parameters = relationship(
 		"ReportParameter",
 		back_populates="report",
 		cascade="all, delete-orphan",
-		lazy="dynamic",
+		lazy="select",
 	)
 	creator = relationship("User", foreign_keys=[created_by])
 

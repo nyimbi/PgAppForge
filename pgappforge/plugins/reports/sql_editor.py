@@ -314,23 +314,60 @@ class SqlEditorView(BaseView):
 	def index(self):
 		return _EDITOR_HTML
 
+	def _get_engine(self):
+		"""
+		Return the SQLAlchemy engine to use for the SQL editor.
+
+		If ``REPORTFORGE_DB_READONLY_URI`` is set, creates a separate
+		engine bound to a read-only PostgreSQL role. Otherwise falls back
+		to the app's default engine (less secure — read-only is strongly
+		recommended for production).
+		"""
+		appbuilder = current_app.extensions.get("appbuilder")
+		ro_uri = current_app.config.get("REPORTFORGE_DB_READONLY_URI")
+		if ro_uri:
+			try:
+				import sqlalchemy as _sa
+				return _sa.create_engine(
+					ro_uri,
+					pool_size=2, max_overflow=2, pool_timeout=10,
+					connect_args={"options": "-c default_transaction_read_only=on"},
+				)
+			except Exception as exc:
+				log.warning("ReportForge: could not create read-only engine: %s — falling back", exc)
+		if appbuilder:
+			return appbuilder.session.bind
+		raise RuntimeError("appbuilder not found and REPORTFORGE_DB_READONLY_URI not set")
+
 	@expose("/api/schema")
 	@has_access
 	def api_schema(self):
-		appbuilder = current_app.extensions.get("appbuilder")
-		if not appbuilder:
-			return jsonify({"tables": [], "error": "appbuilder not found"})
+		"""
+		Return tables and columns from the user's schemas.
+
+		Respects ``REPORTFORGE_SQL_SCHEMAS`` (list of schema names; defaults to
+		["public"]). Pass ``?schema=myschema`` to override in the request.
+		"""
 		try:
-			engine = appbuilder.session.bind
-			insp = sa.inspect(engine)
+			engine = self._get_engine()
+			insp   = sa.inspect(engine)
+			# Schema list: request param > config > ["public"]
+			config_schemas = current_app.config.get("REPORTFORGE_SQL_SCHEMAS", ["public"])
+			req_schema = request.args.get("schema")
+			schemas = [req_schema] if req_schema else config_schemas
+
 			tables = []
-			for tname in sorted(insp.get_table_names(schema="public")):
-				cols = [
-					{"name": c["name"], "type": str(c["type"])}
-					for c in insp.get_columns(tname, schema="public")
-				]
-				tables.append({"name": tname, "schema": "public", "columns": cols})
-			return jsonify({"tables": tables})
+			available_schemas = set(insp.get_schema_names())
+			for schema in schemas:
+				if schema not in available_schemas:
+					continue
+				for tname in sorted(insp.get_table_names(schema=schema)):
+					cols = [
+						{"name": c["name"], "type": str(c["type"])}
+						for c in insp.get_columns(tname, schema=schema)
+					]
+					tables.append({"name": tname, "schema": schema, "columns": cols})
+			return jsonify({"tables": tables, "schemas": list(available_schemas)})
 		except Exception as exc:
 			log.exception("schema introspection failed")
 			return jsonify({"tables": [], "error": str(exc)}), 500
@@ -353,12 +390,12 @@ class SqlEditorView(BaseView):
 		if not re.search(r"\bLIMIT\b", stripped, re.IGNORECASE):
 			sql = f"{sql.rstrip(';')}\nLIMIT {limit}"
 
-		appbuilder = current_app.extensions.get("appbuilder")
-		if not appbuilder:
-			return jsonify({"error": "appbuilder not found"}), 500
 		try:
 			t0 = time.perf_counter()
-			with appbuilder.session.bind.connect() as conn:
+			engine = self._get_engine()
+			with engine.connect() as conn:
+				# Enforce read-only at the connection level too
+				conn.execute(sa.text("SET LOCAL default_transaction_read_only = on"))
 				result = conn.execute(sa.text(sql))
 				columns = list(result.keys())
 				rows = [dict(r._mapping) for r in result]

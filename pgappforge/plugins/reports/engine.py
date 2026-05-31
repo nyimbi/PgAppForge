@@ -20,14 +20,21 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import os
+import re
 import textwrap
+import urllib.request
 from collections import defaultdict
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
+
+# Hard cap on rows materialised in memory (configurable via REPORTFORGE_MAX_ROWS)
+_DEFAULT_MAX_ROWS = 50_000
 
 # ---------------------------------------------------------------------------
 # Optional-dep guards
@@ -48,8 +55,47 @@ try:
 		TableStyle,
 	)
 	_HAS_REPORTLAB = True
+
+	# ── Unicode font registration ─────────────────────────────────────────
+	# Try common system locations for DejaVu Sans (wide Unicode coverage).
+	# Falls back to Helvetica gracefully — no error, just ASCII-only output.
+	_UNICODE_FONT = "Helvetica"
+	_UNICODE_FONT_BOLD = "Helvetica-Bold"
+	_FONT_CANDIDATES = [
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+		"/usr/share/fonts/dejavu/DejaVuSans.ttf",
+		"/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+		"/Library/Fonts/Arial Unicode.ttf",
+		os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf"),
+	]
+	_FONT_BOLD_CANDIDATES = [
+		f.replace("DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
+		for f in _FONT_CANDIDATES
+	]
+	for _p in _FONT_CANDIDATES:
+		if os.path.exists(_p):
+			try:
+				from reportlab.pdfbase.ttfonts import TTFont
+				pdfmetrics.registerFont(TTFont("DejaVuSans", _p))
+				_UNICODE_FONT = "DejaVuSans"
+				log.debug("ReportForge: registered Unicode font DejaVuSans from %s", _p)
+			except Exception:
+				pass
+			break
+	for _p in _FONT_BOLD_CANDIDATES:
+		if os.path.exists(_p):
+			try:
+				from reportlab.pdfbase.ttfonts import TTFont as TTFontB
+				pdfmetrics.registerFont(TTFontB("DejaVuSans-Bold", _p))
+				_UNICODE_FONT_BOLD = "DejaVuSans-Bold"
+			except Exception:
+				pass
+			break
+
 except ImportError:
 	_HAS_REPORTLAB = False
+	_UNICODE_FONT = "Helvetica"
+	_UNICODE_FONT_BOLD = "Helvetica-Bold"
 	log.debug("reports engine: reportlab not installed — PDF generation disabled")
 
 try:
@@ -92,9 +138,39 @@ def _fmt(value: Any, format_string: str | None) -> str:
 	try:
 		if format_string:
 			return format_string.format(value)
-	except (ValueError, TypeError, KeyError):
-		pass
+	except (ValueError, TypeError, KeyError) as exc:
+		log.warning(
+			"ReportForge: format_string %r failed for value %r (%s): falling back to str()",
+			format_string, value, exc,
+		)
 	return str(value)
+
+
+def _pdf_font(bold: bool = False) -> str:
+	"""Return the registered Unicode-capable font name for PDF."""
+	return _UNICODE_FONT_BOLD if bold else _UNICODE_FONT  # type: ignore[name-defined]
+
+
+def _fetch_logo(logo_url: str, timeout: int = 5) -> bytes | None:
+	"""
+	Fetch a logo image from an HTTP/HTTPS URL or a local file path.
+
+	Returns raw bytes on success, None on any error.
+	Only absolute http/https URLs and absolute local paths are accepted —
+	relative paths are rejected to prevent path traversal.
+	"""
+	if not logo_url:
+		return None
+	try:
+		if logo_url.startswith(("http://", "https://")):
+			req = urllib.request.Request(logo_url, headers={"User-Agent": "ReportForge/1.0"})
+			with urllib.request.urlopen(req, timeout=timeout) as resp:
+				return resp.read()
+		elif os.path.isabs(logo_url) and os.path.isfile(logo_url):
+			return Path(logo_url).read_bytes()
+	except Exception as exc:
+		log.warning("ReportForge: could not fetch logo from %r: %s", logo_url, exc)
+	return None
 
 
 # ---------------------------------------------------------------------------
@@ -112,10 +188,16 @@ class ReportEngine:
 		                   PDF and XLSX always fetch all rows.
 	"""
 
-	def __init__(self, session: Session, preview_row_limit: int = 10) -> None:
+	def __init__(
+		self,
+		session: Session,
+		preview_row_limit: int = 10,
+		download_row_limit: int | None = None,
+	) -> None:
 		assert isinstance(session, Session), "session must be a SQLAlchemy Session"
 		self._session = session
-		self._preview_row_limit = preview_row_limit
+		self.preview_row_limit = preview_row_limit
+		self.download_row_limit = download_row_limit
 
 	# ------------------------------------------------------------------ #
 	# Public API                                                           #
@@ -154,26 +236,129 @@ class ReportEngine:
 
 		story = self._build_pdf_story(report, rows, groups)
 
-		# Watermark callback applied to every page
-		watermark_fn = None
-		if report.watermark_text:
-			wm_text = report.watermark_text
-			wm_opacity = report.watermark_opacity or 0.08
+		# ── Combined per-page callback: header, footer, logo, watermark ─────
+		page_fn = self._make_page_callback(report, ps, pc)
+		doc.build(story, onFirstPage=page_fn, onLaterPages=page_fn)
+		return buf.getvalue()
 
-			def watermark_fn(canvas_obj, doc_obj):
-				canvas_obj.saveState()
+	def _make_page_callback(self, report, ps, pc):
+		"""
+		Return a reportlab page callback that draws PAGE_HEADER, PAGE_FOOTER,
+		logo overlay, and watermark on every page of the PDF.
+
+		PAGE_HEADER is drawn at the top of each page (above the main frame).
+		PAGE_FOOTER is drawn at the bottom (below the main frame).
+		"""
+		page_w, page_h = ps
+		margin_top    = pc.get("margin_top_mm",    10) * mm
+		margin_bottom = pc.get("margin_bottom_mm", 10) * mm
+		margin_left   = pc.get("margin_left_mm",   15) * mm
+
+		bands_by_type: dict = defaultdict(list)
+		for band in report.band_list():
+			bands_by_type[band.band_type.value].append(band)
+
+		# Pre-fetch logo bytes once so we don't hit the network per page
+		logo_bytes: bytes | None = None
+		if report.logo_url:
+			logo_bytes = _fetch_logo(report.logo_url)
+
+		wm_text    = getattr(report, "watermark_text",    None)
+		wm_opacity = getattr(report, "watermark_opacity", 0.08) or 0.08
+
+		def _draw_band_fields(canvas_obj, band, y_top: float) -> None:
+			"""Draw all text fields in a band using direct canvas calls."""
+			for field in band.field_list():
+				text = field.style.get("text", "") or ""
+				if not text:
+					continue
+				fs   = float(field.style.get("font_size", 9))
+				bold = bool(field.style.get("bold", False))
+				fn   = _pdf_font(bold)
+				col  = _rl_color(field.style.get("color", "#000000"))
+				aln  = field.style.get("align", "left")
+				x    = margin_left + field.x_mm * mm
+				y    = y_top - field.y_mm * mm - fs
+
+				canvas_obj.setFont(fn, fs)
+				canvas_obj.setFillColor(col)
+				if aln == "center":
+					canvas_obj.drawCentredString(page_w / 2, y, _escape_rl(text))
+				elif aln == "right":
+					canvas_obj.drawRightString(page_w - margin_left, y, _escape_rl(text))
+				else:
+					canvas_obj.drawString(x, y, _escape_rl(text))
+
+		def page_callback(canvas_obj, doc_obj):
+			canvas_obj.saveState()
+
+			# ── Watermark (behind everything else) ─────────────────────────
+			if wm_text:
 				canvas_obj.setFillGray(0.5, wm_opacity)
-				canvas_obj.setFont("Helvetica", 60)
-				canvas_obj.translate(ps[0] / 2, ps[1] / 2)
+				canvas_obj.setFont(_pdf_font(False), 60)
+				canvas_obj.translate(page_w / 2, page_h / 2)
 				canvas_obj.rotate(45)
 				canvas_obj.drawCentredString(0, 0, wm_text.upper())
-				canvas_obj.restoreState()
+				canvas_obj.translate(-page_w / 2, -page_h / 2)
 
-		if watermark_fn:
-			doc.build(story, onFirstPage=watermark_fn, onLaterPages=watermark_fn)
-		else:
-			doc.build(story)
-		return buf.getvalue()
+			# ── Logo (top-right corner) ─────────────────────────────────────
+			if logo_bytes:
+				try:
+					logo_img = io.BytesIO(logo_bytes)
+					canvas_obj.drawImage(
+						logo_img,
+						page_w - margin_left - 40 * mm,
+						page_h - margin_top - 20 * mm,
+						width=35 * mm, height=15 * mm,
+						preserveAspectRatio=True, mask="auto",
+					)
+				except Exception as exc:
+					log.debug("ReportForge: logo render failed: %s", exc)
+
+			# ── PAGE_HEADER bands (below the top margin) ────────────────────
+			y = page_h - margin_top
+			for band in bands_by_type.get("page_header", []):
+				bh = band.height_mm * mm
+				bg = _rl_color(band.background_color)
+				if bg:
+					canvas_obj.setFillColor(bg)
+					canvas_obj.rect(0, y - bh, page_w, bh, fill=1, stroke=0)
+				_draw_band_fields(canvas_obj, band, y)
+				y -= bh
+
+			# ── PAGE_FOOTER bands (above the bottom margin) ─────────────────
+			y = margin_bottom
+			for band in reversed(bands_by_type.get("page_footer", [])):
+				bh = band.height_mm * mm
+				bg = _rl_color(band.background_color)
+				if bg:
+					canvas_obj.setFillColor(bg)
+					canvas_obj.rect(0, y, page_w, bh, fill=1, stroke=0)
+				# Draw text fields
+				for field in band.field_list():
+					text = field.style.get("text", "") or ""
+					if not text:
+						continue
+					fs  = float(field.style.get("font_size", 8))
+					fn  = _pdf_font(False)
+					col = _rl_color(field.style.get("color", "#888888"))
+					canvas_obj.setFont(fn, fs)
+					canvas_obj.setFillColor(col)
+					canvas_obj.drawCentredString(page_w / 2, y + bh / 2 - fs / 2, _escape_rl(text))
+				y += bh
+
+			# ── Page number (always at very bottom) ─────────────────────────
+			canvas_obj.setFont(_pdf_font(False), 8)
+			canvas_obj.setFillColor(_rl_color("#888888"))
+			canvas_obj.drawRightString(
+				page_w - margin_left,
+				margin_bottom - 6 * mm,
+				f"Page {doc_obj.page}",
+			)
+
+			canvas_obj.restoreState()
+
+		return page_callback
 
 	def generate_excel(self, report_id: int, params: dict[str, Any] | None = None) -> bytes:
 		"""
@@ -197,53 +382,47 @@ class ReportEngine:
 		params  = self._resolve_params(report, params or {})
 		rows    = self._execute_query(report, params)
 
-		wb = openpyxl.Workbook()
-		ws = wb.active
-		ws.title = report.name[:31]  # Excel sheet name limit
+		# write_only=True enables streaming — avoids loading everything into RAM
+		wb = openpyxl.Workbook(write_only=True)
+		ws = wb.create_sheet(title=report.name[:31])
 
-		current_row = 1
 		columns: list[str] = list(rows[0].keys()) if rows else []
+
+		header_style = Font(bold=True, color="FFFFFF")
+		header_fill  = PatternFill("solid", fgColor="4472C4")
+		title_fill   = PatternFill("solid", fgColor="336699")
+		title_font   = Font(bold=True, color="FFFFFF", size=13)
 
 		for band in report.band_list():
 			fields = band.field_list()
-			if not fields:
-				continue
+			btype  = band.band_type.value
 
-			if band.band_type.value in (
-				"title", "page_header", "summary", "page_footer"
-			):
-				# Section heading — merge across all data columns
-				col_span = max(len(columns), len(fields), 1)
-				label    = (
-					fields[0].style.get("text", band.band_type.value.replace("_", " ").title())
-					if fields else band.band_type.value.title()
+			if btype in ("title", "summary"):
+				label = (
+					fields[0].style.get("text", btype.replace("_", " ").title())
+					if fields else btype.title()
 				)
-				ws.merge_cells(
-					start_row=current_row, start_column=1,
-					end_row=current_row, end_column=col_span,
-				)
-				cell = ws.cell(row=current_row, column=1, value=label)
-				cell.font      = Font(bold=True, size=13)
+				cell = openpyxl.cell.WriteOnlyCell(ws, value=label)
+				cell.font  = title_font
+				cell.fill  = title_fill
 				cell.alignment = Alignment(horizontal="center")
-				cell.fill      = PatternFill("solid", fgColor="336699")
-				cell.font      = Font(bold=True, color="FFFFFF", size=13)
-				current_row   += 1
+				ws.append([cell])
 
-			elif band.band_type.value == "column_header":
-				# Column labels from fields, or from SQL columns when no fields defined
+			elif btype == "column_header":
 				labels = [
 					f.style.get("text") or f.data_binding or f"col_{i}"
 					for i, f in enumerate(fields)
 				] if fields else columns
-				for col_idx, label in enumerate(labels, start=1):
-					cell = ws.cell(row=current_row, column=col_idx, value=label)
-					cell.font  = Font(bold=True, color="FFFFFF")
-					cell.fill  = PatternFill("solid", fgColor="4472C4")
-					cell.alignment = Alignment(horizontal="center")
-				current_row += 1
+				row_cells = []
+				for label in labels:
+					c = openpyxl.cell.WriteOnlyCell(ws, value=label)
+					c.font  = header_style
+					c.fill  = header_fill
+					c.alignment = Alignment(horizontal="center")
+					row_cells.append(c)
+				ws.append(row_cells)
 
-			elif band.band_type.value == "detail":
-				# One row per data record
+			elif btype == "detail":
 				bindings = [
 					f.data_binding for f in fields if f.data_binding
 				] or columns
@@ -253,20 +432,14 @@ class ReportEngine:
 				}
 				for r_idx, row_data in enumerate(rows):
 					fill_color = "F2F2F2" if r_idx % 2 == 0 else "FFFFFF"
-					for col_idx, binding in enumerate(bindings, start=1):
-						raw  = row_data.get(binding)
-						val  = _fmt(raw, fmt_map.get(binding))
-						cell = ws.cell(row=current_row, column=col_idx, value=val)
-						cell.fill = PatternFill("solid", fgColor=fill_color)
-					current_row += 1
-
-		# Auto-fit column widths (heuristic)
-		for col_cells in ws.columns:
-			max_len = max(
-				(len(str(c.value)) if c.value is not None else 0 for c in col_cells),
-				default=8,
-			)
-			ws.column_dimensions[get_column_letter(col_cells[0].column)].width = min(max_len + 4, 50)
+					row_cells  = []
+					for binding in bindings:
+						raw = row_data.get(binding)
+						val = _fmt(raw, fmt_map.get(binding))
+						c   = openpyxl.cell.WriteOnlyCell(ws, value=val)
+						c.fill = PatternFill("solid", fgColor=fill_color)
+						row_cells.append(c)
+					ws.append(row_cells)
 
 		out = io.BytesIO()
 		wb.save(out)
@@ -467,18 +640,31 @@ class ReportEngine:
 
 		try:
 			if report.is_sql_source:
-				sql = report.data_source
-				if limit:
-					# Wrap in a subquery to apply LIMIT without rewriting user SQL
-					sql = f"SELECT * FROM ({sql}) __rpt_data LIMIT {int(limit)}"
+				sql = report.data_source.strip()
+				# Enforce GROUP BY ordering so group_data() partitions correctly
+				if report.group_field and not re.search(r"\bORDER\s+BY\b", sql, re.IGNORECASE):
+					sql = f"{sql.rstrip(';')}\nORDER BY {report.group_field}"
+				effective_limit = limit or self.download_row_limit or _DEFAULT_MAX_ROWS
+				if re.search(r"\bLIMIT\b", sql, re.IGNORECASE):
+					# User already has LIMIT — don't double-wrap, but warn if > cap
+					pass
+				else:
+					sql = f"SELECT * FROM ({sql}) __rpt_data LIMIT {int(effective_limit)}"
 				result = self._session.execute(text(sql), params)
 				keys   = list(result.keys())
-				return [dict(zip(keys, row)) for row in result.fetchall()]
+				rows   = [dict(zip(keys, row)) for row in result.fetchall()]
+				if len(rows) >= effective_limit:
+					log.warning(
+						"ReportForge: report %s hit row cap (%d). "
+						"Increase REPORTFORGE_MAX_ROWS or add LIMIT to your query.",
+						report.id, effective_limit,
+					)
+				return rows
 			else:
 				model_cls = self._import_model(report.data_source)
 				stmt      = select(model_cls)
-				if limit:
-					stmt = stmt.limit(limit)
+				effective_limit = limit or self.download_row_limit or _DEFAULT_MAX_ROWS
+				stmt = stmt.limit(effective_limit)
 				result = self._session.execute(stmt)
 				rows   = result.scalars().all()
 				return [self._model_to_dict(r) for r in rows]
@@ -576,24 +762,67 @@ class ReportEngine:
 		return story
 
 	def _pdf_section_band(self, band, styles) -> list:
-		"""Render TITLE / PAGE_HEADER / SUMMARY / PAGE_FOOTER as paragraphs."""
+		"""Render TITLE / SUMMARY as paragraphs (PAGE_HEADER/FOOTER handled by page callback)."""
+		# PAGE_HEADER and PAGE_FOOTER are drawn by _make_page_callback — skip here
+		if band.band_type.value in ("page_header", "page_footer"):
+			return []
 		result = []
-		pc = band.page_config if hasattr(band, "page_config") else {}
 		bg = _rl_color(band.background_color)
 
 		for field in band.field_list():
+			ftype = field.field_type.value if hasattr(field.field_type, "value") else str(field.field_type)
+
+			# LINE
+			if ftype == "line":
+				col = _rl_color(field.style.get("color", "#cccccc"))
+				result.append(HRFlowable(
+					width=f"{field.width_mm}mm",
+					thickness=field.style.get("line_width", 0.5),
+					color=col,
+					spaceAfter=2,
+				))
+				continue
+
+			# BOX
+			if ftype == "box":
+				bg_box = _rl_color(field.style.get("bg_color", "transparent"))
+				bdr    = float(field.style.get("border", 1))
+				tbl = Table([[""]], colWidths=[field.width_mm * mm], rowHeights=[field.height_mm * mm])
+				tbl.setStyle(TableStyle([
+					("BOX",    (0, 0), (-1, -1), bdr, _rl_color(field.style.get("border_color", "#000000"))),
+					("BACKGROUND", (0, 0), (-1, -1), bg_box or colors.white),
+				]))
+				result.append(tbl)
+				continue
+
+			# IMAGE
+			if ftype == "image":
+				src = field.style.get("image_src", "")
+				if src:
+					img_bytes = _fetch_logo(src)
+					if img_bytes:
+						try:
+							from reportlab.platypus import Image as RLImage
+							result.append(RLImage(
+								io.BytesIO(img_bytes),
+								width=field.width_mm * mm,
+								height=field.height_mm * mm,
+							))
+						except Exception as exc:
+							log.debug("ReportForge: image render failed: %s", exc)
+				continue
+
+			# TEXT / NUMBER / DATE (default)
 			text = field.style.get("text") or field.data_binding or ""
 			fs   = field.style.get("font_size", 12)
-			bold = field.style.get("bold", False)
-			fn   = ("Helvetica-Bold" if bold else "Helvetica")
-			color_hex = field.style.get("color", "#000000")
-
-			ps = ParagraphStyle(
+			bold = bool(field.style.get("bold", False))
+			fn   = _pdf_font(bold)
+			ps   = ParagraphStyle(
 				f"rpt_section_{field.id}",
 				parent    = styles["Normal"],
 				fontSize  = fs,
 				fontName  = fn,
-				textColor = _rl_color(color_hex),
+				textColor = _rl_color(field.style.get("color", "#000000")),
 				backColor = bg,
 				spaceAfter= 4,
 				alignment = _rl_align(field.style.get("align", "left")),
@@ -630,7 +859,7 @@ class ReportEngine:
 		tbl.setStyle(TableStyle([
 			("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#4472C4")),
 			("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
-			("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+			("FONTNAME",    (0, 0), (-1, 0), _pdf_font(True)),
 			("FONTSIZE",    (0, 0), (-1, 0), 9),
 			("BOTTOMPADDING", (0, 0), (-1, 0), 5),
 			("TOPPADDING",    (0, 0), (-1, 0), 5),
@@ -658,7 +887,7 @@ class ReportEngine:
 
 		tbl = Table(table_data)
 		ts  = [
-			("FONTNAME",  (0, 0), (-1, -1), "Helvetica"),
+			("FONTNAME",  (0, 0), (-1, -1), _pdf_font(False)),
 			("FONTSIZE",  (0, 0), (-1, -1), 9),
 			("GRID",      (0, 0), (-1, -1), 0.25, colors.lightgrey),
 			("TOPPADDING",    (0, 0), (-1, -1), 3),
