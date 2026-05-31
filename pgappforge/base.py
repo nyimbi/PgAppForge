@@ -256,7 +256,21 @@ class AppBuilder:
 
         # Initialize enhanced security modules
         self._init_enhanced_security(app)
-        
+
+        # Register template actor configs into the ActorRegistry.
+        # Non-fatal: a malformed actor section should not prevent app startup.
+        try:
+            from pgappforge.templates.registry import TemplateRegistry as _TR
+            _actor_count = _TR().register_actors()
+            if _actor_count:
+                import logging as _log
+                _log.getLogger(__name__).debug(
+                    "pgappforge: registered %d template actors", _actor_count
+                )
+        except Exception as _e:
+            import logging as _log
+            _log.getLogger(__name__).warning("Actor registration skipped: %s", _e)
+
         self._add_global_static()
         self._add_global_filters()
         app.before_request(self.sm.before_request)
