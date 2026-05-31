@@ -2768,69 +2768,114 @@ export function SNOMEDField({ label, value, onChange, error, required, domainId 
 	# ── Form components ───────────────────────────────────────────────────────
 
 	def _gen_model_form_component(self) -> str:
-		return """\
-import { View } from 'react-native';
-import { Control, Controller, FieldErrors } from 'react-hook-form';
-import { TextField } from '@components/fields/TextField';
-import { NumberField } from '@components/fields/NumberField';
-import { BooleanField } from '@components/fields/BooleanField';
-import { DateField } from '@components/fields/DateField';
-import { TextAreaField } from '@components/fields/TextAreaField';
-import { JSONBField } from '@components/fields/JSONBField';
-import { ArrayField } from '@components/fields/ArrayField';
-import { SelectField } from '@components/fields/SelectField';
+		plugins = getattr(self, '_plugins', {})
+		icd10_import = "import { ICD10Field } from '@components/fields/ICD10Field';\n" if plugins.get('icd10') else ""
+		snomed_import = "import { SNOMEDField } from '@components/fields/SNOMEDField';\n" if plugins.get('snomed') else ""
+		icd10_case = """              case 'icd10':
+                return <ICD10Field label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;
+""" if plugins.get('icd10') else ""
+		snomed_case = """              case 'snomed':
+                return <SNOMEDField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;
+""" if plugins.get('snomed') else ""
 
-export interface FieldSchema {
-  name: string;
-  label: string;
-  type: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'textarea' | 'jsonb' | 'array' | 'select' | 'inet';
-  required?: boolean;
-  integer?: boolean;
-  options?: { label: string; value: string | number }[];
-}
-
-interface ModelFormProps {
-  fields: FieldSchema[];
-  control: Control<Record<string, unknown>>;
-  errors: FieldErrors<Record<string, unknown>>;
-}
-
-export function ModelForm({ fields, control, errors }: ModelFormProps) {
-  return (
-    <View className="gap-4">
-      {fields.map((f) => (
-        <Controller
-          key={f.name}
-          control={control}
-          name={f.name}
-          render={({ field }) => {
-            const err = (errors[f.name]?.message as string) ?? undefined;
-            switch (f.type) {
-              case 'boolean':
-                return <BooleanField label={f.label} value={field.value as boolean} onChange={field.onChange} error={err} />;
-              case 'number':
-                return <NumberField label={f.label} value={field.value as number} onChange={field.onChange} error={err} required={f.required} integer={f.integer} />;
-              case 'date':
-              case 'datetime':
-                return <DateField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} mode={f.type} />;
-              case 'textarea':
-                return <TextAreaField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;
-              case 'jsonb':
-                return <JSONBField label={f.label} value={field.value as Record<string,unknown>} onChange={field.onChange} error={err} required={f.required} />;
-              case 'array':
-                return <ArrayField label={f.label} value={field.value as string[]} onChange={field.onChange} error={err} required={f.required} />;
-              case 'select':
-                return <SelectField label={f.label} value={field.value as string} onChange={field.onChange} options={f.options ?? []} error={err} required={f.required} />;
-              default:
-                return <TextField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;
-            }
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-"""
+		return (
+			"import { View } from 'react-native';\n"
+			"import { Control, Controller, FieldErrors } from 'react-hook-form';\n"
+			"import { TextField } from '@components/fields/TextField';\n"
+			"import { NumberField } from '@components/fields/NumberField';\n"
+			"import { BooleanField } from '@components/fields/BooleanField';\n"
+			"import { DateField } from '@components/fields/DateField';\n"
+			"import { TextAreaField } from '@components/fields/TextAreaField';\n"
+			"import { JSONBField } from '@components/fields/JSONBField';\n"
+			"import { ArrayField } from '@components/fields/ArrayField';\n"
+			"import { SelectField } from '@components/fields/SelectField';\n"
+			"import { InetField } from '@components/fields/InetField';\n"
+			"import { HStoreField } from '@components/fields/HStoreField';\n"
+			"import { UUIDField } from '@components/fields/UUIDField';\n"
+			"import { LTREEField } from '@components/fields/LTREEField';\n"
+			"import { NumericRangeField } from '@components/fields/NumericRangeField';\n"
+			"import { DateRangeField } from '@components/fields/DateRangeField';\n"
+			"import { MapField } from '@components/fields/MapField';\n"
+			"import { MacAddrField } from '@components/fields/MacAddrField';\n"
+			"import { TSVectorField } from '@components/fields/TSVectorField';\n"
+			"import { VectorField } from '@components/fields/VectorField';\n"
+			"import { MarkdownField } from '@components/fields/MarkdownField';\n"
+			+ icd10_import + snomed_import +
+			"\nexport interface FieldSchema {\n"
+			"  name: string;\n"
+			"  label: string;\n"
+			"  type: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'textarea' |\n"
+			"        'jsonb' | 'array' | 'select' | 'inet' | 'hstore' | 'uuid' | 'ltree' |\n"
+			"        'numeric_range' | 'date_range' | 'map' | 'macaddr' | 'tsvector' |\n"
+			"        'vector' | 'markdown' | 'icd10' | 'snomed';\n"
+			"  required?: boolean;\n"
+			"  integer?: boolean;\n"
+			"  options?: { label: string; value: string | number }[];\n"
+			"}\n\n"
+			"interface ModelFormProps {\n"
+			"  fields: FieldSchema[];\n"
+			"  control: Control<Record<string, unknown>>;\n"
+			"  errors: FieldErrors<Record<string, unknown>>;\n"
+			"}\n\n"
+			"export function ModelForm({ fields, control, errors }: ModelFormProps) {\n"
+			"  return (\n"
+			"    <View className=\"gap-4\">\n"
+			"      {fields.map((f) => (\n"
+			"        <Controller\n"
+			"          key={f.name}\n"
+			"          control={control}\n"
+			"          name={f.name}\n"
+			"          render={({ field }) => {\n"
+			"            const err = (errors[f.name]?.message as string) ?? undefined;\n"
+			"            switch (f.type) {\n"
+			"              case 'boolean':\n"
+			"                return <BooleanField label={f.label} value={field.value as boolean} onChange={field.onChange} error={err} />;\n"
+			"              case 'number':\n"
+			"                return <NumberField label={f.label} value={field.value as number} onChange={field.onChange} error={err} required={f.required} integer={f.integer} />;\n"
+			"              case 'date':\n"
+			"              case 'datetime':\n"
+			"                return <DateField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} mode={f.type} />;\n"
+			"              case 'textarea':\n"
+			"                return <TextAreaField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'jsonb':\n"
+			"                return <JSONBField label={f.label} value={field.value as Record<string,unknown>} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'array':\n"
+			"                return <ArrayField label={f.label} value={field.value as string[]} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'select':\n"
+			"                return <SelectField label={f.label} value={field.value as string} onChange={field.onChange} options={f.options ?? []} error={err} required={f.required} />;\n"
+			"              case 'inet':\n"
+			"                return <InetField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'hstore':\n"
+			"                return <HStoreField label={f.label} value={field.value as Record<string,string>} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'uuid':\n"
+			"                return <UUIDField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'ltree':\n"
+			"                return <LTREEField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'numeric_range':\n"
+			"                return <NumericRangeField label={f.label} value={field.value as {lower?:number;upper?:number}} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'date_range':\n"
+			"                return <DateRangeField label={f.label} value={field.value as {lower?:string;upper?:string}} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'map':\n"
+			"                return <MapField label={f.label} value={field.value as string} error={err} />;\n"
+			"              case 'macaddr':\n"
+			"                return <MacAddrField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"              case 'tsvector':\n"
+			"                return <TSVectorField label={f.label} value={field.value as string} />;\n"
+			"              case 'vector':\n"
+			"                return <VectorField label={f.label} value={field.value as number[]} />;\n"
+			"              case 'markdown':\n"
+			"                return <MarkdownField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			+ icd10_case + snomed_case +
+			"              default:\n"
+			"                return <TextField label={f.label} value={field.value as string} onChange={field.onChange} error={err} required={f.required} />;\n"
+			"            }\n"
+			"          }}\n"
+			"        />\n"
+			"      ))}\n"
+			"    </View>\n"
+			"  );\n"
+			"}\n"
+		)
 
 	def _gen_wizard_form(self) -> str:
 		return """\
