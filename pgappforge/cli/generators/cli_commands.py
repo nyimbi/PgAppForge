@@ -55,7 +55,8 @@ def validate_database_uri(ctx, param, value):
             try:
                 engine = create_engine(value, connect_args={"connect_timeout": 5})
                 with engine.connect() as conn:
-                    conn.execute('SELECT 1')
+                    from sqlalchemy import text as _sa_text
+                    conn.execute(_sa_text('SELECT 1'))
                 click.echo('✅ Database connection successful')
                 engine.dispose()
             except Exception as e:
@@ -247,6 +248,30 @@ def validate_version(ctx, param, value):
         raise
     except Exception as e:
         raise click.BadParameter(f'Invalid version format: {e}')
+
+
+def _emit_error(cmd_name, exc, verbose=False):
+    from sqlalchemy.exc import OperationalError, ProgrammingError
+    import click
+    click.echo(f"\n ERROR: {cmd_name} failed: {exc}", err=True)
+    if isinstance(exc, OperationalError):
+        click.echo(
+            "\n TIP: Database connection failed. Check:\n"
+            "  * DB server running and reachable\n"
+            "  * URI: postgresql://user:pass@host:port/dbname\n"
+            "  * User has CONNECT privilege", err=True)
+    elif isinstance(exc, PermissionError):
+        click.echo("\n TIP: Cannot write output dir. Check permissions.", err=True)
+    elif isinstance(exc, ProgrammingError):
+        click.echo(
+            "\n TIP: Schema query failed. Check:\n"
+            "  * User has USAGE on schema (default: public)\n"
+            "  * Run flask fab gen inspect to verify", err=True)
+    else:
+        click.echo("\n TIP: Rerun with --verbose for full traceback.", err=True)
+    if verbose:
+        import traceback
+        click.echo(traceback.format_exc(), err=True)
 
 
 @click.group()
@@ -1128,6 +1153,16 @@ def generate_mobile(
         --uri postgresql://user:pass@localhost/mydb \\
         --name MyApp --app-id com.example.myapp \\
         --output-dir ./my-mobile-app
+
+    \b
+    Plugin auto-detection (based on schema table names):
+      bpm      Tables starting with bpm_      -> BPM workflow screens
+      approval Tables starting with approval_ -> Approval action buttons
+      icd10    Table named icd10_code         -> ICD-10 picker field
+      snomed   Table named snomed_concept     -> SNOMED CT picker field
+      wallet   Tables starting with wallet_   -> Wallet screens
+      offline  Column: updated_at/deleted_at  -> WatermelonDB sync
+      voice    Pass --features voice          -> TTS + mic input
     """
     if verbose:
         logging.basicConfig(level=logging.INFO)

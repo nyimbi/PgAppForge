@@ -137,7 +137,8 @@ class TestFullAppGenerator:
         from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
         from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
-        with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
+        uri = os.environ.get("PG_TEST_URI") or f"sqlite:///{test_db}"
+        with EnhancedDatabaseInspector(uri) as insp:
             config = AppGenerationConfig(
                 app_name="TestApp",
                 enable_docker=False,
@@ -154,7 +155,8 @@ class TestFullAppGenerator:
         from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
         out = tmp_path / "app"
-        with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
+        uri = os.environ.get("PG_TEST_URI") or f"sqlite:///{test_db}"
+        with EnhancedDatabaseInspector(uri) as insp:
             config = AppGenerationConfig(app_name="SyntaxTest", enable_docker=False)
             FullAppGenerator(insp, config, str(out)).generate_complete_app()
 
@@ -174,7 +176,8 @@ class TestFullAppGenerator:
         from pgappforge.cli.generators.database_inspector import EnhancedDatabaseInspector
         from pgappforge.cli.generators.app_generator import FullAppGenerator, AppGenerationConfig
 
-        with EnhancedDatabaseInspector("sqlite:///:memory:") as insp:
+        uri = os.environ.get("PG_TEST_URI") or f"sqlite:///{test_db}"
+        with EnhancedDatabaseInspector(uri) as insp:
             config = AppGenerationConfig(app_name="FileTest", enable_docker=False)
             FullAppGenerator(insp, config, str(tmp_path)).generate_complete_app()
 

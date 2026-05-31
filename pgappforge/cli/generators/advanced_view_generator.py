@@ -15,8 +15,14 @@ from pathlib import Path
 import logging
 from datetime import datetime
 
-from .view_generator import ViewGenerator, ViewType
+from .view_generator import BeautifulViewGenerator as ViewGenerator
 from .database_inspector import EnhancedDatabaseInspector, MasterDetailInfo
+from enum import Enum
+
+
+class ViewType(str, Enum):
+    BASIC = "basic"
+    ADVANCED = "advanced"
 
 logger = logging.getLogger(__name__)
 

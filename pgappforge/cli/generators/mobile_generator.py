@@ -48,6 +48,14 @@ def _label(s: str) -> str:
 	"""snake_case → Title Case label"""
 	return " ".join(w.capitalize() for w in re.split(r"[_\-\s]+", s) if w)
 
+import re as _re_ident
+_IDENT_RE = _re_ident.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+def _safe_ident(s: str) -> str:
+	if not _IDENT_RE.match(s):
+		raise ValueError(f"Refusing to generate for unsafe identifier: {s!r}")
+	return s
+
 def _ts_type(col_type: ColumnType) -> str:
 	"""Map ColumnType → TypeScript type string."""
 	return {
@@ -68,9 +76,9 @@ def _zod_base(col_type: ColumnType, col_name: str) -> str:
 	"""Return base Zod schema for a column type."""
 	name = col_name.lower()
 	if col_type == ColumnType.NUMERIC:
-		return "z.number().int()"
-	if col_type == ColumnType.NUMERIC:
-		return "z.number()"
+		name_lower = col_name.lower()
+		is_int = any(h in name_lower for h in ("count", "qty", "quantity", "_id", "year", "age", "num"))
+		return "z.number().int()" if is_int else "z.number()"
 	if col_type == ColumnType.BOOLEAN:
 		return "z.boolean()"
 	if col_type == ColumnType.DATE_TIME:
@@ -119,6 +127,26 @@ def _parse_check_values(constraints: list, col_name: str) -> list[str]:
 
 @dataclass
 class MobileGenerationConfig:
+	"""Configuration for MobileGenerator.
+
+	Attributes:
+		app_name:      Human-readable application name (e.g. "My Field App").
+		app_id:        Reverse-DNS bundle identifier (e.g. "com.acme.fieldapp").
+		               Auto-derived from app_name when left empty.
+		version:       SemVer string surfaced in package.json and app.json.
+		api_base_url:  Base URL of the pgappforge REST API the app will call.
+		               Must use https:// in production; http:// outside localhost
+		               will trigger a warning (tokens sent in cleartext).
+		primary_color: Hex colour used as the app's brand/tint colour (indigo-500
+		               by default).
+		features:      Feature flags that control which screens are generated.
+		               Recognised values: "auth", "list", "detail", "create",
+		               "edit", "voice".
+		framework:     Generation target.  Valid values: "expo" | "pwa".
+		               "expo" (default) produces a React Native / Expo SDK 52 app.
+		               "pwa" produces a Progressive Web App scaffold.
+	"""
+
 	app_name: str
 	app_id: str = ""              # com.company.myapp
 	version: str = "1.0.0"
@@ -127,12 +155,22 @@ class MobileGenerationConfig:
 	features: list[str] = field(default_factory=lambda: [
 		"auth", "list", "detail", "create", "edit",
 	])
-	framework: str = "expo"
+	framework: str = "expo"       # valid values: "expo" | "pwa"
 
 	def __post_init__(self):
+		import warnings
 		if not self.app_id:
 			slug = re.sub(r"[^a-z0-9]", "", self.app_name.lower())
 			self.app_id = f"com.pgappforge.{slug}"
+		if (
+			self.api_base_url.startswith("http://")
+			and "localhost" not in self.api_base_url
+		):
+			warnings.warn(
+				f"api_base_url uses http:// outside localhost — tokens will be sent "
+				f"in cleartext. Use https:// in production.",
+				stacklevel=2,
+			)
 
 
 # ─── Generator ────────────────────────────────────────────────────────────────
@@ -213,6 +251,11 @@ class MobileGenerator:
 			if not info.is_association_table
 			and not any(name.startswith(p) for p in _system_prefixes)
 		}
+
+		for tname, tinfo in all_tables.items():
+			_safe_ident(tname)
+			for col in tinfo.columns:
+				_safe_ident(col.name)
 
 		plugins = self._detect_plugins(all_tables)
 		self._tables = tables
@@ -355,20 +398,20 @@ class MobileGenerator:
 		logger.info("Generated %d mobile app files in %s", len(files), self.output_dir)
 		return files
 
-	def _detect_plugins(self, tables: dict) -> dict[str, bool]:
+	def _detect_plugins(self, tables: dict) -> dict:
 		names = set(tables.keys())
 		return {
-			"bpm": any(n.startswith("bpm_") for n in names),
+			"bpm":      any(n.startswith("bpm_") for n in names),
 			"approval": any(n.startswith("approval_") for n in names),
-			"icd10": "icd10_code" in names,
-			"snomed": "snomed_concept" in names,
-			"wallet": any(n.startswith("wallet_") for n in names),
-			"offline": any(
-				c.get("name") in ("updated_at", "deleted_at", "synced_at")
+			"icd10":    "icd10_code" in names,
+			"snomed":   "snomed_concept" in names,
+			"wallet":   any(n.startswith("wallet_") for n in names),
+			"offline":  any(
+				col.name in ("updated_at", "deleted_at", "synced_at")
 				for t in tables.values()
-				for c in (t if isinstance(t, list) else t.get("columns", []))
+				for col in t.columns
 			),
-			"voice": True,
+			"voice":    "voice" in list(getattr(self.config, "features", [])),
 		}
 
 	# ── Root config files ─────────────────────────────────────────────────────
@@ -2929,7 +2972,7 @@ export function MarkdownField({ label, value, onChange, error, required, lines =
 		"""ICD-10-CM search field — only generated when icd10 tables are present."""
 		return """\
 import { View, Text, TextInput, Pressable, Modal, FlatList, ActivityIndicator } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@lib/api/client';
 import { Ionicons } from '@expo/vector-icons';
@@ -2964,14 +3007,15 @@ export function ICD10Field({ label, value, onChange, error, required, billableOn
     enabled: debouncedSearch.length >= 2,
   });
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const handleSearch = (text: string) => {
     setSearch(text);
-    const t = setTimeout(() => setDebouncedSearch(text), 300);
-    return () => clearTimeout(t);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(text), 300);
   };
 
   const select = (item: ICD10Result) => {
-    onChange(item.display);
+    onChange(item.code);
     setOpen(false);
     setSearch('');
     setDebouncedSearch('');
@@ -3060,7 +3104,7 @@ export function ICD10Field({ label, value, onChange, error, required, billableOn
 		"""SNOMED CT concept search field — only generated when snomed_concept table is present."""
 		return """\
 import { View, Text, TextInput, Pressable, Modal, FlatList, ActivityIndicator } from 'react-native';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@lib/api/client';
 import { Ionicons } from '@expo/vector-icons';
@@ -3104,9 +3148,11 @@ export function SNOMEDField({ label, value, onChange, error, required, domainId 
     enabled: debouncedSearch.length >= 2,
   });
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const handleSearch = (text: string) => {
     setSearch(text);
-    setTimeout(() => setDebouncedSearch(text), 300);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(text), 300);
   };
 
   const select = (item: SNOMEDResult) => {
@@ -3753,6 +3799,8 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 
 	def _gen_permissions_lib(self) -> str:
 		return (
+			"/** PRESENTATIONAL ONLY — server-side authorization is the source of truth.\n"
+			" *  These helpers control UI visibility only. Never use them to gate data or API calls. */\n"
 			"import { useQuery } from '@tanstack/react-query';\n"
 			"import { apiClient } from './api/client';\n\n"
 			"export type UserRole = { name: string; permissions: string[] };\n\n"
@@ -4027,9 +4075,9 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 	def _gen_sync_provider(self) -> str:
 		"""Generates src/providers/SyncProvider.tsx."""
 		return """\
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { useAuth } from '@lib/auth';
+import { getStoredToken } from '@lib/auth';
 import { syncDB } from '@/src/db/sync';
 
 interface SyncContextValue {
@@ -4043,7 +4091,8 @@ export function useSyncContext() {
 }
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
+  const [token, setToken] = useState<string | null>(null);
+  useEffect(() => { getStoredToken().then(setToken); }, []);
   const appState = useRef<AppStateStatus>(AppState.currentState);
 
   const syncNow = async () => {
@@ -4319,8 +4368,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 			"echo '✓  All checks passed'\n"
 		)
 
-	def _write_files(self, files: dict[str, str]) -> None:
-		for rel_path, content in files.items():
-			abs_path = self.output_dir / rel_path
-			abs_path.parent.mkdir(parents=True, exist_ok=True)
-			abs_path.write_text(content, encoding="utf-8")
+	def _write_files(self, files: dict) -> None:
+		import shutil
+		self.output_dir.mkdir(parents=True, exist_ok=True)
+		needed = sum(len(c.encode("utf-8")) for c in files.values()) * 2
+		free = shutil.disk_usage(self.output_dir).free
+		if free < needed + 50 * 1024 * 1024:
+			raise OSError(
+				f"Insufficient disk space: need {needed / 1e6:.1f} MB, "
+				f"have {free / 1e6:.1f} MB free at {self.output_dir}"
+			)
+		from .file_operations import GenerationTransaction
+		with GenerationTransaction(self.output_dir, "MobileGenerator") as tx:
+			tx.add_files(files)

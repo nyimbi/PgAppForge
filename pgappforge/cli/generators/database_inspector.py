@@ -204,7 +204,9 @@ class EnhancedDatabaseInspector:
         self._table_stats: Dict[str, Dict[str, Any]] = {}
         self._relationship_cache: Dict[str, List[RelationshipInfo]] = {}
         self._association_tables: Set[str] = set()
-        
+        self._analysis_cache = None
+        self._table_info_cache: Dict[str, TableInfo] = {}
+
         # Resource management flags
         self._is_connected = False
         self._auto_cleanup = True
@@ -317,6 +319,9 @@ class EnhancedDatabaseInspector:
         Returns:
             Dictionary containing complete database analysis
         """
+        if self._analysis_cache is not None:
+            return self._analysis_cache
+
         logger.info("Starting comprehensive database analysis...")
 
         tables = self.get_all_tables()
@@ -341,7 +346,8 @@ class EnhancedDatabaseInspector:
                 analysis['relationships'][table_name] = table_info.relationships
 
         logger.info(f"Analysis complete. Found {len(analysis['tables'])} tables")
-        return analysis
+        self._analysis_cache = analysis
+        return self._analysis_cache
 
     def analyze_table(self, table_name: str) -> TableInfo:
         """
@@ -353,6 +359,9 @@ class EnhancedDatabaseInspector:
         Returns:
             Complete table analysis information
         """
+        if table_name in self._table_info_cache:
+            return self._table_info_cache[table_name]
+
         table = self.metadata.tables[table_name]
 
         try:
@@ -360,10 +369,13 @@ class EnhancedDatabaseInspector:
         except NotImplementedError:
             table_comment = {"text": None}
 
+        # Fetch all column metadata once to avoid N+1 per-column inspector calls
+        column_meta = {c["name"]: c for c in self.inspector.get_columns(table_name)}
+
         # Analyze columns
         columns = []
         for column in table.columns:
-            column_info = self._analyze_column(column, table_name)
+            column_info = self._analyze_column(column, table_name, column_meta)
             columns.append(column_info)
 
         # Analyze relationships
@@ -381,7 +393,7 @@ class EnhancedDatabaseInspector:
         view_types = self._suggest_view_types(columns, relationships, is_association)
         security_level = self._assess_security_level(columns)
 
-        return TableInfo(
+        result = TableInfo(
             name=table_name,
             schema=table.schema,
             comment=table_comment.get('text') if table_comment else None,
@@ -398,18 +410,24 @@ class EnhancedDatabaseInspector:
             view_types=view_types,
             security_level=security_level
         )
+        self._table_info_cache[table_name] = result
+        return result
 
-    def _analyze_column(self, column: Column, table_name: str) -> ColumnInfo:
+    def _analyze_column(self, column: Column, table_name: str,
+                        column_meta: Optional[Dict[str, Any]] = None) -> ColumnInfo:
         """Analyze a single column with enhanced metadata."""
         sql_type = column.type
         type_str = str(sql_type)
 
-        # Get column comment
-        column_data = next(
-            (col for col in self.inspector.get_columns(table_name)
-             if col['name'] == column.name),
-            {}
-        )
+        # Use pre-fetched metadata dict when available to avoid N+1 inspector calls
+        if column_meta is not None:
+            column_data = column_meta.get(column.name, {})
+        else:
+            column_data = next(
+                (col for col in self.inspector.get_columns(table_name)
+                 if col['name'] == column.name),
+                {}
+            )
         comment = column_data.get('comment')
 
         # Determine column category
@@ -875,35 +893,29 @@ class EnhancedDatabaseInspector:
         return icon_map.get(category, 'fa-table')
 
     def _estimate_table_rows(self, table_name: str) -> int:
-        """Estimate the number of rows in a table with specific error handling."""
+        """Estimate the number of rows in a table using pg_class.reltuples (O(1), no scan)."""
+        # Return cached value if already fetched
+        if table_name in self._table_stats and "reltuples" in self._table_stats[table_name]:
+            return self._table_stats[table_name]["reltuples"]
+
         try:
-            from sqlalchemy import text, select, func
-            from sqlalchemy.sql import table
-            from sqlalchemy.exc import SQLAlchemyError, DatabaseError, ProgrammingError
-            
-            # Create a table reference for safe SQL generation
-            table_ref = table(table_name)
-            stmt = select(func.count()).select_from(table_ref)
-            
+            stmt = text(
+                "SELECT reltuples::BIGINT "
+                "FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE c.relname = :t AND n.nspname = ANY(current_schemas(false))"
+            )
             with self.engine.connect() as conn:
-                result = conn.execute(stmt)
-                return result.scalar() or 0
-                
-        except ProgrammingError as e:
-            # Table doesn't exist or syntax error
-            logger.warning(f"Table {table_name} may not exist or has syntax issues: {e}")
-            return 0
-        except DatabaseError as e:
-            # Database connection or execution error
-            logger.warning(f"Database error estimating rows for {table_name}: {e}")
-            return 0
-        except SQLAlchemyError as e:
-            # General SQLAlchemy error
-            logger.warning(f"SQLAlchemy error estimating rows for {table_name}: {e}")
-            return 0
+                result = conn.execute(stmt, {"t": table_name})
+                row = result.fetchone()
+                estimate = int(row[0]) if row and row[0] is not None else 0
+
+            self._table_stats.setdefault(table_name, {})["reltuples"] = estimate
+            return estimate
+
         except Exception as e:
-            # Unexpected error
-            logger.error(f"Unexpected error estimating rows for {table_name}: {e}")
+            logger.warning(f"Could not estimate rows for {table_name} via pg_class: {e}")
+            self._table_stats.setdefault(table_name, {})["reltuples"] = 0
             return 0
 
     def _suggest_view_types(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo], is_association: bool) -> List[str]:
@@ -1081,40 +1093,43 @@ class EnhancedDatabaseInspector:
         else:
             return 'StringField'
 
+    def _build_reverse_fk_index(self) -> Dict[str, List[Tuple[str, RelationshipInfo]]]:
+        """Build reverse FK lookup once in O(T); eliminates O(T^2) master-detail scan."""
+        if hasattr(self, "_reverse_fk_index"):
+            return self._reverse_fk_index
+        idx: Dict[str, List[Tuple[str, RelationshipInfo]]] = {}
+        for child_name in self.get_all_tables():
+            try:
+                for rel in self._analyze_relationships(child_name):
+                    remote = rel.remote_table
+                    if remote and rel.type == RelationshipType.MANY_TO_ONE:
+                        idx.setdefault(remote, []).append((child_name, rel))
+            except Exception:
+                pass
+        self._reverse_fk_index = idx
+        return idx
+
     def analyze_master_detail_patterns(self, table_name: str) -> List[MasterDetailInfo]:
         """
         Analyze potential master-detail patterns for a table.
-        
+
         Args:
             table_name: Parent table to analyze
-            
+
         Returns:
             List of suitable master-detail patterns
         """
-        master_detail_patterns = []
-        
-        # Get all tables that reference this table (potential children)
-        all_tables = self.get_all_tables()
-        
-        for potential_child in all_tables:
-            if potential_child == table_name:
-                continue
-                
-            child_relationships = self._analyze_relationships(potential_child)
-            
-            for relationship in child_relationships:
-                if (relationship.remote_table == table_name and 
-                    relationship.type == RelationshipType.MANY_TO_ONE):
-                    
-                    # Analyze if this is suitable for master-detail
-                    master_detail_info = self._analyze_master_detail_suitability(
-                        table_name, potential_child, relationship
-                    )
-                    
-                    if master_detail_info:
-                        master_detail_patterns.append(master_detail_info)
-        
-        return master_detail_patterns
+        idx = self._build_reverse_fk_index()
+        children = idx.get(table_name, [])
+        results = []
+        for child_name, rel in children:
+            try:
+                info = self._analyze_master_detail_suitability(table_name, child_name, rel)
+                if info is not None:
+                    results.append(info)
+            except Exception:
+                pass
+        return results
     
     def _analyze_master_detail_suitability(self, parent_table: str, child_table: str, 
                                          relationship: RelationshipInfo) -> Optional[MasterDetailInfo]:

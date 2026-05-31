@@ -14,11 +14,20 @@ Generates complete, production-ready PgAppForge applications with:
 
 import logging
 import os
+import re as _re_app
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass
 from pathlib import Path
 from jinja2 import Environment, BaseLoader, Template
+
+_IDENT_RE_APP = _re_app.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+
+def _safe_ident(s):
+    if not _IDENT_RE_APP.match(s):
+        raise ValueError(f"Refusing to generate for unsafe identifier: {s!r}")
+    return s
 
 from .database_inspector import EnhancedDatabaseInspector
 from .model_generator import EnhancedModelGenerator, ModelGenerationConfig
@@ -436,15 +445,16 @@ class FullAppGenerator:
         self.generated_files['docs/ARCHITECTURE.md'] = self._generate_architecture_docs()
 
     def _write_files_to_disk(self):
-        """Write all generated files to disk."""
-        for file_path, content in self.generated_files.items():
-            full_path = self.output_dir / file_path
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(full_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-
-        logger.info(f"Written {len(self.generated_files)} files to {self.output_dir}")
+        """Write all generated files to disk via atomic transaction."""
+        import shutil
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        needed = sum(len(c.encode("utf-8")) for c in self.generated_files.values()) * 2
+        free = shutil.disk_usage(self.output_dir).free
+        if free < needed + 50 * 1024 * 1024:
+            raise OSError(f"Insufficient disk: need {needed/1e6:.1f} MB, have {free/1e6:.1f} MB")
+        from .file_operations import GenerationTransaction
+        with GenerationTransaction(self.output_dir, "FullAppGenerator") as tx:
+            tx.add_files(self.generated_files)
 
     def _flatten_structure(self, structure: Dict[str, Any], parent: str = "") -> List[str]:
         """Flatten nested structure dictionary to list of paths."""
@@ -522,7 +532,7 @@ def create_app(config_name=None):
     limiter.init_app(app)
     {% endif %}
     {% if config.enable_websockets %}
-    socketio.init_app(app, cors_allowed_origins="*")
+    socketio.init_app(app, cors_allowed_origins=([o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o] or False))
     {% endif %}
 
     # Initialize AppBuilder
@@ -1429,7 +1439,7 @@ import os
 
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
+    SECRET_KEY = os.environ["SECRET_KEY"]  # required — set in .env
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "SQLALCHEMY_DATABASE_URI",
         "postgresql://user:password@localhost/appdb"
@@ -1449,7 +1459,6 @@ from .config import Config
 class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_ECHO = False
-    WTF_CSRF_ENABLED = False  # easier local testing
 '''
 
     def _generate_prod_config(self) -> str:
@@ -1460,6 +1469,11 @@ from .config import Config
 class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = "https"
     # Set SECRET_KEY via environment — never hardcode
 '''
 
@@ -1471,7 +1485,6 @@ from .config import Config
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "postgresql://user:password@localhost/test_appdb"
-    WTF_CSRF_ENABLED = False
 '''
 
     # ─── Database ────────────────────────────────────────────────────────────
@@ -1567,6 +1580,7 @@ def downgrade():
 
     def _generate_db_init_script(self) -> str:
         return f'''"""Initialize database with default data."""
+import os, secrets, sys
 from app import create_app, db
 from pgappforge.security.sqla.models import User
 
@@ -1577,13 +1591,18 @@ with app.app_context():
     # Create admin user if none exists
     if not db.session.query(User).first():
         from app import appbuilder
+        pw = os.environ.get("ADMIN_PASSWORD")
+        if not pw:
+            pw = secrets.token_urlsafe(24)
+            print(f"Generated admin password (set ADMIN_PASSWORD to override):\\n   {{pw}}", file=sys.stderr)
+        email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
         appbuilder.sm.add_user(
             username="admin",
             firstname="Admin",
             lastname="User",
-            email="admin@{self.config.app_name.lower()}.local",
+            email=email,
             role=appbuilder.sm.find_role(appbuilder.sm.auth_role_admin),
-            password="admin",
+            password=pw,
         )
     db.session.commit()
     print("Database initialized.")
@@ -1841,7 +1860,7 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
+      POSTGRES_PASSWORD: ${{POSTGRES_PASSWORD:?POSTGRES_PASSWORD env var required}}
       POSTGRES_DB: {name}
     volumes:
       - pgdata:/var/lib/postgresql/data

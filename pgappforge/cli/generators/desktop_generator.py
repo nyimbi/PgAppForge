@@ -31,8 +31,17 @@ from __future__ import annotations
 
 import json
 import logging
+import re as _re_dg
 from dataclasses import dataclass, field
 from pathlib import Path
+
+_IDENT_RE_DG = _re_dg.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+
+def _safe_ident(s: str) -> str:
+	if not _IDENT_RE_DG.match(s):
+		raise ValueError(f"Refusing to generate for unsafe identifier: {s!r}")
+	return s
 
 logger = logging.getLogger(__name__)
 
@@ -607,7 +616,12 @@ class DesktopGenerator:
 		)
 
 	def _write_files(self, files: dict[str, str]) -> None:
-		for rel_path, content in files.items():
-			abs_path = self.output_dir / rel_path
-			abs_path.parent.mkdir(parents=True, exist_ok=True)
-			abs_path.write_text(content, encoding="utf-8")
+		import shutil
+		self.output_dir.mkdir(parents=True, exist_ok=True)
+		needed = sum(len(c.encode("utf-8")) for c in files.values()) * 2
+		free = shutil.disk_usage(self.output_dir).free
+		if free < needed + 50 * 1024 * 1024:
+			raise OSError(f"Insufficient disk: need {needed/1e6:.1f} MB, have {free/1e6:.1f} MB")
+		from .file_operations import GenerationTransaction
+		with GenerationTransaction(self.output_dir, "DesktopGenerator") as tx:
+			tx.add_files(files)
