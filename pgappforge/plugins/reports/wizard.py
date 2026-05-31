@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from markupsafe import escape as _e
 from typing import Any
+from ._utils import _he
 
 from flask import current_app, jsonify, redirect, request, session, url_for
 from pgappforge import BaseView, expose
@@ -47,10 +47,6 @@ def _save_state(state: dict[str, Any]) -> None:
     session[_sess_key()] = state
     session.modified = True
 
-
-def _he(text: str) -> str:
-    """HTML-escape a string for safe embedding in HTML."""
-    return str(_e(str(text) if text is not None else ""))
 
 
 # ── Shared HTML shell ─────────────────────────────────────────────────────────

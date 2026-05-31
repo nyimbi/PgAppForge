@@ -562,15 +562,7 @@ def _list_html(reports: list[dict[str, Any]]) -> str:
 	""")
 
 
-def _he(text: str) -> str:
-	"""HTML-escape."""
-	return (
-		str(text)
-		.replace("&", "&amp;")
-		.replace("<", "&lt;")
-		.replace(">", "&gt;")
-		.replace('"', "&quot;")
-	)
+from ._utils import _he
 
 
 # ---------------------------------------------------------------------------

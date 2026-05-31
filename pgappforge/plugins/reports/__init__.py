@@ -851,14 +851,7 @@ class ReportsPlugin(BasePlugin):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _he(text: str) -> str:
-	return (
-		str(text)
-		.replace("&", "&amp;")
-		.replace("<", "&lt;")
-		.replace(">", "&gt;")
-		.replace('"', "&quot;")
-	)
+from ._utils import _he
 
 
 def _get_config(key: str, default: Any = None) -> Any:

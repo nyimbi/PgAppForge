@@ -10,16 +10,13 @@ import json
 import logging
 
 import sqlalchemy as sa
+from ._utils import _he
 from flask import abort, jsonify, make_response, request
 from pgappforge import BaseView, expose
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
 
-
-def _he(text: str) -> str:
-	from markupsafe import escape
-	return str(escape(str(text) if text is not None else ""))
 
 
 def _snapshot(report, session) -> dict:

@@ -22,16 +22,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import sqlalchemy as sa
+from ._utils import _he
 from flask import abort, jsonify, make_response, request
 from pgappforge import BaseView, expose
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
 
-
-def _he(text: str) -> str:
-	from markupsafe import escape
-	return str(escape(str(text) if text is not None else ""))
 
 
 class DashboardView(BaseView):
@@ -259,7 +256,8 @@ async function createBoard(){{
 		from flask_login import current_user
 		from .models import Dashboard
 		from .engine import ReportEngine
-		from .dispatch import send_report_email, DispatchStatus
+		from .dispatch import send_report_email
+		from .models import DispatchStatus
 		from .models import ReportDispatch
 
 		to_email = request.form.get("to_email", "").strip()
