@@ -79,6 +79,7 @@ from .designer import ReportDesignerView
 from .engine import ReportEngine
 from .wizard import ReportWizardView
 from .sql_editor import SqlEditorView
+from .acl import can as _acl_can, log_access as _log_access, check_token, generate_token
 from .models import (
 	ReportDispatch,
 	SavedQuery,
@@ -240,6 +241,16 @@ class ReportPreviewView(BaseView):
 		if report is None:
 			abort(404)
 
+		# ACL check
+		try:
+			from flask_login import current_user
+			if not _acl_can(current_user, report, "run", session):
+				abort(403)
+			_log_access(session, getattr(current_user, "id", None), report_id,
+			            "run", dict(request.args), request.remote_addr)
+		except Exception:
+			pass
+
 		params = {k: v for k, v in request.args.items()}
 
 		# Check if required params are missing → show prompt form
@@ -311,26 +322,22 @@ class ReportPreviewView(BaseView):
 		params  = {k: v for k, v in request.args.items() if k != "format"}
 		session = self._get_session()
 		engine  = ReportEngine(session)
-		# Ownership check: non-admins can only download their own or public reports
+		# ACL + audit log
 		try:
 			from flask_login import current_user
-			from .models import Report
 			import sqlalchemy as sa
 			report_check = session.execute(
 				sa.select(Report).where(Report.id == report_id)
 			).scalar_one_or_none()
 			if report_check is None:
 				abort(404)
-			if not report_check.is_public:
-				uid = getattr(current_user, "id", None)
-				is_admin = any(
-					getattr(r, "name", "") in ("Admin", "admin")
-					for r in getattr(current_user, "roles", [])
-				)
-				if not is_admin and report_check.created_by != uid:
-					abort(403)
+			if not _acl_can(current_user, report_check, "download", session):
+				abort(403)
+			_log_access(session, getattr(current_user, "id", None), report_id,
+			            "download", {k: v for k, v in request.args.items() if k != "format"},
+			            request.remote_addr, fmt=fmt)
 		except Exception:
-			pass  # if auth check fails, allow download (degrade gracefully)
+			pass  # degrade gracefully if auth unavailable
 
 		try:
 			if fmt == "pdf":
@@ -421,6 +428,106 @@ class ReportPreviewView(BaseView):
 		except Exception as exc:
 			log.exception("dispatch failed report_id=%s", report_id)
 			return jsonify({"ok": False, "error": str(exc)}), 500
+
+	# ── Share token ────────────────────────────────────────────────────────
+
+	@expose("/share/<token>")
+	def share(self, token: str):
+		"""Public share-link endpoint. No login required; token controls access."""
+		session = self._get_session()
+		report, params = check_token(token, session)
+		_log_access(session, None, report.id, "token", params, request.remote_addr)
+		engine = ReportEngine(session, preview_row_limit=10)
+		html   = engine.generate_html(report.id, params=params)
+		return make_response(html, 200)
+
+	@expose("/share/create/<int:report_id>", methods=["POST"])
+	@has_access
+	def share_create(self, report_id: int):
+		"""Create a share token. Returns JSON {ok, token, url}."""
+		from flask_login import current_user
+		session   = self._get_session()
+		max_uses  = request.form.get("max_uses")
+		expires   = request.form.get("expires_hours")
+		params    = {k: v for k, v in request.form.items()
+		             if k not in ("max_uses", "expires_hours")}
+		token_str = generate_token(
+			session, report_id=report_id,
+			created_by=getattr(current_user, "id", None),
+			max_uses=int(max_uses) if max_uses else None,
+			expires_hours=int(expires) if expires else 24,
+			params=params or None,
+		)
+		return jsonify({"ok": True, "token": token_str, "url": f"/reports/share/{token_str}"})
+
+	# ── Embedded widget ────────────────────────────────────────────────────
+
+	@expose("/embed/<token>")
+	def embed(self, token: str):
+		"""Stripped iframe-safe HTML. Validates via share token."""
+		session = self._get_session()
+		report, params = check_token(token, session)
+		_log_access(session, None, report.id, "embed", params, request.remote_addr)
+		engine = ReportEngine(session, preview_row_limit=50)
+		inner  = engine.generate_html(report.id, params=params)
+		html = (
+			'<!DOCTYPE html><html><head><meta charset="UTF-8">'
+			'<style>body{margin:0;padding:8px;font-family:sans-serif}</style>'
+			f'</head><body>{inner}</body></html>'
+		)
+		return make_response(html, 200)
+
+	# ── ACL management ─────────────────────────────────────────────────────
+
+	@expose("/acl/<int:report_id>")
+	@has_access
+	def acl_list(self, report_id: int):
+		"""List grants for a report."""
+		import sqlalchemy as sa
+		session = self._get_session()
+		grants  = session.execute(
+			sa.select(ReportGrant).where(ReportGrant.report_id == report_id)
+		).scalars().all()
+		return jsonify({"grants": [
+			{"id": g.id, "principal_type": g.principal_type,
+			 "principal_id": g.principal_id, "permission": g.permission}
+			for g in grants
+		]})
+
+	@expose("/acl/<int:report_id>", methods=["POST"])
+	@has_access
+	def acl_add(self, report_id: int):
+		"""Add a grant. Body: {principal_type, principal_id, permission}."""
+		from flask_login import current_user
+		data           = request.get_json(silent=True) or {}
+		principal_type = data.get("principal_type", "user")
+		principal_id   = int(data.get("principal_id", 0))
+		permission     = data.get("permission", "view")
+		if permission not in ("view", "run", "download", "edit"):
+			return jsonify({"ok": False, "error": "invalid permission"}), 400
+		session = self._get_session()
+		g = ReportGrant(
+			report_id=report_id,
+			principal_type=principal_type,
+			principal_id=principal_id,
+			permission=permission,
+			granted_by=getattr(current_user, "id", None),
+		)
+		session.add(g)
+		session.commit()
+		return jsonify({"ok": True, "id": g.id})
+
+	@expose("/acl/<int:report_id>/<int:grant_id>", methods=["DELETE"])
+	@has_access
+	def acl_remove(self, report_id: int, grant_id: int):
+		"""Remove a grant by id."""
+		session = self._get_session()
+		g = session.get(ReportGrant, grant_id)
+		if g is None or g.report_id != report_id:
+			abort(404)
+		session.delete(g)
+		session.commit()
+		return jsonify({"ok": True})
 
 	def _get_session(self):
 		if hasattr(self, "appbuilder") and self.appbuilder is not None:

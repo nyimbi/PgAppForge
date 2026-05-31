@@ -590,9 +590,16 @@ class ReportDesignerView(BaseView):
 		"""Render the designer canvas for a specific report."""
 		session = self._get_session()
 		from .models import Report, BandType
+		from .acl import can as _acl_can
 		report  = session.get(Report, report_id)
 		if report is None:
 			abort(404)
+		try:
+			from flask_login import current_user
+			if not _acl_can(current_user, report, "edit", session):
+				abort(403)
+		except Exception:
+			pass
 
 		api_base = f"/reports/designer/{report_id}"
 		orient   = report.orientation.value
