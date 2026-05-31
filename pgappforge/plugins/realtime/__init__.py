@@ -829,6 +829,176 @@ def create_plugin(appbuilder, config: dict[str, Any] | None = None) -> RealtimeP
 
 
 # ---------------------------------------------------------------------------
+# PG LISTEN/NOTIFY transport — zero-extra-infra change broadcast
+# ---------------------------------------------------------------------------
+
+import json as _json
+import threading as _threading
+import select as _select
+from typing import Any as _Any
+
+_CHANNEL = "pgaf_changes"
+_listener_thread: _threading.Thread | None = None
+
+
+def push_update(instance: _Any, changed_fields: list[str] | None = None) -> None:
+	"""Broadcast a model change via ``pg_notify``.
+
+	Issues ``SELECT pg_notify('pgaf_changes', :payload)`` on the app's
+	SQLAlchemy engine.  Safe to call outside a transaction — uses its own
+	short-lived autocommit connection.
+
+	Args:
+	    instance:       SQLAlchemy model instance that was changed.
+	    changed_fields: Optional list of changed field names; sent as-is in
+	                    the NOTIFY payload for client-side filtering.
+	"""
+	try:
+		from flask import current_app
+		import sqlalchemy as _sa
+		engine = current_app.extensions["sqlalchemy"].engine
+		payload = _json.dumps({
+			"model": type(instance).__name__,
+			"entity_id": str(getattr(instance, "id", "")),
+			"op": "UPDATE",
+			"fields": changed_fields or [],
+		})
+		with engine.connect() as conn:
+			conn.execute(
+				_sa.text("SELECT pg_notify(:channel, :payload)"),
+				{"channel": _CHANNEL, "payload": payload},
+			)
+			conn.commit()
+	except Exception as exc:
+		log.warning("push_update failed: %s", exc)
+
+
+def realtime_model(broadcast_fields: list[str] | None = None):
+	"""Class decorator: enable real-time broadcasting for a SQLAlchemy model.
+
+	Registers an ``after_commit`` session listener that calls
+	:func:`push_update` for every modified instance of the decorated class.
+
+	Args:
+	    broadcast_fields: Field names to include in the NOTIFY payload.
+	                      If omitted, an empty list is sent (event fires but
+	                      no field-level hints are given to clients).
+
+	Example::
+
+	    @realtime_model(broadcast_fields=["status", "amount"])
+	    class Invoice(Model):
+	        ...
+	"""
+	def decorator(cls):
+		cls._realtime_broadcast_fields = frozenset(broadcast_fields or [])
+		cls._realtime_enabled = True
+		_register_after_commit_listener(cls)
+		return cls
+	return decorator
+
+
+def _register_after_commit_listener(model_cls: type) -> None:
+	"""Attach an SQLAlchemy after_commit hook for *model_cls*."""
+	from sqlalchemy import event as _sa_event
+	from sqlalchemy.orm import Session as _Session
+
+	@_sa_event.listens_for(_Session, "after_commit")
+	def _after_commit(session):
+		if not getattr(model_cls, "_realtime_enabled", False):
+			return
+		broadcast = model_cls._realtime_broadcast_fields
+		for instance in list(session.new) + list(session.dirty):
+			if not isinstance(instance, model_cls):
+				continue
+			changed = [f for f in broadcast if hasattr(instance, f)] if broadcast else []
+			try:
+				push_update(instance, changed_fields=changed)
+			except Exception:
+				pass
+
+
+class RealtimeMixin:
+	"""Add to any ModelView to enable presence tracking and SSE change-stream UI.
+
+	Example::
+
+	    class InvoiceModelView(RealtimeMixin, ModelView):
+	        datamodel = SQLAInterface(Invoice)
+
+	Attributes:
+	    realtime_enabled    : Toggle per-view (default True).
+	    realtime_model_name : Override when the model class name differs from
+	                          the view name (default empty → use model name).
+	"""
+
+	realtime_enabled: bool = True
+	realtime_model_name: str = ""
+
+
+def _start_pg_listener(app) -> None:
+	"""Start the background PostgreSQL LISTEN thread (idempotent)."""
+	global _listener_thread
+	if _listener_thread and _listener_thread.is_alive():
+		return
+	_listener_thread = _threading.Thread(
+		target=_pg_listen_loop,
+		args=(app,),
+		daemon=True,
+		name="pgaf-realtime-listener",
+	)
+	_listener_thread.start()
+
+
+def _pg_listen_loop(app) -> None:
+	"""Background thread: LISTEN on pgaf_changes and fan out via SSE."""
+	try:
+		import psycopg2
+		db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+		if not db_uri.startswith("postgresql"):
+			log.info("RealtimeMixin PG listener: non-PG URI, disabled")
+			return
+		conn = psycopg2.connect(db_uri)
+		conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+		cur = conn.cursor()
+		cur.execute(f"LISTEN {_CHANNEL};")
+		log.info("pgaf realtime: LISTEN %s started", _CHANNEL)
+		while True:
+			if _select.select([conn], [], [], 5)[0]:
+				conn.poll()
+				while conn.notifies:
+					notify = conn.notifies.pop(0)
+					_dispatch_pg_notification(app, notify.payload)
+	except Exception as exc:
+		log.error("pgaf realtime listener crashed: %s", exc)
+
+
+def _dispatch_pg_notification(app, payload_str: str) -> None:
+	"""Fan out a raw NOTIFY payload to SSE clients and SocketIO rooms."""
+	try:
+		payload = _json.loads(payload_str)
+	except Exception:
+		return
+	# SSE fan-out (always attempted)
+	try:
+		from pgappforge.plugins.realtime.views import broadcast_to_clients
+		broadcast_to_clients(payload)
+	except Exception as exc:
+		log.debug("SSE broadcast skipped: %s", exc)
+	# SocketIO fan-out (only when flask-socketio is present and configured)
+	try:
+		with app.app_context():
+			socketio = app.extensions.get("socketio")
+			if socketio:
+				room = f"model_{payload['model']}_{payload['entity_id']}"
+				list_room = f"model_{payload['model']}_list"
+				socketio.emit("model_change", payload, room=room)
+				socketio.emit("model_change", payload, room=list_room)
+	except Exception as exc:
+		log.debug("SocketIO dispatch skipped: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -843,4 +1013,8 @@ __all__ = [
 	"CollaborationSession",
 	"CollaborationEvent",
 	"UserPresence",
+	# PG LISTEN/NOTIFY API
+	"push_update",
+	"realtime_model",
+	"RealtimeMixin",
 ]
