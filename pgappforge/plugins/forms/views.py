@@ -169,40 +169,10 @@ body{font-family:system-ui,sans-serif;background:#0f1117;color:#e0e0e0;margin:0;
         </div>
       </div>
 
-      <div class="csec" id="s-rat" style="display:none">
-        <div class="csh">RATING</div>
-        <div class="cr"><div class="cl">Maximum stars (2–10)</div>
-          <input class="ci" type="number" id="ci-stars" value="5" min="2" max="10" oninput="upd()">
-        </div>
-      </div>
-
-      <div class="csec" id="s-cur" style="display:none">
-        <div class="csh">CURRENCY</div>
-        <div class="cr"><div class="cl">Currency</div>
-          <select class="ci" id="ci-cur" onchange="upd()">
-            <option>USD</option><option>EUR</option><option>GBP</option>
-            <option>KES</option><option>ZAR</option><option>NGN</option>
-            <option>JPY</option><option>CAD</option><option>AUD</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="csec" id="s-sl" style="display:none">
-        <div class="csh">SLIDER</div>
-        <div class="cr"><div class="cl">Min</div><input class="ci" type="number" id="ci-smin" value="0" oninput="upd()"></div>
-        <div class="cr"><div class="cl">Max</div><input class="ci" type="number" id="ci-smax" value="100" oninput="upd()"></div>
-        <div class="cr"><div class="cl">Step</div><input class="ci" type="number" id="ci-sstep" value="1" oninput="upd()"></div>
-      </div>
-
-      <div class="csec" id="s-fml" style="display:none">
-        <div class="csh">FORMULA</div>
-        <div class="cl">Expression &mdash; use {field_id} to reference other fields</div>
-        <textarea class="ci" id="ci-expr" rows="3" placeholder="{price} * {quantity}" oninput="upd()"></textarea>
-      </div>
-
-      <div class="csec" id="s-html" style="display:none">
-        <div class="csh">HTML CONTENT</div>
-        <textarea class="ci" id="ci-html" rows="6" placeholder="&lt;p&gt;Your HTML here&lt;/p&gt;" oninput="upd()"></textarea>
+      <!-- Custom config section — populated dynamically from registry config_schema -->
+      <div class="csec" id="s-custom" style="display:none">
+        <div class="csh" id="s-custom-title">CUSTOM OPTIONS</div>
+        <div id="s-custom-body"></div>
       </div>
 
       <div style="margin-top:14px;display:flex;gap:5px;flex-wrap:wrap">
@@ -249,35 +219,39 @@ let fs={title:'Untitled Form',description:'',submit_label:'Submit',
   success_message:'Thank you!',redirect_url:'',target_model:'',field_mapping:{}};
 let mfCache={}, avModels=[];
 
-// ── Palette (all 26 field types) ──────────────────────────────────────────────
-const PAL=[
-  {g:'TEXT',f:[{t:'text',i:'T',l:'Text'},{t:'email',i:'@',l:'Email'},{t:'phone',i:'#',l:'Phone'},
-    {t:'url',i:'&#128279;',l:'URL'},{t:'textarea',i:'&#9776;',l:'Long Text'},{t:'rich_text',i:'&#10000;',l:'Rich Text'}]},
-  {g:'NUMBER',f:[{t:'number',i:'123',l:'Number'},{t:'currency',i:'$',l:'Currency'},{t:'slider',i:'&#8596;',l:'Slider'}]},
-  {g:'DATE &amp; TIME',f:[{t:'date',i:'&#128197;',l:'Date'},{t:'datetime',i:'&#128336;',l:'Date &amp; Time'},
-    {t:'time',i:'&#9200;',l:'Time'},{t:'date_range',i:'&#128198;',l:'Date Range'}]},
-  {g:'CHOICE',f:[{t:'select',i:'&#9660;',l:'Dropdown'},{t:'radio',i:'&#9673;',l:'Radio Buttons'},
-    {t:'checkbox',i:'&#9745;',l:'Checkboxes'},{t:'toggle',i:'&#9889;',l:'Toggle'},
-    {t:'rating',i:'&#11088;',l:'Rating Stars'}]},
-  {g:'RELATIONSHIP',f:[{t:'fk_lookup',i:'&#128269;',l:'Record Lookup'},{t:'m2n',i:'&#128279;',l:'Multi-Lookup'}]},
-  {g:'FILE',f:[{t:'file',i:'&#128206;',l:'File Upload'},{t:'image',i:'&#128247;',l:'Image'},
-    {t:'signature',i:'&#10000;',l:'Signature Pad'}]},
-  {g:'COMPUTED',f:[{t:'formula',i:'=',l:'Formula'},{t:'hidden',i:'&#128065;',l:'Hidden'}]},
-  {g:'STRUCTURE',f:[{t:'section',i:'&#128204;',l:'Section Header'},{t:'page_break',i:'&#128214;',l:'Page Break'},
-    {t:'html_block',i:'&#10064;',l:'HTML Block'},{t:'repeating',i:'&#8635;',l:'Repeating Group'}]},
-];
-(function(){
+// ── Palette — server-driven, supports registered custom field types ───────────
+let PAL=[];
+
+async function loadPalette(){
+  try{
+    const r=await fetch('/form-builder/api/field-types');
+    const d=await r.json();
+    PAL=d.groups||[];
+    buildPalette();
+  }catch(e){
+    document.getElementById('palette').innerHTML='<div style="color:#ef5350;padding:8px;font-size:0.75rem">Failed to load field types</div>';
+  }
+}
+
+function buildPalette(){
   const p=document.getElementById('palette');
+  p.innerHTML='';
   PAL.forEach(g=>{
-    const h=document.createElement('div');h.className='pg';h.innerHTML=g.g;p.appendChild(h);
-    g.f.forEach(fd=>{
-      const c=document.createElement('div');c.className='chip';c.draggable=true;c.dataset.type=fd.t;
-      c.innerHTML='<span style="font-size:0.73rem;width:16px;text-align:center">'+fd.i+'</span>'+fd.l;
-      c.addEventListener('dragstart',e=>e.dataTransfer.setData('type',fd.t));
+    const h=document.createElement('div');h.className='pg';h.innerHTML=g.group;p.appendChild(h);
+    (g.fields||[]).forEach(fd=>{
+      const c=document.createElement('div');c.className='chip';c.draggable=true;c.dataset.type=fd.type;
+      c.title=fd.description||fd.label;
+      c.innerHTML='<span style="font-size:0.73rem;width:16px;text-align:center">'+fd.icon+'</span>'+fd.label;
+      c.addEventListener('dragstart',e=>e.dataTransfer.setData('type',fd.type));
       p.appendChild(c);
     });
   });
-})();
+}
+
+function findFieldSpec(type){
+  for(const g of PAL){const f=(g.fields||[]).find(x=>x.type===type);if(f)return f;}
+  return null;
+}
 
 // ── View routing ──────────────────────────────────────────────────────────────
 function showV(v){
@@ -325,10 +299,7 @@ function renderCanvas(){
 // ── Config panel ──────────────────────────────────────────────────────────────
 const OPTS_T=['select','radio','checkbox','toggle'];
 const FK_T=['fk_lookup','m2n'];
-const SEC_MAP={
-  's-opts':OPTS_T,'s-fk':FK_T,'s-rat':['rating'],'s-cur':['currency'],
-  's-sl':['slider'],'s-fml':['formula'],'s-html':['html_block']
-};
+const SEC_MAP={'s-opts':OPTS_T,'s-fk':FK_T};
 
 function selF(i){sel=i;renderCanvas();renderCfg();}
 function renderCfg(){
@@ -356,11 +327,48 @@ function renderCfg(){
     document.getElementById('ci-other').checked=!!f.allow_other;
   }
   if(FK_T.includes(f.type)) populateFk(f);
-  if(f.type==='rating') document.getElementById('ci-stars').value=f.max_stars||5;
-  if(f.type==='currency') document.getElementById('ci-cur').value=f.currency||'USD';
-  if(f.type==='slider'){document.getElementById('ci-smin').value=f.slider_min??0;document.getElementById('ci-smax').value=f.slider_max??100;document.getElementById('ci-sstep').value=f.slider_step??1;}
-  if(f.type==='formula') document.getElementById('ci-expr').value=f.expression||'';
-  if(f.type==='html_block') document.getElementById('ci-html').value=f.html||'';
+  renderCustomCfg(f);
+}
+
+// ── Custom config panel (populated from registry config_schema) ───────────────
+function renderCustomCfg(f){
+  const sec=document.getElementById('s-custom');
+  const body=document.getElementById('s-custom-body');
+  const spec=findFieldSpec(f.type);
+  const schema=spec&&spec.config_schema&&Object.keys(spec.config_schema).length?spec.config_schema:null;
+  if(!schema){sec.style.display='none';return;}
+  document.getElementById('s-custom-title').textContent=(spec.label||'Custom').toUpperCase()+' OPTIONS';
+  const extra=f.extra_config||{};
+  body.innerHTML=Object.entries(schema).map(([key,cs])=>{
+    const val=extra[key]!==undefined?extra[key]:(cs.default!==undefined?cs.default:'');
+    const cid='cc-'+key;
+    let inp;
+    if(cs.type==='boolean'){
+      inp='<div style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="'+cid+'" '+(val?'checked':'')+' onchange="updCustom()"><label for="'+cid+'" style="font-size:0.79rem">'+(cs.label||key)+'</label></div>';
+      return '<div class="cr">'+inp+'</div>';
+    }else if(cs.type==='select'){
+      const opts=(cs.options||[]).map(o=>'<option'+(String(val)===o?' selected':'')+' value="'+o+'">'+o+'</option>').join('');
+      inp='<select class="ci" id="'+cid+'" onchange="updCustom()">'+opts+'</select>';
+    }else if(cs.type==='textarea'){
+      inp='<textarea class="ci" id="'+cid+'" rows="3" oninput="updCustom()">'+val+'</textarea>';
+    }else{
+      inp='<input class="ci" type="'+(cs.type==='number'?'number':'text')+'" id="'+cid+'" value="'+val+'" oninput="updCustom()">';
+    }
+    return '<div class="cr"><div class="cl">'+(cs.label||key)+'</div>'+inp+'</div>';
+  }).join('');
+  sec.style.display='';
+}
+
+function updCustom(){
+  if(sel<0)return;
+  const f=fields[sel];const spec=findFieldSpec(f.type);
+  if(!spec||!spec.config_schema)return;
+  const extra={};
+  Object.keys(spec.config_schema).forEach(key=>{
+    const el=document.getElementById('cc-'+key);if(!el)return;
+    extra[key]=el.type==='checkbox'?el.checked:el.value;
+  });
+  f.extra_config=extra;renderCanvas();
 }
 
 function upd(){
@@ -376,11 +384,6 @@ function upd(){
     f.options=raw.map(o=>{const p=o.split(':');return{label:p[0].trim(),value:(p[1]||p[0]).trim()};});
     f.allow_other=document.getElementById('ci-other').checked;
   }
-  if(f.type==='rating')f.max_stars=parseInt(document.getElementById('ci-stars').value)||5;
-  if(f.type==='currency')f.currency=document.getElementById('ci-cur').value;
-  if(f.type==='slider'){f.slider_min=+document.getElementById('ci-smin').value;f.slider_max=+document.getElementById('ci-smax').value;f.slider_step=+document.getElementById('ci-sstep').value;}
-  if(f.type==='formula')f.expression=document.getElementById('ci-expr').value;
-  if(f.type==='html_block')f.html=document.getElementById('ci-html').value;
   renderCanvas();
 }
 
@@ -549,6 +552,7 @@ async function loadEdit(id){
   if(fs.target_model)fetchFields(fs.target_model);
 }
 
+loadPalette();  // fetch built-in + registered types, then build palette chips
 showV('list');
 </script></body></html>"""
 
@@ -678,6 +682,13 @@ class FormBuilderView(BaseView):
 		session.add(share)
 		session.commit()
 		return jsonify({"url": f"/forms/public/{token}", "token": token})
+
+	@expose("/api/field-types")
+	@has_access
+	def api_field_types(self):
+		"""Return the full palette: built-in groups merged with all registered custom types."""
+		from pgappforge.plugins.forms.registry import get_palette_groups
+		return jsonify({"groups": get_palette_groups()})
 
 	@expose("/api/models")
 	@has_access

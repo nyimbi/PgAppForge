@@ -8,9 +8,10 @@ Usage:
 """
 from __future__ import annotations
 import logging
+from pgappforge.plugins.forms.registry import FieldTypeSpec, register_field_type
 
 log = logging.getLogger(__name__)
-__all__ = ["FormsPlugin"]
+__all__ = ["FormsPlugin", "FieldTypeSpec", "register_field_type"]
 
 
 class FormsPlugin:
