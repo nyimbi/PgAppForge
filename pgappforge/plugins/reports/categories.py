@@ -6,6 +6,7 @@ Accessible at /reportforge/categories/
 """
 
 from __future__ import annotations
+from ._session_mixin import ReportSessionMixin
 
 import logging
 from typing import Any
@@ -20,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 
-class ReportCategoryView(BaseView):
+class ReportCategoryView(ReportSessionMixin, BaseView):
 	"""
 	Folder/category management for ReportForge.
 
@@ -34,14 +35,6 @@ class ReportCategoryView(BaseView):
 
 	route_base   = "/reportforge/categories"
 	default_view = "index"
-
-	def _get_session(self):
-		from flask import current_app
-		ab = current_app.extensions.get("appbuilder")
-		if ab:
-			return ab.session
-		db = current_app.extensions.get("sqlalchemy")
-		return db.session if db else None
 
 	@expose("/")
 	@has_access

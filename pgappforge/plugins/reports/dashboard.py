@@ -16,6 +16,7 @@ or a combined HTML email.
 """
 
 from __future__ import annotations
+from ._session_mixin import ReportSessionMixin
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,7 +32,7 @@ log = logging.getLogger(__name__)
 
 
 
-class DashboardView(BaseView):
+class DashboardView(ReportSessionMixin, BaseView):
 	"""
 	Dashboard builder and viewer.
 
@@ -46,10 +47,6 @@ class DashboardView(BaseView):
 	route_base   = "/reportforge/dashboards"
 	default_view = "index"
 
-	def _get_session(self):
-		from flask import current_app
-		ab = current_app.extensions.get("appbuilder")
-		return ab.session if ab else current_app.extensions.get("sqlalchemy").session
 
 	# ── List ──────────────────────────────────────────────────────────────
 
@@ -285,29 +282,57 @@ async function createBoard(){{
 		if board is None:
 			abort(404)
 
-		engine = ReportEngine(session)
-		errors = []
-		for tile in (board.layout_json or []):
-			rid = tile.get("report_id")
+		app_obj = current_app._get_current_object()
+		db_bind = None
+		try:
+			ab = app_obj.extensions.get("appbuilder")
+			db_bind = ab.session.bind if ab else app_obj.extensions["sqlalchemy"].engine
+		except Exception:
+			pass
+
+		def render_tile_pdf(tile: dict) -> tuple[dict, bytes | None, str]:
+			"""Render one tile to PDF bytes using a per-worker session."""
+			from sqlalchemy.orm import Session as _Sess
+			rid    = tile.get("report_id")
+			params = tile.get("params", {})
 			if not rid:
-				continue
+				return tile, None, ""
 			try:
-				report = engine._load_report(rid)
-				data   = engine.generate_pdf(rid, tile.get("params", {}))
-				d = ReportDispatch(
-					report_id=rid,
-					to_email=to_email,
-					subject=subject or f"Dashboard: {board.name} — {report.name}",
-					export_format="pdf",
-					params_json=tile.get("params", {}),
-					status=DispatchStatus.PENDING,
-					created_by=getattr(current_user, "id", None),
-				)
-				session.add(d)
-				session.flush()
-				send_report_email(d, data, session, current_app._get_current_object())
+				with _Sess(bind=db_bind) as wsession:
+					worker_engine = ReportEngine(wsession)
+					data = worker_engine.generate_pdf(rid, params)
+				return tile, data, ""
 			except Exception as exc:
-				errors.append(str(exc))
+				return tile, None, str(exc)
+
+		errors = []
+		with ThreadPoolExecutor(max_workers=min(len(board.layout_json or []), 6) or 1) as pool:
+			futures = {pool.submit(render_tile_pdf, tile): tile
+			           for tile in (board.layout_json or []) if tile.get("report_id")}
+			for fut in as_completed(futures):
+				tile, data, err = fut.result()
+				if err:
+					errors.append(err)
+					continue
+				if data is None:
+					continue
+				rid = tile.get("report_id")
+				try:
+					report = engine._load_report(rid)
+					d = ReportDispatch(
+						report_id=rid,
+						to_email=to_email,
+						subject=subject or f"Dashboard: {board.name} — {report.name}",
+						export_format="pdf",
+						params_json=tile.get("params", {}),
+						status=DispatchStatus.PENDING,
+						created_by=getattr(current_user, "id", None),
+					)
+					session.add(d)
+					session.flush()
+					send_report_email(d, data, session, app_obj)
+				except Exception as exc:
+					errors.append(str(exc))
 
 		if errors:
 			return jsonify({"ok": False, "errors": errors}), 500

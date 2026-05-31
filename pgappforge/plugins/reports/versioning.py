@@ -5,6 +5,7 @@ Accessible at /reportforge/reports/<id>/versions
 """
 
 from __future__ import annotations
+from ._session_mixin import ReportSessionMixin
 
 import json
 import logging
@@ -157,7 +158,7 @@ def _restore(report, snap: dict, session) -> None:
 		raise  # caller returns HTTP 500
 
 
-class ReportVersionView(BaseView):
+class ReportVersionView(ReportSessionMixin, BaseView):
 	"""
 	Report version history and publish/restore.
 
@@ -169,10 +170,6 @@ class ReportVersionView(BaseView):
 	route_base   = "/reportforge/reports"
 	default_view = "index"
 
-	def _get_session(self):
-		from flask import current_app
-		ab = current_app.extensions.get("appbuilder")
-		return ab.session if ab else current_app.extensions.get("sqlalchemy").session
 
 	@expose("/<int:report_id>/versions")
 	@has_access
