@@ -195,6 +195,40 @@ class SchemaState:
 			return f"All tables from '{template_name}' already exist."
 		return f"✓ Applied template '{template_name}': added tables {added}."
 
+	def get_capabilities(self) -> str:
+		"""Return accurate description of what pgappforge generates."""
+		return """pgappforge generates a complete production application from your PostgreSQL schema:
+
+BACKEND (Python/Flask):
+  - Flask 3.x web application with SQLAlchemy 2.x models
+  - Automatic CRUD views for every table (list, detail, add, edit, delete)
+  - REST API with OpenAPI/Swagger documentation
+  - Role-based access control (RBAC), JWT authentication, MFA, passkeys
+  - Alembic database migrations
+
+MOBILE (React Native / Expo SDK 52):
+  - iOS + Android app compiled from TypeScript
+  - Screens: FlashList with infinite scroll, detail view, create/edit forms
+  - FK columns → SelectField with live options from API
+  - PostgreSQL-specific field UIs: JSONB editor, HSTORE, date ranges, map pins
+  - ICD-10 search (if icd10 schema) / SNOMED CT search (if snomed schema)
+  - Run: cd <output> && npm install && npx expo start
+
+DESKTOP:
+  - Native window (pywebview, ~10MB binary) pointing to deployed backend URL
+  - Or PySide6+QtWebEngine for richer native integration
+  - Packaged with PyInstaller: make -C desktop dist
+
+INFRASTRUCTURE:
+  - Docker + docker-compose
+  - GitHub Actions CI/CD pipeline
+  - requirements.txt, Makefile, .env.example
+
+GENERATED IN SECONDS with:
+  flask forge gen all --uri postgresql://... --name MyApp --output-dir ./app
+  flask forge gen all ... --platform all  (web + mobile + desktop)
+"""
+
 	def undo(self) -> str:
 		if not self._undo_log:
 			return "Nothing to undo."
@@ -505,6 +539,18 @@ _TOOLS: list[dict[str, Any]] = [
 	{
 		"type": "function",
 		"function": {
+			"name": "get_capabilities",
+			"description": (
+				"Return accurate information about what pgappforge generates from the schema. "
+				"Call this when the user asks 'what will I get?', 'what does this produce?', "
+				"or any question about the output or capabilities."
+			),
+			"parameters": {"type": "object", "properties": {}},
+		},
+	},
+	{
+		"type": "function",
+		"function": {
 			"name": "undo",
 			"description": "Undo the last schema operation.",
 			"parameters": {"type": "object", "properties": {}},
@@ -763,6 +809,7 @@ class AppCreatorChat:
 			"show_schema": lambda: self.state.show_schema(),
 			"list_templates": lambda: self.state.list_templates(),
 			"apply_template": lambda: self.state.apply_template(args.get("template_name", "")),
+			"get_capabilities": lambda: self.state.get_capabilities(),
 			"undo": lambda: self.state.undo(),
 			"generate_app": lambda: self.state.generate_app(
 				args.get("output_dir", ""),
