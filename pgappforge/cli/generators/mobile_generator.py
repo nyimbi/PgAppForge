@@ -1018,12 +1018,25 @@ export default function MFAScreen() {
 		screen_name = m + ("Edit" if edit else "New") + "Screen"
 		title_text = ("Edit " + label) if edit else ("New " + label)
 		mut_args = "(Number(id), data)" if edit else "(data)"
-		extra_query_import = ", useQuery" if edit else ""
-		extra_get_import = (", get" + m) if edit else ""
 		extra_params_import = ", useLocalSearchParams" if edit else ""
 
 		_skip = {"created_on", "changed_on", "created_by_fk", "changed_by_fk"}
 		form_cols = [c for c in tinfo.columns if not c.primary_key and c.name not in _skip]
+
+		# Build FK column → remote_table map from relationships
+		fk_map: dict[str, str] = {}
+		for rel in tinfo.relationships:
+			if getattr(rel.type, "value", rel.type) in ("many_to_one", "many-to-one"):
+				for col_name in (rel.local_columns or []):
+					fk_map[col_name] = rel.remote_table
+
+		# Collect FK targets that need data fetching (for SelectField options)
+		fk_queries: list[tuple[str, str]] = []  # (col_name, remote_table)
+		for col in form_cols:
+			if col.foreign_key and col.name in fk_map:
+				remote = fk_map[col.name]
+				if (col.name, remote) not in fk_queries:
+					fk_queries.append((col.name, remote))
 
 		# Build field controller blocks
 		# Per-component value casts for form fields (react-hook-form returns unknown)
@@ -1041,27 +1054,102 @@ export default function MFAScreen() {
 		field_blocks = []
 		for col in form_cols[:12]:
 			col_label = _label(col.name)
+
+			# FK column → SelectField with related records
+			if col.foreign_key and col.name in fk_map:
+				remote = fk_map[col.name]
+				remote_camel = _camel(remote)
+				remote_m = _pascal(remote)
+				req = "true" if not col.nullable else "false"
+				# Find the first non-PK string-like column of the remote table as label
+				remote_info = self._tables.get(remote)
+				label_col = "id"
+				if remote_info:
+					for rc in remote_info.columns:
+						if not rc.primary_key and not rc.foreign_key and rc.category == ColumnType.TEXT:
+							label_col = rc.name
+							break
+				field_blocks.append(
+					"          <Controller\n"
+					"            control={control}\n"
+					"            name=\"" + col.name + "\"\n"
+					"            render={({ field }) => (\n"
+					"              <SelectField\n"
+					"                label=\"" + col_label + "\"\n"
+					"                value={field.value as unknown as string | number}\n"
+					"                onChange={field.onChange}\n"
+					"                options={(" + remote_camel + "Options ?? []).map((r) => ({\n"
+					"                  label: String(r['" + label_col + "'] ?? r['id'] ?? ''),\n"
+					"                  value: r['id'] as string | number,\n"
+					"                }))}\n"
+					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
+					"                required={" + req + "}\n"
+					"                placeholder=\"Select " + _label(remote) + "...\"\n"
+					"              />\n"
+					"            )}\n"
+					"          />\n"
+				)
+				continue
+
+			# Enum column → SelectField with static options
+			if col.enum_values:
+				req = "true" if not col.nullable else "false"
+				options_ts = "[" + ", ".join(
+					"{ label: " + repr(v) + ", value: " + repr(v) + " }"
+					for v in col.enum_values
+				) + "]"
+				field_blocks.append(
+					"          <Controller\n"
+					"            control={control}\n"
+					"            name=\"" + col.name + "\"\n"
+					"            render={({ field }) => (\n"
+					"              <SelectField\n"
+					"                label=\"" + col_label + "\"\n"
+					"                value={field.value as string}\n"
+					"                onChange={field.onChange}\n"
+					"                options={" + options_ts + "}\n"
+					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
+					"                required={" + req + "}\n"
+					"              />\n"
+					"            )}\n"
+					"          />\n"
+				)
+				continue
+
 			field_comp = self._pick_field_component(col)
 			req = "true" if not col.nullable else "false"
 			cast = _CASTS.get(field_comp, "as string")
-			# TSVectorField and MapField are read-only — no onChange
+			# TSVectorField and VectorField are read-only — omit onChange/error/required
 			readonly = field_comp in ("TSVectorField", "VectorField")
-			change_prop = "" if readonly else "                onChange={field.onChange}\n"
-			field_blocks.append(
-				"          <Controller\n"
-				"            control={control}\n"
-				"            name=\"" + col.name + "\"\n"
-				"            render={({ field }) => (\n"
-				"              <" + field_comp + "\n"
-				"                label=\"" + col_label + "\"\n"
-				"                value={field.value " + cast + "}\n"
-				+ change_prop +
-				"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
-				"                required={" + req + "}\n"
-				"              />\n"
-				"            )}\n"
-				"          />\n"
-			)
+			if readonly:
+				field_blocks.append(
+					"          <Controller\n"
+					"            control={control}\n"
+					"            name=\"" + col.name + "\"\n"
+					"            render={({ field }) => (\n"
+					"              <" + field_comp + "\n"
+					"                label=\"" + col_label + "\"\n"
+					"                value={field.value " + cast + "}\n"
+					"              />\n"
+					"            )}\n"
+					"          />\n"
+				)
+			else:
+				field_blocks.append(
+					"          <Controller\n"
+					"            control={control}\n"
+					"            name=\"" + col.name + "\"\n"
+					"            render={({ field }) => (\n"
+					"              <" + field_comp + "\n"
+					"                label=\"" + col_label + "\"\n"
+					"                value={field.value " + cast + "}\n"
+					"                onChange={field.onChange}\n"
+					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
+					"                required={" + req + "}\n"
+					"              />\n"
+					"            )}\n"
+					"          />\n"
+				)
 		field_inputs = "".join(field_blocks)
 
 		id_param = "  const { id } = useLocalSearchParams<{ id: string }>();\n" if edit else ""
@@ -1079,21 +1167,41 @@ export default function MFAScreen() {
 				"  }, [existing]);\n\n"
 			)
 
+		# FK list imports and useQuery calls
+		fk_list_imports = ""
+		fk_query_calls = ""
+		for col_name, remote in fk_queries:
+			remote_camel = _camel(remote)
+			remote_m = _pascal(remote)
+			fk_list_imports += "import { list" + remote_m + " } from '@lib/api/" + remote_camel + "';\n"
+			fk_query_calls += (
+				"  const { data: " + remote_camel + "Options } = useQuery({\n"
+				"    queryKey: ['" + remote + "', 'select-options'],\n"
+				"    queryFn: () => list" + remote_m + "({ page_size: 500 }).then(r => (r.result ?? []) as unknown as Record<string, unknown>[]),\n"
+				"    staleTime: 5 * 60 * 1000,\n"
+				"  });\n"
+			)
+
+		# useQuery needed for edit mode or FK selects
+		needs_query = edit or bool(fk_queries)
+		needs_effect = edit
 		extra_imports = ""
 		if edit:
 			extra_imports = (
 				"import { get" + m + " } from '@lib/api/" + camel + "';\n"
-				"import { useEffect } from 'react';\n"
 			)
+		if needs_effect:
+			extra_imports += "import { useEffect } from 'react';\n"
 
 		parts = [
 			"import { View, Text, ScrollView, Alert } from 'react-native';\n",
 			"import { useRouter" + extra_params_import + " } from 'expo-router';\n",
 			"import { useForm, Controller } from 'react-hook-form';\n",
 			"import { zodResolver } from '@hookform/resolvers/zod';\n",
-			"import { useMutation, useQueryClient" + extra_query_import + " } from '@tanstack/react-query';\n",
+			"import { useMutation, useQueryClient" + (", useQuery" if needs_query else "") + " } from '@tanstack/react-query';\n",
 			"import { " + action + m + " } from '@lib/api/" + camel + "';\n",
 			"import { create" + m + "Schema, type Create" + m + "Input } from '@lib/validation/" + camel + "';\n",
+			fk_list_imports,
 			"import { TextField } from '@components/fields/TextField';\n",
 			"import { NumberField } from '@components/fields/NumberField';\n",
 			"import { BooleanField } from '@components/fields/BooleanField';\n",
@@ -1101,6 +1209,7 @@ export default function MFAScreen() {
 			"import { TextAreaField } from '@components/fields/TextAreaField';\n",
 			"import { JSONBField } from '@components/fields/JSONBField';\n",
 			"import { ArrayField } from '@components/fields/ArrayField';\n",
+			"import { SelectField } from '@components/fields/SelectField';\n",
 			"import { Button } from '@components/ui/Button';\n",
 			extra_imports,
 			"\ntype " + m + "Form = Create" + m + "Input;\n\n",
@@ -1111,6 +1220,7 @@ export default function MFAScreen() {
 			"  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<" + m + "Form>({\n",
 			"    resolver: zodResolver(create" + m + "Schema),\n",
 			"  });\n\n",
+			fk_query_calls,
 			load_query,
 			"  const mut = useMutation({\n",
 			"    mutationFn: (data: " + m + "Form) => " + action + m + mut_args + ",\n",
@@ -1153,6 +1263,8 @@ export default function MFAScreen() {
 			return "JSONBField"
 		if ct == ColumnType.ARRAY:
 			return "ArrayField"
+		if ct == ColumnType.FOREIGN_KEY or col.foreign_key:
+			return "SelectField"
 		if ct == ColumnType.HSTORE:
 			return "HStoreField"
 		if ct == ColumnType.UUID:
@@ -3482,7 +3594,15 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 
 		schema_lines = []
 		for col in form_cols:
-			base = _zod_base(col.category, col.name)
+			# FK columns are always integers (or UUIDs), regardless of name-based heuristic
+			if col.foreign_key or col.category == ColumnType.FOREIGN_KEY:
+				base = "z.number().int()"
+			# Enum columns → z.enum([...])
+			elif col.enum_values:
+				vals = ", ".join(repr(v) for v in col.enum_values)
+				base = f"z.enum([{vals}])"
+			else:
+				base = _zod_base(col.category, col.name)
 			if col.nullable:
 				field = f"{base}.nullable().optional()"
 			else:
