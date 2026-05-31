@@ -885,6 +885,32 @@ export default function MFAScreen() {
 
 	# ── Per-model screens ─────────────────────────────────────────────────────
 
+	def _build_fk_map(self, tinfo: TableInfo) -> dict[str, dict]:
+		"""Build FK column → remote table metadata map from many_to_one relationships.
+
+		Returns {col_name: {remote, camel, pascal, label_col}} where label_col
+		is the first non-PK, non-FK TEXT column of the remote table (for display).
+		"""
+		fk_map: dict[str, dict] = {}
+		for rel in tinfo.relationships:
+			if getattr(rel.type, "value", rel.type) not in ("many_to_one", "many-to-one"):
+				continue
+			for col_name in (rel.local_columns or []):
+				remote_info = self._tables.get(rel.remote_table)
+				label_col = "id"
+				if remote_info:
+					for rc in remote_info.columns:
+						if not rc.primary_key and not rc.foreign_key and rc.category == ColumnType.TEXT:
+							label_col = rc.name
+							break
+				fk_map[col_name] = {
+					"remote": rel.remote_table,
+					"camel": _camel(rel.remote_table),
+					"pascal": _pascal(rel.remote_table),
+					"label_col": label_col,
+				}
+		return fk_map
+
 	def _get_display_cols(self, tinfo: TableInfo, max_cols: int = 3) -> list:
 		"""Return first N non-PK, non-FK display columns."""
 		return [
@@ -1005,24 +1031,8 @@ export default function MFAScreen() {
 		label = _label(tinfo.name)
 		non_pk = [c for c in tinfo.columns if not c.primary_key]
 
-		# Build FK map: col_name → {remote_table, label_col}
-		fk_map: dict[str, dict] = {}
-		for rel in tinfo.relationships:
-			if getattr(rel.type, "value", rel.type) in ("many_to_one", "many-to-one"):
-				for col_name in (rel.local_columns or []):
-					remote_info = self._tables.get(rel.remote_table)
-					label_col = "id"
-					if remote_info:
-						for rc in remote_info.columns:
-							if not rc.primary_key and not rc.foreign_key and rc.category == ColumnType.TEXT:
-								label_col = rc.name
-								break
-					fk_map[col_name] = {
-						"remote": rel.remote_table,
-						"camel": _camel(rel.remote_table),
-						"pascal": _pascal(rel.remote_table),
-						"label_col": label_col,
-					}
+		# Build FK map using shared helper
+		fk_map = self._build_fk_map(tinfo)
 
 		# Find child tables that have FK → this table (one-to-many from current table's perspective)
 		children: list[dict] = []  # {table, col_name, pascal, camel}
@@ -1179,12 +1189,9 @@ export default function MFAScreen() {
 		_skip = {"created_on", "changed_on", "created_by_fk", "changed_by_fk"}
 		form_cols = [c for c in tinfo.columns if not c.primary_key and c.name not in _skip]
 
-		# Build FK column → remote_table map from relationships
-		fk_map: dict[str, str] = {}
-		for rel in tinfo.relationships:
-			if getattr(rel.type, "value", rel.type) in ("many_to_one", "many-to-one"):
-				for col_name in (rel.local_columns or []):
-					fk_map[col_name] = rel.remote_table
+		# Build FK column → remote_table map (using shared helper, extract just the remote name)
+		fk_map_full = self._build_fk_map(tinfo)
+		fk_map: dict[str, str] = {k: v["remote"] for k, v in fk_map_full.items()}
 
 		# Collect FK targets that need data fetching (for SelectField options)
 		fk_queries: list[tuple[str, str]] = []  # (col_name, remote_table)
