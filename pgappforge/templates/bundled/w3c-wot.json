@@ -2,7 +2,7 @@
   "name": "w3c-wot",
   "schema": "w3c_wot",
   "label": "W3C WoT (IoT)",
-  "description": "Web of Things Thing Description \u2014 IoT device interoperability",
+  "description": "Web of Things Thing Description — IoT device interoperability",
   "color": "#1a7abf",
   "icon": "fa-microchip",
   "version": "1.1",
@@ -106,20 +106,50 @@
         "name": "context",
         "type": "JSONB",
         "description": "JSON-LD @context array/object mapping semantic vocabularies to namespace URIs"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "wot_property": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key; referenced by wot_property_value.property_id"
+        "description": "Auto-incremented surrogate key; referenced by wot_property_value.property_id",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "thing_id",
         "type": "UUID",
         "fk": "wot_thing.id",
-        "description": "Device that exposes this property; references wot_thing.id"
+        "description": "Device that exposes this property; references wot_thing.id",
+        "index": true
       },
       {
         "name": "name",
@@ -172,20 +202,50 @@
         "name": "forms",
         "type": "JSONB",
         "description": "WoT interaction affordance forms array ({\"href\", \"op\", \"contentType\"}) describing protocol bindings"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "wot_property_value": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Monotonically increasing surrogate key for time-series ordering"
+        "description": "Monotonically increasing surrogate key for time-series ordering",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "property_id",
         "type": "INTEGER",
         "fk": "wot_property.id",
-        "description": "Which property this reading belongs to; references wot_property.id"
+        "description": "Which property this reading belongs to; references wot_property.id",
+        "index": true
       },
       {
         "name": "value_numeric",
@@ -217,20 +277,50 @@
         "name": "quality",
         "type": "VARCHAR(20)",
         "description": "OPC-UA-style data quality flag: GOOD, UNCERTAIN, BAD, or MISSING"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "wot_action": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for this action definition"
+        "description": "Auto-incremented surrogate key for this action definition",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "thing_id",
         "type": "UUID",
         "fk": "wot_thing.id",
-        "description": "Device that exposes this action; references wot_thing.id"
+        "description": "Device that exposes this action; references wot_thing.id",
+        "index": true
       },
       {
         "name": "name",
@@ -261,20 +351,50 @@
         "name": "forms",
         "type": "JSONB",
         "description": "WoT interaction affordance forms array ({\"href\", \"op\", \"contentType\"}) describing protocol endpoints"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "wot_event": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key; referenced by wot_event_log.event_id"
+        "description": "Auto-incremented surrogate key; referenced by wot_event_log.event_id",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "thing_id",
         "type": "UUID",
         "fk": "wot_thing.id",
-        "description": "Device that can emit this event type; references wot_thing.id"
+        "description": "Device that can emit this event type; references wot_thing.id",
+        "index": true
       },
       {
         "name": "name",
@@ -300,20 +420,50 @@
         "name": "forms",
         "type": "JSONB",
         "description": "WoT subscription forms array ({\"href\", \"op\": \"subscribeevent\", \"contentType\"}) for consumers"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "wot_event_log": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Monotonically increasing surrogate key for append-only event ordering"
+        "description": "Monotonically increasing surrogate key for append-only event ordering",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "event_id",
         "type": "INTEGER",
         "fk": "wot_event.id",
-        "description": "Event type that was emitted; references wot_event.id"
+        "description": "Event type that was emitted; references wot_event.id",
+        "index": true
       },
       {
         "name": "payload_data",
@@ -325,11 +475,39 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when the device emitted this event; recommended partition key for large deployments"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Web of Things Thing Description \u2014 IoT device interoperability",
-  "long_description": "Web of Things Thing Description \u2014 IoT device interoperability",
+  "short_description": "Web of Things Thing Description — IoT device interoperability",
+  "long_description": "Web of Things Thing Description — IoT device interoperability",
   "when_to_use": "Use when building applications that need to conform to the W3C WoT (IoT) standard.",
   "extensions": [
     "postgis"

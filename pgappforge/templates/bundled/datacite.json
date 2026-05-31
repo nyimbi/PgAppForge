@@ -23,9 +23,10 @@
     "dc_creator": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for this creator record"
+        "description": "Surrogate primary key for this creator record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -57,6 +58,34 @@
         "name": "affiliation",
         "type": "JSONB",
         "description": "Array of affiliation objects: [{name, affiliationIdentifier, affiliationIdentifierScheme}]"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dc_resource": [
@@ -157,45 +186,94 @@
         "name": "updated_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent metadata update from the DataCite API"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dc_resource_creator": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for this resource-creator association"
+        "description": "Surrogate primary key for this resource-creator association",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "resource_id",
         "type": "UUID",
         "fk": "dc_resource.id",
-        "description": "References dc_resource.id; the resource this creator contributed to"
+        "description": "References dc_resource.id; the resource this creator contributed to",
+        "index": true
       },
       {
         "name": "creator_id",
         "type": "INTEGER",
         "fk": "dc_creator.id",
-        "description": "References dc_creator.id; the contributing creator or author"
+        "description": "References dc_creator.id; the contributing creator or author",
+        "index": true
       },
       {
         "name": "order_num",
         "type": "INTEGER",
         "description": "1-based position of this creator in the author list (citation order)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dc_download": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incrementing event ID; BIGSERIAL to handle high-volume repositories"
+        "description": "Auto-incrementing event ID; BIGSERIAL to handle high-volume repositories",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "resource_id",
         "type": "UUID",
         "fk": "dc_resource.id",
-        "description": "References dc_resource.id; the resource that was downloaded"
+        "description": "References dc_resource.id; the resource that was downloaded",
+        "index": true
       },
       {
         "name": "downloaded_at",
@@ -212,6 +290,34 @@
         "name": "client_type",
         "type": "VARCHAR(30)",
         "description": "Category of downloading agent: 'browser', 'api', 'harvester', 'unknown'"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

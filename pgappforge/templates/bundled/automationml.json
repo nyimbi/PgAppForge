@@ -56,6 +56,28 @@
         "name": "modified_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent update to this project record"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "aml_instance_hierarchy": [
@@ -69,7 +91,8 @@
         "name": "project_id",
         "type": "UUID",
         "fk": "aml_project.id",
-        "description": "Reference to the owning aml_project; cascade-delete if project is removed"
+        "description": "Reference to the owning aml_project; cascade-delete if project is removed",
+        "index": true
       },
       {
         "name": "name",
@@ -80,6 +103,34 @@
         "name": "description",
         "type": "TEXT",
         "description": "Free-text description of the hierarchy's engineering scope or purpose"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "aml_internal_element": [
@@ -93,13 +144,15 @@
         "name": "hierarchy_id",
         "type": "UUID",
         "fk": "aml_instance_hierarchy.id",
-        "description": "Reference to the containing aml_instance_hierarchy"
+        "description": "Reference to the containing aml_instance_hierarchy",
+        "index": true
       },
       {
         "name": "parent_id",
         "type": "UUID",
         "fk": "aml_internal_element.id",
-        "description": "Self-referential FK to parent element; NULL for top-level elements in the hierarchy"
+        "description": "Self-referential FK to parent element; NULL for top-level elements in the hierarchy",
+        "index": true
       },
       {
         "name": "name",
@@ -136,6 +189,34 @@
         "name": "geometry",
         "type": "JSONB",
         "description": "Optional 3D placement data for digital-twin visualization; e.g. {x, y, z, rx, ry, rz}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "aml_connection": [
@@ -149,7 +230,8 @@
         "name": "hierarchy_id",
         "type": "UUID",
         "fk": "aml_instance_hierarchy.id",
-        "description": "Reference to the aml_instance_hierarchy that owns this connection"
+        "description": "Reference to the aml_instance_hierarchy that owns this connection",
+        "index": true
       },
       {
         "name": "name",
@@ -172,6 +254,34 @@
         "name": "connection_type",
         "type": "VARCHAR(100)",
         "description": "Engineering link type (e.g. 'Signal', 'Power', 'Kinematic', 'Communication')"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   }

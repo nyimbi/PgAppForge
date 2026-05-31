@@ -2,7 +2,7 @@
   "name": "iptc",
   "schema": "iptc",
   "label": "IPTC (News/Journalism)",
-  "description": "International Press Telecommunications Council \u2014 news article metadata standard used by all major news organizations",
+  "description": "International Press Telecommunications Council — news article metadata standard used by all major news organizations",
   "color": "#c0392b",
   "icon": "fa-newspaper",
   "version": "IPTC Photo Metadata 2023.1",
@@ -16,7 +16,7 @@
   "table_notes": {
     "iptc_media_item": "Root entity for a single news item (article, photo, video); all other IPTC tables hang off this via foreign key. JSONB columns hold language-tagged values per the IPTC Multilingual Text standard.",
     "iptc_subject": "Classifies the news item using IPTC subject codes (NewsCodes) or custom controlled vocabularies; a single item may have many subjects at different levels of specificity.",
-    "iptc_location": "Records geographic scope of a news item \u2014 where it was created, where it is about, or both \u2014 using a role discriminator and optional PostGIS point for spatial queries.",
+    "iptc_location": "Records geographic scope of a news item — where it was created, where it is about, or both — using a role discriminator and optional PostGIS point for spatial queries.",
     "iptc_asset": "Describes a rendition or binary file (photo, video, graphic) linked to a news item, including EXIF camera metadata and GPS capture point."
   },
   "tables": {
@@ -72,7 +72,7 @@
       {
         "name": "credit_line",
         "type": "VARCHAR(500)",
-        "description": "Provider credit string displayed alongside the item (e.g. \u00a9 Reuters 2024)"
+        "description": "Provider credit string displayed alongside the item (e.g. © Reuters 2024)"
       },
       {
         "name": "copyright_notice",
@@ -113,20 +113,50 @@
         "name": "editorial_office",
         "type": "VARCHAR(255)",
         "description": "Name or code of the bureau/desk responsible for this item (e.g. Reuters/London)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iptc_subject": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "media_item_id",
         "type": "UUID",
         "fk": "iptc_media_item.id",
-        "description": "References the news item this subject classification belongs to"
+        "description": "References the news item this subject classification belongs to",
+        "index": true
       },
       {
         "name": "subject_code",
@@ -147,20 +177,50 @@
         "name": "subject_scheme_uri",
         "type": "TEXT",
         "description": "Canonical URI identifying the subject scheme (e.g. http://cv.iptc.org/newscodes/mediatopic/)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iptc_location": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "media_item_id",
         "type": "UUID",
         "fk": "iptc_media_item.id",
-        "description": "References the news item this location is associated with"
+        "description": "References the news item this location is associated with",
+        "index": true
       },
       {
         "name": "location_role",
@@ -191,6 +251,34 @@
         "name": "geo_point",
         "type": "GEOGRAPHY(POINT,4326)",
         "description": "PostGIS WGS84 point enabling ST_DWithin radius and ST_Distance spatial queries"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iptc_asset": [
@@ -204,7 +292,8 @@
         "name": "media_item_id",
         "type": "UUID",
         "fk": "iptc_media_item.id",
-        "description": "References the parent news item this asset is a rendition of"
+        "description": "References the parent news item this asset is a rendition of",
+        "index": true
       },
       {
         "name": "media_type",
@@ -260,10 +349,38 @@
         "name": "taken_at",
         "type": "TIMESTAMPTZ",
         "description": "Shutter timestamp from EXIF DateTimeOriginal (camera local time converted to UTC)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "International Press Telecommunications Council \u2014 news article metadata standard used by all major news organizations",
+  "short_description": "International Press Telecommunications Council — news article metadata standard used by all major news organizations",
   "long_description": "IPTC (International Press Telecommunications Council) Photo Metadata and News Architecture are the global standards for news content metadata, used by Reuters, AP, Getty Images, and all major news organizations. The schema covers news items/articles with IPTC subjects and genres, geographic locations, bylines/credits, and the original media asset (image) with EXIF camera data and GPS coordinates.",
   "when_to_use": "Use for content management systems for newsrooms, digital asset management (DAM) for image libraries, or media archive platforms. IPTC metadata is embedded in all professional news photography and required by Adobe Stock, Getty Images, and all major stock photo platforms. Required for press accreditation systems and news wire API integrations.",
   "extensions": [

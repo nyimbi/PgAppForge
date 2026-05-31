@@ -2,7 +2,7 @@
   "name": "citygml",
   "schema": "citygml",
   "label": "OGC CityGML 3.0",
-  "description": "3D city model standard \u2014 buildings, bridges, roads for digital twins and smart cities",
+  "description": "3D city model standard — buildings, bridges, roads for digital twins and smart cities",
   "color": "#95a5a6",
   "icon": "fa-city",
   "version": "3.0",
@@ -27,7 +27,7 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "Primary key \u2014 unique identifier for this city model instance"
+        "description": "Primary key — unique identifier for this city model instance"
       },
       {
         "name": "name",
@@ -58,6 +58,34 @@
         "name": "lod",
         "type": "SMALLINT",
         "description": "Maximum Level of Detail present: 0=footprint, 1=block, 2=roofshape, 3=detailed, 4=interior"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cgml_building": [
@@ -65,19 +93,21 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "Primary key \u2014 unique identifier for this building record"
+        "description": "Primary key — unique identifier for this building record"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
         "fk": "cgml_city_model.id",
-        "description": "References cgml_city_model.id \u2014 the parent dataset this building belongs to"
+        "description": "References cgml_city_model.id — the parent dataset this building belongs to",
+        "index": true
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Globally unique GML identifier from the source CityGML file (e.g. BLDG_0001)"
+        "description": "Globally unique GML identifier from the source CityGML file (e.g. BLDG_0001)",
+        "index": true
       },
       {
         "name": "name",
@@ -138,6 +168,34 @@
         "name": "address",
         "type": "JSONB",
         "description": "JSONB structured address: {\"street\",\"number\",\"city\",\"postcode\",\"country\"} per CityGML xAL subset"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cgml_bridge": [
@@ -145,19 +203,21 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "Primary key \u2014 unique identifier for this bridge record"
+        "description": "Primary key — unique identifier for this bridge record"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
         "fk": "cgml_city_model.id",
-        "description": "References cgml_city_model.id \u2014 the parent dataset this bridge belongs to"
+        "description": "References cgml_city_model.id — the parent dataset this bridge belongs to",
+        "index": true
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Globally unique GML identifier from the source CityGML file"
+        "description": "Globally unique GML identifier from the source CityGML file",
+        "index": true
       },
       {
         "name": "name",
@@ -183,6 +243,34 @@
         "name": "geometry",
         "type": "GEOGRAPHY(LINESTRING,4326)",
         "description": "WGS84 linestring tracing the bridge centreline from abutment to abutment"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cgml_transportation": [
@@ -190,19 +278,21 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "Primary key \u2014 unique identifier for this transportation segment"
+        "description": "Primary key — unique identifier for this transportation segment"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
         "fk": "cgml_city_model.id",
-        "description": "References cgml_city_model.id \u2014 the parent dataset this segment belongs to"
+        "description": "References cgml_city_model.id — the parent dataset this segment belongs to",
+        "index": true
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Globally unique GML identifier from the source CityGML file"
+        "description": "Globally unique GML identifier from the source CityGML file",
+        "index": true
       },
       {
         "name": "type",
@@ -223,6 +313,34 @@
         "name": "geometry",
         "type": "GEOGRAPHY(LINESTRING,4326)",
         "description": "WGS84 linestring representing the segment centreline for routing and display"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cgml_land_use": [
@@ -230,19 +348,21 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "Primary key \u2014 unique identifier for this land use parcel"
+        "description": "Primary key — unique identifier for this land use parcel"
       },
       {
         "name": "city_model_id",
         "type": "UUID",
         "fk": "cgml_city_model.id",
-        "description": "References cgml_city_model.id \u2014 the parent dataset this parcel belongs to"
+        "description": "References cgml_city_model.id — the parent dataset this parcel belongs to",
+        "index": true
       },
       {
         "name": "gml_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Globally unique GML identifier from the source CityGML file"
+        "description": "Globally unique GML identifier from the source CityGML file",
+        "index": true
       },
       {
         "name": "class",
@@ -258,10 +378,38 @@
         "name": "geometry",
         "type": "GEOGRAPHY(POLYGON,4326)",
         "description": "WGS84 polygon boundary of the land use parcel"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "3D city model standard \u2014 buildings, bridges, roads for digital twins and smart cities",
+  "short_description": "3D city model standard — buildings, bridges, roads for digital twins and smart cities",
   "long_description": "OGC CityGML 3.0 is the international standard for 3D city models, covering buildings, bridges, roads, vegetation, and land use with multi-level-of-detail (LoD) geometry. The schema captures 2D footprints and building attributes suitable for most smart city analytics, with JSONB fields for 3D geometry when needed.",
   "when_to_use": "Use for digital twin platforms, smart city dashboards, urban planning tools, or any application modeling the built environment. Used by Singapore's Virtual Singapore, Helsinki 3D+, and many EU city digital twins. Required for EU Urban Digital Twin projects and some EU Cohesion Fund applications. Pairs with PostGIS for spatial queries.",
   "extensions": [

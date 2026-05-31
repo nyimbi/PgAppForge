@@ -2,7 +2,7 @@
   "name": "fiware",
   "schema": "fiware",
   "label": "FIWARE Smart Data Models",
-  "description": "EU-backed open data models \u2014 smart cities, agrifood, energy, environment",
+  "description": "EU-backed open data models — smart cities, agrifood, energy, environment",
   "color": "#3498db",
   "icon": "fa-smart-city",
   "version": "2024",
@@ -32,7 +32,8 @@
       {
         "name": "station_id",
         "type": "VARCHAR(100)",
-        "description": "External identifier of the weather station (e.g. WMO ID or operator code)"
+        "description": "External identifier of the weather station (e.g. WMO ID or operator code)",
+        "index": true
       },
       {
         "name": "name",
@@ -63,7 +64,7 @@
       {
         "name": "relative_humidity",
         "type": "NUMERIC(5,2)",
-        "description": "Relative humidity as a percentage (0\u2013100)"
+        "description": "Relative humidity as a percentage (0–100)"
       },
       {
         "name": "wind_speed",
@@ -73,7 +74,7 @@
       {
         "name": "wind_direction",
         "type": "NUMERIC(6,2)",
-        "description": "Wind direction in degrees clockwise from true north (0\u2013360)"
+        "description": "Wind direction in degrees clockwise from true north (0–360)"
       },
       {
         "name": "atmospheric_pressure",
@@ -89,6 +90,34 @@
         "name": "weather_type",
         "type": "JSONB",
         "description": "FIWARE-coded weather condition array, e.g. [\"rain\", \"fog\"]. Values follow FIWARE WeatherObserved weatherType vocabulary."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fw_air_quality_observed": [
@@ -101,7 +130,8 @@
       {
         "name": "station_id",
         "type": "VARCHAR(100)",
-        "description": "External identifier of the air quality monitoring station"
+        "description": "External identifier of the air quality monitoring station",
+        "index": true
       },
       {
         "name": "location",
@@ -117,37 +147,65 @@
       {
         "name": "co",
         "type": "NUMERIC(10,4)",
-        "description": "Carbon monoxide (CO) concentration in micrograms per cubic metre (\u03bcg/m\u00b3)"
+        "description": "Carbon monoxide (CO) concentration in micrograms per cubic metre (μg/m³)"
       },
       {
         "name": "no2",
         "type": "NUMERIC(10,4)",
-        "description": "Nitrogen dioxide (NO\u2082) concentration in \u03bcg/m\u00b3"
+        "description": "Nitrogen dioxide (NO₂) concentration in μg/m³"
       },
       {
         "name": "o3",
         "type": "NUMERIC(10,4)",
-        "description": "Ozone (O\u2083) concentration in \u03bcg/m\u00b3"
+        "description": "Ozone (O₃) concentration in μg/m³"
       },
       {
         "name": "pm10",
         "type": "NUMERIC(10,4)",
-        "description": "Particulate matter \u226410\u03bcm diameter concentration in \u03bcg/m\u00b3"
+        "description": "Particulate matter ≤10μm diameter concentration in μg/m³"
       },
       {
         "name": "pm25",
         "type": "NUMERIC(10,4)",
-        "description": "Fine particulate matter \u22642.5\u03bcm diameter concentration in \u03bcg/m\u00b3"
+        "description": "Fine particulate matter ≤2.5μm diameter concentration in μg/m³"
       },
       {
         "name": "aqi",
         "type": "INTEGER",
-        "description": "Computed Air Quality Index value (scale varies by country; typically 0\u2013500 US AQI)"
+        "description": "Computed Air Quality Index value (scale varies by country; typically 0–500 US AQI)"
       },
       {
         "name": "aqi_level",
         "type": "VARCHAR(20)",
         "description": "Textual AQI band, e.g. 'good', 'moderate', 'unhealthy', 'hazardous'"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fw_traffic_flow_observed": [
@@ -160,7 +218,8 @@
       {
         "name": "road_segment_id",
         "type": "VARCHAR(100)",
-        "description": "External identifier of the road segment or loop detector being observed"
+        "description": "External identifier of the road segment or loop detector being observed",
+        "index": true
       },
       {
         "name": "location",
@@ -180,7 +239,7 @@
       {
         "name": "occupancy",
         "type": "NUMERIC(5,4)",
-        "description": "Fraction of time the detector was occupied by vehicles (0.0\u20131.0)"
+        "description": "Fraction of time the detector was occupied by vehicles (0.0–1.0)"
       },
       {
         "name": "average_vehicle_speed",
@@ -196,6 +255,34 @@
         "name": "congestion_level",
         "type": "VARCHAR(20)",
         "description": "Qualitative congestion band: 'freeFlow', 'congested', 'heavyCongestion', 'blockage'"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fw_waste_container": [
@@ -244,6 +331,34 @@
         "name": "last_emptied_at",
         "type": "TIMESTAMPTZ",
         "description": "UTC timestamp of the most recent emptying service event"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fw_device": [
@@ -292,11 +407,39 @@
         "name": "date_last_value_reported",
         "type": "TIMESTAMPTZ",
         "description": "UTC timestamp when this device last successfully transmitted a data value"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "EU-backed open data models \u2014 smart cities, agrifood, energy, environment",
-  "long_description": "FIWARE Smart Data Models are the EU-backed reference schemas for smart city and IoT applications, maintained by TM Forum, IUDX, and the FIWARE Foundation. The schema covers weather observations, air quality measurements, traffic flow counts, waste container fill levels, and IoT device registry \u2014 the five most commonly deployed models.",
+  "short_description": "EU-backed open data models — smart cities, agrifood, energy, environment",
+  "long_description": "FIWARE Smart Data Models are the EU-backed reference schemas for smart city and IoT applications, maintained by TM Forum, IUDX, and the FIWARE Foundation. The schema covers weather observations, air quality measurements, traffic flow counts, waste container fill levels, and IoT device registry — the five most commonly deployed models.",
   "when_to_use": "Use for smart city platforms, environmental monitoring dashboards, or any IoT application targeting EU markets. Used by 300+ cities in the EU Smart Cities Marketplace. Required for compliance with many EU Horizon and CEF Digital grants. The Catania, Porto, Santander, and Helsinki smart city reference implementations all use FIWARE data models.",
   "extensions": [
     "postgis"

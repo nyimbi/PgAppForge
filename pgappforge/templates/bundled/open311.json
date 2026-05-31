@@ -2,7 +2,7 @@
   "name": "open311",
   "schema": "open311",
   "label": "Open311 (Civic Tech)",
-  "description": "US government service request standard \u2014 311 calls, civic issues, public services",
+  "description": "US government service request standard — 311 calls, civic issues, public services",
   "color": "#3498db",
   "icon": "fa-phone-square",
   "version": "2.2",
@@ -14,22 +14,23 @@
     "311",
     "smart-city"
   ],
-  "short_description": "US government service request standard \u2014 311 calls, civic issues, public services",
-  "long_description": "Open311 is the standard API protocol for civic service requests \u2014 potholes, broken streetlights, graffiti, noise complaints \u2014 enabling citizens to report issues and track resolution. The schema covers jurisdiction registration, service type catalog with custom attribute definitions, and individual service request records with geolocation, status, and agency assignment.",
+  "short_description": "US government service request standard — 311 calls, civic issues, public services",
+  "long_description": "Open311 is the standard API protocol for civic service requests — potholes, broken streetlights, graffiti, noise complaints — enabling citizens to report issues and track resolution. The schema covers jurisdiction registration, service type catalog with custom attribute definitions, and individual service request records with geolocation, status, and agency assignment.",
   "when_to_use": "Use for 311 call center systems, civic engagement apps, smart city service management, or citizen reporting platforms. Adopted by cities including Chicago, San Francisco, Boston, and New York. Required for SeeClickFix, Salesforce Government Cloud, and Microsoft Azure for Government integrations. Growing adoption through EU Smart City Marketplace and FIWARE ecosystem.",
   "table_notes": {
     "o311_jurisdiction": "Registry of municipal or agency jurisdictions that expose Open311 endpoints; one row per city or government entity.",
     "o311_service": "Catalog of reportable service types offered by a jurisdiction (e.g. pothole, graffiti, noise); each has a unique service_code within its jurisdiction.",
     "o311_service_request": "Individual citizen-submitted issue reports with location, status lifecycle, and contact details; the primary transactional table.",
-    "o311_attribute": "Custom metadata fields (attributes) that extend a service\u2019s data collection form; supports multiple datatypes and ordered display."
+    "o311_attribute": "Custom metadata fields (attributes) that extend a service’s data collection form; supports multiple datatypes and ordered display."
   },
   "tables": {
     "o311_jurisdiction": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the jurisdiction"
+        "description": "Auto-incremented surrogate key for the jurisdiction",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -40,12 +41,12 @@
       {
         "name": "url",
         "type": "TEXT",
-        "description": "Base URL of the jurisdiction\u2019s Open311 API endpoint"
+        "description": "Base URL of the jurisdiction’s Open311 API endpoint"
       },
       {
         "name": "locale",
         "type": "VARCHAR(10)",
-        "description": "BCP 47 locale tag for the jurisdiction\u2019s default language (e.g. en-US, es-MX)"
+        "description": "BCP 47 locale tag for the jurisdiction’s default language (e.g. en-US, es-MX)"
       },
       {
         "name": "timezone",
@@ -55,21 +56,51 @@
       {
         "name": "geo_boundary",
         "type": "GEOGRAPHY(POLYGON,4326)",
-        "description": "PostGIS polygon defining the jurisdiction\u2019s geographic boundary in WGS84"
+        "description": "PostGIS polygon defining the jurisdiction’s geographic boundary in WGS84"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "o311_service": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the service type"
+        "description": "Auto-incremented surrogate key for the service type",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "jurisdiction_id",
         "type": "INTEGER",
         "fk": "o311_jurisdiction.id",
-        "description": "References o311_jurisdiction \u2014 the municipality that offers this service"
+        "description": "References o311_jurisdiction — the municipality that offers this service",
+        "index": true
       },
       {
         "name": "service_code",
@@ -107,6 +138,34 @@
         "name": "category_group",
         "type": "VARCHAR(100)",
         "description": "Category grouping for UI display (e.g. Streets, Parks, Sanitation)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "o311_service_request": [
@@ -120,7 +179,8 @@
         "name": "service_id",
         "type": "INTEGER",
         "fk": "o311_service.id",
-        "description": "References o311_service \u2014 the type of issue being reported"
+        "description": "References o311_service — the type of issue being reported",
+        "index": true
       },
       {
         "name": "status",
@@ -176,31 +236,61 @@
       {
         "name": "requestor_email",
         "type": "VARCHAR(320)",
-        "description": "Citizen\u2019s email address for status notifications (RFC 5321 max length)"
+        "description": "Citizen’s email address for status notifications (RFC 5321 max length)"
       },
       {
         "name": "requestor_phone",
         "type": "VARCHAR(30)",
-        "description": "Citizen\u2019s phone number for follow-up contact (E.164 or local format)"
+        "description": "Citizen’s phone number for follow-up contact (E.164 or local format)"
       },
       {
         "name": "token",
         "type": "VARCHAR(100)",
         "description": "Temporary tracking token issued before a permanent UUID is assigned (async services)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "o311_attribute": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the attribute definition"
+        "description": "Auto-incremented surrogate key for the attribute definition",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "service_id",
         "type": "INTEGER",
         "fk": "o311_service.id",
-        "description": "References o311_service \u2014 the service this attribute extends"
+        "description": "References o311_service — the service this attribute extends",
+        "index": true
       },
       {
         "name": "variable",
@@ -236,12 +326,40 @@
       {
         "name": "order_num",
         "type": "INTEGER",
-        "description": "Display order of this attribute within the service\u2019s submission form"
+        "description": "Display order of this attribute within the service’s submission form"
       },
       {
         "name": "allowed_values",
         "type": "JSONB",
         "description": "JSON array of {key, name} objects for list-type attributes (e.g. [{\"key\":\"1\",\"name\":\"Yes\"}])"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

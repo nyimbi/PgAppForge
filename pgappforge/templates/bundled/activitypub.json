@@ -124,6 +124,28 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this actor record was first stored locally"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ap_object": [
@@ -149,7 +171,8 @@
         "name": "attributed_to_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id — the actor who authored or owns this object"
+        "description": "References ap_actor.id — the actor who authored or owns this object",
+        "index": true
       },
       {
         "name": "content",
@@ -229,6 +252,34 @@
         "type": "INTEGER",
         "default": "0",
         "description": "Cached count of Announce (boost/reblog) activities targeting this object"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ap_activity": [
@@ -254,13 +305,15 @@
         "name": "actor_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id — the actor who performed this activity"
+        "description": "References ap_actor.id — the actor who performed this activity",
+        "index": true
       },
       {
         "name": "object_id",
         "type": "UUID",
         "fk": "ap_object.id",
-        "description": "References ap_object.id — the object this activity was performed on (NULL for Follow)"
+        "description": "References ap_object.id — the object this activity was performed on (NULL for Follow)",
+        "index": true
       },
       {
         "name": "target_url",
@@ -272,6 +325,34 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this activity was received or generated"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ap_follow": [
@@ -285,13 +366,15 @@
         "name": "follower_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id — the actor initiating the follow"
+        "description": "References ap_actor.id — the actor initiating the follow",
+        "index": true
       },
       {
         "name": "following_id",
         "type": "UUID",
         "fk": "ap_actor.id",
-        "description": "References ap_actor.id — the actor being followed"
+        "description": "References ap_actor.id — the actor being followed",
+        "index": true
       },
       {
         "name": "state",
@@ -303,6 +386,28 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when the Follow activity was received and this record created"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

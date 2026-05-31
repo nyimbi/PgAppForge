@@ -24,14 +24,16 @@
     "ubl_party": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key; referenced by ubl_invoice.supplier_id and ubl_invoice.customer_id"
+        "description": "Surrogate primary key; referenced by ubl_invoice.supplier_id and ubl_invoice.customer_id",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "party_id",
         "type": "VARCHAR(100)",
-        "description": "Scheme-qualified business identifier (e.g. GLN, DUNS, or national company registry number)"
+        "description": "Scheme-qualified business identifier (e.g. GLN, DUNS, or national company registry number)",
+        "index": true
       },
       {
         "name": "party_name",
@@ -47,7 +49,8 @@
       {
         "name": "tax_id",
         "type": "VARCHAR(100)",
-        "description": "VAT registration number or national tax identifier (e.g. DE123456789 for German VAT)"
+        "description": "VAT registration number or national tax identifier (e.g. DE123456789 for German VAT)",
+        "index": true
       },
       {
         "name": "registration_name",
@@ -83,6 +86,34 @@
         "name": "telephone",
         "type": "VARCHAR(30)",
         "description": "Contact telephone number in ITU-T E.164 or local format"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ubl_invoice": [
@@ -97,7 +128,8 @@
         "type": "VARCHAR(100)",
         "unique": true,
         "nullable": false,
-        "description": "Seller-assigned invoice number; must be unique per supplier and used in payment references"
+        "description": "Seller-assigned invoice number; must be unique per supplier and used in payment references",
+        "index": true
       },
       {
         "name": "issue_date",
@@ -126,13 +158,15 @@
         "name": "supplier_id",
         "type": "INTEGER",
         "fk": "ubl_party.id",
-        "description": "References ubl_party.id for the selling party (AccountingSupplierParty in UBL spec)"
+        "description": "References ubl_party.id for the selling party (AccountingSupplierParty in UBL spec)",
+        "index": true
       },
       {
         "name": "customer_id",
         "type": "INTEGER",
         "fk": "ubl_party.id",
-        "description": "References ubl_party.id for the buying party (AccountingCustomerParty in UBL spec)"
+        "description": "References ubl_party.id for the buying party (AccountingCustomerParty in UBL spec)",
+        "index": true
       },
       {
         "name": "payable_amount",
@@ -157,7 +191,8 @@
       {
         "name": "payment_id",
         "type": "VARCHAR(100)",
-        "description": "Remittance reference or payment reference number the buyer must quote on the bank transfer"
+        "description": "Remittance reference or payment reference number the buyer must quote on the bank transfer",
+        "index": true
       },
       {
         "name": "note",
@@ -175,26 +210,51 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this invoice record was inserted into the database"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ubl_invoice_line": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for this invoice line row"
+        "description": "Surrogate primary key for this invoice line row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "invoice_id",
         "type": "UUID",
         "fk": "ubl_invoice.id",
         "nullable": false,
-        "description": "References ubl_invoice.id; groups all lines belonging to the same invoice"
+        "description": "References ubl_invoice.id; groups all lines belonging to the same invoice",
+        "index": true
       },
       {
         "name": "line_id",
         "type": "VARCHAR(20)",
-        "description": "Seller-assigned line number within the invoice (e.g. '1', '2'); used in buyer reconciliation"
+        "description": "Seller-assigned line number within the invoice (e.g. '1', '2'); used in buyer reconciliation",
+        "index": true
       },
       {
         "name": "description",
@@ -235,20 +295,50 @@
         "name": "tax_rate",
         "type": "NUMERIC(5,2)",
         "description": "Applicable VAT or tax percentage rate for this line (e.g. 20.00 for 20% UK VAT)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ubl_tax_total": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for this tax subtotal row"
+        "description": "Surrogate primary key for this tax subtotal row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "invoice_id",
         "type": "UUID",
         "fk": "ubl_invoice.id",
-        "description": "References ubl_invoice.id; an invoice may have multiple tax subtotal rows by category"
+        "description": "References ubl_invoice.id; an invoice may have multiple tax subtotal rows by category",
+        "index": true
       },
       {
         "name": "tax_amount",
@@ -258,7 +348,8 @@
       {
         "name": "tax_category_id",
         "type": "VARCHAR(10)",
-        "description": "UNCL 5305 tax category code: S=standard rate, Z=zero rated, E=exempt, AE=reverse charge"
+        "description": "UNCL 5305 tax category code: S=standard rate, Z=zero rated, E=exempt, AE=reverse charge",
+        "index": true
       },
       {
         "name": "taxable_amount",
@@ -274,6 +365,34 @@
         "name": "tax_name",
         "type": "VARCHAR(100)",
         "description": "Human-readable tax scheme name (e.g. 'VAT', 'GST', 'Sales Tax') for display purposes"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

@@ -2,7 +2,7 @@
   "name": "dcat",
   "schema": "dcat",
   "label": "DCAT v3 (Data Catalog)",
-  "description": "W3C Data Catalog Vocabulary \u2014 used by US/UK/EU government open data portals",
+  "description": "W3C Data Catalog Vocabulary — used by US/UK/EU government open data portals",
   "color": "#27ae60",
   "icon": "fa-database",
   "version": "3.0",
@@ -14,7 +14,7 @@
     "eu",
     "us-mandate"
   ],
-  "short_description": "W3C Data Catalog Vocabulary \u2014 used by US/UK/EU government open data portals",
+  "short_description": "W3C Data Catalog Vocabulary — used by US/UK/EU government open data portals",
   "long_description": "DCAT v3 is the W3C recommendation for describing datasets and data services in interoperable machine-readable catalogs. The schema captures catalog metadata, dataset descriptions with spatial/temporal coverage and update frequency, distribution formats with download URLs, and reusable API data services.",
   "when_to_use": "Use for open data portals, enterprise data catalogs, data marketplace platforms, or any system publishing dataset metadata for discovery. Mandated by EU Open Data Directive for public sector bodies. US data.gov, UK data.gov.uk, EU data.europa.eu, and data.gov.au all use DCAT. Required for FAIR (Findable, Accessible, Interoperable, Reusable) data compliance in scientific publishing.",
   "table_notes": {
@@ -72,6 +72,34 @@
         "name": "modified",
         "type": "TIMESTAMPTZ",
         "description": "Date/time the catalog record was last updated"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dcat_dataset": [
@@ -85,7 +113,8 @@
         "name": "catalog_id",
         "type": "UUID",
         "fk": "dcat_catalog.id",
-        "description": "References the parent dcat_catalog that owns this dataset"
+        "description": "References the parent dcat_catalog that owns this dataset",
+        "index": true
       },
       {
         "name": "title",
@@ -167,6 +196,34 @@
         "name": "version",
         "type": "VARCHAR(50)",
         "description": "Version identifier of the dataset content (e.g. '2024-Q1', '3.0')"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dcat_distribution": [
@@ -180,7 +237,8 @@
         "name": "dataset_id",
         "type": "UUID",
         "fk": "dcat_dataset.id",
-        "description": "References the dcat_dataset this distribution belongs to"
+        "description": "References the dcat_dataset this distribution belongs to",
+        "index": true
       },
       {
         "name": "title",
@@ -221,6 +279,34 @@
         "name": "modified",
         "type": "TIMESTAMPTZ",
         "description": "Date/time this distribution was last updated"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dcat_data_service": [
@@ -234,7 +320,8 @@
         "name": "catalog_id",
         "type": "UUID",
         "fk": "dcat_catalog.id",
-        "description": "References the dcat_catalog that lists this service"
+        "description": "References the dcat_catalog that lists this service",
+        "index": true
       },
       {
         "name": "title",
@@ -262,6 +349,34 @@
         "name": "contact_point",
         "type": "JSONB",
         "description": "Contact details object with keys: name, email, url (vCard/schema.org style)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

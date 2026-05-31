@@ -2,7 +2,7 @@
   "name": "iso20022",
   "schema": "iso20022",
   "label": "ISO 20022 (Payments)",
-  "description": "Global financial messaging \u2014 bank payment mandate 2024-2026",
+  "description": "Global financial messaging — bank payment mandate 2024-2026",
   "color": "#2c3e50",
   "icon": "fa-university",
   "version": "2019",
@@ -20,12 +20,85 @@
     "payment_status": "Audit log of status transitions for a credit transfer transaction, capturing reason codes per ISO 20022 status reporting messages."
   },
   "tables": {
+    "iso20022_party": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "pk": true,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "party_type",
+        "type": "VARCHAR(20)",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false
+      },
+      {
+        "name": "lei",
+        "type": "CHAR(20)"
+      },
+      {
+        "name": "tax_id",
+        "type": "VARCHAR(50)",
+        "index": true
+      },
+      {
+        "name": "bic",
+        "type": "CHAR(11)"
+      },
+      {
+        "name": "iban",
+        "type": "VARCHAR(34)"
+      },
+      {
+        "name": "address",
+        "type": "JSONB",
+        "default": "{}"
+      },
+      {
+        "name": "country",
+        "type": "CHAR(2)"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
+      }
+    ],
     "fi_identification": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for the financial institution record"
+        "description": "Surrogate primary key for the financial institution record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "bic",
@@ -41,7 +114,8 @@
       {
         "name": "clearing_system_id",
         "type": "VARCHAR(35)",
-        "description": "Domestic clearing system member ID (e.g. ABA routing number, UK sort code)"
+        "description": "Domestic clearing system member ID (e.g. ABA routing number, UK sort code)",
+        "index": true
       },
       {
         "name": "country",
@@ -52,6 +126,34 @@
         "name": "address",
         "type": "JSONB",
         "description": "Structured postal address: {street, building_number, post_code, town, country}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "payment_instruction": [
@@ -66,7 +168,8 @@
         "type": "VARCHAR(35)",
         "unique": true,
         "nullable": false,
-        "description": "Unique message ID assigned by the initiating party (PAIN.001 GrpHdr/MsgId)"
+        "description": "Unique message ID assigned by the initiating party (PAIN.001 GrpHdr/MsgId)",
+        "index": true
       },
       {
         "name": "creation_dt",
@@ -87,9 +190,10 @@
       },
       {
         "name": "debtor_id",
-        "type": "INTEGER",
-        "fk": "fi_identification.id",
-        "description": "References fi_identification \u2014 the financial institution debiting the account"
+        "type": "UUID",
+        "fk": "iso20022_party.id",
+        "description": "References fi_identification — the financial institution debiting the account",
+        "index": true
       },
       {
         "name": "debtor_account_iban",
@@ -106,6 +210,34 @@
         "name": "purpose_code",
         "type": "VARCHAR(4)",
         "description": "ISO 20022 ExternalPurpose1Code classifying the economic purpose of this payment"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "credit_transfer_txn": [
@@ -119,13 +251,15 @@
         "name": "instruction_id",
         "type": "UUID",
         "fk": "payment_instruction.id",
-        "description": "References payment_instruction \u2014 the parent instruction group"
+        "description": "References payment_instruction — the parent instruction group",
+        "index": true
       },
       {
         "name": "end_to_end_id",
         "type": "VARCHAR(35)",
         "nullable": false,
-        "description": "End-to-end reference assigned by initiating party, carried unchanged through the payment chain"
+        "description": "End-to-end reference assigned by initiating party, carried unchanged through the payment chain",
+        "index": true
       },
       {
         "name": "uetr",
@@ -146,9 +280,10 @@
       },
       {
         "name": "creditor_id",
-        "type": "INTEGER",
-        "fk": "fi_identification.id",
-        "description": "References fi_identification \u2014 the financial institution crediting the account"
+        "type": "UUID",
+        "fk": "iso20022_party.id",
+        "description": "References fi_identification — the financial institution crediting the account",
+        "index": true
       },
       {
         "name": "creditor_account_iban",
@@ -181,20 +316,44 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Row creation timestamp (server-side)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "payment_status": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for this status event"
+        "description": "Auto-incremented surrogate key for this status event",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "txn_id",
         "type": "UUID",
         "fk": "credit_transfer_txn.id",
-        "description": "References credit_transfer_txn \u2014 the transaction this status event applies to"
+        "description": "References credit_transfer_txn — the transaction this status event applies to",
+        "index": true
       },
       {
         "name": "status",
@@ -216,10 +375,38 @@
         "name": "reason_info",
         "type": "TEXT",
         "description": "Free-text elaboration of the reason code provided by the processing institution"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Global financial messaging \u2014 bank payment mandate 2024-2026",
+  "short_description": "Global financial messaging — bank payment mandate 2024-2026",
   "long_description": "ISO 20022 is the global financial messaging standard replacing legacy SWIFT MT messages across all payment types. The schema implements the core payment initiation (PAIN.001) and interbank clearing (PACS.008) message structures, capturing financial institution identifiers (BIC/LEI), account numbers (IBAN), transaction details, and status reporting.",
   "when_to_use": "Use for any payment processing system, banking API, treasury management platform, or fintech that must process or initiate wire transfers, ACH payments, SEPA transfers, or SWIFT gpi transactions. The US Federal Reserve completed its ISO 20022 migration in 2024; SWIFT global migration runs 2022-2026. Required for TARGET2 (ECB), CHAPS (UK), TIPS, and all G20 central bank systems."
 }

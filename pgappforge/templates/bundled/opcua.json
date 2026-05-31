@@ -2,7 +2,7 @@
   "name": "opcua",
   "schema": "opcua",
   "label": "OPC UA (Industrial)",
-  "description": "Industrial automation data standard \u2014 used by every IIoT platform (Siemens, Rockwell, ABB)",
+  "description": "Industrial automation data standard — used by every IIoT platform (Siemens, Rockwell, ABB)",
   "color": "#8e44ad",
   "icon": "fa-industry",
   "version": "1.05",
@@ -33,7 +33,7 @@
         "name": "application_uri",
         "type": "TEXT",
         "unique": true,
-        "description": "OPC UA ApplicationUri \u2014 globally unique URI identifying this server application instance"
+        "description": "OPC UA ApplicationUri — globally unique URI identifying this server application instance"
       },
       {
         "name": "product_name",
@@ -65,6 +65,34 @@
         "name": "last_connected_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent successful OPC UA session establishment"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "opcua_node": [
@@ -78,13 +106,15 @@
         "name": "server_id",
         "type": "UUID",
         "fk": "opcua_server.id",
-        "description": "OPC UA server that owns this node; references opcua_server.id"
+        "description": "OPC UA server that owns this node; references opcua_server.id",
+        "index": true
       },
       {
         "name": "node_id",
         "type": "VARCHAR(500)",
         "nullable": false,
-        "description": "OPC UA NodeId string (e.g. ns=2;s=Pump1.Speed) \u2014 unique within a server"
+        "description": "OPC UA NodeId string (e.g. ns=2;s=Pump1.Speed) — unique within a server",
+        "index": true
       },
       {
         "name": "browse_name",
@@ -115,26 +145,57 @@
         "name": "parent_id",
         "type": "UUID",
         "fk": "opcua_node.id",
-        "description": "Parent node in the address-space hierarchy; self-referential FK to opcua_node.id (NULL for root objects)"
+        "description": "Parent node in the address-space hierarchy; self-referential FK to opcua_node.id (NULL for root objects)",
+        "index": true
       },
       {
         "name": "description",
         "type": "TEXT",
-        "description": "OPC UA Description attribute \u2014 free-text documentation supplied by the server for this node"
+        "description": "OPC UA Description attribute — free-text documentation supplied by the server for this node"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "opcua_data_value": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incrementing surrogate key for the data value row"
+        "description": "Auto-incrementing surrogate key for the data value row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "node_id",
         "type": "UUID",
         "fk": "opcua_node.id",
-        "description": "Node whose value was sampled; references opcua_node.id"
+        "description": "Node whose value was sampled; references opcua_node.id",
+        "index": true
       },
       {
         "name": "value_boolean",
@@ -160,17 +221,45 @@
         "name": "source_timestamp",
         "type": "TIMESTAMPTZ",
         "nullable": false,
-        "description": "OPC UA SourceTimestamp \u2014 when the value was produced at the data source (PLC/sensor)"
+        "description": "OPC UA SourceTimestamp — when the value was produced at the data source (PLC/sensor)"
       },
       {
         "name": "server_timestamp",
         "type": "TIMESTAMPTZ",
-        "description": "OPC UA ServerTimestamp \u2014 when the server received or recorded the value"
+        "description": "OPC UA ServerTimestamp — when the server received or recorded the value"
       },
       {
         "name": "status_code",
         "type": "INTEGER",
         "description": "OPC UA StatusCode (32-bit); 0x00000000 = Good; non-zero indicates quality/uncertainty issues"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "opcua_alarm": [
@@ -184,13 +273,15 @@
         "name": "server_id",
         "type": "UUID",
         "fk": "opcua_server.id",
-        "description": "Server that generated this alarm; references opcua_server.id"
+        "description": "Server that generated this alarm; references opcua_server.id",
+        "index": true
       },
       {
         "name": "node_id",
         "type": "UUID",
         "fk": "opcua_node.id",
-        "description": "Address-space node that is the source of the alarm condition; references opcua_node.id"
+        "description": "Address-space node that is the source of the alarm condition; references opcua_node.id",
+        "index": true
       },
       {
         "name": "event_type",
@@ -200,12 +291,12 @@
       {
         "name": "severity",
         "type": "INTEGER",
-        "description": "OPC UA severity value 1\u20131000; 1=Low, 500=Medium, 1000=High per OPC UA Part 9"
+        "description": "OPC UA severity value 1–1000; 1=Low, 500=Medium, 1000=High per OPC UA Part 9"
       },
       {
         "name": "message",
         "type": "TEXT",
-        "description": "OPC UA Event Message LocalizedText \u2014 human-readable description of the alarm condition"
+        "description": "OPC UA Event Message LocalizedText — human-readable description of the alarm condition"
       },
       {
         "name": "active_state",
@@ -221,20 +312,50 @@
         "name": "acknowledged_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp when an operator acknowledged the alarm; NULL if not yet acknowledged"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "opcua_method_call": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incrementing surrogate key for the method call record"
+        "description": "Auto-incrementing surrogate key for the method call record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "node_id",
         "type": "UUID",
         "fk": "opcua_node.id",
-        "description": "Node representing the OPC UA Method that was invoked; references opcua_node.id"
+        "description": "Node representing the OPC UA Method that was invoked; references opcua_node.id",
+        "index": true
       },
       {
         "name": "method_name",
@@ -261,10 +382,38 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this method call was recorded; defaults to server wall-clock time at insert"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Industrial automation data standard \u2014 used by every IIoT platform (Siemens, Rockwell, ABB)",
+  "short_description": "Industrial automation data standard — used by every IIoT platform (Siemens, Rockwell, ABB)",
   "long_description": "OPC UA (Unified Architecture) is the IEC 62541 standard for industrial automation data exchange, combining platform-independent data modeling with built-in security. The schema covers OPC UA server registration, node address space (variables, objects, methods), real-time data values, process alarms, and method call logging.",
   "when_to_use": "Use for Industrial IoT platforms, SCADA/DCS system integrations, manufacturing execution systems (MES), or any Industry 4.0 application. OPC UA is implemented in virtually all modern industrial equipment from Siemens, Rockwell, ABB, Beckhoff, and Bosch. Required for Industry 4.0 compliance in EU's IACS cybersecurity framework (IEC 62443) and German Industrie 4.0 reference architecture (RAMI 4.0)."
 }

@@ -32,7 +32,8 @@
         "name": "patient_id",
         "type": "VARCHAR(64)",
         "unique": true,
-        "description": "DICOM Patient ID (tag 0010,0020) — typically MRN assigned by issuing institution"
+        "description": "DICOM Patient ID (tag 0010,0020) — typically MRN assigned by issuing institution",
+        "index": true
       },
       {
         "name": "patient_name",
@@ -52,7 +53,36 @@
       {
         "name": "fhir_patient_id",
         "type": "UUID",
-        "description": "References FHIR Patient resource for cross-system interoperability with HL7 FHIR"
+        "description": "References FHIR Patient resource for cross-system interoperability with HL7 FHIR",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dicom_study": [
@@ -73,7 +103,8 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "dicom_patient.id",
-        "description": "References dicom_patient — the subject of this imaging study"
+        "description": "References dicom_patient — the subject of this imaging study",
+        "index": true
       },
       {
         "name": "study_date",
@@ -115,6 +146,34 @@
         "type": "INTEGER",
         "default": "0",
         "description": "Cached count of series belonging to this study (denormalized for query performance)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dicom_series": [
@@ -135,7 +194,8 @@
         "name": "study_id",
         "type": "UUID",
         "fk": "dicom_study.id",
-        "description": "References dicom_study — the parent study this series belongs to"
+        "description": "References dicom_study — the parent study this series belongs to",
+        "index": true
       },
       {
         "name": "series_number",
@@ -167,6 +227,34 @@
         "name": "series_date",
         "type": "DATE",
         "description": "Date this series was acquired (DICOM tag 0008,0021)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dicom_instance": [
@@ -187,7 +275,8 @@
         "name": "series_id",
         "type": "UUID",
         "fk": "dicom_series.id",
-        "description": "References dicom_series — the series this instance belongs to"
+        "description": "References dicom_series — the series this instance belongs to",
+        "index": true
       },
       {
         "name": "sop_class_uid",
@@ -223,6 +312,34 @@
         "name": "metadata",
         "type": "JSONB",
         "description": "Supplementary DICOM tag values as JSONB {tag: value} — pixel spacing, slice thickness, window center/width, etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dicom_report": [
@@ -236,7 +353,8 @@
         "name": "study_id",
         "type": "UUID",
         "fk": "dicom_study.id",
-        "description": "References dicom_study — the imaging study this report describes"
+        "description": "References dicom_study — the imaging study this report describes",
+        "index": true
       },
       {
         "name": "report_type",
@@ -273,6 +391,28 @@
         "name": "finalized_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp when the report reached final/signed status (NULL if still in progress)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

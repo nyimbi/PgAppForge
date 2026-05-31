@@ -24,9 +24,10 @@
     "iati_organisation": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for internal joins"
+        "description": "Surrogate primary key for internal joins",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "ref",
@@ -48,6 +49,34 @@
         "name": "country",
         "type": "CHAR(2)",
         "description": "ISO 3166-1 alpha-2 country where the organisation is registered"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iati_activity": [
@@ -68,7 +97,8 @@
         "name": "reporting_org_id",
         "type": "INTEGER",
         "fk": "iati_organisation.id",
-        "description": "Organisation responsible for publishing this activity record; references iati_organisation.id"
+        "description": "Organisation responsible for publishing this activity record; references iati_organisation.id",
+        "index": true
       },
       {
         "name": "title",
@@ -124,20 +154,50 @@
         "name": "last_updated",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp when the publisher last updated this activity in their IATI data file"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iati_transaction": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for internal joins"
+        "description": "Surrogate primary key for internal joins",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "activity_id",
         "type": "UUID",
         "fk": "iati_activity.id",
-        "description": "Activity this financial flow belongs to; references iati_activity.id"
+        "description": "Activity this financial flow belongs to; references iati_activity.id",
+        "index": true
       },
       {
         "name": "transaction_type",
@@ -163,13 +223,15 @@
         "name": "provider_org_id",
         "type": "INTEGER",
         "fk": "iati_organisation.id",
-        "description": "Organisation providing the funds in this transaction; references iati_organisation.id"
+        "description": "Organisation providing the funds in this transaction; references iati_organisation.id",
+        "index": true
       },
       {
         "name": "receiver_org_id",
         "type": "INTEGER",
         "fk": "iati_organisation.id",
-        "description": "Organisation receiving the funds in this transaction; references iati_organisation.id"
+        "description": "Organisation receiving the funds in this transaction; references iati_organisation.id",
+        "index": true
       },
       {
         "name": "description",
@@ -185,20 +247,50 @@
         "name": "country_code",
         "type": "CHAR(2)",
         "description": "ISO 3166-1 alpha-2 code of the recipient country for this transaction"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iati_budget": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for internal joins"
+        "description": "Surrogate primary key for internal joins",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "activity_id",
         "type": "UUID",
         "fk": "iati_activity.id",
-        "description": "Activity this budget period belongs to; references iati_activity.id"
+        "description": "Activity this budget period belongs to; references iati_activity.id",
+        "index": true
       },
       {
         "name": "budget_type",
@@ -229,20 +321,50 @@
         "name": "status",
         "type": "VARCHAR(3)",
         "description": "IATI BudgetStatus codelist (1=Indicative, 2=Committed)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iati_result": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for internal joins"
+        "description": "Surrogate primary key for internal joins",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "activity_id",
         "type": "UUID",
         "fk": "iati_activity.id",
-        "description": "Activity this result framework entry belongs to; references iati_activity.id"
+        "description": "Activity this result framework entry belongs to; references iati_activity.id",
+        "index": true
       },
       {
         "name": "result_type",
@@ -263,6 +385,34 @@
         "name": "indicators",
         "type": "JSONB",
         "description": "JSONB array of indicator objects each with {title, measure, ascending, baseline, period[{target, actual}]} per IATI schema"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

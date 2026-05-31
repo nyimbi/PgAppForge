@@ -2,7 +2,7 @@
   "name": "xbrl-ifrs",
   "schema": "xbrl_ifrs",
   "label": "XBRL + IFRS/GAAP Taxonomy",
-  "description": "SEC-mandated financial reporting standard \u2014 public company filings, IFRS/GAAP concepts",
+  "description": "SEC-mandated financial reporting standard — public company filings, IFRS/GAAP concepts",
   "color": "#2c3e50",
   "icon": "fa-balance-scale",
   "version": "2024",
@@ -17,16 +17,17 @@
   "table_notes": {
     "xbrl_concept": "Master registry of all XBRL taxonomy elements (account names/line items) from IFRS, US-GAAP, or custom namespaces.",
     "xbrl_taxonomy": "One row per taxonomy package (e.g. IFRS 2023, US-GAAP 2024); the filing FK pins which standard was used.",
-    "xbrl_filing": "Top-level filing record per entity/period \u2014 the root context for all facts in a submission.",
+    "xbrl_filing": "Top-level filing record per entity/period — the root context for all facts in a submission.",
     "xbrl_fact": "Core fact table storing individual reported values keyed to a concept, filing, and dimensional context."
   },
   "tables": {
     "xbrl_concept": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate key for the concept row"
+        "description": "Surrogate key for the concept row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "namespace",
@@ -68,15 +69,44 @@
       {
         "name": "documentation",
         "type": "TEXT",
-        "description": "Normative definition from the taxonomy\u2019s documentation linkbase"
+        "description": "Normative definition from the taxonomy’s documentation linkbase"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "xbrl_taxonomy": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate key for the taxonomy package"
+        "description": "Surrogate key for the taxonomy package",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -108,6 +138,34 @@
         "name": "effective_date",
         "type": "DATE",
         "description": "Date from which this taxonomy version is authoritative for filing purposes"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "xbrl_filing": [
@@ -151,7 +209,8 @@
         "name": "taxonomy_id",
         "type": "INTEGER",
         "fk": "xbrl_taxonomy.id",
-        "description": "References xbrl_taxonomy \u2014 the taxonomy package used to tag this filing"
+        "description": "References xbrl_taxonomy — the taxonomy package used to tag this filing",
+        "index": true
       },
       {
         "name": "currency",
@@ -166,32 +225,64 @@
       {
         "name": "submission_url",
         "type": "TEXT",
-        "description": "Canonical URL of the filing package on the regulator\u2019s portal"
+        "description": "Canonical URL of the filing package on the regulator’s portal"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "xbrl_fact": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate key for a single reported fact value"
+        "description": "Surrogate key for a single reported fact value",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "filing_id",
         "type": "UUID",
         "fk": "xbrl_filing.id",
-        "description": "References xbrl_filing \u2014 the submission this fact belongs to"
+        "description": "References xbrl_filing — the submission this fact belongs to",
+        "index": true
       },
       {
         "name": "concept_id",
         "type": "INTEGER",
         "fk": "xbrl_concept.id",
-        "description": "References xbrl_concept \u2014 the taxonomy element (line item) this fact reports"
+        "description": "References xbrl_concept — the taxonomy element (line item) this fact reports",
+        "index": true
       },
       {
         "name": "context_id",
         "type": "VARCHAR(100)",
-        "description": "XBRL context identifier from the source document (entity + period + scenario key)"
+        "description": "XBRL context identifier from the source document (entity + period + scenario key)",
+        "index": true
       },
       {
         "name": "unit",
@@ -216,21 +307,49 @@
       {
         "name": "period_start",
         "type": "DATE",
-        "description": "Start of the fact\u2019s period context (NULL for instant-type concepts)"
+        "description": "Start of the fact’s period context (NULL for instant-type concepts)"
       },
       {
         "name": "period_end",
         "type": "DATE",
-        "description": "End date or instant date of the fact\u2019s period context"
+        "description": "End date or instant date of the fact’s period context"
       },
       {
         "name": "segment",
         "type": "JSONB",
         "description": "Dimensional breakdown for this fact; keys are dimension QNames, values are member QNames (e.g. {\"srt:StatementGeographicalAxis\": \"srt:NorthAmericaMember\"})"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "SEC-mandated financial reporting standard \u2014 public company filings, IFRS/GAAP concepts",
+  "short_description": "SEC-mandated financial reporting standard — public company filings, IFRS/GAAP concepts",
   "long_description": "XBRL with IFRS/GAAP taxonomy enables structured financial reporting that regulators can process programmatically. The schema covers the complete XBRL pipeline: taxonomy concept definitions (account names from IFRS/GAAP), filing metadata (entity, period, reporting currency), and individual financial facts with their dimensional context (segment, unit, period type).",
   "when_to_use": "Use for financial reporting automation tools, regulatory compliance platforms, audit/analytics systems processing SEC filings, or investor relations portals. SEC mandates XBRL for all public company filers (10-K, 10-Q, 8-K). ESMA requires iXBRL for EU public companies. UK FCA, EBA (banking), EIOPA (insurance), and ESMA (securities) all require XBRL reporting."
 }

@@ -2,7 +2,7 @@
   "name": "green-button",
   "schema": "green_button",
   "label": "Green Button / ESPI",
-  "description": "Energy consumption data standard \u2014 all US utilities must provide Green Button data",
+  "description": "Energy consumption data standard — all US utilities must provide Green Button data",
   "color": "#27ae60",
   "icon": "fa-plug",
   "version": "3.3",
@@ -32,12 +32,14 @@
         "name": "local_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Utility-assigned identifier for this service point (stable across feeds)"
+        "description": "Utility-assigned identifier for this service point (stable across feeds)",
+        "index": true
       },
       {
         "name": "customer_id",
         "type": "VARCHAR(100)",
-        "description": "Utility account or customer number that owns this service point"
+        "description": "Utility account or customer number that owns this service point",
+        "index": true
       },
       {
         "name": "service_category",
@@ -63,6 +65,34 @@
         "name": "tariff_profile",
         "type": "VARCHAR(100)",
         "description": "Rate schedule or tariff code under which this usage point is billed (e.g. E-TOU-C)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gb_meter_reading": [
@@ -76,7 +106,8 @@
         "name": "usage_point_id",
         "type": "UUID",
         "fk": "gb_usage_point.id",
-        "description": "References gb_usage_point.id; the service location this reading belongs to"
+        "description": "References gb_usage_point.id; the service location this reading belongs to",
+        "index": true
       },
       {
         "name": "reading_type",
@@ -92,7 +123,7 @@
         "name": "power_of_ten_multiplier",
         "type": "SMALLINT",
         "default": "0",
-        "description": "Scale factor: raw value \u00d7 10^n gives the actual quantity (e.g. -3 = milli, 3 = kilo)"
+        "description": "Scale factor: raw value × 10^n gives the actual quantity (e.g. -3 = milli, 3 = kilo)"
       },
       {
         "name": "interval_length_seconds",
@@ -103,6 +134,34 @@
         "name": "accumulation_behaviour",
         "type": "VARCHAR(30)",
         "description": "ESPI AccumulationKind: deltaData (interval energy), summation (cumulative register), etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gb_interval_block": [
@@ -116,7 +175,8 @@
         "name": "meter_reading_id",
         "type": "UUID",
         "fk": "gb_meter_reading.id",
-        "description": "References gb_meter_reading.id; the reading configuration this block belongs to"
+        "description": "References gb_meter_reading.id; the reading configuration this block belongs to",
+        "index": true
       },
       {
         "name": "start_at",
@@ -133,20 +193,50 @@
         "name": "num_readings",
         "type": "INTEGER",
         "description": "Expected count of interval readings in this block; use to detect incomplete feeds"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gb_interval_reading": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incrementing surrogate key; BIGSERIAL supports high-volume 15-min meter feeds"
+        "description": "Auto-incrementing surrogate key; BIGSERIAL supports high-volume 15-min meter feeds",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "interval_block_id",
         "type": "UUID",
         "fk": "gb_interval_block.id",
-        "description": "References gb_interval_block.id; the delivery batch this reading was part of"
+        "description": "References gb_interval_block.id; the delivery batch this reading was part of",
+        "index": true
       },
       {
         "name": "start_at",
@@ -168,10 +258,38 @@
         "name": "quality_of_reading",
         "type": "VARCHAR(20)",
         "description": "ESPI QualityOfReading code: valid, estimated, projected, questionable, derived, etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Energy consumption data standard \u2014 all US utilities must provide Green Button data",
-  "long_description": "Green Button / ESPI (Energy Services Provider Interface) is the US standard for consumer energy data access, mandated under Smart Grid Investment Grant programs. The schema captures utility account data, meter reading configurations, interval data blocks, and individual interval readings \u2014 enabling analysis of energy consumption patterns.",
+  "short_description": "Energy consumption data standard — all US utilities must provide Green Button data",
+  "long_description": "Green Button / ESPI (Energy Services Provider Interface) is the US standard for consumer energy data access, mandated under Smart Grid Investment Grant programs. The schema captures utility account data, meter reading configurations, interval data blocks, and individual interval readings — enabling analysis of energy consumption patterns.",
   "when_to_use": "Use for energy analytics tools, smart home energy management apps, demand response platforms, or any consumer energy application. All US utilities receiving Smart Grid Investment Grants must provide Green Button data. Over 65 million US homes have Green Button access. Required for participation in US demand response programs and some state utility API mandates."
 }

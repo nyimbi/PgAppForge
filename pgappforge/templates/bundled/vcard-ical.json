@@ -130,20 +130,44 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Row insertion timestamp (database-managed, not part of the vCard spec)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "vcard_email": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "contact_id",
         "type": "UUID",
         "fk": "vcard_contact.id",
-        "description": "Foreign key to vcard_contact — the contact that owns this email address"
+        "description": "Foreign key to vcard_contact — the contact that owns this email address",
+        "index": true
       },
       {
         "name": "address",
@@ -166,20 +190,50 @@
         "name": "label",
         "type": "VARCHAR(100)",
         "description": "Optional human-readable display label for this email entry (e.g. \"Work\", \"Personal\")"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "vcard_phone": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "contact_id",
         "type": "UUID",
         "fk": "vcard_contact.id",
-        "description": "Foreign key to vcard_contact — the contact that owns this phone number"
+        "description": "Foreign key to vcard_contact — the contact that owns this phone number",
+        "index": true
       },
       {
         "name": "number",
@@ -196,6 +250,34 @@
         "type": "INTEGER",
         "default": "100",
         "description": "RFC 6350 PREF parameter — 1 (most preferred) to 100 (least preferred); lower wins"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ical_calendar": [
@@ -234,6 +316,34 @@
         "name": "prodid",
         "type": "VARCHAR(255)",
         "description": "RFC 5545 PRODID — software product identifier that created this calendar feed"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ical_event": [
@@ -247,7 +357,8 @@
         "name": "calendar_id",
         "type": "UUID",
         "fk": "ical_calendar.id",
-        "description": "Foreign key to ical_calendar — the calendar this event belongs to"
+        "description": "Foreign key to ical_calendar — the calendar this event belongs to",
+        "index": true
       },
       {
         "name": "uid",
@@ -330,6 +441,28 @@
         "name": "last_modified",
         "type": "TIMESTAMPTZ",
         "description": "RFC 5545 LAST-MODIFIED — timestamp of the most recent change to this event"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

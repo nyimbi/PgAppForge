@@ -57,6 +57,34 @@
         "name": "default_probability",
         "type": "NUMERIC(8,6)",
         "description": "Annualised probability of default used in credit risk calculations (0.0–1.0)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "actus_contract": [
@@ -71,7 +99,8 @@
         "type": "VARCHAR(100)",
         "unique": true,
         "nullable": false,
-        "description": "Business-level contract identifier (e.g. from originating system or LEI-based scheme)"
+        "description": "Business-level contract identifier (e.g. from originating system or LEI-based scheme)",
+        "index": true
       },
       {
         "name": "contract_type",
@@ -88,7 +117,8 @@
         "name": "counterparty_id",
         "type": "UUID",
         "fk": "actus_counterparty.id",
-        "description": "References the counterparty entity in actus_counterparty"
+        "description": "References the counterparty entity in actus_counterparty",
+        "index": true
       },
       {
         "name": "settlement_currency",
@@ -130,20 +160,44 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this contract record was inserted"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "actus_contract_event": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the event row"
+        "description": "Auto-incremented surrogate key for the event row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "contract_id",
         "type": "UUID",
         "fk": "actus_contract.id",
-        "description": "References the parent contract in actus_contract"
+        "description": "References the parent contract in actus_contract",
+        "index": true
       },
       {
         "name": "scheduled_time",
@@ -171,14 +225,43 @@
         "name": "state_after",
         "type": "JSONB",
         "description": "ACTUS contract state snapshot after this event (e.g. nominalValue, accruedInterest, statusDate)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "actus_risk_factor": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the risk factor row"
+        "description": "Auto-incremented surrogate key for the risk factor row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "market_object_code",
@@ -200,6 +283,34 @@
         "name": "base_value",
         "type": "NUMERIC(18,8)",
         "description": "Current or reference value of the risk factor used as the simulation baseline"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

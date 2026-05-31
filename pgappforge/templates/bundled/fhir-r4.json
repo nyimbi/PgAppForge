@@ -95,6 +95,28 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this row was inserted into the database"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "practitioner": [
@@ -139,6 +161,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR Practitioner resource payload for round-trip fidelity and extensions"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "organization": [
@@ -184,6 +234,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR Organization resource payload for round-trip fidelity and extensions"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "encounter": [
@@ -197,19 +275,22 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the patient this encounter is about"
+        "description": "References patient.id — the patient this encounter is about",
+        "index": true
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
         "fk": "practitioner.id",
-        "description": "References practitioner.id — primary clinician responsible for this encounter"
+        "description": "References practitioner.id — primary clinician responsible for this encounter",
+        "index": true
       },
       {
         "name": "organization_id",
         "type": "UUID",
         "fk": "organization.id",
-        "description": "References organization.id — facility or organization where the encounter took place"
+        "description": "References organization.id — facility or organization where the encounter took place",
+        "index": true
       },
       {
         "name": "status",
@@ -245,6 +326,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR Encounter resource payload including participants, hospitalization, and locations"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "observation": [
@@ -258,13 +367,15 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the subject of the observation"
+        "description": "References patient.id — the subject of the observation",
+        "index": true
       },
       {
         "name": "encounter_id",
         "type": "UUID",
         "fk": "encounter.id",
-        "description": "References encounter.id — the visit during which this observation was made"
+        "description": "References encounter.id — the visit during which this observation was made",
+        "index": true
       },
       {
         "name": "code",
@@ -310,6 +421,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR Observation resource including components, reference ranges, and derived-from links"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "condition": [
@@ -323,13 +462,15 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the patient this condition is recorded against"
+        "description": "References patient.id — the patient this condition is recorded against",
+        "index": true
       },
       {
         "name": "encounter_id",
         "type": "UUID",
         "fk": "encounter.id",
-        "description": "References encounter.id — the visit at which this condition was first documented"
+        "description": "References encounter.id — the visit at which this condition was first documented",
+        "index": true
       },
       {
         "name": "code",
@@ -365,6 +506,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR Condition resource including stage, evidence, and body site details"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "medication_request": [
@@ -378,13 +547,15 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the patient for whom the medication is prescribed"
+        "description": "References patient.id — the patient for whom the medication is prescribed",
+        "index": true
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
         "fk": "practitioner.id",
-        "description": "References practitioner.id — the prescribing clinician"
+        "description": "References practitioner.id — the prescribing clinician",
+        "index": true
       },
       {
         "name": "medication_code",
@@ -420,6 +591,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR MedicationRequest resource including dispense request, substitution, and prior auth"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "diagnostic_report": [
@@ -433,13 +632,15 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the patient whose specimen or study was reported on"
+        "description": "References patient.id — the patient whose specimen or study was reported on",
+        "index": true
       },
       {
         "name": "encounter_id",
         "type": "UUID",
         "fk": "encounter.id",
-        "description": "References encounter.id — the visit that prompted this diagnostic report"
+        "description": "References encounter.id — the visit that prompted this diagnostic report",
+        "index": true
       },
       {
         "name": "code",
@@ -475,6 +676,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR DiagnosticReport resource including referenced observations, imaging, and media"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "appointment": [
@@ -488,13 +717,15 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the patient participant in this appointment"
+        "description": "References patient.id — the patient participant in this appointment",
+        "index": true
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
         "fk": "practitioner.id",
-        "description": "References practitioner.id — the clinician participant in this appointment"
+        "description": "References practitioner.id — the clinician participant in this appointment",
+        "index": true
       },
       {
         "name": "status",
@@ -525,6 +756,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR Appointment resource including all participants, slot references, and cancellation reason"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "allergy_intolerance": [
@@ -538,7 +797,8 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id — the patient who has this allergy or intolerance"
+        "description": "References patient.id — the patient who has this allergy or intolerance",
+        "index": true
       },
       {
         "name": "code",
@@ -574,6 +834,34 @@
         "name": "resource",
         "type": "JSONB",
         "description": "Full FHIR AllergyIntolerance resource including recorder, asserter, and note details"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

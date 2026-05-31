@@ -73,6 +73,34 @@
         "name": "primary_address",
         "type": "JSONB",
         "description": "Structured mailing address: {line, city, countrySubdivision, postalCode, countryCode}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "hro_position_opening": [
@@ -137,6 +165,34 @@
         "type": "VARCHAR(30)",
         "default": "'Open'",
         "description": "Posting lifecycle state: Open, OnHold, Filled, Cancelled, Expired"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "hro_candidate": [
@@ -150,7 +206,8 @@
         "name": "person_id",
         "type": "UUID",
         "fk": "hro_person_profile.id",
-        "description": "References hro_person_profile — links candidate to their identity and contact data"
+        "description": "References hro_person_profile — links candidate to their identity and contact data",
+        "index": true
       },
       {
         "name": "profile_status",
@@ -181,6 +238,34 @@
         "name": "ref_notes",
         "type": "JSONB",
         "description": "Array of professional references: [{name, title, company, relationship, contact}]"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "hro_application": [
@@ -194,13 +279,15 @@
         "name": "candidate_id",
         "type": "UUID",
         "fk": "hro_candidate.id",
-        "description": "References hro_candidate — the applicant submitting this application"
+        "description": "References hro_candidate — the applicant submitting this application",
+        "index": true
       },
       {
         "name": "position_id",
         "type": "UUID",
         "fk": "hro_position_opening.id",
-        "description": "References hro_position_opening — the role being applied for"
+        "description": "References hro_position_opening — the role being applied for",
+        "index": true
       },
       {
         "name": "applied_at",
@@ -232,6 +319,34 @@
         "name": "offer",
         "type": "JSONB",
         "description": "Formal offer details: {salary, currency (ISO 4217), startDate, expiryDate, status, terms}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "hro_employment": [
@@ -245,19 +360,22 @@
         "name": "person_id",
         "type": "UUID",
         "fk": "hro_person_profile.id",
-        "description": "References hro_person_profile — the employed individual"
+        "description": "References hro_person_profile — the employed individual",
+        "index": true
       },
       {
         "name": "position_id",
         "type": "UUID",
         "fk": "hro_position_opening.id",
-        "description": "References hro_position_opening — the position this employee fills"
+        "description": "References hro_position_opening — the position this employee fills",
+        "index": true
       },
       {
         "name": "employee_id",
         "type": "VARCHAR(50)",
         "unique": true,
-        "description": "Employer-assigned employee badge or payroll number (unique within the organization)"
+        "description": "Employer-assigned employee badge or payroll number (unique within the organization)",
+        "index": true
       },
       {
         "name": "start_date",
@@ -289,6 +407,34 @@
         "name": "work_schedule",
         "type": "JSONB",
         "description": "Working pattern: {hoursPerWeek, daysPerWeek, shiftCode, flexibleWork, remoteAllowed}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

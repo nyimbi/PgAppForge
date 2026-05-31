@@ -25,9 +25,10 @@
     "arts_retail_store": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the store"
+        "description": "Auto-incremented surrogate key for the store",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "store_number",
@@ -65,25 +66,56 @@
         "type": "BOOLEAN",
         "default": "true",
         "description": "False when a store is permanently closed or temporarily suspended"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "arts_workstation": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the workstation"
+        "description": "Auto-incremented surrogate key for the workstation",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "store_id",
         "type": "INTEGER",
         "fk": "arts_retail_store.id",
-        "description": "Store this workstation belongs to; references arts_retail_store.id"
+        "description": "Store this workstation belongs to; references arts_retail_store.id",
+        "index": true
       },
       {
         "name": "workstation_id",
         "type": "VARCHAR(50)",
-        "description": "Lane or terminal identifier assigned by the store (e.g. LANE-03, SCO-01)"
+        "description": "Lane or terminal identifier assigned by the store (e.g. LANE-03, SCO-01)",
+        "index": true
       },
       {
         "name": "type",
@@ -104,6 +136,34 @@
         "name": "last_heartbeat_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent health-check ping; used to detect dead terminals"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "arts_transaction": [
@@ -117,13 +177,15 @@
         "name": "store_id",
         "type": "INTEGER",
         "fk": "arts_retail_store.id",
-        "description": "Store where this transaction occurred; references arts_retail_store.id"
+        "description": "Store where this transaction occurred; references arts_retail_store.id",
+        "index": true
       },
       {
         "name": "workstation_id",
         "type": "INTEGER",
         "fk": "arts_workstation.id",
-        "description": "Terminal that recorded this transaction; references arts_workstation.id"
+        "description": "Terminal that recorded this transaction; references arts_workstation.id",
+        "index": true
       },
       {
         "name": "transaction_number",
@@ -153,12 +215,14 @@
       {
         "name": "operator_id",
         "type": "VARCHAR(50)",
-        "description": "Cashier or associate badge/login ID who processed this transaction"
+        "description": "Cashier or associate badge/login ID who processed this transaction",
+        "index": true
       },
       {
         "name": "customer_id",
         "type": "VARCHAR(100)",
-        "description": "Loyalty or CRM account identifier if the customer was identified at POS"
+        "description": "Loyalty or CRM account identifier if the customer was identified at POS",
+        "index": true
       },
       {
         "name": "total_amount",
@@ -179,20 +243,50 @@
         "name": "status",
         "type": "VARCHAR(20)",
         "description": "Lifecycle state: in-progress, completed, voided, suspended, recalled"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "arts_line_item": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the line item"
+        "description": "Auto-incremented surrogate key for the line item",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "transaction_id",
         "type": "UUID",
         "fk": "arts_transaction.id",
-        "description": "Parent transaction this line belongs to; references arts_transaction.id"
+        "description": "Parent transaction this line belongs to; references arts_transaction.id",
+        "index": true
       },
       {
         "name": "seq_num",
@@ -248,20 +342,50 @@
         "name": "tax_amount",
         "type": "NUMERIC(15,4)",
         "description": "Tax collected on this line item (may be zero for exempt items)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "arts_tender": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the tender row"
+        "description": "Auto-incremented surrogate key for the tender row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "transaction_id",
         "type": "UUID",
         "fk": "arts_transaction.id",
-        "description": "Transaction being settled by this tender; references arts_transaction.id"
+        "description": "Transaction being settled by this tender; references arts_transaction.id",
+        "index": true
       },
       {
         "name": "tender_type",
@@ -292,6 +416,34 @@
         "name": "card_last4",
         "type": "CHAR(4)",
         "description": "Last four digits of the card PAN retained for receipt display (never full PAN)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

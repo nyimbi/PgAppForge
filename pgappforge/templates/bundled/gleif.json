@@ -22,9 +22,10 @@
     "gleif_lei_record": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate auto-increment primary key"
+        "description": "Surrogate auto-increment primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "lei",
@@ -106,7 +107,8 @@
       {
         "name": "registration_id",
         "type": "VARCHAR(100)",
-        "description": "Entity’s identifier within its registration authority (e.g. company number)"
+        "description": "Entity’s identifier within its registration authority (e.g. company number)",
+        "index": true
       },
       {
         "name": "lei_status",
@@ -132,14 +134,43 @@
         "name": "managing_lou",
         "type": "VARCHAR(20)",
         "description": "LEI of the Local Operating Unit (LOU) managing this record. References gleif_lei_record.lei."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gleif_relationship": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate auto-increment primary key"
+        "description": "Surrogate auto-increment primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "child_lei",
@@ -177,6 +208,34 @@
         "name": "period_end",
         "type": "DATE",
         "description": "End date of the reporting period for this relationship (NULL if ongoing)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

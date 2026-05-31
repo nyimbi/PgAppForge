@@ -55,6 +55,34 @@
         "type": "BOOLEAN",
         "default": "true",
         "description": "Whether the organization is currently operational and accepting data exchanges"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "niem_person": [
@@ -107,7 +135,36 @@
       {
         "name": "state_id",
         "type": "VARCHAR(50)",
-        "description": "State-issued driver’s license or ID number for secondary identity matching"
+        "description": "State-issued driver’s license or ID number for secondary identity matching",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "niem_location": [
@@ -146,6 +203,34 @@
         "name": "geo_point",
         "type": "GEOGRAPHY(POINT,4326)",
         "description": "PostGIS WGS84 point; enables ST_DWithin proximity and ST_Distance queries"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "niem_incident": [
@@ -175,7 +260,8 @@
         "name": "location_id",
         "type": "UUID",
         "fk": "niem_location.id",
-        "description": "References niem_location.id; pinpoints where the incident occurred"
+        "description": "References niem_location.id; pinpoints where the incident occurred",
+        "index": true
       },
       {
         "name": "reported_at",
@@ -201,7 +287,36 @@
         "name": "reporting_org_id",
         "type": "UUID",
         "fk": "niem_organization.id",
-        "description": "References niem_organization.id; identifies the agency that filed this incident report"
+        "description": "References niem_organization.id; identifies the agency that filed this incident report",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "niem_case": [
@@ -236,13 +351,15 @@
         "name": "court_id",
         "type": "UUID",
         "fk": "niem_organization.id",
-        "description": "References niem_organization.id; identifies the court where the case is docketed"
+        "description": "References niem_organization.id; identifies the court where the case is docketed",
+        "index": true
       },
       {
         "name": "subject_id",
         "type": "UUID",
         "fk": "niem_person.id",
-        "description": "References niem_person.id; the defendant or primary subject of the case"
+        "description": "References niem_person.id; the defendant or primary subject of the case",
+        "index": true
       },
       {
         "name": "charges",
@@ -253,6 +370,34 @@
         "name": "disposition",
         "type": "VARCHAR(100)",
         "description": "Final outcome: guilty, not guilty, dismissed, pled, deferred adjudication, etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

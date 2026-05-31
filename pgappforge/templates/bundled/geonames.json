@@ -2,10 +2,10 @@
   "name": "geonames",
   "schema": "geonames",
   "label": "GeoNames (Geographic Database)",
-  "description": "World geographic database \u2014 11M+ place names, admin divisions, postal codes with coordinates",
-  "short_description": "World geographic database \u2014 11M+ place names, admin divisions, postal codes with coordinates",
+  "description": "World geographic database — 11M+ place names, admin divisions, postal codes with coordinates",
+  "short_description": "World geographic database — 11M+ place names, admin divisions, postal codes with coordinates",
   "long_description": "GeoNames is the world's largest geographic database with over 11 million place names (cities, mountains, rivers, airports, landmarks) covering every country. Includes administrative division hierarchies (states/provinces/counties), postal codes for 100+ countries, alternate name translations in hundreds of languages, and elevation data. Freely available under Creative Commons CC-BY 4.0.",
-  "when_to_use": "Use for any application needing geographic lookups, address validation, timezone resolution, or administrative boundary data. Essential for country/region/city dropdowns, geosearch, and location data normalization. Load data via: flask forge templates install-data geonames (auto-downloads from geonames.org \u2014 ~1.5GB uncompressed, CC-BY 4.0 license, no registration required).",
+  "when_to_use": "Use for any application needing geographic lookups, address validation, timezone resolution, or administrative boundary data. Essential for country/region/city dropdowns, geosearch, and location data normalization. Load data via: flask forge templates install-data geonames (auto-downloads from geonames.org — ~1.5GB uncompressed, CC-BY 4.0 license, no registration required).",
   "color": "#27ae60",
   "icon": "fa-globe",
   "version": "2024",
@@ -31,9 +31,10 @@
     "geonames_feature": [
       {
         "name": "geonameid",
-        "type": "INTEGER",
+        "type": "UUID",
         "pk": true,
-        "description": "GeoNames unique identifier (stable across versions)"
+        "description": "GeoNames unique identifier (stable across versions)",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -49,7 +50,7 @@
       {
         "name": "alternatenames",
         "type": "TEXT",
-        "description": "Comma-separated alternate names (short form \u2014 full data in geonames_altname)"
+        "description": "Comma-separated alternate names (short form — full data in geonames_altname)"
       },
       {
         "name": "latitude",
@@ -138,14 +139,43 @@
         "name": "search_vector",
         "type": "TSVECTOR",
         "description": "PostgreSQL full-text search vector over name + asciiname for fast text search"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_altname": [
       {
         "name": "alternatenameid",
-        "type": "INTEGER",
+        "type": "UUID",
         "pk": true,
-        "description": "GeoNames alternate name unique ID"
+        "description": "GeoNames alternate name unique ID",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "geonameid",
@@ -192,6 +222,34 @@
         "name": "to_date",
         "type": "DATE",
         "description": "Date until which this name was valid (NULL = still valid)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_country": [
@@ -292,14 +350,43 @@
         "name": "equivalent_fips_code",
         "type": "VARCHAR(10)",
         "description": "Equivalent FIPS region code"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_admin1": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "code",
@@ -322,14 +409,43 @@
         "type": "INTEGER",
         "fk": "geonames_feature.geonameid",
         "description": "GeoNames feature ID for this division"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_admin2": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "code",
@@ -352,14 +468,43 @@
         "type": "INTEGER",
         "fk": "geonames_feature.geonameid",
         "description": "GeoNames feature ID for this division"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_postal_code": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "country_code",
@@ -415,6 +560,34 @@
         "name": "accuracy",
         "type": "SMALLINT",
         "description": "Accuracy of coordinates: 1=estimated, 4=geonames, 6=centroid of addresses, 9=GPS"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_feature_code": [
@@ -443,6 +616,34 @@
         "name": "description",
         "type": "TEXT",
         "description": "Detailed description of what this feature type represents"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "geonames_timezone": [
@@ -471,6 +672,34 @@
         "name": "country_code",
         "type": "CHAR(2)",
         "description": "ISO country code where this timezone is primarily used"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

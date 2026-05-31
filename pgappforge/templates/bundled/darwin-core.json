@@ -2,7 +2,7 @@
   "name": "darwin-core",
   "schema": "darwin_core",
   "label": "Darwin Core (Biodiversity)",
-  "description": "Biodiversity occurrence data \u2014 GBIF global database, natural history collections worldwide",
+  "description": "Biodiversity occurrence data — GBIF global database, natural history collections worldwide",
   "color": "#27ae60",
   "icon": "fa-frog",
   "version": "2024-02-28",
@@ -26,7 +26,7 @@
         "name": "id",
         "type": "UUID",
         "pk": true,
-        "description": "Primary key \u2014 UUID for the dataset record"
+        "description": "Primary key — UUID for the dataset record"
       },
       {
         "name": "name",
@@ -58,6 +58,34 @@
         "name": "lang_code",
         "type": "CHAR(5)",
         "description": "IETF/ISO 639 language code for the primary metadata language (e.g. en, pt-BR)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dwc_occurrence": [
@@ -71,18 +99,20 @@
         "name": "occurrence_id",
         "type": "VARCHAR(255)",
         "unique": true,
-        "description": "Darwin Core occurrenceID \u2014 globally unique identifier assigned by the data provider"
+        "description": "Darwin Core occurrenceID — globally unique identifier assigned by the data provider",
+        "index": true
       },
       {
         "name": "dataset_id",
         "type": "UUID",
         "fk": "dwc_dataset.id",
-        "description": "References dwc_dataset.id \u2014 identifies the source dataset for this occurrence"
+        "description": "References dwc_dataset.id — identifies the source dataset for this occurrence",
+        "index": true
       },
       {
         "name": "catalog_number",
         "type": "VARCHAR(100)",
-        "description": "Identifier for the physical specimen within the institution\u2019s collection catalogue"
+        "description": "Identifier for the physical specimen within the institution’s collection catalogue"
       },
       {
         "name": "collection_code",
@@ -102,7 +132,7 @@
       {
         "name": "occurrence_status",
         "type": "VARCHAR(20)",
-        "description": "DwC occurrenceStatus: \u2018present\u2019 or \u2018absent\u2019 at the location and time recorded"
+        "description": "DwC occurrenceStatus: ‘present’ or ‘absent’ at the location and time recorded"
       },
       {
         "name": "event_date",
@@ -173,20 +203,50 @@
         "name": "occurrence_remarks",
         "type": "TEXT",
         "description": "Free-text notes about the occurrence added by the collector or data curator"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dwc_taxon": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "taxon_id",
         "type": "VARCHAR(255)",
         "unique": true,
-        "description": "Darwin Core taxonID \u2014 globally unique identifier from the source checklist (e.g. GBIF backbone taxon key)"
+        "description": "Darwin Core taxonID — globally unique identifier from the source checklist (e.g. GBIF backbone taxon key)",
+        "index": true
       },
       {
         "name": "scientific_name",
@@ -222,12 +282,12 @@
       {
         "name": "genus",
         "type": "VARCHAR(100)",
-        "description": "Linnaean genus \u2014 first part of the binomial scientific name"
+        "description": "Linnaean genus — first part of the binomial scientific name"
       },
       {
         "name": "specific_epithet",
         "type": "VARCHAR(100)",
-        "description": "Species epithet \u2014 second part of the binomial (e.g. concolor in Puma concolor)"
+        "description": "Species epithet — second part of the binomial (e.g. concolor in Puma concolor)"
       },
       {
         "name": "taxon_rank",
@@ -248,35 +308,94 @@
         "name": "iucn_status",
         "type": "VARCHAR(20)",
         "description": "IUCN Red List category: EX, EW, CR, EN, VU, NT, LC, DD, NE"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dwc_occurrence_taxon": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "occurrence_id",
         "type": "UUID",
         "fk": "dwc_occurrence.id",
-        "description": "References dwc_occurrence.id \u2014 the occurrence being identified"
+        "description": "References dwc_occurrence.id — the occurrence being identified",
+        "index": true
       },
       {
         "name": "taxon_id",
         "type": "INTEGER",
         "fk": "dwc_taxon.id",
-        "description": "References dwc_taxon.id \u2014 the taxon assigned to this occurrence"
+        "description": "References dwc_taxon.id — the taxon assigned to this occurrence",
+        "index": true
       },
       {
         "name": "identification_qualifier",
         "type": "VARCHAR(100)",
-        "description": "DwC identificationQualifier expressing uncertainty, e.g. \u2018cf.\u2019, \u2018aff.\u2019, \u2018?\u2019, \u2018sensu lato\u2019"
+        "description": "DwC identificationQualifier expressing uncertainty, e.g. ‘cf.’, ‘aff.’, ‘?’, ‘sensu lato’"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Biodiversity occurrence data \u2014 GBIF global database, natural history collections worldwide",
+  "short_description": "Biodiversity occurrence data — GBIF global database, natural history collections worldwide",
   "long_description": "Darwin Core is the biodiversity informatics standard maintained by TDWG (Taxonomic Databases Working Group) for sharing occurrence records from natural history collections, field surveys, and citizen science projects. The schema covers dataset provenance, specimen/observation occurrence records with taxonomic identification, full Linnaean taxonomy, and IUCN conservation status.",
   "when_to_use": "Use for biodiversity databases, natural history collection management systems, conservation planning tools, or citizen science platforms. Darwin Core is the primary format for GBIF (Global Biodiversity Information Facility), iNaturalist, eBird, and the Ocean Biodiversity Information System. Required for data contribution to GBIF and reporting under the Convention on Biological Diversity (CBD)."
 }

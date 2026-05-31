@@ -2,7 +2,7 @@
   "name": "fao-agrovoc",
   "schema": "fao_agrovoc",
   "label": "FAO AgrInfo / AGROVOC",
-  "description": "UN Food and Agriculture Organization data standards \u2014 food security, agricultural statistics",
+  "description": "UN Food and Agriculture Organization data standards — food security, agricultural statistics",
   "color": "#27ae60",
   "icon": "fa-leaf",
   "version": "2024",
@@ -25,9 +25,10 @@
     "fao_country": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key"
+        "description": "Surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "fao_code",
@@ -59,14 +60,43 @@
         "name": "sub_region",
         "type": "VARCHAR(100)",
         "description": "FAO sub-regional grouping within the macro-region (e.g. Eastern Africa)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fao_item": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key"
+        "description": "Surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "fao_code",
@@ -93,26 +123,57 @@
         "name": "unit",
         "type": "VARCHAR(30)",
         "description": "Default measurement unit for this item (e.g. tonnes, head, 1000 USD)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fao_production": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key (bigint for large FAOSTAT row volumes)"
+        "description": "Surrogate primary key (bigint for large FAOSTAT row volumes)",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "country_id",
         "type": "INTEGER",
         "fk": "fao_country.id",
-        "description": "References fao_country \u2014 the country or territory that produced the commodity"
+        "description": "References fao_country — the country or territory that produced the commodity",
+        "index": true
       },
       {
         "name": "item_id",
         "type": "INTEGER",
         "fk": "fao_item.id",
-        "description": "References fao_item \u2014 the commodity being measured"
+        "description": "References fao_item — the commodity being measured",
+        "index": true
       },
       {
         "name": "element",
@@ -138,32 +199,64 @@
         "name": "flag",
         "type": "CHAR(2)",
         "description": "FAOSTAT data-quality flag (e.g. E=estimate, F=FAO figure, I=imputed, M=missing)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fao_trade": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key (bigint for bilateral trade row volumes)"
+        "description": "Surrogate primary key (bigint for bilateral trade row volumes)",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "reporter_id",
         "type": "INTEGER",
         "fk": "fao_country.id",
-        "description": "References fao_country \u2014 the country reporting the trade flow"
+        "description": "References fao_country — the country reporting the trade flow",
+        "index": true
       },
       {
         "name": "partner_id",
         "type": "INTEGER",
         "fk": "fao_country.id",
-        "description": "References fao_country \u2014 the trading partner country"
+        "description": "References fao_country — the trading partner country",
+        "index": true
       },
       {
         "name": "item_id",
         "type": "INTEGER",
         "fk": "fao_item.id",
-        "description": "References fao_item \u2014 the traded commodity"
+        "description": "References fao_item — the traded commodity",
+        "index": true
       },
       {
         "name": "flow",
@@ -184,20 +277,49 @@
         "name": "value_usd",
         "type": "NUMERIC(18,2)",
         "description": "Trade value in thousands of US dollars (1000 USD) as reported by FAO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "agrovoc_concept": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key"
+        "description": "Surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "uri",
         "type": "TEXT",
         "unique": true,
-        "description": "Canonical AGROVOC SKOS URI (e.g. http://aims.fao.org/aos/agrovoc/c_330) \u2014 stable across versions"
+        "description": "Canonical AGROVOC SKOS URI (e.g. http://aims.fao.org/aos/agrovoc/c_330) — stable across versions"
       },
       {
         "name": "prefLabel_en",
@@ -208,7 +330,8 @@
         "name": "broader_id",
         "type": "INTEGER",
         "fk": "agrovoc_concept.id",
-        "description": "Self-referencing FK to the broader (parent) concept per SKOS skos:broader hierarchy"
+        "description": "Self-referencing FK to the broader (parent) concept per SKOS skos:broader hierarchy",
+        "index": true
       },
       {
         "name": "related",
@@ -219,10 +342,38 @@
         "name": "alt_labels",
         "type": "JSONB",
         "description": "JSONB map of language codes to alternate label arrays (skos:altLabel); e.g. {\"en\": [\"maize\"]}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "UN Food and Agriculture Organization data standards \u2014 food security, agricultural statistics",
-  "long_description": "FAO AGROVOC is the UN Food and Agriculture Organization's multilingual thesaurus covering agriculture, forestry, fisheries, food, and related topics with 40,000+ concepts in 40+ languages. The schema also includes FAO production and trade statistics tables for storing FAOSTAT data \u2014 commodity production by country and year, and bilateral trade flows.",
+  "short_description": "UN Food and Agriculture Organization data standards — food security, agricultural statistics",
+  "long_description": "FAO AGROVOC is the UN Food and Agriculture Organization's multilingual thesaurus covering agriculture, forestry, fisheries, food, and related topics with 40,000+ concepts in 40+ languages. The schema also includes FAO production and trade statistics tables for storing FAOSTAT data — commodity production by country and year, and bilateral trade flows.",
   "when_to_use": "Use for food security information systems, agricultural statistics portals, commodity trading platforms, or any application needing FAO-standard crop/livestock classification. AGROVOC is the reference vocabulary for FAO, Bioversity International, and CIGAR. FAOSTAT data is required for SDG 2 (Zero Hunger) monitoring reports and national food security assessments."
 }

@@ -2,9 +2,9 @@
   "name": "iec-cim",
   "schema": "iec_cim",
   "label": "IEC CIM (Utilities)",
-  "description": "Common Information Model \u2014 power grid standard used by all utilities",
-  "short_description": "Common Information Model \u2014 power grid standard used by all utilities",
-  "long_description": "IEC CIM (Common Information Model, standards IEC 61968/61970) is the power industry's universal data model for electric utility systems. The schema covers grid topology (substations, equipment, lines), energy consumers (loads), and time-series measurements \u2014 the minimum viable CIM subset for most utility applications.",
+  "description": "Common Information Model — power grid standard used by all utilities",
+  "short_description": "Common Information Model — power grid standard used by all utilities",
+  "long_description": "IEC CIM (Common Information Model, standards IEC 61968/61970) is the power industry's universal data model for electric utility systems. The schema covers grid topology (substations, equipment, lines), energy consumers (loads), and time-series measurements — the minimum viable CIM subset for most utility applications.",
   "when_to_use": "Use for SCADA systems, outage management, smart grid applications, or any tool that must exchange data with utility control systems. NERC (US), ENTSO-E (EU), and most national grid operators mandate CIM for grid data exchange. Required for compliance with FERC Order 881, EU Clean Energy Package, and UK Grid Code.",
   "color": "#f39c12",
   "icon": "fa-bolt",
@@ -36,7 +36,7 @@
         "name": "mrid",
         "type": "UUID",
         "unique": true,
-        "description": "IEC CIM Master Resource Identifier \u2014 globally unique identity used for CIM data exchange"
+        "description": "IEC CIM Master Resource Identifier — globally unique identity used for CIM data exchange"
       },
       {
         "name": "name",
@@ -63,6 +63,34 @@
         "name": "voltage_level_kv",
         "type": "NUMERIC(8,2)",
         "description": "Primary operating voltage in kilovolts (e.g. 132, 33, 11)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cim_equipment": [
@@ -92,7 +120,8 @@
         "name": "substation_id",
         "type": "UUID",
         "fk": "cim_substation.id",
-        "description": "References cim_substation.id \u2014 the substation where this equipment is installed"
+        "description": "References cim_substation.id — the substation where this equipment is installed",
+        "index": true
       },
       {
         "name": "in_service",
@@ -124,6 +153,34 @@
         "name": "install_date",
         "type": "DATE",
         "description": "Date the equipment was commissioned and placed in service"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cim_ac_line_segment": [
@@ -178,6 +235,34 @@
         "name": "route",
         "type": "GEOGRAPHY(LINESTRING, 4326)",
         "description": "WGS84 linestring tracing the physical conductor route; enables corridor and proximity analysis"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cim_energy_consumer": [
@@ -222,15 +307,45 @@
         "name": "substation_id",
         "type": "UUID",
         "fk": "cim_substation.id",
-        "description": "References cim_substation.id \u2014 the substation supplying this consumer load point"
+        "description": "References cim_substation.id — the substation supplying this consumer load point",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "cim_measurement": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for this telemetry reading row"
+        "description": "Auto-incremented surrogate key for this telemetry reading row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "mrid",
@@ -241,7 +356,8 @@
         "name": "equipment_id",
         "type": "UUID",
         "fk": "cim_equipment.id",
-        "description": "References cim_equipment.id \u2014 the device this measurement was taken from"
+        "description": "References cim_equipment.id — the device this measurement was taken from",
+        "index": true
       },
       {
         "name": "measurement_type",
@@ -273,6 +389,34 @@
         "name": "quality",
         "type": "VARCHAR(30)",
         "description": "IEC CIM Quality61968 validity flag: GOOD, SUSPECT, BAD, MANUALLY_ENTERED, etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

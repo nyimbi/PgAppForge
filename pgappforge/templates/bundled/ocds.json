@@ -26,9 +26,10 @@
     "ocds_buyer": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the buyer record"
+        "description": "Auto-incremented surrogate key for the buyer record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "identifier",
@@ -55,14 +56,43 @@
         "name": "contact_point",
         "type": "JSONB",
         "description": "Primary contact details: {name, email, telephone, faxNumber, url}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ocds_supplier": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the supplier record"
+        "description": "Auto-incremented surrogate key for the supplier record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "identifier",
@@ -93,6 +123,34 @@
         "name": "roles",
         "type": "JSONB",
         "description": "OCDS party role codes array (e.g. [\"supplier\", \"tenderer\", \"contactPoint\"])"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ocds_tender": [
@@ -123,7 +181,8 @@
         "name": "buyer_id",
         "type": "INTEGER",
         "fk": "ocds_buyer.id",
-        "description": "References ocds_buyer — the procuring entity initiating this contracting process"
+        "description": "References ocds_buyer — the procuring entity initiating this contracting process",
+        "index": true
       },
       {
         "name": "procurement_method",
@@ -179,6 +238,34 @@
         "name": "number_of_tenderers",
         "type": "INTEGER",
         "description": "Count of valid bids received by the close of the tender period"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ocds_award": [
@@ -192,13 +279,15 @@
         "name": "tender_id",
         "type": "UUID",
         "fk": "ocds_tender.id",
-        "description": "References ocds_tender — the contracting process this award belongs to"
+        "description": "References ocds_tender — the contracting process this award belongs to",
+        "index": true
       },
       {
         "name": "supplier_id",
         "type": "INTEGER",
         "fk": "ocds_supplier.id",
-        "description": "References ocds_supplier — the winning bidder receiving this award"
+        "description": "References ocds_supplier — the winning bidder receiving this award",
+        "index": true
       },
       {
         "name": "title",
@@ -229,6 +318,34 @@
         "name": "items",
         "type": "JSONB",
         "description": "Array of awarded line items: [{id, description, quantity, unit, classification}]"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ocds_contract": [
@@ -242,7 +359,8 @@
         "name": "award_id",
         "type": "UUID",
         "fk": "ocds_award.id",
-        "description": "References ocds_award — the award decision that gave rise to this contract"
+        "description": "References ocds_award — the award decision that gave rise to this contract",
+        "index": true
       },
       {
         "name": "title",
@@ -283,20 +401,50 @@
         "name": "description",
         "type": "TEXT",
         "description": "Narrative description of the contracted scope of work or supply"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ocds_milestone": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the milestone record"
+        "description": "Auto-incremented surrogate key for the milestone record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "tender_id",
         "type": "UUID",
         "fk": "ocds_tender.id",
-        "description": "References ocds_tender — the contracting process this milestone belongs to"
+        "description": "References ocds_tender — the contracting process this milestone belongs to",
+        "index": true
       },
       {
         "name": "type",
@@ -322,6 +470,34 @@
         "name": "status",
         "type": "VARCHAR(30)",
         "description": "OCDS milestone status code: scheduled, met, notMet, partiallyMet"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

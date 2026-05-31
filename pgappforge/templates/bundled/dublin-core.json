@@ -2,7 +2,7 @@
   "name": "dublin-core",
   "schema": "dublin_core",
   "label": "Dublin Core Metadata",
-  "description": "ISO 15836 general-purpose metadata standard \u2014 used by libraries, repositories, web resources",
+  "description": "ISO 15836 general-purpose metadata standard — used by libraries, repositories, web resources",
   "color": "#8e44ad",
   "icon": "fa-book-open",
   "version": "ISO 15836-2",
@@ -31,78 +31,78 @@
         "name": "identifier",
         "type": "TEXT",
         "unique": true,
-        "description": "DC:Identifier \u2014 unique external URI, DOI, ISBN, or URN that identifies this resource"
+        "description": "DC:Identifier — unique external URI, DOI, ISBN, or URN that identifies this resource"
       },
       {
         "name": "title",
         "type": "JSONB",
         "nullable": false,
-        "description": "DC:Title \u2014 JSONB array of {value, lang} objects supporting multilingual titles"
+        "description": "DC:Title — JSONB array of {value, lang} objects supporting multilingual titles"
       },
       {
         "name": "creator",
         "type": "JSONB",
-        "description": "DC:Creator \u2014 JSONB array of agent names or URIs primarily responsible for creating the resource"
+        "description": "DC:Creator — JSONB array of agent names or URIs primarily responsible for creating the resource"
       },
       {
         "name": "subject",
         "type": "JSONB",
-        "description": "DC:Subject \u2014 JSONB array of {value, scheme} objects; scheme may be LCSH, DDC, MeSH, or free text"
+        "description": "DC:Subject — JSONB array of {value, scheme} objects; scheme may be LCSH, DDC, MeSH, or free text"
       },
       {
         "name": "description",
         "type": "JSONB",
-        "description": "DC:Description \u2014 JSONB array of {value, lang} objects containing abstracts or summaries"
+        "description": "DC:Description — JSONB array of {value, lang} objects containing abstracts or summaries"
       },
       {
         "name": "publisher",
         "type": "VARCHAR(500)",
-        "description": "DC:Publisher \u2014 entity responsible for making the resource available (organisation or service name)"
+        "description": "DC:Publisher — entity responsible for making the resource available (organisation or service name)"
       },
       {
         "name": "contributor",
         "type": "JSONB",
-        "description": "DC:Contributor \u2014 JSONB array of agent names with secondary responsibility (editors, illustrators, etc.)"
+        "description": "DC:Contributor — JSONB array of agent names with secondary responsibility (editors, illustrators, etc.)"
       },
       {
         "name": "date",
         "type": "DATE",
-        "description": "DC:Date \u2014 primary date associated with the resource lifecycle (publication, creation, or modification)"
+        "description": "DC:Date — primary date associated with the resource lifecycle (publication, creation, or modification)"
       },
       {
         "name": "dc_type",
         "type": "VARCHAR(100)",
-        "description": "DC:Type \u2014 DCMI Type Vocabulary term (e.g. Text, Dataset, Image, Collection, Event)"
+        "description": "DC:Type — DCMI Type Vocabulary term (e.g. Text, Dataset, Image, Collection, Event)"
       },
       {
         "name": "format",
         "type": "VARCHAR(100)",
-        "description": "DC:Format \u2014 media type or dimensions; use IANA MIME type string (e.g. application/pdf, image/tiff)"
+        "description": "DC:Format — media type or dimensions; use IANA MIME type string (e.g. application/pdf, image/tiff)"
       },
       {
         "name": "source",
         "type": "TEXT",
-        "description": "DC:Source \u2014 URI or citation of the resource from which this one is derived"
+        "description": "DC:Source — URI or citation of the resource from which this one is derived"
       },
       {
         "name": "lang_code",
         "type": "CHAR(5)",
-        "description": "DC:Language \u2014 primary language of the resource content; RFC 5646 tag (e.g. en, fr, zh-Hant)"
+        "description": "DC:Language — primary language of the resource content; RFC 5646 tag (e.g. en, fr, zh-Hant)"
       },
       {
         "name": "relation",
         "type": "JSONB",
-        "description": "DC:Relation \u2014 JSONB array of {type, uri} objects linking related resources (isPartOf, replaces, etc.)"
+        "description": "DC:Relation — JSONB array of {type, uri} objects linking related resources (isPartOf, replaces, etc.)"
       },
       {
         "name": "coverage",
         "type": "TEXT",
-        "description": "DC:Coverage \u2014 spatial or temporal extent of the resource (place name, bounding box, or date range)"
+        "description": "DC:Coverage — spatial or temporal extent of the resource (place name, bounding box, or date range)"
       },
       {
         "name": "rights",
         "type": "TEXT",
-        "description": "DC:Rights \u2014 rights statement or license URI governing access and use of the resource"
+        "description": "DC:Rights — rights statement or license URI governing access and use of the resource"
       },
       {
         "name": "created_at",
@@ -114,6 +114,28 @@
         "name": "modified_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent update to this metadata record; NULL if never modified"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dc_collection": [
@@ -148,36 +170,89 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when the collection record was created"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dc_collection_member": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the membership row"
+        "description": "Auto-incremented surrogate key for the membership row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "collection_id",
         "type": "UUID",
         "fk": "dc_collection.id",
-        "description": "References dc_collection.id \u2014 the collection this resource belongs to"
+        "description": "References dc_collection.id — the collection this resource belongs to",
+        "index": true
       },
       {
         "name": "resource_id",
         "type": "UUID",
         "fk": "dc_resource.id",
-        "description": "References dc_resource.id \u2014 the resource being included in the collection"
+        "description": "References dc_resource.id — the resource being included in the collection",
+        "index": true
       },
       {
         "name": "added_at",
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this resource was added to the collection"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "ISO 15836 general-purpose metadata standard \u2014 used by libraries, repositories, web resources",
+  "short_description": "ISO 15836 general-purpose metadata standard — used by libraries, repositories, web resources",
   "long_description": "Dublin Core (ISO 15836-2) is the foundational metadata standard used by libraries, digital repositories, and the web. The 15 core metadata elements cover the complete resource description lifecycle.",
   "when_to_use": "Use for digital libraries, institutional repositories, content management, or any resource catalog requiring discovery metadata. Required for OAI-PMH repository compliance and interoperability with WorldCat."
 }

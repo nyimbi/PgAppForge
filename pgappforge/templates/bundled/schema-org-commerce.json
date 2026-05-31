@@ -28,9 +28,10 @@
     "sorg_organization": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the organization"
+        "description": "Auto-incremented surrogate key for the organization",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -72,14 +73,43 @@
         "name": "same_as",
         "type": "JSONB",
         "description": "Array of URLs for the same entity on other sites (e.g. Wikipedia, Wikidata, social profiles) per schema.org/sameAs"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "sorg_product": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the product"
+        "description": "Auto-incremented surrogate key for the product",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -112,7 +142,8 @@
         "name": "brand_id",
         "type": "INTEGER",
         "fk": "sorg_organization.id",
-        "description": "References sorg_organization; identifies the brand that makes this product"
+        "description": "References sorg_organization; identifies the brand that makes this product",
+        "index": true
       },
       {
         "name": "category",
@@ -143,26 +174,57 @@
         "name": "is_similar_to",
         "type": "JSONB",
         "description": "Array of product IDs or URLs of similar/comparable products (schema.org/isSimilarTo)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "sorg_offer": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the offer"
+        "description": "Auto-incremented surrogate key for the offer",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "product_id",
         "type": "INTEGER",
         "fk": "sorg_product.id",
-        "description": "References sorg_product; the item being offered for sale"
+        "description": "References sorg_product; the item being offered for sale",
+        "index": true
       },
       {
         "name": "seller_id",
         "type": "INTEGER",
         "fk": "sorg_organization.id",
-        "description": "References sorg_organization; the merchant making this offer"
+        "description": "References sorg_organization; the merchant making this offer",
+        "index": true
       },
       {
         "name": "price",
@@ -199,6 +261,34 @@
         "name": "eligible_region",
         "type": "CHAR(2)",
         "description": "ISO 3166-1 alpha-2 country code where this offer is valid (schema.org/eligibleRegion)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "sorg_order": [
@@ -222,7 +312,8 @@
       {
         "name": "customer_id",
         "type": "INTEGER",
-        "description": "Application-level foreign key to the customer/user record"
+        "description": "Application-level foreign key to the customer/user record",
+        "index": true
       },
       {
         "name": "order_status",
@@ -258,26 +349,57 @@
         "name": "shipping_address",
         "type": "JSONB",
         "description": "Delivery address snapshot at time of purchase per schema.org/PostalAddress: {streetAddress, addressLocality, postalCode, addressCountry}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "sorg_order_item": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the order line item"
+        "description": "Auto-incremented surrogate key for the order line item",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "order_id",
         "type": "UUID",
         "fk": "sorg_order.id",
-        "description": "References sorg_order; the parent order this line item belongs to"
+        "description": "References sorg_order; the parent order this line item belongs to",
+        "index": true
       },
       {
         "name": "offer_id",
         "type": "INTEGER",
         "fk": "sorg_offer.id",
-        "description": "References sorg_offer; the specific price listing that was purchased"
+        "description": "References sorg_offer; the specific price listing that was purchased",
+        "index": true
       },
       {
         "name": "order_quantity",
@@ -293,20 +415,50 @@
         "name": "unit_price",
         "type": "NUMERIC(15,4)",
         "description": "Price per unit at time of purchase, snapshotted to handle future price changes"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "sorg_review": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the review"
+        "description": "Auto-incremented surrogate key for the review",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "product_id",
         "type": "INTEGER",
         "fk": "sorg_product.id",
-        "description": "References sorg_product; the product being reviewed"
+        "description": "References sorg_product; the product being reviewed",
+        "index": true
       },
       {
         "name": "author_name",
@@ -339,6 +491,34 @@
         "type": "BOOLEAN",
         "default": "false",
         "description": "True if the reviewer was verified as a confirmed purchaser of the product"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

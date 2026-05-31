@@ -23,9 +23,10 @@
     "acord_party": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for the party record"
+        "description": "Surrogate primary key for the party record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "party_type",
@@ -40,7 +41,8 @@
       {
         "name": "tax_id",
         "type": "VARCHAR(50)",
-        "description": "Government tax identifier (SSN, EIN, or foreign equivalent)"
+        "description": "Government tax identifier (SSN, EIN, or foreign equivalent)",
+        "index": true
       },
       {
         "name": "date_of_birth",
@@ -61,6 +63,34 @@
         "name": "communication",
         "type": "JSONB",
         "description": "Contact channels: {phone, email, fax} keyed by communication type"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "acord_policy": [
@@ -90,13 +120,15 @@
         "name": "insurer_id",
         "type": "INTEGER",
         "fk": "acord_party.id",
-        "description": "References acord_party — the carrier issuing this policy"
+        "description": "References acord_party — the carrier issuing this policy",
+        "index": true
       },
       {
         "name": "insured_id",
         "type": "INTEGER",
         "fk": "acord_party.id",
-        "description": "References acord_party — the named insured on this policy"
+        "description": "References acord_party — the named insured on this policy",
+        "index": true
       },
       {
         "name": "status",
@@ -123,20 +155,50 @@
         "type": "CHAR(3)",
         "default": "'USD'",
         "description": "ISO 4217 currency code for all monetary amounts on this policy"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "acord_coverage": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for the coverage record"
+        "description": "Surrogate primary key for the coverage record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "policy_id",
         "type": "UUID",
         "fk": "acord_policy.id",
-        "description": "References acord_policy — the policy this coverage belongs to"
+        "description": "References acord_policy — the policy this coverage belongs to",
+        "index": true
       },
       {
         "name": "coverage_type",
@@ -167,20 +229,50 @@
         "name": "terms",
         "type": "JSONB",
         "description": "Coverage-specific terms and endorsements: {sublimits, exclusions, conditions, endorsement_codes}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "acord_risk": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Surrogate primary key for the risk record"
+        "description": "Surrogate primary key for the risk record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "policy_id",
         "type": "UUID",
         "fk": "acord_policy.id",
-        "description": "References acord_policy — the policy insuring this risk"
+        "description": "References acord_policy — the policy insuring this risk",
+        "index": true
       },
       {
         "name": "risk_type",
@@ -206,6 +298,34 @@
         "name": "attributes",
         "type": "JSONB",
         "description": "Risk-type-specific underwriting attributes: e.g. {year, make, model, vin} for vehicles or {construction, stories, year_built} for property"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "acord_claim": [
@@ -225,13 +345,15 @@
         "name": "policy_id",
         "type": "UUID",
         "fk": "acord_policy.id",
-        "description": "References acord_policy — the policy under which this claim is filed"
+        "description": "References acord_policy — the policy under which this claim is filed",
+        "index": true
       },
       {
         "name": "claimant_id",
         "type": "INTEGER",
         "fk": "acord_party.id",
-        "description": "References acord_party — the party seeking payment under this claim"
+        "description": "References acord_party — the party seeking payment under this claim",
+        "index": true
       },
       {
         "name": "loss_date",
@@ -272,6 +394,34 @@
         "name": "reserve_amount",
         "type": "NUMERIC(15,2)",
         "description": "Current actuarial reserve set aside for future payments on this claim"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

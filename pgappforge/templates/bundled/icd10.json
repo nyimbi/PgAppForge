@@ -2,8 +2,8 @@
   "name": "icd10",
   "schema": "icd10",
   "label": "ICD-10-CM/PCS (Diagnoses & Procedures)",
-  "description": "International Classification of Diseases \u2014 required on every US medical claim",
-  "short_description": "WHO disease classification \u2014 required on every US medical claim since 2015",
+  "description": "International Classification of Diseases — required on every US medical claim",
+  "short_description": "WHO disease classification — required on every US medical claim since 2015",
   "long_description": "ICD-10-CM (Clinical Modification) provides 70,000+ diagnosis codes covering all diseases, injuries, symptoms, and conditions. ICD-10-PCS provides 80,000+ procedure codes for inpatient hospital procedures. Both are maintained by CMS and updated annually on October 1. The data is free from CMS with no registration required.",
   "when_to_use": "Required on all Medicare, Medicaid, and private insurance claims in the US since October 2015. Use for clinical coding systems, billing/revenue cycle management, clinical analytics, risk adjustment (HCC model), and quality measure reporting. Pair with FHIR R4 Condition/Procedure resources for complete clinical interoperability. Annual updates: https://www.cms.gov/medicare/coding-billing/icd-10-codes",
   "color": "#c0392b",
@@ -22,15 +22,16 @@
     "icd10_code": "Every ICD-10-CM code with its description, billing validity, and hierarchy position. Core table for diagnosis coding and billing. Index on code, parent_code, chapter, and is_valid_for_billing for common query patterns.",
     "icd10_chapter": "The 22 ICD-10-CM chapters (A00-B99 Infectious diseases, C00-D49 Neoplasms, etc.). Each chapter covers a major disease category. Use for high-level analytics and report grouping.",
     "icd10_block": "Code blocks within chapters (e.g. A00-A09 Intestinal infectious diseases). Essential for mid-level grouping in analytics dashboards.",
-    "icd10_pcs_code": "ICD-10-PCS (Procedure Coding System) codes for inpatient hospital procedures. 7-character codes with each position encoding a specific dimension (section, body system, operation, etc.). US inpatient only \u2014 outpatient uses CPT codes."
+    "icd10_pcs_code": "ICD-10-PCS (Procedure Coding System) codes for inpatient hospital procedures. 7-character codes with each position encoding a specific dimension (section, body system, operation, etc.). US inpatient only — outpatient uses CPT codes."
   },
   "tables": {
     "icd10_chapter": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "chapter_number",
@@ -58,20 +59,50 @@
         "name": "short_title",
         "type": "VARCHAR(100)",
         "description": "Abbreviated chapter title for UI display"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "icd10_block": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "chapter_id",
         "type": "INTEGER",
         "fk": "icd10_chapter.id",
-        "description": "Chapter this block belongs to"
+        "description": "Chapter this block belongs to",
+        "index": true
       },
       {
         "name": "code_range_start",
@@ -88,6 +119,34 @@
         "type": "VARCHAR(300)",
         "nullable": false,
         "description": "Block title (e.g. Intestinal infectious diseases)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "icd10_code": [
@@ -95,7 +154,7 @@
         "name": "code",
         "type": "VARCHAR(7)",
         "pk": true,
-        "description": "ICD-10-CM code (3-7 chars, e.g. J18.9 or S72.001A). No dots stored \u2014 add for display."
+        "description": "ICD-10-CM code (3-7 chars, e.g. J18.9 or S72.001A). No dots stored — add for display."
       },
       {
         "name": "code_with_dots",
@@ -118,13 +177,15 @@
         "name": "chapter_id",
         "type": "INTEGER",
         "fk": "icd10_chapter.id",
-        "description": "Chapter this code belongs to (for analytics grouping)"
+        "description": "Chapter this code belongs to (for analytics grouping)",
+        "index": true
       },
       {
         "name": "block_id",
         "type": "INTEGER",
         "fk": "icd10_block.id",
-        "description": "Code block within the chapter"
+        "description": "Code block within the chapter",
+        "index": true
       },
       {
         "name": "parent_code",
@@ -190,6 +251,34 @@
         "name": "search_vector",
         "type": "TSVECTOR",
         "description": "PostgreSQL FTS vector over short+long description for fast keyword search"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "icd10_pcs_code": [
@@ -249,6 +338,34 @@
         "name": "termination_date",
         "type": "DATE",
         "description": "Date retired (NULL=active). PCS codes change significantly each year."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   }

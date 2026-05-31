@@ -57,6 +57,34 @@
         "name": "public_key",
         "type": "TEXT",
         "description": "PEM-encoded public key used to cryptographically sign assertions (OB 3.0 JWS)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ob_badge_class": [
@@ -70,7 +98,8 @@
         "name": "issuer_id",
         "type": "UUID",
         "fk": "ob_issuer.id",
-        "description": "References ob_issuer — the organisation that owns and awards this badge"
+        "description": "References ob_issuer — the organisation that owns and awards this badge",
+        "index": true
       },
       {
         "name": "name",
@@ -113,6 +142,28 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this badge class was first created"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ob_assertion": [
@@ -126,12 +177,14 @@
         "name": "badge_class_id",
         "type": "UUID",
         "fk": "ob_badge_class.id",
-        "description": "References ob_badge_class — the definition being awarded"
+        "description": "References ob_badge_class — the definition being awarded",
+        "index": true
       },
       {
         "name": "recipient_id",
         "type": "VARCHAR(320)",
-        "description": "Identifier for the recipient — typically an email address or hashed email"
+        "description": "Identifier for the recipient — typically an email address or hashed email",
+        "index": true
       },
       {
         "name": "recipient_type",
@@ -174,6 +227,34 @@
         "name": "revocation_reason",
         "type": "TEXT",
         "description": "Human-readable explanation of why the badge was revoked; NULL if not revoked"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "ob_endorsement": [
@@ -187,13 +268,15 @@
         "name": "assertion_id",
         "type": "UUID",
         "fk": "ob_assertion.id",
-        "description": "References ob_assertion — the specific awarded badge being endorsed"
+        "description": "References ob_assertion — the specific awarded badge being endorsed",
+        "index": true
       },
       {
         "name": "issuer_id",
         "type": "UUID",
         "fk": "ob_issuer.id",
-        "description": "References ob_issuer — the third party making the endorsement claim"
+        "description": "References ob_issuer — the third party making the endorsement claim",
+        "index": true
       },
       {
         "name": "claim",
@@ -204,6 +287,34 @@
         "name": "issued_on",
         "type": "DATE",
         "description": "Date the endorsement was published"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

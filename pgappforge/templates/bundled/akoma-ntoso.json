@@ -2,8 +2,8 @@
   "name": "akoma-ntoso",
   "schema": "akoma_ntoso",
   "label": "Akoma Ntoso (Legal Documents)",
-  "description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
-  "short_description": "UN/EU standard for legislative and judicial documents \u2014 EU Parliament, UN, national legislatures",
+  "description": "UN/EU standard for legislative and judicial documents — EU Parliament, UN, national legislatures",
+  "short_description": "UN/EU standard for legislative and judicial documents — EU Parliament, UN, national legislatures",
   "long_description": "Akoma Ntoso (Architecture for Knowledge-Oriented Management of African Normative Texts in an Open Standard) is the OASIS/UN standard for representing legislative and judicial documents in XML. The schema covers the FRBR (Functional Requirements for Bibliographic Records) work/expression hierarchy, document content storage, cross-references between legal texts, and amendment tracking.",
   "when_to_use": "Use for legal information systems, legislative drafting tools, parliamentary document management, or legal tech platforms. Used by EU Parliament (EUR-Lex), UN (UNDOC), African Union, and national parliaments in Italy, Norway, Brazil, and Kenya. Required for interoperability with Legislation.gov.uk and EUR-Lex APIs. Essential for legal AI tools parsing statutory texts.",
   "color": "#2c3e50",
@@ -18,7 +18,7 @@
     "parliament"
   ],
   "table_notes": {
-    "an_frbr_work": "Abstract legal work identity in the FRBR hierarchy \u2014 one row per distinct legislative act regardless of language or version.",
+    "an_frbr_work": "Abstract legal work identity in the FRBR hierarchy — one row per distinct legislative act regardless of language or version.",
     "an_frbr_expression": "A specific language/version realisation of an an_frbr_work; multiple expressions can exist per work (e.g. EN and FR versions).",
     "an_document": "Stores actual document content (XML or plain text) for a given expression; one row per physical rendition of an expression.",
     "an_reference": "Cross-references from one document to another legal URI, capturing citations, definitions, and repeals within legislative texts.",
@@ -73,6 +73,34 @@
         "name": "doc_type",
         "type": "VARCHAR(50)",
         "description": "Akoma Ntoso document type code: act, bill, amendment, debate, judgment, officialGazette, etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "an_frbr_expression": [
@@ -86,7 +114,8 @@
         "name": "work_id",
         "type": "UUID",
         "fk": "an_frbr_work.id",
-        "description": "References the abstract work this expression realises (an_frbr_work.id)"
+        "description": "References the abstract work this expression realises (an_frbr_work.id)",
+        "index": true
       },
       {
         "name": "uri",
@@ -118,6 +147,34 @@
         "name": "status",
         "type": "VARCHAR(30)",
         "description": "Publication lifecycle status: draft, published, consolidated, repealed, superseded"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "an_document": [
@@ -131,7 +188,8 @@
         "name": "expression_id",
         "type": "UUID",
         "fk": "an_frbr_expression.id",
-        "description": "References the expression this document embodies (an_frbr_expression.id)"
+        "description": "References the expression this document embodies (an_frbr_expression.id)",
+        "index": true
       },
       {
         "name": "content",
@@ -159,20 +217,44 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this document row was inserted into the database"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "an_reference": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the reference record"
+        "description": "Auto-incremented surrogate key for the reference record",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "source_doc_id",
         "type": "UUID",
         "fk": "an_document.id",
-        "description": "Document that contains the reference (an_document.id)"
+        "description": "Document that contains the reference (an_document.id)",
+        "index": true
       },
       {
         "name": "target_uri",
@@ -193,6 +275,34 @@
         "name": "context",
         "type": "TEXT",
         "description": "Surrounding sentence or phrase providing human-readable context for the reference"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "an_amendment": [
@@ -206,13 +316,15 @@
         "name": "amending_doc_id",
         "type": "UUID",
         "fk": "an_document.id",
-        "description": "Document that introduces the change (the amending act) \u2014 references an_document.id"
+        "description": "Document that introduces the change (the amending act) — references an_document.id",
+        "index": true
       },
       {
         "name": "amended_doc_id",
         "type": "UUID",
         "fk": "an_document.id",
-        "description": "Document being modified by the amendment \u2014 references an_document.id"
+        "description": "Document being modified by the amendment — references an_document.id",
+        "index": true
       },
       {
         "name": "amendment_type",
@@ -238,6 +350,34 @@
         "name": "new_text",
         "type": "TEXT",
         "description": "Replacement or inserted text after the amendment (NULL for repeals)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   }

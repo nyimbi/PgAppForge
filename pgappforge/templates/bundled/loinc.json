@@ -2,7 +2,7 @@
   "name": "loinc",
   "schema": "loinc",
   "label": "HL7 LOINC (Schema)",
-  "description": "Logical Observation Identifiers Names and Codes \u2014 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
+  "description": "Logical Observation Identifiers Names and Codes — 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
   "color": "#3498db",
   "icon": "fa-vials",
   "version": "2.78",
@@ -107,14 +107,43 @@
         "name": "search_vector",
         "type": "TSVECTOR",
         "description": "PostgreSQL full-text search vector over loinc_num, long_common_name, and component"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "loinc_hierarchy": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "path",
@@ -147,24 +176,55 @@
         "type": "VARCHAR(10)",
         "fk": "loinc_code.loinc_num",
         "description": "FK to loinc_code; populated only for leaf nodes representing a single LOINC observation"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "loinc_answer_list": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "answer_list_id",
         "type": "VARCHAR(10)",
-        "description": "LOINC answer list identifier (LL prefix, e.g. LL539-8); shared across codes using the same list"
+        "description": "LOINC answer list identifier (LL prefix, e.g. LL539-8); shared across codes using the same list",
+        "index": true
       },
       {
         "name": "answer_string_id",
         "type": "VARCHAR(10)",
-        "description": "Unique LOINC identifier for this individual answer concept within the list"
+        "description": "Unique LOINC identifier for this individual answer concept within the list",
+        "index": true
       },
       {
         "name": "answer_code",
@@ -186,14 +246,43 @@
         "type": "VARCHAR(10)",
         "fk": "loinc_code.loinc_num",
         "description": "FK to loinc_code; links this answer list membership to a specific coded LOINC observation"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "loinc_linguistic_variant": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "loinc_num",
@@ -215,11 +304,39 @@
         "name": "linguistic_rank",
         "type": "INTEGER",
         "description": "Preference rank when multiple translations exist for the same code and language (1 = preferred)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Logical Observation Identifiers Names and Codes \u2014 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
-  "long_description": "LOINC (Logical Observation Identifiers Names and Codes) provides 100,000+ universal codes for laboratory and clinical observations \u2014 from blood glucose measurements to radiology reports. The schema includes the main code table, hierarchical classification tree, multilingual variants, and answer list definitions for coded observations. Data download is free after registration at loinc.org.",
+  "short_description": "Logical Observation Identifiers Names and Codes — 100,000+ lab & clinical observation codes. Free download after registration at loinc.org. Load data via: flask forge templates install-data loinc",
+  "long_description": "LOINC (Logical Observation Identifiers Names and Codes) provides 100,000+ universal codes for laboratory and clinical observations — from blood glucose measurements to radiology reports. The schema includes the main code table, hierarchical classification tree, multilingual variants, and answer list definitions for coded observations. Data download is free after registration at loinc.org.",
   "when_to_use": "Use alongside FHIR R4 for any lab, pathology, or clinical measurement system. Required by CMS in the US for electronic lab reporting. Essential when storing structured clinical results that must be understood by multiple systems without proprietary code translation.",
   "extensions": [
     "ltree"

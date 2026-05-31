@@ -2,7 +2,7 @@
   "name": "lti",
   "schema": "lti",
   "label": "IMS Global LTI (Learning Tools)",
-  "description": "Learning Tools Interoperability \u2014 standard for connecting LMS to external learning tools",
+  "description": "Learning Tools Interoperability — standard for connecting LMS to external learning tools",
   "color": "#f39c12",
   "icon": "fa-chalkboard-teacher",
   "version": "1.3",
@@ -36,7 +36,8 @@
         "name": "client_id",
         "type": "VARCHAR(255)",
         "unique": true,
-        "description": "OAuth 2.0 client_id issued by the platform during LTI tool registration"
+        "description": "OAuth 2.0 client_id issued by the platform during LTI tool registration",
+        "index": true
       },
       {
         "name": "issuer",
@@ -68,6 +69,34 @@
         "type": "BOOLEAN",
         "default": "true",
         "description": "Whether this platform registration is currently accepting launches"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "lti_tool": [
@@ -117,6 +146,34 @@
         "name": "custom_params",
         "type": "JSONB",
         "description": "Key-value map of custom LTI parameters sent to the tool on every launch (e.g. {\"canvas_course_id\":\"$Canvas.course.id\"})"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "lti_deployment": [
@@ -130,24 +187,28 @@
         "name": "platform_id",
         "type": "UUID",
         "fk": "lti_platform.id",
-        "description": "Reference to the LMS platform (lti_platform) where the tool is deployed"
+        "description": "Reference to the LMS platform (lti_platform) where the tool is deployed",
+        "index": true
       },
       {
         "name": "tool_id",
         "type": "UUID",
         "fk": "lti_tool.id",
-        "description": "Reference to the tool definition (lti_tool) being deployed"
+        "description": "Reference to the tool definition (lti_tool) being deployed",
+        "index": true
       },
       {
         "name": "deployment_id",
         "type": "VARCHAR(255)",
         "unique": true,
-        "description": "IMS-assigned deployment_id claim from the platform; scopes the tool within the LMS installation"
+        "description": "IMS-assigned deployment_id claim from the platform; scopes the tool within the LMS installation",
+        "index": true
       },
       {
         "name": "context_id",
         "type": "VARCHAR(255)",
-        "description": "LTI context_id claim identifying the course or group within the platform"
+        "description": "LTI context_id claim identifying the course or group within the platform",
+        "index": true
       },
       {
         "name": "context_title",
@@ -159,6 +220,34 @@
         "type": "BOOLEAN",
         "default": "true",
         "description": "Whether this deployment is currently enabled for new launches"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "lti_launch": [
@@ -172,12 +261,14 @@
         "name": "deployment_id",
         "type": "UUID",
         "fk": "lti_deployment.id",
-        "description": "Reference to the deployment (lti_deployment) that produced this launch"
+        "description": "Reference to the deployment (lti_deployment) that produced this launch",
+        "index": true
       },
       {
         "name": "user_id",
         "type": "VARCHAR(255)",
-        "description": "Platform-issued opaque user identifier from the LTI 'sub' claim; stable per user per platform"
+        "description": "Platform-issued opaque user identifier from the LTI 'sub' claim; stable per user per platform",
+        "index": true
       },
       {
         "name": "user_name",
@@ -192,7 +283,8 @@
       {
         "name": "resource_link_id",
         "type": "VARCHAR(255)",
-        "description": "Stable identifier for the specific link/activity in the LMS that triggered this launch"
+        "description": "Stable identifier for the specific link/activity in the LMS that triggered this launch",
+        "index": true
       },
       {
         "name": "resource_link_title",
@@ -214,10 +306,38 @@
         "name": "nonce",
         "type": "VARCHAR(100)",
         "description": "One-time value from the OIDC ID token used to prevent replay attacks; should be consumed on first use"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Learning Tools Interoperability \u2014 standard for connecting LMS to external learning tools",
+  "short_description": "Learning Tools Interoperability — standard for connecting LMS to external learning tools",
   "long_description": "IMS Global LTI (Learning Tools Interoperability) 1.3 enables secure, standards-based integration between LMS platforms and external learning tools. The schema models platforms (Canvas, Moodle, Blackboard), tools (external apps), deployments (tool registration in an LMS context), and individual launch records with user roles and context.",
   "when_to_use": "Use for building edtech tools that integrate with university LMS systems. LTI 1.3 is required for integration with Canvas, Moodle, Blackboard, and D2L Brightspace. Essential for gradebook passback (LTI Advantage Assignments and Grades Service). Required by most university instructional technology procurement policies."
 }

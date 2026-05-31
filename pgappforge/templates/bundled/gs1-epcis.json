@@ -2,7 +2,7 @@
   "name": "gs1-epcis",
   "schema": "gs1_epcis",
   "label": "GS1 / EPCIS 2.0",
-  "description": "Supply chain event tracking \u2014 EU pharma mandate, retail standard",
+  "description": "Supply chain event tracking — EU pharma mandate, retail standard",
   "color": "#e74c3c",
   "icon": "fa-barcode",
   "version": "2.0",
@@ -25,9 +25,10 @@
     "gs1_location": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "gln",
@@ -61,14 +62,43 @@
         "type": "BOOLEAN",
         "default": "true",
         "description": "Whether this location is currently operational and valid for use in new events"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gs1_trade_item": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "gtin",
@@ -113,6 +143,34 @@
         "type": "BOOLEAN",
         "default": "false",
         "description": "True if this item is subject to regulatory serialization mandates (e.g. EU FMD, DSCSA)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "epcis_event": [
@@ -176,20 +234,50 @@
         "name": "extensions",
         "type": "JSONB",
         "description": "Vendor or community extension fields in EPCIS 2.0 JSON-LD context format"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "epcis_epc": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "event_id",
         "type": "UUID",
         "fk": "epcis_event.id",
-        "description": "EPCIS event this EPC participates in; references epcis_event.id"
+        "description": "EPCIS event this EPC participates in; references epcis_event.id",
+        "index": true
       },
       {
         "name": "epc",
@@ -216,20 +304,50 @@
         "name": "expiry_date",
         "type": "DATE",
         "description": "Product expiry or best-before date (GS1 AI 17); mandatory for pharma under EU FMD/DSCSA"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "epcis_quantity": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "event_id",
         "type": "UUID",
         "fk": "epcis_event.id",
-        "description": "EPCIS event this quantity element belongs to; references epcis_event.id"
+        "description": "EPCIS event this quantity element belongs to; references epcis_event.id",
+        "index": true
       },
       {
         "name": "gtin",
@@ -246,10 +364,38 @@
         "name": "uom",
         "type": "VARCHAR(20)",
         "description": "Unit of measure for quantity; coded per GS1 UN/ECE Recommendation 20 (e.g. EA, KGM, LTR)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Supply chain event tracking \u2014 EU pharma mandate, retail standard",
+  "short_description": "Supply chain event tracking — EU pharma mandate, retail standard",
   "long_description": "GS1/EPCIS 2.0 (Electronic Product Code Information Services) enables real-time tracking of physical products through supply chains using standardized events. The schema captures the five W's for each supply chain event: What (EPC/GTIN), Where (GLN location), When (timestamp), Why (business step/disposition), and How (EPCIS extensions). Supports full traceability from manufacturer to patient/consumer.",
   "when_to_use": "Use for pharmaceutical track-and-trace (EU FMD mandate), food safety traceability (FDA FSMA 204), and retail supply chain visibility. Required by EU Falsified Medicines Directive, US Drug Supply Chain Security Act, and China CFDA for pharmaceuticals. Walmart, Amazon, and major grocers mandate EPCIS for suppliers.",
   "extensions": [

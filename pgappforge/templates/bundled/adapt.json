@@ -2,7 +2,7 @@
   "name": "adapt",
   "schema": "adapt",
   "label": "ADAPT (Agriculture)",
-  "description": "Agricultural Data Application Programming Toolkit \u2014 precision farming",
+  "description": "Agricultural Data Application Programming Toolkit — precision farming",
   "color": "#27ae60",
   "icon": "fa-seedling",
   "version": "1.0",
@@ -13,7 +13,7 @@
     "precision-ag",
     "iot"
   ],
-  "short_description": "Agricultural Data Application Programming Toolkit \u2014 precision farming",
+  "short_description": "Agricultural Data Application Programming Toolkit — precision farming",
   "long_description": "ADAPT (Agricultural Data Application Programming Toolkit) is the multi-vendor standard from John Deere, AGCO, CNH Industrial, and Trimble for farm data exchange. The schema covers the complete precision agriculture data chain: farm and field boundaries, crop zone planting records, field operations (planting, spraying, harvest), machine registrations, agricultural inputs, GPS time logs, and harvest yield data.",
   "when_to_use": "Use for precision agriculture platforms, farm management information systems (FMIS), agtech apps, or any agricultural data integration. ADAPT is implemented by all major precision agriculture equipment manufacturers. Required for John Deere Operations Center and Climate FieldView integrations. Essential for carbon credit programs that need verified field activity data.",
   "table_notes": {
@@ -48,7 +48,8 @@
       {
         "name": "owner_id",
         "type": "INTEGER",
-        "description": "References the application user or organisation that owns this farm"
+        "description": "References the application user or organisation that owns this farm",
+        "index": true
       },
       {
         "name": "country",
@@ -59,6 +60,34 @@
         "name": "boundary",
         "type": "GEOGRAPHY(POLYGON, 4326)",
         "description": "Outer boundary of the entire farm as a WGS84 polygon for spatial queries"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_field": [
@@ -72,7 +101,8 @@
         "name": "farm_id",
         "type": "UUID",
         "fk": "adapt_farm.id",
-        "description": "References adapt_farm; links this field to its parent farm"
+        "description": "References adapt_farm; links this field to its parent farm",
+        "index": true
       },
       {
         "name": "name",
@@ -98,6 +128,34 @@
         "name": "irrigation_type",
         "type": "VARCHAR(50)",
         "description": "Primary irrigation method (e.g. 'drip', 'pivot', 'flood', 'rainfed') affecting water management"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_crop_zone": [
@@ -111,7 +169,8 @@
         "name": "field_id",
         "type": "UUID",
         "fk": "adapt_field.id",
-        "description": "References adapt_field; the parent field containing this crop zone"
+        "description": "References adapt_field; the parent field containing this crop zone",
+        "index": true
       },
       {
         "name": "crop_species",
@@ -142,6 +201,34 @@
         "name": "boundary",
         "type": "GEOGRAPHY(POLYGON, 4326)",
         "description": "Polygon of the planted zone within the field; may differ from field boundary for rotations"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_operation": [
@@ -155,13 +242,15 @@
         "name": "field_id",
         "type": "UUID",
         "fk": "adapt_field.id",
-        "description": "References adapt_field; the field where the operation was performed"
+        "description": "References adapt_field; the field where the operation was performed",
+        "index": true
       },
       {
         "name": "crop_zone_id",
         "type": "UUID",
         "fk": "adapt_crop_zone.id",
-        "description": "References adapt_crop_zone; crop context for the operation (nullable for non-crop work)"
+        "description": "References adapt_crop_zone; crop context for the operation (nullable for non-crop work)",
+        "index": true
       },
       {
         "name": "operation_type",
@@ -181,18 +270,48 @@
       {
         "name": "operator_id",
         "type": "INTEGER",
-        "description": "References the application user who drove or supervised this operation"
+        "description": "References the application user who drove or supervised this operation",
+        "index": true
       },
       {
         "name": "machine_id",
         "type": "UUID",
         "fk": "adapt_machine.id",
-        "description": "References adapt_machine; the primary equipment unit used for this operation"
+        "description": "References adapt_machine; the primary equipment unit used for this operation",
+        "index": true
       },
       {
         "name": "notes",
         "type": "TEXT",
         "description": "Operator free-text observations (weather, anomalies, skipped areas)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_machine": [
@@ -237,14 +356,43 @@
         "name": "width_meters",
         "type": "NUMERIC(6,2)",
         "description": "Working width in metres; used to calculate covered area from GPS track length"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_ag_input": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the agricultural input product"
+        "description": "Auto-incremented surrogate key for the agricultural input product",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -280,20 +428,50 @@
         "name": "active_ingredients",
         "type": "JSONB",
         "description": "Array of {name, cas_number, concentration_pct} objects listing active chemical components"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_time_log": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key; high-volume table expects billions of rows"
+        "description": "Auto-incremented surrogate key; high-volume table expects billions of rows",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "operation_id",
         "type": "UUID",
         "fk": "adapt_operation.id",
-        "description": "References adapt_operation; groups all GPS ticks belonging to one field operation"
+        "description": "References adapt_operation; groups all GPS ticks belonging to one field operation",
+        "index": true
       },
       {
         "name": "timestamp",
@@ -309,7 +487,7 @@
       {
         "name": "heading_degrees",
         "type": "NUMERIC(5,2)",
-        "description": "Machine heading in degrees clockwise from true north (0\u2013359.99)"
+        "description": "Machine heading in degrees clockwise from true north (0–359.99)"
       },
       {
         "name": "speed_kmh",
@@ -330,6 +508,34 @@
         "name": "applied_uom",
         "type": "VARCHAR(20)",
         "description": "Unit of measure for applied_rate (e.g. 'L/ha', 'kg/ha'); matches adapt_ag_input.uom"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "adapt_harvest": [
@@ -343,7 +549,8 @@
         "name": "crop_zone_id",
         "type": "UUID",
         "fk": "adapt_crop_zone.id",
-        "description": "References adapt_crop_zone; the planted area this harvest summary covers"
+        "description": "References adapt_crop_zone; the planted area this harvest summary covers",
+        "index": true
       },
       {
         "name": "harvest_date",
@@ -374,6 +581,34 @@
         "name": "quality_data",
         "type": "JSONB",
         "description": "Flexible object for crop-specific quality metrics: {protein_pct, test_weight, oil_pct, starch_pct, etc.}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

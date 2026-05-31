@@ -2,7 +2,7 @@
   "name": "snomed-ct",
   "schema": "snomed_ct",
   "label": "SNOMED CT (Schema)",
-  "description": "SNOMED Clinical Terms \u2014 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
+  "description": "SNOMED Clinical Terms — 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
   "color": "#9b59b6",
   "icon": "fa-stethoscope",
   "version": "Int-20240901",
@@ -20,7 +20,7 @@
         "name": "id",
         "type": "BIGINT",
         "pk": true,
-        "description": "SNOMED CT concept identifier (SCTID) \u2014 18-digit integer, globally unique"
+        "description": "SNOMED CT concept identifier (SCTID) — 18-digit integer, globally unique"
       },
       {
         "name": "effective_time",
@@ -38,12 +38,42 @@
         "name": "module_id",
         "type": "BIGINT",
         "nullable": false,
-        "description": "SCTID of the module this concept belongs to (e.g. 900000000000207008 = SNOMED CT core)"
+        "description": "SCTID of the module this concept belongs to (e.g. 900000000000207008 = SNOMED CT core)",
+        "index": true
       },
       {
         "name": "definition_status_id",
         "type": "BIGINT",
-        "description": "Fully defined (900000000000073002) or primitive (900000000000074008)"
+        "description": "Fully defined (900000000000073002) or primitive (900000000000074008)",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "snomed_description": [
@@ -51,7 +81,7 @@
         "name": "id",
         "type": "BIGINT",
         "pk": true,
-        "description": "Description SCTID \u2014 unique identifier for this term/synonym"
+        "description": "Description SCTID — unique identifier for this term/synonym"
       },
       {
         "name": "effective_time",
@@ -66,13 +96,15 @@
       {
         "name": "module_id",
         "type": "BIGINT",
-        "description": "SCTID of the module containing this description"
+        "description": "SCTID of the module containing this description",
+        "index": true
       },
       {
         "name": "concept_id",
         "type": "BIGINT",
         "fk": "snomed_concept.id",
-        "description": "SCTID of the concept this description belongs to"
+        "description": "SCTID of the concept this description belongs to",
+        "index": true
       },
       {
         "name": "language_code",
@@ -82,7 +114,8 @@
       {
         "name": "type_id",
         "type": "BIGINT",
-        "description": "FSN (900000000000003001) = Fully Specified Name; Synonym (900000000000013009)"
+        "description": "FSN (900000000000003001) = Fully Specified Name; Synonym (900000000000013009)",
+        "index": true
       },
       {
         "name": "term",
@@ -93,12 +126,41 @@
       {
         "name": "case_significance_id",
         "type": "BIGINT",
-        "description": "Case sensitivity: CS=case sensitive, CI=case insensitive, cI=initial char"
+        "description": "Case sensitivity: CS=case sensitive, CI=case insensitive, cI=initial char",
+        "index": true
       },
       {
         "name": "search_vector",
         "type": "TSVECTOR",
         "description": "PostgreSQL FTS vector over term for fast full-text search across all descriptions"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "snomed_relationship": [
@@ -106,7 +168,7 @@
         "name": "id",
         "type": "BIGINT",
         "pk": true,
-        "description": "Relationship SCTID \u2014 unique identifier for this relationship instance"
+        "description": "Relationship SCTID — unique identifier for this relationship instance"
       },
       {
         "name": "effective_time",
@@ -122,13 +184,15 @@
         "name": "source_id",
         "type": "BIGINT",
         "fk": "snomed_concept.id",
-        "description": "SCTID of the concept on the source (child) side of the relationship"
+        "description": "SCTID of the concept on the source (child) side of the relationship",
+        "index": true
       },
       {
         "name": "destination_id",
         "type": "BIGINT",
         "fk": "snomed_concept.id",
-        "description": "SCTID of the concept on the destination (parent/target) side"
+        "description": "SCTID of the concept on the destination (parent/target) side",
+        "index": true
       },
       {
         "name": "relationship_group",
@@ -138,41 +202,102 @@
       {
         "name": "type_id",
         "type": "BIGINT",
-        "description": "Relationship type SCTID (e.g. 116680003=Is a, 363698007=Finding site)"
+        "description": "Relationship type SCTID (e.g. 116680003=Is a, 363698007=Finding site)",
+        "index": true
       },
       {
         "name": "characteristic_type_id",
         "type": "BIGINT",
-        "description": "Stated (from author) vs inferred (computed) relationship"
+        "description": "Stated (from author) vs inferred (computed) relationship",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "snomed_transitive_closure": [
       {
         "name": "id",
-        "type": "BIGSERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for fast lookups"
+        "description": "Auto-incremented surrogate key for fast lookups",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "super_type_id",
         "type": "BIGINT",
         "fk": "snomed_concept.id",
-        "description": "Ancestor concept SCTID (any level up the Is-a hierarchy)"
+        "description": "Ancestor concept SCTID (any level up the Is-a hierarchy)",
+        "index": true
       },
       {
         "name": "sub_type_id",
         "type": "BIGINT",
         "fk": "snomed_concept.id",
-        "description": "Descendant concept SCTID \u2014 allows \"find all X and its subtypes\" in O(1)"
+        "description": "Descendant concept SCTID — allows \"find all X and its subtypes\" in O(1)",
+        "index": true
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "SNOMED Clinical Terms \u2014 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
+  "short_description": "SNOMED Clinical Terms — 350,000+ clinical concepts. Schema only; load data via: flask forge templates install-data snomed-ct (requires NLM UMLS license)",
   "long_description": "SNOMED CT is the world's most comprehensive clinical health terminology with 350,000+ clinical concepts organized in a poly-hierarchy. The schema includes the RF2 release format tables: concepts, descriptions (preferred terms, synonyms), relationships (is-a, finding site, etc.), and transitive closure for subsumption queries. Requires UMLS license for US use; other countries may have free access via SNOMED International.",
   "when_to_use": "Use for clinical decision support, problem list encoding, allergy recording, and clinical documentation requiring standard clinical terms. Required by UK NHS, mandated in many EU countries, and recommended by US ONC. Pair with FHIR R4 for complete clinical interoperability. Load data via: flask forge templates install-data snomed-ct",
   "table_notes": {
     "snomed_concept": "All 350,000+ SNOMED CT concepts. Each concept is a clinical entity (disease, finding, procedure, substance). Query with transitive_closure for subsumption (find all subtypes).",
-    "snomed_description": "All terms/synonyms for each concept \u2014 Fully Specified Names plus synonyms in multiple languages. Build GIN index on search_vector for fast clinical term search.",
+    "snomed_description": "All terms/synonyms for each concept — Fully Specified Names plus synonyms in multiple languages. Build GIN index on search_vector for fast clinical term search.",
     "snomed_relationship": "Relationships between concepts (Is-a hierarchy + clinical attributes like Finding site, Causative agent). The Is-a (116680003) relationships form the concept hierarchy.",
     "snomed_transitive_closure": "Pre-computed transitive closure of the Is-a hierarchy. Enables O(1) subsumption queries: SELECT * FROM conditions WHERE concept_id IN (SELECT sub_type_id FROM snomed_transitive_closure WHERE super_type_id = 73211009) finds all diabetes subtypes."
   }

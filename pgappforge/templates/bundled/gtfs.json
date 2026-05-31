@@ -67,6 +67,34 @@
         "name": "agency_email",
         "type": "VARCHAR(320)",
         "description": "Contact email address for rider feedback or customer service"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "stops": [
@@ -123,6 +151,34 @@
         "name": "platform_code",
         "type": "VARCHAR(50)",
         "description": "Platform identifier within a multi-platform station (e.g. “3A”, “North”)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "routes": [
@@ -136,7 +192,8 @@
         "name": "agency_id",
         "type": "VARCHAR(100)",
         "fk": "agency.agency_id",
-        "description": "References agency.agency_id of the operator running this route"
+        "description": "References agency.agency_id of the operator running this route",
+        "index": true
       },
       {
         "name": "route_short_name",
@@ -173,6 +230,34 @@
         "name": "route_text_color",
         "type": "CHAR(6)",
         "description": "6-digit hex RGB color for text drawn over route_color for legible contrast"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "calendar": [
@@ -235,6 +320,34 @@
         "type": "DATE",
         "nullable": false,
         "description": "Last date this service pattern is active (inclusive)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "trips": [
@@ -249,13 +362,15 @@
         "type": "VARCHAR(100)",
         "fk": "routes.route_id",
         "nullable": false,
-        "description": "References routes.route_id of the route this trip belongs to"
+        "description": "References routes.route_id of the route this trip belongs to",
+        "index": true
       },
       {
         "name": "service_id",
         "type": "VARCHAR(100)",
         "fk": "calendar.service_id",
-        "description": "References calendar.service_id defining which days this trip operates"
+        "description": "References calendar.service_id defining which days this trip operates",
+        "index": true
       },
       {
         "name": "trip_headsign",
@@ -265,45 +380,79 @@
       {
         "name": "direction_id",
         "type": "SMALLINT",
-        "description": "Travel direction for distinguishing outbound/inbound: 0=one direction, 1=opposite direction"
+        "description": "Travel direction for distinguishing outbound/inbound: 0=one direction, 1=opposite direction",
+        "index": true
       },
       {
         "name": "block_id",
         "type": "VARCHAR(100)",
-        "description": "Groups consecutive trips served by the same physical vehicle (for through-service)"
+        "description": "Groups consecutive trips served by the same physical vehicle (for through-service)",
+        "index": true
       },
       {
         "name": "shape_id",
         "type": "VARCHAR(100)",
-        "description": "References shapes.shape_id defining the geographic path drawn on maps for this trip"
+        "description": "References shapes.shape_id defining the geographic path drawn on maps for this trip",
+        "index": true
       },
       {
         "name": "wheelchair_accessible",
         "type": "SMALLINT",
         "default": "0",
         "description": "Wheelchair accessibility of the vehicle: 0=no info, 1=accessible, 2=not accessible"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "stop_times": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key (GTFS stop_times has no natural PK)"
+        "description": "Auto-incremented surrogate key (GTFS stop_times has no natural PK)",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "trip_id",
         "type": "VARCHAR(100)",
         "fk": "trips.trip_id",
         "nullable": false,
-        "description": "References trips.trip_id of the vehicle run this stop time belongs to"
+        "description": "References trips.trip_id of the vehicle run this stop time belongs to",
+        "index": true
       },
       {
         "name": "stop_id",
         "type": "VARCHAR(100)",
         "fk": "stops.stop_id",
         "nullable": false,
-        "description": "References stops.stop_id of the physical stop visited at this point in the trip"
+        "description": "References stops.stop_id of the physical stop visited at this point in the trip",
+        "index": true
       },
       {
         "name": "stop_sequence",
@@ -337,20 +486,50 @@
         "type": "SMALLINT",
         "default": "0",
         "description": "Passenger drop-off policy: 0=regular, 1=no drop-off, 2=phone agency, 3=coordinate with driver"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "calendar_dates": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "service_id",
         "type": "VARCHAR(100)",
         "fk": "calendar.service_id",
-        "description": "References calendar.service_id whose normal schedule is being overridden on this date"
+        "description": "References calendar.service_id whose normal schedule is being overridden on this date",
+        "index": true
       },
       {
         "name": "date",
@@ -363,20 +542,50 @@
         "type": "SMALLINT",
         "nullable": false,
         "description": "Type of exception: 1=service added on this date, 2=service removed on this date"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "shapes": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "shape_id",
         "type": "VARCHAR(100)",
         "nullable": false,
-        "description": "Groups all points belonging to one route path (referenced by trips.shape_id)"
+        "description": "Groups all points belonging to one route path (referenced by trips.shape_id)",
+        "index": true
       },
       {
         "name": "shape_pt_lat",
@@ -392,6 +601,34 @@
         "name": "shape_pt_sequence",
         "type": "INTEGER",
         "description": "Ordering integer for waypoints within a shape (ascending, not necessarily contiguous)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "fare_attributes": [
@@ -425,6 +662,34 @@
         "name": "transfer_duration",
         "type": "INTEGER",
         "description": "Seconds within which a transfer is valid after initial fare payment"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

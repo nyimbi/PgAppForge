@@ -2,7 +2,7 @@
   "name": "iso15926",
   "schema": "iso15926",
   "label": "ISO 15926 (Oil & Gas)",
-  "description": "Plant lifecycle data integration standard \u2014 dominant in oil & gas and process industries",
+  "description": "Plant lifecycle data integration standard — dominant in oil & gas and process industries",
   "color": "#95a5a6",
   "icon": "fa-oil-can",
   "version": "ISO 15926-2",
@@ -47,12 +47,41 @@
         "name": "superclass_id",
         "type": "UUID",
         "fk": "iso15926_class.id",
-        "description": "Parent class in the RDL type hierarchy (self-referencing FK to iso15926_class.id)"
+        "description": "Parent class in the RDL type hierarchy (self-referencing FK to iso15926_class.id)",
+        "index": true
       },
       {
         "name": "namespace",
         "type": "VARCHAR(200)",
         "description": "Ontology namespace (e.g. http://posccaesar.org/rdl/ or a project-specific prefix)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iso15926_individual": [
@@ -77,7 +106,8 @@
         "name": "class_id",
         "type": "UUID",
         "fk": "iso15926_class.id",
-        "description": "References iso15926_class.id to type this object (e.g. Centrifugal Pump, Pipeline)"
+        "description": "References iso15926_class.id to type this object (e.g. Centrifugal Pump, Pipeline)",
+        "index": true
       },
       {
         "name": "description",
@@ -98,6 +128,34 @@
         "name": "properties",
         "type": "JSONB",
         "description": "Flexible key-value bag of typed attributes ({\"attribute_uri\": value}); structure follows RDL property definitions"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iso15926_activity": [
@@ -116,7 +174,8 @@
         "name": "activity_type_id",
         "type": "UUID",
         "fk": "iso15926_class.id",
-        "description": "References iso15926_class.id classifying the activity type from the RDL"
+        "description": "References iso15926_class.id classifying the activity type from the RDL",
+        "index": true
       },
       {
         "name": "begin_time",
@@ -132,12 +191,41 @@
         "name": "location_id",
         "type": "UUID",
         "fk": "iso15926_individual.id",
-        "description": "References iso15926_individual.id for the physical location where activity takes place"
+        "description": "References iso15926_individual.id for the physical location where activity takes place",
+        "index": true
       },
       {
         "name": "involved_parties",
         "type": "JSONB",
         "description": "Array of party objects ([{\"role\": \"contractor\", \"party_uri\": \"...\"}]) recording participants and their roles"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "iso15926_document": [
@@ -167,7 +255,8 @@
         "name": "document_type_id",
         "type": "UUID",
         "fk": "iso15926_class.id",
-        "description": "References iso15926_class.id classifying the document type (P&ID, datasheet, procedure)"
+        "description": "References iso15926_class.id classifying the document type (P&ID, datasheet, procedure)",
+        "index": true
       },
       {
         "name": "issue_date",
@@ -188,10 +277,38 @@
         "name": "tags",
         "type": "JSONB",
         "description": "Array of tag/equipment references this document covers ([\"101-P-001\", \"101-V-002\"])"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Plant lifecycle data integration standard \u2014 dominant in oil & gas and process industries",
+  "short_description": "Plant lifecycle data integration standard — dominant in oil & gas and process industries",
   "long_description": "ISO 15926 is the process industries data integration standard, covering the lifecycle of oil & gas plants, chemical plants, and other complex industrial facilities from design through decommissioning. The schema implements Part 2 (Data model) with classes (types in the POSCCAESAR RDL), individuals (specific equipment items), activities, and engineering documents.",
   "when_to_use": "Use for plant information management systems, digital twin platforms for process industries, or asset management systems in oil & gas, chemicals, or power generation. Mandated by major operators including Shell, BP, Equinor, and Saudi Aramco for vendor data deliverables. Required for ISO 15926-compliant handover packages on major capital projects."
 }

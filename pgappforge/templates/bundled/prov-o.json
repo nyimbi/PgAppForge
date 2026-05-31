@@ -74,6 +74,34 @@
         "name": "invalidated_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp when the entity ceased to be valid or usable (prov:invalidatedAtTime)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "prov_agent": [
@@ -108,6 +136,34 @@
         "name": "attributes",
         "type": "JSONB",
         "description": "Arbitrary PROV-compatible key/value metadata; structure: {\"key\": \"value\"}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "prov_activity": [
@@ -147,26 +203,57 @@
         "name": "attributes",
         "type": "JSONB",
         "description": "Arbitrary PROV-compatible key/value metadata; structure: {\"key\": \"value\"}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "prov_was_generated_by": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "entity_id",
         "type": "UUID",
         "fk": "prov_entity.id",
-        "description": "The entity that was produced; references prov_entity.id"
+        "description": "The entity that was produced; references prov_entity.id",
+        "index": true
       },
       {
         "name": "activity_id",
         "type": "UUID",
         "fk": "prov_activity.id",
-        "description": "The activity that produced the entity; references prov_activity.id"
+        "description": "The activity that produced the entity; references prov_activity.id",
+        "index": true
       },
       {
         "name": "at_time",
@@ -177,26 +264,57 @@
         "name": "party_role",
         "type": "VARCHAR(100)",
         "description": "Role the entity played in the generation relationship (e.g. output, primaryOutput)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "prov_used": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "activity_id",
         "type": "UUID",
         "fk": "prov_activity.id",
-        "description": "The activity that consumed the entity; references prov_activity.id"
+        "description": "The activity that consumed the entity; references prov_activity.id",
+        "index": true
       },
       {
         "name": "entity_id",
         "type": "UUID",
         "fk": "prov_entity.id",
-        "description": "The entity consumed as input by the activity; references prov_entity.id"
+        "description": "The entity consumed as input by the activity; references prov_entity.id",
+        "index": true
       },
       {
         "name": "at_time",
@@ -207,56 +325,146 @@
         "name": "party_role",
         "type": "VARCHAR(100)",
         "description": "Role the entity played in this usage (e.g. input, trainingData, configFile)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "prov_was_attributed_to": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "entity_id",
         "type": "UUID",
         "fk": "prov_entity.id",
-        "description": "The entity being attributed to an agent; references prov_entity.id"
+        "description": "The entity being attributed to an agent; references prov_entity.id",
+        "index": true
       },
       {
         "name": "agent_id",
         "type": "UUID",
         "fk": "prov_agent.id",
-        "description": "The agent responsible for the entity; references prov_agent.id"
+        "description": "The agent responsible for the entity; references prov_agent.id",
+        "index": true
       },
       {
         "name": "party_role",
         "type": "VARCHAR(100)",
         "description": "Role the agent held in relation to the entity (e.g. author, owner, curator)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "prov_was_derived_from": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key"
+        "description": "Auto-incremented surrogate key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "derived_entity_id",
         "type": "UUID",
         "fk": "prov_entity.id",
-        "description": "The newly derived entity (the result); references prov_entity.id"
+        "description": "The newly derived entity (the result); references prov_entity.id",
+        "index": true
       },
       {
         "name": "source_entity_id",
         "type": "UUID",
         "fk": "prov_entity.id",
-        "description": "The source entity the derived entity was produced from; references prov_entity.id"
+        "description": "The source entity the derived entity was produced from; references prov_entity.id",
+        "index": true
       },
       {
         "name": "derivation_type",
         "type": "VARCHAR(50)",
         "description": "PROV derivation subtype: prov:Revision, prov:Quotation, or prov:PrimarySource"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

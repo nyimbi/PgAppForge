@@ -32,7 +32,8 @@
         "name": "listing_id",
         "type": "VARCHAR(100)",
         "unique": true,
-        "description": "Human-readable MLS listing number displayed to agents and consumers"
+        "description": "Human-readable MLS listing number displayed to agents and consumers",
+        "index": true
       },
       {
         "name": "status",
@@ -153,6 +154,34 @@
         "name": "features",
         "type": "JSONB",
         "description": "JSONB bag of supplemental RESO fields; expected keys: appliances[], heating[], cooling[], parking[], amenities[]"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "reso_media": [
@@ -192,6 +221,34 @@
         "name": "caption",
         "type": "VARCHAR(255)",
         "description": "Agent-supplied caption or alt-text for the media asset"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "reso_member": [
@@ -204,7 +261,8 @@
       {
         "name": "member_mls_id",
         "type": "VARCHAR(100)",
-        "description": "Human-readable MLS member ID displayed on listings and business cards"
+        "description": "Human-readable MLS member ID displayed on listings and business cards",
+        "index": true
       },
       {
         "name": "member_first_name",
@@ -236,6 +294,34 @@
         "name": "member_status",
         "type": "VARCHAR(30)",
         "description": "RESO member status: Active, Inactive, Pending, Suspended; controls MLS access rights"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "reso_office": [
@@ -248,7 +334,8 @@
       {
         "name": "office_mls_id",
         "type": "VARCHAR(100)",
-        "description": "Human-readable MLS office ID used on listings and regulatory filings"
+        "description": "Human-readable MLS office ID used on listings and regulatory filings",
+        "index": true
       },
       {
         "name": "office_name",
@@ -274,6 +361,34 @@
         "name": "office_postal_code",
         "type": "VARCHAR(20)",
         "description": "ZIP or postal code of the office address"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "reso_open_house": [
@@ -313,6 +428,34 @@
         "name": "remarks",
         "type": "TEXT",
         "description": "Agent notes for the open house (directions, parking instructions, highlights)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

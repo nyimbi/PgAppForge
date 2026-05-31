@@ -63,6 +63,34 @@
         "type": "BOOLEAN",
         "default": "true",
         "description": "Whether the party is currently active; false soft-deletes the record"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "tmf_customer": [
@@ -76,7 +104,8 @@
         "name": "party_id",
         "type": "UUID",
         "fk": "tmf_party.id",
-        "description": "References the underlying party (person or org) that owns this account"
+        "description": "References the underlying party (person or org) that owns this account",
+        "index": true
       },
       {
         "name": "account_number",
@@ -108,6 +137,34 @@
         "name": "segment",
         "type": "VARCHAR(50)",
         "description": "Commercial segmentation label: 'consumer', 'SME', 'enterprise', 'wholesale', etc."
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "tmf_product": [
@@ -162,6 +219,34 @@
         "name": "characteristics",
         "type": "JSONB",
         "description": "Flexible product attributes: [{name, value, valueType, unitOfMeasure}] per TMF620 ProductCharacteristic"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "tmf_service": [
@@ -190,13 +275,15 @@
         "name": "customer_id",
         "type": "UUID",
         "fk": "tmf_customer.id",
-        "description": "References the customer account that subscribes to this service"
+        "description": "References the customer account that subscribes to this service",
+        "index": true
       },
       {
         "name": "product_id",
         "type": "UUID",
         "fk": "tmf_product.id",
-        "description": "References the product offering that defines this service's commercial terms"
+        "description": "References the product offering that defines this service's commercial terms",
+        "index": true
       },
       {
         "name": "started_at",
@@ -212,6 +299,34 @@
         "name": "attributes",
         "type": "JSONB",
         "description": "Service-specific configuration: [{name, value}] e.g. MSISDN, IMSI, bandwidth, QoS class"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "tmf_resource": [
@@ -245,7 +360,8 @@
         "name": "service_id",
         "type": "UUID",
         "fk": "tmf_service.id",
-        "description": "References the service instance this resource is currently allocated to (NULL if unassigned)"
+        "description": "References the service instance this resource is currently allocated to (NULL if unassigned)",
+        "index": true
       },
       {
         "name": "characteristics",
@@ -256,6 +372,34 @@
         "name": "place",
         "type": "JSONB",
         "description": "Physical location: {streetNr, streetName, city, stateOrProvince, country, geographicPoint}"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "tmf_trouble_ticket": [
@@ -275,7 +419,8 @@
         "name": "customer_id",
         "type": "UUID",
         "fk": "tmf_customer.id",
-        "description": "References the customer account that raised or is affected by this ticket"
+        "description": "References the customer account that raised or is affected by this ticket",
+        "index": true
       },
       {
         "name": "title",
@@ -312,6 +457,28 @@
         "name": "resolved_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp when the fault was resolved or request fulfilled (NULL if still open)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },

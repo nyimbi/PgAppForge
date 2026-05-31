@@ -2,7 +2,7 @@
   "name": "gs1-product",
   "schema": "gs1_product",
   "label": "GS1 Product Ontology",
-  "description": "GS1 product identification \u2014 used by Google Shopping, Amazon, major retailers",
+  "description": "GS1 product identification — used by Google Shopping, Amazon, major retailers",
   "color": "#e74c3c",
   "icon": "fa-tag",
   "version": "2024",
@@ -24,16 +24,17 @@
     "gs1_product": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "gtin",
         "type": "VARCHAR(14)",
         "unique": true,
         "nullable": false,
-        "description": "Global Trade Item Number (GS1 standard) \u2014 14-digit padded identifier for the trade item"
+        "description": "Global Trade Item Number (GS1 standard) — 14-digit padded identifier for the trade item"
       },
       {
         "name": "product_name",
@@ -48,7 +49,7 @@
       {
         "name": "gpc_category_code",
         "type": "VARCHAR(8)",
-        "description": "GS1 Global Product Classification (GPC) brick code \u2014 8-digit numeric category identifier"
+        "description": "GS1 Global Product Classification (GPC) brick code — 8-digit numeric category identifier"
       },
       {
         "name": "gpc_category_name",
@@ -105,14 +106,37 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this product record was first inserted"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gs1_product_attribute": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "gtin",
@@ -139,14 +163,43 @@
         "name": "lang_code",
         "type": "CHAR(5)",
         "description": "ISO 639-1 or BCP 47 language tag for localised text attributes (e.g. en, fr-CA)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gs1_product_image": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "gtin",
@@ -174,14 +227,43 @@
         "name": "is_planogram",
         "type": "BOOLEAN",
         "description": "True if this image is intended for retail planogram use (whitebox / shelf-ready view)"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "gs1_allergen_declaration": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate primary key"
+        "description": "Auto-incremented surrogate primary key",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "gtin",
@@ -198,10 +280,38 @@
         "name": "level_of_containment",
         "type": "VARCHAR(30)",
         "description": "GS1 containment code: CONTAINS, MAY_CONTAIN, FREE_FROM, or UNDECLARED per EU FIR 1169/2011"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "GS1 product identification \u2014 used by Google Shopping, Amazon, major retailers",
+  "short_description": "GS1 product identification — used by Google Shopping, Amazon, major retailers",
   "long_description": "GS1 Product Ontology provides the complete product identification data model including GTIN codes, product attributes, images, and allergen declarations aligned with GS1 SmartSearch and GS1 Global Data Synchronisation Network (GDSN) standards. The schema matches what Google Shopping, Amazon Product Advertising API, and major retailers require for product listings.",
   "when_to_use": "Use for any e-commerce platform, product catalog, or retail inventory system that needs to interoperate with Google Shopping, Amazon Marketplace, Walmart Marketplace, or major grocery retailers. GS1 GTIN codes are required by all major retail platforms. The allergen declaration tables are required by EU Food Information Regulation (FIR 1169/2011)."
 }

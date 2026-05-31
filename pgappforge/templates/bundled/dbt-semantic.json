@@ -2,7 +2,7 @@
   "name": "dbt-semantic",
   "schema": "dbt_semantic",
   "label": "dbt Semantic Layer / OLAP",
-  "description": "Modern data stack \u2014 dbt metrics, semantic models, OLAP cube definitions for BI",
+  "description": "Modern data stack — dbt metrics, semantic models, OLAP cube definitions for BI",
   "color": "#ff694b",
   "icon": "fa-cubes",
   "version": "dbt-1.8",
@@ -26,9 +26,10 @@
     "dbt_project": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the project row"
+        "description": "Auto-incremented surrogate key for the project row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -57,20 +58,44 @@
         "type": "TIMESTAMPTZ",
         "default": "NOW()",
         "description": "Timestamp when this project record was first registered"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dbt_model": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the model row"
+        "description": "Auto-incremented surrogate key for the model row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "project_id",
         "type": "INTEGER",
         "fk": "dbt_project.id",
-        "description": "References dbt_project.id \u2014 the project this model belongs to"
+        "description": "References dbt_project.id — the project this model belongs to",
+        "index": true
       },
       {
         "name": "name",
@@ -118,20 +143,50 @@
         "name": "last_compiled_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent successful dbt compile for this model"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dbt_semantic_model": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the semantic model row"
+        "description": "Auto-incremented surrogate key for the semantic model row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "project_id",
         "type": "INTEGER",
         "fk": "dbt_project.id",
-        "description": "References dbt_project.id \u2014 the project this semantic model is scoped to"
+        "description": "References dbt_project.id — the project this semantic model is scoped to",
+        "index": true
       },
       {
         "name": "name",
@@ -148,7 +203,8 @@
         "name": "model_id",
         "type": "INTEGER",
         "fk": "dbt_model.id",
-        "description": "References dbt_model.id \u2014 the underlying dbt model this semantic model wraps"
+        "description": "References dbt_model.id — the underlying dbt model this semantic model wraps",
+        "index": true
       },
       {
         "name": "entities",
@@ -164,20 +220,50 @@
         "name": "measures",
         "type": "JSONB",
         "description": "Array of measure definitions [{name, agg, expr, label}] as building blocks for metrics"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "dbt_metric": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the metric row"
+        "description": "Auto-incremented surrogate key for the metric row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "project_id",
         "type": "INTEGER",
         "fk": "dbt_project.id",
-        "description": "References dbt_project.id \u2014 the project that owns this metric definition"
+        "description": "References dbt_project.id — the project that owns this metric definition",
+        "index": true
       },
       {
         "name": "name",
@@ -219,14 +305,43 @@
         "name": "meta",
         "type": "JSONB",
         "description": "Arbitrary key-value metadata dict for BI tool hints, ownership, or SLA info"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "olap_dimension": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the dimension row"
+        "description": "Auto-incremented surrogate key for the dimension row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -242,7 +357,7 @@
       {
         "name": "dimension_type",
         "type": "VARCHAR(30)",
-        "description": "Dimension type: categorical, time, or geographic \u2014 governs how BI tools render it"
+        "description": "Dimension type: categorical, time, or geographic — governs how BI tools render it"
       },
       {
         "name": "source_table",
@@ -268,14 +383,43 @@
         "name": "attributes",
         "type": "JSONB",
         "description": "Additional non-hierarchical attribute columns [{name, column, label}] on this dimension"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ],
     "olap_cube": [
       {
         "name": "id",
-        "type": "SERIAL",
+        "type": "UUID",
         "pk": true,
-        "description": "Auto-incremented surrogate key for the cube row"
+        "description": "Auto-incremented surrogate key for the cube row",
+        "default": "gen_random_uuid()"
       },
       {
         "name": "name",
@@ -312,10 +456,38 @@
         "name": "last_refreshed_at",
         "type": "TIMESTAMPTZ",
         "description": "Timestamp of the most recent completed pre-aggregation refresh for this cube"
+      },
+      {
+        "name": "tenant_id",
+        "type": "UUID",
+        "nullable": false,
+        "index": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMPTZ",
+        "nullable": false,
+        "default": "NOW()"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true
       }
     ]
   },
-  "short_description": "Modern data stack \u2014 dbt metrics, semantic models, OLAP cube definitions for BI",
-  "long_description": "Modern data stack \u2014 dbt metrics, semantic models, OLAP cube definitions for BI",
+  "short_description": "Modern data stack — dbt metrics, semantic models, OLAP cube definitions for BI",
+  "long_description": "Modern data stack — dbt metrics, semantic models, OLAP cube definitions for BI",
   "when_to_use": "Use when building applications that need to conform to the dbt Semantic Layer / OLAP standard."
 }
