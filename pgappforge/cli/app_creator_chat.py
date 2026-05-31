@@ -702,7 +702,7 @@ class AppCreatorChat:
 		"""
 		self._messages.append({"role": "user", "content": user_input})
 
-		for _iteration in range(10):
+		for _iteration in range(25):
 			response = self._call_ollama(self._messages, _TOOLS, stream=False)
 			msg = response.get("message", {})
 			tool_calls: list[dict[str, Any]] = msg.get("tool_calls") or []
