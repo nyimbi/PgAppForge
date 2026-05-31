@@ -146,7 +146,11 @@ class ReportListView(BaseView):
 				f"<a href='/reports/download/{r.id}?format=xlsx' "
 				f"   class='btn btn-xs btn-success' target='_blank'>XLSX</a> "
 				f"<a href='/reports/download/{r.id}?format=csv' "
-				f"   class='btn btn-xs btn-warning' target='_blank'>CSV</a>"
+				f"   class='btn btn-xs btn-warning' target='_blank'>CSV</a> "
+				f"<a href='/reports/download/{r.id}?format=docx' "
+				f"   class='btn btn-xs btn-info' target='_blank'>DOCX</a> "
+				f"<button onclick=\"dispatchDlg({r.id})\" "
+				f"   class='btn btn-xs btn-default'><i class='fa fa-envelope'></i> Email</button>"
 				f"</td>"
 				f"</tr>"
 			)
@@ -265,8 +269,20 @@ class ReportPreviewView(BaseView):
 					f'attachment; filename="report_{report_id}.csv"'
 				)
 				return response
+			elif fmt == "docx":
+				from .docx_export import generate_docx
+				report = engine._load_report(report_id)
+				rows   = engine.fetch_rows(report_id, params=params)
+				data   = generate_docx(report, rows)
+				buf    = io.BytesIO(data)
+				return send_file(
+					buf,
+					mimetype             = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					as_attachment        = True,
+					download_name        = f"report_{report_id}.docx",
+				)
 			else:
-				abort(400, description=f"Unsupported format: {fmt!r}. Use pdf, xlsx, or csv.")
+				abort(400, description=f"Unsupported format: {fmt!r}. Use pdf, xlsx, csv, or docx.")
 		except LookupError:
 			abort(404)
 		except RuntimeError as exc:
@@ -277,6 +293,44 @@ class ReportPreviewView(BaseView):
 		except Exception as exc:
 			log.exception("download failed for report_id=%s fmt=%s", report_id, fmt)
 			abort(500)
+
+	@expose("/dispatch/<int:report_id>", methods=["POST"])
+	@has_access
+	def dispatch(self, report_id: int):
+		"""Email a rendered report to one or more recipients."""
+		from flask import current_app
+		from .dispatch import dispatch_now
+		to_email  = request.form.get("to_email", "").strip()
+		subject   = request.form.get("subject", "").strip()
+		body_text = request.form.get("body_text", "").strip()
+		fmt       = request.form.get("format", "pdf").lower()
+		if not to_email:
+			return jsonify({"ok": False, "error": "to_email is required"}), 400
+		session = self._get_session()
+		engine  = ReportEngine(session)
+		try:
+			report = engine._load_report(report_id)
+		except LookupError:
+			abort(404)
+		try:
+			d = dispatch_now(
+				report=report,
+				to_email=to_email,
+				subject=subject or f"Report: {report.name}",
+				body_text=body_text,
+				export_format=fmt,
+				params={k: v for k, v in request.form.items()
+				        if k not in ("to_email", "subject", "body_text", "format")},
+				engine=engine,
+				session=session,
+				app=current_app,
+			)
+			if d.status.value == "sent":
+				return jsonify({"ok": True, "message": f"Sent to {to_email}"})
+			return jsonify({"ok": False, "error": d.error_message or "send failed"}), 500
+		except Exception as exc:
+			log.exception("dispatch failed report_id=%s", report_id)
+			return jsonify({"ok": False, "error": str(exc)}), 500
 
 	def _get_session(self):
 		if hasattr(self, "appbuilder") and self.appbuilder is not None:

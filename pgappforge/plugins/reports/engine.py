@@ -152,8 +152,27 @@ class ReportEngine:
 			title       = report.name,
 		)
 
-		story   = self._build_pdf_story(report, rows, groups)
-		doc.build(story)
+		story = self._build_pdf_story(report, rows, groups)
+
+		# Watermark callback applied to every page
+		watermark_fn = None
+		if report.watermark_text:
+			wm_text = report.watermark_text
+			wm_opacity = report.watermark_opacity or 0.08
+
+			def watermark_fn(canvas_obj, doc_obj):
+				canvas_obj.saveState()
+				canvas_obj.setFillGray(0.5, wm_opacity)
+				canvas_obj.setFont("Helvetica", 60)
+				canvas_obj.translate(ps[0] / 2, ps[1] / 2)
+				canvas_obj.rotate(45)
+				canvas_obj.drawCentredString(0, 0, wm_text.upper())
+				canvas_obj.restoreState()
+
+		if watermark_fn:
+			doc.build(story, onFirstPage=watermark_fn, onLaterPages=watermark_fn)
+		else:
+			doc.build(story)
 		return buf.getvalue()
 
 	def generate_excel(self, report_id: int, params: dict[str, Any] | None = None) -> bytes:
@@ -396,6 +415,20 @@ class ReportEngine:
 		if report is None:
 			raise LookupError(f"Report with id={report_id} does not exist")
 		return report
+
+	def fetch_rows(
+		self,
+		report_id: int,
+		params: dict[str, Any] | None = None,
+	) -> list[dict[str, Any]]:
+		"""
+		Public helper: execute the report datasource and return all rows as dicts.
+
+		Uses ``download_row_limit`` (no cap by default).
+		"""
+		report = self._load_report(report_id)
+		resolved = self._resolve_params(report, params or {})
+		return self._execute_query(report, resolved, limit=self.download_row_limit)
 
 	def _resolve_params(self, report, supplied: dict[str, Any]) -> dict[str, Any]:
 		"""

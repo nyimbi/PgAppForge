@@ -162,13 +162,11 @@ def dispatch_now(
 	session.add(dispatch)
 	session.flush()  # get the id
 
-	# Render
+	# Render using the public engine API
 	try:
-		if export_format == "pdf":
-			attachment = engine.generate_pdf(report.id, params)
-		elif export_format == "docx":
-			rows = engine._execute_query(report, engine._resolve_params(report, params))
+		if export_format == "docx":
 			from .docx_export import generate_docx
+			rows = engine.fetch_rows(report.id, params)
 			attachment = generate_docx(report, rows)
 		elif export_format == "xlsx":
 			attachment = engine.generate_excel(report.id, params)
