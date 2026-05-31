@@ -178,7 +178,9 @@ class SchemaState:
 		import re
 		self.actor_role = (role.strip().lower() or
 		                   re.sub(r"[^a-z0-9-]", "-", table.replace("_", "-")))
-		self._undo_log.append(("set_actor", (None, None, None, None)))
+		prev = (self.primary_actor, self.actor_display_singular,
+		        self.actor_display_plural, self.actor_role)
+		self._undo_log.append(("set_actor", prev))
 		return (
 			f"✓ Primary actor set: '{table}' → {self.actor_display_singular} "
 			f"(role={self.actor_role!r}). "
@@ -272,6 +274,13 @@ class SchemaState:
 			return "✓ Description cleared."
 		if op == "apply_template":
 			return "✓ Note: template application cannot be selectively undone."
+		if op == "set_actor":
+			prev_table, prev_sing, prev_plur, prev_role = payload or (None, "", "", "")
+			self.primary_actor = prev_table
+			self.actor_display_singular = prev_sing or ""
+			self.actor_display_plural = prev_plur or ""
+			self.actor_role = prev_role or ""
+			return f"✓ Undone: primary actor {'cleared' if prev_table is None else f'reverted to {prev_table!r}'}."
 		return f"✓ Undone: {op}."
 
 	def _actor_mixin_snippet(self) -> str:

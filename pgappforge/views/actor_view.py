@@ -47,7 +47,8 @@ class ActorModelView(ModelView):
 
 	actor_role: ClassVar[str] = ""
 
-	def __init__(self) -> None:
+	def _init_titles(self) -> None:
+		"""Override the standard title init to source labels from ActorConfig."""
 		cfg = self._actor_config
 		if cfg is not None:
 			if not self.list_title:
@@ -58,7 +59,7 @@ class ActorModelView(ModelView):
 				self.edit_title = f"Edit {cfg.display.singular}"
 			if not self.show_title:
 				self.show_title = cfg.display.singular
-		super().__init__()
+		super()._init_titles()
 
 	@property
 	def _actor_config(self) -> ActorConfig | None:
