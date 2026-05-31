@@ -95,6 +95,26 @@ def _zod_base(col_type: ColumnType, col_name: str) -> str:
 	return "z.string()"
 
 
+
+def _parse_check_values(constraints: list, col_name: str) -> list[str]:
+	"""Extract valid string values from a PostgreSQL CHECK constraint for a column."""
+	import re
+	for c in constraints:
+		if c.get('type') == 'check':
+			sqltext = c.get('data', {}).get('sqltext', '')
+			# Only process if this constraint is for our column
+			if col_name not in sqltext:
+				continue
+			# Match ARRAY['val1'::..., 'val2'::..., ...]
+			matches = re.findall(r"'([^']+)'::", sqltext)
+			if matches:
+				return matches
+			# Match IN ('val1', 'val2', ...)
+			matches = re.findall(r"'([^']+)'", sqltext)
+			if len(matches) >= 2:
+				return matches
+	return []
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -879,12 +899,53 @@ export default function MFAScreen() {
 		display = self._get_display_cols(tinfo, 3)
 		title_col = display[0].name if display else "id"
 
+		# First FK column for meta display (resolved name as badge)
+		fk_meta = None
+		for rel in tinfo.relationships:
+			if getattr(rel.type, "value", rel.type) in ("many_to_one", "many-to-one"):
+				for col_name in (rel.local_columns or []):
+					remote_info = self._tables.get(rel.remote_table)
+					lbl = "id"
+					if remote_info:
+						for rc in remote_info.columns:
+							if not rc.primary_key and not rc.foreign_key and rc.category == ColumnType.TEXT:
+								lbl = rc.name
+								break
+					fk_meta = {
+						"col": col_name, "remote": rel.remote_table,
+						"pascal": _pascal(rel.remote_table), "camel": _camel(rel.remote_table),
+						"label_col": lbl,
+					}
+					break
+			if fk_meta:
+				break
+
+		fk_import = ""
+		fk_query = ""
+		fk_meta_prop = ""
+		if fk_meta:
+			fk_import = f"import {{ list{fk_meta['pascal']} }} from '@lib/api/{fk_meta['camel']}';\n"
+			fk_query = (
+				f"  const {{ data: {fk_meta['camel']}Lookup }} = useQuery({{\n"
+				f"    queryKey: ['{fk_meta['remote']}', 'lookup'],\n"
+				f"    queryFn: () => list{fk_meta['pascal']}({{ page_size: 500 }}).then(r =>\n"
+				f"      Object.fromEntries((r.result as unknown as Record<string,unknown>[] ?? []).map((x) => [String(x['id']), String(x['{fk_meta['label_col']}'] ?? x['id'])]))\n"
+				f"    ),\n"
+				f"    staleTime: 5 * 60 * 1000,\n"
+				f"  }});\n"
+			)
+			fk_meta_prop = f"            meta={{{fk_meta['camel']}Lookup ? {fk_meta['camel']}Lookup[String(item.{fk_meta['col']})] : undefined}}\n"
+
+		needs_query = bool(fk_meta)
+		query_import = ", useQuery" if needs_query else ""
+
 		return (
 			f"import {{ View, Text, RefreshControl, Pressable }} from 'react-native';\n"
 			f"import {{ useRouter }} from 'expo-router';\n"
-			f"import {{ useInfiniteQuery, useMutation, useQueryClient }} from '@tanstack/react-query';\n"
-			f"import {{ useState, useCallback }} from 'react';\n"
-			f"import {{ list{m}, delete{m} }} from '@lib/api/{camel}';\n"
+			f"import {{ useInfiniteQuery, useMutation, useQueryClient{query_import} }} from '@tanstack/react-query';\n"
+			f"import {{ useState }} from 'react';\n"
+			+ fk_import
+			+ f"import {{ list{m}, delete{m} }} from '@lib/api/{camel}';\n"
 			f"import {{ RecordList }} from '@components/lists/RecordList';\n"
 			f"import {{ RecordCard }} from '@components/lists/RecordCard';\n"
 			f"import {{ EmptyState }} from '@components/ui/EmptyState';\n"
@@ -899,7 +960,8 @@ export default function MFAScreen() {
 			f"    getNextPageParam: (last) => last.next_page ?? undefined,\n"
 			f"    initialPageParam: 1,\n"
 			f"  }});\n\n"
-			f"  const deleteMut = useMutation({{\n"
+			+ fk_query
+			+ f"  const deleteMut = useMutation({{\n"
 			f"    mutationFn: delete{m},\n"
 			f"    onSuccess: () => qc.invalidateQueries({{ queryKey: ['{tinfo.name}'] }}),\n"
 			f"  }});\n\n"
@@ -919,7 +981,8 @@ export default function MFAScreen() {
 			f"          <RecordCard\n"
 			f"            title={{String(item.{title_col} ?? '')}}\n"
 			f"            subtitle={{String(item.{display[1].name if len(display) > 1 else 'id'} ?? '')}}\n"
-			f"            onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/${{item.id}}` as never)}}\n"
+			+ fk_meta_prop
+			+ f"            onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/${{item.id}}` as never)}}\n"
 			f"            onEdit={{() => router.push(`/(app)/{_kebab(tinfo.name)}/edit/${{item.id}}` as never)}}\n"
 			f"            onDelete={{() => deleteMut.mutate(item.id as string | number)}}\n"
 			f"          />\n"
@@ -942,72 +1005,165 @@ export default function MFAScreen() {
 		label = _label(tinfo.name)
 		non_pk = [c for c in tinfo.columns if not c.primary_key]
 
+		# Build FK map: col_name → {remote_table, label_col}
+		fk_map: dict[str, dict] = {}
+		for rel in tinfo.relationships:
+			if getattr(rel.type, "value", rel.type) in ("many_to_one", "many-to-one"):
+				for col_name in (rel.local_columns or []):
+					remote_info = self._tables.get(rel.remote_table)
+					label_col = "id"
+					if remote_info:
+						for rc in remote_info.columns:
+							if not rc.primary_key and not rc.foreign_key and rc.category == ColumnType.TEXT:
+								label_col = rc.name
+								break
+					fk_map[col_name] = {
+						"remote": rel.remote_table,
+						"camel": _camel(rel.remote_table),
+						"pascal": _pascal(rel.remote_table),
+						"label_col": label_col,
+					}
+
+		# Find child tables that have FK → this table (one-to-many from current table's perspective)
+		children: list[dict] = []  # {table, col_name, pascal, camel}
+		for child_name, child_info in (self._tables or {}).items():
+			for rel in child_info.relationships:
+				if (getattr(rel.type, "value", rel.type) in ("many_to_one", "many-to-one")
+						and rel.remote_table == tinfo.name
+						and not child_info.is_association_table):
+					for col_name in (rel.local_columns or []):
+						children.append({
+							"table": child_name,
+							"col": col_name,
+							"pascal": _pascal(child_name),
+							"camel": _camel(child_name),
+							"label": _label(child_name),
+							"kebab": _kebab(child_name),
+						})
+					break
+
+		# FK lookup imports
+		fk_imports = ""
+		fk_queries = ""
+		for col_name, fk in fk_map.items():
+			fk_imports += f"import {{ get{fk['pascal']} }} from '@lib/api/{fk['camel']}';\n"
+			fk_queries += (
+				f"  const {{ data: fk_{fk['camel']} }} = useQuery({{\n"
+				f"    queryKey: ['{fk['remote']}', record?.{col_name}],\n"
+				f"    queryFn: () => get{fk['pascal']}(Number(record!.{col_name})),\n"
+				f"    enabled: !!record?.{col_name},\n"
+				f"  }});\n"
+			)
+
+		# Child list imports
+		child_imports = ""
+		child_queries = ""
+		child_sections = ""
+		for child in children:
+			child_imports += f"import {{ list{child['pascal']} }} from '@lib/api/{child['camel']}';\n"
+			child_queries += (
+				f"  const {{ data: {child['camel']}Items }} = useQuery({{\n"
+				f"    queryKey: ['{child['table']}', '{tinfo.name}', id],\n"
+				f"    queryFn: () => list{child['pascal']}({{ page_size: 50 }}).then(r => (r.result as unknown as Record<string,unknown>[] ?? []).filter((x) => String(x['{child['col']}']) === String(id))),\n"
+				f"    enabled: !!id,\n"
+				f"  }});\n"
+			)
+			child_sections += (
+				f"        <View className=\"mt-6\">\n"
+				f"          <Text className=\"text-base font-semibold text-gray-900 dark:text-white mb-3\">{child['label']}</Text>\n"
+				f"          {{{child['camel']}Items?.map((item, i) => (\n"
+				f"            <Pressable key={{i}} onPress={{() => router.push(`/(app)/{child['kebab']}/${{item.id}}` as never)}}\n"
+				f"              className=\"py-2 border-b border-gray-50 dark:border-gray-800\">\n"
+				f"              <Text className=\"text-sm text-primary-600 dark:text-primary-400\">{{String(Object.values(item as object)[1] ?? item.id)}}</Text>\n"
+				f"            </Pressable>\n"
+				f"          ))}}  \n"
+				f"          {{!{child['camel']}Items?.length && <Text className=\"text-sm text-gray-400 italic\">No {child['label'].lower()}</Text>}}\n"
+				f"        </View>\n"
+			)
+
+		# Build field rows — resolve FK names
 		field_rows = ""
 		for col in non_pk:
 			col_label = _label(col.name)
 			ts_key = col.name
-			field_rows += (
-				f"        <View key=\"{ts_key}\" className=\"py-3 border-b border-gray-100 dark:border-gray-700\">\n"
-				f"          <Text className=\"text-xs text-gray-400 uppercase tracking-wide mb-0.5\">{col_label}</Text>\n"
-				f"          <Text className=\"text-base text-gray-800 dark:text-gray-200\">\n"
-				f"            {{record.{ts_key} !== null && record.{ts_key} !== undefined\n"
-				f"              ? String(record.{ts_key})\n"
-				f"              : '—'}}\n"
-				f"          </Text>\n"
-				f"        </View>\n"
-			)
+			if col.name in fk_map:
+				fk = fk_map[col.name]
+				field_rows += (
+					f"        <View key=\"{ts_key}\" className=\"py-3 border-b border-gray-100 dark:border-gray-700\">\n"
+					f"          <Text className=\"text-xs text-gray-400 uppercase tracking-wide mb-0.5\">{col_label}</Text>\n"
+					f"          <Text className=\"text-base text-gray-800 dark:text-gray-200\">\n"
+					f"            {{fk_{fk['camel']} ? String((fk_{fk['camel']} as unknown as Record<string,unknown>)['{fk['label_col']}'] ?? '—') : String(record.{ts_key} ?? '—')}}\n"
+					f"          </Text>\n"
+					f"        </View>\n"
+				)
+			else:
+				field_rows += (
+					f"        <View key=\"{ts_key}\" className=\"py-3 border-b border-gray-100 dark:border-gray-700\">\n"
+					f"          <Text className=\"text-xs text-gray-400 uppercase tracking-wide mb-0.5\">{col_label}</Text>\n"
+					f"          <Text className=\"text-base text-gray-800 dark:text-gray-200\">\n"
+					f"            {{record.{ts_key} !== null && record.{ts_key} !== undefined ? String(record.{ts_key}) : '—'}}\n"
+					f"          </Text>\n"
+					f"        </View>\n"
+				)
+
+		needs_flashlist = bool(children)
+		flashlist_import = "import { FlashList } from '@shopify/flash-list';\n" if needs_flashlist else ""
+		all_imports = (
+			"import { View, Text, ScrollView, Alert, Pressable } from 'react-native';\n"
+			"import { useLocalSearchParams, useRouter } from 'expo-router';\n"
+			"import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';\n"
+			+ flashlist_import
+			+ f"import {{ get{m}, delete{m} }} from '@lib/api/{camel}';\n"
+			+ fk_imports + child_imports
+			+ "import { Skeleton } from '@components/ui/Skeleton';\n"
+			+ "import { Ionicons } from '@expo/vector-icons';\n\n"
+		)
 
 		return (
-			f"import {{ View, Text, ScrollView, Alert, Pressable }} from 'react-native';\n"
-			f"import {{ useLocalSearchParams, useRouter }} from 'expo-router';\n"
-			f"import {{ useQuery, useMutation, useQueryClient }} from '@tanstack/react-query';\n"
-			f"import {{ get{m}, delete{m} }} from '@lib/api/{camel}';\n"
-			f"import {{ Skeleton }} from '@components/ui/Skeleton';\n"
-			f"import {{ Ionicons }} from '@expo/vector-icons';\n\n"
-			f"export default function {m}DetailScreen() {{\n"
-			f"  const {{ id }} = useLocalSearchParams<{{ id: string }}>();\n"
-			f"  const router = useRouter();\n"
-			f"  const qc = useQueryClient();\n\n"
-			f"  const {{ data: record, isLoading }} = useQuery({{\n"
-			f"    queryKey: ['{tinfo.name}', id],\n"
-			f"    queryFn: () => get{m}(Number(id)),\n"
-			f"    enabled: !!id,\n"
-			f"  }});\n\n"
-			f"  const deleteMut = useMutation({{\n"
-			f"    mutationFn: () => delete{m}(Number(id)),\n"
-			f"    onSuccess: () => {{\n"
-			f"      qc.invalidateQueries({{ queryKey: ['{tinfo.name}'] }});\n"
-			f"      router.back();\n"
-			f"    }},\n"
-			f"  }});\n\n"
-			f"  const handleDelete = () => Alert.alert(\n"
-			f"    'Delete {label}',\n"
-			f"    'This cannot be undone.',\n"
-			f"    [\n"
-			f"      {{ text: 'Cancel', style: 'cancel' }},\n"
-			f"      {{ text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate() }},\n"
-			f"    ],\n"
-			f"  );\n\n"
-			f"  if (isLoading) return <Skeleton className=\"flex-1\" />;\n"
-			f"  if (!record) return null;\n\n"
-			f"  return (\n"
-			f"    <ScrollView className=\"flex-1 bg-white dark:bg-gray-900\">\n"
-			f"      <View className=\"px-4 py-6\">\n"
-			f"        <View className=\"flex-row justify-between items-center mb-6\">\n"
-			f"          <Pressable onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/edit/${{id}}` as never)}}\n"
-			f"            className=\"flex-row items-center gap-1\">\n"
-			f"            <Ionicons name=\"pencil-outline\" size={{18}} color=\"#6366f1\" />\n"
-			f"            <Text className=\"text-primary-500 font-medium\">Edit</Text>\n"
-			f"          </Pressable>\n"
-			f"          <Pressable onPress={{handleDelete}}>\n"
-			f"            <Ionicons name=\"trash-outline\" size={{20}} color=\"#ef4444\" />\n"
-			f"          </Pressable>\n"
-			f"        </View>\n"
-			+ field_rows +
-			f"      </View>\n"
-			f"    </ScrollView>\n"
-			f"  );\n"
-			f"}}\n"
+			all_imports
+			+ f"export default function {m}DetailScreen() {{\n"
+			+ f"  const {{ id }} = useLocalSearchParams<{{ id: string }}>();\n"
+			+ f"  const router = useRouter();\n"
+			+ f"  const qc = useQueryClient();\n\n"
+			+ f"  const {{ data: record, isLoading }} = useQuery({{\n"
+			+ f"    queryKey: ['{tinfo.name}', id],\n"
+			+ f"    queryFn: () => get{m}(Number(id)),\n"
+			+ f"    enabled: !!id,\n"
+			+ f"  }});\n\n"
+			+ fk_queries
+			+ child_queries
+			+ f"\n  const deleteMut = useMutation({{\n"
+			+ f"    mutationFn: () => delete{m}(id as string | number),\n"
+			+ f"    onSuccess: () => {{\n"
+			+ f"      qc.invalidateQueries({{ queryKey: ['{tinfo.name}'] }});\n"
+			+ f"      router.back();\n"
+			+ f"    }},\n"
+			+ f"  }});\n\n"
+			+ f"  const handleDelete = () => Alert.alert('Delete {label}', 'This cannot be undone.', [\n"
+			+ f"    {{ text: 'Cancel', style: 'cancel' }},\n"
+			+ f"    {{ text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate() }},\n"
+			+ f"  ]);\n\n"
+			+ f"  if (isLoading) return <Skeleton className=\"flex-1\" />;\n"
+			+ f"  if (!record) return null;\n\n"
+			+ f"  return (\n"
+			+ f"    <ScrollView className=\"flex-1 bg-white dark:bg-gray-900\">\n"
+			+ f"      <View className=\"px-4 py-6\">\n"
+			+ f"        <View className=\"flex-row justify-between items-center mb-6\">\n"
+			+ f"          <Pressable onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/edit/${{id}}` as never)}}\n"
+			+ f"            className=\"flex-row items-center gap-1\">\n"
+			+ f"            <Ionicons name=\"pencil-outline\" size={{18}} color=\"#6366f1\" />\n"
+			+ f"            <Text className=\"text-primary-500 font-medium\">Edit</Text>\n"
+			+ f"          </Pressable>\n"
+			+ f"          <Pressable onPress={{handleDelete}}>\n"
+			+ f"            <Ionicons name=\"trash-outline\" size={{20}} color=\"#ef4444\" />\n"
+			+ f"          </Pressable>\n"
+			+ f"        </View>\n"
+			+ field_rows
+			+ child_sections
+			+ f"      </View>\n"
+			+ f"    </ScrollView>\n"
+			+ f"  );\n"
+			+ f"}}\n"
 		)
 
 	def _gen_form_screen(self, tinfo: TableInfo, edit: bool = False) -> str:
@@ -1085,6 +1241,32 @@ export default function MFAScreen() {
 					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
 					"                required={" + req + "}\n"
 					"                placeholder=\"Select " + _label(remote) + "...\"\n"
+					"              />\n"
+					"            )}\n"
+					"          />\n"
+				)
+				continue
+
+			# CHECK constraint → SelectField with values extracted from PostgreSQL constraint
+			check_vals = _parse_check_values(tinfo.constraints, col.name)
+			if check_vals:
+				req = "true" if not col.nullable else "false"
+				options_ts = "[" + ", ".join(
+					"{ label: " + repr(v.replace("_", " ").title()) + ", value: " + repr(v) + " }"
+					for v in check_vals
+				) + "]"
+				field_blocks.append(
+					"          <Controller\n"
+					"            control={control}\n"
+					"            name=\"" + col.name + "\"\n"
+					"            render={({ field }) => (\n"
+					"              <SelectField\n"
+					"                label=\"" + col_label + "\"\n"
+					"                value={field.value as string}\n"
+					"                onChange={field.onChange}\n"
+					"                options={" + options_ts + "}\n"
+					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
+					"                required={" + req + "}\n"
 					"              />\n"
 					"            )}\n"
 					"          />\n"
