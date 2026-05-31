@@ -756,6 +756,15 @@ An interactive graph-based UI for managing roles and permissions is available at
 Requires Admin role. Supports role CRUD, permission grant/revoke, YAML import/export,
 role templates, health checks, and point-in-time snapshots with diff.
 
+## ERD Designer
+
+A Cytoscape.js-based canvas for visualising and editing the database schema:
+- **ERD Designer**: http://localhost:8080/erd-designer
+
+Requires Admin role + `FAB_ERD_DDL_ENABLED = True` in config to enable DDL mutations.
+Supports schema inspection, forward/reverse engineering (SQL/DBML/Mermaid), Alembic
+migration export, ORM code export, and 43 trigger/object templates.
+
 ## API Documentation
 
 When running, visit:
@@ -1380,6 +1389,14 @@ def register_views(appbuilder):
         )
     except ImportError:
         pass  # SecurityDesignerView optional — skip if widgets_postgresql unavailable
+    try:
+        from pgappforge.views.erd_designer import ERDDesignerView
+        appbuilder.add_view(
+            ERDDesignerView, "ERD Designer",
+            icon="fa-sitemap", category="Tools",
+        )
+    except ImportError:
+        pass  # ERDDesignerView optional — skip if cytoscape widgets unavailable
 '''
 
     def _generate_api_init(self) -> str:
@@ -1699,13 +1716,21 @@ AUTH_LDAP_UID_FIELD = "uid"
                     f'    appbuilder.add_view({cls}, "{table_info.display_name}", '
                     f'icon="{icon}", category="{category}")'
                 )
-        # Add SecurityDesignerView import and registration
+        # Add Visual Security Designer (Admin-only RBAC management)
         view_imports.append(
             "from pgappforge.views.security_designer import SecurityDesignerView"
         )
         registrations.append(
             "    appbuilder.add_view(SecurityDesignerView, 'Security Designer',"
             " icon='fa-shield', category='Security')"
+        )
+        # Add Visual ERD Designer (schema visualisation and DDL management)
+        view_imports.append(
+            "from pgappforge.views.erd_designer import ERDDesignerView"
+        )
+        registrations.append(
+            "    appbuilder.add_view(ERDDesignerView, 'ERD Designer',"
+            " icon='fa-sitemap', category='Tools')"
         )
 
         # Build file: module-level imports first, then function body
