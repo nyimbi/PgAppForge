@@ -1,28 +1,29 @@
 """
 ReportForge scheduled dispatch runner.
 
-Processes ReportDispatch rows with status='scheduled' whose scheduled_at
-has passed. Call this from a Celery beat task, a cron job, or pgappforge's
-built-in job runner.
+Processes:
+1. One-shot ReportDispatch rows with status='scheduled' whose scheduled_at has passed.
+2. Recurring dispatches: after a successful send, if recurrence_rule (RRULE) is set,
+   computes next_run_at and re-queues with status='scheduled'.
+3. ReportSubscription rows (via subscriptions.process_subscriptions).
 
 Usage (Celery)::
 
-    from pgappforge.plugins.reports.scheduler import process_scheduled_dispatches
+    from pgappforge.plugins.reports.scheduler import run_all
 
     @celery.task
-    def reportforge_scheduled():
+    def reportforge_tick():
         from flask import current_app
         with current_app.app_context():
-            count = process_scheduled_dispatches()
-            return f"Processed {count} dispatches"
+            count = run_all()
+            return f"Processed {count} items"
 
 Usage (simple cron / Flask CLI)::
 
-    # In your app factory or CLI command:
-    from pgappforge.plugins.reports.scheduler import process_scheduled_dispatches
-    count = process_scheduled_dispatches()
+    from pgappforge.plugins.reports.scheduler import run_all
+    count = run_all()
 
-Usage (Flask CLI command added automatically by the plugin)::
+Usage (Flask CLI)::
 
     flask reportforge run-scheduled
 """
@@ -36,6 +37,20 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
+def _compute_next_rrule(rule_str: str, after_dt: datetime) -> datetime | None:
+	"""
+	Compute the next occurrence after *after_dt* for an RRULE string.
+	Returns None when the rule is exhausted or dateutil is unavailable.
+	"""
+	try:
+		from dateutil.rrule import rrulestr
+		rule = rrulestr(rule_str, dtstart=after_dt, ignoretz=False)
+		return rule.after(after_dt)
+	except Exception as exc:
+		log.warning("ReportForge: RRULE computation failed (%r): %s", rule_str, exc)
+		return None
+
+
 def process_scheduled_dispatches(
 	session=None,
 	app: Any = None,
@@ -44,13 +59,12 @@ def process_scheduled_dispatches(
 	"""
 	Find and send all scheduled ReportDispatch rows whose time has arrived.
 
-	Args:
-	    session: SQLAlchemy session. If None, obtained from Flask app context.
-	    app: Flask app instance. If None, obtained from Flask current_app.
-	    limit: Maximum dispatches to process in one call (prevents runaway).
+	After a successful send:
+	- If dispatch.recurrence_rule is set, computes next_run_at via RRULE and
+	  re-queues the same dispatch row with status=SCHEDULED.
+	- Otherwise sets status=SENT (already done by dispatch_now).
 
-	Returns:
-	    Number of dispatches attempted (sent + failed).
+	Returns number of dispatches attempted.
 	"""
 	from .models import ReportDispatch, DispatchStatus
 
@@ -89,8 +103,8 @@ def process_scheduled_dispatches(
 
 	for d in due:
 		try:
-			report  = d.report
-			engine  = ReportEngine(session)
+			report = d.report
+			engine = ReportEngine(session)
 			dispatch_now(
 				report=report,
 				to_email=d.to_email,
@@ -103,8 +117,47 @@ def process_scheduled_dispatches(
 				app=app,
 			)
 			log.info("ReportForge scheduler: sent dispatch id=%s to %s", d.id, d.to_email)
+
+			# ── RRULE recurrence: re-queue if rule defined ────────────────
+			if d.recurrence_rule:
+				after = d.scheduled_at or datetime.now(timezone.utc)
+				next_dt = _compute_next_rrule(d.recurrence_rule, after)
+				if next_dt:
+					d.scheduled_at = next_dt
+					d.next_run_at  = next_dt
+					d.status       = DispatchStatus.SCHEDULED
+					d.sent_at      = None
+					d.error_message = None
+					session.commit()
+					log.info(
+						"ReportForge scheduler: re-queued dispatch id=%s next=%s",
+						d.id, next_dt,
+					)
+				else:
+					log.info(
+						"ReportForge scheduler: RRULE exhausted for dispatch id=%s", d.id
+					)
+
 		except Exception as exc:
 			log.exception("ReportForge scheduler: dispatch id=%s failed: %s", d.id, exc)
 		processed += 1
 
 	return processed
+
+
+def run_all(session=None, app: Any = None) -> int:
+	"""
+	Run the full scheduler tick:
+	1. process_scheduled_dispatches
+	2. subscriptions.process_subscriptions
+
+	Call this once per scheduler tick (e.g. every 5 minutes from Celery beat).
+	"""
+	count = 0
+	count += process_scheduled_dispatches(session=session, app=app)
+	try:
+		from .subscriptions import process_subscriptions
+		count += process_subscriptions(session=session, app=app)
+	except Exception as exc:
+		log.warning("ReportForge scheduler: subscriptions run failed: %s", exc)
+	return count

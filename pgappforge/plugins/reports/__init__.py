@@ -46,6 +46,7 @@ import logging
 from typing import Any
 
 import sqlalchemy as sa
+from datetime import datetime, timezone
 from flask import abort, jsonify, make_response, request, send_file
 
 from pgappforge import BaseView, expose
@@ -528,6 +529,157 @@ class ReportPreviewView(BaseView):
 		session.delete(g)
 		session.commit()
 		return jsonify({"ok": True})
+
+	# ── Subscriptions ─────────────────────────────────────────────────────
+
+	@expose("/subscribe/<int:report_id>", methods=["POST"])
+	@has_access
+	def subscribe(self, report_id: int):
+		"""Subscribe current user to recurring report delivery."""
+		from flask_login import current_user
+		from .models import ReportSubscription
+		session   = self._get_session()
+		frequency = request.form.get("frequency", "FREQ=WEEKLY;BYDAY=MO")
+		fmt       = request.form.get("format", "pdf")
+		params    = {k: v for k, v in request.form.items()
+		             if k not in ("frequency", "format")}
+		uid = getattr(current_user, "id", None)
+		if uid is None:
+			return jsonify({"ok": False, "error": "login required"}), 401
+		# Compute first run
+		from datetime import timedelta
+		first_run = None
+		try:
+			from .subscriptions import _next_occurrence
+			from datetime import timezone
+			first_run = _next_occurrence(frequency, datetime.now(timezone.utc))
+		except Exception:
+			from datetime import timezone
+			first_run = datetime.now(timezone.utc) + timedelta(days=1)
+		sub = ReportSubscription(
+			report_id=report_id, user_id=uid,
+			format=fmt, frequency=frequency,
+			params_json=params, next_run_at=first_run,
+		)
+		session.add(sub)
+		session.commit()
+		return jsonify({"ok": True, "id": sub.id, "next_run_at": str(first_run)})
+
+	@expose("/unsubscribe/<int:subscription_id>", methods=["POST"])
+	@has_access
+	def unsubscribe(self, subscription_id: int):
+		"""Deactivate a subscription."""
+		from flask_login import current_user
+		from .models import ReportSubscription
+		import sqlalchemy as sa
+		session = self._get_session()
+		sub = session.get(ReportSubscription, subscription_id)
+		if sub is None:
+			abort(404)
+		uid = getattr(current_user, "id", None)
+		if sub.user_id != uid:
+			abort(403)
+		sub.is_active = False
+		session.commit()
+		return jsonify({"ok": True})
+
+	# ── Background render jobs ─────────────────────────────────────────────
+
+	@expose("/render-async/<int:report_id>", methods=["POST"])
+	@has_access
+	def render_async(self, report_id: int):
+		"""
+		Enqueue a background render job. Returns {job_id} immediately.
+		Poll GET /reports/jobs/<job_id>/status for result.
+		"""
+		from flask_login import current_user
+		from .models import ReportJob, JobStatus
+		import sqlalchemy as sa
+		session = self._get_session()
+		fmt     = request.form.get("format", "pdf")
+		params  = {k: v for k, v in request.form.items() if k != "format"}
+		job = ReportJob(
+			report_id=report_id,
+			format=fmt,
+			params_json=params,
+			status=JobStatus.PENDING,
+			created_by=getattr(current_user, "id", None),
+		)
+		session.add(job)
+		session.commit()
+		# Kick off background thread
+		self._run_job_async(job.id)
+		return jsonify({"ok": True, "job_id": job.id})
+
+	@expose("/jobs/<int:job_id>/status")
+	@has_access
+	def job_status(self, job_id: int):
+		"""Poll render job status."""
+		from .models import ReportJob
+		import sqlalchemy as sa
+		session = self._get_session()
+		job = session.get(ReportJob, job_id)
+		if job is None:
+			abort(404)
+		result = {"status": job.status.value, "error": job.error}
+		if job.result_token:
+			result["download_url"] = f"/reports/share/{job.result_token}"
+		return jsonify(result)
+
+	def _run_job_async(self, job_id: int) -> None:
+		"""Spawn a daemon thread to render the report and store a share token."""
+		import threading
+		from flask import copy_current_request_context
+
+		@copy_current_request_context
+		def _run():
+			from .models import ReportJob, JobStatus
+			from .engine import ReportEngine
+			from .acl import generate_token
+			from datetime import datetime, timezone
+			import sqlalchemy as sa
+			session = self._get_session()
+			job = session.get(ReportJob, job_id)
+			if not job:
+				return
+			try:
+				job.status = JobStatus.RUNNING
+				session.commit()
+				engine = ReportEngine(session)
+				if job.format == "pdf":
+					data = engine.generate_pdf(job.report_id, job.params_json)
+					ext  = "pdf"
+				elif job.format == "xlsx":
+					data = engine.generate_excel(job.report_id, job.params_json)
+					ext  = "xlsx"
+				else:
+					data = engine.generate_csv(job.report_id, job.params_json).encode()
+					ext  = "csv"
+				# Store as share token (15 min TTL, 1 use)
+				from .models import ReportShareToken
+				import secrets
+				tok_str  = secrets.token_urlsafe(24)
+				from datetime import timedelta
+				expires  = datetime.now(timezone.utc) + timedelta(minutes=15)
+				tok = ReportShareToken(
+					token=tok_str, report_id=job.report_id,
+					max_uses=1, uses_remaining=1,
+					expires_at=expires,
+					params_json=job.params_json or {},
+					created_by=job.created_by,
+				)
+				session.add(tok)
+				job.result_token = tok_str
+				job.status       = JobStatus.DONE
+				job.finished_at  = datetime.now(timezone.utc)
+				session.commit()
+			except Exception as exc:
+				log.exception("ReportForge job %s failed", job_id)
+				job.status = JobStatus.FAILED
+				job.error  = str(exc)
+				session.commit()
+
+		threading.Thread(target=_run, daemon=True).start()
 
 	def _get_session(self):
 		if hasattr(self, "appbuilder") and self.appbuilder is not None:
