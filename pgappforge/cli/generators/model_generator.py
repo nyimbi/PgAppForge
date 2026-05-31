@@ -194,10 +194,39 @@ class EnhancedModelGenerator:
                 'comment': col.comment,
             })
 
+        model_name = self._to_pascal_case(table_info.name)
+        _AUDIT = frozenset({'created_on', 'changed_on', 'created_at', 'updated_at',
+                            'deleted_at', 'created_by_fk', 'changed_by_fk'})
+
+        # Build three column variant lists:
+        # Create: write-only fields (no PK, no audit, no server-set columns)
+        cols_create = [c for c in cols if c['name'] not in _AUDIT]
+        # Update: same as Create but every field is Optional
+        cols_update = [{**c, 'definition': f"    {c['name']}: Optional[{c['python_type']}] = None"}
+                       for c in cols_create]
+        # Read: all fields including PK (already filtered by generate loop above which skips PK)
+        # Add PK columns back for Read schema
+        pk_cols = []
+        for col in table_info.columns:
+            if col.primary_key:
+                py_type = self._get_python_type(col) or 'int'
+                pk_cols.append({
+                    'name': col.name,
+                    'definition': f'    {col.name}: {py_type}',
+                    'example': '1',
+                    'nullable': False,
+                    'python_type': py_type,
+                    'comment': None,
+                })
+        cols_read = pk_cols + cols  # PK first, then all non-PK fields
+
         context = {
             'table_info': table_info,
-            'class_name': f"{self._to_pascal_case(table_info.name)}Schema",
-            'columns': cols,
+            'model_name': model_name,
+            'columns': cols,               # backward compat
+            'cols_create': cols_create,
+            'cols_update': cols_update,
+            'cols_read': cols_read,
             'relationships': table_info.relationships,
         }
         return template.render(**context)

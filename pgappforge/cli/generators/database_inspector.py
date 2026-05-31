@@ -423,7 +423,7 @@ class EnhancedDatabaseInspector:
         relationships = self._analyze_relationships(table_name)
 
         # Get indexes and constraints
-        indexes = self.inspector.get_indexes(table_name)
+        indexes = self._enrich_indexes(self.inspector.get_indexes(table_name))
         constraints = self._get_table_constraints(table_name)
 
         # Determine table category and metadata
@@ -454,6 +454,36 @@ class EnhancedDatabaseInspector:
         self._detect_polymorphic_columns(result)
         self._table_info_cache[table_name] = result
         return result
+
+    @staticmethod
+    def _enrich_indexes(raw_indexes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Enrich raw index dicts with partial and expression metadata.
+
+        SQLAlchemy's PG dialect stores:
+        - ``dialect_options['postgresql_where']`` for partial indexes
+        - ``expressions`` (list of str) when the index is on computed expressions
+        """
+        enriched = []
+        for idx in raw_indexes:
+            entry = dict(idx)
+            opts = idx.get('dialect_options', {})
+            where_clause = opts.get('postgresql_where')
+            if where_clause:
+                entry['is_partial'] = True
+                entry['partial_where'] = str(where_clause)
+            else:
+                entry['is_partial'] = False
+                entry['partial_where'] = None
+            # Expression indexes have None in column_names and a non-empty expressions list
+            exprs = idx.get('expressions') or []
+            if exprs and any(e is not None for e in exprs):
+                entry['is_expression'] = True
+                entry['expression_sqls'] = [str(e) for e in exprs if e is not None]
+            else:
+                entry['is_expression'] = False
+                entry['expression_sqls'] = []
+            enriched.append(entry)
+        return enriched
 
     def _detect_polymorphic_columns(self, table_info: 'TableInfo') -> None:
         """Detect polymorphic relationship patterns: *_type + *_id column pairs.

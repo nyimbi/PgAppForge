@@ -1050,7 +1050,7 @@ export default function MFAScreen() {
 			fk_query = (
 				f"  const {{ data: {fk_meta['camel']}Lookup }} = useQuery({{\n"
 				f"    queryKey: ['{fk_meta['remote']}', 'lookup'],\n"
-				f"    queryFn: () => list{fk_meta['pascal']}({{ page_size: 500 }}).then(r =>\n"
+				f"    queryFn: () => list{fk_meta['pascal']}({{ page_size: 100 }}).then(r =>\n"
 				f"      Object.fromEntries((r.result as unknown as Record<string,unknown>[] ?? []).map((x) => [String(x['id']), String(x['{fk_meta['label_col']}'] ?? x['id'])]))\n"
 				f"    ),\n"
 				f"    staleTime: 5 * 60 * 1000,\n"
@@ -1083,11 +1083,27 @@ export default function MFAScreen() {
 			f"    initialPageParam: 1,\n"
 			f"  }});\n\n"
 			+ fk_query
-			+ f"  const deleteMut = useMutation({{\n"
-			f"    mutationFn: delete{m},\n"
-			f"    onSuccess: () => qc.invalidateQueries({{ queryKey: ['{tinfo.name}'] }}),\n"
-			f"  }});\n\n"
+				+ f"  const deleteMut = useMutation({{\n"
+				f"    mutationFn: delete{m},\n"
+				f"    onMutate: async (deletedId) => {{\n"
+				f"      await qc.cancelQueries({{ queryKey: ['{tinfo.name}', 'list'] }});\n"
+				f"      const prev = qc.getQueryData(['{tinfo.name}', 'list', search]);\n"
+				f"      qc.setQueryData(['{tinfo.name}', 'list', search], (old: any) =>\n"
+				f"        old ? {{ ...old, pages: old.pages.map((p: any) => ({{\n"
+				f"          ...p, result: p.result.filter((r: any) => String(r.id) !== String(deletedId))\n"
+				f"        }}))}}\n"
+				f"        : old);\n"
+				f"      return {{ prev }};\n"
+				f"    }},\n"
+				f"    onError: (_e: unknown, _id: unknown, ctx: any) => {{\n"
+				f"      if (ctx?.prev) qc.setQueryData(['{tinfo.name}', 'list', search], ctx.prev);\n"
+				f"    }},\n"
+				f"    onSettled: () => qc.invalidateQueries({{ queryKey: ['{tinfo.name}'] }}),\n"
+				f"  }});\n\n"
 			f"  const records = query.data?.pages.flatMap(p => p.result ?? []) ?? [];\n\n"
+				f"  if (query.isError) return (\n"
+				f"    <ErrorState message=\"Failed to load {label.lower()}\" onRetry={{() => query.refetch()}} />\n"
+				f"  );\n\n"
 			f"  return (\n"
 			f"    <View className=\"flex-1 bg-gray-50 dark:bg-gray-900\">\n"
 			f"      <RecordList\n"
@@ -1098,7 +1114,7 @@ export default function MFAScreen() {
 			f"        refreshing={{query.isFetching}}\n"
 			f"        onRefresh={{() => query.refetch()}}\n"
 			f"        keyExtractor={{(item) => String(item.id)}}\n"
-			f"        ListEmptyComponent={{<EmptyState title=\"No {label.lower()}\" subtitle=\"Tap + to create one\" />}}\n"
+			f"        ListEmptyComponent={{query.isLoading ? null : <EmptyState title=\"No {label.lower()}\" subtitle=\"Tap + to create one\" />}}\n"
 			f"        renderItem={{({{ item }}) => (\n"
 			f"          <RecordCard\n"
 			f"            title={{String(item.{title_col} ?? '')}}\n"
@@ -1537,7 +1553,7 @@ export default function MFAScreen() {
 			fk_query_calls += (
 				"  const { data: " + remote_camel + "Options } = useQuery({\n"
 				"    queryKey: ['" + remote + "', 'select-options'],\n"
-				"    queryFn: () => list" + remote_m + "({ page_size: 500 }).then(r => (r.result ?? []) as unknown as Record<string, unknown>[]),\n"
+				"    queryFn: () => list" + remote_m + "({ page_size: 100 }).then(r => (r.result ?? []) as unknown as Record<string, unknown>[]),\n"
 				"    staleTime: 5 * 60 * 1000,\n"
 				"  });\n"
 			)
@@ -1785,14 +1801,14 @@ import { Skeleton } from '@components/ui/Skeleton';
 
 export default function WorkflowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: task, isLoading } = useQuery({
+  const { data: task, isLoading, isError, refetch } = useQuery({
     queryKey: ['workflow', 'task', id],
     queryFn: () => apiClient.get(`/api/v1/process/instances/${id}`).then(r => r.data),
     enabled: !!id,
   });
 
   if (isLoading) return <Skeleton className="flex-1" />;
-  if (!task) return null;
+  if (isError || !task) return <ErrorState message="Failed to load task" onRetry={refetch} />;
 
   return (
     <ScrollView className="flex-1 bg-white dark:bg-gray-900">
@@ -2266,8 +2282,8 @@ export function DateField({ label, value, onChange, error, required, mode = 'dat
 
 	def _gen_field_select(self) -> str:
 		return """\
-import { View, Text, Pressable, Modal, FlatList } from 'react-native';
-import { useState } from 'react';
+import { View, Text, Pressable, Modal, FlatList, TextInput } from 'react-native';
+import { useState, useMemo, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { cn } from '@lib/utils';
 
@@ -2281,11 +2297,29 @@ interface SelectFieldProps {
   error?: string;
   required?: boolean;
   placeholder?: string;
+  searchable?: boolean;
 }
 
-export function SelectField({ label, value, onChange, options, error, required, placeholder = 'Select...' }: SelectFieldProps) {
+export function SelectField({
+  label, value, onChange, options, error, required,
+  placeholder = 'Select...', searchable = true,
+}: SelectFieldProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchRef = useRef<TextInput>(null);
   const selected = options.find(o => o.value === value);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return options;
+    const q = search.toLowerCase();
+    return options.filter(o => String(o.label).toLowerCase().includes(q));
+  }, [options, search]);
+
+  const handleOpen = () => {
+    setSearch('');
+    setOpen(true);
+    setTimeout(() => searchable && searchRef.current?.focus(), 150);
+  };
 
   return (
     <View className="gap-1">
@@ -2293,7 +2327,7 @@ export function SelectField({ label, value, onChange, options, error, required, 
         {label}{required && <Text className="text-red-500"> *</Text>}
       </Text>
       <Pressable
-        onPress={() => setOpen(true)}
+        onPress={handleOpen}
         className={cn(
           'h-12 px-4 rounded-xl border flex-row items-center justify-between bg-gray-50 dark:bg-gray-800',
           error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
@@ -2307,17 +2341,33 @@ export function SelectField({ label, value, onChange, options, error, required, 
       {error && <Text className="text-xs text-red-500">{error}</Text>}
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <Pressable className="flex-1 bg-black/40" onPress={() => setOpen(false)} />
-        <View className="bg-white dark:bg-gray-900 rounded-t-3xl max-h-[60%]">
-          <View className="px-4 py-3 border-b border-gray-100">
-            <Text className="text-lg font-semibold text-gray-900 dark:text-white">{label}</Text>
+        <View className="bg-white dark:bg-gray-900 rounded-t-3xl max-h-[70%]">
+          <View className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+            <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{label}</Text>
+            {searchable && (
+              <TextInput
+                ref={searchRef}
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search..."
+                placeholderTextColor="#9ca3af"
+                className="h-9 px-3 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+              />
+            )}
           </View>
           <FlatList
-            data={options}
+            data={filtered}
             keyExtractor={(o) => String(o.value)}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View className="py-8 items-center">
+                <Text className="text-gray-400 text-sm">No results for "{search}"</Text>
+              </View>
+            }
             renderItem={({ item }) => (
               <Pressable
-                onPress={() => { onChange(item.value); setOpen(false); }}
-                className="flex-row items-center px-4 py-3 border-b border-gray-50"
+                onPress={() => { onChange(item.value); setOpen(false); setSearch(''); }}
+                className="flex-row items-center px-4 py-3 border-b border-gray-50 dark:border-gray-800"
               >
                 <Text className="flex-1 text-base text-gray-900 dark:text-white">{item.label}</Text>
                 {item.value === value && <Ionicons name="checkmark" size={20} color="#6366f1" />}
