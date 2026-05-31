@@ -1147,15 +1147,24 @@ class TriggerProcedureManager:
 		self.engine = engine
 
 	def list_templates(self) -> list[dict]:
-		"""Return all available trigger/function templates."""
+		"""Return all available trigger/function templates with full metadata.
+
+		Includes ``icon``, ``category``, ``function_sql``, and ``trigger_sql``
+		so the frontend can render the template card grid, filter by category,
+		and build client-side SQL previews without a round-trip.
+		"""
 		return [
 			{
-				"key": k,
-				"label": v["label"],
-				"description": v["description"],
-				"params": v["params"],
-				"defaults": v["defaults"],
-				"has_trigger": v.get("trigger") is not None,
+				"key":          k,
+				"label":        v["label"],
+				"description":  v.get("description", ""),
+				"icon":         v.get("icon", "fa-bolt"),
+				"category":     v.get("category", "general"),
+				"params":       v.get("params", []),
+				"defaults":     v.get("defaults", {}),
+				"has_trigger":  v.get("trigger") is not None,
+				"function_sql": v.get("function", ""),
+				"trigger_sql":  v.get("trigger", ""),
 			}
 			for k, v in TRIGGER_TEMPLATES.items()
 		]
