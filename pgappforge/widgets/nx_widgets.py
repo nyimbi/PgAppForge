@@ -16,9 +16,10 @@ from pgappforge.widgets.data.profiler import DataPreviewProfilerWidget
 from pgappforge.widgets.data.spreadsheet import SpreadsheetWidget
 from pgappforge.widgets.data.validation import DataValidationRulesBuilder
 from pgappforge.widgets.editing.code_editor import CodeEditorWidget
-from pgappforge.widgets.editing.dbml import DBMLEditorWidget
+from pgappforge.widgets.editing.dbml_editor import DbmlEditorWidget
+DBMLEditorWidget = DbmlEditorWidget  # alias
 from pgappforge.widgets.editing.markdown import MarkdownEditorWidget
-from pgappforge.widgets.editing.mermaid import MermaidEditorWidget
+from pgappforge.widgets.editing.mermaid_editor import MermaidEditorWidget
 from pgappforge.widgets.editing.richtext import RichTextEditorWidget
 from pgappforge.widgets.forms.builder import FormBuilderWidget
 from pgappforge.widgets.forms.color_picker import ColorPickerWidget

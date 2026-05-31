@@ -92,12 +92,6 @@ try:
 except ImportError:
     MODULAR_WIDGETS_AVAILABLE = False
 
-try:
-    from .nx_widgets import BarcodeQRScannerWidget
-    _BARCODE_SCANNER_AVAILABLE = True
-except ImportError:
-    _BARCODE_SCANNER_AVAILABLE = False
-
 # Core widgets - always available
 CORE_WIDGETS = {
     'RenderTemplateWidget': RenderTemplateWidget,
@@ -177,8 +171,6 @@ if MODULAR_WIDGETS_AVAILABLE:
         'ColorPickerWidget'
     ])
 
-if _BARCODE_SCANNER_AVAILABLE:
-    __all__.append('BarcodeQRScannerWidget')
 
 
 try:
@@ -190,13 +182,9 @@ try:
     from pgappforge.widgets.data.profiler import DataPreviewProfilerWidget
     from pgappforge.widgets.data.spreadsheet import SpreadsheetWidget
     from pgappforge.widgets.data.validation import DataValidationRulesBuilder
-    from pgappforge.widgets.editing.code_editor import CodeEditorWidget
-    from pgappforge.widgets.editing.dbml import DBMLEditorWidget
     from pgappforge.widgets.editing.markdown import MarkdownEditorWidget
-    from pgappforge.widgets.editing.mermaid import MermaidEditorWidget
     from pgappforge.widgets.editing.richtext import RichTextEditorWidget
     from pgappforge.widgets.forms.builder import FormBuilderWidget
-    from pgappforge.widgets.forms.color_picker import ColorPickerWidget
     from pgappforge.widgets.forms.upload import FileUploadFieldWidget
     from pgappforge.widgets.geo.address import AddressAutocompleteWidget
     from pgappforge.widgets.geo.geopoint import GeoPointWidget
@@ -227,7 +215,6 @@ try:
     from pgappforge.widgets.social.chat import ChatMessagingWidget
     from pgappforge.widgets.social.comments import CommentAndLikeWidget
     from pgappforge.widgets.social.follow import FriendFollowWidget
-    from pgappforge.widgets.visualization.gps import GPSTrackerWidget
     from pgappforge.widgets.workflow.designer import WorkflowDesignerWidget
     from pgappforge.widgets.workflow.diagram import WorkflowDiagramWidget
     from pgappforge.widgets.workflow.gantt import GanttChartWidget
@@ -243,6 +230,7 @@ if EXTENDED_WIDGETS_AVAILABLE:
         'AddressAutocompleteWidget',
         'AudioRecordingAndPlaybackWidget',
         'AuditLogViewerWidget',
+        'BarcodeQRScannerWidget',
         'ChatMessagingWidget',
         'CheckBoxWidget',
         'CommentAndLikeWidget',
@@ -295,6 +283,7 @@ if EXTENDED_WIDGETS_AVAILABLE:
 
     _EXTENDED_REGISTRY = {
         'ActivityTimelineWidget': ActivityTimelineWidget,
+        'BarcodeQRScannerWidget': BarcodeQRScannerWidget,
         'AddressAutocompleteWidget': AddressAutocompleteWidget,
         'AudioRecordingAndPlaybackWidget': AudioRecordingAndPlaybackWidget,
         'AuditLogViewerWidget': AuditLogViewerWidget,
@@ -398,8 +387,6 @@ def get_available_widgets():
             'AdvancedChartsWidget': AdvancedChartsWidget,
             'ColorPickerWidget': ColorPickerWidget,
         }
-        if _BARCODE_SCANNER_AVAILABLE:
-            widgets['modular']['BarcodeQRScannerWidget'] = BarcodeQRScannerWidget
 
     if _EXTENDED_REGISTRY:
         # Organised by subpackage
