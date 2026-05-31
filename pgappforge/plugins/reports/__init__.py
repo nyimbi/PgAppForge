@@ -65,6 +65,9 @@ from .models import (
 )
 from .designer import ReportDesignerView
 from .engine import ReportEngine
+from .wizard import ReportWizardView
+from .sql_editor import SqlEditorView
+from .models import ReportDispatch, SavedQuery
 
 log = logging.getLogger(__name__)
 
@@ -313,20 +316,25 @@ class ReportsPlugin(BasePlugin):
 	@property
 	def metadata(self) -> PluginMetadata:
 		return PluginMetadata(
-			name        = "reports",
-			version     = "0.1.0",
+			name        = "reportforge",
+			version     = "1.0.0",
 			description = (
-				"Banded report builder: drag-and-drop designer, "
-				"PDF/XLSX/HTML/CSV output, parameters, grouping."
+				"ReportForge — professional report builder with WYSIWYG designer, "
+				"branding, watermarks, DOCX/PDF/XLSX/CSV export, email dispatch, "
+				"AI text augmentation, business templates (invoice, quote, statement, "
+				"business letter), report generation wizard, and visual SQL editor."
 			),
 			author      = "PgAppForge Contributors",
-			tags        = ["reports", "pdf", "excel", "banded", "designer"],
+			tags        = ["reports", "reportforge", "pdf", "docx", "excel", "banded",
+			               "designer", "invoice", "wizard", "sql-editor", "ai"],
 			priority    = PluginPriority.NORMAL,
 			permissions = [
 				"can_reports_list",
 				"can_reports_run",
 				"can_reports_download",
 				"can_reports_designer",
+				"can_reports_dispatch",
+				"can_access_sql_editor",
 			],
 			safe_mode_compatible = True,
 			example_config       = _DEFAULT_CONFIG,
@@ -353,18 +361,25 @@ class ReportsPlugin(BasePlugin):
 			import openpyxl  # noqa: F401
 		except ImportError:
 			log.warning(
-				"reports plugin: openpyxl not installed — "
+				"reportforge: openpyxl not installed — "
 				"XLSX generation will raise RuntimeError at request time"
 			)
+		try:
+			import docx  # noqa: F401
+		except ImportError:
+			log.info(
+				"reportforge: python-docx not installed — "
+				"DOCX export disabled (pip install python-docx to enable)"
+			)
 
-		log.info("reports plugin: initialized")
+		log.info("ReportForge plugin: initialized")
 
 	# ------------------------------------------------------------------ #
 	# Views                                                               #
 	# ------------------------------------------------------------------ #
 
 	def register_views(self) -> None:
-		category = self.config.get("REPORTS_MENU_CATEGORY", "Reports")
+		category = self.config.get("REPORTS_MENU_CATEGORY", "ReportForge")
 
 		self.add_view(
 			ReportListView,
@@ -373,13 +388,25 @@ class ReportsPlugin(BasePlugin):
 			category = category,
 		)
 		self.add_view(
+			ReportWizardView,
+			"New Report (Wizard)",
+			icon     = "fa-magic",
+			category = category,
+		)
+		self.add_view(
 			ReportDesignerView,
 			"Report Designer",
 			icon     = "fa-pencil-square-o",
 			category = category,
 		)
+		self.add_view(
+			SqlEditorView,
+			"SQL Query Editor",
+			icon     = "fa-database",
+			category = category,
+		)
 		self.add_view_no_menu(ReportPreviewView)
-		log.info("reports plugin: views registered under category %r", category)
+		log.info("ReportForge plugin: views registered under category %r", category)
 
 	# ------------------------------------------------------------------ #
 	# Models                                                              #
@@ -387,7 +414,8 @@ class ReportsPlugin(BasePlugin):
 
 	def register_models(self) -> list:
 		"""Return model classes for Alembic autogenerate discovery."""
-		return [Report, ReportBand, ReportField, ReportParameter]
+		return [Report, ReportBand, ReportField, ReportParameter,
+		        ReportDispatch, SavedQuery]
 
 	# ------------------------------------------------------------------ #
 	# Config schema                                                       #

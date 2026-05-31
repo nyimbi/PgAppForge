@@ -175,6 +175,27 @@ class Report(Model):
 	def __repr__(self) -> str:
 		return f"<Report id={self.id} name={self.name!r}>"
 
+	# ── Branding ──────────────────────────────────────────────────────────────
+	company_name       = Column(String(255),  nullable=True)
+	logo_url           = Column(String(500),  nullable=True)
+	primary_color      = Column(String(16),   nullable=False, default="#003366")
+	secondary_color    = Column(String(16),   nullable=False, default="#666666")
+	watermark_text     = Column(String(255),  nullable=True)
+	watermark_opacity  = Column(Float,        nullable=False, default=0.08)
+	custom_header_html = Column(Text,         nullable=True)
+	custom_footer_html = Column(Text,         nullable=True)
+
+	# ── Template ───────────────────────────────────────────────────────────
+	template_key = Column(String(64), nullable=True)  # "invoice" | "quote" | ...
+
+	# ── Relationships (additional) ─────────────────────────────────────────
+	dispatches = relationship(
+		"ReportDispatch",
+		back_populates="report",
+		cascade="all, delete-orphan",
+		lazy="dynamic",
+	)
+
 	def band_list(self) -> list[ReportBand]:
 		"""Return bands in render order (position ASC)."""
 		return list(self.bands.order_by(ReportBand.position))
@@ -412,6 +433,120 @@ class ReportParameter(Model):
 
 
 # ---------------------------------------------------------------------------
+# ReportDispatch — email / scheduled delivery records
+# ---------------------------------------------------------------------------
+
+class DispatchStatus(str, enum.Enum):
+	PENDING  = "pending"
+	SENT     = "sent"
+	FAILED   = "failed"
+	SCHEDULED = "scheduled"
+
+
+class ReportDispatch(Model):
+	"""
+	An email dispatch job for a report.
+
+	Supports immediate send (status=sent immediately) and scheduled
+	delivery (status=scheduled, scheduled_at set).
+
+	``to_email`` is a comma-separated list of recipient addresses.
+	``params_json`` holds report parameter values for this dispatch.
+	``export_format`` is "pdf" | "docx" | "xlsx" | "csv".
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "report_dispatch"
+	__table_args__ = (
+		Index("ix_report_dispatch_report_id", "report_id"),
+		Index("ix_report_dispatch_status",    "status"),
+	)
+
+	id        = Column(Integer, primary_key=True)
+	report_id = Column(
+		Integer,
+		ForeignKey("report.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+
+	to_email      = Column(Text,        nullable=False)         # comma-separated
+	cc_email      = Column(Text,        nullable=True)
+	subject       = Column(String(500), nullable=False)
+	body_text     = Column(Text,        nullable=True)
+	export_format = Column(String(10),  nullable=False, default="pdf")
+	params_json   = Column(JSONB,       nullable=False, server_default="{}")
+	status        = Column(
+		SAEnum(DispatchStatus, name="report_dispatch_status"),
+		nullable=False,
+		default=DispatchStatus.PENDING,
+	)
+	error_message = Column(Text,        nullable=True)
+	scheduled_at  = Column(DateTime(timezone=True), nullable=True)
+	sent_at       = Column(DateTime(timezone=True), nullable=True)
+	created_by    = Column(Integer,     ForeignKey("ab_user.id"), nullable=True)
+	created_on    = Column(
+		DateTime(timezone=True),
+		default=lambda: datetime.now(timezone.utc),
+		nullable=False,
+	)
+
+	report  = relationship("Report", back_populates="dispatches")
+	creator = relationship("User", foreign_keys=[created_by])
+
+	def __repr__(self) -> str:
+		return (
+			f"<ReportDispatch id={self.id} report_id={self.report_id} "
+			f"status={self.status.value!r} to={self.to_email!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# SavedQuery — user-saved SQL queries for the visual SQL editor
+# ---------------------------------------------------------------------------
+
+class SavedQuery(Model):
+	"""
+	A user-saved SQL query built with the ReportForge visual SQL editor.
+
+	``sql_text`` holds the final SQL string.
+	``query_def`` holds the visual builder definition (tables, columns,
+	joins, filters) so the query can be re-loaded into the builder UI.
+	``is_public`` makes the query visible to all users (read-only).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "reportforge_saved_query"
+	__table_args__ = (
+		Index("ix_reportforge_query_created_by", "created_by"),
+		Index("ix_reportforge_query_is_public",  "is_public"),
+	)
+
+	id          = Column(Integer, primary_key=True)
+	name        = Column(String(255), nullable=False)
+	description = Column(Text,        nullable=True)
+	sql_text    = Column(Text,        nullable=False)
+	query_def   = Column(JSONB,       nullable=False, server_default="{}")
+	is_public   = Column(Boolean,     nullable=False, default=False)
+	created_by  = Column(Integer,     ForeignKey("ab_user.id"), nullable=True)
+	created_on  = Column(
+		DateTime(timezone=True),
+		default=lambda: datetime.now(timezone.utc),
+		nullable=False,
+	)
+	changed_on  = Column(
+		DateTime(timezone=True),
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		nullable=False,
+	)
+
+	creator = relationship("User", foreign_keys=[created_by])
+
+	def __repr__(self) -> str:
+		return f"<SavedQuery id={self.id} name={self.name!r}>"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -421,8 +556,11 @@ __all__ = [
 	"BandType",
 	"FieldType",
 	"ParameterType",
+	"DispatchStatus",
 	"Report",
 	"ReportBand",
 	"ReportField",
 	"ReportParameter",
+	"ReportDispatch",
+	"SavedQuery",
 ]
