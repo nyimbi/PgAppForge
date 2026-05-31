@@ -10,7 +10,7 @@ from markupsafe import Markup, escape
 from wtforms.widgets import Input
 from flask_babel import gettext
 from pgappforge.widgets_postgresql._cdn import JSBARCODE_CDN_URL
-from pgappforge.widgets.media._utils import js_json as _js_json
+from pgappforge.widgets._utils import js_json as _js_json
 
 FORMAT_CONSTRAINTS: dict[str, dict] = {
 	"CODE128":    {"label": "Code 128",   "hint": "Any ASCII text"},

@@ -8,7 +8,7 @@ from markupsafe import Markup, escape
 from wtforms.widgets import Input
 from flask_babel import gettext
 from pgappforge.widgets_postgresql._cdn import QRCODE_CDN_URL, JSQR_CDN_URL
-from pgappforge.widgets.media._utils import js_json as _js_json
+from pgappforge.widgets._utils import js_json as _js_json
 
 
 class QrCodeWidget(Input):
