@@ -131,6 +131,13 @@ class RelationshipInfo:
     cardinality_description: str
     ui_hint: str
 
+    # Constraint metadata
+    constraint_name: str = ""
+    on_delete: str = ""
+    on_update: str = ""
+    deferrable: bool = False
+    nullable: bool = True
+
 @dataclass
 class MasterDetailInfo:
     """Information about master-detail relationship patterns."""
@@ -345,6 +352,9 @@ class EnhancedDatabaseInspector:
                 analysis['tables'][table_name] = table_info
                 analysis['relationships'][table_name] = table_info.relationships
 
+        # Synthesize parent-side ONE_TO_MANY relationships from the reverse-FK index
+        self._synthesize_parent_relationships(analysis)
+
         logger.info(f"Analysis complete. Found {len(analysis['tables'])} tables")
         self._analysis_cache = analysis
         return self._analysis_cache
@@ -372,10 +382,17 @@ class EnhancedDatabaseInspector:
         # Fetch all column metadata once to avoid N+1 per-column inspector calls
         column_meta = {c["name"]: c for c in self.inspector.get_columns(table_name)}
 
+        # Build unique-column set from unique constraints (more reliable than Column.unique)
+        unique_cols: Set[str] = {
+            col
+            for uc in self.inspector.get_unique_constraints(table_name)
+            for col in uc.get("column_names", [])
+        }
+
         # Analyze columns
         columns = []
         for column in table.columns:
-            column_info = self._analyze_column(column, table_name, column_meta)
+            column_info = self._analyze_column(column, table_name, column_meta, unique_cols)
             columns.append(column_info)
 
         # Analyze relationships
@@ -414,7 +431,8 @@ class EnhancedDatabaseInspector:
         return result
 
     def _analyze_column(self, column: Column, table_name: str,
-                        column_meta: Optional[Dict[str, Any]] = None) -> ColumnInfo:
+                        column_meta: Optional[Dict[str, Any]] = None,
+                        unique_cols: Optional[Set[str]] = None) -> ColumnInfo:
         """Analyze a single column with enhanced metadata."""
         sql_type = column.type
         type_str = str(sql_type)
@@ -453,14 +471,14 @@ class EnhancedDatabaseInspector:
             nullable=column.nullable,
             primary_key=column.primary_key,
             foreign_key=bool(column.foreign_keys),
-            unique=column.unique if hasattr(column, 'unique') else False,
+            unique=(column.name in unique_cols) if unique_cols is not None else (column.unique if hasattr(column, 'unique') else False),
             default=column.default,
             comment=comment,
             length=length,
             precision=precision,
             scale=scale,
             enum_values=enum_values,
-            is_identity=getattr(column_data, 'identity', False),
+            is_identity=column_data.get('identity', False) if isinstance(column_data, dict) else getattr(column_data, 'identity', False),
             autoincrement=column.autoincrement,
             category=category,
             display_name=display_name,
@@ -511,6 +529,23 @@ class EnhancedDatabaseInspector:
         cardinality_desc = self._get_cardinality_description(rel_type)
         ui_hint = self._get_relationship_ui_hint(rel_type)
 
+        # Extract constraint metadata from FK dict
+        fk_options = fk.get("options", {}) or {}
+        constraint_name = fk.get("name", "") or ""
+        on_delete = fk_options.get("ondelete", "") or ""
+        on_update = fk_options.get("onupdate", "") or ""
+        deferrable = bool(fk_options.get("deferrable", False))
+
+        # Determine nullable: FK is nullable if ANY constrained column is nullable
+        try:
+            col_meta = {c["name"]: c for c in self.inspector.get_columns(table_name)}
+            fk_nullable = any(
+                col_meta.get(col_name, {}).get("nullable", True)
+                for col_name in constrained_columns
+            )
+        except Exception:
+            fk_nullable = True
+
         return RelationshipInfo(
             name=rel_name,
             type=rel_type,
@@ -525,7 +560,12 @@ class EnhancedDatabaseInspector:
             display_name=display_name,
             description=description,
             cardinality_description=cardinality_desc,
-            ui_hint=ui_hint
+            ui_hint=ui_hint,
+            constraint_name=constraint_name,
+            on_delete=on_delete,
+            on_update=on_update,
+            deferrable=deferrable,
+            nullable=fk_nullable,
         )
 
     def _identify_association_tables(self):
@@ -535,27 +575,38 @@ class EnhancedDatabaseInspector:
                 self._association_tables.add(table_name)
 
     def _is_association_table(self, table_name: str) -> bool:
-        """Determine if a table is an association table."""
-        # Check naming convention
-        if table_name.endswith('_assoc') or '_to_' in table_name:
-            return True
+        """Determine if a table is an association/junction table using structural criteria only."""
+        fks = self.inspector.get_foreign_keys(table_name)
 
-        foreign_keys = self.inspector.get_foreign_keys(table_name)
-        columns = self.inspector.get_columns(table_name)
-
-        # Must have at least 2 foreign keys
-        if len(foreign_keys) < 2:
+        # Must have EXACTLY 2 foreign keys
+        if len(fks) != 2:
             return False
 
-        # Check if mostly foreign key columns
-        fk_columns = {col for fk in foreign_keys for col in fk['constrained_columns']}
-        non_fk_columns = [col for col in columns if col['name'] not in fk_columns]
+        # Both FKs must reference DISTINCT tables
+        referred = {fk.get("referred_table") for fk in fks}
+        if len(referred) < 2:
+            return False
 
-        # Allow for id, timestamps, and a few metadata columns
-        allowed_extra = {'id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'active'}
-        extra_columns = [col for col in non_fk_columns if col['name'] not in allowed_extra]
+        # FK columns should form most/all of the PK
+        fk_cols = {col for fk in fks for col in fk.get("constrained_columns", [])}
+        try:
+            pk_cols = set(self.inspector.get_pk_constraint(table_name).get("constrained_columns", []))
+        except Exception:
+            pk_cols = set()
 
-        return len(extra_columns) <= 2
+        if pk_cols:
+            non_fk_pk = pk_cols - fk_cols
+            if len(non_fk_pk) > 1:
+                return False
+
+        # Count non-FK, non-audit columns
+        all_cols = {c["name"] for c in self.inspector.get_columns(table_name)}
+        audit_cols = {"id", "created_at", "created_on", "updated_at", "changed_on", "deleted_at"}
+        non_junction_cols = all_cols - fk_cols - audit_cols
+        if len(non_junction_cols) > 3:
+            return False
+
+        return True
 
     def _determine_relationship_type(self, table_name: str, fk: Dict[str, Any]) -> RelationshipType:
         """Determine the type of relationship based on constraints and structure."""
@@ -987,7 +1038,7 @@ class EnhancedDatabaseInspector:
         """Generate a meaningful relationship name."""
         if len(constrained_columns) == 1:
             col_name = constrained_columns[0]
-            base_name = col_name.replace('_id', '').replace('_fk', '')
+            base_name = re.sub(r'(_id|_fk)$', '', col_name)
 
             if base_name == referred_table.lower():
                 base_name = referred_table.lower()
@@ -998,7 +1049,7 @@ class EnhancedDatabaseInspector:
                 return base_name
         else:
             # Multiple columns - create composite name
-            return '_'.join(constrained_columns).replace('_id', '').replace('_fk', '')
+            return re.sub(r'(_id|_fk)$', '', '_'.join(constrained_columns))
 
     def _generate_back_populates_name(self, table_name: str, referred_table: str, rel_type: RelationshipType) -> str:
         """Generate the back_populates name for relationships."""
@@ -1092,6 +1143,75 @@ class EnhancedDatabaseInspector:
                 return 'StringField'
         else:
             return 'StringField'
+
+    def _synthesize_parent_relationships(self, analysis: Dict[str, Any]) -> None:
+        """
+        Post-processing step: add ONE_TO_MANY entries to parent tables.
+
+        MANY_TO_ONE is emitted from the child side during FK traversal but
+        ONE_TO_MANY is never emitted because parents have no FK columns.
+        This method uses the reverse-FK index (built from child MANY_TO_ONE
+        relationships) to synthesize the missing parent-side entries and
+        appends them to both the TableInfo.relationships list and the
+        analysis['relationships'] dict.
+        """
+        idx = self._build_reverse_fk_index()
+
+        for parent_name, children in idx.items():
+            if parent_name not in analysis['tables']:
+                continue
+
+            parent_info: TableInfo = analysis['tables'][parent_name]
+
+            # Collect PK columns for the parent
+            try:
+                pk_cols = list(
+                    self.inspector.get_pk_constraint(parent_name).get("constrained_columns", [])
+                )
+            except Exception:
+                pk_cols = []
+
+            for child_name, child_rel in children:
+                # Derive relationship_name: plural of child table
+                rel_name = p.plural(child_name.lower())
+
+                # back_populates: what the child calls the parent
+                # child_rel.name is the FK-derived name on the child side (MANY_TO_ONE)
+                back_pop = child_rel.name
+
+                display_name = self._generate_relationship_display_name(rel_name, RelationshipType.ONE_TO_MANY)
+                description = self._generate_relationship_description(
+                    parent_name, child_name, RelationshipType.ONE_TO_MANY
+                )
+
+                parent_rel = RelationshipInfo(
+                    name=rel_name,
+                    type=RelationshipType.ONE_TO_MANY,
+                    local_table=parent_name,
+                    remote_table=child_name,
+                    local_columns=pk_cols,
+                    remote_columns=child_rel.local_columns,  # FK cols on child
+                    association_table=None,
+                    back_populates=back_pop,
+                    cascade_options=self._determine_cascade_options(RelationshipType.ONE_TO_MANY),
+                    lazy_loading=self._determine_lazy_loading(RelationshipType.ONE_TO_MANY),
+                    display_name=display_name,
+                    description=description,
+                    cardinality_description=self._get_cardinality_description(RelationshipType.ONE_TO_MANY),
+                    ui_hint=self._get_relationship_ui_hint(RelationshipType.ONE_TO_MANY),
+                    # Constraint metadata not directly available from parent side
+                    constraint_name=child_rel.constraint_name,
+                    on_delete=child_rel.on_delete,
+                    on_update=child_rel.on_update,
+                    deferrable=child_rel.deferrable,
+                    nullable=child_rel.nullable,
+                )
+
+                # Avoid duplicates (idempotent if called multiple times)
+                existing_names = {r.name for r in parent_info.relationships}
+                if rel_name not in existing_names:
+                    parent_info.relationships.append(parent_rel)
+                    analysis['relationships'].setdefault(parent_name, []).append(parent_rel)
 
     def _build_reverse_fk_index(self) -> Dict[str, List[Tuple[str, RelationshipInfo]]]:
         """Build reverse FK lookup once in O(T); eliminates O(T^2) master-detail scan."""

@@ -147,11 +147,13 @@ class EnhancedModelGenerator:
         """
         template = self.jinja_env.get_template('model.j2')
 
+        class_name = self._to_pascal_case(table_info.name)
+
         # Prepare template context
         context = {
             'table_info': table_info,
             'config': self.config,
-            'columns': self._process_columns(table_info.columns),
+            'columns': self._process_columns(table_info.columns, table_info.relationships),
             'relationships': self._process_relationships(table_info.relationships),
             'constraints': self._process_constraints(table_info.constraints),
             'indexes': self._process_indexes(table_info.indexes),
@@ -159,10 +161,11 @@ class EnhancedModelGenerator:
             'event_listeners': self._generate_event_listeners(table_info),
             'validation_methods': self._generate_validation_methods(table_info),
             'utility_methods': self._generate_utility_methods(table_info),
-            'class_name': self._to_pascal_case(table_info.name),
+            'class_name': class_name,
             'base_class': self.config.custom_base_class or 'Model',
             'timestamp': datetime.now().isoformat(),
-            'security_settings': self._generate_security_settings(table_info)
+            'security_settings': self._generate_security_settings(table_info),
+            'repr_method': self._generate_repr_method(table_info),
         }
 
         return template.render(**context)
@@ -199,13 +202,17 @@ class EnhancedModelGenerator:
         }
         return template.render(**context)
 
-    def _process_columns(self, columns: List[ColumnInfo]) -> List[Dict[str, Any]]:
+    def _process_columns(
+        self,
+        columns: List[ColumnInfo],
+        relationships: Optional[List[RelationshipInfo]] = None,
+    ) -> List[Dict[str, Any]]:
         """Process columns for template rendering."""
         processed = []
 
         for column in columns:
             sql_type = self._get_sqlalchemy_type(column)
-            constraints = self._get_column_constraints(column)
+            constraints = self._get_column_constraints(column, relationships or [])
             python_type = self._get_python_type(column)
 
             # Pre-compute the full definition string so the template avoids
@@ -248,7 +255,7 @@ class EnhancedModelGenerator:
                 'remote_columns': rel.remote_columns,
                 'association_table': rel.association_table,
                 'back_populates': rel.back_populates,
-                'cascade': ', '.join(f"'{c}'" for c in rel.cascade_options),
+                'cascade': ', '.join(rel.cascade_options),
                 'lazy': rel.lazy_loading,
                 'display_name': rel.display_name,
                 'description': rel.description,
@@ -259,11 +266,44 @@ class EnhancedModelGenerator:
         return processed
 
     def _process_constraints(self, constraints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process constraints for template rendering."""
+        """Process constraints for template rendering.
+
+        Returns dicts with 'expr' — the SQLAlchemy constructor call string — ready
+        to be placed inside __table_args__ = (..., {}) tuples in the template.
+        """
         processed = []
         for constraint in constraints:
-            if constraint['type'] not in ['primary_key', 'foreign_key']:  # These are handled elsewhere
-                processed.append(constraint)
+            ctype = constraint.get('type', '')
+            if ctype in ('primary_key', 'foreign_key'):
+                continue  # Handled on the column definition
+
+            name = constraint.get('name', '')
+            cols = constraint.get('columns', [])
+            name_arg = f", name='{name}'" if name else ''
+
+            if ctype == 'unique':
+                col_args = ', '.join(f"'{c}'" for c in cols)
+                processed.append({
+                    **constraint,
+                    'expr': f"UniqueConstraint({col_args}{name_arg})",
+                })
+            elif ctype == 'check':
+                sqltext = constraint.get('sqltext', constraint.get('expression', ''))
+                processed.append({
+                    **constraint,
+                    'expr': f"CheckConstraint('{sqltext}'{name_arg})",
+                })
+            elif ctype == 'index':
+                col_args = ', '.join(f"'{c}'" for c in cols)
+                unique_arg = ', unique=True' if constraint.get('unique') else ''
+                processed.append({
+                    **constraint,
+                    'expr': f"Index('{name}', {col_args}{unique_arg})",
+                })
+            else:
+                # Unknown constraint type — pass through raw
+                processed.append({**constraint, 'expr': ''})
+
         return processed
 
     def _process_indexes(self, indexes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -313,26 +353,35 @@ class EnhancedModelGenerator:
         # Add timestamp listeners if timestamps are enabled
         if self.config.include_timestamps:
             column_names = [col.name for col in table_info.columns]
-            if 'created_at' in column_names or 'updated_at' in column_names:
+            has_created = 'created_at' in column_names or 'created_on' in column_names
+            has_updated = 'updated_at' in column_names or 'changed_on' in column_names
+            created_field = 'created_at' if 'created_at' in column_names else 'created_on'
+            updated_field = 'updated_at' if 'updated_at' in column_names else 'changed_on'
+
+            if has_created or has_updated:
+                insert_lines = ['    """Set creation timestamp."""']
+                if has_created:
+                    insert_lines.append(f'    target.{created_field} = datetime.now(tz=timezone.utc)')
+                if has_updated:
+                    insert_lines.append(f'    target.{updated_field} = datetime.now(tz=timezone.utc)')
                 listeners.append({
                     'event': 'before_insert',
-                    'code': '''
-@event.listens_for({class_name}, 'before_insert')
-def before_insert_{table_name}(mapper, connection, target):
-    """Set creation timestamp."""
-    target.created_at = datetime.now(tz=timezone.utc)
-    target.updated_at = datetime.now(tz=timezone.utc)
-                    '''.strip()
+                    'code': (
+                        '@event.listens_for({class_name}, \'before_insert\')\n'
+                        'def before_insert_{table_name}(mapper, connection, target):\n'
+                        + '\n'.join(insert_lines)
+                    )
                 })
 
+            if has_updated:
                 listeners.append({
                     'event': 'before_update',
-                    'code': '''
-@event.listens_for({class_name}, 'before_update')
-def before_update_{table_name}(mapper, connection, target):
-    """Update modification timestamp."""
-    target.updated_at = datetime.now(tz=timezone.utc)
-                    '''.strip()
+                    'code': (
+                        '@event.listens_for({class_name}, \'before_update\')\n'
+                        'def before_update_{table_name}(mapper, connection, target):\n'
+                        '    """Update modification timestamp."""\n'
+                        f'    target.{updated_field} = datetime.now(tz=timezone.utc)'
+                    )
                 })
 
         return listeners
@@ -545,7 +594,9 @@ def before_update_{table_name}(mapper, connection, target):
         python_type = type_mapping.get(column.category, 'str')
         return f'Optional[{python_type}]' if column.nullable else python_type
 
-    def _get_column_constraints(self, column: ColumnInfo) -> List[str]:
+    def _get_column_constraints(
+        self, column: ColumnInfo, relationships: Optional[List[RelationshipInfo]] = None
+    ) -> List[str]:
         """Get column constraints."""
         constraints = []
 
@@ -553,8 +604,9 @@ def before_update_{table_name}(mapper, connection, target):
             constraints.append('primary_key=True')
 
         if column.foreign_key:
-            # Foreign key constraint will be handled separately
-            pass
+            fk_str = self._get_foreign_key_str(column.name, relationships or [])
+            if fk_str:
+                constraints.insert(0, fk_str)
 
         if not column.nullable:
             constraints.append('nullable=False')
@@ -571,6 +623,42 @@ def before_update_{table_name}(mapper, connection, target):
             constraints.append(f'comment="{column.comment}"')
 
         return constraints
+
+    def _get_foreign_key_str(
+        self, column_name: str, relationships: List[RelationshipInfo]
+    ) -> str:
+        """Return ForeignKey('table.col') constraint string for a FK column, or '' if not found."""
+        for rel in relationships:
+            if column_name in rel.local_columns:
+                idx = rel.local_columns.index(column_name)
+                if idx < len(rel.remote_columns):
+                    remote_col = rel.remote_columns[idx]
+                    return f"ForeignKey('{rel.remote_table}.{remote_col}')"
+        return ''
+
+    def _get_repr_columns(self, columns: List[ColumnInfo], max_cols: int = 2) -> List[ColumnInfo]:
+        """Select meaningful columns for __repr__."""
+        PREFERRED = {'name', 'title', 'email', 'code', 'label', 'display_name', 'slug', 'username', 'description'}
+        preferred = [c for c in columns if c.name.lower() in PREFERRED][:max_cols]
+        if preferred:
+            return preferred
+        audit = {'created_on', 'changed_on', 'created_at', 'updated_at'}
+        text_cols = [
+            c for c in columns
+            if not c.primary_key and not c.foreign_key
+            and c.name not in audit
+            and c.category in ('TEXT', 'NUMERIC')
+        ][:max_cols]
+        return text_cols or [c for c in columns if c.primary_key][:1]
+
+    def _generate_repr_method(self, table_info: TableInfo) -> str:
+        """Generate __repr__ using meaningful columns."""
+        cols = self._get_repr_columns(table_info.columns)
+        if not cols:
+            return f"    def __repr__(self):\n        return f'<{self._to_pascal_case(table_info.name)} {{self.id!r}}>'"
+        parts = ' '.join(f'{c.name}={{self.{c.name}!r}}' for c in cols)
+        class_name = self._to_pascal_case(table_info.name)
+        return f"    def __repr__(self):\n        return f'<{class_name} {parts}>'"
 
     def _format_default_value(self, default_value: Any) -> str:
         """Format default value for SQLAlchemy."""
@@ -608,9 +696,9 @@ def before_update_{table_name}(mapper, connection, target):
         for block in gen_model_header():
             self.import_statements.add(block.strip())
 
-        # Add Pydantic if requested
+        # Add Pydantic v2 if requested
         if self.config.generate_pydantic:
-            self.import_statements.add('from pydantic import BaseModel, Field, validator')
+            self.import_statements.add('from pydantic import BaseModel, Field, field_validator, ConfigDict')
         if self.config.use_dataclasses:
             self.import_statements.add('from dataclasses import dataclass')
 

@@ -275,9 +275,9 @@ class BeautifulViewGenerator:
         template = self.jinja_env.from_string(template_str)
 
         # Process columns for form widgets
-        form_columns = self._process_form_columns(table_info.columns)
-        list_columns = self._get_list_columns(table_info.columns)
-        show_columns = self._get_show_columns(table_info.columns)
+        form_columns = self._process_form_columns(table_info.columns, table_info.relationships)
+        list_columns = self._get_list_columns(table_info.columns, table_info.relationships)
+        show_columns = self._get_show_columns(table_info.columns, table_info.relationships)
         search_columns = self._get_search_columns(table_info.columns)
 
         # Generate fieldsets for better form organization
@@ -553,23 +553,54 @@ class BeautifulViewGenerator:
             model_name=self._to_pascal_case(table_info.name)
         )
 
-    def _process_form_columns(self, columns: List[ColumnInfo]) -> List[Dict[str, Any]]:
-        """Process columns for form display with modern widgets."""
+    def _process_form_columns(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo] = None) -> List[Dict[str, Any]]:
+        """Process columns for form display with modern widgets.
+
+        FK columns are omitted in favour of their relationship attribute name.
+        M2M relationships are appended so FAB renders them as MultipleSelectField.
+        """
+        # Build set of FK column names that have a relationship mapping
+        fk_cols_with_rel: set = set()
+        if relationships:
+            for rel in relationships:
+                for local_col in (rel.local_columns or []):
+                    fk_cols_with_rel.add(local_col)
+
         form_columns = []
 
         for column in columns:
-            if not column.primary_key:  # Skip primary keys in forms
-                form_col = {
-                    'name': column.name,
-                    'display_name': column.display_name,
-                    'description': column.description,
-                    'widget': self._get_modern_widget(column),
-                    'validators': column.validation_rules,
-                    'required': not column.nullable,
-                    'sensitive': self._is_sensitive_field(column.name),
-                    'category': column.category.value
-                }
-                form_columns.append(form_col)
+            if column.primary_key:
+                continue
+            # Skip bare FK columns — the relationship attribute is added below
+            if column.name in fk_cols_with_rel:
+                continue
+            form_col = {
+                'name': column.name,
+                'display_name': column.display_name,
+                'description': column.description,
+                'widget': self._get_modern_widget(column),
+                'validators': column.validation_rules,
+                'required': not column.nullable,
+                'sensitive': self._is_sensitive_field(column.name),
+                'category': column.category.value
+            }
+            form_columns.append(form_col)
+
+        # Append M2M relationship attributes so FAB renders MultipleSelectField
+        if relationships:
+            for rel in relationships:
+                rel_type = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+                if rel_type.upper() in ('MANY_TO_MANY', 'M2M'):
+                    form_columns.append({
+                        'name': rel.name,
+                        'display_name': rel.display_name or rel.name.replace('_', ' ').title(),
+                        'description': '',
+                        'widget': {'type': 'Select2ManyWidget', 'config': {}},
+                        'validators': [],
+                        'required': False,
+                        'sensitive': False,
+                        'category': 'relationship'
+                    })
 
         return form_columns
 
@@ -759,29 +790,60 @@ class BeautifulViewGenerator:
                              col.name not in ['created_at', 'updated_at', 'created_by', 'updated_by']]
         return len(non_system_columns) > 8
 
-    def _get_list_columns(self, columns: List[ColumnInfo]) -> List[str]:
-        """Get columns to display in list view."""
-        list_cols = []
+    def _get_list_columns(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo] = None) -> List[str]:
+        """Get columns to display in list view.
 
-        # Add name/title columns first
+        FK columns are replaced with their relationship attribute name so that
+        ModelView renders __str__ of the related object instead of a raw integer.
+        """
+        # Build mapping: local_column_name -> relationship_name
+        fk_to_rel: Dict[str, str] = {}
+        if relationships:
+            for rel in relationships:
+                for local_col in (rel.local_columns or []):
+                    fk_to_rel[local_col] = rel.name
+
+        list_cols: List[str] = []
+
+        # Add name/title columns first (substitute FK cols with rel name)
         for col in columns:
             if any(word in col.name.lower() for word in ['name', 'title', 'email']):
-                list_cols.append(col.name)
+                effective = fk_to_rel.get(col.name, col.name)
+                if effective not in list_cols:
+                    list_cols.append(effective)
 
-        # Add other important columns
+        # Add other important columns (substitute FK cols with rel name)
         for col in columns:
             if (not col.primary_key and
-                col.name not in list_cols and
                 len(list_cols) < 6 and
                 col.category not in [ColumnType.BINARY, ColumnType.JSON]):
-                list_cols.append(col.name)
+                effective = fk_to_rel.get(col.name, col.name)
+                if effective not in list_cols:
+                    list_cols.append(effective)
 
         return list_cols
 
-    def _get_show_columns(self, columns: List[ColumnInfo]) -> List[str]:
-        """Get columns to display in show view."""
-        return [col.name for col in columns
-                if col.category != ColumnType.BINARY]  # Exclude binary fields
+    def _get_show_columns(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo] = None) -> List[str]:
+        """Get columns to display in show view.
+
+        FK columns are replaced with their relationship attribute name.
+        """
+        fk_to_rel: Dict[str, str] = {}
+        if relationships:
+            for rel in relationships:
+                for local_col in (rel.local_columns or []):
+                    fk_to_rel[local_col] = rel.name
+
+        result: List[str] = []
+        seen: set = set()
+        for col in columns:
+            if col.category == ColumnType.BINARY:
+                continue
+            effective = fk_to_rel.get(col.name, col.name)
+            if effective not in seen:
+                seen.add(effective)
+                result.append(effective)
+        return result
 
     def _get_search_columns(self, columns: List[ColumnInfo]) -> List[str]:
         """Get searchable columns."""
@@ -870,9 +932,27 @@ Features: Modern widgets, responsive design, security controls
 
 from pgappforge import ModelView
 from pgappforge.models.sqla.interface import SQLAInterface
-from pgappforge.widgets import BS3TextFieldWidget, BS3TextAreaFieldWidget, Select2Widget  # noqa: F401
+try:
+    from pgappforge.widgets import (
+        BS3TextFieldWidget, BS3TextAreaFieldWidget,
+        Select2Widget, Select2AJAXWidget, Select2ManyWidget,
+        DatePickerWidget, DateTimePickerWidget,
+    )
+except ImportError:
+    # Fallback: import only what is available
+    from pgappforge.widgets import BS3TextFieldWidget  # noqa: F401
+    BS3TextAreaFieldWidget = BS3TextFieldWidget
+    Select2Widget = BS3TextFieldWidget
+    Select2AJAXWidget = BS3TextFieldWidget
+    Select2ManyWidget = BS3TextFieldWidget
+    DatePickerWidget = BS3TextFieldWidget
+    DateTimePickerWidget = BS3TextFieldWidget
 from flask_babel import lazy_gettext as _
 from wtforms.validators import {% for validator in validators %}{{ validator }}{% if not loop.last %}, {% endif %}{% endfor %}
+try:
+    from pgappforge.models.sqla.filters import FilterStartsWith
+except ImportError:
+    FilterStartsWith = None
 
 from ..models import {{ model_name }}
 
@@ -923,12 +1003,16 @@ class {{ class_name }}(ModelView):
     {% endfor %}
 
     # Labels and descriptions
-    {% for column in form_columns %}
-    label_columns = {**getattr(label_columns, 'copy', lambda: {})(),
-                    '{{ column.name }}': _('{{ column.display_name }}')}
-    description_columns = {**getattr(description_columns, 'copy', lambda: {})(),
-                          '{{ column.name }}': _('{{ column.description }}')}
-    {% endfor %}
+    label_columns = {
+        {% for column in form_columns %}
+        '{{ column.name }}': _('{{ column.display_name }}'),
+        {% endfor %}
+    }
+    description_columns = {
+        {% for column in form_columns %}{% if column.description %}
+        '{{ column.name }}': _('{{ column.description }}'),
+        {% endif %}{% endfor %}
+    }
 
     {% if config.performance_optimizations %}
     # Performance settings
@@ -943,13 +1027,15 @@ class {{ class_name }}(ModelView):
     export_types = ['csv', 'xlsx', 'pdf']
     {% endif %}
 
-    {% if config.enable_search %}
-    # Advanced search
+    {% if config.enable_search and relationships %}
+    # Advanced search — uses relationship attribute name and first text column of related table
+    {% if FilterStartsWith %}
     search_form_query_rel_fields = {
         {% for rel in relationships %}
         '{{ rel.name }}': [['name', FilterStartsWith, '']],
         {% endfor %}
     }
+    {% endif %}
     {% endif %}
 
     {% if security_settings and security_settings.requires_auth %}
@@ -967,14 +1053,6 @@ class {{ class_name }}(ModelView):
         # Add any security checks here
         pass
     {% endif %}
-    {% endif %}
-
-    {% if config.responsive_design %}
-    # Responsive design configuration
-    list_template = 'appbuilder/general/model/list_responsive.html'
-    show_template = 'appbuilder/general/model/show_responsive.html'
-    add_template = 'appbuilder/general/model/add_responsive.html'
-    edit_template = 'appbuilder/general/model/edit_responsive.html'
     {% endif %}
         '''.strip()
 
@@ -3087,10 +3165,6 @@ class {{ master_detail_class_name }}(ModelView):
     # Search and filters
     search_columns = {{ pattern.parent_display_fields[:3] }}
     
-    # Inline configuration
-    inline_models = [{{ child_class_name }}]
-    inline_form_class = {{ inline_formset_class }}
-    
     # UI Configuration
     {% if pattern.child_form_layout == 'accordion' %}
     edit_template = 'appbuilder/general/model/edit_master_detail_accordion.html'
@@ -3177,9 +3251,7 @@ class {{ master_detail_class_name }}(ModelView):
     def _handle_master_detail_add(self):
         """Handle adding master record with child records."""
         try:
-            # Start transaction
             session = self.datamodel.session
-            session.begin()
             
             # Create master record
             master_form = self._get_add_form()
@@ -3224,7 +3296,6 @@ class {{ master_detail_class_name }}(ModelView):
         """Handle editing master record with child records."""
         try:
             session = self.datamodel.session
-            session.begin()
             
             # Update master record
             master_form = self._get_edit_form()

@@ -859,37 +859,46 @@ export default function MFAScreen() {
 
 		stat_queries = ""
 		stat_cards = ""
+		refetch_calls = []
 		for t in tables[:6]:
 			camel = _camel(t)
 			label = _label(t)
+			kebab = _kebab(t)
 			stat_queries += (
-				f"  const {camel}Count = useQuery({{\n"
+				f"  const {{ data: {camel}CountData, isFetching: {camel}CountFetching, refetch: refetch{_pascal(t)}Count }} = useQuery({{\n"
 				f"    queryKey: ['{t}', 'count'],\n"
 				f"    queryFn: () => apiClient.get('/api/v1/{t}?page_size=1').then(r => r.data.count ?? 0),\n"
 				f"  }});\n"
 			)
+			refetch_calls.append(f"refetch{_pascal(t)}Count()")
 			stat_cards += (
-				f"          <View key=\"{t}\" className=\"bg-white dark:bg-gray-800 rounded-2xl p-4 flex-1 min-w-[140px] shadow-sm\">\n"
+				f"          <Pressable key=\"{t}\" onPress={{() => router.push('/(app)/{kebab}/' as never)}}\n"
+				f"            className=\"bg-white dark:bg-gray-800 rounded-2xl p-4 flex-1 min-w-[140px] shadow-sm active:opacity-70\">\n"
 				f"            <Text className=\"text-3xl font-bold text-primary-500\">"
-				f"{{String({camel}Count.data ?? '—')}}</Text>\n"
+				f"{{String({camel}CountData ?? '—')}}</Text>\n"
 				f"            <Text className=\"text-sm text-gray-500 mt-1\">{label}</Text>\n"
-				f"          </View>\n"
+				f"          </Pressable>\n"
 			)
 
+		refetch_all = "() => Promise.all([" + ", ".join(refetch_calls) + "].map(fn => fn))" if refetch_calls else "() => {}"
+
 		return (
-			"import { ScrollView, View, Text, RefreshControl } from 'react-native';\n"
+			"import { ScrollView, View, Text, RefreshControl, Pressable } from 'react-native';\n"
 			"import { useQuery } from '@tanstack/react-query';\n"
+			"import { useRouter } from 'expo-router';\n"
 			"import { apiClient } from '@lib/api/client';\n"
 			"import { Skeleton } from '@components/ui/Skeleton';\n\n"
 			"export default function Dashboard() {\n"
+			"  const router = useRouter();\n"
 			+ stat_queries +
 			"\n"
-			"  const refreshing = [" + ", ".join(f"{_camel(t)}Count" for t in tables[:6]) + "].some(q => q.isFetching);\n"
+			"  const refreshing = [" + ", ".join(f"{_camel(t)}CountFetching" for t in tables[:6]) + "].some(Boolean);\n"
+			"  const handleRefresh = () => { " + "; ".join(f"refetch{_pascal(t)}Count()" for t in tables[:6]) + "; };\n"
 			"\n"
 			"  return (\n"
 			"    <ScrollView\n"
 			"      className=\"flex-1 bg-gray-50 dark:bg-gray-900\"\n"
-			"      refreshControl={<RefreshControl refreshing={refreshing} />}\n"
+			"      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}\n"
 			"    >\n"
 			"      <View className=\"px-4 pt-6 pb-4\">\n"
 			"        <Text className=\"text-2xl font-bold text-gray-900 dark:text-white\">Dashboard</Text>\n"
@@ -990,11 +999,19 @@ export default function MFAScreen() {
 				}
 		return fk_map
 
+	_AUDIT_COLS: frozenset = frozenset({
+		'created_on', 'changed_on', 'created_at', 'updated_at',
+		'created_by_fk', 'changed_by_fk', 'deleted_at', 'deleted_on',
+	})
+
 	def _get_display_cols(self, tinfo: TableInfo, max_cols: int = 3) -> list:
-		"""Return first N non-PK, non-FK display columns."""
+		"""Return first N non-PK, non-FK, non-audit, non-complex display columns."""
 		return [
 			c for c in tinfo.columns
-			if not c.primary_key and not c.foreign_key
+			if not c.primary_key
+			and not c.foreign_key
+			and c.name not in self._AUDIT_COLS
+			and c.category not in (ColumnType.JSONB, ColumnType.JSON, ColumnType.ARRAY)
 		][:max_cols]
 
 	def _gen_list_screen(self, tinfo: TableInfo) -> str:
@@ -1085,7 +1102,7 @@ export default function MFAScreen() {
 			f"        renderItem={{({{ item }}) => (\n"
 			f"          <RecordCard\n"
 			f"            title={{String(item.{title_col} ?? '')}}\n"
-			f"            subtitle={{String(item.{display[1].name if len(display) > 1 else 'id'} ?? '')}}\n"
+			+ (f"            subtitle={{String(item.{display[1].name} ?? '')}}\n" if len(display) > 1 else "")
 			+ fk_meta_prop
 			+ f"            onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/${{item.id}}` as never)}}\n"
 			f"            onEdit={{() => router.push(`/(app)/{_kebab(tinfo.name)}/edit/${{item.id}}` as never)}}\n"
@@ -1139,7 +1156,7 @@ export default function MFAScreen() {
 			fk_queries += (
 				f"  const {{ data: fk_{fk['camel']} }} = useQuery({{\n"
 				f"    queryKey: ['{fk['remote']}', record?.{col_name}],\n"
-				f"    queryFn: () => get{fk['pascal']}(Number(record!.{col_name})),\n"
+				f"    queryFn: () => get{fk['pascal']}(record!.{col_name} as string | number),\n"
 				f"    enabled: !!record?.{col_name},\n"
 				f"  }});\n"
 			)
@@ -1153,7 +1170,7 @@ export default function MFAScreen() {
 			child_queries += (
 				f"  const {{ data: {child['camel']}Items }} = useQuery({{\n"
 				f"    queryKey: ['{child['table']}', '{tinfo.name}', id],\n"
-				f"    queryFn: () => list{child['pascal']}({{ page_size: 50 }}).then(r => (r.result as unknown as Record<string,unknown>[] ?? []).filter((x) => String(x['{child['col']}']) === String(id))),\n"
+				f"    queryFn: () => list{child['pascal']}({{ page_size: 100, {child['col']}: String(id) }}).then(r => r.result as unknown as Record<string,unknown>[] ?? []),\n"
 				f"    enabled: !!id,\n"
 				f"  }});\n"
 			)
@@ -1216,7 +1233,7 @@ export default function MFAScreen() {
 			+ f"  const qc = useQueryClient();\n\n"
 			+ f"  const {{ data: record, isLoading }} = useQuery({{\n"
 			+ f"    queryKey: ['{tinfo.name}', id],\n"
-			+ f"    queryFn: () => get{m}(Number(id)),\n"
+			+ f"    queryFn: () => get{m}(id),\n"
 			+ f"    enabled: !!id,\n"
 			+ f"  }});\n\n"
 			+ fk_queries
@@ -1262,7 +1279,7 @@ export default function MFAScreen() {
 		action = "update" if edit else "create"
 		screen_name = m + ("Edit" if edit else "New") + "Screen"
 		title_text = ("Edit " + label) if edit else ("New " + label)
-		mut_args = "(Number(id), data)" if edit else "(data)"
+		mut_args = "(id, data)" if edit else "(data)"
 		extra_params_import = ", useLocalSearchParams" if edit else ""
 
 		_skip = {"created_on", "changed_on", "created_by_fk", "changed_by_fk"}
@@ -1294,8 +1311,14 @@ export default function MFAScreen() {
 		}
 
 		field_blocks = []
-		for col in form_cols[:12]:
+		for col_idx, col in enumerate(form_cols):
 			col_label = _label(col.name)
+
+			# Section divider after 8th field for long forms
+			if col_idx == 8 and len(form_cols) > 8:
+				field_blocks.append(
+					"          <Text className=\"text-sm font-semibold text-gray-500 mt-4 mb-2\">Additional Fields</Text>\n"
+				)
 
 			# FK column → SelectField with related records
 			if col.foreign_key and col.name in fk_map:
@@ -1389,6 +1412,22 @@ export default function MFAScreen() {
 			cast = _CASTS.get(field_comp, "as string")
 			# TSVectorField and VectorField are read-only — omit onChange/error/required
 			readonly = field_comp in ("TSVectorField", "VectorField")
+
+			# Semantic keyboard/input props for TextField
+			extra_field_props = ""
+			if field_comp == "TextField":
+				n = col.name.lower()
+				if "email" in n:
+					extra_field_props += '                keyboardType="email-address"\n                autoCapitalize="none"\n'
+				elif any(x in n for x in ("phone", "mobile", "tel")):
+					extra_field_props += '                keyboardType="phone-pad"\n'
+				elif any(x in n for x in ("url", "website", "link", "href")):
+					extra_field_props += '                keyboardType="url"\n                autoCapitalize="none"\n'
+				elif any(x in n for x in ("password", "secret", "token", "pin")):
+					extra_field_props += '                secureTextEntry={true}\n'
+				elif any(x in n for x in ("name", "title", "first_name", "last_name", "full_name")):
+					extra_field_props += '                autoCapitalize="words"\n'
+
 			if readonly:
 				field_blocks.append(
 					"          <Controller\n"
@@ -1414,6 +1453,7 @@ export default function MFAScreen() {
 					"                onChange={field.onChange}\n"
 					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
 					"                required={" + req + "}\n"
+					+ extra_field_props +
 					"              />\n"
 					"            )}\n"
 					"          />\n"
@@ -1427,7 +1467,7 @@ export default function MFAScreen() {
 			load_query = (
 				"  const { data: existing } = useQuery({\n"
 				"    queryKey: ['" + tinfo.name + "', id],\n"
-				"    queryFn: () => get" + m + "(Number(id)),\n"
+				"    queryFn: () => get" + m + "(id),\n"
 				"    enabled: !!id,\n"
 				"  });\n\n"
 				"  useEffect(() => {\n"
@@ -1474,7 +1514,7 @@ export default function MFAScreen() {
 		# Rebuild field_inputs with voice integration for text/string fields
 		if voice_enabled:
 			voice_field_blocks = []
-			for col in form_cols[:12]:
+			for col in form_cols:
 				col_label = _label(col.name)
 				# Only wrap TextField/TextAreaField with voice
 				field_comp = self._pick_field_component(col)
@@ -1517,7 +1557,7 @@ export default function MFAScreen() {
 				# Rebuild entire field_inputs merging voice and non-voice
 				merged_blocks = []
 				vi = 0
-				for col in form_cols[:12]:
+				for col in form_cols:
 					col_label = _label(col.name)
 					field_comp = self._pick_field_component(col)
 					is_text = field_comp in ("TextField", "TextAreaField")
@@ -1540,7 +1580,7 @@ export default function MFAScreen() {
 				field_inputs = "".join(merged_blocks)
 
 		parts = [
-			"import { View, Text, ScrollView, Alert } from 'react-native';\n",
+			"import { View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';\n",
 			"import { useRouter" + extra_params_import + " } from 'expo-router';\n",
 			"import { useForm, Controller } from 'react-hook-form';\n",
 			"import { zodResolver } from '@hookform/resolvers/zod';\n",
@@ -1579,20 +1619,26 @@ export default function MFAScreen() {
 			"    onError: () => Alert.alert('Error', 'Could not save. Please try again.'),\n",
 			"  });\n\n",
 			"  return (\n",
-			"    <ScrollView className=\"flex-1 bg-white dark:bg-gray-900\" keyboardShouldPersistTaps=\"handled\">\n",
-			"      <View className=\"px-4 py-6 gap-4\">\n",
-			"        <Text className=\"text-xl font-bold text-gray-900 dark:text-white\">\n",
-			"          " + title_text + "\n",
-			"        </Text>\n",
+			"    <KeyboardAvoidingView\n",
+			"      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}\n",
+			"      style={{ flex: 1 }}\n",
+			"      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}\n",
+			"    >\n",
+			"      <ScrollView className=\"flex-1 bg-white dark:bg-gray-900\" keyboardShouldPersistTaps=\"handled\" contentContainerStyle={{ paddingBottom: 100 }}>\n",
+			"        <View className=\"px-4 py-6 gap-4\">\n",
+			"          <Text className=\"text-xl font-bold text-gray-900 dark:text-white\">\n",
+			"            " + title_text + "\n",
+			"          </Text>\n",
 			field_inputs,
-			"        <Button\n",
-			"          title=\"" + ("Save" if edit else "Create") + "\"\n",
-			"          onPress={handleSubmit((data) => mut.mutate(data))}\n",
-			"          loading={isSubmitting || mut.isPending}\n",
-			"          className=\"mt-2\"\n",
-			"        />\n",
-			"      </View>\n",
-			"    </ScrollView>\n",
+			"          <Button\n",
+			"            title=\"" + ("Save" if edit else "Create") + "\"\n",
+			"            onPress={handleSubmit((data) => mut.mutate(data))}\n",
+			"            loading={isSubmitting || mut.isPending}\n",
+			"            className=\"mt-2\"\n",
+			"          />\n",
+			"        </View>\n",
+			"      </ScrollView>\n",
+			"    </KeyboardAvoidingView>\n",
 			"  );\n",
 			"}\n",
 		]
@@ -1997,21 +2043,29 @@ Sheet.displayName = 'Sheet';
 import { View, Text, TextInput, type TextInputProps } from 'react-native';
 import { cn } from '@lib/utils';
 
-interface TextFieldProps {
+interface TextFieldProps extends Omit<TextInputProps, 'value' | 'onChangeText'> {
   label: string;
   value?: string | null;
   onChange?: (v: string) => void;
   error?: string;
   required?: boolean;
   className?: string;
-  placeholder?: string;
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
-  autoCorrect?: boolean;
-  secureTextEntry?: boolean;
-  keyboardType?: string;
 }
 
-export function TextField({ label, error, required, className, onChange, value, placeholder, autoCapitalize, autoCorrect, secureTextEntry }: TextFieldProps) {
+export function TextField({
+  label,
+  error,
+  required,
+  className,
+  onChange,
+  value,
+  placeholder,
+  autoCapitalize,
+  autoCorrect,
+  secureTextEntry,
+  keyboardType,
+  ...rest
+}: TextFieldProps) {
   return (
     <View className={cn('gap-1', className)}>
       <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2020,11 +2074,17 @@ export function TextField({ label, error, required, className, onChange, value, 
       <TextInput
         value={String(value ?? '')}
         onChangeText={onChange}
+        placeholder={placeholder}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
         className={cn(
           'h-12 px-4 rounded-xl border bg-gray-50 dark:bg-gray-800 text-base text-gray-900 dark:text-white',
           error ? 'border-red-400' : 'border-gray-200 dark:border-gray-700',
         )}
         placeholderTextColor="#9ca3af"
+        {...rest}
       />
       {error && <Text className="text-xs text-red-500">{error}</Text>}
     </View>
@@ -3911,16 +3971,20 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 			f"import type {{ Create{m}Input, Update{m}Input }} from '@lib/validation/{_camel(tname)}';\n\n"
 			f"const KEY = '{tname}';\n"
 			f"const ENDPOINT = '/api/v1/{tname}';\n\n"
-			f"export interface List{m}Params {{ page?: number; q?: string; page_size?: number; }}\n\n"
+			f"export interface List{m}Params {{ page?: number; q?: string; page_size?: number; [key: string]: string | number | undefined; }}\n\n"
 			f"export async function list{m}(params: List{m}Params = {{}}) {{\n"
 			f"  const p = new URLSearchParams();\n"
 			f"  if (params.page) p.set('page', String(params.page));\n"
 			f"  if (params.q) p.set('q', params.q);\n"
 			f"  p.set('page_size', String(params.page_size ?? 20));\n"
+			f"  // Forward any extra filter params (e.g. FK column filters for child lists)\n"
+			f"  for (const [k, v] of Object.entries(params)) {{\n"
+			f"    if (!['page', 'q', 'page_size'].includes(k) && v !== undefined) p.set(k, String(v));\n"
+			f"  }}\n"
 			f"  const res = await apiClient.get(`${{ENDPOINT}}?${{p}}`);\n"
 			f"  return res.data as {{ result: {m}[]; count: number; next_page?: number | null }};\n"
 			f"}}\n\n"
-			f"export async function get{m}(id: number): Promise<{m}> {{\n"
+			f"export async function get{m}(id: string | number): Promise<{m}> {{\n"
 			f"  const res = await apiClient.get(`${{ENDPOINT}}/${{id}}`);\n"
 			f"  return res.data;\n"
 			f"}}\n\n"
@@ -3928,7 +3992,7 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 			f"  const res = await apiClient.post(ENDPOINT, data);\n"
 			f"  return res.data;\n"
 			f"}}\n\n"
-			f"export async function update{m}(id: number, data: Update{m}Input): Promise<{m}> {{\n"
+			f"export async function update{m}(id: string | number, data: Update{m}Input): Promise<{m}> {{\n"
 			f"  const res = await apiClient.put(`${{ENDPOINT}}/${{id}}`, data);\n"
 			f"  return res.data;\n"
 			f"}}\n\n"
@@ -3947,9 +4011,9 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 
 		schema_lines = []
 		for col in form_cols:
-			# FK columns are always integers (or UUIDs), regardless of name-based heuristic
+			# FK columns: accept string (UUID) or number (integer PK) — remote table PKs vary
 			if col.foreign_key or col.category == ColumnType.FOREIGN_KEY:
-				base = "z.number().int()"
+				base = "z.union([z.string(), z.number()])"
 			# Enum columns → z.enum([...])
 			elif col.enum_values:
 				vals = ", ".join(repr(v) for v in col.enum_values)
