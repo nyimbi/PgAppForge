@@ -180,7 +180,9 @@ class EnhancedModelGenerator:
                 continue
             python_type = self._get_python_type(col) or 'str'
             # Strip Optional[...] wrapper to get inner type
-            inner = python_type.replace('Optional[', '').rstrip(']') if python_type.startswith('Optional[') else python_type
+            # Safely strip Optional[...] wrapper: removeprefix/removesuffix handles exactly one level
+            inner = (python_type.removeprefix('Optional[').removesuffix(']')
+                     if python_type.startswith('Optional[') else python_type)
             nullable = col.nullable or python_type.startswith('Optional[')
             field_type = f'Optional[{inner}]' if nullable else inner
             comment = f' = Field(description="{col.comment}")' if col.comment else ''

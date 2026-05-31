@@ -1767,11 +1767,15 @@ import { FlashList } from '@shopify/flash-list';
 import { TaskCard } from '@components/workflow/TaskCard';
 import { EmptyState } from '@components/ui/EmptyState';
 
+import { ErrorState } from '@components/ui/ErrorState';
+
 export default function WorkflowTasksScreen() {
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['workflow', 'tasks'],
     queryFn: () => apiClient.get('/api/v1/process/tasks/my').then(r => r.data.result ?? []),
   });
+
+  if (isError) return <ErrorState message="Failed to load tasks" onRetry={refetch} />;
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
@@ -1799,6 +1803,7 @@ import { apiClient } from '@lib/api/client';
 import { ProcessTimeline } from '@components/workflow/ProcessTimeline';
 import { ApprovalActions } from '@components/workflow/ApprovalActions';
 import { Skeleton } from '@components/ui/Skeleton';
+import { ErrorState } from '@components/ui/ErrorState';
 
 export default function WorkflowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

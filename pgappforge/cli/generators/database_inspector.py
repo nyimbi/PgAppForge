@@ -976,7 +976,7 @@ class EnhancedDatabaseInspector:
         _PREFERRED = ('name', 'title', 'label', 'display_name', 'full_name', 'username')
         _AUDIT = frozenset({'created_on', 'changed_on', 'created_at', 'updated_at',
                             'deleted_at', 'created_by_fk', 'changed_by_fk'})
-        singular = table_info.name.rstrip('s')
+        singular = p.singular_noun(table_info.name) or table_info.name.rstrip('s')
         text_cols = [
             c for c in table_info.columns
             if not c.primary_key and not c.foreign_key and c.name not in _AUDIT

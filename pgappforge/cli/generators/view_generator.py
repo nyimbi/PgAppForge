@@ -307,7 +307,7 @@ class BeautifulViewGenerator:
             'validators': validators,
             'widget_config': widget_config,
             'security_settings': security_settings,
-            'relationships': table_info.relationships,
+            'relationships': self._enrich_relationships_for_search(table_info.relationships),
             'config': self.config,
             'icon': table_info.icon,
             'performance_settings': self._generate_performance_settings(table_info),
@@ -552,6 +552,23 @@ class BeautifulViewGenerator:
             class_name=f"{self._to_pascal_case(table_info.name)}RelationshipView",
             model_name=self._to_pascal_case(table_info.name)
         )
+
+    def _enrich_relationships_for_search(self, relationships: List[RelationshipInfo]) -> List[RelationshipInfo]:
+        """Attach `search_col` to each relationship for use in search_form_query_rel_fields.
+
+        Looks up the display_column of the remote table (computed by _pick_display_column
+        in the inspector) so the search filter targets a meaningful column rather than
+        always assuming a column named 'name' exists.
+        """
+        for rel in relationships:
+            if not hasattr(rel, 'search_col'):
+                try:
+                    remote_info = self.inspector.analyze_table(rel.remote_table)
+                    # display_column is the best human-readable label column
+                    rel.search_col = getattr(remote_info, 'display_column', '') or 'name'
+                except Exception:
+                    rel.search_col = 'name'
+        return relationships
 
     def _process_form_columns(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo] = None) -> List[Dict[str, Any]]:
         """Process columns for form display with modern widgets.
@@ -1032,7 +1049,7 @@ class {{ class_name }}(ModelView):
     {% if FilterStartsWith %}
     search_form_query_rel_fields = {
         {% for rel in relationships %}
-        '{{ rel.name }}': [['name', FilterStartsWith, '']],
+        '{{ rel.name }}': [['{{ rel.search_col | default("name") }}', FilterStartsWith, '']],
         {% endfor %}
     }
     {% endif %}
@@ -3493,7 +3510,7 @@ class {{ class_name }}(ModelView):
     # Relationship filters
     search_form_query_rel_fields = {
         {% for rel in relationships %}
-        '{{ rel.name }}': [['name', FilterStartsWith, '']],
+        '{{ rel.name }}': [['{{ rel.search_col | default("name") }}', FilterStartsWith, '']],
         {% endfor %}
     }
     
