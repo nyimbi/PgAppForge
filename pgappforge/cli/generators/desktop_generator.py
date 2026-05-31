@@ -82,6 +82,7 @@ class DesktopGenerator:
 		files["requirements-desktop.txt"] = self._requirements()
 		files["desktop/Makefile"] = self._makefile()
 		files["desktop/README.md"] = self._readme()
+		files["desktop/voice_input_button.js"] = self._gen_voice_input_button()
 
 		# Top-level README and scripts for first-time users
 		files["README.md"] = self._gen_toplevel_readme()
@@ -492,6 +493,117 @@ class DesktopGenerator:
 			+ both_block
 			+ f"echo '▶  Launching {c.app_name}...'\n"
 			f"exec python3 {primary} \"$@\"\n"
+		)
+
+	def _gen_voice_input_button(self) -> str:
+		"""
+		Generates desktop/voice_input_button.js — a Web Speech API voice input
+		component that can be injected into any pgappforge form via pywebview's
+		js_bridge or included directly in the web app's static JS.
+
+		Usage in a form template:
+		  <script src="/static/voice_input_button.js"></script>
+		  <button onclick="PgAfVoice.attachToInput(document.getElementById('my-field'))">
+		    Dictate
+		  </button>
+
+		// For offline persistence, install: npm install electron-store
+		// See https://github.com/sindresorhus/electron-store
+		"""
+		return (
+			'/* desktop/voice_input_button.js\n'
+			' * Web Speech API voice input helper for pgappforge desktop forms.\n'
+			' * No external dependencies — uses window.SpeechRecognition.\n'
+			' *\n'
+			' * For offline persistence, install: npm install electron-store\n'
+			' * See https://github.com/sindresorhus/electron-store\n'
+			' */\n'
+			'(function (root) {\n'
+			"  'use strict';\n\n"
+			'  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;\n\n'
+			'  /**\n'
+			'   * Attach a voice dictation button next to a text input.\n'
+			'   * @param {HTMLInputElement|HTMLTextAreaElement} inputEl\n'
+			'   * @param {object} [opts]\n'
+			'   * @param {string}  [opts.lang="en-US"]      BCP-47 language tag\n'
+			'   * @param {boolean} [opts.continuous=false]  keep listening\n'
+			'   * @param {boolean} [opts.append=false]      append vs replace\n'
+			'   * @returns {HTMLButtonElement} the injected button\n'
+			'   */\n'
+			'  function attachToInput(inputEl, opts) {\n'
+			'    opts = opts || {};\n'
+			'    var lang = opts.lang || "en-US";\n'
+			'    var continuous = !!opts.continuous;\n'
+			'    var append = !!opts.append;\n\n'
+			'    if (!SR) {\n'
+			'      console.warn("[PgAfVoice] SpeechRecognition not supported in this browser/webview.");\n'
+			'      return null;\n'
+			'    }\n\n'
+			'    var btn = document.createElement("button");\n'
+			'    btn.type = "button";\n'
+			'    btn.title = "Dictate";\n'
+			'    btn.setAttribute("aria-label", "Voice input");\n'
+			'    btn.style.cssText = [\n'
+			'      "margin-left:4px", "padding:4px 8px", "cursor:pointer",\n'
+			'      "border:1px solid #d1d5db", "border-radius:6px",\n'
+			'      "background:#f9fafb", "font-size:16px", "line-height:1",\n'
+			'    ].join(";");\n'
+			'    btn.textContent = "\\uD83C\\uDFA4"; // microphone emoji\n\n'
+			'    var recognition = new SR();\n'
+			'    recognition.lang = lang;\n'
+			'    recognition.continuous = continuous;\n'
+			'    recognition.interimResults = false;\n\n'
+			'    var active = false;\n\n'
+			'    recognition.onresult = function (event) {\n'
+			'      var transcript = Array.from(event.results)\n'
+			'        .map(function (r) { return r[0].transcript; })\n'
+			'        .join(" ");\n'
+			'      if (append) {\n'
+			'        inputEl.value = (inputEl.value ? inputEl.value + " " : "") + transcript;\n'
+			'      } else {\n'
+			'        inputEl.value = transcript;\n'
+			'      }\n'
+			'      inputEl.dispatchEvent(new Event("input", { bubbles: true }));\n'
+			'      inputEl.dispatchEvent(new Event("change", { bubbles: true }));\n'
+			'    };\n\n'
+			'    recognition.onerror = function (e) {\n'
+			'      console.warn("[PgAfVoice] recognition error", e.error);\n'
+			'      _setActive(false);\n'
+			'    };\n\n'
+			'    recognition.onend = function () { _setActive(false); };\n\n'
+			'    function _setActive(state) {\n'
+			'      active = state;\n'
+			'      btn.style.background = active ? "#fee2e2" : "#f9fafb";\n'
+			'      btn.style.borderColor = active ? "#f87171" : "#d1d5db";\n'
+			'      btn.textContent = active ? "\\u23F9" : "\\uD83C\\uDFA4";\n'
+			'    }\n\n'
+			'    btn.onclick = function () {\n'
+			'      if (active) {\n'
+			'        recognition.stop();\n'
+			'      } else {\n'
+			'        recognition.start();\n'
+			'        _setActive(true);\n'
+			'      }\n'
+			'    };\n\n'
+			'    // Insert button after the input element\n'
+			'    if (inputEl.parentNode) {\n'
+			'      inputEl.parentNode.insertBefore(btn, inputEl.nextSibling);\n'
+			'    }\n\n'
+			'    return btn;\n'
+			'  }\n\n'
+			'  /**\n'
+			'   * Auto-attach voice buttons to all text inputs matching a selector.\n'
+			'   * @param {string} [selector="input[type=text], textarea"]\n'
+			'   * @param {object} [opts]  passed to attachToInput()\n'
+			'   */\n'
+			'  function attachAll(selector, opts) {\n'
+			'    selector = selector || "input[type=text], input:not([type]), textarea";\n'
+			'    document.querySelectorAll(selector).forEach(function (el) {\n'
+			'      attachToInput(el, opts);\n'
+			'    });\n'
+			'  }\n\n'
+			'  root.PgAfVoice = { attachToInput: attachToInput, attachAll: attachAll };\n'
+			'}(typeof globalThis !== "undefined" ? globalThis : this));\n'
 		)
 
 	def _write_files(self, files: dict[str, str]) -> None:

@@ -731,6 +731,95 @@ class ERDDesignerView(BaseView):
 		return Response(mermaid, mimetype="text/plain",
 		                headers={"Content-Disposition": "attachment; filename=schema.mmd"})
 
+	@expose("/api/export/sql")
+	@has_access
+	def api_export_sql(self):
+		"""Export current DB schema as SQL DDL (CREATE TABLE + FK constraints)."""
+		try:
+			mgr = self._schema_manager()
+			schema = mgr.get_schema()
+			ddl = mgr._to_sql_ddl_str(schema)
+		except Exception as exc:
+			ddl = f"-- Error generating DDL: {exc}\n"
+		return current_app.response_class(
+			ddl,
+			mimetype="text/plain",
+			headers={"Content-Disposition": "attachment; filename=schema.sql"},
+		)
+
+	@expose("/api/export/dbml")
+	@has_access
+	def api_export_dbml(self):
+		"""Export current DB schema in DBML format."""
+		try:
+			mgr = self._schema_manager()
+			schema = mgr.get_schema()
+			dbml = mgr._to_dbml_str(schema)
+		except Exception as exc:
+			dbml = f"// Error generating DBML: {exc}\n"
+		return current_app.response_class(
+			dbml,
+			mimetype="text/plain",
+			headers={"Content-Disposition": "attachment; filename=schema.dbml"},
+		)
+
+	@expose("/api/schema/import-dbml", methods=["POST"])
+	@has_access
+	def api_import_dbml(self):
+		"""Import DBML and apply to the database.
+
+		Body: {"dbml": "<dbml text>"}
+		Requires Admin role + FAB_ERD_DDL_ENABLED=True.
+		"""
+		_require_schema_admin()
+		_validate_csrf()
+		data = request.get_json(silent=True) or {}
+		dbml = (data.get("dbml") or "").strip()
+		if not dbml:
+			return jsonify({"error": "dbml is required"}), 400
+		try:
+			mgr = self._schema_manager()
+			result = mgr.import_dbml(dbml)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/schema/import-mermaid", methods=["POST"])
+	@has_access
+	def api_import_mermaid(self):
+		"""Import Mermaid erDiagram and apply to the database.
+
+		Body: {"mermaid": "<erDiagram text>"}
+		Requires Admin role + FAB_ERD_DDL_ENABLED=True.
+		"""
+		_require_schema_admin()
+		_validate_csrf()
+		data = request.get_json(silent=True) or {}
+		mermaid_text = (data.get("mermaid") or "").strip()
+		if not mermaid_text:
+			return jsonify({"error": "mermaid is required"}), 400
+		try:
+			mgr = self._schema_manager()
+			result = mgr.import_mermaid(mermaid_text)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/reverse-engineer", methods=["POST"])
+	@has_access
+	def api_reverse_engineer(self):
+		"""Read the live database schema and return Cytoscape canvas JSON.
+
+		Returns {"elements": [...], "schema": {...}} suitable for loading directly
+		onto the Cytoscape canvas via cy.add(data.elements).
+		"""
+		try:
+			mgr = self._schema_manager()
+			result = mgr.reverse_engineer()
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"elements": [], "schema": {}, "error": str(exc)}), 500
+
 	@expose("/api/generate-app", methods=["POST"])
 	@has_access
 	def api_generate_app(self):
@@ -1897,6 +1986,11 @@ _DESIGNER_HTML = ("""
       <div class="tb-row">
         <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/alembic')">Alembic</button>
         <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/orm?format=sqlalchemy')">ORM</button>
+      </div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/sql')" title="Download SQL DDL (CREATE TABLE statements)">SQL DDL</button>
+        <button class="btn btn-xs btn-default" onclick="window.open('/erd-designer/api/export/dbml')" title="Download DBML schema file">DBML</button>
+        <button class="btn btn-xs btn-info"    onclick="reverseEngineerFromDB()" title="Reload canvas from live database">&#8635; Load from DB</button>
       </div>
       <!-- Save / Load designs -->
       <div class="tb-sect">DESIGN</div>

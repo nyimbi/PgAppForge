@@ -81,3 +81,5 @@ QRCODE_VERSION = "1.5.3"
 JSQR_VERSION = "1.4.0"
 QRCODE_CDN_URL = f"https://cdnjs.cloudflare.com/ajax/libs/qrcode/{QRCODE_VERSION}/qrcode.min.js"
 JSQR_CDN_URL = f"https://cdnjs.cloudflare.com/ajax/libs/jsqr/{JSQR_VERSION}/jsQR.min.js"
+
+JSYAML_CDN = '<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js" crossorigin=""></script>'

@@ -40,6 +40,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from pgappforge.plugins.offline.sync_mixin import SyncMixin
+from pgappforge.plugins.offline.models import SyncLog as SyncLog
+
 from flask import Blueprint, Response, jsonify, make_response, request
 
 from pgappforge import BaseView, expose
@@ -1107,8 +1110,11 @@ __all__ = [
 	# Plugin class + factory
 	"OfflinePlugin",
 	"create_plugin",
-	# Model
+	# Models
 	"SyncConflict",
+	"SyncLog",
+	# Mixin
+	"SyncMixin",
 	# View
 	"OfflineSyncConflictView",
 	# Capability flag

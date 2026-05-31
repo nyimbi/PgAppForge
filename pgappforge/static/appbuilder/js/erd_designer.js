@@ -1396,6 +1396,35 @@ function dropPolicy(table, name) {
   });
 }
 
+/* ── Reverse engineer: reload canvas from live DB ─────────────────────────── */
+function reverseEngineerFromDB() {
+  if (cy.elements().length > 0) {
+    if (!confirm('Replace the current canvas with the live database schema?')) return;
+  }
+  setStatus('Reverse engineering from live database…');
+  apiFetch('POST', '/api/reverse-engineer').then(function(data) {
+    if (data.error) { setStatus('✗ Reverse engineer error: ' + data.error); return; }
+    var elements = data.elements || [];
+    cy.elements().remove();
+    if (elements.length) {
+      cy.add(elements);
+      var layoutName = (window.cytoscapeFcose && cy.nodes().length > 20) ? 'fcose' : 'cose';
+      cy.layout({
+        name: layoutName,
+        animate: cy.nodes().length < 60,
+        animationDuration: 400,
+        nodeRepulsion: 8000,
+        idealEdgeLength: 80,
+        quality: 'default',
+        randomize: false,
+      }).run();
+    }
+    setStatus('✓ Loaded ' + cy.nodes('[type="table"]').length + ' tables from live database');
+  }).catch(function(err) {
+    setStatus('✗ Reverse engineer failed: ' + (err && err.message ? err.message : String(err)));
+  });
+}
+
 function submitCustomPolicy() {
   var payload = {
     table:      (document.getElementById('pol-tbl')   || {}).value || '',

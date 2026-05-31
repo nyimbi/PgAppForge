@@ -1,0 +1,257 @@
+{% extends "appbuilder/base.html" %}
+
+{% block head_css %}
+{{ super() }}
+<style>
+  .condition-row, .action-row { margin-bottom: 8px; }
+  #conditions-container .row,
+  #actions-container .row { margin-bottom: 6px; }
+  .rules-toolbar { margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block head_js %}
+{{ super() }}
+<script src="{{ appbuilder.static_folder }}/js/rules_builder.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="page-header">
+    <h2>
+      <i class="fa fa-sitemap"></i>
+      {{ _("Rules Engine Builder") }}
+    </h2>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="btn-toolbar rules-toolbar">
+    <button class="btn btn-primary"
+            data-toggle="modal" data-target="#rulesetModal"
+            onclick="clearRulesetForm()">
+      <i class="fa fa-plus"></i> {{ _("New RuleSet") }}
+    </button>
+    <button class="btn btn-default" onclick="importRuleset()">
+      <i class="fa fa-upload"></i> {{ _("Import") }}
+    </button>
+  </div>
+
+  <!-- RuleSets table -->
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <strong>{{ _("Rule Sets") }}</strong>
+    </div>
+    <table class="table table-striped table-bordered table-hover">
+      <thead>
+        <tr>
+          <th>{{ _("ID") }}</th>
+          <th>{{ _("Name") }}</th>
+          <th>{{ _("Model") }}</th>
+          <th>{{ _("Enabled") }}</th>
+          <th>{{ _("Rules") }}</th>
+          <th>{{ _("Actions") }}</th>
+        </tr>
+      </thead>
+      <tbody id="ruleset-table-body">
+        {% for rs in rule_sets %}
+        <tr>
+          <td>{{ rs.id }}</td>
+          <td>
+            <a href="#" onclick="populateRulesetForm({{ rs.id }})">{{ rs.name }}</a>
+          </td>
+          <td><code>{{ rs.model_name }}</code></td>
+          <td>
+            {% if rs.enabled %}
+            <span class="label label-success">{{ _("Yes") }}</span>
+            {% else %}
+            <span class="label label-default">{{ _("No") }}</span>
+            {% endif %}
+          </td>
+          <td>{{ rs.rules | length }}</td>
+          <td>
+            <button class="btn btn-xs btn-warning"
+                    onclick="populateRulesetForm({{ rs.id }})">
+              <i class="fa fa-pencil"></i>
+            </button>
+            <button class="btn btn-xs btn-danger"
+                    onclick="deleteRuleset({{ rs.id }})">
+              <i class="fa fa-trash"></i>
+            </button>
+            <button class="btn btn-xs btn-info"
+                    onclick="exportRuleset({{ rs.id }})">
+              <i class="fa fa-download"></i>
+            </button>
+            <button class="btn btn-xs btn-default"
+                    onclick="toggleRuleset({{ rs.id }}, {{ 'false' if rs.enabled else 'true' }})">
+              {% if rs.enabled %}
+              <i class="fa fa-pause"></i> {{ _("Disable") }}
+              {% else %}
+              <i class="fa fa-play"></i> {{ _("Enable") }}
+              {% endif %}
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center text-muted">
+            {{ _("No rule sets defined yet.") }}
+            <a href="#" data-toggle="modal" data-target="#rulesetModal"
+               onclick="clearRulesetForm()">{{ _("Create one") }}</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /container-fluid -->
+
+
+<!-- =====================================================================
+     RuleSet Modal
+     ===================================================================== -->
+<div class="modal fade" id="rulesetModal" tabindex="-1" role="dialog"
+     aria-labelledby="rulesetModalTitle">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="rulesetModalTitle">{{ _("New RuleSet") }}</h4>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="ruleset-id" value=""/>
+
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>{{ _("RuleSet Name") }} <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="ruleset-name"
+                     placeholder="{{ _('e.g. Invoice Validation Rules') }}"/>
+            </div>
+          </div>
+          <div class="col-sm-4">
+            <div class="form-group">
+              <label>{{ _("Model Name") }} <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="ruleset-model"
+                     placeholder="{{ _('e.g. Invoice') }}"/>
+            </div>
+          </div>
+          <div class="col-sm-2">
+            <div class="form-group">
+              <label>{{ _("Priority") }}</label>
+              <input type="number" class="form-control" id="ruleset-priority" value="100"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>{{ _("Description") }}</label>
+          <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
+        </div>
+
+        <hr/>
+        <h5>{{ _("Rule") }}</h5>
+
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>{{ _("Rule Name") }}</label>
+              <input type="text" class="form-control" id="rule-name"
+                     placeholder="{{ _('e.g. Block zero-amount invoices') }}"/>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>{{ _("Trigger Event") }}</label>
+              <select class="form-control" id="rule-trigger">
+                <option value="on_create">on_create</option>
+                <option value="on_update">on_update</option>
+                <option value="on_delete">on_delete</option>
+                <option value="on_field_change:">on_field_change: &lt;field&gt;</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel panel-default">
+          <div class="panel-heading">
+            <strong>{{ _("Conditions") }}</strong>
+            <small class="text-muted">{{ _("(all AND unless logic=OR)") }}</small>
+          </div>
+          <div class="panel-body">
+            <div id="conditions-container"></div>
+            <button type="button" class="btn btn-xs btn-default"
+                    onclick="addConditionRow()">
+              <i class="fa fa-plus"></i> {{ _("Add Condition") }}
+            </button>
+          </div>
+        </div>
+
+        <div class="panel panel-default">
+          <div class="panel-heading">
+            <strong>{{ _("Actions") }}</strong>
+          </div>
+          <div class="panel-body">
+            <div id="actions-container"></div>
+            <button type="button" class="btn btn-xs btn-default"
+                    onclick="addActionRow()">
+              <i class="fa fa-plus"></i> {{ _("Add Action") }}
+            </button>
+          </div>
+        </div>
+
+        <div id="test-result-area" class="alert alert-info" style="display:none"></div>
+
+      </div><!-- /modal-body -->
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">
+          {{ _("Cancel") }}
+        </button>
+        <button type="button" class="btn btn-info" onclick="testRule()">
+          <i class="fa fa-play"></i> {{ _("Test") }}
+        </button>
+        <button type="button" class="btn btn-success" onclick="saveRuleset()">
+          <i class="fa fa-save"></i> {{ _("Save") }}
+        </button>
+      </div>
+
+    </div><!-- /modal-content -->
+  </div>
+</div>
+
+
+<!-- =====================================================================
+     Import Modal
+     ===================================================================== -->
+<div class="modal fade" id="importModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">{{ _("Import RuleSet JSON") }}</h4>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">
+          {{ _("Paste the JSON exported from another environment.") }}
+        </p>
+        <textarea class="form-control" id="import-json" rows="10"
+                  placeholder='{"name": "...", "model_name": "...", "rules": []}'></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">
+          {{ _("Cancel") }}
+        </button>
+        <button type="button" class="btn btn-primary" onclick="doImport()">
+          <i class="fa fa-upload"></i> {{ _("Import") }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

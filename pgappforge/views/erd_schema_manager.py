@@ -287,6 +287,286 @@ class ERDSchemaManager:
 		"""Convert the live database schema to Mermaid erDiagram syntax."""
 		return _to_mermaid_str(self.get_schema())
 
+	def _to_sql_ddl_str(self, schema: dict) -> str:
+		"""Return CREATE TABLE ... + ALTER TABLE ADD CONSTRAINT FK statements for *schema*.
+
+		Emits all CREATE TABLE statements first, then all ALTER TABLE ADD CONSTRAINT
+		FOREIGN KEY statements so forward-reference ordering is not an issue.
+		"""
+		create_lines: list[str] = []
+		fk_lines: list[str] = []
+
+		for tbl in schema.get("tables", []):
+			tname = tbl["name"]
+			try:
+				qtbl = _qi(tname)
+			except ValueError:
+				continue
+			col_defs: list[str] = []
+			for col in tbl.get("columns", []):
+				try:
+					qcol = _qi(col["name"])
+				except (ValueError, KeyError):
+					continue
+				try:
+					col_type = _safe_type(col.get("type", "TEXT"))
+				except ValueError:
+					col_type = "TEXT"
+				defn = f"{qcol} {col_type}"
+				if col.get("pk"):
+					defn += " PRIMARY KEY"
+				if not col.get("nullable", True) and not col.get("pk"):
+					defn += " NOT NULL"
+				if col.get("unique") and not col.get("pk"):
+					defn += " UNIQUE"
+				if col.get("default") is not None:
+					defn += f" DEFAULT {_quote_default(col['default'])}"
+				col_defs.append(defn)
+				# Collect FK for later ALTER TABLE
+				fk_ref = col.get("fk")
+				if fk_ref and isinstance(fk_ref, str):
+					parts = fk_ref.split(".")
+					ref_table = parts[0]
+					ref_col = parts[1] if len(parts) > 1 else "id"
+					try:
+						cname = _gen_constraint_name(tname, col["name"], ref_table, "fkey")
+						fk_lines.append(
+							f"ALTER TABLE {qtbl} "
+							f"ADD CONSTRAINT {_qi(cname)} "
+							f"FOREIGN KEY ({qcol}) "
+							f"REFERENCES {_qi(ref_table)} ({_qi(ref_col)});"
+						)
+					except ValueError:
+						pass
+			if col_defs:
+				create_lines.append(
+					f"CREATE TABLE IF NOT EXISTS {qtbl} (\n"
+					+ ",\n".join(f"    {d}" for d in col_defs)
+					+ "\n);"
+				)
+
+		# Also emit FKs from the relationships list (if columns don't carry fk attr)
+		for rel in schema.get("relationships", []):
+			from_t = rel.get("from_table", "")
+			from_c = rel.get("from_col", "")
+			to_t = rel.get("to_table", "")
+			to_c = rel.get("to_col", "id")
+			if not (from_t and from_c and to_t):
+				continue
+			try:
+				cname = _gen_constraint_name(from_t, from_c, to_t, "fkey")
+				fk_lines.append(
+					f"ALTER TABLE {_qi(from_t)} "
+					f"ADD CONSTRAINT {_qi(cname)} "
+					f"FOREIGN KEY ({_qi(from_c)}) "
+					f"REFERENCES {_qi(to_t)} ({_qi(to_c or 'id')});"
+				)
+			except ValueError:
+				pass
+
+		parts: list[str] = []
+		if create_lines:
+			parts.append("\n\n".join(create_lines))
+		if fk_lines:
+			parts.append("\n".join(fk_lines))
+		return "\n\n".join(parts)
+
+	def _to_dbml_str(self, schema: dict) -> str:
+		"""Return DBML format string for *schema*.
+
+		Format::
+
+		    Table orders {
+		      id integer [primary key, increment]
+		      customer_id integer [not null]
+		      note varchar
+		    }
+
+		    Ref: orders.customer_id > customers.id
+		"""
+		_SERIAL_TYPES = {"serial", "bigserial", "smallserial"}
+		lines: list[str] = []
+
+		for tbl in schema.get("tables", []):
+			lines.append(f"Table {tbl['name']} {{")
+			for col in tbl.get("columns", []):
+				col_type = col.get("type", "text").lower().split("(")[0].strip()
+				attrs: list[str] = []
+				if col.get("pk"):
+					attrs.append("primary key")
+				if col_type in _SERIAL_TYPES:
+					attrs.append("increment")
+				if not col.get("nullable", True) and not col.get("pk"):
+					attrs.append("not null")
+				if col.get("default") is not None:
+					attrs.append(f"default: `{col['default']}`")
+				attr_str = " [" + ", ".join(attrs) + "]" if attrs else ""
+				lines.append(f"  {col['name']} {col_type}{attr_str}")
+			lines.append("}\n")
+
+		# Ref lines from relationships
+		seen_refs: set[tuple[str, str, str, str]] = set()
+		for rel in schema.get("relationships", []):
+			from_t = rel.get("from_table", "")
+			from_c = rel.get("from_col", "")
+			to_t = rel.get("to_table", "")
+			to_c = rel.get("to_col", "id")
+			if not (from_t and from_c and to_t):
+				continue
+			key = (from_t, from_c, to_t, to_c or "id")
+			if key in seen_refs:
+				continue
+			seen_refs.add(key)
+			lines.append(f"Ref: {from_t}.{from_c} > {to_t}.{to_c or 'id'}")
+
+		return "\n".join(lines)
+
+	def import_dbml(self, dbml_text: str) -> dict[str, Any]:
+		"""Parse DBML text and apply to the database via apply_changes().
+
+		Handles::
+
+		    Table name {
+		      col_name col_type [attrs]
+		    }
+
+		    Ref: table_a.col > table_b.col
+		"""
+		ops: list[dict] = []
+		fk_ops: list[dict] = []
+
+		# ── Parse Table blocks ────────────────────────────────────────────────
+		table_block_re = re.compile(
+			r'Table\s+(\w+)\s*\{([^}]*)\}',
+			re.IGNORECASE | re.DOTALL,
+		)
+		attr_re = re.compile(r'\[([^\]]*)\]')
+
+		for m in table_block_re.finditer(dbml_text):
+			tname = m.group(1)
+			body = m.group(2)
+			columns: list[dict] = []
+			for line in body.splitlines():
+				line = line.strip()
+				if not line or line.startswith("//"):
+					continue
+				# Extract and remove attribute block
+				attr_match = attr_re.search(line)
+				attrs_str = attr_match.group(1) if attr_match else ""
+				col_line = attr_re.sub("", line).strip()
+				parts = col_line.split(None, 1)
+				if len(parts) < 2:
+					continue
+				col_name, col_type_raw = parts[0], parts[1].strip()
+				try:
+					pg_type = _safe_type(col_type_raw)
+				except ValueError:
+					pg_type = "TEXT"
+
+				col_def: dict[str, Any] = {
+					"name": col_name,
+					"type": pg_type,
+					"pk": False,
+					"nullable": True,
+					"unique": False,
+					"default": None,
+				}
+				# Parse attrs
+				for attr in (a.strip() for a in attrs_str.split(",")):
+					al = attr.lower()
+					if al == "primary key" or al == "pk":
+						col_def["pk"] = True
+						col_def["nullable"] = False
+					elif al == "not null" or al == "nn":
+						col_def["nullable"] = False
+					elif al == "unique":
+						col_def["unique"] = True
+					elif al.startswith("default:"):
+						raw_default = attr[len("default:"):].strip().strip("`")
+						col_def["default"] = raw_default
+				columns.append(col_def)
+
+			if columns:
+				ops.append({"op": "create_table", "table": tname, "columns": columns})
+
+		# ── Parse Ref lines ───────────────────────────────────────────────────
+		ref_re = re.compile(
+			r'Ref\s*:\s*(\w+)\.(\w+)\s*[<>-]+\s*(\w+)\.(\w+)',
+			re.IGNORECASE,
+		)
+		for m in ref_re.finditer(dbml_text):
+			from_t, from_c, to_t, to_c = m.group(1), m.group(2), m.group(3), m.group(4)
+			fk_ops.append({
+				"op": "add_fk",
+				"table": from_t,
+				"column": from_c,
+				"ref_table": to_t,
+				"ref_column": to_c,
+			})
+
+		all_ops = ops + fk_ops
+		if not all_ops:
+			return {"applied": 0, "sql": [], "errors": ["No tables or refs found in DBML"]}
+		return self.apply_changes(all_ops)
+
+	def reverse_engineer(self) -> dict[str, Any]:
+		"""Read live schema and return Cytoscape canvas JSON.
+
+		Returns::
+
+		    {
+		      "elements": [...],   # Cytoscape node/edge elements
+		      "schema": {...}      # raw schema dict
+		    }
+		"""
+		schema = self.get_schema()
+		elements: list[dict] = []
+
+		# Compound node for all live tables
+		elements.append({"data": {
+			"id": "mod_LIVE",
+			"label": "Live Database",
+			"type": "module",
+			"color": "#2c3e50",
+		}})
+
+		for tbl in schema.get("tables", []):
+			tname = tbl["name"]
+			cols = tbl.get("columns", [])
+			col_summary = ", ".join(c["name"] for c in cols[:4])
+			if len(cols) > 4:
+				col_summary += f" +{len(cols) - 4}"
+			elements.append({"data": {
+				"id": tname,
+				"parent": "mod_LIVE",
+				"label": tname,
+				"type": "table",
+				"col_summary": col_summary,
+				"color": "#2c3e50",
+				"columns": cols,
+			}})
+
+		seen_edges: set[str] = set()
+		for rel in schema.get("relationships", []):
+			from_t = rel.get("from_table", "")
+			to_t = rel.get("to_table", "")
+			from_c = rel.get("from_col", "")
+			if not (from_t and to_t):
+				continue
+			eid = f"e_{from_t}_{from_c}_{to_t}"
+			if eid in seen_edges:
+				continue
+			seen_edges.add(eid)
+			elements.append({"data": {
+				"id": eid,
+				"source": from_t,
+				"target": to_t,
+				"label": from_c,
+				"type": "fk",
+			}})
+
+		return {"elements": elements, "schema": schema}
+
 	# ─── Apply changes ────────────────────────────────────────────────────────
 
 	def apply_changes(

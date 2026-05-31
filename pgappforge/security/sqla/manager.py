@@ -4,6 +4,12 @@ import logging
 from typing import Dict, List, Optional, Tuple, Union
 import uuid
 
+try:
+	import yaml as _yaml
+	_HAS_YAML = True
+except ImportError:
+	_HAS_YAML = False
+
 from sqlalchemy import and_, func, literal, update, select
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.orm import contains_eager
@@ -1005,3 +1011,164 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
 
         session.add_all(roles)
         session.commit()
+
+    def export_yaml(self) -> str:
+        """Export all roles, permissions, and user-role assignments as YAML text.
+
+        Returns a YAML string with keys ``roles`` and ``users``.
+        Raises RuntimeError if PyYAML is not installed.
+        """
+        if not _HAS_YAML:
+            raise RuntimeError("PyYAML is required for export_yaml(). pip install pyyaml")
+
+        roles_data = []
+        for role in self.get_all_roles():
+            perms = []
+            for pvm in getattr(role, "permissions", []):
+                view_name = getattr(getattr(pvm, "view_menu", None), "name", None)
+                perm_name = getattr(getattr(pvm, "permission", None), "name", None)
+                if view_name and perm_name:
+                    perms.append({"view": view_name, "permission": perm_name})
+            roles_data.append({"name": role.name, "permissions": perms})
+
+        users_data = []
+        for user in self.get_all_users():
+            role_names = [r.name for r in getattr(user, "roles", [])]
+            users_data.append({"username": user.username, "roles": role_names})
+
+        config = {"roles": roles_data, "users": users_data}
+        return _yaml.dump(config, default_flow_style=False, allow_unicode=True)
+
+    def import_yaml(self, yaml_text: str, dry_run: bool = False) -> dict:
+        """Import roles and permissions from YAML text.
+
+        Idempotent — only adds; never deletes existing roles or permissions.
+
+        :param yaml_text: YAML string in the format produced by :meth:`export_yaml`.
+        :param dry_run: When True, simulate the import without persisting changes.
+        :returns: Dict with keys ``added_roles``, ``added_permissions``, ``skipped``,
+                  and ``dry_run``.
+        """
+        if not _HAS_YAML:
+            raise RuntimeError("PyYAML is required for import_yaml(). pip install pyyaml")
+
+        data = _yaml.safe_load(yaml_text) or {}
+        added_roles: List[str] = []
+        added_permissions: List[str] = []
+        skipped: List[str] = []
+
+        for role_entry in data.get("roles", []):
+            role_name = role_entry.get("name", "").strip()
+            if not role_name:
+                continue
+            existing_role = self.find_role(role_name)
+            if existing_role is None:
+                if not dry_run:
+                    existing_role = self.add_role(role_name)
+                added_roles.append(role_name)
+            else:
+                skipped.append(f"role:{role_name}")
+
+            if dry_run:
+                for pvm_entry in role_entry.get("permissions", []):
+                    view = pvm_entry.get("view", "")
+                    perm = pvm_entry.get("permission", "")
+                    if view and perm:
+                        added_permissions.append(f"{perm}@{view}")
+                continue
+
+            # Refresh role after possible creation
+            role_obj = self.find_role(role_name)
+            if role_obj is None:
+                continue
+            for pvm_entry in role_entry.get("permissions", []):
+                view = pvm_entry.get("view", "")
+                perm = pvm_entry.get("permission", "")
+                if not (view and perm):
+                    continue
+                pv = self.find_permission_view_menu(perm, view)
+                if pv is None:
+                    pv = self.add_permission_view_menu(perm, view)
+                    added_permissions.append(f"{perm}@{view}")
+                if pv and pv not in role_obj.permissions:
+                    self.add_permission_role(role_obj, pv)
+                    added_permissions.append(f"{perm}@{view}")
+                else:
+                    skipped.append(f"perm:{perm}@{view}")
+
+        return {
+            "added_roles": added_roles,
+            "added_permissions": added_permissions,
+            "skipped": skipped,
+            "dry_run": dry_run,
+        }
+
+    def security_health_check(self) -> List[dict]:
+        """Run a suite of security health checks and return findings.
+
+        Each finding is a dict with keys:
+          - ``severity``: ``"critical"`` | ``"warning"`` | ``"info"``
+          - ``rule``: short machine-readable rule identifier
+          - ``message``: human-readable description
+
+        Checks performed:
+        1. **no_admin_user** (critical) — no active user assigned the Admin role.
+        2. **empty_role** (warning) — roles with zero permissions.
+        3. **orphan_permission_view** (info) — PermissionView objects assigned to no role.
+        """
+        findings: List[dict] = []
+
+        # 1. At least one active Admin-role user must exist
+        try:
+            admin_role = self.find_role(
+                self.appbuilder.app.config.get("AUTH_ROLE_ADMIN", "Admin")
+            )
+            active_admin_found = False
+            if admin_role:
+                for user in getattr(admin_role, "user", []):
+                    if getattr(user, "active", False):
+                        active_admin_found = True
+                        break
+            if not active_admin_found:
+                findings.append({
+                    "severity": "critical",
+                    "rule": "no_admin_user",
+                    "message": (
+                        "No active user is assigned the Admin role. "
+                        "The application may be unmanageable."
+                    ),
+                })
+        except Exception as exc:
+            log.warning("security_health_check: admin check failed: %s", exc)
+
+        # 2. Roles with zero permissions
+        try:
+            for role in self.get_all_roles():
+                if not getattr(role, "permissions", None):
+                    findings.append({
+                        "severity": "warning",
+                        "rule": "empty_role",
+                        "message": f"Role '{role.name}' has no permissions assigned.",
+                    })
+        except Exception as exc:
+            log.warning("security_health_check: empty_role check failed: %s", exc)
+
+        # 3. PermissionView objects assigned to no role
+        try:
+            all_pvms = self.get_session.query(self.permissionview_model).all()
+            for pvm in all_pvms:
+                if not getattr(pvm, "role", None):
+                    view_name = getattr(getattr(pvm, "view_menu", None), "name", "?")
+                    perm_name = getattr(getattr(pvm, "permission", None), "name", "?")
+                    findings.append({
+                        "severity": "info",
+                        "rule": "orphan_permission_view",
+                        "message": (
+                            f"PermissionView '{perm_name} on {view_name}' "
+                            "is not assigned to any role."
+                        ),
+                    })
+        except Exception as exc:
+            log.warning("security_health_check: orphan_pvm check failed: %s", exc)
+
+        return findings

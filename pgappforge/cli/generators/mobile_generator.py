@@ -334,6 +334,17 @@ class MobileGenerator:
 		files["scripts/run.sh"] = self._gen_run_script()
 		files["scripts/check.sh"] = self._gen_check_script()
 
+		# Offline / WatermelonDB / Voice files
+		if plugins.get("offline"):
+			files["src/db/schema.ts"] = self._gen_db_schema()
+			files["src/db/sync.ts"] = self._gen_sync_client()
+			files["src/providers/SyncProvider.tsx"] = self._gen_sync_provider()
+			files["src/components/MicButton.tsx"] = self._gen_mic_button()
+			files["src/hooks/useTTS.ts"] = self._gen_tts_hook()
+			for tname, tinfo in tables.items():
+				pascal = _pascal(tname)
+				files[f"src/db/models/{pascal}.ts"] = self._gen_watermelondb_model(tname, tinfo)
+
 		self._write_files(files)
 		# Make shell scripts executable
 		for script in ["scripts/setup.sh", "scripts/run.sh", "scripts/check.sh"]:
@@ -352,6 +363,12 @@ class MobileGenerator:
 			"icd10": "icd10_code" in names,
 			"snomed": "snomed_concept" in names,
 			"wallet": any(n.startswith("wallet_") for n in names),
+			"offline": any(
+				c.get("name") in ("updated_at", "deleted_at", "synced_at")
+				for t in tables.values()
+				for c in (t if isinstance(t, list) else t.get("columns", []))
+			),
+			"voice": True,
 		}
 
 	# ── Root config files ─────────────────────────────────────────────────────
@@ -359,6 +376,13 @@ class MobileGenerator:
 	def _gen_package_json(self) -> str:
 		c = self.config
 		slug = _kebab(c.app_name)
+		deps = dict(self.DEPS)
+		if getattr(self, "_plugins", {}).get("offline"):
+			deps["@nozbe/watermelondb"] = "^0.28.0"
+			deps["@nozbe/with-observables"] = "^1.6.0"
+			deps["expo-av"] = "~15.0.2"
+			deps["expo-speech"] = "~13.0.1"
+			deps["expo-file-system"] = "~18.0.12"
 		data = {
 			"name": slug,
 			"version": c.version,
@@ -370,7 +394,7 @@ class MobileGenerator:
 				"web": "expo start --web",
 				"check": "tsc --noEmit && expo-doctor",
 			},
-			"dependencies": self.DEPS,
+			"dependencies": deps,
 			"devDependencies": self.DEV_DEPS,
 			"private": True,
 		}
@@ -1394,6 +1418,84 @@ export default function MFAScreen() {
 		if needs_effect:
 			extra_imports += "import { useEffect } from 'react';\n"
 
+		voice_enabled = getattr(self, "_plugins", {}).get("voice", False)
+		voice_imports = ""
+		voice_hook = ""
+		if voice_enabled:
+			voice_imports = (
+				"import { MicButton } from '@/src/components/MicButton';\n"
+				"import { useTTS } from '@/src/hooks/useTTS';\n"
+			)
+			voice_hook = "  const { speak } = useTTS();\n"
+
+		# Rebuild field_inputs with voice integration for text/string fields
+		if voice_enabled:
+			voice_field_blocks = []
+			for col in form_cols[:12]:
+				col_label = _label(col.name)
+				# Only wrap TextField/TextAreaField with voice
+				field_comp = self._pick_field_component(col)
+				is_text = field_comp in ("TextField", "TextAreaField")
+				# Re-check FK / check / enum to skip voice on those
+				is_fk = col.foreign_key and col.name in fk_map
+				check_vals = _parse_check_values(tinfo.constraints, col.name)
+				has_enum = bool(col.enum_values)
+				if is_text and not is_fk and not check_vals and not has_enum:
+					cast = "as string"
+					req = "true" if not col.nullable else "false"
+					voice_field_blocks.append(
+						"          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>\n"
+						"            <View style={{ flex: 1 }}>\n"
+						"              <Controller\n"
+						"                control={control}\n"
+						"                name=\"" + col.name + "\"\n"
+						"                render={({ field }) => (\n"
+						"                  <" + field_comp + "\n"
+						"                    label=\"" + col_label + "\"\n"
+						"                    value={field.value " + cast + "}\n"
+						"                    onChange={field.onChange}\n"
+						"                    onFocus={() => speak('" + col_label + "')}\n"
+						"                    error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
+						"                    required={" + req + "}\n"
+						"                  />\n"
+						"                )}\n"
+						"              />\n"
+						"            </View>\n"
+						"            <MicButton onTranscript={(t) => {}} />\n"
+						"          </View>\n"
+					)
+				else:
+					# Keep original block from field_blocks if already built,
+					# or re-add as-is (field_blocks was already populated above)
+					pass
+			# Only override if we have something; else keep field_inputs as built
+			if voice_field_blocks:
+				# Merge: use voice blocks only for text fields, keep others
+				# Rebuild entire field_inputs merging voice and non-voice
+				merged_blocks = []
+				vi = 0
+				for col in form_cols[:12]:
+					col_label = _label(col.name)
+					field_comp = self._pick_field_component(col)
+					is_text = field_comp in ("TextField", "TextAreaField")
+					is_fk = col.foreign_key and col.name in fk_map
+					check_vals_c = _parse_check_values(tinfo.constraints, col.name)
+					has_enum_c = bool(col.enum_values)
+					if is_text and not is_fk and not check_vals_c and not has_enum_c:
+						if vi < len(voice_field_blocks):
+							merged_blocks.append(voice_field_blocks[vi])
+							vi += 1
+					else:
+						# find the original block for this col
+						orig_idx = next(
+							(i for i, b in enumerate(field_blocks)
+							 if '"' + col.name + '"' in b or "'" + col.name + "'" in b),
+							None,
+						)
+						if orig_idx is not None:
+							merged_blocks.append(field_blocks[orig_idx])
+				field_inputs = "".join(merged_blocks)
+
 		parts = [
 			"import { View, Text, ScrollView, Alert } from 'react-native';\n",
 			"import { useRouter" + extra_params_import + " } from 'expo-router';\n",
@@ -1403,6 +1505,7 @@ export default function MFAScreen() {
 			"import { " + action + m + " } from '@lib/api/" + camel + "';\n",
 			"import { create" + m + "Schema, type Create" + m + "Input } from '@lib/validation/" + camel + "';\n",
 			fk_list_imports,
+			voice_imports,
 			"import { TextField } from '@components/fields/TextField';\n",
 			"import { NumberField } from '@components/fields/NumberField';\n",
 			"import { BooleanField } from '@components/fields/BooleanField';\n",
@@ -1418,6 +1521,7 @@ export default function MFAScreen() {
 			"  const router = useRouter();\n",
 			"  const qc = useQueryClient();\n",
 			id_param,
+			voice_hook,
 			"  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<" + m + "Form>({\n",
 			"    resolver: zodResolver(create" + m + "Schema),\n",
 			"  });\n\n",
@@ -3819,6 +3923,259 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 			f"export const update{m}Schema = create{m}Schema.partial();\n\n"
 			f"export type Create{m}Input = z.infer<typeof create{m}Schema>;\n"
 			f"export type Update{m}Input = z.infer<typeof update{m}Schema>;\n"
+		)
+
+	# ── Offline / WatermelonDB / Voice methods ────────────────────────────────
+
+	def _gen_db_schema(self) -> str:
+		"""Generates src/db/schema.ts for WatermelonDB."""
+		table_schemas = []
+		for tname, tinfo in self._tables.items():
+			non_pk_cols = [c for c in tinfo.columns if not c.primary_key]
+			col_lines = []
+			for col in non_pk_cols:
+				if col.category in (ColumnType.BOOLEAN,):
+					col_type = "boolean"
+				elif col.category == ColumnType.NUMERIC:
+					col_type = "number"
+				else:
+					col_type = "string"
+				col_lines.append(f"      column({{ name: '{col.name}', type: '{col_type}', isOptional: {str(col.nullable).lower()} }}),")
+			cols_block = "\n".join(col_lines)
+			table_schemas.append(
+				f"  tableSchema({{\n"
+				f"    name: '{tname}',\n"
+				f"    columns: [\n"
+				f"{cols_block}\n"
+				f"    ],\n"
+				f"  }}),"
+			)
+		tables_block = "\n".join(table_schemas)
+		return (
+			"import { appSchema, tableSchema, column } from '@nozbe/watermelondb';\n\n"
+			"export default appSchema({\n"
+			"  version: 1,\n"
+			"  tables: [\n"
+			+ tables_block + "\n"
+			"  ],\n"
+			"});\n"
+		)
+
+	def _gen_watermelondb_model(self, tname: str, tinfo) -> str:
+		"""Generates src/db/models/{Pascal}.ts for a WatermelonDB Model subclass."""
+		pascal = _pascal(tname)
+		field_lines = []
+		for col in tinfo.columns:
+			if col.primary_key:
+				continue
+			if col.foreign_key:
+				# Use @relation for FK columns (strip trailing _id for association name)
+				assoc = col.name[:-3] if col.name.endswith("_id") else col.name
+				field_lines.append(f"  @relation('{assoc}') {_camel(col.name)}: Relation<Model>;")
+			elif col.category == ColumnType.NUMERIC:
+				field_lines.append(f"  @field('{col.name}') {_camel(col.name)}: number;")
+			elif col.category == ColumnType.BOOLEAN:
+				field_lines.append(f"  @field('{col.name}') {_camel(col.name)}: boolean;")
+			else:
+				field_lines.append(f"  @field('{col.name}') {_camel(col.name)}: string;")
+		fields_block = "\n".join(field_lines)
+		return (
+			"import { Model, Relation } from '@nozbe/watermelondb';\n"
+			"import { field, relation } from '@nozbe/watermelondb/decorators';\n\n"
+			f"export default class {pascal} extends Model {{\n"
+			f"  static table = '{tname}';\n\n"
+			+ fields_block + "\n"
+			"}\n"
+		)
+
+	def _gen_sync_client(self) -> str:
+		"""Generates src/db/sync.ts for WatermelonDB synchronize()."""
+		c = self.config
+		api = c.api_base_url
+		return (
+			"import { synchronize } from '@nozbe/watermelondb/sync';\n"
+			"import { database } from './index';\n\n"
+			"const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? '" + api + "';\n\n"
+			"export async function syncDB(token: string): Promise<void> {\n"
+			"  await synchronize({\n"
+			"    database,\n"
+			"    pullChanges: async ({ lastPulledAt }) => {\n"
+			"      const url = `${API}/api/sync?since=${lastPulledAt ?? 0}`;\n"
+			"      const res = await fetch(url, {\n"
+			"        headers: { Authorization: `Bearer ${token}` },\n"
+			"      });\n"
+			"      if (!res.ok) throw new Error(`pull failed: ${res.status}`);\n"
+			"      const json = await res.json();\n"
+			"      return { changes: json.changes, timestamp: json.timestamp };\n"
+			"    },\n"
+			"    pushChanges: async ({ changes, lastPulledAt }) => {\n"
+			"      const res = await fetch(`${API}/api/sync`, {\n"
+			"        method: 'POST',\n"
+			"        headers: {\n"
+			"          'Content-Type': 'application/json',\n"
+			"          Authorization: `Bearer ${token}`,\n"
+			"        },\n"
+			"        body: JSON.stringify({ changes, lastPulledAt }),\n"
+			"      });\n"
+			"      if (!res.ok) throw new Error(`push failed: ${res.status}`);\n"
+			"    },\n"
+			"    migrationsEnabledAtVersion: 1,\n"
+			"  });\n"
+			"}\n"
+		)
+
+	def _gen_sync_provider(self) -> str:
+		"""Generates src/providers/SyncProvider.tsx."""
+		return """\
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
+import { useAuth } from '@lib/auth';
+import { syncDB } from '@/src/db/sync';
+
+interface SyncContextValue {
+  syncNow: () => Promise<void>;
+}
+
+const SyncContext = createContext<SyncContextValue>({ syncNow: async () => {} });
+
+export function useSyncContext() {
+  return useContext(SyncContext);
+}
+
+export function SyncProvider({ children }: { children: ReactNode }) {
+  const { token } = useAuth();
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+
+  const syncNow = async () => {
+    if (!token) return;
+    try {
+      await syncDB(token);
+    } catch (e) {
+      console.warn('[SyncProvider] sync error', e);
+    }
+  };
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && next === 'active') {
+        syncNow();
+      }
+      appState.current = next;
+    });
+    // Sync on mount
+    syncNow();
+    return () => sub.remove();
+  }, [token]);
+
+  return (
+    <SyncContext.Provider value={{ syncNow }}>
+      {children}
+    </SyncContext.Provider>
+  );
+}
+"""
+
+	def _gen_mic_button(self) -> str:
+		"""Generates src/components/MicButton.tsx using expo-av."""
+		c = self.config
+		api = c.api_base_url
+		return (
+			"import { useState, useRef } from 'react';\n"
+			"import { Pressable, ActivityIndicator } from 'react-native';\n"
+			"import { Audio } from 'expo-av';\n"
+			"import * as FileSystem from 'expo-file-system';\n"
+			"import { Ionicons } from '@expo/vector-icons';\n\n"
+			"const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? '" + api + "';\n\n"
+			"interface MicButtonProps {\n"
+			"  onTranscript: (text: string) => void;\n"
+			"  token?: string;\n"
+			"}\n\n"
+			"export function MicButton({ onTranscript, token }: MicButtonProps) {\n"
+			"  const [recording, setRecording] = useState(false);\n"
+			"  const [loading, setLoading] = useState(false);\n"
+			"  const recordingRef = useRef<Audio.Recording | null>(null);\n\n"
+			"  const startRecording = async () => {\n"
+			"    try {\n"
+			"      await Audio.requestPermissionsAsync();\n"
+			"      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });\n"
+			"      const { recording } = await Audio.Recording.createAsync(\n"
+			"        Audio.RecordingOptionsPresets.HIGH_QUALITY,\n"
+			"      );\n"
+			"      recordingRef.current = recording;\n"
+			"      setRecording(true);\n"
+			"    } catch (e) {\n"
+			"      console.warn('[MicButton] start error', e);\n"
+			"    }\n"
+			"  };\n\n"
+			"  const stopRecording = async () => {\n"
+			"    if (!recordingRef.current) return;\n"
+			"    setRecording(false);\n"
+			"    setLoading(true);\n"
+			"    try {\n"
+			"      await recordingRef.current.stopAndUnloadAsync();\n"
+			"      const uri = recordingRef.current.getURI();\n"
+			"      recordingRef.current = null;\n"
+			"      if (!uri) return;\n"
+			"      const res = await FileSystem.uploadAsync(\n"
+			"        `${API}/api/voice/transcribe`,\n"
+			"        uri,\n"
+			"        {\n"
+			"          httpMethod: 'POST',\n"
+			"          uploadType: FileSystem.FileSystemUploadType.MULTIPART,\n"
+			"          fieldName: 'audio',\n"
+			"          headers: token ? { Authorization: `Bearer ${token}` } : {},\n"
+			"        },\n"
+			"      );\n"
+			"      const json = JSON.parse(res.body);\n"
+			"      if (json.text) onTranscript(json.text);\n"
+			"    } catch (e) {\n"
+			"      console.warn('[MicButton] upload error', e);\n"
+			"    } finally {\n"
+			"      setLoading(false);\n"
+			"    }\n"
+			"  };\n\n"
+			"  const handlePress = () => {\n"
+			"    if (recording) stopRecording();\n"
+			"    else startRecording();\n"
+			"  };\n\n"
+			"  if (loading) {\n"
+			"    return <ActivityIndicator size=\"small\" color=\"#6366f1\" style={{ marginLeft: 8 }} />;\n"
+			"  }\n\n"
+			"  return (\n"
+			"    <Pressable\n"
+			"      onPress={handlePress}\n"
+			"      style={{\n"
+			"        marginLeft: 8,\n"
+			"        width: 40,\n"
+			"        height: 40,\n"
+			"        borderRadius: 20,\n"
+			"        alignItems: 'center',\n"
+			"        justifyContent: 'center',\n"
+			"        backgroundColor: recording ? '#ef4444' : '#f3f4f6',\n"
+			"      }}\n"
+			"    >\n"
+			"      <Ionicons\n"
+			"        name={recording ? 'stop-circle' : 'mic-outline'}\n"
+			"        size={22}\n"
+			"        color={recording ? 'white' : '#6366f1'}\n"
+			"      />\n"
+			"    </Pressable>\n"
+			"  );\n"
+			"}\n"
+		)
+
+	def _gen_tts_hook(self) -> str:
+		"""Generates src/hooks/useTTS.ts wrapping expo-speech."""
+		return (
+			"import * as Speech from 'expo-speech';\n\n"
+			"export function useTTS() {\n"
+			"  const speak = (text: string) => {\n"
+			"    Speech.stop();\n"
+			"    Speech.speak(text, { language: 'en-US', rate: 0.9 });\n"
+			"  };\n\n"
+			"  const stop = () => Speech.stop();\n\n"
+			"  return { speak, stop };\n"
+			"}\n"
 		)
 
 	# ── File writer ───────────────────────────────────────────────────────────
