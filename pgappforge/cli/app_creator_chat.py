@@ -637,8 +637,17 @@ class AppCreatorChat:
 			click.echo(click.style(f"Fatal error: {exc}", fg="red"), err=True)
 			raise SystemExit(1) from exc
 
-	def process_message(self, user_input: str) -> str:
-		"""Send user_input, execute tool calls, return final reply string."""
+	def process_message(
+		self,
+		user_input: str,
+		on_tool: Any = None,      # optional Callable[[str, str], None] — called with (name, result)
+		on_content: Any = None,   # optional Callable[[str], None] — called with partial content
+	) -> str:
+		"""Send user_input, execute any tool calls, return final reply.
+
+		Optional callbacks allow callers (CLI streaming, web instrumentation) to
+		react to tool calls and partial content without duplicating the agentic loop.
+		"""
 		self._messages.append({"role": "user", "content": user_input})
 
 		for _iteration in range(10):
@@ -649,57 +658,13 @@ class AppCreatorChat:
 			if not tool_calls:
 				content: str = msg.get("content") or "(no response)"
 				self._messages.append({"role": "assistant", "content": content})
+				if on_content:
+					on_content(content)
 				return content
 
-			self._messages.append({
-				"role": "assistant",
-				"content": msg.get("content") or "",
-				"tool_calls": tool_calls,
-			})
-
-			for tc in tool_calls:
-				fn = tc.get("function", {})
-				name = fn.get("name", "")
-				args_raw = fn.get("arguments", {})
-				args: dict[str, Any] = (
-					json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
-				)
-				result = self._execute_tool(name, args)
-				_log_.debug("tool %s(%s) -> %s", name, args, result)
-				self._messages.append({
-					"role": "tool",
-					"name": name,
-					"content": result,
-				})
-
-		return "(tool iteration limit reached — please rephrase your request)"
-
-	def _process_message_streaming(self, user_input: str) -> None:
-		"""Process a message with streaming output for the CLI."""
-		self._messages.append({"role": "user", "content": user_input})
-		prefix = click.style("pgappforge", fg="cyan", bold=True) + ": "
-
-		for _iteration in range(10):
-			# First pass: get full response (need to handle tool calls atomically)
-			response = self._call_ollama(self._messages, _TOOLS, stream=False)
-			msg = response.get("message", {})
-			tool_calls: list[dict[str, Any]] = msg.get("tool_calls") or []
-
-			if not tool_calls:
-				content = msg.get("content") or ""
-				self._messages.append({"role": "assistant", "content": content})
-				# Simulate streaming by printing word by word
-				click.echo(prefix, nl=False)
-				for word in content.split():
-					click.echo(word + " ", nl=False)
-					sys.stdout.flush()
-				click.echo()
-				return
-
-			# Print partial content if any
 			partial = msg.get("content") or ""
-			if partial.strip():
-				click.echo(prefix + partial)
+			if partial.strip() and on_content:
+				on_content(partial)
 
 			self._messages.append({
 				"role": "assistant",
@@ -714,14 +679,37 @@ class AppCreatorChat:
 				args: dict[str, Any] = (
 					json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
 				)
-				click.echo(click.style(f"  [{name}] ", fg="yellow"), nl=False)
 				result = self._execute_tool(name, args)
-				click.echo(click.style(result, fg="green"))
+				_log_.debug("tool %s(%s) -> %s", name, args, result)
+				if on_tool:
+					on_tool(name, result)
 				self._messages.append({
 					"role": "tool",
 					"name": name,
 					"content": result,
 				})
+
+		return "(tool iteration limit reached — please rephrase your request)"
+
+	def _process_message_streaming(self, user_input: str) -> None:
+		"""CLI streaming — delegates to process_message with print callbacks."""
+		prefix = click.style("pgappforge", fg="cyan", bold=True) + ": "
+		printed_content = [False]
+
+		def on_content(text: str) -> None:
+			if not printed_content[0]:
+				click.echo(prefix, nl=False)
+				printed_content[0] = True
+			for word in text.split():
+				click.echo(word + " ", nl=False)
+				sys.stdout.flush()
+			click.echo()
+
+		def on_tool(name: str, result: str) -> None:
+			click.echo(click.style(f"  [{name}] ", fg="yellow"), nl=False)
+			click.echo(click.style(result, fg="green"))
+
+		self.process_message(user_input, on_tool=on_tool, on_content=on_content)
 
 	# ── Ollama API ────────────────────────────────────────────────────────────
 
@@ -1184,8 +1172,11 @@ def _make_web_chat_class() -> type:
 			url = cfg.get("PGAF_OLLAMA_URL", cfg.get("OLLAMA_URL", "http://localhost:11434"))
 			default_model = cfg.get("PGAF_OLLAMA_MODEL", cfg.get("OLLAMA_MODEL", "qwen2.5:7b"))
 			use_model = model or default_model
-			if self._chat is None or self._chat.model != use_model:
+			if self._chat is None:
 				self._chat = AppCreatorChat(ollama_url=url, model=use_model, stream=False)
+			elif use_model and self._chat.model != use_model:
+				# Change model for future calls but PRESERVE conversation history and schema state
+				self._chat.model = use_model
 			return self._chat
 
 		@expose("/")
@@ -1212,21 +1203,15 @@ def _make_web_chat_class() -> type:
 			chat_obj = self._get_chat(model)
 
 			tool_log: list[str] = []
-			original_execute = chat_obj._execute_tool
 
-			def _instrumented(name: str, args: dict[str, Any]) -> str:
-				result = original_execute(name, args)
-				tool_log.append(f"[{name}] {result}")
-				return result
-
-			chat_obj._execute_tool = _instrumented  # type: ignore[method-assign]
 			try:
-				reply = chat_obj.process_message(user_msg)
+				reply = chat_obj.process_message(
+					user_msg,
+					on_tool=lambda name, result: tool_log.append(f"[{name}] {result}"),
+				)
 			except Exception as exc:
 				_log_.exception("chat error")
 				return jsonify({"error": str(exc)}), 500
-			finally:
-				chat_obj._execute_tool = original_execute  # type: ignore[method-assign]
 
 			return jsonify({
 				"reply": reply,
