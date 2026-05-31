@@ -580,43 +580,118 @@
   "short_description": "Healthcare resources — US/EU/AU government mandated standard",
   "long_description": "HL7 FHIR R4 (Fast Healthcare Interoperability Resources) is the definitive standard for exchanging electronic health records. Each resource type (Patient, Encounter, Observation, etc.) maps directly to a PostgreSQL table with searchable columns and a JSONB resource column for the full FHIR payload. Includes all mandatory SMART on FHIR compliance fields.",
   "when_to_use": "Use when building any clinical system that must exchange patient data with hospitals, labs, or health systems. Required by US 21st Century Cures Act (2021), EU eHDSI, NHS Digital, and ADHA (Australia). Essential for EHR integrations, patient portals, telehealth, and clinical trials.",
-  "actor": {
-    "role": "patient",
-    "table": "patient",
-    "display": {
-      "singular": "Patient",
-      "plural": "Patients",
-      "icon": "fa-user-md",
-      "color": "primary"
-    },
-    "field_map": {
-      "display_name": [
-        "given_name",
-        "family_name"
-      ],
-      "contact_email": "email",
-      "contact_phone": "phone",
-      "status_field": "active",
-      "status_map": {
-        "true": "active",
-        "false": "inactive"
+  "actors": [
+    {
+      "role": "patient",
+      "table": "patient",
+      "display": {
+        "singular": "Patient",
+        "plural": "Patients",
+        "icon": "fa-user-md",
+        "color": "primary"
       },
-      "external_ids": {
-        "mrn": "identifier"
-      }
+      "field_map": {
+        "display_name": [
+          "given_name",
+          "family_name"
+        ],
+        "contact_email": "email",
+        "contact_phone": "phone",
+        "status_field": "active",
+        "status_map": {
+          "true": "active",
+          "false": "inactive"
+        },
+        "external_ids": {
+          "mrn": "identifier"
+        }
+      },
+      "related_collections": [
+        "encounter",
+        "observation",
+        "condition",
+        "medication_request",
+        "appointment"
+      ],
+      "tags": [
+        "hipaa",
+        "person",
+        "billable",
+        "regulated"
+      ],
+      "primary": true
     },
-    "related_collections": [
-      "encounter",
-      "observation",
-      "condition",
-      "medication_request",
-      "appointment"
-    ],
-    "tags": [
-      "hipaa",
-      "person",
-      "billable",
-      "regulated"
-    ]
-  }
+    {
+      "role": "practitioner",
+      "table": "practitioner",
+      "primary": false,
+      "display": {
+        "singular": "Practitioner",
+        "plural": "Practitioners",
+        "icon": "fa-user-nurse",
+        "color": "info"
+      },
+      "field_map": {
+        "display_name": [
+          "given_name",
+          "family_name"
+        ],
+        "contact_email": "email",
+        "status_field": "active",
+        "status_map": {
+          "true": "active",
+          "false": "inactive"
+        },
+        "external_ids": {
+          "npi": "npi_number"
+        }
+      },
+      "sub_roles": {
+        "doctor": {
+          "filter_field": "specialty_code",
+          "filter_values": [
+            "MD",
+            "DO"
+          ],
+          "display": {
+            "singular": "Doctor",
+            "plural": "Doctors",
+            "icon": "fa-user-md"
+          }
+        },
+        "nurse": {
+          "filter_field": "specialty_code",
+          "filter_values": [
+            "RN",
+            "NP"
+          ],
+          "display": {
+            "singular": "Nurse",
+            "plural": "Nurses",
+            "icon": "fa-stethoscope"
+          }
+        },
+        "pharmacist": {
+          "filter_field": "specialty_code",
+          "filter_values": [
+            "PharmD"
+          ],
+          "display": {
+            "singular": "Pharmacist",
+            "plural": "Pharmacists",
+            "icon": "fa-pills"
+          }
+        }
+      },
+      "related_collections": [
+        "encounter",
+        "appointment"
+      ],
+      "tags": [
+        "hipaa",
+        "person",
+        "licensed"
+      ]
+    }
+  ]
 }

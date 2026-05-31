@@ -296,10 +296,39 @@ def test_template_registry_all_actor_configs():
 def test_template_registry_register_actors():
 	reg = TemplateRegistry()
 	count = reg.register_actors()
-	assert count >= 2  # at least fhir-r4 and hr-open
+	assert count >= 3  # patient + practitioner (fhir-r4) + employee (hr-open)
 	actor_reg = ActorRegistry.instance()
 	assert actor_reg.is_registered("patient")
 	assert actor_reg.is_registered("employee")
+	assert actor_reg.is_registered("practitioner")
+
+
+def test_template_registry_get_template_actors():
+	reg = TemplateRegistry()
+	actors = reg.get_template_actors("fhir-r4")
+	assert len(actors) == 2
+	roles = {a.role for a in actors}
+	assert "patient" in roles
+	assert "practitioner" in roles
+	primary = next(a for a in actors if a.primary)
+	assert primary.role == "patient"
+	supporting = next(a for a in actors if not a.primary)
+	assert supporting.role == "practitioner"
+	assert "doctor" in supporting.sub_roles
+
+
+def test_template_registry_get_actor_config_returns_primary():
+	reg = TemplateRegistry()
+	cfg = reg.get_actor_config("fhir-r4")
+	assert cfg.role == "patient"  # primary, not practitioner
+	assert cfg.primary is True
+
+
+def test_hr_open_single_actor_format():
+	reg = TemplateRegistry()
+	actors = reg.get_template_actors("hr-open")
+	assert len(actors) == 1
+	assert actors[0].role == "employee"
 
 
 # ─── Sub-role disambiguation ───────────────────────────────────────────────

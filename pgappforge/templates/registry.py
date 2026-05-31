@@ -254,50 +254,83 @@ class TemplateRegistry:
 	# ─── Actor pattern ────────────────────────────────────────────────────────
 
 	def get_actor_config(self, template_name: str):
-		"""Return ActorConfig for a template, or None if it has no actor declaration.
+		"""Return the PRIMARY actor for a template, or None.
+
+		Supports both formats:
+		  ``"actor": {...}``           — single primary actor (shorthand)
+		  ``"actors": [{...}, ...]``   — array; returns first with ``primary: true``
+		    (falls back to first entry if none is marked primary)
 
 		Raises:
 		    TemplateNotFoundError: if the template doesn't exist.
-		    pydantic.ValidationError: if the actor section is malformed.
+		    ValueError: if the actor section is malformed.
+		"""
+		actors = self.get_template_actors(template_name)
+		if not actors:
+			return None
+		primary = next((a for a in actors if a.primary), actors[0])
+		return primary
+
+	def get_template_actors(self, template_name: str) -> list:
+		"""Return ALL actors declared in a template (primary + supporting).
+
+		Supports:
+		  ``"actor": {...}``         → list of one
+		  ``"actors": [{...}, ...]`` → list of N
+
+		Raises:
+		    TemplateNotFoundError: if the template doesn't exist.
 		"""
 		from pgappforge.templates.core.actor import ActorConfig
 		t = self.get(template_name)
-		actor_data = t.get("actor")
-		if not actor_data:
-			return None
-		return ActorConfig.from_dict(actor_data)
+		results = []
+		# Singular form — primary actor shorthand
+		if "actor" in t:
+			try:
+				results.append(ActorConfig.from_dict(t["actor"]))
+			except Exception as exc:
+				log.warning("Malformed 'actor' in template %r: %s", template_name, exc)
+		# Array form — primary + supporting actors
+		for i, actor_data in enumerate(t.get("actors", [])):
+			try:
+				results.append(ActorConfig.from_dict(actor_data))
+			except Exception as exc:
+				log.warning("Malformed 'actors[%d]' in template %r: %s", i, template_name, exc)
+		return results
 
 	def all_actor_configs(self) -> dict[str, object]:
-		"""Return {template_name: ActorConfig} for every template that declares an actor.
+		"""Return {template_name: primary ActorConfig} for every template that has an actor.
 
-		Skips templates with malformed actor sections (logs a warning).
+		To get ALL actors (including supporting), use ``get_template_actors(name)``.
 		"""
-		from pgappforge.templates.core.actor import ActorConfig
 		self._scan_dirs()
 		result: dict[str, object] = {}
-		for name, t in self._cache.items():
-			actor_data = t.get("actor")
-			if not actor_data:
-				continue
+		for name in self._cache:
 			try:
-				result[name] = ActorConfig.from_dict(actor_data)
+				cfg = self.get_actor_config(name)
+				if cfg is not None:
+					result[name] = cfg
 			except Exception as exc:
-				log.warning("Malformed actor config in template %r: %s", name, exc)
+				log.warning("Error reading actor config for template %r: %s", name, exc)
 		return result
 
 	def register_actors(self) -> int:
-		"""Parse all template actor declarations and register them with ActorRegistry.
+		"""Parse ALL template actor declarations and register with ActorRegistry.
 
-		Call this at app startup (before any actor-aware views are rendered).
-		Returns the number of actors registered.
+		Registers both primary and supporting actors from every template.
+		Call at app startup before actor-aware views are rendered.
+		Returns the total number of actors registered.
 		"""
 		from pgappforge.templates.core.actor import ActorRegistry
+		self._scan_dirs()
 		registry = ActorRegistry.instance()
-		configs = self.all_actor_configs()
-		for config in configs.values():
-			registry.register(config)
-		log.info("Registered %d template actors", len(configs))
-		return len(configs)
+		count = 0
+		for name in self._cache:
+			for config in self.get_template_actors(name):
+				registry.register(config)
+				count += 1
+		log.info("Registered %d template actors from %d templates", count, len(self._cache))
+		return count
 
 
 # ─── Domain classification ────────────────────────────────────────────────────
