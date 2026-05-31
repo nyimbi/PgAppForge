@@ -189,6 +189,11 @@ class TableInfo:
     is_matview: bool = False
     is_readonly: bool = False       # True for views and matviews (no INSERT/UPDATE/DELETE)
     display_column: str = ""        # Best column to use as human-readable label
+    # PostgreSQL inheritance and partitioning
+    is_partitioned: bool = False    # Parent of a declarative partition set (relkind='p')
+    is_partition: bool = False      # A concrete partition of a partitioned table
+    parent_table: str = ""          # Set for is_partition=True; name of the parent table
+    is_inherited: bool = False      # Traditional INHERITS-based child table
 
 
 class EnhancedDatabaseInspector:
@@ -375,6 +380,9 @@ class EnhancedDatabaseInspector:
                     analysis['tables'][view_name] = view_info
                 except Exception as exc:
                     logger.debug("Skipping view %s: %s", view_name, exc)
+
+        # Tag partitioned, partition, and inheritance tables
+        self._tag_partition_inheritance(analysis)
 
         # Synthesize parent-side ONE_TO_MANY relationships from the reverse-FK index
         self._synthesize_parent_relationships(analysis)
@@ -1315,6 +1323,54 @@ class EnhancedDatabaseInspector:
                 return 'StringField'
         else:
             return 'StringField'
+
+    def _tag_partition_inheritance(self, analysis: Dict[str, Any]) -> None:
+        """Tag tables with partition and inheritance metadata.
+
+        Queries pg_class and pg_inherits so generators know to:
+        - Skip partition children from navigation (they're accessed via the parent)
+        - Mark partitioned parent tables as read-only from a routing perspective
+        - Warn about classical INHERITS hierarchies (no ORM auto-poly support)
+        """
+        try:
+            from sqlalchemy import text as _text_pi
+            with self.engine.connect() as conn:
+                # Declarative partitioning: relkind='p' = partitioned table root
+                part_roots = {
+                    r[0] for r in conn.execute(_text_pi(
+                        "SELECT relname FROM pg_class c "
+                        "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                        "WHERE c.relkind = 'p' AND n.nspname = ANY(current_schemas(false))"
+                    )).fetchall()
+                }
+                # Partition children and their parents
+                partition_map: Dict[str, str] = {}
+                for row in conn.execute(_text_pi(
+                    "SELECT c.relname AS child, p.relname AS parent "
+                    "FROM pg_inherits i "
+                    "JOIN pg_class c ON c.oid = i.inhrelid "
+                    "JOIN pg_class p ON p.oid = i.inhparent "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = ANY(current_schemas(false))"
+                )).fetchall():
+                    partition_map[row[0]] = row[1]
+        except Exception as exc:
+            logger.debug("partition/inheritance detection skipped: %s", exc)
+            return
+
+        for tname, tinfo in analysis['tables'].items():
+            if tname in part_roots:
+                tinfo.is_partitioned = True
+                tinfo.is_readonly = True   # DML must go through partition children
+            if tname in partition_map:
+                parent = partition_map[tname]
+                if parent in part_roots:
+                    tinfo.is_partition = True
+                    tinfo.parent_table = parent
+                else:
+                    # Traditional INHERITS (not declarative partitioning)
+                    tinfo.is_inherited = True
+                    tinfo.parent_table = parent
 
     def _synthesize_parent_relationships(self, analysis: Dict[str, Any]) -> None:
         """

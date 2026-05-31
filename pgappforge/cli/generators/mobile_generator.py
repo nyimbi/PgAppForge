@@ -249,6 +249,7 @@ class MobileGenerator:
 			name: info
 			for name, info in all_tables.items()
 			if not info.is_association_table
+			and not getattr(info, "is_partition", False)     # skip partition children (implementation detail)
 			and not any(name.startswith(p) for p in _system_prefixes)
 		}
 
