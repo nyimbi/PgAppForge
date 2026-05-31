@@ -15,7 +15,8 @@ from sqlalchemy import TypeDecorator, Text, String
 from sqlalchemy.ext.mutable import MutableDict
 from wtforms import Field, ValidationError
 from wtforms.widgets import TextArea, Input
-from flask import Markup, current_app
+from flask import current_app
+from markupsafe import Markup
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 
 log = logging.getLogger(__name__)

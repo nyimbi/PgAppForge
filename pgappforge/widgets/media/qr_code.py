@@ -4,10 +4,11 @@ QR Code Widget for PgForge
 A comprehensive QR Code widget with generation, scanning, customization, and bulk operations.
 """
 
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms.widgets import Input
 from flask_babel import gettext
 from pgappforge.widgets_postgresql._cdn import QRCODE_CDN_URL, JSQR_CDN_URL
+from pgappforge.widgets.media._utils import js_json as _js_json
 
 
 class QrCodeWidget(Input):
@@ -675,12 +676,13 @@ class QrCodeWidget(Input):
             </div>
 
             <!-- Hidden input field -->
-            <input type="hidden" name="{field.name}" id="{widget_id}" value="{field.data or ''}" />
+            <input type="hidden" name="{escape(field.name)}" id="{escape(widget_id)}" value="{escape(field.data or '')}" />
         </div>
         '''
 
     def _generate_javascript(self, widget_id, initial_value):
         """Generate JavaScript for the QR code widget."""
+        safe_initial = _js_json(initial_value)
         return f'''
         <script>
         (function() {{
@@ -729,8 +731,8 @@ class QrCodeWidget(Input):
                 loadHistory();
 
                 // Set initial value if provided
-                if ('{initial_value}') {{
-                    document.getElementById('{widget_id}-content-input').value = '{initial_value}';
+                if ({safe_initial}) {{
+                    document.getElementById('{widget_id}-content-input').value = {safe_initial};
                     generateQRCode();
                 }}
             }}

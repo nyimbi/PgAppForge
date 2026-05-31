@@ -82,8 +82,9 @@ from geoalchemy2 import Geometry
 # View header components
 VIEW_IMPORTS = """
 import calendar
-from flask import redirect, flash, url_for, request, jsonify, current_app, g, Markup
+from flask import redirect, flash, url_for, request, jsonify, current_app, g
 from flask import render_template
+from markupsafe import Markup
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.views import ModelView, BaseView, MasterDetailView, MultipleView, RestCRUDView, CompactCRUDMixin
 from pgappforge import ModelView, ModelRestApi, CompactCRUDMixin, aggregate_count, action, expose, BaseView, has_access
@@ -17210,7 +17211,8 @@ import json
 import os
 from pathlib import Path
 
-from flask import render_template_string, Markup
+from flask import render_template_string
+from markupsafe import Markup
 
 class UIComponentManager:
     \"\"\"UI component manager with comprehensive features\"\"\"

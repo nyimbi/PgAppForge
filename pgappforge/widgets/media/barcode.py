@@ -4,13 +4,13 @@ BarcodeWidget — 1D barcode generator using JsBarcode (CDN, no server deps).
 Supported formats: CODE128, EAN13, EAN8, UPC (UPC-A), UPCE, CODE39, ITF14, MSI, pharmacode
 """
 
-import json
 import re
 
 from markupsafe import Markup, escape
 from wtforms.widgets import Input
 from flask_babel import gettext
 from pgappforge.widgets_postgresql._cdn import JSBARCODE_CDN_URL
+from pgappforge.widgets.media._utils import js_json as _js_json
 
 FORMAT_CONSTRAINTS: dict[str, dict] = {
 	"CODE128":    {"label": "Code 128",   "hint": "Any ASCII text"},
@@ -26,19 +26,6 @@ FORMAT_CONSTRAINTS: dict[str, dict] = {
 
 VALID_FORMATS = frozenset(FORMAT_CONSTRAINTS)
 
-
-def _js_json(value) -> str:
-	"""json.dumps safe for embedding inside an HTML <script> block.
-
-	Escapes < and > as Unicode escapes so the HTML parser cannot
-	misinterpret </script> or <script> sequences inside the JS string.
-	"""
-	return (
-		json.dumps(value)
-		.replace("<", "\\u003c")
-		.replace(">", "\\u003e")
-		.replace("&", "\\u0026")
-	)
 
 
 def _js_id(wid: str) -> str:
