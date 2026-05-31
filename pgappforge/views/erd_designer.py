@@ -1464,6 +1464,173 @@ cy.fit();
 		except Exception as exc:
 			return jsonify({"error": str(exc)}), 500
 
+	# ── Database Objects panel (Domains, Views, Mat.Views, Policies, Event Triggers)
+
+	def _object_manager(self):
+		from pgappforge.views.erd_object_manager import DatabaseObjectManager
+		return DatabaseObjectManager(self._schema_manager().engine)
+
+	@expose("/api/objects/templates")
+	@has_access
+	def api_object_templates(self):
+		"""List all database-object templates, optionally filtered by type."""
+		from pgappforge.views.erd_object_manager import DatabaseObjectManager
+		obj_type = request.args.get("type")
+		mgr = self._object_manager()
+		return jsonify({"templates": mgr.list_object_templates(obj_type or None)})
+
+	@expose("/api/objects/apply-template", methods=["POST"])
+	@has_access
+	def api_object_apply_template(self):
+		"""Apply a database-object template."""
+		_require_schema_admin()
+		_validate_csrf()
+		data         = request.get_json(silent=True) or {}
+		template_key = data.pop("template_key", "")
+		if not template_key:
+			return jsonify({"error": "template_key required"}), 400
+		try:
+			mgr    = self._object_manager()
+			result = mgr.apply_object_template(template_key, **data)
+			return jsonify(result)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	# Domains
+	@expose("/api/domains/list")
+	@has_access
+	def api_domains_list(self):
+		schema = request.args.get("schema", "public")
+		return jsonify({"domains": self._object_manager().list_domains(schema)})
+
+	@expose("/api/domains/drop", methods=["POST"])
+	@has_access
+	def api_domains_drop(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		try:
+			r = self._object_manager().drop_domain(d["name"], d.get("schema","public"), d.get("cascade",False))
+			return jsonify(r)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	# Event triggers
+	@expose("/api/event-triggers/list")
+	@has_access
+	def api_event_trigger_list(self):
+		return jsonify({"event_triggers": self._object_manager().list_event_triggers()})
+
+	@expose("/api/event-triggers/drop", methods=["POST"])
+	@has_access
+	def api_event_trigger_drop(self):
+		_require_schema_admin(); _validate_csrf()
+		d    = request.get_json(silent=True) or {}
+		name = d.get("name", "")
+		if not name:
+			return jsonify({"error": "name required"}), 400
+		return jsonify(self._object_manager().drop_event_trigger(name))
+
+	@expose("/api/event-triggers/toggle", methods=["POST"])
+	@has_access
+	def api_event_trigger_toggle(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		return jsonify(self._object_manager().toggle_event_trigger(d.get("name",""), bool(d.get("enable",True))))
+
+	# Materialized views
+	@expose("/api/matviews/list")
+	@has_access
+	def api_matview_list(self):
+		schema = request.args.get("schema", "public")
+		return jsonify({"mat_views": self._object_manager().list_mat_views(schema)})
+
+	@expose("/api/matviews/refresh", methods=["POST"])
+	@has_access
+	def api_matview_refresh(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		return jsonify(self._object_manager().refresh_mat_view(
+			d.get("name",""), d.get("schema","public"), d.get("concurrently", True)
+		))
+
+	@expose("/api/matviews/drop", methods=["POST"])
+	@has_access
+	def api_matview_drop(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		return jsonify(self._object_manager().drop_view(d.get("name",""), d.get("schema","public"), materialized=True))
+
+	# Views
+	@expose("/api/views/list")
+	@has_access
+	def api_view_list(self):
+		schema = request.args.get("schema", "public")
+		return jsonify({"views": self._object_manager().list_views(schema)})
+
+	@expose("/api/views/definition")
+	@has_access
+	def api_view_definition(self):
+		name   = request.args.get("name", "")
+		schema = request.args.get("schema", "public")
+		mat    = request.args.get("materialized","0") in ("1","true")
+		defn   = self._object_manager().get_view_definition(name, schema, mat)
+		return jsonify({"definition": defn})
+
+	@expose("/api/views/create", methods=["POST"])
+	@has_access
+	def api_view_create(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		try:
+			r = self._object_manager().create_view(
+				d.get("name",""), d.get("query",""),
+				d.get("schema","public"), bool(d.get("materialized",False))
+			)
+			return jsonify(r)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/views/drop", methods=["POST"])
+	@has_access
+	def api_view_drop(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		return jsonify(self._object_manager().drop_view(
+			d.get("name",""), d.get("schema","public"), bool(d.get("materialized",False))
+		))
+
+	# Policies
+	@expose("/api/policies/list")
+	@has_access
+	def api_policy_list(self):
+		table  = request.args.get("table")
+		schema = request.args.get("schema", "public")
+		return jsonify({"policies": self._object_manager().list_policies(table, schema)})
+
+	@expose("/api/policies/create", methods=["POST"])
+	@has_access
+	def api_policy_create(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		try:
+			r = self._object_manager().create_policy(
+				d.get("table",""), d.get("name",""), d.get("using_expr",""),
+				d.get("command","ALL"), d.get("check_expr"),
+				d.get("schema","public"),
+			)
+			return jsonify(r)
+		except Exception as exc:
+			return jsonify({"error": str(exc)}), 500
+
+	@expose("/api/policies/drop", methods=["POST"])
+	@has_access
+	def api_policy_drop(self):
+		_require_schema_admin(); _validate_csrf()
+		d = request.get_json(silent=True) or {}
+		return jsonify(self._object_manager().drop_policy(
+			d.get("table",""), d.get("name",""), d.get("schema","public")
+		))
+
 	# ── Phase 5: Schema namespace list ────────────────────────────────────────
 
 	@expose("/api/schema-list")
@@ -1707,28 +1874,23 @@ _DESIGNER_HTML = ("""
         <button class="btn btn-xs btn-default" onclick="recommendIndexes()">&#9660; Indexes</button>
         <button class="btn btn-xs btn-info"    onclick="aiGenerateSchema()">&#129302; AI Gen</button>
       </div>
-      <!-- Triggers & Functions -->
-      <div class="tb-sect">TRIGGERS &amp; FUNCTIONS</div>
-      <button class="btn btn-xs btn-default btn-block"
-              onclick="openTriggerPanel('templates')"
-              title="Apply a trigger template to any table">
-        &#9889; Template Library
-      </button>
-      <button class="btn btn-xs btn-default btn-block"
-              onclick="openTriggerPanel('live')"
-              title="List existing triggers in the database">
-        &#128295; Live Triggers
-      </button>
-      <button class="btn btn-xs btn-default btn-block"
-              onclick="openTriggerPanel('functions')"
-              title="Browse and view function/procedure source">
-        &#402; Functions
-      </button>
-      <button class="btn btn-xs btn-primary btn-block"
-              onclick="openTriggerPanel('editor')"
-              title="Write a custom function/procedure">
-        &#9998; Function Editor
-      </button>
+      <!-- Database Objects -->
+      <div class="tb-sect">DATABASE OBJECTS</div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('templates')"    title="Trigger templates">&#9889; Triggers</button>
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('functions')"    title="Browse functions">&#402; Fns</button>
+        <button class="btn btn-xs btn-primary" onclick="openTriggerPanel('editor')"       title="Function editor">&#9998; Edit</button>
+      </div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('domains')"      title="Domains">&#127358; Domains</button>
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('views')"        title="Views">&#128065; Views</button>
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('policies')"     title="RLS Policies">&#128274; RLS</button>
+      </div>
+      <div class="tb-row">
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('matviews')"     title="Materialized views">&#8635; MatViews</button>
+        <button class="btn btn-xs btn-default" onclick="openTriggerPanel('evtrig')"       title="Event triggers">&#9889; EvTrig</button>
+        <button class="btn btn-xs btn-warning" onclick="openTriggerPanel('objtpl')"       title="All 43 templates">&#128230; All Tpl</button>
+      </div>
       <!-- Diff -->
       <div class="tb-sect">MIGRATION</div>
       <button class="btn btn-xs btn-warning btn-block" onclick="showDiff([])">Preview Diff</button>
@@ -1900,13 +2062,22 @@ _DESIGNER_HTML = ("""
 <!-- ─── Trigger / Function panel modal ─────────────────────────────── -->
 <div id="trigger-modal" class="erd-modal">
   <div class="erd-modal-box" style="max-width:820px;width:96vw">
-    <h5 style="display:flex;align-items:center;justify-content:space-between">
-      <span>&#9889; Triggers &amp; Functions</span>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-xs btn-default" id="tab-templates" onclick="switchTriggerTab('templates')">Templates</button>
+    <h5 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <span>&#9889; Database Objects</span>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <!-- Row 1: Triggers & Functions -->
+        <button class="btn btn-xs btn-default" id="tab-templates" onclick="switchTriggerTab('templates')">Triggers</button>
         <button class="btn btn-xs btn-default" id="tab-live"      onclick="switchTriggerTab('live')">Live Triggers</button>
         <button class="btn btn-xs btn-default" id="tab-functions"  onclick="switchTriggerTab('functions')">Functions</button>
-        <button class="btn btn-xs btn-primary" id="tab-editor"    onclick="switchTriggerTab('editor')">&#9998; Editor</button>
+        <button class="btn btn-xs btn-primary" id="tab-editor"    onclick="switchTriggerTab('editor')">&#9998; Fn Editor</button>
+        <span style="border-left:1px solid #34495e;margin:0 2px"></span>
+        <!-- Row 2: New object types -->
+        <button class="btn btn-xs btn-default" id="tab-domains"   onclick="switchTriggerTab('domains')">&#127358; Domains</button>
+        <button class="btn btn-xs btn-default" id="tab-evtrig"    onclick="switchTriggerTab('evtrig')">&#9889; Evt Triggers</button>
+        <button class="btn btn-xs btn-default" id="tab-matviews"  onclick="switchTriggerTab('matviews')">&#128193; Mat.Views</button>
+        <button class="btn btn-xs btn-default" id="tab-views"     onclick="switchTriggerTab('views')">&#128065; Views</button>
+        <button class="btn btn-xs btn-default" id="tab-policies"  onclick="switchTriggerTab('policies')">&#128274; Policies</button>
+        <button class="btn btn-xs btn-warning" id="tab-objtpl"    onclick="switchTriggerTab('objtpl')">&#128230; All Templates</button>
       </div>
     </h5>
 
@@ -1987,6 +2158,126 @@ _DESIGNER_HTML = ("""
       <div class="erd-modal-actions">
         <button class="btn btn-sm btn-default" onclick="clearFunctionEditor()">Clear</button>
         <button class="btn btn-sm btn-primary" onclick="submitCustomFunction()">&#10003; Create / Replace</button>
+      </div>
+    </div>
+
+    <!-- DOMAINS tab -->
+    <div id="tpanel-domains" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="dom-schema" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;max-width:150px" onchange="loadDomains()"><option>public</option></select>
+        <button class="btn btn-xs btn-default" onclick="loadDomains()">&#8635;</button>
+        <button class="btn btn-xs btn-info" onclick="switchTriggerTab('objtpl');filterObjType('domain')">+ New from template</button>
+      </div>
+      <div id="domains-list" style="max-height:46vh;overflow-y:auto;font-size:.8em"><div style="color:#7f8c8d">Loading…</div></div>
+    </div>
+
+    <!-- EVENT TRIGGERS tab -->
+    <div id="tpanel-evtrig" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn btn-xs btn-default" onclick="loadEventTriggers()">&#8635; Refresh</button>
+        <button class="btn btn-xs btn-info" onclick="switchTriggerTab('objtpl');filterObjType('event_trigger')">+ New from template</button>
+      </div>
+      <div id="evtrig-list" style="max-height:46vh;overflow-y:auto;font-size:.8em"><div style="color:#7f8c8d">Loading…</div></div>
+    </div>
+
+    <!-- MATERIALIZED VIEWS tab -->
+    <div id="tpanel-matviews" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <select id="mv-schema" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;max-width:150px" onchange="loadMatViews()"><option>public</option></select>
+        <button class="btn btn-xs btn-default" onclick="loadMatViews()">&#8635;</button>
+        <button class="btn btn-xs btn-info" onclick="switchTriggerTab('objtpl');filterObjType('materialized_view')">+ New template</button>
+        <button class="btn btn-xs btn-warning" onclick="showViewEditor(true)">&#9998; Custom</button>
+      </div>
+      <div id="matviews-list" style="max-height:40vh;overflow-y:auto;font-size:.8em"><div style="color:#7f8c8d">Loading…</div></div>
+      <div id="matview-def" style="display:none;margin-top:8px">
+        <b id="matview-def-name" style="font-size:.8em;color:#3498db"></b>
+        <pre id="matview-def-sql" style="background:#0d1b2a;padding:8px;font-size:.72em;color:#00ff99;max-height:160px;overflow:auto;border-radius:4px"></pre>
+      </div>
+    </div>
+
+    <!-- VIEWS tab -->
+    <div id="tpanel-views" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <select id="view-schema" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;max-width:150px" onchange="loadViews()"><option>public</option></select>
+        <button class="btn btn-xs btn-default" onclick="loadViews()">&#8635;</button>
+        <button class="btn btn-xs btn-info" onclick="switchTriggerTab('objtpl');filterObjType('view')">+ New template</button>
+        <button class="btn btn-xs btn-warning" onclick="showViewEditor(false)">&#9998; Custom</button>
+      </div>
+      <div id="views-list" style="max-height:36vh;overflow-y:auto;font-size:.8em"><div style="color:#7f8c8d">Loading…</div></div>
+      <!-- Inline view editor -->
+      <div id="view-editor" style="display:none;margin-top:10px">
+        <label style="font-size:.75em;color:#7f8c8d">View / Materialized View SQL query</label>
+        <input id="view-edit-name" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;margin-bottom:4px" placeholder="view_name">
+        <textarea id="view-edit-sql" style="width:100%;height:140px;background:#0d1b2a;color:#00ff99;border:1px solid #445566;border-radius:4px;padding:8px;font-family:monospace;font-size:.78em;resize:vertical"
+          placeholder="SELECT * FROM orders WHERE ..."></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+          <label style="font-size:.75em;color:#7f8c8d"><input type="checkbox" id="view-edit-mat"> Materialized</label>
+          <button class="btn btn-xs btn-primary" onclick="submitCustomView()">&#10003; Create / Replace</button>
+          <button class="btn btn-xs btn-default" onclick="document.getElementById('view-editor').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- POLICIES tab -->
+    <div id="tpanel-policies" class="tpanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <input id="pol-table" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566;max-width:160px" placeholder="Table (optional)" oninput="loadPolicies()">
+        <button class="btn btn-xs btn-default" onclick="loadPolicies()">&#8635;</button>
+        <button class="btn btn-xs btn-info" onclick="switchTriggerTab('objtpl');filterObjType('policy')">+ New template</button>
+        <button class="btn btn-xs btn-warning" onclick="document.getElementById('policy-editor').style.display=''">&#9998; Custom</button>
+      </div>
+      <div id="policies-list" style="max-height:30vh;overflow-y:auto;font-size:.8em"><div style="color:#7f8c8d">Loading…</div></div>
+      <!-- Custom policy editor -->
+      <div id="policy-editor" style="display:none;margin-top:10px;background:#0d1b2a;padding:10px;border-radius:6px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <div><label style="font-size:.72em;color:#7f8c8d">Table</label>
+            <input id="pol-tbl" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566"></div>
+          <div><label style="font-size:.72em;color:#7f8c8d">Policy name</label>
+            <input id="pol-name" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566" value="my_policy"></div>
+          <div><label style="font-size:.72em;color:#7f8c8d">Command</label>
+            <select id="pol-cmd" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566">
+              <option>ALL</option><option>SELECT</option><option>INSERT</option><option>UPDATE</option><option>DELETE</option>
+            </select></div>
+          <div><label style="font-size:.72em;color:#7f8c8d">USING expression</label>
+            <input id="pol-using" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566" placeholder="tenant_id = current_tenant()"></div>
+          <div style="grid-column:span 2"><label style="font-size:.72em;color:#7f8c8d">WITH CHECK (optional)</label>
+            <input id="pol-check" class="form-control input-sm" style="background:#253545;color:#ecf0f1;border-color:#445566"></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-xs btn-primary" onclick="submitCustomPolicy()">&#10003; Create Policy</button>
+          <button class="btn btn-xs btn-default" onclick="document.getElementById('policy-editor').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALL OBJECT TEMPLATES tab (domains + views + policies + event triggers) -->
+    <div id="tpanel-objtpl" class="tpanel" style="display:none">
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap" id="obj-type-filters">
+        <button class="btn btn-xs btn-default obj-tcat active" onclick="filterObjType('all')" data-type="all">All</button>
+        <button class="btn btn-xs btn-default obj-tcat" onclick="filterObjType('domain')" data-type="domain">Domains</button>
+        <button class="btn btn-xs btn-default obj-tcat" onclick="filterObjType('event_trigger')" data-type="event_trigger">Event Triggers</button>
+        <button class="btn btn-xs btn-default obj-tcat" onclick="filterObjType('materialized_view')" data-type="materialized_view">Mat.Views</button>
+        <button class="btn btn-xs btn-default obj-tcat" onclick="filterObjType('view')" data-type="view">Views</button>
+        <button class="btn btn-xs btn-default obj-tcat" onclick="filterObjType('policy')" data-type="policy">Policies</button>
+      </div>
+      <div id="obj-tpl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;max-height:46vh;overflow-y:auto">
+        <div style="color:#7f8c8d">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Object template parameter form -->
+    <div id="obj-tpl-params-form" style="display:none;margin-top:12px;padding:12px;background:#0d1b2a;border-radius:6px">
+      <h6 id="obj-tpl-params-title" style="margin:0 0 8px;color:#e67e22"></h6>
+      <p id="obj-tpl-params-desc" style="font-size:.8em;color:#7f8c8d;margin-bottom:8px"></p>
+      <div id="obj-tpl-params-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+      <div style="margin-top:8px;font-size:.75em;color:#7f8c8d">
+        <b>Preview SQL:</b>
+        <pre id="obj-tpl-sql-preview" style="background:#111;padding:6px;font-size:.82em;color:#f0c040;max-height:120px;overflow:auto;border-radius:3px;margin:4px 0 0"></pre>
+      </div>
+      <div class="erd-modal-actions">
+        <button class="btn btn-sm btn-default" onclick="document.getElementById('obj-tpl-params-form').style.display='none'">Cancel</button>
+        <button class="btn btn-sm btn-warning" onclick="previewObjectTemplate()">Preview SQL</button>
+        <button class="btn btn-sm btn-success" id="obj-tpl-apply-btn">&#9658; Apply to Database</button>
       </div>
     </div>
 

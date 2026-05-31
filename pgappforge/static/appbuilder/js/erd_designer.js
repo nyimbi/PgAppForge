@@ -1061,3 +1061,356 @@ function submitCustomFunction() {
     }
   });
 }
+
+/* ── Update switchTriggerTab to handle new tabs ──────────────────────────── */
+(function patchSwitchTriggerTab() {
+  var _orig = switchTriggerTab;
+  switchTriggerTab = function(tab) {
+    var newTabs = ['domains','evtrig','matviews','views','policies','objtpl'];
+    var allTabs = ['templates','live','functions','editor'].concat(newTabs);
+    allTabs.forEach(function(t) {
+      var p  = document.getElementById('tpanel-' + t);
+      var bt = document.getElementById('tab-' + t);
+      if (p)  p.style.display = t === tab ? '' : 'none';
+      if (bt) bt.className = bt.className.replace(' active','') + (t === tab ? ' active' : '');
+    });
+    if (tab === 'templates')  loadTriggerTemplates();
+    if (tab === 'live')       loadLiveTriggers();
+    if (tab === 'functions')  loadFunctions();
+    if (tab === 'domains')    loadDomains();
+    if (tab === 'evtrig')     loadEventTriggers();
+    if (tab === 'matviews')   loadMatViews();
+    if (tab === 'views')      loadViews();
+    if (tab === 'policies')   loadPolicies();
+    if (tab === 'objtpl')     loadObjectTemplates();
+  };
+})();
+
+/* ── Object Template grid ──────────────────────────────────────────────────── */
+var _objectTemplates = null;
+var _selectedObjTplKey = null;
+
+function loadObjectTemplates() {
+  if (_objectTemplates) { renderObjTplGrid(_objectTemplates); return; }
+  apiFetch('GET', '/api/objects/templates').then(function(d) {
+    _objectTemplates = d.templates || [];
+    renderObjTplGrid(_objectTemplates);
+  });
+}
+
+function renderObjTplGrid(templates, typeFilter) {
+  var grid = document.getElementById('obj-tpl-grid');
+  if (!grid) return;
+  var filtered = typeFilter && typeFilter !== 'all'
+    ? templates.filter(function(t){ return t.type === typeFilter; })
+    : templates;
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="color:#7f8c8d">No templates in this category.</div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(function(t) {
+    var icon = t.icon ? '<i class="fas ' + _esc(t.icon) + ' me-1"></i>' : '&#9657;';
+    var typeColor = {domain:'#e67e22', event_trigger:'#e74c3c',
+                     materialized_view:'#8e44ad', view:'#2980b9', policy:'#27ae60'}[t.type] || '#888';
+    var objId = 'objcard-' + _esc(t.key || '');
+    return '<div class="tpl-card" id="' + objId + '" onclick="selectObjTemplate(\'' + _esc(t.key || '') + '\')" ' +
+      'style="border-left:3px solid ' + typeColor + '">' +
+      '<h6>' + icon + ' ' + _esc(t.label) + '</h6>' +
+      '<p>' + _esc(t.description || '') + '</p>' +
+      '<span style="font-size:.68em;color:' + typeColor + '">' + _esc(t.type) + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function filterObjType(typeVal) {
+  document.querySelectorAll('.obj-tcat').forEach(function(b){
+    b.classList.toggle('active', b.dataset.type === typeVal);
+  });
+  renderObjTplGrid(_objectTemplates || [], typeVal);
+}
+
+function selectObjTemplate(templateKey) {
+  _selectedObjTplKey = templateKey;
+  document.querySelectorAll('.tpl-card[id^="objcard-"]').forEach(function(c){
+    c.classList.toggle('selected', c.id === 'objcard-' + templateKey);
+  });
+  var tmpl = (_objectTemplates || []).find(function(t){ return t.key === templateKey; });
+  if (!tmpl) return;
+
+  document.getElementById('obj-tpl-params-title').textContent = tmpl.label;
+  document.getElementById('obj-tpl-params-desc').textContent  = tmpl.description || '';
+  document.getElementById('obj-tpl-sql-preview').textContent  = '';
+
+  var fields = document.getElementById('obj-tpl-params-fields');
+  fields.innerHTML = (tmpl.params || []).map(function(p) {
+    var dflt = (tmpl.defaults || {})[p] || '';
+    if (p === 'table') {
+      var sel = cy.$('node[type="table"]:selected');
+      if (sel.length === 1) dflt = sel[0].id();
+    }
+    return '<div><label style="font-size:.75em;color:#7f8c8d">' + _esc(p) + '</label>' +
+      '<input id="obj-param-' + _esc(p) + '" class="form-control input-sm" ' +
+      'style="background:#253545;color:#ecf0f1;border-color:#445566" value="' + _esc(dflt) + '"></div>';
+  }).join('');
+
+  document.getElementById('obj-tpl-params-form').style.display = '';
+  document.getElementById('obj-tpl-apply-btn').onclick = function() { applyObjectTemplate(); };
+}
+
+function _getObjTplParams() {
+  var tmpl = (_objectTemplates || []).find(function(t){ return t.key === _selectedObjTplKey; });
+  if (!tmpl) return null;
+  var params = { template_key: _selectedObjTplKey };
+  (tmpl.params || []).forEach(function(p) {
+    var el = document.getElementById('obj-param-' + p);
+    if (el) params[p] = el.value.trim();
+  });
+  return params;
+}
+
+function previewObjectTemplate() {
+  var tmpl = (_objectTemplates || []).find(function(t){ return t.key === _selectedObjTplKey; });
+  var params = _getObjTplParams();
+  if (!tmpl || !params) return;
+  var sql = tmpl.sql || '';
+  Object.keys(params).forEach(function(k) {
+    sql = sql.split('{' + k + '}').join(params[k]);
+  });
+  document.getElementById('obj-tpl-sql-preview').textContent = sql || '(no preview)';
+}
+
+function applyObjectTemplate() {
+  var params = _getObjTplParams();
+  if (!params) return;
+  setStatus('Applying object template…');
+  apiFetch('POST', '/api/objects/apply-template', params).then(function(d) {
+    if (d.errors && d.errors.length) {
+      setStatus('✗ Error: ' + d.errors[0]);
+    } else {
+      setStatus('✓ Applied: ' + _selectedObjTplKey);
+      document.getElementById('obj-tpl-params-form').style.display = 'none';
+    }
+  });
+}
+
+/* ── Domains ───────────────────────────────────────────────────────────────── */
+function loadDomains() {
+  var schema = (document.getElementById('dom-schema') || {}).value || 'public';
+  var list   = document.getElementById('domains-list');
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/domains/list?schema=' + encodeURIComponent(schema)).then(function(d) {
+    var rows = d.domains || [];
+    if (!list) return;
+    if (!rows.length) { list.innerHTML = '<div style="color:#7f8c8d">No domains found.</div>'; return; }
+    list.innerHTML = rows.map(function(r) {
+      return '<div class="trigger-row">' +
+        '<span><b>' + _esc(r.domain_name) + '</b> : <i>' + _esc(r.data_type || '') + '</i>' +
+        (r.check_clause ? ' <small style="color:#7f8c8d">CHECK (' + _esc(r.check_clause) + ')</small>' : '') + '</span>' +
+        '<button class="btn btn-xs btn-danger" onclick="dropDomain(' + JSON.stringify(r.domain_name) + ')">Drop</button>' +
+        '</div>';
+    }).join('');
+  });
+}
+
+function dropDomain(name) {
+  if (!confirm('Drop domain "' + name + '"?')) return;
+  var schema = (document.getElementById('dom-schema') || {}).value || 'public';
+  apiFetch('POST', '/api/domains/drop', {name: name, schema: schema}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped domain: ' + name);
+    loadDomains();
+  });
+}
+
+/* ── Event Triggers ────────────────────────────────────────────────────────── */
+function loadEventTriggers() {
+  var list = document.getElementById('evtrig-list');
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/event-triggers/list').then(function(d) {
+    var rows = d.event_triggers || [];
+    if (!list) return;
+    if (!rows.length) { list.innerHTML = '<div style="color:#7f8c8d">No event triggers found.</div>'; return; }
+    list.innerHTML = rows.map(function(r) {
+      var en = r.enabled !== 'D';
+      return '<div class="trigger-row">' +
+        '<span><b>' + _esc(r.name) + '</b> ON <i>' + _esc(r.event) + '</i>' +
+        ' → ' + _esc(r.function_name || '') + '</span>' +
+        '<div style="display:flex;gap:4px">' +
+        '<button class="btn btn-xs btn-' + (en ? 'warning' : 'success') + '" onclick="toggleEvTrig(' +
+          JSON.stringify(r.name) + ',' + (!en) + ')">' + (en ? 'Disable' : 'Enable') + '</button>' +
+        '<button class="btn btn-xs btn-danger" onclick="dropEvTrig(' + JSON.stringify(r.name) + ')">Drop</button>' +
+        '</div></div>';
+    }).join('');
+  });
+}
+
+function toggleEvTrig(name, enable) {
+  apiFetch('POST', '/api/event-triggers/toggle', {name: name, enable: enable}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Event trigger ' + (enable ? 'enabled' : 'disabled'));
+    loadEventTriggers();
+  });
+}
+
+function dropEvTrig(name) {
+  if (!confirm('Drop event trigger "' + name + '"?')) return;
+  apiFetch('POST', '/api/event-triggers/drop', {name: name}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped: ' + name);
+    loadEventTriggers();
+  });
+}
+
+/* ── Materialized Views ────────────────────────────────────────────────────── */
+function loadMatViews() {
+  var schema = (document.getElementById('mv-schema') || {}).value || 'public';
+  var list   = document.getElementById('matviews-list');
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/matviews/list?schema=' + encodeURIComponent(schema)).then(function(d) {
+    var rows = d.mat_views || [];
+    if (!list) return;
+    if (!rows.length) { list.innerHTML = '<div style="color:#7f8c8d">No materialized views found.</div>'; return; }
+    list.innerHTML = rows.map(function(r) {
+      var pop = r.ispopulated ? '<span style="color:#2ecc71">&#9679; populated</span>' : '<span style="color:#e74c3c">&#9675; empty</span>';
+      return '<div class="trigger-row">' +
+        '<span onclick="loadMatViewDef(\'' + _esc(r.view_name) + '\')" style="cursor:pointer">' +
+        '<b>' + _esc(r.view_name) + '</b> ' + pop + (r.size ? ' <small style="color:#7f8c8d">' + _esc(r.size) + '</small>' : '') + '</span>' +
+        '<div style="display:flex;gap:4px">' +
+        '<button class="btn btn-xs btn-info" onclick="refreshMatView(\'' + _esc(r.view_name) + '\')">&#8635; Refresh</button>' +
+        '<button class="btn btn-xs btn-danger" onclick="dropMatView(\'' + _esc(r.view_name) + '\')">Drop</button>' +
+        '</div></div>';
+    }).join('');
+  });
+}
+
+function loadMatViewDef(name) {
+  var schema = (document.getElementById('mv-schema') || {}).value || 'public';
+  apiFetch('GET', '/api/views/definition?name=' + encodeURIComponent(name) + '&schema=' + encodeURIComponent(schema) + '&materialized=1')
+    .then(function(d) {
+      document.getElementById('matview-def-name').textContent = name;
+      document.getElementById('matview-def-sql').textContent  = d.definition || '';
+      document.getElementById('matview-def').style.display = '';
+    });
+}
+
+function refreshMatView(name) {
+  var schema = (document.getElementById('mv-schema') || {}).value || 'public';
+  setStatus('Refreshing ' + name + '…');
+  apiFetch('POST', '/api/matviews/refresh', {name: name, schema: schema, concurrently: true}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Refreshed: ' + name);
+  });
+}
+
+function dropMatView(name) {
+  if (!confirm('Drop materialized view "' + name + '"?')) return;
+  var schema = (document.getElementById('mv-schema') || {}).value || 'public';
+  apiFetch('POST', '/api/matviews/drop', {name: name, schema: schema}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped: ' + name);
+    loadMatViews();
+  });
+}
+
+function showViewEditor(materialized) {
+  var ed = document.getElementById('view-editor');
+  if (ed) {
+    ed.style.display = '';
+    var cb = document.getElementById('view-edit-mat');
+    if (cb) cb.checked = !!materialized;
+  }
+}
+
+function submitCustomView() {
+  var name = (document.getElementById('view-edit-name') || {}).value || '';
+  var sql  = (document.getElementById('view-edit-sql')  || {}).value || '';
+  var mat  = document.getElementById('view-edit-mat') && document.getElementById('view-edit-mat').checked;
+  var schema = (document.getElementById(mat ? 'mv-schema' : 'view-schema') || {}).value || 'public';
+  if (!name || !sql) { alert('Name and SQL required.'); return; }
+  apiFetch('POST', '/api/views/create', {name: name, query: sql, schema: schema, materialized: mat}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ ' + (mat ? 'Materialized view' : 'View') + ' created: ' + name);
+    if (!d.errors || !d.errors.length) {
+      document.getElementById('view-editor').style.display = 'none';
+      mat ? loadMatViews() : loadViews();
+    }
+  });
+}
+
+/* ── Views ─────────────────────────────────────────────────────────────────── */
+function loadViews() {
+  var schema = (document.getElementById('view-schema') || {}).value || 'public';
+  var list   = document.getElementById('views-list');
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/views/list?schema=' + encodeURIComponent(schema)).then(function(d) {
+    var rows = d.views || [];
+    if (!list) return;
+    if (!rows.length) { list.innerHTML = '<div style="color:#7f8c8d">No views found.</div>'; return; }
+    list.innerHTML = rows.map(function(r) {
+      return '<div class="fn-row" onclick="loadViewDef(\'' + _esc(r.view_name) + '\')">' +
+        '<b>' + _esc(r.view_name) + '</b>' +
+        '<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();dropView(\'' + _esc(r.view_name) + '\')">Drop</button>' +
+        '</div>';
+    }).join('');
+  });
+}
+
+function loadViewDef(name) {
+  var schema = (document.getElementById('view-schema') || {}).value || 'public';
+  apiFetch('GET', '/api/views/definition?name=' + encodeURIComponent(name) + '&schema=' + encodeURIComponent(schema))
+    .then(function(d) {
+      document.getElementById('view-edit-name').value = name;
+      document.getElementById('view-edit-sql').value  = d.definition || '';
+      document.getElementById('view-editor').style.display = '';
+    });
+}
+
+function dropView(name) {
+  if (!confirm('Drop view "' + name + '"?')) return;
+  var schema = (document.getElementById('view-schema') || {}).value || 'public';
+  apiFetch('POST', '/api/views/drop', {name: name, schema: schema}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped view: ' + name);
+    loadViews();
+  });
+}
+
+/* ── Policies ──────────────────────────────────────────────────────────────── */
+function loadPolicies() {
+  var table  = (document.getElementById('pol-table') || {}).value || '';
+  var qs     = table ? '?table=' + encodeURIComponent(table) : '';
+  var list   = document.getElementById('policies-list');
+  if (list) list.innerHTML = '<div style="color:#7f8c8d">Loading…</div>';
+  apiFetch('GET', '/api/policies/list' + qs).then(function(d) {
+    var rows = d.policies || [];
+    if (!list) return;
+    if (!rows.length) { list.innerHTML = '<div style="color:#7f8c8d">No policies found.</div>'; return; }
+    list.innerHTML = rows.map(function(r) {
+      return '<div class="trigger-row">' +
+        '<span><b>' + _esc(r.policyname) + '</b> on <i>' + _esc(r.tablename) + '</i>' +
+        ' FOR <b>' + _esc(r.cmd || 'ALL') + '</b></span>' +
+        '<button class="btn btn-xs btn-danger" onclick="dropPolicy(\'' + _esc(r.tablename) + '\',\'' + _esc(r.policyname) + '\')">Drop</button>' +
+        '</div>';
+    }).join('');
+  });
+}
+
+function dropPolicy(table, name) {
+  if (!confirm('Drop policy "' + name + '" on "' + table + '"?')) return;
+  apiFetch('POST', '/api/policies/drop', {table: table, name: name}).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Dropped policy: ' + name);
+    loadPolicies();
+  });
+}
+
+function submitCustomPolicy() {
+  var payload = {
+    table:      (document.getElementById('pol-tbl')   || {}).value || '',
+    name:       (document.getElementById('pol-name')  || {}).value || '',
+    command:    (document.getElementById('pol-cmd')   || {}).value || 'ALL',
+    using_expr: (document.getElementById('pol-using') || {}).value || '',
+    check_expr: (document.getElementById('pol-check') || {}).value || null,
+    schema:     'public',
+  };
+  if (!payload.table || !payload.name || !payload.using_expr) {
+    alert('Table, name, and USING expression are required.');
+    return;
+  }
+  apiFetch('POST', '/api/policies/create', payload).then(function(d) {
+    setStatus(d.errors && d.errors.length ? '✗ ' + d.errors[0] : '✓ Policy created: ' + payload.name);
+    if (!d.errors || !d.errors.length) loadPolicies();
+  });
+}
