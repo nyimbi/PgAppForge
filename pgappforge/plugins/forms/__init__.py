@@ -18,7 +18,9 @@ class FormsPlugin:
 	name = "forms"
 
 	def initialize(self, app, appbuilder) -> None:
-		log.info("FormsPlugin initialized")
+		from pgappforge.plugins.forms.registry import auto_discover_widgets
+		discovered = auto_discover_widgets()
+		log.info("FormsPlugin initialized — %d widget types auto-discovered", discovered)
 
 	def register_views(self, appbuilder) -> None:
 		from pgappforge.plugins.forms.views import FormBuilderView, PublicFormView

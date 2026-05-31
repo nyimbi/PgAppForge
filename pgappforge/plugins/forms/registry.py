@@ -198,3 +198,186 @@ _BUILTIN_GROUPS: list[dict] = [
 		{"type": "repeating",  "icon": "&#8635;",   "label": "Repeating Group", "config_schema": {}, "description": "Dynamic rows of sub-fields"},
 	]},
 ]
+
+# ── Auto-discovery from pgappforge widget library ─────────────────────────────
+
+import re as _re
+
+# Widget class names that are layout/display-only — not form inputs
+_SKIP_WIDGET_NAMES: frozenset = frozenset({
+	"RenderTemplateWidget", "FormWidget", "ListWidget", "SearchWidget",
+	"ShowWidget", "GroupFormListWidget", "ListMasterWidget", "ListAddWidget",
+	"ListThumbnail", "ListLinkWidget", "ListCarousel", "ListItem", "ListBlock",
+	"ShowBlockWidget", "ShowVerticalWidget", "FormVerticalWidget",
+	"FormHorizontalWidget", "FormInlineWidget", "ApprovalWidget", "MenuWidget",
+	"ChartWidget", "AdvancedChartsWidget", "FormBuilderWidget", "ValidationWidget",
+})
+
+# Categories from get_available_widgets() whose contents are display/layout — auto-skip
+_SKIP_CATEGORIES: frozenset = frozenset({
+	"core",       # layout templates: ListWidget, FormWidget, etc.
+	"layout",     # Timeline, Tree, VirtualList, Graph — visualizers, not inputs
+	"workflow",   # Kanban, Gantt, Wizard, Diagram — workflow viewers, not inputs
+	"analytics",  # KPI, Pivot — charts/dashboards, not inputs
+})
+
+# Module path fragment → palette group name
+_MODULE_TO_GROUP: list[tuple[str, str]] = [
+	(".input.",       "INPUT"),
+	(".geo.",         "GEO & LOCATION"),
+	(".media.",       "MEDIA"),
+	(".editing.",     "EDITING"),
+	(".data.",        "DATA"),
+	(".social.",      "SOCIAL"),
+	(".workflow.",    "WORKFLOW"),
+	(".layout.",      "LAYOUT"),
+	(".analytics.",   "ANALYTICS"),
+	(".forms.",       "FORMS"),
+	(".visualization.", "GEO & LOCATION"),
+	("fieldwidgets",  "FIELD INPUTS"),
+	("modern_ui",     "ENHANCED"),
+	("specialized",   "DATA"),
+]
+
+# Icon hints by keyword in class name
+_ICON_HINTS: list[tuple[str, str]] = [
+	("Password",  "&#128274;"),
+	("Color",     "&#127752;"),
+	("Tag",       "&#127991;"),
+	("Date",      "&#128197;"),
+	("Time",      "&#9200;"),
+	("Signature", "&#10000;"),
+	("Map",       "&#128506;"),
+	("Geo",       "&#127759;"),
+	("GPS",       "&#127759;"),
+	("Address",   "&#127968;"),
+	("Phone",     "&#128222;"),
+	("Image",     "&#128247;"),
+	("Camera",    "&#128247;"),
+	("Video",     "&#127909;"),
+	("Audio",     "&#127925;"),
+	("File",      "&#128206;"),
+	("QR",        "&#9638;"),
+	("Barcode",   "&#9638;"),
+	("JSON",      "&#123;"),
+	("Array",     "&#91;"),
+	("Code",      "&#60;/&#62;"),
+	("Markdown",  "M"),
+	("Rich",      "&#10000;"),
+	("Mermaid",   "&#9671;"),
+	("DBML",      "&#9671;"),
+	("GPS",       "&#128204;"),
+	("Chat",      "&#128172;"),
+	("Comment",   "&#128172;"),
+	("ICD",       "&#9874;"),
+	("SNOMED",    "&#9874;"),
+	("Select2",   "&#9660;"),
+	("Toggle",    "&#9889;"),
+	("Range",     "&#8596;"),
+	("Slider",    "&#8596;"),
+	("Star",      "&#11088;"),
+	("Rating",    "&#11088;"),
+	("Spread",    "&#128200;"),
+	("Chart",     "&#128200;"),
+	("Kanban",    "&#9783;"),
+	("Gantt",     "&#128198;"),
+	("Wizard",    "&#128736;"),
+]
+
+
+def _camel_to_snake(name: str) -> str:
+	"""ICD10SearchWidget → icd10_search"""
+	name = _re.sub(r"Widget$", "", name)
+	s1 = _re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
+	s2 = _re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", s1)
+	return s2.lower()
+
+
+def _camel_to_label(name: str) -> str:
+	"""ICD10SearchWidget → ICD10 Search"""
+	name = _re.sub(r"Widget$", "", name)
+	s1 = _re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name)
+	s2 = _re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", s1)
+	return s2.strip()
+
+
+def _widget_icon(name: str) -> str:
+	for kw, icon in _ICON_HINTS:
+		if kw.lower() in name.lower():
+			return icon
+	return "&#9633;"  # generic square
+
+
+def _first_docline(cls: type) -> str:
+	doc = getattr(cls, "__doc__", None) or ""
+	skip_prefixes = ("---", "===", ">>>", ":param", ":type", ":return", ":rtype", "#", "@")
+	for line in doc.splitlines():
+		line = line.strip()
+		if line and not any(line.startswith(p) for p in skip_prefixes):
+			return line[:140]
+	return ""
+
+
+def _group_from_class(cls: type, category: str) -> str:
+	mod = getattr(cls, "__module__", "") or ""
+	for fragment, group in _MODULE_TO_GROUP:
+		if fragment in mod:
+			return group
+	return category.upper().replace("_", " ")
+
+
+def _builtin_types() -> frozenset:
+	"""Set of type identifiers already in _BUILTIN_GROUPS."""
+	return frozenset(
+		f["type"]
+		for g in _BUILTIN_GROUPS
+		for f in g["fields"]
+	)
+
+
+def auto_discover_widgets() -> int:
+	"""Auto-register all form-compatible pgappforge widgets as field types.
+
+	Calls get_available_widgets(), filters out layout/display-only classes,
+	and registers each remaining widget as a FieldTypeSpec with a fallback
+	renderer (data-field-type + data-widget-config for JS enhancement).
+
+	Returns the number of new types registered.
+	Idempotent — safe to call multiple times.
+	"""
+	try:
+		from pgappforge.widgets import get_available_widgets
+	except ImportError:
+		return 0
+
+	existing_builtin = _builtin_types()
+	count = 0
+	all_widgets = get_available_widgets()
+
+	for category, widget_map in all_widgets.items():
+		if category in _SKIP_CATEGORIES:
+			continue
+		for cls_name, cls in widget_map.items():
+			if cls_name in _SKIP_WIDGET_NAMES:
+				continue
+			type_name = _camel_to_snake(cls_name)
+			if not type_name or type_name in existing_builtin:
+				continue
+			if get_field_type(type_name) is not None:
+				continue  # already registered
+			label = _camel_to_label(cls_name)
+			group = _group_from_class(cls, category)
+			description = _first_docline(cls)
+			icon = _widget_icon(cls_name)
+			try:
+				register_field_type(FieldTypeSpec(
+					type=type_name,
+					label=label,
+					group=group,
+					icon=icon,
+					description=description,
+				))
+				count += 1
+			except Exception:
+				pass  # invalid type name or other issue — skip silently
+	return count
