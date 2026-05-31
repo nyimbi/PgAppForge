@@ -251,6 +251,54 @@ class TemplateRegistry:
 			grouped[domain].sort(key=lambda x: x["label"])
 		return dict(sorted(grouped.items()))
 
+	# ─── Actor pattern ────────────────────────────────────────────────────────
+
+	def get_actor_config(self, template_name: str):
+		"""Return ActorConfig for a template, or None if it has no actor declaration.
+
+		Raises:
+		    TemplateNotFoundError: if the template doesn't exist.
+		    pydantic.ValidationError: if the actor section is malformed.
+		"""
+		from pgappforge.templates.core.actor import ActorConfig
+		t = self.get(template_name)
+		actor_data = t.get("actor")
+		if not actor_data:
+			return None
+		return ActorConfig.from_dict(actor_data)
+
+	def all_actor_configs(self) -> dict[str, object]:
+		"""Return {template_name: ActorConfig} for every template that declares an actor.
+
+		Skips templates with malformed actor sections (logs a warning).
+		"""
+		from pgappforge.templates.core.actor import ActorConfig
+		self._scan_dirs()
+		result: dict[str, object] = {}
+		for name, t in self._cache.items():
+			actor_data = t.get("actor")
+			if not actor_data:
+				continue
+			try:
+				result[name] = ActorConfig.from_dict(actor_data)
+			except Exception as exc:
+				log.warning("Malformed actor config in template %r: %s", name, exc)
+		return result
+
+	def register_actors(self) -> int:
+		"""Parse all template actor declarations and register them with ActorRegistry.
+
+		Call this at app startup (before any actor-aware views are rendered).
+		Returns the number of actors registered.
+		"""
+		from pgappforge.templates.core.actor import ActorRegistry
+		registry = ActorRegistry.instance()
+		configs = self.all_actor_configs()
+		for config in configs.values():
+			registry.register(config)
+		log.info("Registered %d template actors", len(configs))
+		return len(configs)
+
 
 # ─── Domain classification ────────────────────────────────────────────────────
 

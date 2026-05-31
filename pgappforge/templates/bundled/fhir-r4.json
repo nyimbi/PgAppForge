@@ -2,7 +2,7 @@
   "name": "fhir-r4",
   "schema": "fhir_r4",
   "label": "HL7 FHIR R4",
-  "description": "Healthcare resources \u2014 US/EU/AU government mandated standard",
+  "description": "Healthcare resources — US/EU/AU government mandated standard",
   "color": "#3498db",
   "icon": "fa-heartbeat",
   "version": "4.0.1",
@@ -83,7 +83,7 @@
       {
         "name": "identifier",
         "type": "JSONB",
-        "description": "Array of external identifiers: [{system (URI), value}] \u2014 MRN, SSN, passport, etc."
+        "description": "Array of external identifiers: [{system (URI), value}] — MRN, SSN, passport, etc."
       },
       {
         "name": "resource",
@@ -117,7 +117,7 @@
       {
         "name": "npi",
         "type": "VARCHAR(20)",
-        "description": "US National Provider Identifier (NPI) \u2014 10-digit NPPES-assigned number"
+        "description": "US National Provider Identifier (NPI) — 10-digit NPPES-assigned number"
       },
       {
         "name": "specialty",
@@ -133,7 +133,7 @@
       {
         "name": "qualification",
         "type": "JSONB",
-        "description": "Array of credentials: [{code (SNOMED/HL7), issuer, period}] \u2014 degrees, licenses, certifications"
+        "description": "Array of credentials: [{code (SNOMED/HL7), issuer, period}] — degrees, licenses, certifications"
       },
       {
         "name": "resource",
@@ -197,19 +197,19 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the patient this encounter is about"
+        "description": "References patient.id — the patient this encounter is about"
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
         "fk": "practitioner.id",
-        "description": "References practitioner.id \u2014 primary clinician responsible for this encounter"
+        "description": "References practitioner.id — primary clinician responsible for this encounter"
       },
       {
         "name": "organization_id",
         "type": "UUID",
         "fk": "organization.id",
-        "description": "References organization.id \u2014 facility or organization where the encounter took place"
+        "description": "References organization.id — facility or organization where the encounter took place"
       },
       {
         "name": "status",
@@ -258,13 +258,13 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the subject of the observation"
+        "description": "References patient.id — the subject of the observation"
       },
       {
         "name": "encounter_id",
         "type": "UUID",
         "fk": "encounter.id",
-        "description": "References encounter.id \u2014 the visit during which this observation was made"
+        "description": "References encounter.id — the visit during which this observation was made"
       },
       {
         "name": "code",
@@ -323,13 +323,13 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the patient this condition is recorded against"
+        "description": "References patient.id — the patient this condition is recorded against"
       },
       {
         "name": "encounter_id",
         "type": "UUID",
         "fk": "encounter.id",
-        "description": "References encounter.id \u2014 the visit at which this condition was first documented"
+        "description": "References encounter.id — the visit at which this condition was first documented"
       },
       {
         "name": "code",
@@ -378,13 +378,13 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the patient for whom the medication is prescribed"
+        "description": "References patient.id — the patient for whom the medication is prescribed"
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
         "fk": "practitioner.id",
-        "description": "References practitioner.id \u2014 the prescribing clinician"
+        "description": "References practitioner.id — the prescribing clinician"
       },
       {
         "name": "medication_code",
@@ -433,13 +433,13 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the patient whose specimen or study was reported on"
+        "description": "References patient.id — the patient whose specimen or study was reported on"
       },
       {
         "name": "encounter_id",
         "type": "UUID",
         "fk": "encounter.id",
-        "description": "References encounter.id \u2014 the visit that prompted this diagnostic report"
+        "description": "References encounter.id — the visit that prompted this diagnostic report"
       },
       {
         "name": "code",
@@ -488,13 +488,13 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the patient participant in this appointment"
+        "description": "References patient.id — the patient participant in this appointment"
       },
       {
         "name": "practitioner_id",
         "type": "UUID",
         "fk": "practitioner.id",
-        "description": "References practitioner.id \u2014 the clinician participant in this appointment"
+        "description": "References practitioner.id — the clinician participant in this appointment"
       },
       {
         "name": "status",
@@ -538,7 +538,7 @@
         "name": "patient_id",
         "type": "UUID",
         "fk": "patient.id",
-        "description": "References patient.id \u2014 the patient who has this allergy or intolerance"
+        "description": "References patient.id — the patient who has this allergy or intolerance"
       },
       {
         "name": "code",
@@ -577,7 +577,46 @@
       }
     ]
   },
-  "short_description": "Healthcare resources \u2014 US/EU/AU government mandated standard",
+  "short_description": "Healthcare resources — US/EU/AU government mandated standard",
   "long_description": "HL7 FHIR R4 (Fast Healthcare Interoperability Resources) is the definitive standard for exchanging electronic health records. Each resource type (Patient, Encounter, Observation, etc.) maps directly to a PostgreSQL table with searchable columns and a JSONB resource column for the full FHIR payload. Includes all mandatory SMART on FHIR compliance fields.",
-  "when_to_use": "Use when building any clinical system that must exchange patient data with hospitals, labs, or health systems. Required by US 21st Century Cures Act (2021), EU eHDSI, NHS Digital, and ADHA (Australia). Essential for EHR integrations, patient portals, telehealth, and clinical trials."
+  "when_to_use": "Use when building any clinical system that must exchange patient data with hospitals, labs, or health systems. Required by US 21st Century Cures Act (2021), EU eHDSI, NHS Digital, and ADHA (Australia). Essential for EHR integrations, patient portals, telehealth, and clinical trials.",
+  "actor": {
+    "role": "patient",
+    "table": "patient",
+    "display": {
+      "singular": "Patient",
+      "plural": "Patients",
+      "icon": "fa-user-md",
+      "color": "primary"
+    },
+    "field_map": {
+      "display_name": [
+        "given_name",
+        "family_name"
+      ],
+      "contact_email": "email",
+      "contact_phone": "phone",
+      "status_field": "active",
+      "status_map": {
+        "true": "active",
+        "false": "inactive"
+      },
+      "external_ids": {
+        "mrn": "identifier"
+      }
+    },
+    "related_collections": [
+      "encounter",
+      "observation",
+      "condition",
+      "medication_request",
+      "appointment"
+    ],
+    "tags": [
+      "hipaa",
+      "person",
+      "billable",
+      "regulated"
+    ]
+  }
 }

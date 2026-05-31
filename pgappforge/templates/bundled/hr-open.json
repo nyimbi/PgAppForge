@@ -15,7 +15,7 @@
     "enterprise"
   ],
   "table_notes": {
-    "hro_person_profile": "Core identity record for any individual in the HR system \u2014 employee, candidate, or contractor.",
+    "hro_person_profile": "Core identity record for any individual in the HR system — employee, candidate, or contractor.",
     "hro_position_opening": "Defines a job vacancy including type, FTE ratio, compensation band, and posting lifecycle status.",
     "hro_candidate": "Aggregates resume data (work history, education, skills, certifications) linked to a person profile.",
     "hro_application": "Tracks a candidate's pipeline progress against a specific position opening, from submission to offer.",
@@ -150,7 +150,7 @@
         "name": "person_id",
         "type": "UUID",
         "fk": "hro_person_profile.id",
-        "description": "References hro_person_profile \u2014 links candidate to their identity and contact data"
+        "description": "References hro_person_profile — links candidate to their identity and contact data"
       },
       {
         "name": "profile_status",
@@ -194,13 +194,13 @@
         "name": "candidate_id",
         "type": "UUID",
         "fk": "hro_candidate.id",
-        "description": "References hro_candidate \u2014 the applicant submitting this application"
+        "description": "References hro_candidate — the applicant submitting this application"
       },
       {
         "name": "position_id",
         "type": "UUID",
         "fk": "hro_position_opening.id",
-        "description": "References hro_position_opening \u2014 the role being applied for"
+        "description": "References hro_position_opening — the role being applied for"
       },
       {
         "name": "applied_at",
@@ -245,13 +245,13 @@
         "name": "person_id",
         "type": "UUID",
         "fk": "hro_person_profile.id",
-        "description": "References hro_person_profile \u2014 the employed individual"
+        "description": "References hro_person_profile — the employed individual"
       },
       {
         "name": "position_id",
         "type": "UUID",
         "fk": "hro_position_opening.id",
-        "description": "References hro_position_opening \u2014 the position this employee fills"
+        "description": "References hro_position_opening — the position this employee fills"
       },
       {
         "name": "employee_id",
@@ -294,5 +294,36 @@
   },
   "short_description": "IEEE/ANSI-backed cross-vendor HR data standard",
   "long_description": "HR-Open Standards (formerly HR-XML) is the IEEE/ANSI-backed standard for HR data exchange. The schema covers the complete hire-to-retire lifecycle: job postings (PositionOpening), candidate profiles with employment/education history, applications with assessment results, and employment records with compensation data.",
-  "when_to_use": "Use for any HR information system, applicant tracking system (ATS), or HR integration platform that must exchange data with third-party HR vendors. HR-Open is used by SAP SuccessFactors, Workday, and ADP for integration APIs. Essential for staffing agency systems and background check integrations."
+  "when_to_use": "Use for any HR information system, applicant tracking system (ATS), or HR integration platform that must exchange data with third-party HR vendors. HR-Open is used by SAP SuccessFactors, Workday, and ADP for integration APIs. Essential for staffing agency systems and background check integrations.",
+  "actor": {
+    "role": "employee",
+    "table": "hro_person_profile",
+    "display": {
+      "singular": "Employee",
+      "plural": "Employees",
+      "icon": "fa-id-badge",
+      "color": "info"
+    },
+    "field_map": {
+      "display_name": [
+        "given_name",
+        "family_name"
+      ],
+      "status_field": "status",
+      "status_map": {
+        "active": "active",
+        "inactive": "inactive",
+        "on-leave": "active"
+      }
+    },
+    "related_collections": [
+      "hro_employment",
+      "hro_application"
+    ],
+    "tags": [
+      "gdpr",
+      "person",
+      "hr"
+    ]
+  }
 }
