@@ -20,6 +20,7 @@ import json
 from typing import Any
 
 from markupsafe import Markup
+from pgappforge.widgets._utils import js_json as _js_json
 
 from pgappforge.widgets_postgresql._cdn import (
 	LEAFLET_CDN as _LEAFLET_CDN,
@@ -136,7 +137,7 @@ class DataGridWidget:
 (function() {{
   var COLS = {cols_json};
   var ALL_ROWS = {rows_json};
-  var SAVE_URL = {json.dumps(save_url)};
+  var SAVE_URL = {_js_json(save_url)};
   var RPP = {rpp};
 
   var changes = {{}}; // key = rowId+"|"+field  value = {{id,field,value}}
@@ -489,8 +490,8 @@ class DataImportWidget:
 
 <script>
 (function() {{
-  var PREVIEW_URL = {json.dumps(preview_url)};
-  var COMMIT_URL  = {json.dumps(commit_url)};
+  var PREVIEW_URL = {_js_json(preview_url)};
+  var COMMIT_URL  = {_js_json(commit_url)};
   var MODEL_FIELDS = {fields_json};
 
   var _file = null;
@@ -871,7 +872,7 @@ class RelationshipGraphWidget:
   var RECORD_ID  = {record_id};
   var MODEL_NAME = {model_name};
   var RELS       = {rels_json};
-  var CID        = {json.dumps(cid)};
+  var CID        = {_js_json(cid)};
 
   document.addEventListener('DOMContentLoaded', function() {{
     var elements = [

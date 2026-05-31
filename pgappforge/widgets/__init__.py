@@ -181,6 +181,175 @@ if _BARCODE_SCANNER_AVAILABLE:
     __all__.append('BarcodeQRScannerWidget')
 
 
+try:
+    from pgappforge.widgets.analytics.kpi import KPIDashboardWidget
+    from pgappforge.widgets.analytics.pivot import PivotTableWidget
+    from pgappforge.widgets.data.db_structure import DatabaseStructureWidget
+    from pgappforge.widgets.data.import_export import DataImportExportWidget
+    from pgappforge.widgets.data.json_editor import JSONEditorWidget
+    from pgappforge.widgets.data.profiler import DataPreviewProfilerWidget
+    from pgappforge.widgets.data.spreadsheet import SpreadsheetWidget
+    from pgappforge.widgets.data.validation import DataValidationRulesBuilder
+    from pgappforge.widgets.editing.code_editor import CodeEditorWidget
+    from pgappforge.widgets.editing.dbml import DBMLEditorWidget
+    from pgappforge.widgets.editing.markdown import MarkdownEditorWidget
+    from pgappforge.widgets.editing.mermaid import MermaidEditorWidget
+    from pgappforge.widgets.editing.richtext import RichTextEditorWidget
+    from pgappforge.widgets.forms.builder import FormBuilderWidget
+    from pgappforge.widgets.forms.color_picker import ColorPickerWidget
+    from pgappforge.widgets.forms.upload import FileUploadFieldWidget
+    from pgappforge.widgets.geo.address import AddressAutocompleteWidget
+    from pgappforge.widgets.geo.geopoint import GeoPointWidget
+    from pgappforge.widgets.geo.heatmap import GeographicHeatmapWidget
+    from pgappforge.widgets.geo.map import MapWidget
+    from pgappforge.widgets.input.date import DateRangePickerWidget
+    from pgappforge.widgets.input.numeric import CurrencyInputWidget, DurationWidget, RatingWidget, StarRatingWidget
+    from pgappforge.widgets.input.phone import PhoneNumberWidget
+    from pgappforge.widgets.input.range import RangeSliderWidget, SliderWidget
+    from pgappforge.widgets.input.select import DependentSelectWidget, MultiSelectWidget, TagInputWidget
+    from pgappforge.widgets.input.text import PasswordStrengthWidget
+    from pgappforge.widgets.input.time import TimeField, TimePickerWidget
+    from pgappforge.widgets.input.toggle import CheckBoxWidget, SwitchWidget, ToggleButtonWidget
+    from pgappforge.widgets.layout.dashboard import DashboardDesignerWidget
+    from pgappforge.widgets.layout.graph import RelationshipGraphWidget
+    from pgappforge.widgets.layout.timeline import ActivityTimelineWidget
+    from pgappforge.widgets.layout.tree import TreeViewWidget
+    from pgappforge.widgets.layout.version import VersionControlWidget
+    from pgappforge.widgets.layout.virtual_list import VirtualScrollingListWidget
+    from pgappforge.widgets.media.audio import AudioRecordingAndPlaybackWidget
+    from pgappforge.widgets.media.barcode_scanner import BarcodeQRScannerWidget
+    from pgappforge.widgets.media.camera import PeriodicCameraWidget
+    from pgappforge.widgets.media.document import DocumentViewerWidget
+    from pgappforge.widgets.media.image import ImageCropWidget, ImageProcessingConfig
+    from pgappforge.widgets.media.signature import SignaturePadWidget
+    from pgappforge.widgets.media.video import VideoRecordAndPlayWidget
+    from pgappforge.widgets.social.audit import AuditLogViewerWidget
+    from pgappforge.widgets.social.chat import ChatMessagingWidget
+    from pgappforge.widgets.social.comments import CommentAndLikeWidget
+    from pgappforge.widgets.social.follow import FriendFollowWidget
+    from pgappforge.widgets.visualization.gps import GPSTrackerWidget
+    from pgappforge.widgets.workflow.designer import WorkflowDesignerWidget
+    from pgappforge.widgets.workflow.diagram import WorkflowDiagramWidget
+    from pgappforge.widgets.workflow.gantt import GanttChartWidget
+    from pgappforge.widgets.workflow.kanban import KanbanBoardWidget
+    from pgappforge.widgets.workflow.wizard import StepWizardWidget
+    EXTENDED_WIDGETS_AVAILABLE = True
+except ImportError:
+    EXTENDED_WIDGETS_AVAILABLE = False
+
+if EXTENDED_WIDGETS_AVAILABLE:
+    __all__.extend([
+        'ActivityTimelineWidget',
+        'AddressAutocompleteWidget',
+        'AudioRecordingAndPlaybackWidget',
+        'AuditLogViewerWidget',
+        'ChatMessagingWidget',
+        'CheckBoxWidget',
+        'CommentAndLikeWidget',
+        'CurrencyInputWidget',
+        'DashboardDesignerWidget',
+        'DataImportExportWidget',
+        'DataPreviewProfilerWidget',
+        'DataValidationRulesBuilder',
+        'DatabaseStructureWidget',
+        'DateRangePickerWidget',
+        'DependentSelectWidget',
+        'DocumentViewerWidget',
+        'DurationWidget',
+        'FileUploadFieldWidget',
+        'FriendFollowWidget',
+        'GanttChartWidget',
+        'GeoPointWidget',
+        'GeographicHeatmapWidget',
+        'ImageCropWidget',
+        'ImageProcessingConfig',
+        'KPIDashboardWidget',
+        'KanbanBoardWidget',
+        'MapWidget',
+        'MarkdownEditorWidget',
+        'MultiSelectWidget',
+        'PasswordStrengthWidget',
+        'PeriodicCameraWidget',
+        'PhoneNumberWidget',
+        'PivotTableWidget',
+        'RangeSliderWidget',
+        'RatingWidget',
+        'RelationshipGraphWidget',
+        'RichTextEditorWidget',
+        'SignaturePadWidget',
+        'SliderWidget',
+        'SpreadsheetWidget',
+        'StarRatingWidget',
+        'StepWizardWidget',
+        'SwitchWidget',
+        'TimeField',
+        'TimePickerWidget',
+        'ToggleButtonWidget',
+        'TreeViewWidget',
+        'VersionControlWidget',
+        'VideoRecordAndPlayWidget',
+        'VirtualScrollingListWidget',
+        'WorkflowDesignerWidget',
+        'WorkflowDiagramWidget',
+    ])
+
+    _EXTENDED_REGISTRY = {
+        'ActivityTimelineWidget': ActivityTimelineWidget,
+        'AddressAutocompleteWidget': AddressAutocompleteWidget,
+        'AudioRecordingAndPlaybackWidget': AudioRecordingAndPlaybackWidget,
+        'AuditLogViewerWidget': AuditLogViewerWidget,
+        'ChatMessagingWidget': ChatMessagingWidget,
+        'CheckBoxWidget': CheckBoxWidget,
+        'CommentAndLikeWidget': CommentAndLikeWidget,
+        'CurrencyInputWidget': CurrencyInputWidget,
+        'DashboardDesignerWidget': DashboardDesignerWidget,
+        'DataImportExportWidget': DataImportExportWidget,
+        'DataPreviewProfilerWidget': DataPreviewProfilerWidget,
+        'DataValidationRulesBuilder': DataValidationRulesBuilder,
+        'DatabaseStructureWidget': DatabaseStructureWidget,
+        'DateRangePickerWidget': DateRangePickerWidget,
+        'DependentSelectWidget': DependentSelectWidget,
+        'DocumentViewerWidget': DocumentViewerWidget,
+        'DurationWidget': DurationWidget,
+        'FileUploadFieldWidget': FileUploadFieldWidget,
+        'FriendFollowWidget': FriendFollowWidget,
+        'GanttChartWidget': GanttChartWidget,
+        'GeoPointWidget': GeoPointWidget,
+        'GeographicHeatmapWidget': GeographicHeatmapWidget,
+        'ImageCropWidget': ImageCropWidget,
+        'ImageProcessingConfig': ImageProcessingConfig,
+        'KPIDashboardWidget': KPIDashboardWidget,
+        'KanbanBoardWidget': KanbanBoardWidget,
+        'MapWidget': MapWidget,
+        'MarkdownEditorWidget': MarkdownEditorWidget,
+        'MultiSelectWidget': MultiSelectWidget,
+        'PasswordStrengthWidget': PasswordStrengthWidget,
+        'PeriodicCameraWidget': PeriodicCameraWidget,
+        'PhoneNumberWidget': PhoneNumberWidget,
+        'PivotTableWidget': PivotTableWidget,
+        'RangeSliderWidget': RangeSliderWidget,
+        'RatingWidget': RatingWidget,
+        'RelationshipGraphWidget': RelationshipGraphWidget,
+        'RichTextEditorWidget': RichTextEditorWidget,
+        'SignaturePadWidget': SignaturePadWidget,
+        'SliderWidget': SliderWidget,
+        'SpreadsheetWidget': SpreadsheetWidget,
+        'StarRatingWidget': StarRatingWidget,
+        'StepWizardWidget': StepWizardWidget,
+        'SwitchWidget': SwitchWidget,
+        'TimeField': TimeField,
+        'TimePickerWidget': TimePickerWidget,
+        'ToggleButtonWidget': ToggleButtonWidget,
+        'TreeViewWidget': TreeViewWidget,
+        'VersionControlWidget': VersionControlWidget,
+        'VideoRecordAndPlayWidget': VideoRecordAndPlayWidget,
+        'VirtualScrollingListWidget': VirtualScrollingListWidget,
+        'WorkflowDesignerWidget': WorkflowDesignerWidget,
+        'WorkflowDiagramWidget': WorkflowDiagramWidget,
+    }
+else:
+    _EXTENDED_REGISTRY = {}
+
 def get_available_widgets():
     """
     Get all available widgets organized by category.
@@ -231,6 +400,25 @@ def get_available_widgets():
         }
         if _BARCODE_SCANNER_AVAILABLE:
             widgets['modular']['BarcodeQRScannerWidget'] = BarcodeQRScannerWidget
+
+    if _EXTENDED_REGISTRY:
+        # Organised by subpackage
+        for key in ('input', 'geo', 'media_extended', 'workflow', 'layout',
+                    'data', 'analytics', 'social', 'forms_extended'):
+            widgets.setdefault(key, {})
+        for name, cls in _EXTENDED_REGISTRY.items():
+            mod = getattr(cls, '__module__', '')
+            if '.input.' in mod:       widgets['input'][name] = cls
+            elif '.geo.' in mod:       widgets['geo'][name] = cls
+            elif '.media.' in mod:     widgets['media_extended'][name] = cls
+            elif '.workflow.' in mod:  widgets['workflow'][name] = cls
+            elif '.layout.' in mod:    widgets['layout'][name] = cls
+            elif '.data.' in mod:      widgets['data'][name] = cls
+            elif '.analytics.' in mod: widgets['analytics'][name] = cls
+            elif '.social.' in mod:    widgets['social'][name] = cls
+            else:                      widgets['forms_extended'][name] = cls
+        # Remove empty buckets
+        widgets = {k: v for k, v in widgets.items() if v}
 
     return widgets
 

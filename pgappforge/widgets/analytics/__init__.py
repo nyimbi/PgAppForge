@@ -1,0 +1,1 @@
+"""analytics widgets for PgAppForge."""

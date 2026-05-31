@@ -59,6 +59,7 @@ import json
 import logging
 
 from markupsafe import Markup
+from pgappforge.widgets._utils import js_json as _js_json
 
 log = logging.getLogger(__name__)
 
@@ -215,10 +216,10 @@ class SQLEditorWidget:
 
 <script>
 (function() {{
-  var WID       = {json.dumps(wid)};
-  var EXEC_URL  = {json.dumps(execute_url)};
-  var SCHEMA_URL= {json.dumps(schema_url)};
-  var THEME     = {json.dumps(theme)};
+  var WID       = {_js_json(wid)};
+  var EXEC_URL  = {_js_json(execute_url)};
+  var SCHEMA_URL= {_js_json(schema_url)};
+  var THEME     = {_js_json(theme)};
   var INIT_VAL  = {placeholder_json};
   var monacoEditor = null;
 
@@ -417,7 +418,7 @@ class SQLEditorWidget:
       initMonaco();
     }} else {{
       var s = document.createElement('script');
-      s.src = {json.dumps(monaco_loader)};
+      s.src = {_js_json(monaco_loader)};
       s.onload = initMonaco;
       document.head.appendChild(s);
     }}

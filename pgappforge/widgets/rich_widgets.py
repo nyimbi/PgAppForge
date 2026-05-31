@@ -22,6 +22,7 @@ from typing import Any
 
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from markupsafe import Markup
+from pgappforge.widgets._utils import js_json as _js_json
 
 
 # ---------------------------------------------------------------------------
@@ -330,13 +331,13 @@ class MarkdownEditorWidget(BS3TextFieldWidget):
 
 		var mde = new SimpleMDE({{
 			element: textarea,
-			initialValue: {json.dumps(initial)},
+			initialValue: {_js_json(initial)},
 			spellChecker: {_jsbool(self.spellchecker)},
 			autofocus: false,
 			autoDownloadFontAwesome: false,
-			placeholder: {json.dumps(self.placeholder)},
-			toolbar: {json.dumps(self.toolbar)},
-			status: {json.dumps(self.status)},
+			placeholder: {_js_json(self.placeholder)},
+			toolbar: {_js_json(self.toolbar)},
+			status: {_js_json(self.status)},
 			autosave: {{
 				enabled: {_jsbool(self.autosave)},
 				uniqueId: 'fab-md-{field_id}',
@@ -527,7 +528,7 @@ class CodeEditorWidget(BS3TextFieldWidget):
 (function() {{
 	{_once_guard(loader_guard)}
 
-	var editorConfig = {json.dumps(config, indent="\t\t")};
+	var editorConfig = {_js_json(config, indent="\t\t")};
 
 	function initCodeEditor() {{
 		var container  = document.getElementById('{field_id}-container');
@@ -736,7 +737,7 @@ class RichTextEditorWidget(BS3TextFieldWidget):
 				if (!file) return;
 				var fd = new FormData();
 				fd.append('image', file);
-				fetch({json.dumps(self.image_upload_url)}, {{ method: 'POST', body: fd }})
+				fetch({_js_json(self.image_upload_url)}, {{ method: 'POST', body: fd }})
 					.then(function(r) {{ return r.json(); }})
 					.then(function(data) {{
 						if (data && data.url) {{
@@ -781,11 +782,11 @@ class RichTextEditorWidget(BS3TextFieldWidget):
 		// Inject toolbar HTML via Quill Snow theme
 		var quill = new Quill('#' + '{field_id}-editor', {{
 			modules: {{
-				toolbar: {json.dumps(self.toolbar)}
+				toolbar: {_js_json(self.toolbar)}
 			}},
-			placeholder: {json.dumps(self.placeholder)},
+			placeholder: {_js_json(self.placeholder)},
 			readOnly: {_jsbool(self.readonly)},
-			theme: {json.dumps(self.theme)}
+			theme: {_js_json(self.theme)}
 		}});
 
 		// Set initial content
@@ -793,7 +794,7 @@ class RichTextEditorWidget(BS3TextFieldWidget):
 		if (initialDelta) {{
 			quill.setContents(initialDelta);
 		}} else {{
-			var initHtml = {json.dumps(initial_html)};
+			var initHtml = {_js_json(initial_html)};
 			if (initHtml) {{
 				quill.clipboard.dangerouslyPasteHTML(initHtml);
 			}}
@@ -1007,7 +1008,7 @@ class SignaturePadWidget(BS3TextFieldWidget):
 (function() {{
 	{_once_guard(loader_guard)}
 
-	var cfg = {json.dumps(config)};
+	var cfg = {_js_json(config)};
 
 	function initSignaturePad() {{
 		var canvas  = document.getElementById(cfg.fieldId + '-canvas');

@@ -320,8 +320,8 @@ class SNOMEDSearchWidget:
 
 <script>
 (function() {{
-  var wid = {json.dumps(wid)};
-  var domainId = {json.dumps(self.domain)};
+  var wid = {_js_json(wid)};
+  var domainId = {_js_json(self.domain)};
   var activeOnly = {active_flag};
   var debounceTimer = null;
   var TAG_COLORS = {tag_colors_json};

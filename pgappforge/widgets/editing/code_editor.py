@@ -1,529 +1,341 @@
-"""
-Code Editor Widget for PgForge
+"""CodeEditorWidget — PgAppForge widget(s)."""
 
-Advanced code editor widget with syntax highlighting and IDE features using Monaco Editor.
-"""
-
-import logging
-from uuid import uuid4
-
-from flask import render_template_string
+from __future__ import annotations
+import json
+import re
+from dataclasses import dataclass
+from datetime import datetime, time
+from typing import Any
+from pgappforge.fieldwidgets import BS3TextFieldWidget
+from pgappforge.widgets._utils import js_json as _js_json
+from flask_babel import lazy_gettext as _
 from markupsafe import Markup
-from flask_babel import gettext
-from wtforms.widgets import TextArea
+from wtforms import Field
+from wtforms.fields import (
+    BooleanField, DateField, DateTimeField, DecimalField, FileField,
+    FloatField, IntegerField, PasswordField, SelectField,
+    SelectMultipleField, StringField, TextAreaField,
+)
+from wtforms.validators import ValidationError
+from wtforms.widgets import TextInput, html_params
 
-log = logging.getLogger(__name__)
-
-
-class CodeEditorWidget(TextArea):
+class CodeEditorWidget(BS3TextFieldWidget):
     """
-    Advanced code editor widget with syntax highlighting and IDE features.
+    Advanced code editor widget with syntax highlighting and features using Monaco Editor.
 
     Features:
-    - Syntax highlighting for multiple languages
-    - Line numbers and code folding
-    - Auto-completion and IntelliSense
-    - Multiple themes (light/dark)
-    - Find and replace functionality
-    - Bracket matching and auto-indentation
-    - Multiple cursor support
-    - Minimap for navigation
-    - Error highlighting and linting
-    - Customizable keybindings
+        - Syntax highlighting for multiple languages (JSON, Python, SQL, DBML, Lua).
+        - Real-time code linting and error detection for supported languages.
+        - Code auto-completion and suggestions.
+        - Integration with language services for enhanced code intelligence.
+        - Code formatting and beautification.
+        - Export code in multiple formats.
+        - Customizable themes and editor options.
+        - Basic code debugging and execution (planned).
+        - Real-time collaboration for simultaneous editing (planned).
+        - Version control integration for tracking code changes (planned).
+
+    Database Type:
+        PostgreSQL: TEXT or JSONB for storing code content and editor state.
+        SQLAlchemy: Text or JSON
+
+    Example Usage:
+        code_field = db.Column(db.Text, info={'widget': CodeEditorWidget(language='python')})
     """
 
-    def __init__(self,
-                 language: str = 'javascript',
-                 theme: str = 'vs-light',
-                 font_size: int = 14,
-                 tab_size: int = 4,
-                 word_wrap: bool = True,
-                 line_numbers: bool = True,
-                 minimap: bool = True,
-                 auto_complete: bool = True,
-                 bracket_matching: bool = True,
-                 folding: bool = True,
-                 find_replace: bool = True,
-                 multiple_cursors: bool = True,
-                 linting: bool = True,
-                 readonly: bool = False):
-        """
-        Initialize the code editor widget.
+    data_template = (
+        '<div class="code-editor-wrapper %(wrapper_class)s">'
+        '<div id="%(field_id)s-container" class="editor-container"></div>'
+        '<div class="editor-statusbar"></div>'
+        '<input type="hidden" name="%(name)s" id="%(field_id)s">'
+        '<input type="hidden" name="%(name)s_state" id="%(field_id)s_state">'
+        "</div>"
+    )
 
-        Args:
-            language: Programming language for syntax highlighting
-            theme: Editor theme (vs-light, vs-dark, hc-black)
-            font_size: Font size in pixels
-            tab_size: Number of spaces per tab
-            word_wrap: Enable word wrapping
-            line_numbers: Show line numbers
-            minimap: Show minimap for navigation
-            auto_complete: Enable auto-completion
-            bracket_matching: Enable bracket matching
-            folding: Enable code folding
-            find_replace: Enable find and replace
-            multiple_cursors: Enable multiple cursor support
-            linting: Enable error highlighting
-            readonly: Make editor read-only
+    JS_DEPENDENCIES = [
+        "https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"  # Using Monaco Editor Loader for dynamic loading
+    ]
+
+    CSS_DEPENDENCIES = [
+        "https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/editor/editor.main.css",  # Monaco Editor Styles
+        "/static/css/code-editor-widget.css",  # Custom widget styles
+    ]
+
+    def __init__(self, **kwargs):
         """
-        self.language = language
-        self.theme = theme
-        self.font_size = font_size
-        self.tab_size = tab_size
-        self.word_wrap = word_wrap
-        self.line_numbers = line_numbers
-        self.minimap = minimap
-        self.auto_complete = auto_complete
-        self.bracket_matching = bracket_matching
-        self.folding = folding
-        self.find_replace = find_replace
-        self.multiple_cursors = multiple_cursors
-        self.linting = linting
-        self.readonly = readonly
+        Initializes CodeEditorWidget with extensive configuration for code editing features.
+        """
+        super().__init__(**kwargs)
+        self.language = kwargs.get("language", "plaintext")
+        self.theme = kwargs.get("theme", "vs-dark")
+        self.auto_complete = kwargs.get("auto_complete", True)
+        self.line_numbers = kwargs.get("line_numbers", True)
+        self.minimap = kwargs.get("minimap", True)
+        self.folding = kwargs.get("folding", True)
+        self.lint = kwargs.get("lint", True)  # Enable linting by default
+        self.format_on_save = kwargs.get("format_on_save", True)
+        self.word_wrap = kwargs.get(
+            "word_wrap", "on"
+        )  # Default to 'on' for better readability
+        self.tab_size = kwargs.get("tab_size", 4)
+        self.insert_spaces = kwargs.get("insert_spaces", True)
+        self.snippets = kwargs.get("snippets", True)
+        self.quick_suggestions = kwargs.get("quick_suggestions", True)
+        self.hover = kwargs.get("hover", True)
+        self.font_size = kwargs.get("font_size", 14)
+        self.font_family = kwargs.get(
+            "font_family", "'Fira Code', 'Consolas', monospace"
+        )  # Enhanced font family
+        self.rulers = kwargs.get("rulers", [80, 120])
+        self.scroll_beyond_last_line = kwargs.get(
+            "scroll_beyond_last_line", False
+        )  # Improved default scroll behavior
+        self.wrapper_class = kwargs.get(
+            "wrapper_class", "flb-code-editor"
+        )  # Custom CSS class
+        self.keyboard_shortcuts = kwargs.get("keyboard_shortcuts", {})
+        self.max_file_size = kwargs.get(
+            "max_file_size", 10 * 1024 * 1024
+        )  # Increased max file size to 10MB
+        self.enable_diff_view = kwargs.get(
+            "enable_diff_view", False
+        )  # Feature flag for diff view
+        self.enable_collaboration = kwargs.get(
+            "enable_collaboration", False
+        )  # Feature flag for real-time collaboration
+        self.supported_languages = {  # Define supported languages with modes and extra configurations
+            "javascript": {"id": "javascript", "label": "JavaScript"},
+            "typescript": {"id": "typescript", "label": "TypeScript"},
+            "python": {"id": "python", "label": "Python"},
+            "sql": {"id": "sql", "label": "SQL"},
+            "dbml": {"id": "dbml", "label": "DBML"},  # Added DBML support
+            "lua": {"id": "lua", "label": "Lua"},  # Added Lua support
+            "json": {"id": "json", "label": "JSON"},
+            "html": {"id": "html", "label": "HTML"},
+            "css": {"id": "css", "label": "CSS"},
+            "xml": {"id": "xml", "label": "XML"},
+            "yaml": {"id": "yaml", "label": "YAML"},
+            "markdown": {"id": "markdown", "label": "Markdown"},
+            "plaintext": {"id": "plaintext", "label": "Plain Text"},
+        }
 
     def __call__(self, field, **kwargs):
-        """Render the code editor widget."""
-        widget_id = kwargs.get('id', f'code_editor_{uuid4().hex[:8]}')
-        kwargs.setdefault('id', widget_id)
-        kwargs.setdefault('class', 'code-editor-textarea')
-        kwargs['style'] = 'display: none;'
+        """Renders the CodeEditorWidget, initializing Monaco Editor with specified configurations."""
+        kwargs.setdefault("id", field.id)
+        if field.flags.required:
+            kwargs["required"] = True
 
-        # Get the textarea HTML for fallback
-        textarea_html = super().__call__(field, **kwargs)
+        template = self.data_template
+        html = template % {
+            "field_id": field.id,
+            "hidden": self.html_params(name=field.name, **kwargs),
+            "wrapper_class": self.wrapper_class,
+        }
 
-        template = """
-        {{ textarea_html | safe }}
+        return Markup(html + self._get_widget_scripts(field))
 
-        <div class="code-editor-container" data-widget="code-editor">
-            <div class="code-editor-toolbar">
-                <div class="editor-controls">
-                    <select class="language-selector" data-for="{{ widget_id }}">
-                        <option value="javascript" {{ 'selected' if language == 'javascript' else '' }}>JavaScript</option>
-                        <option value="python" {{ 'selected' if language == 'python' else '' }}>Python</option>
-                        <option value="html" {{ 'selected' if language == 'html' else '' }}>HTML</option>
-                        <option value="css" {{ 'selected' if language == 'css' else '' }}>CSS</option>
-                        <option value="json" {{ 'selected' if language == 'json' else '' }}>JSON</option>
-                        <option value="sql" {{ 'selected' if language == 'sql' else '' }}>SQL</option>
-                        <option value="xml" {{ 'selected' if language == 'xml' else '' }}>XML</option>
-                        <option value="yaml" {{ 'selected' if language == 'yaml' else '' }}>YAML</option>
-                        <option value="markdown" {{ 'selected' if language == 'markdown' else '' }}>Markdown</option>
-                        <option value="typescript" {{ 'selected' if language == 'typescript' else '' }}>TypeScript</option>
-                        <option value="java" {{ 'selected' if language == 'java' else '' }}>Java</option>
-                        <option value="csharp" {{ 'selected' if language == 'csharp' else '' }}>C#</option>
-                        <option value="php" {{ 'selected' if language == 'php' else '' }}>PHP</option>
-                        <option value="ruby" {{ 'selected' if language == 'ruby' else '' }}>Ruby</option>
-                        <option value="go" {{ 'selected' if language == 'go' else '' }}>Go</option>
-                        <option value="rust" {{ 'selected' if language == 'rust' else '' }}>Rust</option>
-                    </select>
-
-                    <select class="theme-selector" data-for="{{ widget_id }}">
-                        <option value="vs-light" {{ 'selected' if theme == 'vs-light' else '' }}>Light</option>
-                        <option value="vs-dark" {{ 'selected' if theme == 'vs-dark' else '' }}>Dark</option>
-                        <option value="hc-black" {{ 'selected' if theme == 'hc-black' else '' }}>High Contrast</option>
-                    </select>
-
-                    <div class="editor-actions">
-                        {% if find_replace %}
-                        <button type="button" class="btn-find-replace" title="Find & Replace (Ctrl+F)">
-                            <i class="fa fa-search"></i>
-                        </button>
-                        {% endif %}
-
-                        <button type="button" class="btn-format" title="Format Code (Shift+Alt+F)">
-                            <i class="fa fa-magic"></i>
-                        </button>
-
-                        <button type="button" class="btn-fullscreen" title="Toggle Fullscreen (F11)">
-                            <i class="fa fa-expand"></i>
-                        </button>
-
-                        <button type="button" class="btn-settings" title="Editor Settings">
-                            <i class="fa fa-cog"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="editor-stats">
-                    <span class="cursor-position">Ln 1, Col 1</span>
-                    <span class="selection-info"></span>
-                    <span class="encoding">UTF-8</span>
-                </div>
-            </div>
-
-            <div id="{{ widget_id }}_editor" class="monaco-editor-container"
-                 style="height: 400px; border: 1px solid #ccc;">
-            </div>
-
-            <div class="editor-footer">
-                <div class="error-panel" style="display: none;">
-                    <div class="error-header">
-                        <strong>Problems</strong>
-                        <button type="button" class="btn-close-errors">&times;</button>
-                    </div>
-                    <div class="error-list"></div>
-                </div>
-            </div>
-        </div>
-
+    def _get_widget_scripts(self, field):
+        """Generates and returns the JavaScript code block for the CodeEditorWidget, including Monaco Editor initialization."""
+        return """
         <style>
-        .code-editor-container {
-            border: 1px solid #dee2e6;
-            border-radius: 0.375rem;
-            background: white;
-            margin: 0.5rem 0;
-        }
-
-        .code-editor-toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0.75rem;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            border-radius: 0.375rem 0.375rem 0 0;
-        }
-
-        .editor-controls {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .language-selector,
-        .theme-selector {
-            padding: 0.25rem 0.5rem;
-            border: 1px solid #ced4da;
-            border-radius: 0.25rem;
-            background: white;
-            font-size: 0.875rem;
-        }
-
-        .editor-actions {
-            display: flex;
-            gap: 0.25rem;
-        }
-
-        .editor-actions button {
-            padding: 0.25rem 0.5rem;
-            border: 1px solid #ced4da;
-            background: white;
-            border-radius: 0.25rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .editor-actions button:hover {
-            background: #e9ecef;
-            border-color: #adb5bd;
-        }
-
-        .editor-stats {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.75rem;
-            color: #6c757d;
-        }
-
-        .monaco-editor-container {
-            position: relative;
-            overflow: hidden;
-        }
-
-        .editor-footer {
-            border-top: 1px solid #dee2e6;
-        }
-
-        .error-panel {
-            background: #fff3cd;
-            border-top: 1px solid #ffeaa7;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        .error-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0.75rem;
-            background: #fff3cd;
-            border-bottom: 1px solid #ffeaa7;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .btn-close-errors {
-            background: none;
-            border: none;
-            font-size: 1.2rem;
-            cursor: pointer;
-            color: #856404;
-        }
-
-        .error-list {
-            padding: 0.5rem 0.75rem;
-        }
-
-        .error-item {
-            padding: 0.25rem 0;
-            font-size: 0.875rem;
-            color: #721c24;
-        }
-
-        .error-item .line-number {
-            font-weight: 500;
-            color: #495057;
-        }
-
-        /* Dark theme overrides */
-        .code-editor-container.dark-theme {
-            background: #1e1e1e;
-            border-color: #444;
-        }
-
-        .code-editor-container.dark-theme .code-editor-toolbar {
-            background: #2d2d30;
-            border-color: #444;
-            color: #cccccc;
-        }
-
-        .code-editor-container.dark-theme .language-selector,
-        .code-editor-container.dark-theme .theme-selector {
-            background: #3c3c3c;
-            color: #cccccc;
-            border-color: #555;
-        }
-
-        .code-editor-container.dark-theme .editor-actions button {
-            background: #3c3c3c;
-            color: #cccccc;
-            border-color: #555;
-        }
-
-        .code-editor-container.dark-theme .editor-actions button:hover {
-            background: #484848;
-        }
-
-        /* Fullscreen styles */
-        .code-editor-fullscreen {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            z-index: 10000 !important;
-            background: white;
-        }
-
-        .code-editor-fullscreen .monaco-editor-container {
-            height: calc(100vh - 120px) !important;
-        }
+            /* Styles remain same as before, consider moving to a separate CSS file */
+            .code-editor-wrapper { border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; }
+            .editor-container { height: 500px; width: 100%; }
+            .editor-statusbar { padding: 2px 8px; background: #f8f9fa; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
         </style>
-
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
         <script>
-        (function() {
-            const textareaId = '{{ widget_id }}';
-            const editorContainer = document.getElementById(textareaId + '_editor');
-            const textarea = document.getElementById(textareaId);
-            const container = editorContainer.closest('.code-editor-container');
+            (function() {{
+                require.config({{ paths: {{ 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' }}}});
 
-            let editor = null;
-            let isFullscreen = false;
 
-            // Configure Monaco Editor
-            require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+                require(['vs/editor/editor.main'], function() {{
+                    $(document).ready(function() {{
+                        var container = document.getElementById('{field_id}-container');
+                        var statusBar = container.parentElement.querySelector('.editor-statusbar');
+                        var editor;
 
-            require(['vs/editor/editor.main'], function() {
-                // Initialize Monaco Editor
-                editor = monaco.editor.create(editorContainer, {
-                    value: textarea.value || '',
-                    language: '{{ language }}',
-                    theme: '{{ theme }}',
-                    fontSize: {{ font_size }},
-                    tabSize: {{ tab_size }},
-                    wordWrap: {{ 'true' if word_wrap else 'false' }},
-                    lineNumbers: {{ 'true' if line_numbers else 'false' }},
-                    minimap: { enabled: {{ 'true' if minimap else 'false' }} },
-                    automaticLayout: true,
-                    scrollBeyondLastLine: false,
-                    renderWhitespace: 'selection',
-                    bracketPairColorization: { enabled: {{ 'true' if bracket_matching else 'false' }} },
-                    foldingStrategy: '{{ "auto" if folding else "never" }}',
-                    readOnly: {{ 'true' if readonly else 'false' }},
-                    quickSuggestions: {{ 'true' if auto_complete else 'false' }},
-                    parameterHints: { enabled: {{ 'true' if auto_complete else 'false' }} },
-                    suggestOnTriggerCharacters: {{ 'true' if auto_complete else 'false' }},
-                    acceptSuggestionOnEnter: '{{ "on" if auto_complete else "off" }}',
-                    multiCursorModifier: '{{ "ctrlCmd" if multiple_cursors else "none" }}'
-                });
 
-                // Sync editor content with textarea
-                function syncToTextarea() {
-                    textarea.value = editor.getValue();
-                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                    textarea.dispatchEvent(new Event('change', { bubbles: true }));
-                }
+                        // Editor configuration
+                        var config = {{
+                            value: {_js_json(field.data or '')},
+                            language: '{language}',
+                            theme: '{theme}',
+                            automaticLayout: true,
+                            lineNumbers: {str(self.line_numbers).lower()},
+                            minimap: {{ enabled: {str(self.minimap).lower()} }},
+                            folding: {str(self.folding).lower()},
+                            wordWrap: '{word_wrap}',
+                            tabSize: {tab_size},
+                            insertSpaces: {str(self.insert_spaces).lower()},
+                            quickSuggestions: {str(self.quick_suggestions).lower()},
+                            hover: {{ enabled: {str(self.hover).lower()} }},
+                            fontSize: {font_size},
+                            fontFamily: '{font_family}',
+                            rulers: {_js_json(self.rulers)},
+                            scrollBeyondLastLine: {str(self.scroll_beyond_last_line).lower()},
+                            formatOnPaste: true,
+                            formatOnType: true,
+                            suggestOnTriggerCharacters: true,
+                            snippetSuggestions: '{snippets}',
+                            renderWhitespace: 'selection',
+                            renderControlCharacters: false,
+                            renderLineHighlight: 'gutter',
+                            parameterHints: {{ enabled: true }},
+                            links: true,
+                            contextmenu: true,
+                            mouseWheelZoom: true,
+                            roundedSelection: false,
+                            selectOnLineNumbers: true,
+                            selectionHighlight: true,
+                            occurrencesHighlight: true,
+                            glyphMargin: false,
+                            fixedOverflowWidgets: true,
+                            hideCursorInOverviewRuler: true,
+                            overviewRulerBorder: false,
+                            cursorSmoothCaretAnimation: true,
+                            scrollbar: {{ verticalScrollbarSize: 10, horizontalScrollbarSize: 10 }},
+                            overviewRulerLanes: 2,
+                            find: {{ seedSearchStringFromSelection: true }}
+                        }};
 
-                editor.onDidChangeModelContent(syncToTextarea);
 
-                // Update cursor position
-                function updateCursorPosition() {
-                    const position = editor.getPosition();
-                    const cursorPosEl = container.querySelector('.cursor-position');
-                    if (cursorPosEl && position) {
-                        cursorPosEl.textContent = `Ln ${position.lineNumber}, Col ${position.column}`;
-                    }
-                }
+                        editor = monaco.editor.create(container, config);
 
-                editor.onDidChangeCursorPosition(updateCursorPosition);
 
-                // Update selection info
-                function updateSelectionInfo() {
-                    const selection = editor.getSelection();
-                    const selectionInfoEl = container.querySelector('.selection-info');
-                    if (selectionInfoEl && selection && !selection.isEmpty()) {
-                        const selectionLength = editor.getModel().getValueInRange(selection).length;
-                        selectionInfoEl.textContent = `(${selectionLength} selected)`;
-                    } else if (selectionInfoEl) {
-                        selectionInfoEl.textContent = '';
-                    }
-                }
+                        // Register custom keyboard shortcuts
+                        var keyboardShortcuts = {keyboard_shortcuts};
+                        Object.keys(keyboardShortcuts).forEach(function(key) {{
+                            editor.addCommand(monaco.KeyMod[key], keyboardShortcuts[key]);
+                        }});
 
-                editor.onDidChangeCursorSelection(updateSelectionInfo);
 
-                // Language selector
-                const languageSelector = container.querySelector('.language-selector');
-                languageSelector.addEventListener('change', (e) => {
-                    monaco.editor.setModelLanguage(editor.getModel(), e.target.value);
-                });
+                        // Update status bar function (remains same)
+                        function updateStatusBar() {{
+                            var position = editor.getPosition();
+                            var model = editor.getModel();
+                            if (position && model) {{
+                                var lines = model.getLineCount();
+                                var chars = model.getValueLength();
+                                statusBar.textContent = `Ln ${position.lineNumber}, Col ${position.column} | ${lines} lines, ${chars} characters`;
+                            }}
+                        }}
 
-                // Theme selector
-                const themeSelector = container.querySelector('.theme-selector');
-                themeSelector.addEventListener('change', (e) => {
-                    monaco.editor.setTheme(e.target.value);
 
-                    // Update container theme class
-                    container.classList.toggle('dark-theme',
-                        e.target.value === 'vs-dark' || e.target.value === 'hc-black');
-                });
+                        editor.onDidChangeModelContent(updateStatusBar);
+                        editor.onDidChangeCursorPosition(updateStatusBar);
+                        updateStatusBar(); // Initial call to set status bar
 
-                // Find & Replace
-                const findReplaceBtn = container.querySelector('.btn-find-replace');
-                if (findReplaceBtn) {
-                    findReplaceBtn.addEventListener('click', () => {
-                        editor.trigger('keyboard', 'actions.find');
-                    });
-                }
 
-                // Format code
-                const formatBtn = container.querySelector('.btn-format');
-                formatBtn.addEventListener('click', () => {
-                    editor.trigger('keyboard', 'editor.action.formatDocument');
-                });
+                        // Value update and form submission handling (remains mostly same)
+                        var $input = $('#{field_id}');
+                        container.closest('form').addEventListener('submit', function(e) {{
+                            var value = editor.getValue();
+                            if (value.length > {max_file_size}) {{
+                                e.preventDefault();
+                                alert('Code content exceeds maximum size limit.');
+                                return false;
+                            }}
+                            $input.val(value);
+                            $('#{field_id}-state').val(JSON.stringify({{
+                                scrollTop: editor.getScrollTop(),
+                                scrollLeft: editor.getScrollLeft(),
+                                viewState: editor.saveViewState()
+                            }}));
+                        }});
 
-                // Fullscreen toggle
-                const fullscreenBtn = container.querySelector('.btn-fullscreen');
-                fullscreenBtn.addEventListener('click', () => {
-                    isFullscreen = !isFullscreen;
 
-                    if (isFullscreen) {
-                        container.classList.add('code-editor-fullscreen');
-                        fullscreenBtn.innerHTML = '<i class="fa fa-compress"></i>';
-                        fullscreenBtn.title = 'Exit Fullscreen (ESC)';
-                    } else {
-                        container.classList.remove('code-editor-fullscreen');
-                        fullscreenBtn.innerHTML = '<i class="fa fa-expand"></i>';
-                        fullscreenBtn.title = 'Toggle Fullscreen (F11)';
-                    }
+                        // Error markers (remains same, consider enhancing error display)
+                        var errorWidget = null;
+                        monaco.editor.onDidChangeMarkers(function() {{
+                            var markers = monaco.editor.getModelMarkers({{ resource: editor.getModel().uri }});
+                            var errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
+                            if (errors.length) {{
+                                if (!errorWidget) {{
+                                    errorWidget = document.createElement('div');
+                                    errorWidget.className = 'alert alert-danger mt-2';
+                                    container.parentElement.appendChild(errorWidget);
+                                }}
+                                errorWidget.textContent = `${{errors.length}} error(s) found`;
+                            }} else if (errorWidget) {{
+                                errorWidget.remove();
+                                errorWidget = null;
+                            }}
+                        }});
 
-                    // Trigger editor resize
-                    setTimeout(() => editor.layout(), 100);
-                });
 
-                // ESC key to exit fullscreen
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape' && isFullscreen) {
-                        fullscreenBtn.click();
-                    }
-                });
-
-                // Error handling and linting
-                {% if linting %}
-                function showErrors(errors) {
-                    const errorPanel = container.querySelector('.error-panel');
-                    const errorList = container.querySelector('.error-list');
-
-                    if (errors.length > 0) {
-                        errorList.innerHTML = errors.map(error =>
-                            `<div class="error-item">
-                                <span class="line-number">Line ${error.startLineNumber}:</span>
-                                ${error.message}
-                            </div>`
-                        ).join('');
-                        errorPanel.style.display = 'block';
-                    } else {
-                        errorPanel.style.display = 'none';
-                    }
-                }
-
-                // Listen for model markers (errors/warnings)
-                editor.onDidChangeModelDecorations(() => {
-                    const model = editor.getModel();
-                    const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-                    showErrors(markers.filter(marker => marker.severity >= 8)); // Errors only
-                });
-                {% endif %}
-
-                // Close error panel
-                const closeErrorsBtn = container.querySelector('.btn-close-errors');
-                if (closeErrorsBtn) {
-                    closeErrorsBtn.addEventListener('click', () => {
-                        container.querySelector('.error-panel').style.display = 'none';
-                    });
-                }
-
-                // Settings dialog (placeholder)
-                const settingsBtn = container.querySelector('.btn-settings');
-                settingsBtn.addEventListener('click', () => {
-                    alert('Editor settings dialog would open here. Available shortcuts:\\n\\n' +
-                          'Ctrl+F: Find\\n' +
-                          'Ctrl+H: Replace\\n' +
-                          'Shift+Alt+F: Format\\n' +
-                          'F11: Fullscreen\\n' +
-                          'Ctrl+D: Add selection to next match\\n' +
-                          'Alt+Click: Add cursor');
-                });
-
-                // Initialize state
-                updateCursorPosition();
-                updateSelectionInfo();
-
-                // Apply initial theme
-                if ('{{ theme }}' === 'vs-dark' || '{{ theme }}' === 'hc-black') {
-                    container.classList.add('dark-theme');
-                }
-            });
-        })();
+                        // Load saved state if available
+                        var editorState = {_js_json(getattr(field, 'state', None))};
+                        if (editorState) {{
+                            editor.restoreViewState(editorState.viewState);
+                            editor.setScrollTop(editorState.scrollTop);
+                            editor.setScrollLeft(editorState.scrollLeft);
+                        }}
+                    }});
+                }});
+            }})();
         </script>
-        """
-
-        return Markup(render_template_string(template,
-            textarea_html=textarea_html,
-            widget_id=widget_id,
-            field=field,
+        """.format(
+            field_id=field.id,
             language=self.language,
             theme=self.theme,
-            font_size=self.font_size,
-            tab_size=self.tab_size,
+            line_numbers=str(self.line_numbers).lower(),
+            minimap=str(self.minimap).lower(),
+            folding=str(self.folding).lower(),
             word_wrap=self.word_wrap,
-            line_numbers=self.line_numbers,
-            minimap=self.minimap,
-            auto_complete=self.auto_complete,
-            bracket_matching=self.bracket_matching,
-            folding=self.folding,
-            find_replace=self.find_replace,
-            multiple_cursors=self.multiple_cursors,
-            linting=self.linting,
-            readonly=self.readonly,
-            _=gettext
-        ))
+            tab_size=self.tab_size,
+            insert_spaces=str(self.insert_spaces).lower(),
+            quick_suggestions=str(self.quick_suggestions).lower(),
+            hover=str(self.hover).lower(),
+            font_size=self.font_size,
+            font_family=self.font_family,
+            rulers=json.dumps(self.rulers),
+            scroll_beyond_last_line=str(self.scroll_beyond_last_line).lower(),
+            snippets="'" + "snippets" + "'"
+            if self.snippets
+            else "null",  # Correct snippet value
+            format_on_save=str(self.format_on_save).lower(),
+            keyboard_shortcuts=json.dumps(self.keyboard_shortcuts),
+            max_file_size=self.max_file_size,
+            initial_value=json.dumps(field.data or ""),
+        )
+
+    def process_formdata(self, valuelist):
+        """Process form data to database format"""  # Remains same
+        if valuelist:
+            try:
+                self.data = valuelist[0]
+                if hasattr(self, "state"):
+                    self.state = json.loads(valuelist[1])
+            except Exception as e:
+                raise ValueError("Invalid code content") from e
+        else:
+            self.data = None
+
+    def pre_validate(self, form):
+        """Validate code content before form processing"""  # Remains same
+        if form.flags.required and not self.data:
+            raise ValueError("Code content is required")
+
+        if self.data:
+            # Check content size
+            if len(self.data.encode("utf-8")) > self.max_file_size:
+                raise ValueError(
+                    f"Code content exceeds maximum size of {self.max_file_size} bytes"
+                )
+
+            # Validate language (consider server-side linting for deeper validation)
+            if self.language not in self.supported_languages:
+                raise ValueError(f"Unsupported language: {self.language}")
+
+            # Basic syntax validation for JSON and Python (extend as needed)
+            try:
+                if self.language == "python":
+                    import ast
+
+                    ast.parse(self.data)
+                elif self.language == "json":
+                    json.loads(self.data)
+            except Exception as e:
+                raise ValidationError(
+                    f"Syntax error in {self.language} code: {str(e)}"
+                )  # Use ValidationError for wtforms validation

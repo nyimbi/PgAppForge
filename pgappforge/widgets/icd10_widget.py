@@ -316,7 +316,7 @@ class ICD10SearchWidget:
 
 <script>
 (function() {{
-  var wid = {json.dumps(wid)};
+  var wid = {_js_json(wid)};
   var billableOnly = {billable_flag};
   var debounceTimer = null;
   var breadcrumbStack = []; // {{label, url}} entries
