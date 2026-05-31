@@ -7,6 +7,7 @@ A comprehensive QR Code widget with generation, scanning, customization, and bul
 from markupsafe import Markup
 from wtforms.widgets import Input
 from flask_babel import gettext
+from pgappforge.widgets_postgresql._cdn import QRCODE_CDN_URL, JSQR_CDN_URL
 
 
 class QrCodeWidget(Input):
@@ -694,7 +695,7 @@ class QrCodeWidget(Input):
                 // Load QR code generation library
                 if (!window.QRCode) {{
                     const qrScript = document.createElement('script');
-                    qrScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js';
+                    qrScript.src = '{QRCODE_CDN_URL}';
                     qrScript.onload = function() {{
                         qrCodeLib = window.QRCode;
                         console.log('QR Code generation library loaded');
@@ -707,7 +708,7 @@ class QrCodeWidget(Input):
                 // Load QR code scanning library
                 if (!window.jsQR) {{
                     const jsQRScript = document.createElement('script');
-                    jsQRScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js';
+                    jsQRScript.src = '{JSQR_CDN_URL}';
                     jsQRScript.onload = function() {{
                         jsQRLib = window.jsQR;
                         console.log('QR Code scanning library loaded');

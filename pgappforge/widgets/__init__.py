@@ -85,12 +85,18 @@ except ImportError:
 try:
     from .visualization import GPSTrackerWidget
     from .editing import MermaidEditorWidget, DbmlEditorWidget, CodeEditorWidget
-    from .media import QrCodeWidget
+    from .media import QrCodeWidget, BarcodeWidget
     from .charts import AdvancedChartsWidget
     from .forms import ColorPickerWidget
     MODULAR_WIDGETS_AVAILABLE = True
 except ImportError:
     MODULAR_WIDGETS_AVAILABLE = False
+
+try:
+    from .nx_widgets import BarcodeQRScannerWidget
+    _BARCODE_SCANNER_AVAILABLE = True
+except ImportError:
+    _BARCODE_SCANNER_AVAILABLE = False
 
 # Core widgets - always available
 CORE_WIDGETS = {
@@ -166,9 +172,13 @@ if MODULAR_WIDGETS_AVAILABLE:
         'DbmlEditorWidget',
         'CodeEditorWidget',
         'QrCodeWidget',
+        'BarcodeWidget',
         'AdvancedChartsWidget',
         'ColorPickerWidget'
     ])
+
+if _BARCODE_SCANNER_AVAILABLE:
+    __all__.append('BarcodeQRScannerWidget')
 
 
 def get_available_widgets():
@@ -215,9 +225,12 @@ def get_available_widgets():
             'DbmlEditorWidget': DbmlEditorWidget,
             'CodeEditorWidget': CodeEditorWidget,
             'QrCodeWidget': QrCodeWidget,
+            'BarcodeWidget': BarcodeWidget,
             'AdvancedChartsWidget': AdvancedChartsWidget,
             'ColorPickerWidget': ColorPickerWidget,
         }
+        if _BARCODE_SCANNER_AVAILABLE:
+            widgets['modular']['BarcodeQRScannerWidget'] = BarcodeQRScannerWidget
 
     return widgets
 

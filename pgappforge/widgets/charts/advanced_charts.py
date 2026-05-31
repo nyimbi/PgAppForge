@@ -7,7 +7,7 @@ real-time updates, export functionality, and extensive customization options.
 
 import logging
 
-from flask import Markup
+from markupsafe import Markup
 from flask_babel import gettext
 from wtforms.widgets import Input
 

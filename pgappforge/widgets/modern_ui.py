@@ -11,7 +11,8 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
-from flask import Markup, render_template_string, url_for, current_app
+from flask import render_template_string, url_for, current_app
+from markupsafe import Markup
 from flask_babel import gettext, lazy_gettext
 from wtforms.widgets import TextArea, Input, Select, CheckboxInput
 from wtforms.widgets.core import html_params

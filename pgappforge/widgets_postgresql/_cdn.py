@@ -51,3 +51,11 @@ CYTOSCAPE_VERSION = "3.27.0"
 CYTOSCAPE_CDN = f"""
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/{CYTOSCAPE_VERSION}/cytoscape.min.js" crossorigin=""></script>
 """
+
+JSBARCODE_VERSION = "3.11.6"
+JSBARCODE_CDN_URL = f"https://cdn.jsdelivr.net/npm/jsbarcode@{JSBARCODE_VERSION}/dist/JsBarcode.all.min.js"
+
+QRCODE_VERSION = "1.5.3"
+JSQR_VERSION = "1.4.0"
+QRCODE_CDN_URL = f"https://cdnjs.cloudflare.com/ajax/libs/qrcode/{QRCODE_VERSION}/qrcode.min.js"
+JSQR_CDN_URL = f"https://cdnjs.cloudflare.com/ajax/libs/jsqr/{JSQR_VERSION}/jsQR.min.js"

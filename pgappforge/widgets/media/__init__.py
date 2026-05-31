@@ -1,7 +1,6 @@
 """Media widgets for PgForge."""
 
-# Temporarily commenting out QrCodeWidget due to syntax errors
-# from .qr_code import QrCodeWidget
+from .qr_code import QrCodeWidget
+from .barcode import BarcodeWidget
 
-# __all__ = ['QrCodeWidget']
-__all__ = []
+__all__ = ["QrCodeWidget", "BarcodeWidget"]

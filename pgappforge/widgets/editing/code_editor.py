@@ -7,7 +7,8 @@ Advanced code editor widget with syntax highlighting and IDE features using Mona
 import logging
 from uuid import uuid4
 
-from flask import Markup, render_template_string
+from flask import render_template_string
+from markupsafe import Markup
 from flask_babel import gettext
 from wtforms.widgets import TextArea
 
