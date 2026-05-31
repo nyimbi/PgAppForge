@@ -276,9 +276,9 @@ class BeautifulViewGenerator:
 
         # Process columns for form widgets
         form_columns = self._process_form_columns(table_info.columns, table_info.relationships)
-        list_columns = self._get_list_columns(table_info.columns, table_info.relationships)
+        list_columns = self._get_list_columns(table_info.columns, table_info.relationships, table_info)
         show_columns = self._get_show_columns(table_info.columns, table_info.relationships)
-        search_columns = self._get_search_columns(table_info.columns)
+        search_columns = self._get_search_columns(table_info.columns, table_info)
 
         # Generate fieldsets for better form organization
         fieldsets = self._generate_fieldsets(table_info.columns)
@@ -288,9 +288,14 @@ class BeautifulViewGenerator:
 
         # Generate widget configurations
         widget_config = self._generate_widget_config(table_info.columns)
+        # Actor-aware overrides (status badge, sub_role select)
+        widget_config.update(self._get_actor_widget_overrides(table_info))
 
         # Generate security settings
         security_settings = self._generate_view_security(table_info)
+
+        # Actor-aware label overrides
+        actor_label_overrides = self._get_actor_label_overrides(table_info)
 
         add_edit_columns = [col['name'] if isinstance(col, dict) else col.name for col in form_columns]
         context = {
@@ -306,6 +311,7 @@ class BeautifulViewGenerator:
             'fieldsets': fieldsets,
             'validators': validators,
             'widget_config': widget_config,
+            'actor_label_overrides': actor_label_overrides,
             'security_settings': security_settings,
             'relationships': self._enrich_relationships_for_search(table_info.relationships),
             'config': self.config,
@@ -807,11 +813,19 @@ class BeautifulViewGenerator:
                              col.name not in ['created_at', 'updated_at', 'created_by', 'updated_by']]
         return len(non_system_columns) > 8
 
-    def _get_list_columns(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo] = None) -> List[str]:
+    def _get_list_columns(
+        self,
+        columns: List[ColumnInfo],
+        relationships: List[RelationshipInfo] = None,
+        table_info=None,
+    ) -> List[str]:
         """Get columns to display in list view.
 
         FK columns are replaced with their relationship attribute name so that
         ModelView renders __str__ of the related object instead of a raw integer.
+
+        For actor tables (table_info.is_actor == True) the display_name columns
+        from actor_config are prepended so the person's name appears first.
         """
         # Build mapping: local_column_name -> relationship_name
         fk_to_rel: Dict[str, str] = {}
@@ -822,18 +836,40 @@ class BeautifulViewGenerator:
 
         list_cols: List[str] = []
 
+        # ── Actor-aware: prepend display_name columns ───────────────────────
+        is_actor = getattr(table_info, 'is_actor', False)
+        actor_config = getattr(table_info, 'actor_config', {}) if is_actor else {}
+        actor_display_cols: List[str] = actor_config.get('display_name', []) if is_actor else []
+        actor_status_col: str = actor_config.get('status', '') if is_actor else ''
+
+        if is_actor and actor_display_cols:
+            for dc in actor_display_cols:
+                if dc not in list_cols:
+                    list_cols.append(dc)
+
         # Add name/title columns first (substitute FK cols with rel name)
         for col in columns:
             if any(word in col.name.lower() for word in ['name', 'title', 'email']):
+                # Skip columns already added as actor display_name cols
+                if col.name in actor_display_cols:
+                    continue
                 effective = fk_to_rel.get(col.name, col.name)
                 if effective not in list_cols:
                     list_cols.append(effective)
+
+        # For actor tables surface the status column right after identity cols
+        if is_actor and actor_status_col:
+            if actor_status_col not in list_cols:
+                list_cols.append(actor_status_col)
 
         # Add other important columns (substitute FK cols with rel name)
         for col in columns:
             if (not col.primary_key and
                 len(list_cols) < 6 and
                 col.category not in [ColumnType.BINARY, ColumnType.JSON]):
+                # Skip actor display_name / status cols already added
+                if col.name in actor_display_cols or col.name == actor_status_col:
+                    continue
                 effective = fk_to_rel.get(col.name, col.name)
                 if effective not in list_cols:
                     list_cols.append(effective)
@@ -862,15 +898,88 @@ class BeautifulViewGenerator:
                 result.append(effective)
         return result
 
-    def _get_search_columns(self, columns: List[ColumnInfo]) -> List[str]:
-        """Get searchable columns."""
-        searchable = []
+    def _get_search_columns(self, columns: List[ColumnInfo], table_info=None) -> List[str]:
+        """Get searchable columns.
+
+        For actor tables, the display_name columns from actor_config are prepended
+        so searches target the person's name fields first.
+        """
+        is_actor = getattr(table_info, 'is_actor', False)
+        actor_config = getattr(table_info, 'actor_config', {}) if is_actor else {}
+        actor_display_cols: List[str] = actor_config.get('display_name', []) if is_actor else []
+
+        searchable: List[str] = []
+
+        # For actor tables: prepend display_name columns (they are TEXT, not sensitive)
+        for dc in actor_display_cols:
+            if dc not in searchable:
+                searchable.append(dc)
+
         for col in columns:
             if (col.category in [ColumnType.TEXT] and
                 not self._is_sensitive_field(col.name) and
-                col.name not in ['id', 'password', 'hash']):
+                col.name not in ['id', 'password', 'hash'] and
+                col.name not in searchable):
                 searchable.append(col.name)
         return searchable
+
+    def _get_actor_label_overrides(self, table_info) -> Dict[str, str]:
+        """Return label_columns overrides for actor tables.
+
+        Maps display_name columns -> 'Full Name' and the status column ->
+        'Status', so the generated ModelView shows friendlier headers.
+        Returns an empty dict for non-actor tables.
+        """
+        if not getattr(table_info, 'is_actor', False):
+            return {}
+        actor_config = getattr(table_info, 'actor_config', {})
+        overrides: Dict[str, str] = {}
+        display_cols = actor_config.get('display_name', [])
+        if display_cols:
+            # If there are multiple display cols (e.g. given_name + family_name)
+            # give the first one a "Full Name" label; the others get sensible names.
+            if len(display_cols) == 1:
+                overrides[display_cols[0]] = 'Full Name'
+            else:
+                overrides[display_cols[0]] = 'First Name'
+                overrides[display_cols[1]] = 'Last Name'
+                for extra in display_cols[2:]:
+                    overrides[extra] = extra.replace('_', ' ').title()
+        status_col = actor_config.get('status', '')
+        if status_col:
+            overrides[status_col] = 'Status'
+        sub_role_col = actor_config.get('sub_role', '')
+        if sub_role_col:
+            overrides[sub_role_col] = 'Role Type'
+        return overrides
+
+    def _get_actor_widget_overrides(self, table_info) -> Dict[str, Dict[str, Any]]:
+        """Return widget_config overrides for actor status/sub_role columns.
+
+        Status column gets a BadgeWidget suggestion (coloured display).
+        Sub_role column with known options gets a Select2Widget.
+        Returns empty dict for non-actor tables.
+        """
+        if not getattr(table_info, 'is_actor', False):
+            return {}
+        actor_config = getattr(table_info, 'actor_config', {})
+        overrides: Dict[str, Dict[str, Any]] = {}
+        status_col = actor_config.get('status', '')
+        if status_col:
+            overrides[status_col] = {
+                'type': 'Select2Widget',
+                'config': {'placeholder': 'Select status…'},
+            }
+        sub_role_col = actor_config.get('sub_role', '')
+        sub_roles = actor_config.get('sub_roles', [])
+        if sub_role_col and sub_roles:
+            overrides[sub_role_col] = {
+                'type': 'Select2Widget',
+                'config': {
+                    'choices': [{'id': sr['key'], 'text': sr['label']} for sr in sub_roles],
+                },
+            }
+        return overrides
 
     def _to_pascal_case(self, snake_str: str) -> str:
         """Convert snake_case to PascalCase."""
@@ -1023,6 +1132,9 @@ class {{ class_name }}(ModelView):
     label_columns = {
         {% for column in form_columns %}
         '{{ column.name }}': _('{{ column.display_name }}'),
+        {% endfor %}
+        {% for col_name, friendly in actor_label_overrides.items() %}
+        '{{ col_name }}': _('{{ friendly }}'),
         {% endfor %}
     }
     description_columns = {

@@ -376,6 +376,69 @@ class ActorRegistry:
 	def all_configs(self) -> list[ActorConfig]:
 		return [r.config for r in self._regs.values()]
 
+	@staticmethod
+	def to_comment_json(config: ActorConfig) -> str:
+		import json
+		return json.dumps({
+			"pgaf_actor": {
+				"role": config.role,
+				"schema_name": config.schema_name or "",
+				"display_name": (
+					" ".join(config.field_map.display_name)
+					if isinstance(config.field_map.display_name, list)
+					else config.field_map.display_name
+				),
+				"status": config.field_map.status_field or "",
+				"sub_roles": [
+					{
+						"key": sr_key,
+						"label": sr.display.singular,
+						"description": f"{sr.filter_field} in {sr.filter_values}",
+					}
+					for sr_key, sr in config.sub_roles.items()
+				],
+			}
+		})
+
+	def sync_to_db(self, engine) -> None:
+		"""Persist all registered actor configs as PostgreSQL table comments.
+
+		Called from SecurityManager.create_db() so generators and the ERD
+		Designer can discover actor semantics from the live database schema.
+		"""
+		from sqlalchemy import text
+		import json
+		with self._lock:
+			regs = list(self._regs.values())
+		if not regs:
+			return
+		try:
+			with engine.begin() as conn:
+				for reg in regs:
+					config = reg.config
+					if not config.table:
+						continue
+					comment_json = self.to_comment_json(config)
+					# Merge with any existing comment (preserve non-actor metadata)
+					existing = conn.execute(text(
+						"SELECT obj_description(c.oid, 'pg_class') "
+						"FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+						"WHERE c.relname=:t AND n.nspname=ANY(current_schemas(false))"
+					), {"t": config.table}).scalar()
+					if existing:
+						try:
+							existing_data = json.loads(existing)
+						except (json.JSONDecodeError, TypeError):
+							existing_data = {"_text": existing}
+						existing_data.update(json.loads(comment_json))
+						comment_json = json.dumps(existing_data)
+					conn.execute(text(
+						f"COMMENT ON TABLE \"{config.table}\" IS :c"
+					), {"c": comment_json})
+		except Exception as exc:
+			import logging
+			logging.getLogger(__name__).warning("ActorRegistry.sync_to_db failed: %s", exc)
+
 	def primary_configs(self) -> list[ActorConfig]:
 		"""Return only primary actors (one per template)."""
 		return [r.config for r in self._regs.values() if r.config.primary]

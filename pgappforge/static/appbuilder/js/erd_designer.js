@@ -79,6 +79,13 @@ const cy = cytoscape({
                'line-color': '#555', 'target-arrow-color': '#555',
                'width': 1.5, 'label': 'data(label)',
                'font-size': '9px', 'color': '#777', 'text-background-opacity': 0 } },
+    /* Actor pattern nodes — amber highlight signals person/party */
+    { selector: 'node[type="table"][?is_actor]',
+      style: {
+        'background-color': '#f59e0b',
+        'border-color':     '#d97706',
+        'border-width':     3,
+      } },
     /* Diff overlay styles */
     { selector: 'node.diff-new',    style: { 'border-color': '#2ecc71', 'border-width': 4 } },
     { selector: 'node.diff-drop',   style: { 'border-color': '#e74c3c', 'border-width': 4 } },
@@ -227,9 +234,28 @@ cy.on('tap', 'node[type="table"]', function(e) {
            '<span class="col-name">' + _esc(c.name) + '</span>' +
            '<span class="col-type">' + _esc(c.type || '') + '</span></div>';
   }).join('');
+
+  // Actor pattern badge
+  var actorHtml = '';
+  if (d.is_actor) {
+    var actorConf    = d.actor_config || {};
+    var displayCols  = (actorConf.display_name || []).join(', ');
+    actorHtml =
+      '<div class="actor-badge">' +
+        '<span class="actor-icon">👤</span>' +
+        '<span class="actor-role">' + _esc(d.actor_role || 'actor') + '</span>' +
+      '</div>' +
+      '<div class="actor-fields">' +
+        (displayCols  ? '<div><b>Display:</b> '  + _esc(displayCols)         + '</div>' : '') +
+        (actorConf.status   ? '<div><b>Status:</b> '   + _esc(actorConf.status)   + '</div>' : '') +
+        (actorConf.sub_role ? '<div><b>Sub-role:</b> ' + _esc(actorConf.sub_role) + '</div>' : '') +
+      '</div>';
+  }
+
   var panel = document.getElementById('info-panel');
   if (panel) {
     panel.innerHTML = '<div class="ip-title">' + _esc(d.label) + '</div>' +
+                      actorHtml +
                       '<div class="ip-cols">' + cols + '</div>' +
                       '<div class="ip-actions">' +
                       '<button onclick="openColumnEditor(\'' + _esc(e.target.id()) + '\')" class="ip-btn">✎ Edit</button>' +

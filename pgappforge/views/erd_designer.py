@@ -1864,6 +1864,13 @@ _DESIGNER_HTML = ("""
     .col-type  { color:var(--muted); font-size:.85em; }
     .ip-actions { margin-top:6px; }
     .ip-btn { font-size:.75em; padding:2px 8px; }
+    /* Actor pattern badge */
+    .actor-badge  { display:flex; align-items:center; gap:6px; padding:4px 8px;
+                    background:#fef3c7; border-radius:4px; margin-bottom:8px; }
+    .actor-icon   { font-size:16px; }
+    .actor-role   { font-weight:600; color:#92400e; text-transform:capitalize; }
+    .actor-fields { font-size:12px; color:#78716c; }
+    .actor-fields div { margin-bottom:2px; }
     /* Context menu */
     #context-menu { position:fixed; background:#2c3e50; border:1px solid var(--border);
                     border-radius:6px; z-index:9999; display:none; min-width:160px;

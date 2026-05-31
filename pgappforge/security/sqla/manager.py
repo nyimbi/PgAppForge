@@ -193,6 +193,12 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
                 log.info(c.LOGMSG_INF_SEC_NO_DB)
                 self._safe_create_all(engine)
                 log.info(c.LOGMSG_INF_SEC_ADD_DB)
+            # Persist Actor pattern configs as table comments for generators and ERD Designer
+            try:
+                from pgappforge.templates.core.actor import ActorRegistry
+                ActorRegistry.instance().sync_to_db(engine)
+            except Exception:
+                pass
             # Always ensure default roles exist (handles TRUNCATE in tests)
             self._create_default_roles()
 

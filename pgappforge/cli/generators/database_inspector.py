@@ -8,7 +8,7 @@ relationship analysis, constraint detection, and metadata extraction.
 import logging
 import re
 from typing import Dict, List, Any, Optional, Tuple, Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from sqlalchemy import (
     create_engine,
@@ -194,6 +194,11 @@ class TableInfo:
     is_partition: bool = False      # A concrete partition of a partitioned table
     parent_table: str = ""          # Set for is_partition=True; name of the parent table
     is_inherited: bool = False      # Traditional INHERITS-based child table
+    # Actor pattern metadata (populated by _detect_actor_tables)
+    is_actor: bool = False          # True when table implements the Actor pattern
+    actor_role: str = ""            # e.g. "patient", "employee"
+    actor_schema: str = ""          # schema_name from ActorConfig (disambiguates SaaS vs RE tenant)
+    actor_config: dict = field(default_factory=dict)  # Full pgaf_actor payload from table comment
 
 
 class EnhancedDatabaseInspector:
@@ -383,6 +388,9 @@ class EnhancedDatabaseInspector:
 
         # Tag partitioned, partition, and inheritance tables
         self._tag_partition_inheritance(analysis)
+
+        # Tag tables implementing the Actor pattern (reads pgaf_actor table comments)
+        self._detect_actor_tables(analysis)
 
         # Synthesize parent-side ONE_TO_MANY relationships from the reverse-FK index
         self._synthesize_parent_relationships(analysis)
@@ -1371,6 +1379,42 @@ class EnhancedDatabaseInspector:
                     # Traditional INHERITS (not declarative partitioning)
                     tinfo.is_inherited = True
                     tinfo.parent_table = parent
+
+    def _detect_actor_tables(self, analysis: Dict[str, Any]) -> None:
+        """Tag tables that implement the Actor pattern.
+
+        Reads the pgaf_actor key from PostgreSQL table comments written by
+        ActorRegistry.sync_to_db(). Falls back gracefully when not present.
+        """
+        import json
+        try:
+            from sqlalchemy import text as _text_actor
+            with self.engine.connect() as conn:
+                rows = conn.execute(_text_actor(
+                    "SELECT c.relname, obj_description(c.oid, 'pg_class') "
+                    "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+                    "WHERE n.nspname=ANY(current_schemas(false)) "
+                    "AND obj_description(c.oid, 'pg_class') LIKE '%pgaf_actor%'"
+                )).fetchall()
+        except Exception as exc:
+            logger.debug("Actor table detection skipped: %s", exc)
+            return
+
+        for table_name, comment in rows:
+            if not comment or table_name not in analysis.get("tables", {}):
+                continue
+            try:
+                data = json.loads(comment)
+                actor_conf = data.get("pgaf_actor")
+                if not actor_conf:
+                    continue
+                t = analysis["tables"][table_name]
+                t.is_actor = True
+                t.actor_role = actor_conf.get("role", "")
+                t.actor_schema = actor_conf.get("schema_name", "")
+                t.actor_config = actor_conf
+            except (json.JSONDecodeError, KeyError, AttributeError):
+                pass
 
     def _synthesize_parent_relationships(self, analysis: Dict[str, Any]) -> None:
         """

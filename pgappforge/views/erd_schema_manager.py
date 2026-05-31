@@ -270,7 +270,7 @@ class ERDSchemaManager:
 					"unique": col.unique,
 					"comment": col.comment,
 				})
-			tables.append({"name": tname, "columns": cols})
+			tables.append({"name": tname, "columns": cols, "comment": tinfo.comment})
 
 		rels = []
 		for rel in analysis.get("relationships", []):
@@ -536,7 +536,23 @@ class ERDSchemaManager:
 			col_summary = ", ".join(c["name"] for c in cols[:4])
 			if len(cols) > 4:
 				col_summary += f" +{len(cols) - 4}"
-			elements.append({"data": {
+
+			# Detect Actor pattern from table comment JSON
+			is_actor = False
+			actor_role = ""
+			actor_config: dict = {}
+			raw_comment: str | None = tbl.get("comment")
+			if raw_comment:
+				try:
+					parsed = json.loads(raw_comment)
+					if isinstance(parsed, dict) and "pgaf_actor" in parsed:
+						is_actor = True
+						actor_config = parsed["pgaf_actor"] if isinstance(parsed["pgaf_actor"], dict) else {}
+						actor_role = actor_config.get("role", "")
+				except (json.JSONDecodeError, TypeError):
+					pass
+
+			node_data: dict[str, Any] = {
 				"id": tname,
 				"parent": "mod_LIVE",
 				"label": tname,
@@ -544,7 +560,11 @@ class ERDSchemaManager:
 				"col_summary": col_summary,
 				"color": "#2c3e50",
 				"columns": cols,
-			}})
+				"is_actor": is_actor,
+				"actor_role": actor_role,
+				"actor_config": actor_config,
+			}
+			elements.append({"data": node_data})
 
 		seen_edges: set[str] = set()
 		for rel in schema.get("relationships", []):

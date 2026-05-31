@@ -1006,7 +1006,32 @@ export default function MFAScreen() {
 	})
 
 	def _get_display_cols(self, tinfo: TableInfo, max_cols: int = 3) -> list:
-		"""Return first N non-PK, non-FK, non-audit, non-complex display columns."""
+		"""Return first N non-PK, non-FK, non-audit, non-complex display columns.
+
+		For actor tables the display_name columns from actor_config are used
+		as the preferred display columns so list cards show a person's name
+		rather than an unrelated field like created_at.
+		"""
+		if getattr(tinfo, 'is_actor', False):
+			actor_config = getattr(tinfo, 'actor_config', {})
+			display_names = actor_config.get('display_name', [])
+			if display_names:
+				# Return ColumnInfo objects for the actor display_name cols (in order)
+				col_map = {c.name: c for c in tinfo.columns}
+				result = [col_map[n] for n in display_names if n in col_map]
+				# Pad with remaining non-PK/non-FK/non-audit cols if needed
+				if len(result) < max_cols:
+					for c in tinfo.columns:
+						if (not c.primary_key
+								and not c.foreign_key
+								and c.name not in self._AUDIT_COLS
+								and c.category not in (ColumnType.JSONB, ColumnType.JSON, ColumnType.ARRAY)
+								and c not in result):
+							result.append(c)
+							if len(result) >= max_cols:
+								break
+				return result[:max_cols]
+
 		return [
 			c for c in tinfo.columns
 			if not c.primary_key
@@ -1020,7 +1045,25 @@ export default function MFAScreen() {
 		label = _label(tinfo.name)
 		camel = _camel(tinfo.name)
 		display = self._get_display_cols(tinfo, 3)
-		title_col = display[0].name if display else "id"
+
+		# ── Actor-aware title / status ────────────────────────────────────────
+		is_actor = getattr(tinfo, 'is_actor', False)
+		actor_config = getattr(tinfo, 'actor_config', {}) if is_actor else {}
+		actor_display_cols = actor_config.get('display_name', []) if is_actor else []
+		actor_status_col = actor_config.get('status', '') if is_actor else ''
+
+		if is_actor and actor_display_cols:
+			# title expression: concatenate all display_name parts
+			if len(actor_display_cols) == 1:
+				title_col = actor_display_cols[0]
+				title_expr = f"String(item.{actor_display_cols[0]} ?? '')"
+			else:
+				title_col = actor_display_cols[0]
+				parts = " + ' ' + ".join(f"String(item.{c} ?? '')" for c in actor_display_cols)
+				title_expr = f"({parts}).trim()"
+		else:
+			title_col = display[0].name if display else "id"
+			title_expr = f"String(item.{title_col} ?? '')"
 
 		# First FK column for meta display (resolved name as badge)
 		fk_meta = None
@@ -1118,8 +1161,9 @@ export default function MFAScreen() {
 			f"        ListEmptyComponent={{query.isLoading ? null : <EmptyState title=\"No {label.lower()}\" subtitle=\"Tap + to create one\" />}}\n"
 			f"        renderItem={{({{ item }}) => (\n"
 			f"          <RecordCard\n"
-			f"            title={{String(item.{title_col} ?? '')}}\n"
-			+ (f"            subtitle={{String(item.{display[1].name} ?? '')}}\n" if len(display) > 1 else "")
+			f"            title={{{title_expr}}}\n"
+			+ (f"            subtitle={{String(item.{display[1].name} ?? '')}}\n" if len(display) > 1 and not is_actor else "")
+			+ (f"            meta={{item.{actor_status_col} ? String(item.{actor_status_col}) : undefined}}\n" if is_actor and actor_status_col else "")
 			+ fk_meta_prop
 			+ f"            onPress={{() => router.push(`/(app)/{_kebab(tinfo.name)}/${{item.id}}` as never)}}\n"
 			f"            onEdit={{() => router.push(`/(app)/{_kebab(tinfo.name)}/edit/${{item.id}}` as never)}}\n"
@@ -1143,6 +1187,13 @@ export default function MFAScreen() {
 		camel = _camel(tinfo.name)
 		label = _label(tinfo.name)
 		non_pk = [c for c in tinfo.columns if not c.primary_key]
+
+		# ── Actor-aware config ────────────────────────────────────────────────
+		is_actor = getattr(tinfo, 'is_actor', False)
+		actor_config = getattr(tinfo, 'actor_config', {}) if is_actor else {}
+		actor_display_cols = actor_config.get('display_name', []) if is_actor else []
+		actor_status_col = actor_config.get('status', '') if is_actor else ''
+		actor_sub_role_col = actor_config.get('sub_role', '') if is_actor else ''
 
 		# Build FK map using shared helper
 		fk_map = self._build_fk_map(tinfo)
@@ -1279,6 +1330,50 @@ export default function MFAScreen() {
 					f"        </View>\n"
 				)
 
+		# ── Actor summary block (prepended inside ScrollView) ────────────────
+		actor_summary = ""
+		if is_actor and actor_display_cols:
+			# Full name expression
+			if len(actor_display_cols) == 1:
+				name_expr = f"{{record.{actor_display_cols[0]}}}"
+			else:
+				name_parts = "}} {{".join(f"record.{c}" for c in actor_display_cols)
+				name_expr = f"{{{name_parts}}}"
+
+			# Status badge (colour determined at runtime by value)
+			status_badge = ""
+			if actor_status_col:
+				status_badge = (
+					f"          <View className=\"flex-row gap-2 mt-1\">\n"
+					f"            <View className=\"px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/30\">\n"
+					f"              <Text className=\"text-primary-700 dark:text-primary-300 text-xs font-medium capitalize\">\n"
+					f"                {{record.{actor_status_col} ? String(record.{actor_status_col}) : '—'}}\n"
+					f"              </Text>\n"
+					f"            </View>\n"
+				)
+				# Add sub_role badge if present
+				if actor_sub_role_col:
+					status_badge += (
+						f"            {{record.{actor_sub_role_col} && (\n"
+						f"              <View className=\"px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800\">\n"
+						f"                <Text className=\"text-gray-600 dark:text-gray-300 text-xs font-medium capitalize\">\n"
+						f"                  {{String(record.{actor_sub_role_col})}}\n"
+						f"                </Text>\n"
+						f"              </View>\n"
+						f"            )}}\n"
+					)
+				status_badge += "          </View>\n"
+
+			actor_summary = (
+				f"        {{/* Actor Summary */}}\n"
+				f"        <View className=\"bg-primary-50 dark:bg-primary-900/20 rounded-2xl p-4 mb-4\">\n"
+				f"          <Text className=\"text-xl font-bold text-gray-900 dark:text-white mb-1\">\n"
+				f"            {name_expr}\n"
+				f"          </Text>\n"
+				+ status_badge
+				+ f"        </View>\n"
+			)
+
 		needs_flashlist = bool(children)
 		flashlist_import = "import { FlashList } from '@shopify/flash-list';\n" if needs_flashlist else ""
 		all_imports = (
@@ -1333,6 +1428,7 @@ export default function MFAScreen() {
 			+ f"            <Ionicons name=\"trash-outline\" size={{20}} color=\"#ef4444\" />\n"
 			+ f"          </Pressable>\n"
 			+ f"        </View>\n"
+			+ actor_summary
 			+ field_rows
 			+ child_sections
 			+ f"      </View>\n"
@@ -1350,6 +1446,12 @@ export default function MFAScreen() {
 		title_text = ("Edit " + label) if edit else ("New " + label)
 		mut_args = "(id, data)" if edit else "(data)"
 		extra_params_import = ", useLocalSearchParams" if edit else ""
+
+		# ── Actor-aware sub_role config ───────────────────────────────────────
+		is_actor = getattr(tinfo, 'is_actor', False)
+		actor_config = getattr(tinfo, 'actor_config', {}) if is_actor else {}
+		actor_sub_role_col = actor_config.get('sub_role', '') if is_actor else ''
+		actor_sub_roles = actor_config.get('sub_roles', []) if is_actor else []
 
 		_skip = {"created_on", "changed_on", "created_by_fk", "changed_by_fk"}
 		form_cols = [c for c in tinfo.columns if not c.primary_key and c.name not in _skip]
@@ -1419,6 +1521,31 @@ export default function MFAScreen() {
 					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
 					"                required={" + req + "}\n"
 					"                placeholder=\"Select " + _label(remote) + "...\"\n"
+					"              />\n"
+					"            )}\n"
+					"          />\n"
+				)
+				continue
+
+			# Actor sub_role → SelectField with known options from actor_config
+			if (is_actor and actor_sub_role_col and col.name == actor_sub_role_col and actor_sub_roles):
+				req = "true" if not col.nullable else "false"
+				options_ts = "[" + ", ".join(
+					"{ label: " + repr(sr["label"]) + ", value: " + repr(sr["key"]) + " }"
+					for sr in actor_sub_roles
+				) + "]"
+				field_blocks.append(
+					"          <Controller\n"
+					"            control={control}\n"
+					"            name=\"" + col.name + "\"\n"
+					"            render={({ field }) => (\n"
+					"              <SelectField\n"
+					"                label=\"" + _label(col.name) + "\"\n"
+					"                value={field.value as string}\n"
+					"                onChange={field.onChange}\n"
+					"                options={" + options_ts + "}\n"
+					"                error={errors." + col.name + "?.message ? String(errors." + col.name + "!.message) : undefined}\n"
+					"                required={" + req + "}\n"
 					"              />\n"
 					"            )}\n"
 					"          />\n"
