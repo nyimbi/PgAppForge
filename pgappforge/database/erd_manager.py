@@ -576,11 +576,24 @@ class DatabaseERDManager:
         return relationships
 
     def _get_table_row_count(self, table_name: str) -> Optional[int]:
-        """Get approximate row count for a table"""
+        """Get approximate row count using pg_class.reltuples (fast, ~1ms).
+
+        Avoids the full table scan of COUNT(*) which locks tables and can take
+        minutes on large datasets. The estimate is refreshed by VACUUM/ANALYZE
+        and is accurate enough for display purposes.
+        """
         try:
             with self.engine.connect() as conn:
-                result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
-                return result.scalar()
+                result = conn.execute(
+                    text(
+                        "SELECT reltuples::bigint AS approx_count "
+                        "FROM pg_class "
+                        "WHERE relname = :table_name AND relkind = 'r'"
+                    ),
+                    {"table_name": table_name},
+                )
+                row = result.fetchone()
+                return int(row[0]) if row else None
         except Exception as e:
             logger.warning(f"Could not get row count for {table_name}: {e}")
             return None

@@ -716,6 +716,131 @@ class ERDDesignerView(BaseView):
 			return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+	# ── Design CRUD — persisted canvas state ──────────────────────────────────
+
+	def _db_session(self):
+		"""Return the SQLAlchemy session for design persistence."""
+		return self.appbuilder.get_session
+
+	@expose("/api/designs", methods=["GET"])
+	@has_access
+	def api_designs_list(self):
+		"""List all designs visible to the current user (own + public)."""
+		from pgappforge.models.erd_models import ErdDesign
+		import sqlalchemy as sa
+		session = self._db_session()
+		uid = getattr(current_user, "id", None)
+		designs = session.execute(
+			sa.select(ErdDesign).where(
+				sa.or_(ErdDesign.owner_id == uid, ErdDesign.is_public == True)
+			).order_by(ErdDesign.changed_on.desc()).limit(100)
+		).scalars().all()
+		return jsonify({"designs": [
+			{"id": d.id, "name": d.name, "description": d.description,
+			 "is_public": d.is_public, "changed_on": str(d.changed_on)}
+			for d in designs
+		]})
+
+	@expose("/api/designs", methods=["POST"])
+	@has_access
+	def api_designs_create(self):
+		"""Create a new saved design. Body: {name, canvas_json, schema_json}."""
+		from pgappforge.models.erd_models import ErdDesign
+		data   = request.get_json(silent=True) or {}
+		name   = (data.get("name") or "Untitled Design").strip()
+		session = self._db_session()
+		design = ErdDesign(
+			name=name,
+			description=data.get("description", ""),
+			canvas_json=data.get("canvas_json", {}),
+			schema_json=data.get("schema_json", {}),
+			is_public=bool(data.get("is_public", False)),
+			owner_id=getattr(current_user, "id", None),
+		)
+		session.add(design)
+		session.commit()
+		return jsonify({"ok": True, "id": design.id, "name": design.name})
+
+	@expose("/api/designs/<int:design_id>", methods=["GET"])
+	@has_access
+	def api_designs_get(self, design_id: int):
+		"""Load a saved design (canvas_json + schema_json)."""
+		from pgappforge.models.erd_models import ErdDesign
+		import sqlalchemy as sa
+		session = self._db_session()
+		uid = getattr(current_user, "id", None)
+		d = session.get(ErdDesign, design_id)
+		if d is None:
+			return jsonify({"error": "Design not found"}), 404
+		if d.owner_id != uid and not d.is_public:
+			return jsonify({"error": "Access denied"}), 403
+		return jsonify({
+			"id": d.id, "name": d.name, "description": d.description,
+			"canvas_json": d.canvas_json, "schema_json": d.schema_json,
+			"is_public": d.is_public, "changed_on": str(d.changed_on),
+		})
+
+	@expose("/api/designs/<int:design_id>", methods=["PUT"])
+	@has_access
+	def api_designs_update(self, design_id: int):
+		"""Auto-save a design. Body: {name?, canvas_json?, schema_json?, is_public?}."""
+		from pgappforge.models.erd_models import ErdDesign
+		from sqlalchemy.orm.attributes import flag_modified
+		data    = request.get_json(silent=True) or {}
+		session = self._db_session()
+		d       = session.get(ErdDesign, design_id)
+		if d is None:
+			return jsonify({"error": "Design not found"}), 404
+		uid = getattr(current_user, "id", None)
+		if d.owner_id != uid:
+			return jsonify({"error": "Access denied"}), 403
+		if "name"        in data: d.name        = data["name"]
+		if "description" in data: d.description = data["description"]
+		if "is_public"   in data: d.is_public   = bool(data["is_public"])
+		if "canvas_json" in data:
+			d.canvas_json = data["canvas_json"]
+			flag_modified(d, "canvas_json")
+		if "schema_json" in data:
+			d.schema_json = data["schema_json"]
+			flag_modified(d, "schema_json")
+		session.commit()
+		return jsonify({"ok": True})
+
+	@expose("/api/designs/<int:design_id>", methods=["DELETE"])
+	@has_access
+	def api_designs_delete(self, design_id: int):
+		"""Delete a saved design (owner only)."""
+		from pgappforge.models.erd_models import ErdDesign
+		session = self._db_session()
+		d       = session.get(ErdDesign, design_id)
+		if d is None:
+			return jsonify({"error": "Design not found"}), 404
+		if d.owner_id != getattr(current_user, "id", None):
+			return jsonify({"error": "Access denied"}), 403
+		session.delete(d)
+		session.commit()
+		return jsonify({"ok": True})
+
+	@expose("/api/migration-log")
+	@has_access
+	def api_migration_log(self):
+		"""Return the last 50 DDL migration log entries (Admin only)."""
+		_require_schema_admin()
+		from pgappforge.models.erd_models import ErdMigrationLog
+		import sqlalchemy as sa
+		session = self._db_session()
+		entries = session.execute(
+			sa.select(ErdMigrationLog)
+			.order_by(ErdMigrationLog.applied_at.desc())
+			.limit(50)
+		).scalars().all()
+		return jsonify({"entries": [
+			{"id": e.id, "applied_at": str(e.applied_at), "status": e.status,
+			 "sql": e.sql_json, "rollback_sql": e.rollback_sql, "error": e.error}
+			for e in entries
+		]})
+
+
 # ─── HTML Template ────────────────────────────────────────────────────────────
 
 _DESIGNER_HTML = """
