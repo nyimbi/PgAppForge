@@ -81,6 +81,9 @@ from .engine import ReportEngine
 from .wizard import ReportWizardView
 from .sql_editor import SqlEditorView
 from .acl import can as _acl_can, log_access as _log_access, check_token, generate_token
+from .categories import ReportCategoryView
+from .versioning import ReportVersionView
+from .dashboard import DashboardView
 from .models import (
 	ReportDispatch,
 	SavedQuery,
@@ -808,7 +811,20 @@ class ReportsPlugin(BasePlugin):
 			icon     = "fa-database",
 			category = category,
 		)
+		self.add_view(
+			ReportCategoryView,
+			"Categories",
+			icon     = "fa-folder",
+			category = category,
+		)
+		self.add_view(
+			DashboardView,
+			"Dashboards",
+			icon     = "fa-th-large",
+			category = category,
+		)
 		self.add_view_no_menu(ReportPreviewView)
+		self.add_view_no_menu(ReportVersionView)
 		log.info("ReportForge plugin: views registered under category %r", category)
 
 	# ------------------------------------------------------------------ #
