@@ -1,18 +1,19 @@
 """
 Ollama-powered conversational app creation interface for pgappforge.
 
-CLI:  flask forge chat-create [--model qwen2.5:7b] [--ollama-url http://localhost:11434]
+CLI:  flask forge chat-create [--model granite4.1:8b] [--ollama-url http://localhost:11434]
 Web:  /app-creator/
 
 The model is given tool-calling capability over a set of schema-building
 primitives.  Every tool call mutates an in-process SchemaState; the accumulated
 state is rendered after each turn so the user can see progress.
 
-Recommended local models (in order of preference for tool calling):
-  qwen2.5:7b     — best tool calling, 4.7GB, excellent schema reasoning
-  llama3.2:3b    — fast, reliable tools, 2.0GB
-  phi4-mini      — excellent instruction following, 2.5GB
-  gemma2:2b      — smallest, ~1.5GB, adequate for simple schemas
+Benchmarked local models (see docs/OLLAMA_MODEL_BENCHMARK.md for full results):
+  granite4.1:8b  — fastest (1453 tok/min), 5.3GB, 87/100 tool score  ← default
+  gemma4:e4b     — equal accuracy, 9.6GB, 750 tok/min (GPU recommended)
+  qwen3.5:9b     — 256K context, 6.6GB, 941 tok/min, 77/100 tool score
+  llama3.2:3b    — lightweight, 2.0GB
+  phi4-mini      — good instruction following, 2.5GB
 
 Ollama tool-use protocol: /api/chat accepts a `tools` list in OpenAI format.
 Responses may contain `tool_calls` inside `message`. We loop until no more
@@ -543,7 +544,8 @@ WORKFLOW:
 1. Listen to what the user wants to build.
 2. Call set_app_name with a snake_case name.
 3. Call set_description with a brief summary.
-4. Call create_table for each entity. Use proper PostgreSQL types:
+4. Call create_table for each entity. IMPORTANT: always include the ACTORS (users, customers,
+   staff, etc.) as tables — not just the things they interact with. Use proper PostgreSQL types:
    - Text: varchar(255) for names/titles, text for long content
    - Numbers: integer, numeric(10,2) for money
    - Dates: date, timestamptz
@@ -567,11 +569,11 @@ IMPORTANT:
 
 # Models known to support tool calling well with Ollama
 RECOMMENDED_MODELS: dict[str, str] = {
-	"qwen2.5:7b": "Best tool calling, 4.7GB — recommended",
-	"llama3.2:3b": "Fast, reliable tools, 2.0GB",
+	"granite4.1:8b": "Best speed+accuracy, 5.3GB, 1453 tok/min — recommended",
+	"gemma4:e4b": "Excellent accuracy, 9.6GB, 750 tok/min (GPU recommended)",
+	"qwen3.5:9b": "Good accuracy, 6.6GB, 941 tok/min",
+	"llama3.2:3b": "Fast, lightweight, 2.0GB",
 	"phi4-mini": "Good instruction following, 2.5GB",
-	"mistral:7b": "Reliable, 4.1GB",
-	"gemma2:2b": "Smallest option, 1.5GB — limited tool reliability",
 }
 
 
@@ -584,7 +586,7 @@ class AppCreatorChat:
 	def __init__(
 		self,
 		ollama_url: str = "http://localhost:11434",
-		model: str = "qwen2.5:7b",
+		model: str = "granite4.1:8b",
 		stream: bool = True,
 	) -> None:
 		self.ollama_url = ollama_url.rstrip("/")
@@ -818,7 +820,7 @@ class AppCreatorChat:
 @click.command("chat-create")
 @click.option(
 	"--model", "-m",
-	default="qwen2.5:7b",
+	default="granite4.1:8b",
 	show_default=True,
 	envvar="PGAF_OLLAMA_MODEL",
 	help=(
@@ -853,9 +855,9 @@ def chat_create(model: str, ollama_url: str, no_stream: bool, list_models: bool)
 
 	\b
 	Recommended models (install with: ollama pull <model>):
-	  qwen2.5:7b    — best tool calling, 4.7GB  ← default
-	  llama3.2:3b   — fast, 2.0GB
-	  phi4-mini     — good reasoning, 2.5GB
+	  granite4.1:8b — fastest, 1453 tok/min, 5.3GB  ← default
+	  gemma4:e4b    — most accurate, 750 tok/min, 9.6GB
+	  qwen3.5:9b    — balanced, 941 tok/min, 6.6GB
 
 	\b
 	Examples:
@@ -977,11 +979,11 @@ header h1 { font-size: .95rem; font-weight: 600; color: #7dd3fc; letter-spacing:
   <h1>pgappforge · App Creator Chat</h1>
   <div class="header-right">
     <select class="model-select" id="model-select">
-      <option value="qwen2.5:7b">qwen2.5:7b ★</option>
+      <option value="granite4.1:8b">granite4.1:8b ★ fastest</option>
+      <option value="gemma4:e4b">gemma4:e4b — best accuracy</option>
+      <option value="qwen3.5:9b">qwen3.5:9b</option>
       <option value="llama3.2:3b">llama3.2:3b</option>
       <option value="phi4-mini">phi4-mini</option>
-      <option value="mistral:7b">mistral:7b</option>
-      <option value="gemma2:2b">gemma2:2b</option>
     </select>
     <span class="badge" id="status-badge">connecting…</span>
   </div>
@@ -1170,7 +1172,7 @@ def _make_web_chat_class() -> type:
 			from flask import current_app
 			cfg = current_app.config
 			url = cfg.get("PGAF_OLLAMA_URL", cfg.get("OLLAMA_URL", "http://localhost:11434"))
-			default_model = cfg.get("PGAF_OLLAMA_MODEL", cfg.get("OLLAMA_MODEL", "qwen2.5:7b"))
+			default_model = cfg.get("PGAF_OLLAMA_MODEL", cfg.get("OLLAMA_MODEL", "granite4.1:8b"))
 			use_model = model or default_model
 			if self._chat is None:
 				self._chat = AppCreatorChat(ollama_url=url, model=use_model, stream=False)
