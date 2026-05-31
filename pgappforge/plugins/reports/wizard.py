@@ -184,13 +184,40 @@ function pick(key) {
 
 def _step2_html(state: dict) -> str:
     sql = state.get("sql", "SELECT * FROM your_table LIMIT 100;")
+    # Build inline parameter form if template has params
+    params_html = ""
+    tmpl = state.get("template_data", {})
+    if tmpl and tmpl.get("parameters"):
+        param_fields = ""
+        for p in tmpl["parameters"]:
+            label   = _he(p.get("label") or p.get("name", ""))
+            name    = _he(p.get("name", ""))
+            default = _he(str(p.get("default", "")))
+            ptype   = p.get("type", "string")
+            inp_type = {"date": "date", "integer": "number", "float": "number"}.get(ptype, "text")
+            param_fields += (
+                f'<div class="col-4 mb-2">'
+                f'<label class="form-label fw-bold" style="font-size:12px">{label}</label>'
+                f'<input name="param_{name}" type="{inp_type}" class="form-control form-control-sm"'
+                f' value="{default}" placeholder="{label}">'
+                f'</div>'
+            )
+        params_html = (
+            '<div class="mb-3 border rounded p-2" style="background:#f8f9fa">'
+            '<div class="fw-bold mb-2" style="font-size:13px">'
+            '<i class="fas fa-sliders-h me-1 text-primary"></i>Test Parameters</div>'
+            f'<div class="row">{param_fields}</div>'
+            '</div>'
+        )
+
     return f"""
 <div class="card p-4">
   <h4 class="mb-3"><i class="fas fa-database me-2 text-primary"></i>Data Source</h4>
   <p class="text-muted">Write the SQL query that powers this report. Use <code>:param_name</code> for runtime parameters.</p>
   <form method="POST" action="/reportforge/wizard/step/2">
+    {params_html}
     <textarea id="sql-ta" name="sql" rows="12" class="form-control mb-3"
-      placeholder="SELECT * FROM orders WHERE status = :status">{sql}</textarea>
+      placeholder="SELECT * FROM orders WHERE status = :status">{_he(sql)}</textarea>
     <div class="d-flex justify-content-between">
       <div>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testQuery()">

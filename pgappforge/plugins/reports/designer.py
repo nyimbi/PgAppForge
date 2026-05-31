@@ -327,18 +327,44 @@ def _js(report_id: int, api_base: str) -> str:
 		    showFieldProps(field);
 		}}
 
+		// Fetch schema columns once per page load
+		window._rf_columns = [];
+		fetch(apiBase + '/columns').then(r => r.json()).then(d => {{
+		    window._rf_columns = d.columns || [];
+		}});
+
+		function _bindingSelect(currentBinding) {{
+		    const cols = window._rf_columns;
+		    if (!cols.length) {{
+		        return `<input type="text" id="prop-binding" value="${{currentBinding || ''}}" placeholder="SQL column name">`;
+		    }}
+		    const opts = ['<option value="">— none —</option>',
+		        ...cols.map(c => `<option value="${{c}}" ${{c === currentBinding ? 'selected' : ''}}>${{c}}</option>`)
+		    ].join('');
+		    return `<select id="prop-binding">${{opts}}</select>`;
+		}}
+
 		function showFieldProps(field) {{
 		    document.getElementById('props-title').textContent = 'Field Properties';
 		    document.getElementById('props-content').innerHTML = `
 		        <div class="prop-section">
 		          <label>Data Binding</label>
-		          <input type="text" id="prop-binding" value="${{field.data_binding || ''}}"
-		                 placeholder="SQL column name">
+		          ${{_bindingSelect(field.data_binding)}}
 		        </div>
 		        <div class="prop-section">
 		          <label>Format String</label>
 		          <input type="text" id="prop-format" value="${{field.format_string || ''}}"
 		                 placeholder="e.g. {{:,.2f}}">
+		        </div>
+		        <div class="prop-section">
+		          <label>Compute (subtotal)</label>
+		          <input type="text" id="prop-compute" value="${{field.compute || ''}}"
+		                 placeholder="e.g. sum(amount), count(*)">
+		        </div>
+		        <div class="prop-section">
+		          <label>Drill-down URL</label>
+		          <input type="text" id="prop-link" value="${{field.link_url_template || ''}}"
+		                 placeholder="/reports/run/42?id={{{{customer_id}}}}">
 		        </div>
 		        <div class="prop-section">
 		          <label>Static Text</label>
@@ -396,8 +422,10 @@ def _js(report_id: int, api_base: str) -> str:
 
 		function applyFieldProps(fieldId) {{
 		    const body = {{
-		        data_binding:  document.getElementById('prop-binding').value || null,
-		        format_string: document.getElementById('prop-format').value  || null,
+		        data_binding:       document.getElementById('prop-binding').value  || null,
+		        format_string:      document.getElementById('prop-format').value   || null,
+		        compute:            document.getElementById('prop-compute')?.value || null,
+		        link_url_template:  document.getElementById('prop-link')?.value    || null,
 		        x_mm:   parseFloat(document.getElementById('prop-x').value),
 		        y_mm:   parseFloat(document.getElementById('prop-y').value),
 		        width_mm:  parseFloat(document.getElementById('prop-w').value),
@@ -913,12 +941,14 @@ class ReportDesignerView(BaseView):
 		if field.band.report_id != report_id:
 			abort(404)
 		data = request.get_json(force=True) or {}
-		if "x_mm"          in data: field.x_mm          = float(data["x_mm"])
-		if "y_mm"          in data: field.y_mm          = float(data["y_mm"])
-		if "width_mm"      in data: field.width_mm      = float(data["width_mm"])
-		if "height_mm"     in data: field.height_mm     = float(data["height_mm"])
-		if "data_binding"  in data: field.data_binding  = data["data_binding"]
-		if "format_string" in data: field.format_string = data["format_string"]
+		if "x_mm"              in data: field.x_mm              = float(data["x_mm"])
+		if "y_mm"              in data: field.y_mm              = float(data["y_mm"])
+		if "width_mm"          in data: field.width_mm          = float(data["width_mm"])
+		if "height_mm"         in data: field.height_mm         = float(data["height_mm"])
+		if "data_binding"      in data: field.data_binding      = data["data_binding"]
+		if "format_string"     in data: field.format_string     = data["format_string"]
+		if "compute"           in data: field.compute           = data["compute"]
+		if "link_url_template" in data: field.link_url_template = data["link_url_template"]
 		if "style"         in data:
 			from sqlalchemy.orm.attributes import flag_modified
 			existing = dict(field.style or {})

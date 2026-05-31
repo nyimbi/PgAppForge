@@ -108,6 +108,9 @@ body { background:#f4f6fa; font-family:'Segoe UI',Arial,sans-serif; margin:0; }
         <button class="btn btn-outline-info btn-sm" onclick="loadSaved()">
           <i class="fas fa-folder-open me-1"></i>Saved
         </button>
+        <button class="btn btn-outline-warning btn-sm" onclick="saveAsReport()">
+          <i class="fas fa-chart-bar me-1"></i>Save as Report
+        </button>
         <button class="btn btn-ai btn-sm" onclick="aiDialog()">
           <i class="fas fa-robot me-1"></i>AI Assist
         </button>
@@ -293,12 +296,67 @@ async function doAI(){
   else alert('AI error: '+(d.error||'No SQL returned'));
 }
 
+// ── Save as Report ────────────────────────────────────────────────────────
+function saveAsReport(){new bootstrap.Modal(document.getElementById('mReport')).show();}
+async function doSaveAsReport(){
+  const sql=document.getElementById('sql-ta').value.trim();
+  const name=(document.getElementById('rname').value||'').trim();
+  if(!sql||!name){alert('Name and SQL required.');return;}
+  const r=await fetch(B+'/api/report/create',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sql,name})
+  });
+  const d=await r.json();
+  if(d.ok){
+    bootstrap.Modal.getInstance(document.getElementById('mReport')).hide();
+    if(confirm('Report created! Open in designer now?'))
+      window.open(d.designer_url,'_blank');
+  } else alert('Error: '+(d.error||'unknown'));
+}
+
+// ── Schema-based autocomplete (datalist) ─────────────────────────────────
+async function buildAutocomplete(){
+  const r=await fetch(B+'/api/schema');
+  const d=await r.json();
+  const terms=[];
+  (d.tables||[]).forEach(t=>{
+    terms.push(t.name);
+    (t.columns||[]).forEach(c=>terms.push(t.name+'.'+c.name,c.name));
+  });
+  const dl=document.createElement('datalist');
+  dl.id='sql-ac';
+  terms.filter((v,i,a)=>a.indexOf(v)===i).forEach(t=>{
+    const o=document.createElement('option');o.value=t;dl.appendChild(o);
+  });
+  document.body.appendChild(dl);
+  document.getElementById('sql-ta').setAttribute('autocomplete','sql-ac');
+}
+buildAutocomplete();
+
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runQ();}
 });
 
 loadSchema();
 </script>
+
+<!-- Save as Report Modal -->
+<div class="modal fade" id="mReport" tabindex="-1">
+<div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title"><i class="fas fa-chart-bar me-2"></i>Save as Report</h5>
+    <button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <input id="rname" class="form-control" placeholder="Report name">
+    <small class="text-muted">Creates a new tabular report with this SQL. You can then edit it in the designer.</small>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+    <button class="btn btn-warning btn-sm" onclick="doSaveAsReport()">
+      <i class="fas fa-chart-bar me-1"></i>Create Report
+    </button>
+  </div>
+</div></div></div>
+
 </body>
 </html>"""
 
@@ -452,6 +510,52 @@ class SqlEditorView(BaseView):
 			{"id": x.id, "name": x.name, "description": x.description, "sql": x.sql_text}
 			for x in qs
 		]})
+
+	@expose("/api/report/create", methods=["POST"])
+	@has_access
+	def api_create_report(self):
+		"""
+		Save the current SQL editor query as a new Report with a tabular template.
+		Returns JSON {ok, report_id, designer_url}.
+		"""
+		from flask import current_app
+		from flask_login import current_user
+		from .models import Report, PaperSize, Orientation
+		from .wizard import _apply_template_bands
+		from .report_templates import get_template
+
+		data    = request.get_json(silent=True) or {}
+		sql     = (data.get("sql") or "").strip()
+		name    = (data.get("name") or "Untitled Report").strip()
+		if not sql:
+			return jsonify({"ok": False, "error": "sql is required"}), 400
+
+		appbuilder = current_app.extensions.get("appbuilder")
+		if not appbuilder:
+			return jsonify({"ok": False, "error": "appbuilder not found"}), 500
+
+		session = appbuilder.session
+		report  = Report(
+			name=name,
+			data_source=sql,
+			is_sql_source=True,
+			paper_size=PaperSize.A4,
+			orientation=Orientation.PORTRAIT,
+			template_key="tabular",
+			is_draft=True,
+			created_by=getattr(current_user, "id", None),
+		)
+		session.add(report)
+		session.flush()
+		tmpl = get_template("tabular")
+		if tmpl:
+			_apply_template_bands(report, tmpl, session)
+		session.commit()
+		return jsonify({
+			"ok": True,
+			"report_id": report.id,
+			"designer_url": f"/reports/designer/{report.id}",
+		})
 
 	@expose("/api/ai-assist", methods=["POST"])
 	@has_access

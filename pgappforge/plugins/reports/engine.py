@@ -731,6 +731,11 @@ class ReportEngine:
 					f.data_binding: f.format_string
 					for f in fields if f.data_binding
 				}
+				link_map = {
+					f.data_binding: f.link_url_template
+					for f in fields
+					if getattr(f, "link_url_template", None) and f.data_binding
+				}
 				# column header row first
 				parts.append('<table class="rpt-table"><thead><tr>')
 				for binding in bindings:
@@ -742,7 +747,21 @@ class ReportEngine:
 					for binding in bindings:
 						raw = row_data.get(binding)
 						val = _fmt(raw, fmt_map.get(binding))
-						parts.append(f'<td>{_escape(val)}</td>')
+						cell_html = _escape(val)
+						link_tmpl = link_map.get(binding)
+						if link_tmpl:
+							# Expand {field_name} placeholders with row values
+							import re as _re
+							try:
+								href = _re.sub(
+									r"\{(\w+)\}",
+									lambda m: str(row_data.get(m.group(1), "")),
+									link_tmpl,
+								)
+								cell_html = f'<a href="{_escape(href)}">{cell_html}</a>'
+							except Exception:
+								pass
+						parts.append(f'<td>{cell_html}</td>')
 					parts.append("</tr>")
 				if len(rows) == self.preview_row_limit:
 					parts.append(
