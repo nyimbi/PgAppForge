@@ -109,6 +109,10 @@ class ColumnInfo:
     validation_rules: List[str]
     widget_type: str
     form_field_type: str
+    # Polymorphic relationship detection (no FK constraint, paired with a *_type column)
+    is_polymorphic_type: bool = False   # e.g. entity_type (VARCHAR discriminator)
+    is_polymorphic_id: bool = False     # e.g. entity_id (unconstrained FK placeholder)
+    polymorphic_type_col: str = ""      # name of the paired *_type column
 
 
 @dataclass
@@ -447,8 +451,28 @@ class EnhancedDatabaseInspector:
             view_types=view_types,
             security_level=security_level
         )
+        self._detect_polymorphic_columns(result)
         self._table_info_cache[table_name] = result
         return result
+
+    def _detect_polymorphic_columns(self, table_info: 'TableInfo') -> None:
+        """Detect polymorphic relationship patterns: *_type + *_id column pairs.
+
+        A polymorphic pair consists of a VARCHAR/TEXT column ending in _type paired
+        with an INTEGER/UUID column ending in _id that has NO foreign key constraint.
+        This is a common pattern for generic associations (comments, attachments, etc.).
+        """
+        col_map = {c.name: c for c in table_info.columns}
+        for col in table_info.columns:
+            if col.name.endswith('_type') and col.category in (ColumnType.TEXT,):
+                base = col.name[:-5]  # strip '_type'
+                id_col_name = f'{base}_id'
+                id_col = col_map.get(id_col_name)
+                if id_col is not None and not id_col.foreign_key:
+                    # Mark both columns as polymorphic
+                    col.is_polymorphic_type = True
+                    id_col.is_polymorphic_id = True
+                    id_col.polymorphic_type_col = col.name
 
     def _analyze_column(self, column: Column, table_name: str,
                         column_meta: Optional[Dict[str, Any]] = None,
@@ -536,7 +560,8 @@ class EnhancedDatabaseInspector:
 
         # Generate relationship name
         rel_name = self._generate_relationship_name(table_name, referred_table, constrained_columns, rel_type)
-        back_populates = self._generate_back_populates_name(table_name, referred_table, rel_type)
+        fk_col = constrained_columns[0] if constrained_columns else ''
+        back_populates = self._generate_back_populates_name(table_name, referred_table, rel_type, fk_col)
 
         # Determine association table for many-to-many
         association_table = None
@@ -1135,12 +1160,45 @@ class EnhancedDatabaseInspector:
             # Multiple columns - create composite name
             return re.sub(r'(_id|_fk)$', '', '_'.join(constrained_columns))
 
-    def _generate_back_populates_name(self, table_name: str, referred_table: str, rel_type: RelationshipType) -> str:
-        """Generate the back_populates name for relationships."""
+    # Common self-referential FK base names → antonym for back_populates
+    _SELF_REF_ANTONYMS: Dict[str, str] = {
+        'manager': 'subordinates',
+        'parent': 'children',
+        'root': 'descendants',
+        'predecessor': 'successors',
+        'supervisor': 'reports',
+        'replied_to': 'replies',
+        'approved_by': 'approvals',
+        'created_by': 'created_items',
+        'source': 'targets',
+        'owner': 'owned_items',
+        'leader': 'members',
+        'category': 'subcategories',
+    }
+
+    def _generate_back_populates_name(
+        self,
+        table_name: str,
+        referred_table: str,
+        rel_type: RelationshipType,
+        fk_col_name: str = '',
+    ) -> str:
+        """Generate the back_populates name for relationships.
+
+        For self-referential relationships, derives forward/back names from the FK column
+        so that both sides of the relationship have distinct, semantically clear names.
+        """
         if rel_type in [RelationshipType.ONE_TO_MANY, RelationshipType.MANY_TO_MANY]:
             return p.plural(table_name.lower())
-        else:
-            return table_name.lower()
+        if rel_type == RelationshipType.SELF_REFERENCING and fk_col_name:
+            # Strip _id / _fk suffix to get the semantic base (e.g. manager_id → manager)
+            base = re.sub(r'(_id|_fk)$', '', fk_col_name.lower())
+            antonym = self._SELF_REF_ANTONYMS.get(base)
+            if antonym:
+                return antonym
+            # Generic fallback: use plural of the base name
+            return p.plural(base) if base else p.plural(table_name.lower())
+        return table_name.lower()
 
     def _find_association_table(self, table1: str, table2: str) -> Optional[str]:
         """Find association table for many-to-many relationship."""
@@ -1256,8 +1314,14 @@ class EnhancedDatabaseInspector:
                 pk_cols = []
 
             for child_name, child_rel in children:
-                # Derive relationship_name: plural of child table
-                rel_name = p.plural(child_name.lower())
+                # For self-referential tables, the synthesized ONE_TO_MANY name
+                # must be the antonym (e.g., 'subordinates'), not the plural of the
+                # table name — otherwise both sides would be named 'employees'.
+                is_self_ref = (child_name == parent_name)
+                if is_self_ref and child_rel.back_populates:
+                    rel_name = child_rel.back_populates
+                else:
+                    rel_name = p.plural(child_name.lower())
 
                 # back_populates: what the child calls the parent
                 # child_rel.name is the FK-derived name on the child side (MANY_TO_ONE)

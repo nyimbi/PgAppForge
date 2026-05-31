@@ -246,6 +246,20 @@ class EnhancedModelGenerator:
         processed = []
 
         for rel in relationships:
+            is_self_ref = (
+                rel.type == RelationshipType.SELF_REFERENCING
+                or rel.remote_table == rel.local_table
+            )
+            # For self-referential MANY_TO_ONE: needs remote_side and foreign_keys
+            # so SQLAlchemy can determine join direction unambiguously.
+            remote_side = None
+            foreign_keys_str = None
+            if is_self_ref and rel.type == RelationshipType.MANY_TO_ONE and rel.local_columns:
+                local_col = rel.local_columns[0]
+                remote_col = rel.remote_columns[0] if rel.remote_columns else 'id'
+                remote_side = f'[{self._to_pascal_case(rel.remote_table)}.{remote_col}]'
+                foreign_keys_str = f'[{local_col}]'
+
             rel_dict = {
                 'name': rel.name,
                 'type': rel.type.value,
@@ -259,7 +273,9 @@ class EnhancedModelGenerator:
                 'lazy': rel.lazy_loading,
                 'display_name': rel.display_name,
                 'description': rel.description,
-                'ui_hint': rel.ui_hint
+                'ui_hint': rel.ui_hint,
+                'remote_side': remote_side,
+                'foreign_keys': foreign_keys_str,
             }
             processed.append(rel_dict)
 

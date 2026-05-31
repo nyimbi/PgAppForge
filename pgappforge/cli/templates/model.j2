@@ -17,7 +17,23 @@ class {{ class_name }}({{ base_class }}):
     """{{ table_info.display_name }} model{% if table_info.comment %} - {{ table_info.comment }}{% endif %}"""
 
     __tablename__ = '{{ table_info.name }}'
-    {% if table_info.comment %}
+    {% set has_comment = table_info.comment %}
+    {% set extra_constraints = constraints | selectattr('expr') | list %}
+    {% if has_comment and extra_constraints %}
+    __table_args__ = (
+        {% for c in extra_constraints %}
+        {{ c.expr }},
+        {% endfor %}
+        {'comment': '{{ table_info.comment }}'}
+    )
+    {% elif extra_constraints %}
+    __table_args__ = (
+        {% for c in extra_constraints %}
+        {{ c.expr }},
+        {% endfor %}
+        {}
+    )
+    {% elif has_comment %}
     __table_args__ = {'comment': '{{ table_info.comment }}'}
     {% endif %}
 
@@ -31,8 +47,10 @@ class {{ class_name }}({{ base_class }}):
     {{ relationship.name }} = relationship(
         '{{ relationship.remote_class }}',
         {% if relationship.association_table %}secondary='{{ relationship.association_table }}',{% endif %}
+        {% if relationship.foreign_keys %}foreign_keys={{ relationship.foreign_keys }},{% endif %}
+        {% if relationship.remote_side %}remote_side={{ relationship.remote_side }},{% endif %}
         back_populates='{{ relationship.back_populates }}'{% if relationship.cascade %},
-        cascade=[{{ relationship.cascade }}]{% endif %},
+        cascade='{{ relationship.cascade }}'{% endif %},
         lazy='{{ relationship.lazy }}'
     ) # {{ relationship.description }}
     {% endfor %}
@@ -65,10 +83,7 @@ class {{ class_name }}({{ base_class }}):
     {% endif %}
 
     {% if config.generate_repr %}
-    def __repr__(self):
-        """String representation of {{ class_name }}."""
-        {% set display_cols = columns[:2] %}
-        return f"<{{ class_name }}({% for col in display_cols %}{{ col.name }}={getattr(self, '{{ col.name }}', 'None')}{% if not loop.last %}, {% endif %}{% endfor %})>"
+{{ repr_method }}
     {% endif %}
 
     {% if config.generate_str %}
