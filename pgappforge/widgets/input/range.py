@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -67,6 +67,11 @@ class RangeSliderWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize RangeSliderWidget with custom settings"""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.min = kwargs.get("min", 0)
         self.max = kwargs.get("max", 100)
         self.step = kwargs.get("step", 1)
@@ -98,11 +103,16 @@ class RangeSliderWidget(BS3TextFieldWidget):
             f"[{field.data[0] if field.data else self.min},{field.data[1] if field.data else self.max}]",
         )
         kwargs.setdefault("data-slider-tooltip", "always" if self.tooltips else "hide")
-        kwargs.setdefault(
-            "data-slider-orientation", self.orientation
-        )  # Set orientation
+        kwargs.setdefault("data-slider-orientation", self.orientation)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.disabled:
+            kwargs["disabled"] = True
 
-        if self.tooltip_options:  # Apply advanced tooltip options if provided
+        if self.tooltip_options:
             kwargs.setdefault(
                 "data-slider-tooltip-options", json.dumps(self.tooltip_options)
             )
@@ -112,6 +122,18 @@ class RangeSliderWidget(BS3TextFieldWidget):
             "text": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
         }
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html
@@ -342,6 +364,11 @@ class SliderWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize slider widget with extended settings for tooltips, ticks, and styling."""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.min_value = kwargs.get("min_value", 0)
         self.max_value = kwargs.get("max_value", 100)
         self.step = kwargs.get("step", 1)
@@ -369,8 +396,17 @@ class SliderWidget(BS3TextFieldWidget):
         kwargs.setdefault("min", self.min_value)
         kwargs.setdefault("max", self.max_value)
         kwargs.setdefault("step", self.step)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.disabled:
+            kwargs["disabled"] = True
+        if self.readonly:
+            kwargs["readonly"] = True
 
-        if field.data is not None:  # Handle initial value, same as before
+        if field.data is not None:
             initial_value = field.data
         elif self.default_value is not None:
             initial_value = self.default_value
@@ -378,20 +414,32 @@ class SliderWidget(BS3TextFieldWidget):
             initial_value = self.min_value
         kwargs.setdefault("value", initial_value)
 
-        if initial_value < self.min_value:  # Validate value bounds, same as before
+        if initial_value < self.min_value:
             initial_value = self.min_value
         elif initial_value > self.max_value:
             initial_value = self.max_value
 
-        if field.flags.required:  # Required attribute remains same
+        if field.flags.required:
             kwargs["required"] = True
 
         html = self.data_template % {
             "range": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
             "orientation": self.orientation,
-            "label": field.label.text,
+            "label": escape(field.label.text) if field.label else "",
         }
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html

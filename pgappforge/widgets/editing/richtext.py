@@ -1,23 +1,14 @@
 """RichTextEditorWidget — PgAppForge widget(s)."""
 
 from __future__ import annotations
+import html as _html
 import json
-import re
-from dataclasses import dataclass
-from datetime import datetime, time
 from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
 from markupsafe import Markup
-from wtforms import Field
-from wtforms.fields import (
-    BooleanField, DateField, DateTimeField, DecimalField, FileField,
-    FloatField, IntegerField, PasswordField, SelectField,
-    SelectMultipleField, StringField, TextAreaField,
-)
 from wtforms.validators import ValidationError
-from wtforms.widgets import TextInput, html_params
 
 class RichTextEditorWidget(BS3TextFieldWidget):
     """
@@ -77,6 +68,11 @@ class RichTextEditorWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize rich text editor with extended settings for toolbar, templates, history, and collaboration"""
         super().__init__(**kwargs)
+        # Universal widget kwargs
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("read_only", False)  # alias: read_only already used below
+        self.disabled = kwargs.get("disabled", False)
         self.height = kwargs.get("height", "400px")
         self.toolbar_config = kwargs.get(
             "toolbar_config",
@@ -136,160 +132,176 @@ class RichTextEditorWidget(BS3TextFieldWidget):
 
         if field.flags.required:
             kwargs["required"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
+
+        has_errors = bool(field.errors)
 
         template = self.data_template if field.data else self.empty_template
-        html = template % {
+        rendered_html = template % {
             "hidden": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
         }
 
-        return Markup(
-            html
-            + """
+        # Help text
+        help_html = ""
+        if self.description:
+            help_html = (
+                f'<small class="form-text text-muted" id="{field.id}_help">'
+                f'{_html.escape(str(self.description))}</small>'
+            )
+
+        # Error feedback (server-side WTForms errors)
+        error_html = ""
+        if has_errors:
+            error_items = "".join(
+                f"<span>{_html.escape(str(e))}</span>" for e in field.errors
+            )
+            error_html = (
+                f'<div class="invalid-feedback d-block" id="{field.id}_error" role="alert">'
+                f'{error_items}</div>'
+            )
+
+        # Aria attributes for the editor container
+        aria_label = str(field.label.text) if field.label else field.name
+        describedby_parts = []
+        if self.description:
+            describedby_parts.append(f"{field.id}_help")
+        if has_errors:
+            describedby_parts.append(f"{field.id}_error")
+
+        # Use json.dumps for all Python values injected into JS
+        field_id_js = json.dumps(field.id)
+        placeholder_js = json.dumps(self.placeholder)
+        image_upload_url_js = json.dumps(self.image_upload_url)
+        aria_label_js = json.dumps(aria_label)
+        describedby_js = json.dumps(" ".join(describedby_parts)) if describedby_parts else "null"
+
+        script = f"""
         <style>
-            /* Styles remain mostly the same, consider adding styles for history and template UI */
-            .rich-text-editor-container { position: relative; margin-bottom: 1em; }
-            .ql-editor { min-height: {height}; max-height: 800px; overflow-y: auto; }
-            .editor-metadata { margin-top: 0.5em; color: #666; font-size: 0.9em; }
-            .editor-error { color: #a94442; display: none; margin-top: 0.5em; }
-            .editor-history { margin-top: 1em; border: 1px solid #ccc; padding: 10px; border-radius: 4px; } /* History container style */
-            .editor-history .history-list { list-style: none; padding: 0; margin: 0; }
-            .editor-history .history-list li { padding: 5px 0; border-bottom: 1px dotted #eee; }
-            .editor-history .history-list li:last-child { border-bottom: none; }
+            .rich-text-editor-container {{ position: relative; margin-bottom: 1em; }}
+            .ql-editor {{ min-height: {_html.escape(self.height)}; max-width: 100%; max-height: 800px; overflow-y: auto; }}
+            .editor-metadata {{ margin-top: 0.5em; color: #666; font-size: 0.9em; }}
+            .editor-error {{ color: #a94442; display: none; margin-top: 0.5em; }}
+            .editor-history {{ margin-top: 1em; border: 1px solid #ccc; padding: 10px; border-radius: 4px; }}
+            .editor-history .history-list {{ list-style: none; padding: 0; margin: 0; }}
+            .editor-history .history-list li {{ padding: 5px 0; border-bottom: 1px dotted #eee; }}
+            .editor-history .history-list li:last-child {{ border-bottom: none; }}
         </style>
         <script>
-            (function() {
-                var editor = null; // Quill editor instance
-                var $input = $('#%(field_id)s');
-                var $error = $('#%(field_id)s-error');
-                var $wordcount = $('#%(field_id)s-wordcount');
-                var $readingtime = $('#%(field_id)s-readingtime'); // Reading time display
-                var $historyContainer = $('#%(field_id)s-history'); // History container element
+            (function() {{
+                var fieldId = {field_id_js};
+                var editor = null;
+                var $input = $('#' + fieldId);
+                var $error = $('#' + fieldId + '-error');
+                var $wordcount = $('#' + fieldId + '-wordcount');
+                var $readingtime = $('#' + fieldId + '-readingtime');
+                var $historyContainer = $('#' + fieldId + '-history');
                 var autoSaveTimeout;
 
-
-                function initializeEditor() {
-                    editor = new Quill('#%(field_id)s-editor', {{
+                function initializeEditor() {{
+                    editor = new Quill('#' + fieldId + '-editor', {{
                         modules: {{
                             toolbar: {{
-                                container: %(toolbar_config)s,
-                                handlers: {{ image: imageHandler, templates: templatesHandler }} // Added templates handler
+                                container: {json.dumps(self.toolbar_config)},
+                                handlers: {{ image: imageHandler, templates: templatesHandler }}
                             }},
-                            formula: true, syntax: true, imageResize: %(image_resize)s, history: {{ delay: 2000, maxStack: 500 }}
+                            formula: true, syntax: true, imageResize: {str(self.image_resize).lower()}, history: {{ delay: 2000, maxStack: 500 }}
                         }},
-                        placeholder: '%(placeholder)s', readOnly: %(read_only)s, theme: 'snow', formats: %(formats)s
+                        placeholder: {placeholder_js},
+                        readOnly: {str(self.read_only).lower()},
+                        theme: 'snow',
+                        formats: {json.dumps(self.formats)}
                     }});
 
+                    // Apply accessibility attributes to the Quill contenteditable div
+                    var qlEditor = document.querySelector('#' + fieldId + '-editor .ql-editor');
+                    if (qlEditor) {{
+                        qlEditor.setAttribute('aria-label', {aria_label_js});
+                        qlEditor.setAttribute('aria-multiline', 'true');
+                        if ({describedby_js} !== null) qlEditor.setAttribute('aria-describedby', {describedby_js});
+                        {f'qlEditor.setAttribute("aria-invalid", "true");' if has_errors else ''}
+                    }}
 
-                    // Event handlers and other JavaScript code (imageHandler, text-change, etc.) from previous version here,
-                    // Modified and extended as described below
-                    editor.on('text-change', handleTextChange); // Centralized text change handler
-                    $('.rich-text-editor-controls [data-action="toggle-history"]').click(toggleHistory); // History toggle handler
-                }
+                    editor.on('text-change', handleTextChange);
+                }}
 
-
-                // --- Image Upload Handler --- (Improved Error Handling)
-                function imageHandler() {
+                function imageHandler() {{
                     var input = document.createElement('input');
                     input.setAttribute('type', 'file');
-                    input.setAttribute('accept', '%(allowed_image_types)s');
+                    input.setAttribute('accept', {json.dumps(",".join(self.allowed_image_types))});
 
-
-                    input.onchange = async function() { // Make onChange async to use await for AJAX
+                    input.onchange = async function() {{
                         var file = input.files[0];
-
-
                         if (!file) return;
 
-
-                        if (file.size > %(image_max_size)d) {
-                            displayError('Image too large (max %(image_max_size)d bytes)');
+                        if (file.size > {self.image_max_size}) {{
+                            displayError('Image too large (max {self.image_max_size} bytes)');
                             return;
-                        }
+                        }}
 
-
-                        if (!%(allowed_image_types)s.includes(file.type)) {
+                        if (!{json.dumps(self.allowed_image_types)}.includes(file.type)) {{
                             displayError('Invalid image type');
                             return;
-                        }
-
+                        }}
 
                         const formData = new FormData();
                         formData.append('image', file);
 
-
                         try {{
                             showLoading('Uploading Image...');
-                            const response = await $.ajax({{ // Using await for AJAX call
-                                url: '%(image_upload_url)s', type: 'POST', data: formData, processData: false, contentType: false
+                            const response = await fetch({image_upload_url_js}, {{
+                                method: 'POST',
+                                body: formData,
+                                processData: false,
+                                contentType: false
                             }});
                             hideLoading();
+                            const data = await response.json();
                             const range = editor.getSelection(true);
-                            editor.insertEmbed(range.index, 'image', response.url);
-
-
+                            editor.insertEmbed(range.index, 'image', data.url);
                         }} catch (error) {{
                             hideLoading();
-                            displayError('Image upload failed: ' + error.message); // Improved error message
-                            console.error('Image upload error:', error); // Log error for debugging
+                            displayError('Image upload failed: ' + error.message);
+                            console.error('Image upload error:', error);
                         }}
                     }};
                     input.click();
-                }
+                }}
 
+                function templatesHandler() {{
+                    alert('Template insertion feature is a placeholder and needs backend implementation.');
+                }}
 
-                // --- Templates Handler --- (New Template Insertion Feature - Placeholder, Implement Template Loading and Insertion Logic)
-                function templatesHandler() {
-                    alert('Template insertion feature is a placeholder and needs to be implemented with template loading and insertion logic.');
-                    // In full implementation:
-                    // 1. Show a modal or dropdown with available templates.
-                    // 2. Fetch templates from server (using templates_url).
-                    // 3. On template selection, insert template content into the editor at the current cursor position.
-                }
-
-
-                // --- Text Change Handler --- (Enhanced Word Count and Text Analysis)
-                function handleTextChange(delta, oldDelta, source) {
+                function handleTextChange(delta, oldDelta, source) {{
                     if (source === 'api') return;
-
 
                     var contents = editor.getContents();
                     var text = editor.getText().trim();
 
-
-                    // Text Analysis and Metadata Update
                     updateTextMetadata(text);
 
-
-                    // Max Length Validation
-                    if (%(max_length)s && text.length > %(max_length)s) {{
+                    if ({json.dumps(self.max_length)} && text.length > {json.dumps(self.max_length)}) {{
                         displayError('Content exceeds maximum length');
                         return;
                     }} else {{
                         $error.hide();
                     }}
 
-
-                    // Update Hidden Input (Auto-save moved here for efficiency)
                     $input.val(JSON.stringify(contents)).trigger('change');
-                    if (%(auto_save)s) queueAutoSave(); // Queue auto-save
-                }
+                    if ({str(self.auto_save).lower()}) queueAutoSave();
+                }}
 
-
-                // --- Text Metadata Update --- (Word Count, Reading Time - Extend with more analysis features)
                 function updateTextMetadata(text) {{
-                    if (%(word_count)s) {{
+                    if ({str(self.word_count).lower()}) {{
                         const wordCount = text ? text.trim().split(/\\s+/).length : 0;
-                        const charCount = text.length;
                         $wordcount.text('Words: ' + wordCount);
                     }} else {{
                         $wordcount.empty();
                     }}
 
-
-                    // Example: Reading Time Estimate (basic - can be improved with syllable count etc.)
-                    if ({text_analysis_features}.includes('readingTime')) {{
-                        const wordsPerMinute = 200; // Average reading speed
+                    if ({json.dumps(self.text_analysis_features)}.includes('readingTime')) {{
+                        const wordsPerMinute = 200;
                         const readingTimeMinutes = Math.ceil(text.trim().split(/\\s+/).length / wordsPerMinute);
                         $readingtime.text('Reading Time: ~' + readingTimeMinutes + ' minutes');
                     }} else {{
@@ -297,105 +309,61 @@ class RichTextEditorWidget(BS3TextFieldWidget):
                     }}
                 }}
 
-
-                // --- Auto-save Queue --- (Debounced auto-save for performance)
                 function queueAutoSave() {{
                     clearTimeout(autoSaveTimeout);
-                    autoSaveTimeout = setTimeout(triggerAutoSave, %(auto_save_interval)d);
+                    autoSaveTimeout = setTimeout(triggerAutoSave, {self.auto_save_interval});
                 }}
-
 
                 function triggerAutoSave() {{
-                    $input.closest('form').trigger('autosave', [{{
-                        field: $input.attr('name'), value: $input.val()
-                    }}]);
+                    $input.closest('form').trigger('autosave', [{{ field: $input.attr('name'), value: $input.val() }}]);
                 }}
 
-
-                // --- History Toggle --- (Basic History Panel Toggle - Extend with actual history loading)
                 function toggleHistory() {{
                     $historyContainer.toggle();
                     if ($historyContainer.is(':visible')) {{
-                        loadHistory(); // Load history when panel is shown - Placeholder for actual history loading
+                        loadHistory();
                     }}
                 }}
 
-
-                // --- History Loading --- (Placeholder - Implement actual history loading from history_url)
                 function loadHistory() {{
-                    $historyContainer.find('.history-list').html('<li>Revision history loading is a placeholder and needs to be implemented.</li>');
-                    // In full implementation:
-                    // 1. Fetch revision history from history_url using AJAX.
-                    // 2. Populate the history list with revision items (date, user, etc.).
-                    // 3. Add functionality to view and restore revisions.
+                    $historyContainer.find('.history-list').html('<li>Revision history loading is a placeholder.</li>');
                 }}
 
-
-                // --- Display Error --- (Centralized error display for consistency)
                 function displayError(message) {{
                     $error.text(message).show();
                 }}
 
-
-                // --- Show Loading --- (Centralized loading indicator)
                 function showLoading(message) {{
                     $('.loading-overlay').text(message).show();
                 }}
 
-
-                // --- Hide Loading ---
                 function hideLoading() {{
                     $('.loading-overlay').hide();
                 }}
 
-
-                // --- Initialization and Form Handlers ---
                 initializeEditor();
 
-
-                // Set initial content (remains same)
                 if ($input.val()) {{
                     try {{
-                        quill.setContents(JSON.parse($input.val()));
-                        updateTextMetadata(editor.getText().trim()); // Initial metadata update
+                        editor.setContents(JSON.parse($input.val()));
+                        updateTextMetadata(editor.getText().trim());
                     }} catch (e) {{
                         console.error('Error setting initial content:', e);
                         $error.text('Error loading content').show();
                     }}
                 }}
 
-
-                // Handle form reset (remains same)
                 $input.closest('form').on('reset', function() {{
-                    quill.setContents([]);
+                    editor.setContents([]);
                     $error.hide();
                     $wordcount.empty();
-                    $readingtime.empty(); // Clear reading time as well
+                    $readingtime.empty();
                 }});
-
-
             }})();
         </script>
-        """.format(
-                field_id=field.id,
-                height=self.height,
-                toolbar_config=json.dumps(self.toolbar_config),
-                formats=json.dumps(self.formats),
-                placeholder=self.placeholder,
-                read_only=str(self.read_only).lower(),
-                auto_save=str(self.auto_save).lower(),
-                auto_save_interval=self.auto_save_interval,
-                word_count=str(self.word_count).lower(),
-                max_length=json.dumps(self.max_length),
-                image_upload_url=self.image_upload_url,
-                image_resize=str(self.image_resize).lower(),
-                image_max_size=self.image_max_size,
-                allowed_image_types=json.dumps(self.allowed_image_types),
-                text_analysis_features=json.dumps(
-                    self.text_analysis_features
-                ),  # Pass text analysis config
-            )
-        )
+        """
+
+        return Markup(rendered_html + help_html + error_html + script)
 
     def pre_validate(self, form):
         """Validate content before form processing"""

@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -59,28 +59,52 @@ class PhoneNumberWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize phone widget with custom settings"""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "Enter phone number")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.default_country = kwargs.get("default_country", "US")
         self.preferred_countries = kwargs.get("preferred_countries", ["US", "GB", "CA"])
         self.allow_extensions = kwargs.get("allow_extensions", True)
         self.auto_format = kwargs.get("auto_format", True)
         self.national_mode = kwargs.get("national_mode", False)
         self.mobile_only = kwargs.get("mobile_only", False)
-        self.placeholder = kwargs.get("placeholder", "Enter phone number")
-        self.custom_error_messages = kwargs.get(
-            "error_messages", {}
-        )  # Custom error messages dict
+        self.error_message = kwargs.get("error_message", "Invalid phone number")
+        self.custom_error_messages = kwargs.get("error_messages", {})
 
     def __call__(self, field, **kwargs):
         """Render the phone input widget"""
         kwargs.setdefault("type", "tel")
-        kwargs.setdefault("class", "form-control phone-input")
+        kwargs.setdefault("class", "form-control phone-input" + (" is-invalid" if field.errors else ""))
         kwargs.setdefault("placeholder", self.placeholder)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if field.flags.required:
             kwargs["required"] = True
 
         template = self.data_template if field.data else self.empty_template
         html = template % {"text": self.html_params(name=field.name, **kwargs)}
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html

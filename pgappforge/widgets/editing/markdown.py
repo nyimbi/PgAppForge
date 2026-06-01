@@ -1,23 +1,14 @@
 """MarkdownEditorWidget — PgAppForge widget(s)."""
 
 from __future__ import annotations
+import html as _html
 import json
-import re
-from dataclasses import dataclass
-from datetime import datetime, time
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
 from markupsafe import Markup
-from wtforms import Field
-from wtforms.fields import (
-    BooleanField, DateField, DateTimeField, DecimalField, FileField,
-    FloatField, IntegerField, PasswordField, SelectField,
-    SelectMultipleField, StringField, TextAreaField,
-)
 from wtforms.validators import ValidationError
-from wtforms.widgets import TextInput, html_params
 
 class MarkdownEditorWidget(BS3TextFieldWidget):
     """
@@ -72,6 +63,11 @@ class MarkdownEditorWidget(BS3TextFieldWidget):
         status_bar_items: Optional[List[str]] = None,
         syntax_highlighting: bool = True,
         math_delimiters: Optional[List[Dict[str, str]]] = None,
+        placeholder: str = "",
+        css_class: str = "",
+        description: str = "",
+        readonly: bool = False,
+        disabled: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -90,6 +86,13 @@ class MarkdownEditorWidget(BS3TextFieldWidget):
             **kwargs: Additional keyword arguments
         """
         super().__init__(**kwargs)
+
+        # Universal widget kwargs
+        self.placeholder = placeholder
+        self.css_class = css_class
+        self.description = description
+        self.readonly = readonly
+        self.disabled = disabled
 
         self.autosave = autosave
         self.autosave_delay = autosave_delay
@@ -147,119 +150,162 @@ class MarkdownEditorWidget(BS3TextFieldWidget):
             Markup: Safe HTML markup for the widget
         """
         kwargs.setdefault("type", "hidden")
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
+
+        has_errors = bool(field.errors)
 
         template = self.data_template if field.data else self.empty_template
-        html = template % {
+        rendered_html = template % {
             "hidden": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
         }
 
-        return Markup(f"""
-            {html}
+        # Help text
+        help_html = ""
+        if self.description:
+            help_html = (
+                f'<small class="form-text text-muted" id="{field.id}_help">'
+                f'{_html.escape(str(self.description))}</small>'
+            )
+
+        # Error feedback (server-side WTForms errors)
+        error_html = ""
+        if has_errors:
+            error_items = "".join(
+                f"<span>{_html.escape(str(e))}</span>" for e in field.errors
+            )
+            error_html = (
+                f'<div class="invalid-feedback d-block" id="{field.id}_error" role="alert">'
+                f'{error_items}</div>'
+            )
+
+        # Accessibility: aria attrs for the hidden input (EasyMDE wraps it)
+        aria_label = str(field.label.text) if field.label else field.name
+        describedby_parts = []
+        if self.description:
+            describedby_parts.append(f"{field.id}_help")
+        if has_errors:
+            describedby_parts.append(f"{field.id}_error")
+
+        # Use json.dumps for all Python values injected into JS
+        field_id_js = json.dumps(field.id)
+        upload_url_js = json.dumps(self.upload_url)
+        theme_js = json.dumps(self.theme)
+
+        script = f"""
             <script>
                 (function() {{
+                    var fieldId = {field_id_js};
+                    var editorEl = document.getElementById(fieldId + '-editor');
+                    if (!editorEl) return;
+
                     // Initialize EasyMDE with enhanced configuration
                     const easyMDE = new EasyMDE({{
-                        element: document.getElementById('{field.id}-editor'),
+                        element: editorEl,
                         initialValue: {_js_json(field.data or "")},
                         spellChecker: {str(self.spellchecker).lower()},
                         autoDownloadFontAwesome: false,
                         autosave: {{
                             enabled: {str(self.autosave).lower()},
                             delay: {self.autosave_delay},
-                            uniqueId: "{field.id}",
+                            uniqueId: fieldId,
                             text: "Auto-saved: "
                         }},
-                        theme: "{self.theme}",
+                        theme: {theme_js},
                         toolbar: {_js_json(self.toolbar_config)},
                         status: {_js_json(self.status_bar_items)},
                         uploadImage: true,
-                        imageUploadEndpoint: "{self.upload_url}",
+                        imageUploadEndpoint: {upload_url_js},
                         renderingConfig: {{
                             singleLineBreaks: false,
                             codeSyntaxHighlighting: {str(self.syntax_highlighting).lower()},
-                            sanitizerFunction: (html) => {{
-                                // Implement custom sanitization if needed
-                                return html;
+                            sanitizerFunction: function(rawHtml) {{
+                                return rawHtml;
                             }}
                         }},
                         previewRender: function(plainText, preview) {{
-                            // Enhanced preview with KaTeX support
-                            setTimeout(() => {{
-                                renderMathInElement(preview, {{
-                                    delimiters: {_js_json(self.math_delimiters)},
-                                    throwOnError: false,
-                                    errorColor: '#cc0000'
-                                }});
+                            setTimeout(function() {{
+                                if (typeof renderMathInElement !== 'undefined') {{
+                                    renderMathInElement(preview, {{
+                                        delimiters: {_js_json(self.math_delimiters)},
+                                        throwOnError: false,
+                                        errorColor: '#cc0000'
+                                    }});
+                                }}
                             }}, 0);
                             return this.parent.markdown(plainText);
                         }}
                     }});
 
+                    // Apply aria attributes to the underlying textarea
+                    var textarea = editorEl;
+                    textarea.setAttribute('aria-label', {json.dumps(aria_label)});
+                    {f'textarea.setAttribute("aria-describedby", {json.dumps(" ".join(describedby_parts))});' if describedby_parts else ''}
+                    {f'textarea.setAttribute("aria-invalid", "true");' if has_errors else ''}
+
                     // Enhanced change handler with debouncing
                     let updateTimeout;
-                    easyMDE.codemirror.on("change", () => {{
+                    easyMDE.codemirror.on("change", function() {{
                         clearTimeout(updateTimeout);
-                        updateTimeout = setTimeout(() => {{
+                        updateTimeout = setTimeout(function() {{
                             const value = easyMDE.value();
-                            const input = document.getElementById('{field.id}');
-                            input.value = value;
+                            const input = document.getElementById(fieldId);
+                            if (input) input.value = value;
 
-                            // Update metadata with enhanced counting
-                            const wordCount = value.trim().split(/\\s+/).filter(w => w.length > 0).length;
+                            const wordCount = value.trim().split(/\\s+/).filter(function(w) {{ return w.length > 0; }}).length;
                             const charCount = value.length;
 
-                            document.querySelector('.markdown-metadata .word-count')
-                                .textContent = `${{wordCount}} words`;
-                            document.querySelector('.markdown-metadata .char-count')
-                                .textContent = `${{charCount}} characters`;
+                            const wc = document.querySelector('#' + fieldId + '-editor').closest('.markdown-editor-container').querySelector('.word-count');
+                            const cc = document.querySelector('#' + fieldId + '-editor').closest('.markdown-editor-container').querySelector('.char-count');
+                            if (wc) wc.textContent = wordCount + ' words';
+                            if (cc) cc.textContent = charCount + ' characters';
                         }}, 150);
                     }});
 
-                    // Enhanced image upload handler with progress tracking
+                    // Image upload handler
                     easyMDE.uploadImage = async function(file, onSuccess, onError) {{
                         const formData = new FormData();
                         formData.append('image', file);
 
                         try {{
-                            const response = await fetch('{self.upload_url}', {{
+                            const response = await fetch({upload_url_js}, {{
                                 method: 'POST',
                                 body: formData,
-                                headers: {{
-                                    'Accept': 'application/json'
-                                }}
+                                headers: {{ 'Accept': 'application/json' }}
                             }});
 
                             if (!response.ok) {{
-                                throw new Error(`HTTP error! status: ${{response.status}}`);
+                                throw new Error('HTTP error! status: ' + response.status);
                             }}
 
                             const data = await response.json();
-                            if (data?.url) {{
+                            if (data && data.url) {{
                                 onSuccess(data.url);
                             }} else {{
                                 throw new Error('Upload response missing URL');
                             }}
                         }} catch (error) {{
                             console.error('Upload error:', error);
-                            onError(`Image upload failed: ${{error.message}}`);
+                            onError('Image upload failed: ' + error.message);
                         }}
                     }};
 
                     // Initialize KaTeX for existing math content
-                    if (easyMDE.value().includes('$')) {{
-                        renderMathInElement(
-                            document.getElementById('{field.id}-editor'),
-                            {{
-                                delimiters: {_js_json(self.math_delimiters)},
-                                throwOnError: false,
-                                errorColor: '#cc0000'
-                            }}
-                        );
+                    if (typeof renderMathInElement !== 'undefined' && easyMDE.value().includes('$')) {{
+                        renderMathInElement(editorEl, {{
+                            delimiters: {_js_json(self.math_delimiters)},
+                            throwOnError: false,
+                            errorColor: '#cc0000'
+                        }});
                     }}
                 }})();
             </script>
-        """)
+        """
+
+        return Markup(rendered_html + help_html + error_html + script)
 
     def process_data(self, value: Union[str, Dict[str, Any], None]) -> str:
         """

@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -95,7 +95,11 @@ class CurrencyInputWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize currency widget with extended settings"""
         super().__init__(**kwargs)
-        self.currency = kwargs.get("currency", "USD")  # Default currency set to USD
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
+        self.currency = kwargs.get("currency", "USD")
         if self.currency not in self.CURRENCIES:
             self.currency = "USD"  # Fallback to USD if invalid currency provided
 
@@ -118,30 +122,45 @@ class CurrencyInputWidget(BS3TextFieldWidget):
         """Render the currency input widget with currency selector and dynamic formatting"""
         kwargs.setdefault("type", "text")
         kwargs.setdefault("placeholder", self.placeholder)
-        kwargs.setdefault("class", "form-control currency-input")
-        kwargs.setdefault(
-            "data-precision", self.precision
-        )  # Pass precision as data attribute
-        kwargs.setdefault("data-thousands", self.thousands_sep)  # Pass thousands_sep
-        kwargs.setdefault("data-decimal", self.decimal_sep)  # Pass decimal_sep
-        kwargs.setdefault(
-            "data-symbol-position", self.symbol_position
-        )  # Pass symbol position
+        kwargs.setdefault("class", "form-control currency-input" + (" is-invalid" if field.errors else ""))
+        kwargs.setdefault("data-precision", self.precision)
+        kwargs.setdefault("data-thousands", self.thousands_sep)
+        kwargs.setdefault("data-decimal", self.decimal_sep)
+        kwargs.setdefault("data-symbol-position", self.symbol_position)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if field.flags.required:
             kwargs["required"] = True
 
         currency_selector_html = self._render_currency_selector(
             field.id, self.currency
-        )  # Render currency dropdown
+        )
         template = self.data_template if field.data else self.empty_template
         html = template % {
             "text": self.html_params(name=field.name, **kwargs),
-            "currency_symbol": self.CURRENCIES[self.currency][
-                "symbol"
-            ],  # Initial currency symbol
-            "currency_selector": currency_selector_html,  # Insert currency selector HTML
+            "currency_symbol": self.CURRENCIES[self.currency]["symbol"],
+            "currency_selector": currency_selector_html,
         }
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html
@@ -394,7 +413,12 @@ class RatingWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize rating widget with custom settings"""
         super().__init__(**kwargs)
-        self.number = kwargs.get("number", 5)  # Number of stars
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
+        self.number = kwargs.get("number", 5)
         self.enable_half = kwargs.get("enable_half", True)  # Allow half stars
         self.star_on = kwargs.get("star_on", "fa fa-star")  # Icon for filled star
         self.star_off = kwargs.get("star_off", "fa fa-star-o")  # Icon for empty star
@@ -422,19 +446,35 @@ class RatingWidget(BS3TextFieldWidget):
     def __call__(self, field, **kwargs):
         """Render the rating widget"""
         kwargs.setdefault("type", "hidden")
-        kwargs.setdefault(
-            "aria-invalid", "true" if field.errors else "false"
-        )  # ARIA invalid state
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if field.flags.required:
             kwargs["required"] = True
-            kwargs.setdefault("aria-required", "true")  # ARIA required attribute
+            kwargs.setdefault("aria-required", "true")
 
         template = self.data_template if field.data else self.empty_template
         html = template % {
             "hidden": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
         }
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html
@@ -684,19 +724,16 @@ class DurationWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize duration widget with extended settings for granular control and formatting"""
         super().__init__(**kwargs)
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.show_seconds = kwargs.get("show_seconds", True)
         self.show_days = kwargs.get("show_days", True)
-        self.show_microseconds = kwargs.get(
-            "show_microseconds", False
-        )  # Not directly used in granular input
-        self.min_duration = kwargs.get("min_duration", None)  # In timedelta seconds
-        self.max_duration = kwargs.get("max_duration", None)  # In timedelta seconds
-        self.step = kwargs.get(
-            "step", 1
-        )  # Step interval for seconds input, not directly applicable to all units
-        self.placeholder = kwargs.get(
-            "placeholder", "P0D"
-        )  # ISO 8601 Duration format placeholder
+        self.show_microseconds = kwargs.get("show_microseconds", False)
+        self.min_duration = kwargs.get("min_duration", None)
+        self.max_duration = kwargs.get("max_duration", None)
+        self.step = kwargs.get("step", 1)
         self.format = kwargs.get("format", "verbose")  # 'verbose', 'short', or 'iso'
         self.required = kwargs.get("required", False)
         self.display_format = kwargs.get(
@@ -708,11 +745,18 @@ class DurationWidget(BS3TextFieldWidget):
 
     def __call__(self, field, **kwargs):
         """Render the duration input widget with granular controls and enhanced UI"""
-        kwargs.setdefault("type", "text")  # Hidden input still text type for value
-        kwargs.setdefault(
-            "placeholder", self.placeholder
-        )  # ISO format as default placeholder
+        kwargs.setdefault("type", "text")
+        kwargs.setdefault("placeholder", self.placeholder)
         kwargs.setdefault("autocomplete", "off")
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if self.required:
             kwargs["required"] = True
@@ -721,7 +765,19 @@ class DurationWidget(BS3TextFieldWidget):
         html = template % {
             "text": self.html_params(name=field.name, **kwargs),
             "show_seconds_style": "block" if self.show_seconds else "none",
-        }  # Control seconds input visibility
+        }
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html
@@ -999,7 +1055,15 @@ class StarRatingWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize star rating widget with extended custom settings including shape, hints, and distribution."""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.disabled = kwargs.get("disabled", False)
         self.max_stars = kwargs.get("max_stars", 5)
+        # Aliases used internally by pre_validate / process_formdata
+        self.number = self.max_stars
+        self.min_rating = kwargs.get("min_rating", 0)
+        self.step = kwargs.get("step", 0.5)
         self.enable_half = kwargs.get("enable_half", True)
         self.star_size = kwargs.get("star_size", 25)
         self.readonly = kwargs.get("readonly", False)
@@ -1007,19 +1071,22 @@ class StarRatingWidget(BS3TextFieldWidget):
         self.show_value = kwargs.get("show_value", True)
         self.show_clear = kwargs.get("show_clear", True)
         self.animate = kwargs.get("animate", True)
-        self.star_color = kwargs.get("star_color", "#FFD700")  # Default gold color
+        self.star_color = kwargs.get("star_color", "#FFD700")
         self.star_empty_color = kwargs.get("star_empty_color", "#ccc")
-        self.custom_shape = kwargs.get(
-            "custom_shape", None
-        )  # Could be FontAwesome class, Unicode char, or image URL
-        self.hints = kwargs.get("hints", None)  # Dynamic hints based on rating value
-        self.show_distribution = kwargs.get(
-            "show_distribution", False
-        )  # Enable distribution visualization
+        self.custom_shape = kwargs.get("custom_shape", None)
+        self.hints = kwargs.get("hints", None)
+        self.show_distribution = kwargs.get("show_distribution", False)
 
     def __call__(self, field, **kwargs):
         """Render the star rating widget with enhanced features like custom shapes, dynamic hints, and distribution."""
         kwargs.setdefault("type", "hidden")
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if self.required:
             kwargs["required"] = "required"
@@ -1033,6 +1100,18 @@ class StarRatingWidget(BS3TextFieldWidget):
             "hidden": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
         }
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html

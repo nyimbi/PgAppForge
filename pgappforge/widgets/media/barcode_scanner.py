@@ -1,421 +1,361 @@
 """BarcodeQRScannerWidget — PgAppForge widget(s)."""
 
 from __future__ import annotations
-import json
-import re
-from dataclasses import dataclass
-from datetime import datetime, time
-from typing import Any
+
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
-from wtforms import Field
-from wtforms.fields import (
-    BooleanField, DateField, DateTimeField, DecimalField, FileField,
-    FloatField, IntegerField, PasswordField, SelectField,
-    SelectMultipleField, StringField, TextAreaField,
-)
-from wtforms.validators import ValidationError
-from wtforms.widgets import TextInput, html_params
+from markupsafe import Markup, escape
+
 
 class BarcodeQRScannerWidget(BS3TextFieldWidget):
-    """
-    Barcode and QR code scanner widget with camera integration.
+	"""
+	Barcode and QR code scanner widget with camera integration.
 
-    Features:
-    - Multiple format support (1D/2D barcodes, QR codes)
-    - Camera selection and switching
-    - Real-time auto-detection
-    - Manual entry fallback with validation
-    - Batch scanning mode
-    - Scan history with export
-    - Custom format validation
-    - Result formatting/cleaning
-    - Error correction levels
-    - Offline scanning capability
-    - Barcode generation
-    - Scan analytics/statistics
-    - Mobile-first responsive design
-    - Custom result processors
-    - API integrations
-    - Sound/vibration feedback
-    - Image preprocessing
-    - Zoom controls
-    - Torch/flash control
-    - Orientation handling
+	Features:
+	- Multiple format support (1D/2D barcodes, QR codes)
+	- Camera selection and switching
+	- Real-time auto-detection
+	- Manual entry fallback with validation
+	- Batch scanning mode
+	- Scan history with export
+	- Custom format validation
+	- Result formatting/cleaning
+	- Sound/vibration feedback
+	- Zoom controls
+	- Torch/flash control
+	- Orientation handling
 
-    Database Type:
-        PostgreSQL: VARCHAR or JSONB (for batch mode)
-        SQLAlchemy: String or JSON
+	Database Type:
+		PostgreSQL: VARCHAR or JSONB (for batch mode)
+		SQLAlchemy: String or JSON
 
-    Required Dependencies:
-    - ZXing 0.19+
-    - QuaggaJS 0.12+
-    - MediaDevices API
-    - WebAssembly support
-    - Service Workers (offline)
+	Required Dependencies:
+	- ZXing 0.19+
+	- QuaggaJS 0.12+
+	- MediaDevices API
+	- WebAssembly support
 
-    Browser Support:
-    - Chrome 60+
-    - Firefox 60+
-    - Safari 11.1+
-    - Edge 79+
-    - Opera 47+
-    - Chrome for Android 89+
-    - Safari iOS 11.3+
+	Browser Support:
+	- Chrome 60+, Firefox 60+, Safari 11.1+, Edge 79+
 
-    Required Permissions:
-    - Camera access
-    - Storage (IndexedDB)
-    - Vibration API
-    - Service Workers
-    - Fullscreen API
-    - Wake Lock API
+	Required Permissions:
+	- Camera access
+	"""
 
-    Performance Considerations:
-    - Camera resolution vs performance
-    - Image processing load
-    - Memory usage for history
-    - Battery impact
-    - CPU utilization
-    - Worker thread usage
-    - Cache management
-    - Offline storage limits
+	JS_DEPENDENCIES = [
+		"https://unpkg.com/@zxing/library@0.19.1",
+		"https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js",
+		"/static/js/barcode-scanner.js",
+	]
 
-    Security Implications:
-    - Camera permission handling
-    - Data validation/sanitization
-    - Secure storage practices
-    - API endpoint security
-    - XSS prevention
-    - CSRF protection
-    - Rate limiting
-    - Input validation
+	CSS_DEPENDENCIES = ["/static/css/barcode-scanner.css"]
 
-    Best Practices:
-    - Request minimal permissions
-    - Implement error recovery
-    - Provide feedback
-    - Cache results
-    - Handle offline mode
-    - Validate scans
-    - Monitor performance
-    - Clean invalid data
-    - Regular testing
-    - Update dependencies
+	DEFAULT_FORMATS = ["qr", "ean13", "ean8", "code128", "code39", "upc"]
 
-    Example:
-        scanner = db.Column(db.String(255), nullable=True,
-            info={'widget': BarcodeQRScannerWidget(
-                formats=['qr', 'ean13', 'code128'],
-                auto_submit=True,
-                history=True,
-                validate=True,
-                error_correction='M',
-                offline_support=True
-            )})
-    """
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
+		self.formats = kwargs.get("formats", self.DEFAULT_FORMATS)
+		self.auto_submit = kwargs.get("auto_submit", True)
+		self.history = kwargs.get("history", True)
+		self.validate = kwargs.get("validate", True)
+		self.camera_id = kwargs.get("camera_id", None)
+		self.batch_mode = kwargs.get("batch_mode", False)
+		self.result_handler = kwargs.get("result_handler", None)
+		self.error_correction = kwargs.get("error_correction", "M")
+		self.offline_support = kwargs.get("offline_support", True)
+		self.sound_feedback = kwargs.get("sound_feedback", True)
+		self.vibrate = kwargs.get("vibrate", True)
+		self.torch = kwargs.get("torch", True)
+		self.zoom = kwargs.get("zoom", True)
+		self.orientation = kwargs.get("orientation", True)
+		self.preprocessing = kwargs.get("preprocessing", True)
+		self.confidence = kwargs.get("confidence", 0.8)
+		self.scan_interval = kwargs.get("scan_interval", 100)
+		self.history_size = kwargs.get("history_size", 100)
+		self.timeout = kwargs.get("timeout", 30)
+		# Universal kwargs
+		self.placeholder = kwargs.get("placeholder", "")
+		self.css_class = kwargs.get("css_class", "")
+		self.description = kwargs.get("description", "")
+		self.readonly = kwargs.get("readonly", False)
+		self.disabled = kwargs.get("disabled", False)
 
-    # JavaScript Dependencies
-    JS_DEPENDENCIES = [
-        "https://unpkg.com/@zxing/library@0.19.1",
-        "https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js",
-        "/static/js/barcode-scanner.js",
-    ]
+	def __call__(self, field, **kwargs):
+		"""Render the barcode scanner widget."""
+		kwargs.setdefault("id", field.id)
+		return self.render_field(field, **kwargs)
 
-    # CSS Dependencies
-    CSS_DEPENDENCIES = ["/static/css/barcode-scanner.css"]
+	def render_field(self, field, **kwargs):
+		"""Render the barcode scanner widget with controls and preview."""
+		kwargs.setdefault("id", field.id)
 
-    # Default supported formats
-    DEFAULT_FORMATS = ["qr", "ean13", "ean8", "code128", "code39", "upc"]
+		has_errors = bool(field.errors)
+		invalid_attr = ' aria-invalid="true"' if has_errors else ''
+		label_text = str(field.label.text) if field.label else str(_("Barcode Scanner"))
+		field_id = escape(field.id)
 
-    def __init__(self, **kwargs):
-        """
-        Initialize BarcodeQRScannerWidget with custom settings.
+		html = (
+			self._include_dependencies() +
+			f'<div class="barcode-scanner-widget" id="{field_id}-container"'
+			f' role="application" aria-label="{escape(label_text)}">'
 
-        Args:
-            formats (list): Supported barcode formats
-            auto_submit (bool): Auto-submit on scan
-            history (bool): Enable scan history
-            validate (bool): Enable validation
-            camera_id (str): Specific camera device ID
-            batch_mode (bool): Enable batch scanning
-            result_handler (callable): Custom result processor
-            error_correction (str): QR error correction level (L,M,Q,H)
-            offline_support (bool): Enable offline scanning
-            sound_feedback (bool): Enable sound on scan
-            vibrate (bool): Enable vibration on scan
-            torch (bool): Enable torch/flash control
-            zoom (bool): Enable zoom controls
-            orientation (bool): Enable orientation handling
-            preprocessing (bool): Enable image preprocessing
-            confidence (float): Minimum confidence threshold
-            scan_interval (int): Milliseconds between scans
-            history_size (int): Maximum history entries
-            timeout (int): Scan timeout in seconds
-        """
-        super().__init__(**kwargs)
+			# Camera preview
+			f'<div class="camera-container">'
+			f'<video id="{field_id}-preview" playsinline autoplay'
+			f' aria-label="{escape(str(_("Camera preview")))}">'
+			'</video>'
+			f'<canvas id="{field_id}-canvas" style="display:none;" aria-hidden="true"></canvas>'
+			'<div class="scanner-overlay" aria-hidden="true">'
+			'<div class="scan-region"></div>'
+			'</div>'
+			'<div class="scanner-controls" role="toolbar"'
+			f' aria-label="{escape(str(_("Scanner controls")))}">'
+			+ self._render_camera_controls(field.id) +
+			'</div>'
+			'</div>'
 
-        self.formats = kwargs.get("formats", self.DEFAULT_FORMATS)
-        self.auto_submit = kwargs.get("auto_submit", True)
-        self.history = kwargs.get("history", True)
-        self.validate = kwargs.get("validate", True)
-        self.camera_id = kwargs.get("camera_id", None)
-        self.batch_mode = kwargs.get("batch_mode", False)
-        self.result_handler = kwargs.get("result_handler", None)
-        self.error_correction = kwargs.get("error_correction", "M")
-        self.offline_support = kwargs.get("offline_support", True)
-        self.sound_feedback = kwargs.get("sound_feedback", True)
-        self.vibrate = kwargs.get("vibrate", True)
-        self.torch = kwargs.get("torch", True)
-        self.zoom = kwargs.get("zoom", True)
-        self.orientation = kwargs.get("orientation", True)
-        self.preprocessing = kwargs.get("preprocessing", True)
-        self.confidence = kwargs.get("confidence", 0.8)
-        self.scan_interval = kwargs.get("scan_interval", 100)
-        self.history_size = kwargs.get("history_size", 100)
-        self.timeout = kwargs.get("timeout", 30)
+			# Results area
+			'<div class="results-container">'
+			f'<label for="{field_id}-manual" class="visually-hidden sr-only">'
+			f'{escape(str(_("Enter code manually")))}</label>'
+			f'<input type="text" id="{field_id}-manual"'
+			' class="form-control manual-input"'
+			f' placeholder="{escape(str(_("Enter code manually...")))}"'
+			f' aria-label="{escape(str(_("Manual barcode entry")))}">'
+			+ (self._render_history_table(field.id) if self.history else "") +
+			'</div>'
 
-    def render_field(self, field, **kwargs):
-        """Render the barcode scanner widget with controls and preview"""
-        kwargs.setdefault("id", field.id)
-        input_html = super().render_field(field, **kwargs)
+			# Loading state
+			'<div class="loading-overlay" style="display:none;" role="status"'
+			f' aria-label="{escape(str(_("Initializing camera...")))}">'
+			'<div class="spinner-border" aria-hidden="true"></div>'
+			f'<span class="visually-hidden sr-only">{escape(str(_("Initializing camera...")))}</span>'
+			'</div>'
 
-        return Markup(
-            f"""
-            {self._include_dependencies()}
+			# Error messages
+			f'<div class="alert alert-danger scanner-error" style="display:none;"'
+			f' role="alert" aria-live="assertive"></div>'
 
-            <div class="barcode-scanner-widget" id="{field.id}-container">
-                <!-- Camera Preview -->
-                <div class="camera-container">
-                    <video id="{field.id}-preview" playsinline autoplay></video>
-                    <canvas id="{field.id}-canvas" style="display:none;"></canvas>
+			# Hidden field storing the scanned value
+			f'<input type="hidden" name="{escape(field.name)}" id="{field_id}"'
+			f' value="{escape(field.data or "")}"'
+			f' aria-label="{escape(label_text)}"{invalid_attr}>'
+			'</div>'
+		)
 
-                    <div class="scanner-overlay">
-                        <div class="scan-region"></div>
-                    </div>
+		# Inline script — all dynamic values go through _js_json
+		camera_id_js = _js_json(self.camera_id) if self.camera_id else 'null'
+		html += f"""
+<script>
+(function() {{
+	var FIELD_ID = {_js_json(field.id)};
 
-                    <!-- Controls -->
-                    <div class="scanner-controls">
-                        {self._render_camera_controls(field.id)}
-                    </div>
-                </div>
+	function init() {{
+		var container = document.getElementById(FIELD_ID + '-container');
+		if (!container) return;
 
-                <!-- Results Area -->
-                <div class="results-container">
-                    <input type="text" id="{field.id}-manual"
-                           class="form-control manual-input"
-                           placeholder="Enter code manually...">
+		var hiddenField = document.getElementById(FIELD_ID);
+		var manualInput = document.getElementById(FIELD_ID + '-manual');
 
-                    {self._render_history_table(field.id) if self.history else ''}
-                </div>
+		// Sync manual input to hidden field
+		if (manualInput && hiddenField) {{
+			manualInput.addEventListener('input', function() {{
+				hiddenField.value = this.value;
+			}});
+		}}
 
-                <!-- Loading State -->
-                <div class="loading-overlay" style="display:none;">
-                    <div class="spinner-border"></div>
-                    <span class="sr-only">Initializing camera...</span>
-                </div>
+		// Orientation change
+		if ({_js_json(self.orientation)}) {{
+			window.addEventListener('orientationchange', function() {{
+				if (window.barcodeScanner_) window.barcodeScanner_.handleOrientation();
+			}});
+		}}
 
-                <!-- Error Messages -->
-                <div class="alert alert-danger" style="display:none;"></div>
+		window.addEventListener('unload', function() {{
+			if (window.barcodeScanner_) window.barcodeScanner_.cleanup();
+		}});
 
-                {input_html}
-            </div>
+		// Initialize scanner if BarcodeScanner class is available
+		if (typeof BarcodeScanner !== 'undefined') {{
+			window.barcodeScanner_ = new BarcodeScanner(FIELD_ID, {{
+				formats: {_js_json(self.formats)},
+				autoSubmit: {_js_json(self.auto_submit)},
+				history: {_js_json(self.history)},
+				validate: {_js_json(self.validate)},
+				cameraId: {camera_id_js},
+				batchMode: {_js_json(self.batch_mode)},
+				errorCorrection: {_js_json(self.error_correction)},
+				offlineSupport: {_js_json(self.offline_support)},
+				soundFeedback: {_js_json(self.sound_feedback)},
+				vibrate: {_js_json(self.vibrate)},
+				torch: {_js_json(self.torch)},
+				zoom: {_js_json(self.zoom)},
+				orientation: {_js_json(self.orientation)},
+				preprocessing: {_js_json(self.preprocessing)},
+				confidence: {_js_json(self.confidence)},
+				scanInterval: {_js_json(self.scan_interval)},
+				historySize: {_js_json(self.history_size)},
+				timeout: {_js_json(self.timeout)},
 
-            <script>
-                $(document).ready(function() {{
-                    const scanner = new BarcodeScanner('{field.id}', {{
-                        formats: {_js_json(self.formats)},
-                        autoSubmit: {str(self.auto_submit).lower()},
-                        history: {str(self.history).lower()},
-                        validate: {str(self.validate).lower()},
-                        cameraId: {f"'{self.camera_id}'" if self.camera_id else 'null'},
-                        batchMode: {str(self.batch_mode).lower()},
-                        errorCorrection: '{self.error_correction}',
-                        offlineSupport: {str(self.offline_support).lower()},
-                        soundFeedback: {str(self.sound_feedback).lower()},
-                        vibrate: {str(self.vibrate).lower()},
-                        torch: {str(self.torch).lower()},
-                        zoom: {str(self.zoom).lower()},
-                        orientation: {str(self.orientation).lower()},
-                        preprocessing: {str(self.preprocessing).lower()},
-                        confidence: {self.confidence},
-                        scanInterval: {self.scan_interval},
-                        historySize: {self.history_size},
-                        timeout: {self.timeout},
+				onScan: function(result) {{
+					if (hiddenField) hiddenField.value = result;
+					if ({_js_json(self.auto_submit)}) {{
+						var form = hiddenField && hiddenField.closest ? hiddenField.closest('form') : null;
+						if (form) form.submit();
+					}}
+				}},
+				onError: function(error) {{
+					var alertEl = container.querySelector('.scanner-error');
+					if (alertEl) {{
+						alertEl.textContent = error;
+						alertEl.style.display = 'block';
+						setTimeout(function() {{ alertEl.style.display = 'none'; }}, 5000);
+					}}
+				}},
+				onStateChange: function(state) {{
+					var loading = container.querySelector('.loading-overlay');
+					if (loading) loading.style.display = state.loading ? 'block' : 'none';
+					if (state.camera === 'unavailable' && manualInput) {{
+						manualInput.style.display = 'block';
+					}}
+				}}
+			}});
+		}}
+	}}
 
-                        onScan: function(result) {{
-                            handleScan(result);
-                        }},
-                        onError: function(error) {{
-                            showError(error);
-                        }},
-                        onStateChange: function(state) {{
-                            updateState(state);
-                        }}
-                    }});
+	if (document.readyState === 'loading') {{
+		document.addEventListener('DOMContentLoaded', init);
+	}} else {{
+		init();
+	}}
+}})();
+</script>"""
 
-                    // Scan result handler
-                    function handleScan(result) {{
-                        if ({str(self.validate).lower()}) {{
-                            if (!validateScan(result)) {{
-                                showError('Invalid scan result');
-                                return;
-                            }}
-                        }}
+		# Server-side WTForms errors
+		if has_errors:
+			html += (
+				f'<div class="invalid-feedback d-block" id="{field_id}_error" role="alert">'
+			)
+			for error in field.errors:
+				html += f'<span>{escape(str(error))}</span>'
+			html += '</div>'
 
-                        $('#{field.id}').val(result);
+		# Help text
+		if self.description:
+			html += (
+				f'<small class="form-text text-muted" id="{field_id}_help">'
+				f'{escape(self.description)}</small>'
+			)
 
-                        if ({str(self.auto_submit).lower()}) {{
-                            $('#{field.id}').closest('form').submit();
-                        }}
-                    }}
+		return Markup(html)
 
-                    // Validation handler
-                    function validateScan(result) {{
-                        // Implement format-specific validation
-                        return true;
-                    }}
+	def _include_dependencies(self) -> str:
+		"""Include required JavaScript and CSS dependencies."""
+		js_includes = "\n".join(
+			f'<script src="{escape(url)}"></script>' for url in self.JS_DEPENDENCIES
+		)
+		css_includes = "\n".join(
+			f'<link rel="stylesheet" href="{escape(url)}">' for url in self.CSS_DEPENDENCIES
+		)
+		return f"{css_includes}\n{js_includes}\n"
 
-                    // Error handler
-                    function showError(error) {{
-                        const alert = $('.barcode-scanner-widget .alert');
-                        alert.text(error).show();
-                        setTimeout(() => alert.fadeOut(), 5000);
-                    }}
+	def _render_camera_controls(self, field_id: str) -> str:
+		"""Render camera control buttons."""
+		controls = []
+		safe_id = escape(field_id)
 
-                    // State update handler
-                    function updateState(state) {{
-                        $('.loading-overlay')[state.loading ? 'show' : 'hide']();
+		if self.torch:
+			controls.append(
+				f'<button type="button" class="btn btn-light torch-toggle"'
+				f' aria-label="{escape(str(_("Toggle torch")))}"'
+				f' title="{escape(str(_("Toggle torch")))}">'
+				'<i class="fa fa-bolt" aria-hidden="true"></i>'
+				'</button>'
+			)
 
-                        if (state.torch) {{
-                            $('.torch-toggle').addClass('active');
-                        }}
+		if self.zoom:
+			controls.append(
+				'<div class="zoom-controls" role="group"'
+				f' aria-label="{escape(str(_("Zoom controls")))}">'
+				f'<button type="button" class="btn btn-light zoom-in"'
+				f' aria-label="{escape(str(_("Zoom in")))}">'
+				'<i class="fa fa-search-plus" aria-hidden="true"></i>'
+				'</button>'
+				f'<button type="button" class="btn btn-light zoom-out"'
+				f' aria-label="{escape(str(_("Zoom out")))}">'
+				'<i class="fa fa-search-minus" aria-hidden="true"></i>'
+				'</button>'
+				'</div>'
+			)
 
-                        if (state.camera === 'unavailable') {{
-                            $('.manual-input').show();
-                        }}
-                    }}
+		return "\n".join(controls)
 
-                    // Handle orientation changes
-                    if ({str(self.orientation).lower()}) {{
-                        window.addEventListener('orientationchange', function() {{
-                            scanner.handleOrientation();
-                        }});
-                    }}
+	def _render_history_table(self, field_id: str) -> str:
+		"""Render scan history table."""
+		safe_id = escape(field_id)
+		return (
+			f'<div class="scan-history mt-2" role="region"'
+			f' aria-label="{escape(str(_("Scan history")))}">'
+			f'<h5>{escape(str(_("Scan History")))}</h5>'
+			'<table class="table table-sm" role="grid"'
+			f' aria-label="{escape(str(_("Scan history table")))}">'
+			'<thead>'
+			'<tr>'
+			f'<th scope="col">{escape(str(_("Code")))}</th>'
+			f'<th scope="col">{escape(str(_("Type")))}</th>'
+			f'<th scope="col">{escape(str(_("Time")))}</th>'
+			f'<th scope="col">{escape(str(_("Actions")))}</th>'
+			'</tr>'
+			'</thead>'
+			'<tbody></tbody>'
+			'</table>'
+			'</div>'
+		)
 
-                    // Cleanup on unload
-                    window.addEventListener('unload', function() {{
-                        scanner.cleanup();
-                    }});
-                }});
-            </script>
-        """
-        )
+	def process_formdata(self, valuelist):
+		"""Process form data and validate."""
+		if valuelist:
+			try:
+				self.data = self._validate_scan_data(valuelist[0])
+			except ValueError as e:
+				raise ValueError(str(e))
+		else:
+			self.data = None
 
-    def _include_dependencies(self):
-        """Include required JavaScript and CSS dependencies"""
-        js_includes = "\n".join(
-            [f'<script src="{url}"></script>' for url in self.JS_DEPENDENCIES]
-        )
-        css_includes = "\n".join(
-            [f'<link rel="stylesheet" href="{url}">' for url in self.CSS_DEPENDENCIES]
-        )
-        return f"{css_includes}\n{js_includes}"
+	def _validate_scan_data(self, value: str) -> str:
+		"""Validate scanned barcode data."""
+		if not value:
+			raise ValueError("Empty scan result")
 
-    def _render_camera_controls(self, field_id):
-        """Render camera control buttons"""
-        controls = []
+		if self.validate:
+			format_validators = {
+				"ean13": lambda x: len(x) == 13 and x.isdigit(),
+				"ean8": lambda x: len(x) == 8 and x.isdigit(),
+				"code128": lambda x: len(x) >= 1,
+				"qr": lambda x: len(x) >= 1,
+			}
 
-        if self.torch:
-            controls.append(
-                f"""
-                <button type="button" class="btn btn-light torch-toggle"
-                        aria-label="Toggle torch">
-                    <i class="fa fa-bolt"></i>
-                </button>
-            """
-            )
+			valid = False
+			for fmt in self.formats:
+				validator = format_validators.get(fmt)
+				if validator and validator(value):
+					valid = True
+					break
+				elif fmt not in format_validators:
+					# Unknown format — accept by default
+					valid = True
+					break
 
-        if self.zoom:
-            controls.append(
-                f"""
-                <div class="zoom-controls">
-                    <button type="button" class="btn btn-light zoom-in"
-                            aria-label="Zoom in">
-                        <i class="fa fa-search-plus"></i>
-                    </button>
-                    <button type="button" class="btn btn-light zoom-out"
-                            aria-label="Zoom out">
-                        <i class="fa fa-search-minus"></i>
-                    </button>
-                </div>
-            """
-            )
+			if not valid:
+				raise ValueError("Invalid barcode format")
 
-        return "\n".join(controls)
+		return value
 
-    def _render_history_table(self, field_id):
-        """Render scan history table"""
-        return f"""
-            <div class="scan-history">
-                <h5>Scan History</h5>
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Code</th>
-                            <th>Type</th>
-                            <th>Time</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        """
-
-    def process_formdata(self, valuelist):
-        """Process form data and validate"""
-        if valuelist:
-            try:
-                self.data = self._validate_scan_data(valuelist[0])
-            except ValueError as e:
-                raise ValueError(str(e))
-        else:
-            self.data = None
-
-    def _validate_scan_data(self, value):
-        """Validate scanned barcode data"""
-        if not value:
-            raise ValueError("Empty scan result")
-
-        if self.validate:
-            # Format-specific validation
-            format_validators = {
-                "ean13": lambda x: len(x) == 13 and x.isdigit(),
-                "ean8": lambda x: len(x) == 8 and x.isdigit(),
-                "code128": lambda x: len(x) >= 1,
-                "qr": lambda x: len(x) >= 1,
-            }
-
-            # Try each supported format
-            valid = False
-            for fmt in self.formats:
-                if fmt in format_validators:
-                    valid = format_validators[fmt](value)
-                    if valid:
-                        break
-
-            if not valid:
-                raise ValueError("Invalid barcode format")
-
-        return value
-
-    def pre_validate(self, form):
-        """Validate before form processing"""
-        if self.data is not None:
-            try:
-                self.data = self._validate_scan_data(self.data)
-            except ValueError as e:
-                raise ValueError(str(e))
+	def pre_validate(self, form):
+		"""Validate before form processing."""
+		if self.data is not None:
+			try:
+				self.data = self._validate_scan_data(self.data)
+			except ValueError as e:
+				raise ValueError(str(e))

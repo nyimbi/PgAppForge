@@ -1,23 +1,14 @@
 """CodeEditorWidget — PgAppForge widget(s)."""
 
 from __future__ import annotations
+import html
 import json
-import re
-from dataclasses import dataclass
-from datetime import datetime, time
 from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
 from markupsafe import Markup
-from wtforms import Field
-from wtforms.fields import (
-    BooleanField, DateField, DateTimeField, DecimalField, FileField,
-    FloatField, IntegerField, PasswordField, SelectField,
-    SelectMultipleField, StringField, TextAreaField,
-)
 from wtforms.validators import ValidationError
-from wtforms.widgets import TextInput, html_params
 
 class CodeEditorWidget(BS3TextFieldWidget):
     """
@@ -66,6 +57,13 @@ class CodeEditorWidget(BS3TextFieldWidget):
         Initializes CodeEditorWidget with extensive configuration for code editing features.
         """
         super().__init__(**kwargs)
+        # Universal widget kwargs
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
+        # Editor-specific
         self.language = kwargs.get("language", "plaintext")
         self.theme = kwargs.get("theme", "vs-dark")
         self.auto_complete = kwargs.get("auto_complete", True)
@@ -124,59 +122,106 @@ class CodeEditorWidget(BS3TextFieldWidget):
         kwargs.setdefault("id", field.id)
         if field.flags.required:
             kwargs["required"] = True
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
+
+        has_errors = bool(field.errors)
+        wrapper_class = self.wrapper_class
+        if self.css_class:
+            wrapper_class = f"{wrapper_class} {self.css_class}"
+
+        # Accessibility: aria-label, aria-invalid, aria-describedby
+        aria_label = str(field.label.text) if field.label else field.name
+        describedby_parts = []
+        if self.description:
+            describedby_parts.append(f"{field.id}_help")
+        if has_errors:
+            describedby_parts.append(f"{field.id}_error")
+        aria_attrs = f' aria-label="{html.escape(aria_label)}"'
+        if describedby_parts:
+            aria_attrs += f' aria-describedby="{" ".join(describedby_parts)}"'
+        if has_errors:
+            aria_attrs += ' aria-invalid="true"'
 
         template = self.data_template
-        html = template % {
+        rendered_html = template % {
             "field_id": field.id,
             "hidden": self.html_params(name=field.name, **kwargs),
-            "wrapper_class": self.wrapper_class,
+            "wrapper_class": wrapper_class,
         }
 
-        return Markup(html + self._get_widget_scripts(field))
+        # Help text
+        help_html = ""
+        if self.description:
+            help_html = (
+                f'<small class="form-text text-muted" id="{field.id}_help">'
+                f'{html.escape(str(self.description))}</small>'
+            )
+
+        # Error feedback
+        error_html = ""
+        if has_errors:
+            error_items = "".join(
+                f"<span>{html.escape(str(e))}</span>" for e in field.errors
+            )
+            error_html = (
+                f'<div class="invalid-feedback d-block" id="{field.id}_error">'
+                f'{error_items}</div>'
+            )
+
+        return Markup(rendered_html + help_html + error_html + self._get_widget_scripts(field))
 
     def _get_widget_scripts(self, field):
         """Generates and returns the JavaScript code block for the CodeEditorWidget, including Monaco Editor initialization."""
-        return """
+        # Use json.dumps() for all Python values injected into JS to prevent XSS
+        field_id_js = json.dumps(field.id)
+        language_js = json.dumps(self.language)
+        theme_js = json.dumps(self.theme)
+        word_wrap_js = json.dumps(self.word_wrap)
+        font_family_js = json.dumps(self.font_family)
+        snippets_js = '"snippets"' if self.snippets else "null"
+        return f"""
         <style>
-            /* Styles remain same as before, consider moving to a separate CSS file */
-            .code-editor-wrapper { border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; }
-            .editor-container { height: 500px; width: 100%; }
-            .editor-statusbar { padding: 2px 8px; background: #f8f9fa; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
+            .code-editor-wrapper {{ border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; }}
+            .editor-container {{ height: 500px; width: 100%; }}
+            .editor-statusbar {{ padding: 2px 8px; background: #f8f9fa; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }}
         </style>
         <script>
             (function() {{
                 require.config({{ paths: {{ 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' }}}});
 
-
                 require(['vs/editor/editor.main'], function() {{
                     $(document).ready(function() {{
-                        var container = document.getElementById('{field_id}-container');
+                        var fieldId = {field_id_js};
+                        var container = document.getElementById(fieldId + '-container');
+                        if (!container) return;
                         var statusBar = container.parentElement.querySelector('.editor-statusbar');
                         var editor;
-
 
                         // Editor configuration
                         var config = {{
                             value: {_js_json(field.data or '')},
-                            language: '{language}',
-                            theme: '{theme}',
+                            language: {language_js},
+                            theme: {theme_js},
                             automaticLayout: true,
                             lineNumbers: {str(self.line_numbers).lower()},
                             minimap: {{ enabled: {str(self.minimap).lower()} }},
                             folding: {str(self.folding).lower()},
-                            wordWrap: '{word_wrap}',
-                            tabSize: {tab_size},
+                            wordWrap: {word_wrap_js},
+                            tabSize: {self.tab_size},
                             insertSpaces: {str(self.insert_spaces).lower()},
                             quickSuggestions: {str(self.quick_suggestions).lower()},
                             hover: {{ enabled: {str(self.hover).lower()} }},
-                            fontSize: {font_size},
-                            fontFamily: '{font_family}',
-                            rulers: {_js_json(self.rulers)},
+                            fontSize: {self.font_size},
+                            fontFamily: {font_family_js},
+                            rulers: {json.dumps(self.rulers)},
                             scrollBeyondLastLine: {str(self.scroll_beyond_last_line).lower()},
                             formatOnPaste: true,
                             formatOnType: true,
                             suggestOnTriggerCharacters: true,
-                            snippetSuggestions: '{snippets}',
+                            snippetSuggestions: {snippets_js},
                             renderWhitespace: 'selection',
                             renderControlCharacters: false,
                             renderLineHighlight: 'gutter',
@@ -198,70 +243,69 @@ class CodeEditorWidget(BS3TextFieldWidget):
                             find: {{ seedSearchStringFromSelection: true }}
                         }};
 
-
                         editor = monaco.editor.create(container, config);
 
-
                         // Register custom keyboard shortcuts
-                        var keyboardShortcuts = {keyboard_shortcuts};
+                        var keyboardShortcuts = {json.dumps(self.keyboard_shortcuts)};
                         Object.keys(keyboardShortcuts).forEach(function(key) {{
                             editor.addCommand(monaco.KeyMod[key], keyboardShortcuts[key]);
                         }});
 
-
-                        // Update status bar function (remains same)
+                        // Update status bar
                         function updateStatusBar() {{
                             var position = editor.getPosition();
                             var model = editor.getModel();
-                            if (position && model) {{
+                            if (position && model && statusBar) {{
                                 var lines = model.getLineCount();
                                 var chars = model.getValueLength();
-                                statusBar.textContent = `Ln ${position.lineNumber}, Col ${position.column} | ${lines} lines, ${chars} characters`;
+                                statusBar.textContent = 'Ln ' + position.lineNumber + ', Col ' + position.column + ' | ' + lines + ' lines, ' + chars + ' characters';
                             }}
                         }}
 
-
                         editor.onDidChangeModelContent(updateStatusBar);
                         editor.onDidChangeCursorPosition(updateStatusBar);
-                        updateStatusBar(); // Initial call to set status bar
+                        updateStatusBar();
 
+                        // Value update and form submission
+                        var inputEl = document.getElementById(fieldId);
+                        var form = container.closest('form');
+                        if (form) {{
+                            form.addEventListener('submit', function(e) {{
+                                var value = editor.getValue();
+                                if (value.length > {self.max_file_size}) {{
+                                    e.preventDefault();
+                                    alert('Code content exceeds maximum size limit.');
+                                    return false;
+                                }}
+                                if (inputEl) inputEl.value = value;
+                                var stateEl = document.getElementById(fieldId + '-state');
+                                if (stateEl) {{
+                                    stateEl.value = JSON.stringify({{
+                                        scrollTop: editor.getScrollTop(),
+                                        scrollLeft: editor.getScrollLeft(),
+                                        viewState: editor.saveViewState()
+                                    }});
+                                }}
+                            }});
+                        }}
 
-                        // Value update and form submission handling (remains mostly same)
-                        var $input = $('#{field_id}');
-                        container.closest('form').addEventListener('submit', function(e) {{
-                            var value = editor.getValue();
-                            if (value.length > {max_file_size}) {{
-                                e.preventDefault();
-                                alert('Code content exceeds maximum size limit.');
-                                return false;
-                            }}
-                            $input.val(value);
-                            $('#{field_id}-state').val(JSON.stringify({{
-                                scrollTop: editor.getScrollTop(),
-                                scrollLeft: editor.getScrollLeft(),
-                                viewState: editor.saveViewState()
-                            }}));
-                        }});
-
-
-                        // Error markers (remains same, consider enhancing error display)
+                        // Error markers
                         var errorWidget = null;
                         monaco.editor.onDidChangeMarkers(function() {{
                             var markers = monaco.editor.getModelMarkers({{ resource: editor.getModel().uri }});
-                            var errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
+                            var errors = markers.filter(function(m) {{ return m.severity === monaco.MarkerSeverity.Error; }});
                             if (errors.length) {{
                                 if (!errorWidget) {{
                                     errorWidget = document.createElement('div');
                                     errorWidget.className = 'alert alert-danger mt-2';
                                     container.parentElement.appendChild(errorWidget);
                                 }}
-                                errorWidget.textContent = `${{errors.length}} error(s) found`;
+                                errorWidget.textContent = errors.length + ' error(s) found';
                             }} else if (errorWidget) {{
                                 errorWidget.remove();
                                 errorWidget = null;
                             }}
                         }});
-
 
                         // Load saved state if available
                         var editorState = {_js_json(getattr(field, 'state', None))};
@@ -270,34 +314,16 @@ class CodeEditorWidget(BS3TextFieldWidget):
                             editor.setScrollTop(editorState.scrollTop);
                             editor.setScrollLeft(editorState.scrollLeft);
                         }}
+
+                        // Invalidate layout on Bootstrap tab/modal show
+                        $(document).on('shown.bs.tab shown.bs.modal', function() {{
+                            if (editor) editor.layout();
+                        }});
                     }});
                 }});
             }})();
         </script>
-        """.format(
-            field_id=field.id,
-            language=self.language,
-            theme=self.theme,
-            line_numbers=str(self.line_numbers).lower(),
-            minimap=str(self.minimap).lower(),
-            folding=str(self.folding).lower(),
-            word_wrap=self.word_wrap,
-            tab_size=self.tab_size,
-            insert_spaces=str(self.insert_spaces).lower(),
-            quick_suggestions=str(self.quick_suggestions).lower(),
-            hover=str(self.hover).lower(),
-            font_size=self.font_size,
-            font_family=self.font_family,
-            rulers=json.dumps(self.rulers),
-            scroll_beyond_last_line=str(self.scroll_beyond_last_line).lower(),
-            snippets="'" + "snippets" + "'"
-            if self.snippets
-            else "null",  # Correct snippet value
-            format_on_save=str(self.format_on_save).lower(),
-            keyboard_shortcuts=json.dumps(self.keyboard_shortcuts),
-            max_file_size=self.max_file_size,
-            initial_value=json.dumps(field.data or ""),
-        )
+        """
 
     def process_formdata(self, valuelist):
         """Process form data to database format"""  # Remains same

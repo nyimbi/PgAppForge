@@ -5,6 +5,8 @@ A comprehensive Database Markup Language (DBML) editor widget with syntax highli
 live schema visualization, validation, and export capabilities.
 """
 
+import html as _html
+import json
 from markupsafe import Markup
 from wtforms.widgets import TextArea
 from flask_babel import gettext
@@ -68,6 +70,12 @@ class DbmlEditorWidget(TextArea):
             enable_schema_stats: Show schema statistics
         """
         super().__init__(**kwargs)
+        # Universal widget kwargs
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
+        self.placeholder = kwargs.get("placeholder", "")
         self.enable_live_preview = enable_live_preview
         self.enable_syntax_highlighting = enable_syntax_highlighting
         self.enable_auto_complete = enable_auto_complete
@@ -243,17 +251,37 @@ Ref: order_items.product_id > products.id
     def __call__(self, field, **kwargs):
         """Render the DBML editor widget."""
         editor_id = kwargs.get('id', field.id or field.name)
+        has_errors = bool(field.errors)
 
         # Build CSS
         css = self._generate_css(editor_id)
 
-        # Build HTML structure
-        html = self._generate_html(field, editor_id, **kwargs)
+        # Build HTML structure (passes field for correct name/value handling)
+        html_content = self._generate_html(field, editor_id, **kwargs)
 
         # Build JavaScript
         js = self._generate_javascript(editor_id, field.data or self.default_content)
 
-        return Markup(f"{css}\n{html}\n{js}")
+        # Help text
+        help_html = ""
+        if self.description:
+            help_html = (
+                f'<small class="form-text text-muted" id="{field.id}_help">'
+                f'{_html.escape(str(self.description))}</small>'
+            )
+
+        # Error feedback (server-side WTForms errors)
+        error_html = ""
+        if has_errors:
+            error_items = "".join(
+                f"<span>{_html.escape(str(e))}</span>" for e in field.errors
+            )
+            error_html = (
+                f'<div class="invalid-feedback d-block" id="{field.id}_error" role="alert">'
+                f'{error_items}</div>'
+            )
+
+        return Markup(f"{css}\n{html_content}\n{help_html}\n{error_html}\n{js}")
 
     def _generate_css(self, editor_id):
         """Generate CSS for the DBML editor."""
@@ -478,23 +506,92 @@ Ref: order_items.product_id > products.id
 
     def _generate_html(self, field, editor_id, **kwargs):
         """Generate HTML structure for the DBML editor."""
+        has_errors = bool(field.errors)
+        aria_label = str(field.label.text) if field.label else field.name
+        describedby_parts = []
+        if self.description:
+            describedby_parts.append(f"{field.id}_help")
+        if has_errors:
+            describedby_parts.append(f"{field.id}_error")
+        describedby_attr = (
+            f' aria-describedby="{_html.escape(" ".join(describedby_parts))}"'
+            if describedby_parts else ""
+        )
+        aria_invalid_attr = ' aria-invalid="true"' if has_errors else ""
+
+        # Safe field values
+        field_name = _html.escape(field.name)
+        field_value = _html.escape(field.data or "")
+
+        # Build preview panel HTML
+        if self.enable_live_preview:
+            tabs = ""
+            if self.enable_table_diagram:
+                tabs += f'<button class="tab active" data-tab="diagram">{gettext("Diagram")}</button>'
+            if self.enable_validation:
+                tabs += f'<button class="tab" data-tab="validation">{gettext("Validation")}</button>'
+            if self.enable_schema_stats:
+                tabs += f'<button class="tab" data-tab="stats">{gettext("Statistics")}</button>'
+            tabs += f'<button class="tab" data-tab="sql">{gettext("SQL Preview")}</button>'
+
+            tab_contents = ""
+            if self.enable_table_diagram:
+                tab_contents += f'<div id="{editor_id}-diagram-view" class="tab-content active"><div id="{editor_id}-diagram"></div></div>'
+            if self.enable_validation:
+                tab_contents += f'<div id="{editor_id}-validation-view" class="tab-content"><div id="{editor_id}-validation"></div></div>'
+            if self.enable_schema_stats:
+                tab_contents += f'<div id="{editor_id}-stats-view" class="tab-content"><div id="{editor_id}-stats"></div></div>'
+            tab_contents += f'<div id="{editor_id}-sql-view" class="tab-content"><pre id="{editor_id}-sql-preview" style="font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 12px; border-radius: 4px; overflow: auto;"></pre></div>'
+
+            preview_panel = (
+                f'<div id="{editor_id}-preview-panel" class="dbml-preview-panel">'
+                f'<div id="{editor_id}-preview-tabs" class="dbml-preview-tabs">{tabs}</div>'
+                f'<div id="{editor_id}-preview-content" class="dbml-preview-content">{tab_contents}</div>'
+                f'</div>'
+            )
+        else:
+            preview_panel = ""
+
+        validate_btn = (
+            f'<button type="button" class="btn" id="{editor_id}-validate-btn" title="{gettext("Validate Schema")}">'
+            f'<i class="fas fa-check"></i> {gettext("Validate")}</button>'
+            if self.enable_validation else ""
+        )
+        export_btn = (
+            f'<button type="button" class="btn" id="{editor_id}-export-btn" title="{gettext("Export Schema")}">'
+            f'<i class="fas fa-download"></i> {gettext("Export")}</button>'
+            if self.enable_export else ""
+        )
+        preview_toggle_btn = (
+            f'<button type="button" class="btn active" id="{editor_id}-preview-toggle" title="{gettext("Toggle Preview")}">'
+            f'<i class="fas fa-eye"></i> {gettext("Preview")}</button>'
+            if self.enable_live_preview else ""
+        )
+        help_btn = (
+            f'<button type="button" class="btn" id="{editor_id}-help-btn" title="{gettext("Show Help")}">'
+            f'<i class="fas fa-question-circle"></i> {gettext("Help")}</button>'
+            if self.enable_help else ""
+        )
+
         return f'''
-        <div id="{editor_id}-container" class="dbml-editor-container">
+        <div id="{editor_id}-container" class="dbml-editor-container"
+             role="application"
+             aria-label="{_html.escape(aria_label)}"
+             {describedby_attr}
+             {aria_invalid_attr}>
             <!-- Toolbar -->
             <div id="{editor_id}-toolbar" class="dbml-toolbar">
                 <h5><i class="fas fa-database"></i> {gettext("DBML Schema Editor")}</h5>
-
                 <div class="btn-group">
-                    {'<button type="button" class="btn" id="' + editor_id + '-validate-btn" title="' + gettext("Validate Schema") + '"><i class="fas fa-check"></i> ' + gettext("Validate") + '</button>' if self.enable_validation else ''}
-                    {'<button type="button" class="btn" id="' + editor_id + '-export-btn" title="' + gettext("Export Schema") + '"><i class="fas fa-download"></i> ' + gettext("Export") + '</button>' if self.enable_export else ''}
+                    {validate_btn}
+                    {export_btn}
                     <button type="button" class="btn" id="{editor_id}-format-btn" title="{gettext("Format Code")}">
                         <i class="fas fa-code"></i> {gettext("Format")}
                     </button>
                 </div>
-
                 <div class="btn-group">
-                    {'<button type="button" class="btn active" id="' + editor_id + '-preview-toggle" title="' + gettext("Toggle Preview") + '"><i class="fas fa-eye"></i> ' + gettext("Preview") + '</button>' if self.enable_live_preview else ''}
-                    {'<button type="button" class="btn" id="' + editor_id + '-help-btn" title="' + gettext("Show Help") + '"><i class="fas fa-question-circle"></i> ' + gettext("Help") + '</button>' if self.enable_help else ''}
+                    {preview_toggle_btn}
+                    {help_btn}
                 </div>
             </div>
 
@@ -502,8 +599,10 @@ Ref: order_items.product_id > products.id
             <div id="{editor_id}-main" class="dbml-main">
                 <!-- Editor Panel -->
                 <div id="{editor_id}-editor-panel" class="dbml-editor-panel">
-                    <div id="{editor_id}-editor" class="dbml-editor"></div>
-                    <div id="{editor_id}-status" class="dbml-status">
+                    <div id="{editor_id}-editor" class="dbml-editor"
+                         role="textbox" aria-multiline="true"
+                         aria-label="{_html.escape(aria_label)}"></div>
+                    <div id="{editor_id}-status" class="dbml-status" role="status" aria-live="polite">
                         <span id="{editor_id}-cursor-info">Line 1, Column 1</span>
                         <span id="{editor_id}-selection-info"></span>
                         <span id="{editor_id}-file-info">DBML</span>
@@ -511,21 +610,22 @@ Ref: order_items.product_id > products.id
                 </div>
 
                 <!-- Preview Panel -->
-                {('<div id="' + editor_id + '-preview-panel" class="dbml-preview-panel"><div id="' + editor_id + '-preview-tabs" class="dbml-preview-tabs">' + ('<button class="tab active" data-tab="diagram">' + gettext("Diagram") + '</button>' if self.enable_table_diagram else '') + ('<button class="tab" data-tab="validation">' + gettext("Validation") + '</button>' if self.enable_validation else '') + ('<button class="tab" data-tab="stats">' + gettext("Statistics") + '</button>' if self.enable_schema_stats else '') + '<button class="tab" data-tab="sql">' + gettext("SQL Preview") + '</button></div><div id="' + editor_id + '-preview-content" class="dbml-preview-content">' + ('<div id="' + editor_id + '-diagram-view" class="tab-content active"><div id="' + editor_id + '-diagram"></div></div>' if self.enable_table_diagram else '') + ('<div id="' + editor_id + '-validation-view" class="tab-content"><div id="' + editor_id + '-validation"></div></div>' if self.enable_validation else '') + ('<div id="' + editor_id + '-stats-view" class="tab-content"><div id="' + editor_id + '-stats"></div></div>' if self.enable_schema_stats else '') + '<div id="' + editor_id + '-sql-view" class="tab-content"><pre id="' + editor_id + '-sql-preview" style="font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 12px; border-radius: 4px; overflow: auto;"></pre></div></div></div>') if self.enable_live_preview else ''}
+                {preview_panel}
             </div>
 
             <!-- Hidden input field -->
-            <input type="hidden" name="{{{{field.name}}}}" id="{editor_id}" value="{{{{field.data or ''}}}}" />
+            <input type="hidden" name="{field_name}" id="{editor_id}" value="{field_value}" />
         </div>
         '''
 
     def _escape_content_for_js(self, content):
-        """Escape content for safe inclusion in JavaScript template literal."""
-        return content.replace('`', '\\`').replace('\\', '\\\\')
+        """Escape content for safe inclusion in JavaScript — delegates to json.dumps."""
+        return json.dumps(content)
 
     def _generate_javascript(self, editor_id, initial_content):
         """Generate JavaScript for the DBML editor."""
-        escaped_content = self._escape_content_for_js(initial_content)
+        # json.dumps produces a properly quoted+escaped JS string literal
+        initial_content_js = json.dumps(initial_content)
         return f'''
         <script>
         (function() {{
@@ -624,7 +724,7 @@ Ref: order_items.product_id > products.id
 
                 // Initialize editor
                 const editor = monaco.editor.create(document.getElementById('{editor_id}-editor'), {{
-                    value: `{escaped_content}`,
+                    value: {initial_content_js},
                     language: 'dbml',
                     theme: '{self.theme}',
                     fontSize: {self.font_size},

@@ -5,6 +5,8 @@ Provides a comprehensive Mermaid diagram editor with real-time preview,
 syntax highlighting, diagram validation, and export capabilities.
 """
 
+import html as _html
+import json
 from markupsafe import Markup
 from wtforms.widgets import TextArea
 from flask_babel import gettext as _
@@ -40,6 +42,12 @@ class MermaidEditorWidget(TextArea):
             enable_pan: Enable pan functionality in preview
         """
         super().__init__(**kwargs)
+        # Universal widget kwargs
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
+        self.placeholder = kwargs.get("placeholder", "")
         self.default_diagram_type = default_diagram_type
         self.enable_live_preview = enable_live_preview
         self.enable_syntax_highlighting = enable_syntax_highlighting
@@ -168,6 +176,10 @@ class MermaidEditorWidget(TextArea):
         kwargs.setdefault('name', field.name)
 
         editor_id = f"mermaid_editor_{field.id}"
+        has_errors = bool(field.errors)
+
+        # Initial content: prefer field.data, fall back to default
+        initial_content = field.data or self.default_content
 
         # Generate CSS styles
         css_styles = self._generate_css(editor_id)
@@ -181,12 +193,79 @@ class MermaidEditorWidget(TextArea):
         # Generate modals
         modals_html = self._generate_modals(editor_id)
 
-        # Generate JavaScript
-        javascript = self._generate_javascript(editor_id)
+        # Generate JavaScript (pass initial_content safely)
+        javascript = self._generate_javascript(editor_id, initial_content)
+
+        # Help text
+        help_html = ""
+        if self.description:
+            help_html = (
+                f'<small class="form-text text-muted" id="{field.id}_help">'
+                f'{_html.escape(str(self.description))}</small>'
+            )
+
+        # Error feedback (server-side WTForms errors)
+        error_html = ""
+        if has_errors:
+            error_items = "".join(
+                f"<span>{_html.escape(str(e))}</span>" for e in field.errors
+            )
+            error_html = (
+                f'<div class="invalid-feedback d-block" id="{field.id}_error" role="alert">'
+                f'{error_items}</div>'
+            )
+
+        # Accessibility for status bar — live region
+        aria_label = str(field.label.text) if field.label else field.name
+        describedby_parts = []
+        if self.description:
+            describedby_parts.append(f"{field.id}_help")
+        if has_errors:
+            describedby_parts.append(f"{field.id}_error")
+        describedby_attr = (
+            f' aria-describedby="{_html.escape(" ".join(describedby_parts))}"'
+            if describedby_parts else ""
+        )
+        aria_invalid_attr = ' aria-invalid="true"' if has_errors else ""
+
+        # Hidden input value must be HTML-escaped
+        hidden_value = _html.escape(initial_content)
+
+        # Status bar aria-live
+        status_bar = f"""
+            <div class="mermaid-editor-status" role="status" aria-live="polite" aria-atomic="true">
+                <div class="status-info">
+                    <span class="diagram-type" id="{editor_id}_current_type">
+                        <i class="{_html.escape(self.diagram_types[self.default_diagram_type]['icon'])}"></i>
+                        {_html.escape(str(self.diagram_types[self.default_diagram_type]['name']))}
+                    </span>
+                    <span class="line-count" id="{editor_id}_line_count">
+                        <i class="fas fa-list-ol"></i> 1 {_html.escape(_('lines'))}
+                    </span>
+                    <span class="validation-status" id="{editor_id}_validation">
+                        <i class="fas fa-check-circle"></i> {_html.escape(_('Valid'))}
+                    </span>
+                    <span class="save-status" id="{editor_id}_save_status">
+                        <i class="fas fa-save"></i> {_html.escape(_('Saved'))}
+                    </span>
+                </div>
+                <div class="status-actions">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleView('{_html.escape(editor_id)}')">
+                        <i class="fas fa-columns"></i> {_html.escape(_('Toggle View'))}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="validateDiagram('{_html.escape(editor_id)}')">
+                        <i class="fas fa-check"></i> {_html.escape(_('Validate'))}
+                    </button>
+                </div>
+            </div>"""
 
         return Markup(f"""
         {css_styles}
         <div id="{editor_id}" class="mermaid-editor-container"
+             role="application"
+             aria-label="{_html.escape(aria_label)}"
+             {describedby_attr}
+             {aria_invalid_attr}
              data-auto-save="{str(self.auto_save).lower()}"
              data-save-interval="{self.save_interval}"
              data-split-view="{str(self.split_view).lower()}">
@@ -198,37 +277,15 @@ class MermaidEditorWidget(TextArea):
             {editor_area_html}
 
             <!-- Status Bar -->
-            <div class="mermaid-editor-status">
-                <div class="status-info">
-                    <span class="diagram-type" id="{editor_id}_current_type">
-                        <i class="{self.diagram_types[self.default_diagram_type]['icon']}"></i>
-                        {self.diagram_types[self.default_diagram_type]['name']}
-                    </span>
-                    <span class="line-count" id="{editor_id}_line_count">
-                        <i class="fas fa-list-ol"></i> 1 {_('lines')}
-                    </span>
-                    <span class="validation-status" id="{editor_id}_validation">
-                        <i class="fas fa-check-circle"></i> {_('Valid')}
-                    </span>
-                    <span class="save-status" id="{editor_id}_save_status">
-                        <i class="fas fa-save"></i> {_('Saved')}
-                    </span>
-                </div>
-                <div class="status-actions">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleView('{editor_id}')">
-                        <i class="fas fa-columns"></i> {_('Toggle View')}
-                    </button>
-                    <button class="btn btn-sm btn-outline-info" onclick="validateDiagram('{editor_id}')">
-                        <i class="fas fa-check"></i> {_('Validate')}
-                    </button>
-                </div>
-            </div>
+            {status_bar}
 
             <!-- Hidden input for form data -->
-            <input type="hidden" id="{kwargs['id']}" name="{kwargs['name']}"
-                   value="{self.default_content}" data-mermaid-content="">
+            <input type="hidden" id="{_html.escape(kwargs['id'])}" name="{_html.escape(kwargs['name'])}"
+                   value="{hidden_value}" data-mermaid-content="">
         </div>
 
+        {help_html}
+        {error_html}
         {modals_html}
         {javascript}
         """)
@@ -956,11 +1013,14 @@ class MermaidEditorWidget(TextArea):
         </style>
         """
 
-    def _generate_javascript(self, editor_id):
+    def _generate_javascript(self, editor_id, initial_content=None):
         """Generate JavaScript for Mermaid editor functionality."""
-        import json
+        if initial_content is None:
+            initial_content = self.default_content
         diagram_types_json = json.dumps(self.diagram_types)
         themes_json = json.dumps(list(self.themes.keys()))
+        # Use json.dumps to safely inject the initial content string into JS
+        initial_content_js = json.dumps(initial_content)
 
         return f"""
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
@@ -972,7 +1032,7 @@ class MermaidEditorWidget(TextArea):
             // Mermaid editor state
             let mermaidEditorState = {{
                 editor: null,
-                currentContent: `{self.default_content}`,
+                currentContent: {initial_content_js},
                 currentType: '{self.default_diagram_type}',
                 currentTheme: 'default',
                 livePreview: {str(self.enable_live_preview).lower()},

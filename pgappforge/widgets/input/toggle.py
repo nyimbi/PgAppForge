@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -99,6 +99,11 @@ class CheckBoxWidget(BS3TextFieldWidget):
         self.help_tooltip = kwargs.get("help_tooltip", "")
         self.group_name = kwargs.get("group_name")
         self.debug = kwargs.get("debug", False)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
 
     def _init_validation(self, kwargs):
         """Initialize validation settings"""
@@ -140,12 +145,16 @@ class CheckBoxWidget(BS3TextFieldWidget):
     def _set_aria_attributes(self, field, kwargs):
         """Set ARIA attributes for accessibility"""
         kwargs["role"] = "checkbox"
-        kwargs["aria-label"] = field.label.text
+        kwargs["aria-label"] = field.label.text if field.label else ""
         kwargs["aria-checked"] = (
             "mixed"
             if self.indeterminate
-            else str(field.checked or self.default_checked).lower()
+            else str(getattr(field, "checked", False) or self.default_checked).lower()
         )
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.description:
+            kwargs["aria-describedby"] = f"{field.id}_help"
         return kwargs
 
     def _set_state_attributes(self, field, kwargs):
@@ -186,8 +195,8 @@ class CheckBoxWidget(BS3TextFieldWidget):
         """Render the HTML template"""
         help_attrs = (
             {
-                "data-toggle": "tooltip",
-                "data-placement": "right",
+                "data-bs-toggle": "tooltip",
+                "data-bs-placement": "right",
                 "title": self.help_tooltip,
             }
             if self.help_tooltip
@@ -195,12 +204,21 @@ class CheckBoxWidget(BS3TextFieldWidget):
         )
 
         help_text = (
-            f'<div class="help-text text-muted" {self.html_params(**help_attrs)}>{self.help_text}</div>'
+            f'<div class="help-text text-muted" {self.html_params(**help_attrs)}>{escape(self.help_text)}</div>'
             if self.help_text
             else ""
         )
+        if self.description:
+            help_text += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
         error_text = (
-            f'<div class="invalid-feedback" role="alert">{field.errors[0]}</div>'
+            (
+                f'<div class="invalid-feedback" id="{escape(field.id)}_error" role="alert">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
             if field.errors
             else ""
         )
@@ -208,7 +226,7 @@ class CheckBoxWidget(BS3TextFieldWidget):
         return self.template % {
             "checkbox": self.html_params(name=field.name, **kwargs),
             "field_id": field.id,
-            "label": field.label.text,
+            "label": escape(field.label.text) if field.label else "",
             "wrapper_class": self._get_wrapper_classes(field),
             "label_class": self._get_label_classes(field),
             "help_text": help_text,
@@ -710,7 +728,10 @@ class SwitchWidget(BS3TextFieldWidget):
     ):
         """Initialize switch widget with extended settings including label position and confirmation"""
         super().__init__(**kwargs)
-        self.size = kwargs.get("size", "md")  # Size variations
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.size = kwargs.get("size", "md")
         self.color = kwargs.get("color", "primary")
         self.help_text = kwargs.get("help_text", "")
         self.loading_text = kwargs.get("loading_text", "Loading...")
@@ -722,9 +743,9 @@ class SwitchWidget(BS3TextFieldWidget):
         self.readonly = kwargs.get("readonly", False)
         self.required = kwargs.get("required", False)
         self.default = kwargs.get("default", False)
-        self.label_position = label_position  # 'left' or 'right', default right
-        self.confirmation = confirmation  # Enable confirmation dialog
-        self.confirmation_text = confirmation_text  # Text for confirmation dialog
+        self.label_position = label_position
+        self.confirmation = confirmation
+        self.confirmation_text = confirmation_text
 
     def __call__(self, field, **kwargs):
         """Render the switch widget with enhanced styling, label positioning, and confirmation dialog"""
@@ -733,7 +754,11 @@ class SwitchWidget(BS3TextFieldWidget):
         kwargs.setdefault(
             "class", f"custom-control-input switch-{self.size} switch-{self.color}"
         )
-        kwargs.setdefault("aria-label", field.label.text)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
 
         if field.flags.required or self.required:
             kwargs["required"] = "required"
@@ -747,18 +772,27 @@ class SwitchWidget(BS3TextFieldWidget):
             kwargs["readonly"] = "readonly"
             kwargs["onclick"] = "return false"
 
-        if field.checked or (
-            not field.checked and self.default
-        ):  # Handle checked state
+        if getattr(field, "checked", False) or (
+            not getattr(field, "checked", False) and self.default
+        ):
             kwargs["checked"] = "checked"
 
         help_text = (
-            f'<div class="help-text text-muted small">{self.help_text}</div>'
+            f'<div class="help-text text-muted small">{escape(self.help_text)}</div>'
             if self.help_text
             else ""
-        )  # Help and error text
+        )
+        if self.description:
+            help_text += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
         error_text = (
-            f'<div class="invalid-feedback">{field.errors[0]}</div>'
+            (
+                f'<div class="invalid-feedback" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
             if field.errors
             else ""
         )
@@ -938,30 +972,37 @@ class ToggleButtonWidget(BS3TextFieldWidget):
         Initialize toggle button widget with extended settings, including toggle groups, confirmation, and label positioning.
         """
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
         self.style = kwargs.get("style", "primary")
+        self.color = kwargs.get("color", self.style)
         self.size = kwargs.get("size", "md")
         self.icons = {**self.default_icons, **kwargs.get("icons", {})}
         self.disabled = kwargs.get("disabled", False)
         self.readonly = kwargs.get("readonly", False)
         self.loading = kwargs.get("loading", False)
+        self.loading_text = kwargs.get("loading_text", "Loading...")
+        self.help_text = kwargs.get("help_text", "")
         self.animate = kwargs.get("animate", True)
         self.wrapper_class = kwargs.get("wrapper_class", "")
-        self.active_text = kwargs.get(
-            "active_text", "On"
-        )  # More user-friendly defaults
-        self.inactive_text = kwargs.get(
-            "inactive_text", "Off"
-        )  # More user-friendly defaults
+        self.active_text = kwargs.get("active_text", "On")
+        self.inactive_text = kwargs.get("inactive_text", "Off")
         self.default = kwargs.get("default", False)
         self.label_position = label_position
         self.confirmation = confirmation
         self.confirmation_text = confirmation_text
-        self.toggle_group = toggle_group  # Enable toggle button group behavior
+        self.toggle_group = toggle_group
 
     def __call__(self, field, **kwargs):
         """Render the toggle button widget, incorporating toggle groups and enhanced event handling."""
         kwargs.setdefault("id", field.id)
         kwargs.setdefault("type", "checkbox")
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
 
         if field.flags.required:
             kwargs["required"] = "required"
@@ -970,19 +1011,28 @@ class ToggleButtonWidget(BS3TextFieldWidget):
         if field.flags.readonly or self.readonly:
             kwargs["readonly"] = "readonly"
             kwargs["onclick"] = "return false"
-        if field.checked or (not field.checked and self.default):
+        if getattr(field, "checked", False) or (not getattr(field, "checked", False) and self.default):
             kwargs["checked"] = "checked"
 
         error_text = (
-            f'<div class="invalid-feedback">{field.errors[0]}</div>'
+            (
+                f'<div class="invalid-feedback" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
             if field.errors
             else ""
         )
         help_text = (
-            f'<div class="help-text text-muted small">{self.help_text}</div>'
+            f'<div class="help-text text-muted small">{escape(self.help_text)}</div>'
             if self.help_text
             else ""
         )
+        if self.description:
+            help_text += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         btn_classes = [
             "btn",

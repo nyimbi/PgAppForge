@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -80,6 +80,11 @@ class PasswordStrengthWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize password widget with extensive configuration"""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.min_length = kwargs.get("min_length", 8)
         self.max_length = kwargs.get("max_length", 100)
         self.require_special = kwargs.get("require_special", True)
@@ -130,14 +135,23 @@ class PasswordStrengthWidget(BS3TextFieldWidget):
         """Render the password strength widget"""
         kwargs.setdefault("id", field.id)
         kwargs.setdefault("type", "password")
-        kwargs.setdefault("class", "form-control")
+        kwargs.setdefault("class", "form-control" + (" is-invalid" if field.errors else ""))
         kwargs.setdefault("autocomplete", "new-password")
         kwargs.setdefault("minlength", self.min_length)
         kwargs.setdefault("maxlength", self.max_length)
         kwargs.setdefault(
             "aria-describedby",
             f"{field.id}-strength {field.id}-suggestions {field.id}-breach",
-        )  # ARIA description
+        )
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.placeholder:
+            kwargs.setdefault("placeholder", self.placeholder)
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if field.flags.required:
             kwargs["required"] = True
@@ -147,6 +161,22 @@ class PasswordStrengthWidget(BS3TextFieldWidget):
             "field_id": field.id,
             "wrapper_class": self.wrapper_class,
         }
+
+        # Append server-side error feedback
+        if field.errors:
+            error_html = (
+                f'<div class="invalid-feedback" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+            html += error_html
+
+        # Append help text
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html

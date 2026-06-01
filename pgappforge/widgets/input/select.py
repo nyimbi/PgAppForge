@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -68,7 +68,6 @@ class TagInputWidget(BS3TextFieldWidget):
         self.tag_types = kwargs.get("tag_types", {})
         self.validate_pattern = kwargs.get("validate_pattern", None)
         self.delimiter = kwargs.get("delimiter", ",")
-        self.placeholder = kwargs.get("placeholder", "Add tags...")
         self.free_input = kwargs.get(
             "free_input", True
         )  # Allow free input if no suggestions match
@@ -78,6 +77,16 @@ class TagInputWidget(BS3TextFieldWidget):
         kwargs.setdefault("type", "text")
         kwargs.setdefault("data-role", "tagsinput")
         kwargs.setdefault("placeholder", self.placeholder)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+            kwargs["aria-describedby"] = f"{field.id}_error"
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if field.data:
             if isinstance(field.data, list):
@@ -87,6 +96,18 @@ class TagInputWidget(BS3TextFieldWidget):
 
         template = self.data_template if field.data else self.empty_template
         html = template % {"text": self.html_params(name=field.name, **kwargs)}
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html
@@ -306,10 +327,10 @@ class MultiSelectWidget(BS3TextFieldWidget):
                 </div>
                 {% if select_all %}
                 <div class="select-controls">
-                    <button class="btn btn-xs btn-default select-all">
+                    <button class="btn btn-xs btn-secondary select-all">
                         <i class="fa fa-check-square-o"></i> Select All
                     </button>
-                    <button class="btn btn-xs btn-default deselect-all">
+                    <button class="btn btn-xs btn-secondary deselect-all">
                         <i class="fa fa-square-o"></i> Deselect All
                     </button>
                 </div>
@@ -336,6 +357,11 @@ class MultiSelectWidget(BS3TextFieldWidget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "Select options...")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.config = {
             "max_selections": kwargs.get("max_selections"),
             "min_selections": kwargs.get("min_selections"),
@@ -360,6 +386,13 @@ class MultiSelectWidget(BS3TextFieldWidget):
         """Render the widget"""
         kwargs["type"] = "hidden"
         kwargs["multiple"] = "multiple"
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.disabled:
+            kwargs["disabled"] = True
 
         if field.flags.required:
             kwargs["required"] = True
@@ -373,6 +406,17 @@ class MultiSelectWidget(BS3TextFieldWidget):
         }
 
         html = self._render_template(template_data)
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
         return Markup(html + self._generate_assets(field))
 
     def _render_options(self, field):
@@ -689,6 +733,11 @@ class DependentSelectWidget(BS3TextFieldWidget):
             offline_support (bool): Enable offline mode
         """
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "Select...")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
 
         # Core settings
         self.url = kwargs.get("url")
@@ -720,28 +769,59 @@ class DependentSelectWidget(BS3TextFieldWidget):
         kwargs.setdefault("id", field.id)
         input_html = super().render_field(field, **kwargs)
 
+        invalid_class = " is-invalid" if field.errors else ""
+        aria_invalid = ' aria-invalid="true"' if field.errors else ""
+        aria_describedby_parts = []
+        if self.description:
+            aria_describedby_parts.append(f"{field.id}_help")
+        if field.errors:
+            aria_describedby_parts.append(f"{field.id}_error")
+        aria_describedby = (
+            f' aria-describedby="{" ".join(aria_describedby_parts)}"'
+            if aria_describedby_parts
+            else ""
+        )
+        disabled_attr = " disabled" if self.disabled else ""
+
+        error_html = ""
+        if field.errors:
+            error_html = (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        help_html = ""
+        if self.description:
+            help_html = (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
+
         return Markup(
             f"""
             {self._include_dependencies()}
 
             <div class="dependent-select-widget" role="combobox">
-                <select name="{field.name}" id="{field.id}"
-                        class="form-control select2-widget"
-                        aria-label="{field.label.text if field.label else ''}"
-                        {f'data-depends-on="{self.depends_on}"' if self.depends_on else ''}
-                        data-placeholder="{self.placeholder}"
-                        {f'data-default-value="{self.default_value}"' if self.default_value else ''}>
+                <select name="{escape(field.name)}" id="{escape(field.id)}"
+                        class="form-control select2-widget{invalid_class}"
+                        aria-label="{escape(field.label.text) if field.label else ''}"
+                        {f'data-depends-on="{escape(self.depends_on)}"' if self.depends_on else ''}
+                        data-placeholder="{escape(self.placeholder)}"
+                        {f'data-default-value="{escape(str(self.default_value))}"' if self.default_value else ''}
+                        {aria_invalid}{aria_describedby}{disabled_attr}>
                     <option></option>
                 </select>
 
                 <div class="loading-indicator" style="display:none;">
                     <div class="spinner-border spinner-border-sm"></div>
-                    <span class="sr-only">Loading options...</span>
+                    <span class="visually-hidden">Loading options...</span>
                 </div>
 
                 <div class="alert alert-danger error-message"
                      style="display:none;" role="alert"></div>
             </div>
+            {error_html}
+            {help_html}
 
             <script>
                 $(document).ready(function() {{

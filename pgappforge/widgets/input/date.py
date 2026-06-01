@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -63,6 +63,11 @@ class DateRangePickerWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize date range picker with extended settings including fiscal year, disabled dates, and theming"""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.format = kwargs.get("format", "YYYY-MM-DD")
         self.separator = kwargs.get("separator", " - ")
         self.min_date = kwargs.get("min_date", None)
@@ -112,17 +117,39 @@ class DateRangePickerWidget(BS3TextFieldWidget):
 
     def __call__(self, field, **kwargs):
         kwargs.setdefault("type", "text")
-        kwargs.setdefault("class", "form-control")
+        kwargs.setdefault("class", "form-control" + (" is-invalid" if field.errors else ""))
         kwargs.setdefault("data-format", self.format)
         kwargs.setdefault("data-separator", self.separator)
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.description:
+            kwargs.setdefault("aria-describedby", f"{field.id}_help")
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
+        if self.placeholder:
+            kwargs.setdefault("placeholder", self.placeholder)
 
-        if self.theme_classes:  # Add custom theme classes
-            kwargs.setdefault(
-                "class", kwargs.get("class", "") + " " + self.theme_classes
-            )
+        if self.theme_classes:
+            existing = kwargs.get("class", "form-control")
+            kwargs["class"] = existing + " " + self.theme_classes
 
         template = self.data_template if field.data else self.empty_template
         html = template % {"text": self.html_params(name=field.name, **kwargs)}
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         # Prepare ranges including fiscal year ranges if enabled
         ranges = self.default_ranges.copy()

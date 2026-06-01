@@ -9,7 +9,7 @@ from typing import Any
 from pgappforge.fieldwidgets import BS3TextFieldWidget
 from pgappforge.widgets._utils import js_json as _js_json
 from flask_babel import lazy_gettext as _
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field
 from wtforms.fields import (
     BooleanField, DateField, DateTimeField, DecimalField, FileField,
@@ -171,6 +171,11 @@ class TimePickerWidget(BS3TextFieldWidget):
     def __init__(self, **kwargs):
         """Initialize time picker with custom settings"""
         super().__init__(**kwargs)
+        self.placeholder = kwargs.get("placeholder", "")
+        self.css_class = kwargs.get("css_class", "")
+        self.description = kwargs.get("description", "")
+        self.readonly = kwargs.get("readonly", False)
+        self.disabled = kwargs.get("disabled", False)
         self.format_24hr = kwargs.get("format_24hr", True)
         self.show_seconds = kwargs.get("show_seconds", True)
         self.minute_step = kwargs.get("minute_step", 1)
@@ -198,17 +203,41 @@ class TimePickerWidget(BS3TextFieldWidget):
         kwargs.setdefault("data-show-meridian", str(self.show_meridian).lower())
         kwargs.setdefault("data-minute-step", self.minute_step)
         kwargs.setdefault("data-second-step", self.second_step)
-        kwargs["aria-describedby"] = (
-            f"{field.id}-error"  # WCAG association for error message
-        )
-        kwargs["aria-live"] = "assertive"  # WCAG live region for error announcement
+        kwargs.setdefault("aria-label", field.label.text if field.label else "")
+        if self.placeholder:
+            kwargs.setdefault("placeholder", self.placeholder)
+        if self.readonly:
+            kwargs["readonly"] = True
+        if self.disabled:
+            kwargs["disabled"] = True
+
+        # Build aria-describedby covering error + help
+        describedby_parts = [f"{field.id}-error"]
+        if self.description:
+            describedby_parts.append(f"{field.id}_help")
+        kwargs["aria-describedby"] = " ".join(describedby_parts)
+
+        if field.errors:
+            kwargs["aria-invalid"] = "true"
 
         if field.flags.required:
             kwargs["required"] = True
-            kwargs["aria-required"] = "true"  # WCAG required attribute
+            kwargs["aria-required"] = "true"
 
         template = self.data_template if field.data else self.empty_template
         html = template % {"text": self.html_params(name=field.name, **kwargs)}
+
+        if field.errors:
+            html += (
+                f'<div class="invalid-feedback d-block" id="{escape(field.id)}_error">'
+                + "".join(f"<span>{escape(e)}</span>" for e in field.errors)
+                + "</div>"
+            )
+        if self.description:
+            html += (
+                f'<small class="form-text text-muted" id="{escape(field.id)}_help">'
+                f"{escape(self.description)}</small>"
+            )
 
         return Markup(
             html
