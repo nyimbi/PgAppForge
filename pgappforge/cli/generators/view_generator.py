@@ -48,7 +48,7 @@ class ViewGenerationConfig:
     generate_relationship_views: bool = True
     
     # Inline formset configuration
-    enable_inline_formsets: bool = True
+    enable_inline_formsets: bool = False  # MasterDetailView uses FAB built-in templates
     max_inline_forms: int = 50
     default_inline_forms: int = 3
     inline_form_layouts: List[str] = None  # ['stacked', 'tabular', 'accordion']
@@ -218,7 +218,12 @@ class BeautifulViewGenerator:
         """
         views = {}
 
-        # Always generate ModelView
+        # Association/junction tables are managed through parent M2N relationships —
+        # they do not need their own CRUD views.
+        if table_info.is_association_table:
+            return views
+
+        # Generate the main ModelView
         views['model_view'] = self.generate_model_view(table_info)
 
         # Generate specialized views based on table characteristics
@@ -579,41 +584,62 @@ class BeautifulViewGenerator:
     def _process_form_columns(self, columns: List[ColumnInfo], relationships: List[RelationshipInfo] = None) -> List[Dict[str, Any]]:
         """Process columns for form display with modern widgets.
 
-        FK columns are omitted in favour of their relationship attribute name.
-        M2M relationships are appended so FAB renders them as MultipleSelectField.
+        FK columns are substituted IN-PLACE with their relationship attribute name
+        so that FAB renders a Select2 picker at the same position in the form.
+        MANY_TO_MANY relationships are appended at the end as multi-select fields.
+
+        Before fix: FK cols were silently dropped — add/edit forms had no way to
+        select a related object (e.g. customer on an order).
+        After fix: `customer_id` → `customer` (Select2AJAXWidget) in correct position.
         """
-        # Build set of FK column names that have a relationship mapping
-        fk_cols_with_rel: set = set()
+        # Build FK column → RelationshipInfo map for MANY_TO_ONE / ONE_TO_ONE
+        fk_to_rel_obj: Dict[str, RelationshipInfo] = {}
         if relationships:
             for rel in relationships:
-                for local_col in (rel.local_columns or []):
-                    fk_cols_with_rel.add(local_col)
+                rel_type_val = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+                if rel_type_val.upper() in ('MANY_TO_ONE', 'ONE_TO_ONE', 'SELF_REFERENCING'):
+                    for local_col in (rel.local_columns or []):
+                        fk_to_rel_obj[local_col] = rel
 
-        form_columns = []
+        seen_rel_names: set = set()
+        form_columns: List[Dict] = []
 
         for column in columns:
             if column.primary_key:
                 continue
-            # Skip bare FK columns — the relationship attribute is added below
-            if column.name in fk_cols_with_rel:
-                continue
-            form_col = {
-                'name': column.name,
-                'display_name': column.display_name,
-                'description': column.description,
-                'widget': self._get_modern_widget(column),
-                'validators': column.validation_rules,
-                'required': not column.nullable,
-                'sensitive': self._is_sensitive_field(column.name),
-                'category': column.category.value
-            }
-            form_columns.append(form_col)
+            if column.name in fk_to_rel_obj:
+                # Substitute FK column with its relationship attribute (preserves form order)
+                rel = fk_to_rel_obj[column.name]
+                if rel.name not in seen_rel_names:
+                    seen_rel_names.add(rel.name)
+                    form_columns.append({
+                        'name': rel.name,
+                        'display_name': rel.display_name or rel.name.replace('_', ' ').title(),
+                        'description': rel.description or '',
+                        'widget': {'type': 'Select2AJAXWidget', 'config': {}},
+                        'validators': [] if column.nullable else ['DataRequired()'],
+                        'required': not column.nullable,
+                        'sensitive': False,
+                        'category': 'relationship',
+                    })
+            else:
+                form_columns.append({
+                    'name': column.name,
+                    'display_name': column.display_name,
+                    'description': column.description,
+                    'widget': self._get_modern_widget(column),
+                    'validators': column.validation_rules,
+                    'required': not column.nullable,
+                    'sensitive': self._is_sensitive_field(column.name),
+                    'category': column.category.value,
+                })
 
-        # Append M2M relationship attributes so FAB renders MultipleSelectField
+        # Append MANY_TO_MANY attributes at end — FAB renders MultipleSelectField
         if relationships:
             for rel in relationships:
-                rel_type = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
-                if rel_type.upper() in ('MANY_TO_MANY', 'M2M'):
+                rel_type_val = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+                if rel_type_val.upper() in ('MANY_TO_MANY', 'M2M') and rel.name not in seen_rel_names:
+                    seen_rel_names.add(rel.name)
                     form_columns.append({
                         'name': rel.name,
                         'display_name': rel.display_name or rel.name.replace('_', ' ').title(),
@@ -622,7 +648,7 @@ class BeautifulViewGenerator:
                         'validators': [],
                         'required': False,
                         'sensitive': False,
-                        'category': 'relationship'
+                        'category': 'relationship',
                     })
 
         return form_columns
@@ -3201,40 +3227,55 @@ class {{ class_name }}BulkWizardView(BaseView):
         return "# Report view template implementation"
 
     def _generate_master_detail_view(self, parent_info: TableInfo, pattern: 'MasterDetailInfo') -> str:
-        """Generate master-detail view code."""
+        """Generate a MasterDetailView (parent) + ModelView (child) pair.
+
+        pgappforge's MasterDetailView renders child records inline by declaring
+        ``related_views = [ChildView]`` — no custom add/edit overrides needed.
+        """
         child_info = self.inspector.analyze_table(pattern.child_table)
         template = self._get_master_detail_view_template()
 
-        # Pre-compute field types so the Jinja template doesn't have to use
-        # broken filter chains like |selectattr(...)|first|attr('form_field_type')
-        _BOOL_TYPES = {ColumnType.BOOLEAN}
-        _INT_TYPES  = {ColumnType.NUMERIC}
-        _DT_TYPES   = {ColumnType.DATE_TIME}
-        def _field_type(col) -> str:
-            cat = getattr(col, 'category', None)
-            if cat in _BOOL_TYPES:
-                return 'BooleanField'
-            if cat in _INT_TYPES:
-                return 'IntegerField'
-            if cat in _DT_TYPES:
-                return 'DateTimeField'
-            return 'StringField'
+        # Child columns: exclude PK and the FK column pointing back to the parent
+        fk_back = set()
+        if pattern.relationship and getattr(pattern.relationship, 'foreign_key_column', None):
+            fk_back.add(pattern.relationship.foreign_key_column)
+        child_cols = [
+            col.name for col in getattr(child_info, 'columns', [])
+            if not getattr(col, 'primary_key', False) and col.name not in fk_back
+        ]
+        child_list_cols = child_cols[:6]
 
-        child_field_type_map = {
-            col.name: _field_type(col)
-            for col in getattr(child_info, 'columns', [])
-            if not getattr(col, 'primary_key', False) and not getattr(col, 'foreign_key', False)
-        }
+        # Parent columns: exclude PK
+        parent_cols = [
+            col.name for col in getattr(parent_info, 'columns', [])
+            if not getattr(col, 'primary_key', False)
+        ]
+        parent_list_cols = parent_cols[:6]
+
+        parent_cls = self._to_pascal_case(parent_info.name)
+        child_cls  = self._to_pascal_case(pattern.child_table)
+        fk_col     = (
+            pattern.relationship.foreign_key_column
+            if pattern.relationship and getattr(pattern.relationship, 'foreign_key_column', None)
+            else "parent_id"
+        )
 
         return self.jinja_env.from_string(template).render(
             parent_info=parent_info,
             child_info=child_info,
             pattern=pattern,
-            parent_class_name=self._to_pascal_case(parent_info.name),
-            child_class_name=self._to_pascal_case(pattern.child_table),
-            master_detail_class_name=f"{self._to_pascal_case(parent_info.name)}{self._to_pascal_case(pattern.child_table)}MasterDetailView",
-            inline_formset_class=f"{self._to_pascal_case(pattern.child_table)}InlineFormSet",
-            child_field_type_map=child_field_type_map,
+            parent_class_name=parent_cls,
+            child_class_name=child_cls,
+            child_view_class_name=f"{child_cls}InlineView",
+            master_detail_class_name=f"{parent_cls}{child_cls}MasterDetailView",
+            fk_column=fk_col,
+            child_list_columns=child_list_cols,
+            child_add_columns=child_cols,
+            child_edit_columns=child_cols,
+            parent_list_columns=parent_list_cols,
+            parent_show_columns=parent_cols,
+            parent_add_columns=parent_cols,
+            parent_edit_columns=parent_cols,
         )
     
     def _generate_reference_view(self, table_info: TableInfo, relationship: 'RelationshipInfo') -> str:
@@ -3250,405 +3291,61 @@ class {{ class_name }}BulkWizardView(BaseView):
         )
 
     def _get_master_detail_view_template(self) -> str:
-        """Get template for master-detail views."""
+        """Correct MasterDetailView template using pgappforge's built-in related_views API.
+
+        pgappforge's MasterDetailView renders child records below the master by
+        declaring ``related_views = [ChildView]``.  No custom add/edit overrides,
+        no DynamicForm/FieldList, no non-existent template paths needed.
+        """
         return '''"""
-{{ parent_class_name }} Master-Detail View with {{ child_class_name }} inline forms.
+{{ parent_class_name }} / {{ child_class_name }} master-detail view.
 
-This view provides a comprehensive interface for managing {{ parent_info.display_name }}
-records along with their related {{ child_info.display_name }} records in a single form.
+{{ parent_info.display_name }} records displayed with inline {{ child_info.display_name }}.
+The FK column {{ fk_column }} is pre-populated automatically when adding child records.
 """
-
-from flask import flash, redirect, url_for, request
-from pgappforge import ModelView, BaseView, expose
+from pgappforge import MasterDetailView, ModelView
 from pgappforge.models.sqla.interface import SQLAInterface
-from pgappforge.widgets import FormWidget, ShowWidget
-from pgappforge.forms import DynamicForm
-from wtforms import FieldList, FormField, HiddenField, BooleanField, StringField, IntegerField, DateTimeField
-from wtforms.validators import DataRequired, Optional
 from ..models import {{ parent_class_name }}, {{ child_class_name }}
 
 
-class {{ inline_formset_class }}(DynamicForm):
-    """Inline formset for {{ child_class_name }} records."""
+class {{ child_view_class_name }}(ModelView):
+    """Detail view for {{ child_info.display_name }}.
 
-    # Child record fields (type derived at generation time)
-{% for field, field_type in child_field_type_map.items() %}
-    {{ field }} = {{ field_type }}()
-{% endfor %}
-
-    # Hidden fields for tracking
-    id = HiddenField()
-    delete = BooleanField('Delete')
-    
-    class Meta:
-        csrf = False
-
-
-class {{ master_detail_class_name }}(ModelView):
+    Registered as a related view in {{ master_detail_class_name }}.
+    {{ fk_column }} is pre-populated via the master-detail interface.
     """
-    Master-Detail view for {{ parent_class_name }} with inline {{ child_class_name }} management.
-    
-    Features:
-    - Inline editing of child records
-    - Bulk operations on child records
-    - Relationship validation
-    - Transaction-safe updates
+
+    datamodel = SQLAInterface({{ child_class_name }})
+
+    list_columns = {{ child_list_columns }}
+    add_columns  = {{ child_add_columns }}
+    edit_columns = {{ child_edit_columns }}
+
+    list_title = "{{ child_info.display_name }} List"
+    add_title  = "Add {{ child_info.display_name }}"
+    edit_title = "Edit {{ child_info.display_name }}"
+    show_title = "{{ child_info.display_name }} Details"
+
+
+class {{ master_detail_class_name }}(MasterDetailView):
+    """Master-Detail: {{ parent_class_name }} with inline {{ child_class_name }}.
+
+    MasterDetailView handles all routing and child record display automatically.
     """
-    
-    datamodel = SQLAInterface({{ parent_class_name }})
-    
-    # View configuration
-    route_base = '/{{ parent_info.name.lower() }}_master_detail'
-    default_view = 'list'
-    
-    # Master record configuration
-    list_title = "{{ parent_info.display_name }} Master-Detail Management"
-    show_title = "{{ parent_info.display_name }} Details"
-    add_title = "Add {{ parent_info.display_name }} with {{ child_info.display_name }}"
-    edit_title = "Edit {{ parent_info.display_name }} and {{ child_info.display_name }}"
-    
-    # Master record fields
-    list_columns = {{ pattern.parent_display_fields + ['_child_count'] }}
-    show_columns = {{ pattern.parent_display_fields }}
-    add_columns = {{ pattern.parent_display_fields }}
-    edit_columns = {{ pattern.parent_display_fields }}
-    
-    # Search and filters
-    search_columns = {{ pattern.parent_display_fields[:3] }}
-    
-    # UI Configuration
-    {% if pattern.child_form_layout == 'accordion' %}
-    edit_template = 'appbuilder/general/model/edit_master_detail_accordion.html'
-    add_template = 'appbuilder/general/model/add_master_detail_accordion.html'
-    {% elif pattern.child_form_layout == 'tabular' %}
-    edit_template = 'appbuilder/general/model/edit_master_detail_tabular.html'
-    add_template = 'appbuilder/general/model/add_master_detail_tabular.html'
-    {% else %}
-    edit_template = 'appbuilder/general/model/edit_master_detail_stacked.html'
-    add_template = 'appbuilder/general/model/add_master_detail_stacked.html'
-    {% endif %}
-    
-    # Inline formset configuration
-    inline_formset_config = {
-        'default_count': {{ pattern.default_child_count }},
-        'min_forms': {{ pattern.min_child_forms }},
-        'max_forms': {{ pattern.max_child_forms }},
-        'enable_sorting': {{ pattern.enable_sorting|lower }},
-        'enable_deletion': {{ pattern.enable_deletion|lower }},
-        'layout': '{{ pattern.child_form_layout }}',
-        'bulk_operations': {{ pattern.supports_bulk_operations|lower }}
-    }
-    
-    @expose('/add', methods=['GET', 'POST'])
-    def add(self):
-        """Add master record with inline child records."""
-        widget = self._get_add_widget()
-        
-        if request.method == 'POST':
-            return self._handle_master_detail_add()
-        
-        return self.render_template(
-            self.add_template,
-            title=self.add_title,
-            widget=widget,
-            appbuilder=self.appbuilder
-        )
-    
-    @expose('/edit/<pk>', methods=['GET', 'POST'])  
-    def edit(self, pk):
-        """Edit master record with inline child records."""
-        master_record = self.datamodel.get(pk)
-        if not master_record:
-            flash("Record not found", "error")
-            return redirect(url_for('.list'))
-        
-        widget = self._get_edit_widget(master_record)
-        
-        if request.method == 'POST':
-            return self._handle_master_detail_edit(master_record)
-        
-        return self.render_template(
-            self.edit_template,
-            title=self.edit_title,
-            widget=widget,
-            pk=pk,
-            appbuilder=self.appbuilder
-        )
-    
-    @expose('/show/<pk>')
-    def show(self, pk):
-        """Show master record with child records."""
-        master_record = self.datamodel.get(pk)
-        if not master_record:
-            flash("Record not found", "error") 
-            return redirect(url_for('.list'))
-        
-        # Get child records
-        child_records = self.datamodel.session.query({{ child_class_name }}).\
-            filter_by({{ pattern.relationship.local_columns[0] }}=pk).all()
-        
-        widget = self._get_show_widget(master_record)
-        
-        return self.render_template(
-            self.show_template,
-            title=self.show_title,
-            widget=widget,
-            master_record=master_record,
-            child_records=child_records,
-            pk=pk,
-            appbuilder=self.appbuilder
-        )
-    
-    def _handle_master_detail_add(self):
-        """Handle adding master record with child records."""
-        try:
-            session = self.datamodel.session
-            
-            # Create master record
-            master_form = self._get_add_form()
-            if master_form.validate():
-                master_record = {{ parent_class_name }}()
-                master_form.populate_obj(master_record)
-                session.add(master_record)
-                session.flush()  # Get the ID
-                
-                # Create child records
-                child_data = request.form.getlist('child_forms')
-                for child_form_data in child_data:
-                    if child_form_data.get('delete'):
-                        continue
-                        
-                    child_record = {{ child_class_name }}()
-                    # Set foreign key
-                    setattr(child_record, '{{ pattern.relationship.local_columns[0] }}', master_record.id)
-                    
-                    # Populate child fields
-                    {% for field in pattern.child_display_fields %}
-                    if '{{ field }}' in child_form_data:
-                        setattr(child_record, '{{ field }}', child_form_data['{{ field }}'])
-                    {% endfor %}
-                    
-                    session.add(child_record)
-                
-                session.commit()
-                flash(f"{{ parent_info.display_name }} and related records added successfully", "success")
-                return redirect(url_for('.list'))
-            else:
-                session.rollback()
-                flash("Form validation failed", "error")
-                
-        except Exception as e:
-            session.rollback()
-            flash(f"Error adding records: {str(e)}", "error")
-        
-        return redirect(url_for('.add'))
-    
-    def _handle_master_detail_edit(self, master_record):
-        """Handle editing master record with child records."""
-        try:
-            session = self.datamodel.session
-            
-            # Update master record
-            master_form = self._get_edit_form()
-            if master_form.validate():
-                master_form.populate_obj(master_record)
-                
-                # Handle child records
-                existing_children = {child.id: child for child in master_record.{{ pattern.relationship.name }}}
-                child_data = request.form.getlist('child_forms')
-                
-                processed_ids = set()
-                
-                for child_form_data in child_data:
-                    child_id = child_form_data.get('id')
-                    
-                    if child_form_data.get('delete') and child_id:
-                        # Delete existing child
-                        if int(child_id) in existing_children:
-                            session.delete(existing_children[int(child_id)])
-                        continue
-                    
-                    if child_id:
-                        # Update existing child
-                        child_record = existing_children.get(int(child_id))
-                        if child_record:
-                            {% for field in pattern.child_display_fields %}
-                            if '{{ field }}' in child_form_data:
-                                setattr(child_record, '{{ field }}', child_form_data['{{ field }}'])
-                            {% endfor %}
-                            processed_ids.add(int(child_id))
-                    else:
-                        # Add new child
-                        child_record = {{ child_class_name }}()
-                        setattr(child_record, '{{ pattern.relationship.local_columns[0] }}', master_record.id)
-                        
-                        {% for field in pattern.child_display_fields %}
-                        if '{{ field }}' in child_form_data:
-                            setattr(child_record, '{{ field }}', child_form_data['{{ field }}'])
-                        {% endfor %}
-                        
-                        session.add(child_record)
-                
-                session.commit()
-                flash("Records updated successfully", "success")
-                return redirect(url_for('.list'))
-            else:
-                session.rollback()
-                flash("Form validation failed", "error")
-                
-        except Exception as e:
-            session.rollback() 
-            flash(f"Error updating records: {str(e)}", "error")
-        
-        return redirect(url_for('.edit', pk=master_record.id))
-    
-    def _get_add_widget(self):
-        """Get widget for add form with inline formsets."""
-        form = self._get_add_form()
-        return FormWidget(
-            form=form,
-            include_cols=self.add_columns,
-            exclude_cols=[],
-            fieldsets=self._get_fieldsets_with_inline()
-        )
-    
-    def _get_edit_widget(self, master_record):
-        """Get widget for edit form with inline formsets."""
-        form = self._get_edit_form()
-        form.process(obj=master_record)
-        return FormWidget(
-            form=form,
-            include_cols=self.edit_columns,
-            exclude_cols=[],
-            fieldsets=self._get_fieldsets_with_inline()
-        )
-    
-    def _get_show_widget(self, master_record):
-        """Get widget for show view."""
-        return ShowWidget(
-            model=master_record,
-            include_cols=self.show_columns,
-            exclude_cols=[],
-            fieldsets=self._get_fieldsets_with_inline()
-        )
-    
-    def _get_fieldsets_with_inline(self):
-        """Get fieldsets including inline child forms."""
-        fieldsets = [
-            {
-                'name': '{{ parent_info.display_name }} Information',
-                'fields': {{ pattern.parent_display_fields }},
-                'icon': 'fa-info-circle'
-            },
-            {
-                'name': '{{ child_info.display_name }} Records',
-                'fields': ['_inline_{{ pattern.child_table }}'],
-                'icon': 'fa-list',
-                'collapsible': False
-            }
-        ]
-        return fieldsets
-    
-    @property
-    def _child_count(self):
-        """Virtual column for child record count."""
-        def child_count_formatter(item):
-            return len(getattr(item, '{{ pattern.relationship.name }}', []))
-        return child_count_formatter
 
+    datamodel     = SQLAInterface({{ parent_class_name }})
+    related_views = [{{ child_view_class_name }}]
 
-# Register the view
-appbuilder.add_view(
-    {{ master_detail_class_name }},
-    "{{ parent_info.display_name }} Master-Detail",
-    icon="fa-edit",
-    category="{{ parent_info.category or 'Master-Detail' }}"
-)
+    list_columns = {{ parent_list_columns }}
+    show_columns = {{ parent_show_columns }}
+    add_columns  = {{ parent_add_columns }}
+    edit_columns = {{ parent_edit_columns }}
+
+    list_title  = "{{ parent_info.display_name }}"
+    show_title  = "{{ parent_info.display_name }} Details"
+    add_title   = "Add {{ parent_info.display_name }}"
+    edit_title  = "Edit {{ parent_info.display_name }}"
 '''
-
-    def _get_lookup_view_template(self) -> str:
-        """Get template for lookup views."""
-        return '''"""
-{{ class_name }} - Enhanced lookup view for records with multiple relationships.
-
-This view provides advanced filtering and search capabilities based on related data.
-"""
-
-from pgappforge import ModelView
-from pgappforge.models.sqla.interface import SQLAInterface
-from pgappforge.models.sqla.filters import FilterStartsWith, FilterEqual, FilterMenu
-from ..models import {{ model_name }}{% for rel in relationships %}, {{ rel.remote_table|title }}{% endfor %}
-
-
-class {{ class_name }}(ModelView):
-    """
-    Lookup view for {{ model_name }} with advanced relationship filtering.
-    
-    Features:
-    - Multi-relationship filtering
-    - Quick lookup by related entities
-    - Enhanced search capabilities
-    """
-    
-    datamodel = SQLAInterface({{ model_name }})
-    
-    # View configuration
-    route_base = '/{{ table_info.name.lower() }}_lookup'
-    default_view = 'list'
-    
-    # Display configuration
-    list_title = "{{ table_info.display_name }} Lookup"
-    
-    # Show key fields and relationships
-    list_columns = [
-        {% for col in table_info.columns[:4] %}
-        {% if not col.primary_key %}'{{ col.name }}',{% endif %}
-        {% endfor %}
-        {% for rel in relationships %}
-        '{{ rel.name }}',
-        {% endfor %}
-    ]
-    
-    # Enhanced search
-    search_columns = [
-        {% for col in table_info.columns[:3] %}
-        {% if not col.primary_key and col.searchable %}'{{ col.name }}',{% endif %}
-        {% endfor %}
-        {% for rel in relationships %}
-        '{{ rel.name }}.name',
-        {% endfor %}
-    ]
-    
-    # Relationship filters
-    search_form_query_rel_fields = {
-        {% for rel in relationships %}
-        '{{ rel.name }}': [['{{ rel.search_col | default("name") }}', FilterStartsWith, '']],
-        {% endfor %}
-    }
-    
-    # Base filters for quick lookup
-    base_filters = []
-    
-    # Add menu filters for each relationship
-    {% for rel in relationships %}
-    filters_menu = FilterMenu('{{ rel.name }}', {{ rel.remote_table|title }})
-    {% endfor %}
-    
-    @expose('/lookup_by/<relation>/<pk>')
-    def lookup_by_relation(self, relation, pk):
-        """Quick lookup by related entity."""
-        # Apply filter and redirect to filtered list
-        return redirect(url_for('.list', **{f'_flt_0_{relation}': pk}))
-
-
-appbuilder.add_view(
-    {{ class_name }},
-    "{{ table_info.display_name }} Lookup", 
-    icon="fa-search",
-    category="{{ table_info.category or 'Lookups' }}"
-)
-'''
-
     def _get_reference_view_template(self) -> str:
         """Get template for reference views."""
         return '''"""

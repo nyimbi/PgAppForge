@@ -291,6 +291,11 @@ class EnhancedModelGenerator:
                 remote_side = f'[{self._to_pascal_case(rel.remote_table)}.{remote_col}]'
                 foreign_keys_str = f'[{local_col}]'
 
+            # uselist=False required for both sides of ONE_TO_ONE (SA 2.x won't infer it)
+            uselist: bool | None = None
+            if rel.type == RelationshipType.ONE_TO_ONE:
+                uselist = False
+
             rel_dict = {
                 'name': rel.name,
                 'type': rel.type.value,
@@ -307,6 +312,7 @@ class EnhancedModelGenerator:
                 'ui_hint': rel.ui_hint,
                 'remote_side': remote_side,
                 'foreign_keys': foreign_keys_str,
+                'uselist': uselist,
             }
             processed.append(rel_dict)
 

@@ -82,6 +82,29 @@ class ColumnType(Enum):
     TSTZRANGE = "tstzrange"
     DATERANGE = "daterange"
 
+    # PG14+ multirange types — must be before range types in _categorize_column
+    INT4MULTIRANGE = "int4multirange"
+    INT8MULTIRANGE = "int8multirange"
+    NUMMULTIRANGE = "nummultirange"
+    TSMULTIRANGE = "tsmultirange"
+    TSTZMULTIRANGE = "tstzmultirange"
+    DATEMULTIRANGE = "datemultirange"
+
+    # Other PostgreSQL-specific types
+    INTERVAL = "interval"
+    MONEY = "money"
+    BIT = "bit"
+    XML = "xml"
+
+    # Native PostgreSQL geometric types (not PostGIS)
+    POINT = "point"
+    LINE = "line"
+    LSEG = "lseg"
+    BOX = "box"
+    PATH = "path"
+    POLYGON = "polygon"
+    CIRCLE = "circle"
+
 
 @dataclass
 class ColumnInfo:
@@ -113,6 +136,11 @@ class ColumnInfo:
     is_polymorphic_type: bool = False   # e.g. entity_type (VARCHAR discriminator)
     is_polymorphic_id: bool = False     # e.g. entity_id (unconstrained FK placeholder)
     polymorphic_type_col: str = ""      # name of the paired *_type column
+    # Generated/computed column (GENERATED ALWAYS AS (expr) STORED)
+    is_generated: bool = False
+    generated_expression: str = ""
+    # Server-side default expression (DEFAULT gen_random_uuid(), DEFAULT NOW(), etc.)
+    server_default: str = ""
 
 
 @dataclass
@@ -141,6 +169,11 @@ class RelationshipInfo:
     on_update: str = ""
     deferrable: bool = False
     nullable: bool = True
+
+    @property
+    def foreign_key_column(self) -> str:
+        """First local (FK-side) column — used by view generators."""
+        return self.local_columns[0] if self.local_columns else ""
 
 @dataclass
 class MasterDetailInfo:
@@ -392,8 +425,11 @@ class EnhancedDatabaseInspector:
         # Tag tables implementing the Actor pattern (reads pgaf_actor table comments)
         self._detect_actor_tables(analysis)
 
-        # Synthesize parent-side ONE_TO_MANY relationships from the reverse-FK index
+        # Synthesize parent-side ONE_TO_MANY / ONE_TO_ONE relationships from the reverse-FK index
         self._synthesize_parent_relationships(analysis)
+
+        # Synthesize MANY_TO_MANY relationships onto both owner tables for each junction table
+        self._synthesize_many_to_many_relationships(analysis)
 
         logger.info(f"Analysis complete. Found {len(analysis['tables'])} tables")
         self._analysis_cache = analysis
@@ -538,6 +574,18 @@ class EnhancedDatabaseInspector:
             )
         comment = column_data.get('comment')
 
+        # Detect generated/computed columns (GENERATED ALWAYS AS (expr) STORED)
+        computed_info = column_data.get('computed', {}) or {}
+        is_generated = bool(computed_info)
+        generated_expression = computed_info.get('sqltext', '') if isinstance(computed_info, dict) else ''
+
+        # Server-side default expression
+        srv_default = column_data.get('default')
+        if srv_default is None:
+            srv_default = ''
+        elif not isinstance(srv_default, str):
+            srv_default = str(srv_default)
+
         # Determine column category
         category = self._categorize_column(column, table_name)
 
@@ -575,7 +623,10 @@ class EnhancedDatabaseInspector:
             description=description,
             validation_rules=validation_rules,
             widget_type=widget_type,
-            form_field_type=form_field_type
+            form_field_type=form_field_type,
+            is_generated=is_generated,
+            generated_expression=generated_expression,
+            server_default=srv_default,
         )
 
     def _analyze_relationships(self, table_name: str) -> List[RelationshipInfo]:
@@ -611,7 +662,7 @@ class EnhancedDatabaseInspector:
 
         # Determine association table for many-to-many
         association_table = None
-        if rel_type == RelationshipType.MANY_TO_MANY:
+        if rel_type == RelationshipType.MANY_TO_MANY:  # SA 2.x: dynamic removed
             association_table = self._find_association_table(table_name, referred_table)
 
         # Generate display metadata
@@ -722,7 +773,7 @@ class EnhancedDatabaseInspector:
             return RelationshipType.ONE_TO_ONE
 
         for constraint in unique_constraints:
-            if set(constrained_columns).issubset(set(constraint['column_names'])):
+            if set(constrained_columns) == set(constraint['column_names']):
                 return RelationshipType.ONE_TO_ONE
 
         # Default to many-to-one
@@ -783,17 +834,66 @@ class EnhancedDatabaseInspector:
         elif type_name in ('h3index', 'h3_index', 'h3cell') or 'h3' in type_name and 'index' in type_name:
             return ColumnType.H3INDEX
 
-        # PostgreSQL range types
+        # INTERVAL type (e.g. '30 days', '2 hours 15 minutes')
+        elif 'interval' in type_name:
+            return ColumnType.INTERVAL
+
+        # MONEY type (monetary amounts with currency symbol)
+        elif 'money' in type_name:
+            return ColumnType.MONEY
+
+        # BIT / BIT VARYING
+        elif type_name.startswith('bit') or 'bit varying' in type_name:
+            return ColumnType.BIT
+
+        # XML type
+        elif 'xml' in type_name:
+            return ColumnType.XML
+
+        # Native PostgreSQL geometric types (not PostGIS geometry/geography)
+        # IMPORTANT: check 'polygon' before 'point' is not needed since polygon doesn't
+        # contain 'point', but 'lseg' before 'line' matters ('lseg' contains 'se' not 'line')
+        elif type_name == 'point' or type_name.startswith('point('):
+            return ColumnType.POINT
+        elif type_name == 'lseg' or type_name.startswith('lseg('):
+            return ColumnType.LSEG
+        elif type_name == 'line' or type_name.startswith('line('):
+            return ColumnType.LINE
+        elif type_name in ('box',):
+            return ColumnType.BOX
+        elif type_name == 'path':
+            return ColumnType.PATH
+        elif type_name == 'polygon':
+            return ColumnType.POLYGON
+        elif type_name == 'circle':
+            return ColumnType.CIRCLE
+
+        # PostgreSQL multirange types (PG14+) — checked BEFORE range types
+        # because 'int4range' is a substring of 'int4multirange'
+        elif 'int4multirange' in type_name:
+            return ColumnType.INT4MULTIRANGE
+        elif 'int8multirange' in type_name:
+            return ColumnType.INT8MULTIRANGE
+        elif 'nummultirange' in type_name:
+            return ColumnType.NUMMULTIRANGE
+        elif 'tstzmultirange' in type_name:
+            return ColumnType.TSTZMULTIRANGE
+        elif 'tsmultirange' in type_name:
+            return ColumnType.TSMULTIRANGE
+        elif 'datemultirange' in type_name:
+            return ColumnType.DATEMULTIRANGE
+
+        # PostgreSQL range types — tstzrange BEFORE tsrange ('tsrange' ⊂ 'tstzrange')
         elif 'int4range' in type_name:
             return ColumnType.INT4RANGE
         elif 'int8range' in type_name:
             return ColumnType.INT8RANGE
         elif 'numrange' in type_name:
             return ColumnType.NUMRANGE
-        elif 'tsrange' in type_name:
-            return ColumnType.TSRANGE
         elif 'tstzrange' in type_name:
             return ColumnType.TSTZRANGE
+        elif 'tsrange' in type_name:
+            return ColumnType.TSRANGE
         elif 'daterange' in type_name:
             return ColumnType.DATERANGE
 
@@ -847,6 +947,25 @@ class EnhancedDatabaseInspector:
             return 'TimestampRangeWidget'  # PostgreSQL timestamp ranges
         elif category == ColumnType.DATERANGE:
             return 'DateRangeWidget'  # PostgreSQL date ranges
+        elif category in (ColumnType.INT4MULTIRANGE, ColumnType.INT8MULTIRANGE,
+                          ColumnType.NUMMULTIRANGE):
+            return 'NumericRangeWidget'
+        elif category in (ColumnType.TSMULTIRANGE, ColumnType.TSTZMULTIRANGE):
+            return 'TimestampRangeWidget'
+        elif category == ColumnType.DATEMULTIRANGE:
+            return 'DateRangeWidget'
+        elif category == ColumnType.INTERVAL:
+            return 'DurationWidget'
+        elif category == ColumnType.MONEY:
+            return 'CurrencyWidget'
+        elif category == ColumnType.BIT:
+            return 'BS3TextFieldWidget'
+        elif category == ColumnType.XML:
+            return 'CodeEditorWidget'
+        elif category in (ColumnType.POINT, ColumnType.LINE, ColumnType.LSEG,
+                          ColumnType.BOX, ColumnType.PATH, ColumnType.POLYGON,
+                          ColumnType.CIRCLE):
+            return 'MapWidget'
 
         # PRIORITY 2: Special name-based widgets (only for generic types)
         column_name = column.name.lower()
@@ -1301,8 +1420,8 @@ class EnhancedDatabaseInspector:
 
     def _determine_lazy_loading(self, rel_type: RelationshipType) -> str:
         """Determine appropriate lazy loading strategy."""
-        if rel_type == RelationshipType.MANY_TO_MANY:
-            return 'dynamic'
+        if rel_type == RelationshipType.MANY_TO_MANY:  # SA 2.x: dynamic removed
+            return 'select'  # dynamic removed in SA 2.x
         else:
             return 'select'
 
@@ -1444,39 +1563,50 @@ class EnhancedDatabaseInspector:
                 pk_cols = []
 
             for child_name, child_rel in children:
-                # For self-referential tables, the synthesized ONE_TO_MANY name
-                # must be the antonym (e.g., 'subordinates'), not the plural of the
-                # table name — otherwise both sides would be named 'employees'.
                 is_self_ref = (child_name == parent_name)
-                if is_self_ref and child_rel.back_populates:
-                    rel_name = child_rel.back_populates
+
+                # ONE_TO_ONE child → parent gets a ONE_TO_ONE back-ref (singular, uselist=False)
+                # MANY_TO_ONE child → parent gets ONE_TO_MANY back-ref (plural)
+                if child_rel.type == RelationshipType.ONE_TO_ONE:
+                    syn_type = RelationshipType.ONE_TO_ONE
+                    if is_self_ref and child_rel.back_populates:
+                        rel_name = child_rel.back_populates
+                    else:
+                        rel_name = child_name.lower()  # singular
                 else:
-                    rel_name = p.plural(child_name.lower())
+                    syn_type = RelationshipType.ONE_TO_MANY
+                    # For self-referential tables, the synthesized ONE_TO_MANY name
+                    # must be the antonym (e.g., 'subordinates'), not the plural of the
+                    # table name — otherwise both sides would be named 'employees'.
+                    if is_self_ref and child_rel.back_populates:
+                        rel_name = child_rel.back_populates
+                    else:
+                        rel_name = p.plural(child_name.lower())
 
                 # back_populates: what the child calls the parent
-                # child_rel.name is the FK-derived name on the child side (MANY_TO_ONE)
+                # child_rel.name is the FK-derived name on the child side
                 back_pop = child_rel.name
 
-                display_name = self._generate_relationship_display_name(rel_name, RelationshipType.ONE_TO_MANY)
+                display_name = self._generate_relationship_display_name(rel_name, syn_type)
                 description = self._generate_relationship_description(
-                    parent_name, child_name, RelationshipType.ONE_TO_MANY
+                    parent_name, child_name, syn_type
                 )
 
                 parent_rel = RelationshipInfo(
                     name=rel_name,
-                    type=RelationshipType.ONE_TO_MANY,
+                    type=syn_type,
                     local_table=parent_name,
                     remote_table=child_name,
                     local_columns=pk_cols,
                     remote_columns=child_rel.local_columns,  # FK cols on child
                     association_table=None,
                     back_populates=back_pop,
-                    cascade_options=self._determine_cascade_options(RelationshipType.ONE_TO_MANY),
-                    lazy_loading=self._determine_lazy_loading(RelationshipType.ONE_TO_MANY),
+                    cascade_options=self._determine_cascade_options(syn_type),
+                    lazy_loading=self._determine_lazy_loading(syn_type),
                     display_name=display_name,
                     description=description,
-                    cardinality_description=self._get_cardinality_description(RelationshipType.ONE_TO_MANY),
-                    ui_hint=self._get_relationship_ui_hint(RelationshipType.ONE_TO_MANY),
+                    cardinality_description=self._get_cardinality_description(syn_type),
+                    ui_hint=self._get_relationship_ui_hint(syn_type),
                     # Constraint metadata not directly available from parent side
                     constraint_name=child_rel.constraint_name,
                     on_delete=child_rel.on_delete,
@@ -1489,7 +1619,62 @@ class EnhancedDatabaseInspector:
                 existing_names = {r.name for r in parent_info.relationships}
                 if rel_name not in existing_names:
                     parent_info.relationships.append(parent_rel)
-                    analysis['relationships'].setdefault(parent_name, []).append(parent_rel)
+
+    def _synthesize_many_to_many_relationships(self, analysis: Dict[str, Any]) -> None:
+        """Add MANY_TO_MANY relationships to both owner tables for each junction table.
+
+        For User ↔ Group via user_group: both User and Group get a MANY_TO_MANY
+        relationship pointing to the other, with association_table='user_group'.
+        """
+        for junction_name in self._association_tables:
+            fks = self.inspector.get_foreign_keys(junction_name)
+            if len(fks) != 2:
+                continue
+
+            table_a = fks[0]['referred_table']
+            table_b = fks[1]['referred_table']
+
+            for owner, remote in ((table_a, table_b), (table_b, table_a)):
+                if owner not in analysis['tables']:
+                    continue
+                owner_info = analysis['tables'][owner]
+
+                # Skip if already present
+                already = {
+                    r.remote_table
+                    for r in owner_info.relationships
+                    if r.type == RelationshipType.MANY_TO_MANY
+                }
+                if remote in already:
+                    continue
+
+                rel_name = p.plural(remote.lower())
+                back_pop = p.plural(owner.lower())
+
+                nn_rel = RelationshipInfo(
+                    name=rel_name,
+                    type=RelationshipType.MANY_TO_MANY,
+                    local_table=owner,
+                    remote_table=remote,
+                    local_columns=[],
+                    remote_columns=[],
+                    association_table=junction_name,
+                    back_populates=back_pop,
+                    cascade_options=self._determine_cascade_options(RelationshipType.MANY_TO_MANY),
+                    lazy_loading=self._determine_lazy_loading(RelationshipType.MANY_TO_MANY),
+                    display_name=rel_name.replace('_', ' ').title(),
+                    description=self._generate_relationship_description(
+                        owner, remote, RelationshipType.MANY_TO_MANY
+                    ),
+                    cardinality_description=self._get_cardinality_description(RelationshipType.MANY_TO_MANY),
+                    ui_hint=self._get_relationship_ui_hint(RelationshipType.MANY_TO_MANY),
+                    constraint_name="",
+                    on_delete="",
+                    on_update="",
+                    deferrable=False,
+                    nullable=True,
+                )
+                owner_info.relationships.append(nn_rel)
 
     def _build_reverse_fk_index(self) -> Dict[str, List[Tuple[str, RelationshipInfo]]]:
         """Build reverse FK lookup once in O(T); eliminates O(T^2) master-detail scan."""
@@ -1500,7 +1685,7 @@ class EnhancedDatabaseInspector:
             try:
                 for rel in self._analyze_relationships(child_name):
                     remote = rel.remote_table
-                    if remote and rel.type == RelationshipType.MANY_TO_ONE:
+                    if remote and rel.type in (RelationshipType.MANY_TO_ONE, RelationshipType.ONE_TO_ONE):
                         idx.setdefault(remote, []).append((child_name, rel))
             except Exception:
                 pass

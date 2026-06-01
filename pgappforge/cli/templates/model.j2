@@ -47,6 +47,7 @@ class {{ class_name }}({{ base_class }}):
     {{ relationship.name }} = relationship(
         '{{ relationship.remote_class }}',
         {% if relationship.association_table %}secondary='{{ relationship.association_table }}',{% endif %}
+        {% if relationship.uselist is not none %}uselist={{ 'False' if not relationship.uselist else 'True' }},{% endif %}
         {% if relationship.foreign_keys %}foreign_keys={{ relationship.foreign_keys }},{% endif %}
         {% if relationship.remote_side %}remote_side={{ relationship.remote_side }},{% endif %}
         back_populates='{{ relationship.back_populates }}'{% if relationship.cascade %},
