@@ -326,6 +326,20 @@ class BeautifulViewGenerator:
             'timestamp': datetime.now().isoformat()
         }
 
+        # Collect all specialized widget classes used by this table's columns
+        _BASE_WIDGETS = frozenset({
+            'BS3TextFieldWidget', 'BS3TextAreaFieldWidget', 'BS3PasswordFieldWidget',
+            'BS3DateFieldWidget', 'BS3DateTimeFieldWidget', 'CheckboxWidget',
+            'Select2Widget', 'Select2AJAXWidget', 'Select2ManyWidget',
+            'DatePickerWidget', 'DateTimePickerWidget',
+        })
+        used_widget_classes = sorted({
+            col.widget_type
+            for col in table_info.columns
+            if col.widget_type and col.widget_type not in _BASE_WIDGETS
+        })
+        context['used_widget_classes'] = used_widget_classes
+
         return template.render(**context)
 
     def generate_api_view(self, table_info: TableInfo) -> str:
@@ -653,58 +667,117 @@ class BeautifulViewGenerator:
 
         return form_columns
 
+    # Comprehensive widget configuration — one entry per widget type.
+    # Config values become keyword arguments to the widget constructor.
+    _WIDGET_CONFIGS: dict = {
+        # Text inputs
+        'TagInputWidget':           {'max_tags': 10, 'sortable': True, 'allow_duplicates': False},
+        'PhoneNumberWidget':        {'default_country': 'KE', 'preferred_countries': ['KE', 'US', 'GB', 'NG', 'ZA']},
+        'ColorPickerWidget':        {'show_palette': True, 'show_history': True,
+                                     'custom_colors': ['#ff5733', '#33ff57', '#3357ff']},
+        # Rich text / code
+        'CodeEditorWidget':         {'language': None, 'theme': 'vs-light', 'line_numbers': True, 'minimap': True},
+        'MarkdownEditorWidget':     {'preview_mode': 'split', 'toolbar': True, 'height': 300},
+        'RichTextEditorWidget':     {'toolbar': 'standard', 'height': 300},
+        'MermaidEditorWidget':      {'theme': 'default', 'auto_preview': True},
+        'DbmlEditorWidget':         {'auto_preview': True, 'show_relations': True},
+        # Data / JSON
+        'JSONEditorWidget':         {'mode': 'tree', 'schema_validation': True, 'height': 300},
+        'ArrayEditorWidget':        {'sortable': True, 'min_items': 0},
+        'HStoreEditorWidget':       {'key_placeholder': 'key', 'value_placeholder': 'value'},
+        'SpreadsheetWidget':        {'rows': 10, 'columns': 5, 'allow_add_rows': True},
+        # Geo / map
+        'PostGISMapWidget':         {'map_provider': 'openstreetmap', 'default_zoom': 13,
+                                     'show_coordinates': True},
+        'GeoPointWidget':           {'map_provider': 'openstreetmap', 'default_zoom': 13},
+        'GeographicHeatmapWidget':  {'radius': 25, 'opacity': 0.8},
+        'AddressAutocompleteWidget':{'geocode_on_select': True, 'show_map': True},
+        'MapWidget':                {'map_provider': 'openstreetmap', 'default_zoom': 10},
+        'GPSTrackerWidget':         {'map_provider': 'openstreetmap', 'enable_tracking': True,
+                                     'enable_routes': True},
+        # File / media
+        'FileUploadWidget':         {'multiple': False, 'max_size': '10MB'},
+        'FileUploadFieldWidget':    {'multiple': False, 'max_size': '10MB'},
+        'ImageCropWidget':          {'allow_crop': True, 'preview': True},
+        'SignaturePadWidget':       {'pen_color': '#000000', 'pen_size': 2, 'require_name': False},
+        'SignatureWidget':          {'pen_color': '#000000', 'pen_size': 2},
+        'QrCodeWidget':             {'size': 200, 'error_correction': 'M'},
+        'BarcodeWidget':            {'format': 'CODE128', 'width': 2, 'height': 80},
+        'BarcodeScannerWidget':     {'formats': ['QR_CODE', 'CODE128', 'EAN_13'],
+                                     'camera_facing': 'environment'},
+        'AudioRecordingWidget':     {'max_duration': 300, 'quality': 'medium'},
+        'VideoRecordWidget':        {'max_duration': 60, 'quality': 'medium'},
+        'PeriodicCameraWidget':     {'interval': 30, 'facing': 'environment'},
+        'DocumentViewerWidget':     {'allowed_types': ['pdf', 'doc', 'docx', 'xls', 'xlsx']},
+        # Date / time
+        'DateTimeRangeWidget':      {'date_format': 'YYYY-MM-DD', 'time_format': 'HH:mm'},
+        'TimePickerWidget':         {'format': '24h', 'step': 15},
+        'TimeFieldWidget':          {'format': '24h'},
+        # Number / range
+        'RangeSliderWidget':        {'step': 1, 'show_value': True, 'show_ticks': False},
+        'NumericRangeWidget':       {'step': 1},
+        'CurrencyWidget':           {'currency': 'USD', 'decimal_places': 2},
+        'DurationWidget':           {'units': ['days', 'hours', 'minutes'], 'compact': False},
+        'CurrencyInputWidget':      {'currency': 'USD', 'decimal_places': 2},
+        'StarRatingWidget':         {'max_rating': 5, 'allow_half': False},
+        # Network
+        'NetworkAddressWidget':     {'show_cidr': True, 'validate_format': True},
+        'MACAddressWidget':         {'separator': ':', 'uppercase': True},
+        # Select
+        'Select2AJAXWidget':        {'delay': 250, 'minimum_input_length': 1},
+        'Select2ManyWidget':        {'close_on_select': False},
+        'MultiSelectWidget':        {'searchable': True},
+        'DependentSelectWidget':    {},
+        # Charts / analytics
+        'AdvancedChartsWidget':     {'chart_type': 'line', 'responsive': True, 'animation': True},
+        # Special / PG-specific
+        'UUIDFieldWidget':          {'show_generate_button': True, 'auto_generate': False},
+        'FullTextSearchWidget':     {},
+        'TreeHierarchyWidget':      {'separator': '.', 'max_depth': 10},
+        'EmbeddingWidget':          {'show_dimensions': True, 'show_preview': False},
+        'H3IndexWidget':            {'show_map': True, 'show_resolution': True},
+        'RasterImageWidget':        {'preview': True, 'max_size': '50MB'},
+        # Social
+        'ChatMessagingWidget':      {'realtime': True},
+        'CommentAndLikeWidget':     {'allow_reactions': True},
+        # Data quality
+        'DataValidationRulesWidget':{'show_preview': True},
+        'DataPreviewProfilerWidget':{'max_rows': 100},
+        # Password
+        'PasswordStrengthWidget':   {'min_length': 12, 'require_special': True},
+        # Toggle
+        'SwitchWidget':             {'on_label': 'Yes', 'off_label': 'No'},
+        'ToggleButtonWidget':       {'size': 'md'},
+    }
+
     def _get_modern_widget(self, column: ColumnInfo) -> Dict[str, Any]:
-        """Get modern widget configuration for a column."""
+        """Get widget configuration for a column.
+
+        Returns a dict with 'type' (widget class name) and 'config' (constructor kwargs).
+        Config is drawn from _WIDGET_CONFIGS; special cases override the defaults.
+        """
         if not self.config.use_modern_widgets:
             return {'type': 'BS3TextFieldWidget', 'config': {}}
 
         widget_type = column.widget_type
-        widget_config = {}
+        # Deep-copy config so mutations don't bleed between columns
+        config = dict(self._WIDGET_CONFIGS.get(widget_type, {}))
 
-        # Enhanced widget configurations based on column type
-        if widget_type == 'ColorPickerWidget':
-            widget_config = {
-                'show_palette': True,
-                'show_history': True,
-                'custom_colors': ['#ff5733', '#33ff57', '#3357ff']
-            }
-        elif widget_type == 'CodeEditorWidget':
-            widget_config = {
-                'language': self._detect_code_language(column.name),
-                'theme': 'vs-light',
-                'line_numbers': True,
-                'minimap': True
-            }
-        elif widget_type == 'AdvancedChartsWidget':
-            widget_config = {
-                'chart_type': 'line',
-                'responsive': True,
-                'animation': True,
-                'zoom_enabled': True
-            }
-        elif widget_type == 'GPSTrackerWidget':
-            widget_config = {
-                'map_provider': 'openstreetmap',
-                'enable_tracking': True,
-                'enable_routes': True
-            }
+        # Per-column overrides
+        if widget_type == 'CodeEditorWidget':
+            config['language'] = self._detect_code_language(column.name)
         elif widget_type == 'FileUploadWidget':
-            widget_config = {
-                'multiple': column.name.endswith('s'),
-                'allowed_extensions': self._get_allowed_extensions(column.name),
-                'max_size': '10MB'
-            }
-        elif widget_type == 'TagInputWidget':
-            widget_config = {
-                'max_tags': 10,
-                'sortable': True,
-                'allow_duplicates': False
-            }
+            config['multiple'] = column.name.endswith('s')
+            config['allowed_extensions'] = self._get_allowed_extensions(column.name)
+        elif widget_type in ('CurrencyWidget', 'CurrencyInputWidget'):
+            # Infer currency from column name hints (usd_amount, eur_price, etc.)
+            name_lower = column.name.lower()
+            for cur in ('usd', 'eur', 'gbp', 'kes', 'ngn', 'zar'):
+                if cur in name_lower:
+                    config['currency'] = cur.upper()
+                    break
 
-        return {
-            'type': widget_type,
-            'config': widget_config
-        }
+        return {'type': widget_type, 'config': config}
 
     def _generate_fieldsets(self, columns: List[ColumnInfo]) -> List[Dict[str, Any]]:
         """Generate logical fieldsets for form organization."""
@@ -1084,21 +1157,24 @@ Features: Modern widgets, responsive design, security controls
 
 from pgappforge import ModelView
 from pgappforge.models.sqla.interface import SQLAInterface
-try:
-    from pgappforge.widgets import (
-        BS3TextFieldWidget, BS3TextAreaFieldWidget,
-        Select2Widget, Select2AJAXWidget, Select2ManyWidget,
-        DatePickerWidget, DateTimePickerWidget,
-    )
-except ImportError:
-    # Fallback: import only what is available
-    from pgappforge.widgets import BS3TextFieldWidget  # noqa: F401
-    BS3TextAreaFieldWidget = BS3TextFieldWidget
-    Select2Widget = BS3TextFieldWidget
-    Select2AJAXWidget = BS3TextFieldWidget
-    Select2ManyWidget = BS3TextFieldWidget
-    DatePickerWidget = BS3TextFieldWidget
-    DateTimePickerWidget = BS3TextFieldWidget
+from pgappforge.widgets import (
+    BS3TextFieldWidget, BS3TextAreaFieldWidget,
+    Select2Widget, Select2AJAXWidget, Select2ManyWidget,
+    DatePickerWidget, DateTimePickerWidget,
+)
+
+def _load_widget(name, _fallback=BS3TextFieldWidget):
+    """Load a widget class by name from the pgappforge widget registry."""
+    try:
+        from pgappforge.widgets import get_widget_by_name
+        cls = get_widget_by_name(name)
+        return cls if cls is not None else _fallback
+    except Exception:
+        return _fallback
+
+{% for widget_cls in used_widget_classes %}
+{{ widget_cls }} = _load_widget('{{ widget_cls }}')
+{% endfor %}
 from flask_babel import lazy_gettext as _
 from wtforms.validators import {% for validator in validators %}{{ validator }}{% if not loop.last %}, {% endif %}{% endfor %}
 try:
