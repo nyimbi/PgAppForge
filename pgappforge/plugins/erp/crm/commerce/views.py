@@ -1,0 +1,401 @@
+"""
+pgappforge/plugins/erp/crm/commerce/views.py
+
+Flask views for the Commerce plugin.
+
+Route summary
+-------------
+ShippingMethodView     /commerce/shipping-methods/
+TaxRuleView            /commerce/tax-rules/
+SubscriptionPlanView   /commerce/plans/
+SubscriptionView       /commerce/subscriptions/
+CommerceReportView     /commerce/reports/
+  ├─ /mrr-arr            — MRR / ARR breakdown (HTML)
+  ├─ /subscription-churn — Churn (CANCELLED) rate by plan (HTML)
+  └─ /shipping-usage     — Shipping method usage counts (HTML)
+"""
+from __future__ import annotations
+
+import logging
+
+import sqlalchemy as sa
+from flask import abort, jsonify, make_response, request
+
+from pgappforge import BaseView, expose
+from pgappforge.security.decorators import has_access
+
+log = logging.getLogger(__name__)
+
+
+def _get_session():
+	try:
+		from flask import current_app
+		ab = current_app.extensions.get("appbuilder")
+		if ab and hasattr(ab, "get_session"):
+			return ab.get_session
+		db = current_app.extensions.get("sqlalchemy")
+		if db:
+			return db.session
+	except RuntimeError:
+		pass
+	raise RuntimeError("Cannot obtain database session")
+
+
+def _he(s: object) -> str:
+	return (
+		str(s)
+		.replace("&", "&amp;")
+		.replace("<", "&lt;")
+		.replace(">", "&gt;")
+		.replace('"', "&quot;")
+	)
+
+
+def _cents(v: int | None) -> str:
+	if v is None:
+		return "—"
+	return f"{v // 100:,}.{abs(v) % 100:02d}"
+
+
+# ---------------------------------------------------------------------------
+# ShippingMethodView
+# ---------------------------------------------------------------------------
+
+class ShippingMethodView(BaseView):
+	"""Shipping Method CRUD."""
+
+	route_base = "/commerce/shipping-methods"
+
+	@expose("/")
+	@has_access
+	def list(self):
+		from pgappforge.plugins.erp.crm.commerce.models import ShippingMethod
+		session = _get_session()
+		methods = session.execute(
+			sa.select(ShippingMethod).order_by(ShippingMethod.cost_cents)
+		).scalars().all()
+		rows = "".join(
+			f"<tr><td>{_he(m.name)}</td><td>{_he(m.carrier)}</td>"
+			f"<td>{_he(m.service_level or '')}</td><td>{_cents(m.cost_cents)}</td>"
+			f"<td>{m.delivery_days_min}-{m.delivery_days_max}d</td>"
+			f"<td>{'Active' if m.is_active else 'Inactive'}</td></tr>"
+			for m in methods
+		)
+		return make_response(
+			f"<html><body><h2>Shipping Methods</h2><table border='1'>"
+			f"<tr><th>Name</th><th>Carrier</th><th>Service</th><th>Cost</th><th>Delivery</th><th>Status</th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+	@expose("/", methods=["POST"])
+	@has_access
+	def create(self):
+		from pgappforge.plugins.erp.crm.commerce.models import ShippingMethod
+		data = request.get_json(force=True) or {}
+		for f in ("tenant_id", "name", "carrier", "cost_cents"):
+			if not data.get(f) and data.get(f) != 0:
+				return jsonify({"error": f"Missing field: {f}"}), 400
+		session = _get_session()
+		method = ShippingMethod(
+			tenant_id=data["tenant_id"],
+			name=data["name"],
+			carrier=data["carrier"],
+			service_level=data.get("service_level"),
+			cost_cents=data["cost_cents"],
+			free_threshold_cents=data.get("free_threshold_cents"),
+			delivery_days_min=data.get("delivery_days_min", 1),
+			delivery_days_max=data.get("delivery_days_max", 7),
+			is_active=data.get("is_active", True),
+		)
+		session.add(method)
+		session.commit()
+		return jsonify({"id": method.id, "name": method.name}), 201
+
+	@expose("/<string:method_id>/apply-cost", methods=["POST"])
+	@has_access
+	def apply_cost(self, method_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService, ShippingMethodNotFoundError
+		data = request.get_json(force=True) or {}
+		subtotal = data.get("order_subtotal_cents", 0)
+		session = _get_session()
+		try:
+			cost = CommerceService.apply_shipping_cost(subtotal, method_id, session)
+			return jsonify({"shipping_cost_cents": cost})
+		except ShippingMethodNotFoundError:
+			return jsonify({"error": "Shipping method not found or inactive"}), 404
+
+
+# ---------------------------------------------------------------------------
+# TaxRuleView
+# ---------------------------------------------------------------------------
+
+class TaxRuleView(BaseView):
+	"""Tax Rule CRUD + compute endpoint."""
+
+	route_base = "/commerce/tax-rules"
+
+	@expose("/")
+	@has_access
+	def list(self):
+		from pgappforge.plugins.erp.crm.commerce.models import TaxRule
+		session = _get_session()
+		rules = session.execute(
+			sa.select(TaxRule).order_by(TaxRule.jurisdiction_code, TaxRule.product_category)
+		).scalars().all()
+		rows = "".join(
+			f"<tr><td>{_he(r.jurisdiction_code)}</td><td>{_he(r.product_category)}</td>"
+			f"<td>{_he(r.tax_name)}</td><td>{float(r.tax_rate) * 100:.2f}%</td>"
+			f"<td>{'Yes' if r.is_inclusive else 'No'}</td></tr>"
+			for r in rules
+		)
+		return make_response(
+			f"<html><body><h2>Tax Rules</h2><table border='1'>"
+			f"<tr><th>Jurisdiction</th><th>Category</th><th>Name</th><th>Rate</th><th>Inclusive</th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+	@expose("/compute", methods=["POST"])
+	@has_access
+	def compute(self):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService
+		data = request.get_json(force=True) or {}
+		session = _get_session()
+		result = CommerceService.compute_tax(
+			data.get("subtotal_cents", 0),
+			data.get("jurisdiction_code", ""),
+			data.get("product_category", "*"),
+			session,
+		)
+		return jsonify({
+			"tax_cents": result["tax_cents"],
+			"tax_rate": str(result["tax_rate"]),
+			"tax_name": result["tax_name"],
+			"is_inclusive": result["is_inclusive"],
+		})
+
+
+# ---------------------------------------------------------------------------
+# SubscriptionPlanView
+# ---------------------------------------------------------------------------
+
+class SubscriptionPlanView(BaseView):
+	"""Subscription Plan CRUD."""
+
+	route_base = "/commerce/plans"
+
+	@expose("/")
+	@has_access
+	def list(self):
+		from pgappforge.plugins.erp.crm.commerce.models import SubscriptionPlan
+		session = _get_session()
+		plans = session.execute(
+			sa.select(SubscriptionPlan).order_by(SubscriptionPlan.amount_cents)
+		).scalars().all()
+		rows = "".join(
+			f"<tr><td>{_he(p.name)}</td><td>{_cents(p.amount_cents)} {_he(p.currency_code)}</td>"
+			f"<td>{p.interval_months}mo</td><td>{p.trial_days}d trial</td></tr>"
+			for p in plans
+		)
+		return make_response(
+			f"<html><body><h2>Subscription Plans</h2><table border='1'>"
+			f"<tr><th>Name</th><th>Amount</th><th>Interval</th><th>Trial</th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# SubscriptionView
+# ---------------------------------------------------------------------------
+
+class SubscriptionView(BaseView):
+	"""Subscription lifecycle endpoints."""
+
+	route_base = "/commerce/subscriptions"
+
+	@expose("/")
+	@has_access
+	def list(self):
+		from pgappforge.plugins.erp.crm.commerce.models import Subscription
+		session = _get_session()
+		subs = session.execute(
+			sa.select(Subscription).order_by(Subscription.created_at.desc()).limit(200)
+		).scalars().all()
+		rows = "".join(
+			f"<tr><td>{_he(s.id[:8])}</td><td>{_he(s.customer_id[:8])}</td>"
+			f"<td>{_he(s.status)}</td><td>{_cents(s.amount_cents)} {_he(s.currency_code)}</td>"
+			f"<td>{_he(s.billing_interval)}</td>"
+			f"<td>{_he(str(s.next_billing_date) if s.next_billing_date else '')}</td></tr>"
+			for s in subs
+		)
+		return make_response(
+			f"<html><body><h2>Subscriptions</h2><table border='1'>"
+			f"<tr><th>ID</th><th>Customer</th><th>Status</th><th>Amount</th><th>Interval</th><th>Next Billing</th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+	@expose("/", methods=["POST"])
+	@has_access
+	def create(self):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService, PlanNotFoundError, CommerceValidationError
+		data = request.get_json(force=True) or {}
+		session = _get_session()
+		try:
+			sub = CommerceService.create_subscription(data, session)
+			session.commit()
+			return jsonify({
+				"id": sub.id,
+				"status": sub.status,
+				"next_billing_date": sub.next_billing_date.isoformat() if sub.next_billing_date else None,
+			}), 201
+		except PlanNotFoundError:
+			return jsonify({"error": "Plan not found"}), 404
+		except (CommerceValidationError, KeyError) as exc:
+			session.rollback()
+			return jsonify({"error": str(exc)}), 422
+
+	@expose("/<string:sub_id>/cancel", methods=["POST"])
+	@has_access
+	def cancel(self, sub_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService, SubscriptionNotFoundError
+		data = request.get_json(force=True) or {}
+		session = _get_session()
+		try:
+			sub = CommerceService.cancel_subscription(sub_id, data.get("reason", ""), session)
+			session.commit()
+			return jsonify({"id": sub.id, "status": sub.status})
+		except SubscriptionNotFoundError:
+			return jsonify({"error": "Subscription not found"}), 404
+
+	@expose("/<string:sub_id>/pause", methods=["POST"])
+	@has_access
+	def pause(self, sub_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService, SubscriptionNotFoundError, CommerceValidationError
+		session = _get_session()
+		try:
+			sub = CommerceService.pause_subscription(sub_id, session)
+			session.commit()
+			return jsonify({"id": sub.id, "status": sub.status})
+		except SubscriptionNotFoundError:
+			return jsonify({"error": "Subscription not found"}), 404
+		except CommerceValidationError as exc:
+			session.rollback()
+			return jsonify({"error": str(exc)}), 422
+
+	@expose("/<string:sub_id>/resume", methods=["POST"])
+	@has_access
+	def resume(self, sub_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService, SubscriptionNotFoundError, CommerceValidationError
+		from datetime import date
+		data = request.get_json(force=True) or {}
+		new_date_str = data.get("new_billing_date", date.today().isoformat())
+		session = _get_session()
+		try:
+			sub = CommerceService.resume_subscription(sub_id, date.fromisoformat(new_date_str), session)
+			session.commit()
+			return jsonify({"id": sub.id, "status": sub.status, "next_billing_date": str(sub.next_billing_date)})
+		except SubscriptionNotFoundError:
+			return jsonify({"error": "Subscription not found"}), 404
+		except CommerceValidationError as exc:
+			session.rollback()
+			return jsonify({"error": str(exc)}), 422
+
+	@expose("/<string:sub_id>/renew", methods=["POST"])
+	@has_access
+	def renew(self, sub_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import (
+			CommerceService, SubscriptionNotFoundError, PlanNotFoundError, CommerceValidationError,
+		)
+		session = _get_session()
+		try:
+			sub = CommerceService.process_renewal(sub_id, session)
+			session.commit()
+			return jsonify({"id": sub.id, "status": sub.status, "next_billing_date": str(sub.next_billing_date)})
+		except SubscriptionNotFoundError:
+			return jsonify({"error": "Subscription not found"}), 404
+		except (PlanNotFoundError, CommerceValidationError) as exc:
+			session.rollback()
+			return jsonify({"error": str(exc)}), 422
+
+
+# ---------------------------------------------------------------------------
+# CommerceReportView — 3 ReportForge-compatible report endpoints
+# ---------------------------------------------------------------------------
+
+class CommerceReportView(BaseView):
+	"""Commerce reports."""
+
+	route_base = "/commerce/reports"
+
+	@expose("/mrr-arr")
+	@has_access
+	def mrr_arr(self):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceService
+		tenant_id = request.args.get("tenant_id", "")
+		session = _get_session()
+		report = CommerceService.subscription_revenue_report(tenant_id, session)
+		by_status_rows = "".join(
+			f"<tr><td>{_he(s)}</td><td>{cnt}</td></tr>"
+			for s, cnt in report["by_status"].items()
+		)
+		return make_response(
+			f"<html><body><h2>MRR / ARR</h2>"
+			f"<p>MRR: <strong>{_cents(report['mrr_cents'])}</strong></p>"
+			f"<p>ARR: <strong>{_cents(report['arr_cents'])}</strong></p>"
+			f"<h3>Subscribers by Status</h3>"
+			f"<table border='1'><tr><th>Status</th><th>Count</th></tr>{by_status_rows}</table>"
+			f"</body></html>"
+		)
+
+	@expose("/subscription-churn")
+	@has_access
+	def subscription_churn(self):
+		from pgappforge.plugins.erp.crm.commerce.models import Subscription, SubscriptionPlan
+		import sqlalchemy.func as func
+		session = _get_session()
+		rows_data = session.execute(
+			sa.select(
+				SubscriptionPlan.name.label("plan_name"),
+				Subscription.status,
+				func.count(Subscription.id).label("cnt"),
+			)
+			.join(SubscriptionPlan, SubscriptionPlan.id == Subscription.plan_id)
+			.group_by(SubscriptionPlan.name, Subscription.status)
+		).all()
+
+		by_plan: dict[str, dict[str, int]] = {}
+		for r in rows_data:
+			by_plan.setdefault(r.plan_name, {})[r.status] = r.cnt
+
+		rows = ""
+		for plan_name, counts in sorted(by_plan.items()):
+			total = sum(counts.values())
+			cancelled = counts.get("CANCELLED", 0)
+			churn_pct = round(cancelled / total * 100, 1) if total else 0
+			rows += f"<tr><td>{_he(plan_name)}</td><td>{total}</td><td>{cancelled}</td><td>{churn_pct}%</td></tr>"
+
+		return make_response(
+			f"<html><body><h2>Subscription Churn by Plan</h2><table border='1'>"
+			f"<tr><th>Plan</th><th>Total</th><th>Cancelled</th><th>Churn Rate</th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+	@expose("/shipping-usage")
+	@has_access
+	def shipping_usage(self):
+		from pgappforge.plugins.erp.crm.commerce.models import ShippingMethod
+		session = _get_session()
+		# Stub — real impl joins to order table
+		methods = session.execute(
+			sa.select(ShippingMethod).where(ShippingMethod.is_active == True)  # noqa: E712
+		).scalars().all()
+		rows = "".join(
+			f"<tr><td>{_he(m.name)}</td><td>{_he(m.carrier)}</td>"
+			f"<td>{_cents(m.cost_cents)}</td><td>—</td></tr>"
+			for m in methods
+		)
+		return make_response(
+			f"<html><body><h2>Shipping Method Usage</h2><table border='1'>"
+			f"<tr><th>Method</th><th>Carrier</th><th>Cost</th><th>Orders</th></tr>"
+			f"{rows}<p><em>Order count requires order table integration.</em></p>"
+			f"</table></body></html>"
+		)
