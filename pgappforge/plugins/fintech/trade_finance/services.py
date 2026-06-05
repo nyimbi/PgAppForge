@@ -576,11 +576,13 @@ class TradeFinanceService:
 		presentation_id: str,
 		decision: str,
 		waived_discrepancies: list[str] | None = None,
+		actor_id: str | None = None,
 	) -> Any:
 		"""Accept or reject a presentation (optionally waiving specific discrepancies).
 
 		decision: 'ACCEPT' or 'REJECT'
 		waived_discrepancies: list of discrepancy descriptions being waived by applicant
+		actor_id: UUID of the user making the decision (recorded in audit trail)
 
 		Returns:
 			Updated LCPresentation instance
@@ -588,8 +590,9 @@ class TradeFinanceService:
 		Raises:
 			ValueError: if presentation not found or not in DISCREPANT/COMPLIANT status
 		"""
-		from pgappforge.plugins.fintech.trade_finance.models import LCPresentation
+		from pgappforge.plugins.fintech.trade_finance.models import LCPresentation, LCPresentationDecision
 		import sqlalchemy as sa
+		from sqlalchemy import update
 
 		pres = self._session.execute(
 			sa.select(LCPresentation).where(LCPresentation.id == presentation_id)
@@ -603,27 +606,30 @@ class TradeFinanceService:
 		if decision not in ("ACCEPT", "REJECT"):
 			raise ValueError(f"decision must be ACCEPT or REJECT, got {decision!r}")
 
-		# LCPresentation is immutable — we transition by creating a new status record.
-		# Per the ImmutableRecordMixin pattern, instead of updating we reflect the
-		# decision intent on the existing record via a controlled status attribute
-		# set (the immutability guard fires on before_update; we use this controlled
-		# pathway only during the accept/reject lifecycle transition).
-		# In production, replace with a LCPresentationDecision correction entry.
-		object.__setattr__(pres, "_immutable", False)  # allow this single controlled update
-		try:
-			if decision == "ACCEPT":
-				pres.status = "ACCEPTED" if pres.discrepancies else "ACCEPTED"
-				if waived_discrepancies:
-					pres.discrepancies = [
-						d for d in (pres.discrepancies or [])
-						if d not in waived_discrepancies
-					]
-					pres.status = "WAIVED"
-			else:
-				pres.status = "REJECTED"
-			self._session.flush()
-		finally:
-			object.__setattr__(pres, "_immutable", True)
+		new_status = "REJECTED"
+		if decision == "ACCEPT":
+			new_status = "WAIVED" if waived_discrepancies else "ACCEPTED"
+
+		# Write the INSERT-only decision record (audit trail)
+		decision_record = LCPresentationDecision(
+			tenant_id=self._tenant_id,
+			presentation_id=str(pres.id),
+			decision=decision if not waived_discrepancies else "WAIVE",
+			decided_by=actor_id if actor_id else "system",
+			waived_discrepancies=waived_discrepancies or [],
+		)
+		self._session.add(decision_record)
+
+		# Update presentation status via raw SQL to bypass ImmutableRecordMixin (controlled pathway)
+		self._session.execute(
+			update(LCPresentation)
+			.where(LCPresentation.id == pres.id)
+			.values(status=new_status)
+			.execution_options(synchronize_session="fetch")
+		)
+		self._session.flush()
+		# Refresh local object to reflect new status
+		self._session.refresh(pres)
 
 		event_type = (
 			"tf.lc.presentation.accepted" if decision == "ACCEPT"
@@ -677,6 +683,15 @@ class TradeFinanceService:
 
 		amount_to_pay = pres.amount_presented_cents
 
+		# UCP 600 Art 30: enforce tolerance on settlement amount
+		max_lc = money_add(lc.amount_cents, percent_of(lc.amount_cents, lc.tolerance_pct or 10))
+		if lc.amount_utilized_cents + amount_to_pay > max_lc:
+			raise ValueError(
+				f"Settlement amount {amount_to_pay} + utilized {lc.amount_utilized_cents} "
+				f"exceeds LC amount {lc.amount_cents} + tolerance {lc.tolerance_pct}% "
+				f"(max={max_lc})"
+			)
+
 		# Post to GL (non-fatal)
 		journal_id = self._post_to_gl([
 			{
@@ -704,10 +719,6 @@ class TradeFinanceService:
 		lc.amount_utilized_cents = money_add(lc.amount_utilized_cents, amount_to_pay)
 
 		# Determine if LC is now fully utilised
-		max_lc = money_add(
-			lc.amount_cents,
-			percent_of(lc.amount_cents, lc.tolerance_pct or 10),
-		)
 		margin_released = 0
 		if lc.amount_utilized_cents >= lc.amount_cents:
 			lc.status = "PAID"
@@ -721,7 +732,7 @@ class TradeFinanceService:
 		# Mark presentation paid
 		object.__setattr__(pres, "_immutable", False)
 		try:
-			pres.status = "PAID" if hasattr(pres, "status") else "PAID"
+			pres.status = "PAID"
 			pres.payment_made_at = _now()
 			self._session.flush()
 		finally:

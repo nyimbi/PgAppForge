@@ -801,7 +801,7 @@ def _get_documents_expiring(
 	return result
 
 
-def _get_vehicle_tco(
+def get_vehicle_tco(
 	cls: type,
 	session: Any,
 	vehicle_id: str,
@@ -1113,7 +1113,7 @@ FleetService.get_documents_expiring = classmethod(  # type: ignore[method-assign
 	)
 )
 FleetService.get_vehicle_tco = classmethod(  # type: ignore[method-assign]
-	lambda cls, session, vehicle_id, from_date, to_date, tenant_id: _get_vehicle_tco(
+	lambda cls, session, vehicle_id, from_date, to_date, tenant_id: get_vehicle_tco(
 		cls, session, vehicle_id, from_date, to_date, tenant_id
 	)
 )

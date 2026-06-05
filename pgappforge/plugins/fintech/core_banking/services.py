@@ -728,7 +728,7 @@ class CoreBankingService:
 				{
 					"account_code": "CUSTOMER_DEPOSITS",
 					"debit_cents": 0,
-					"credit_cents": credit_amount_cents,
+					"credit_cents": amount_cents,  # use source currency for GL balance; FX tracked in LedgerEntry
 					"party_id": to_acct.id,
 					"description": f"Transfer in {reference}",
 				},

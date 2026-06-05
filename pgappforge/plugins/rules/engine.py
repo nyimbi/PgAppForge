@@ -27,6 +27,26 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _SIMPLE_CACHE: dict[str, tuple[float, list]] = {}
+
+
+def _resolve_value(value: Any, context: dict[str, Any]) -> Any:
+	"""Resolve a rule value against a context dict.
+
+	Supports:
+	  "$field"         — return context[field] (dot-separated key lookup)
+	  "{{field}}"      — string template interpolation (all {{}} replaced)
+	  anything else    — returned as-is
+	"""
+	if isinstance(value, str):
+		if value.startswith("$"):
+			field = value[1:]
+			return context.get(field)
+		if "{{" in value:
+			import re as _re
+			def _sub(m: Any) -> str:
+				return str(context.get(m.group(1), ""))
+			return _re.sub(r"\{\{(\w+)\}\}", _sub, value)
+	return value
 _CACHE_TTL: float = 30.0
 _CACHE_LOCK = threading.Lock()
 
@@ -64,6 +84,15 @@ _OPS: dict[str, Callable[[Any, Any], bool]] = {
 
 class RulesValidationError(Exception):
 	"""Raised when a 'block' action fires; message is user-facing."""
+
+
+class RulesFieldError(RulesValidationError):
+	"""Field-level validation error raised by rules engine (field_name, message)."""
+
+	def __init__(self, field_name: str, message: str) -> None:
+		self.field_name = field_name
+		self.message = message
+		super().__init__(f"{field_name}: {message}")
 
 
 # ---------------------------------------------------------------------------

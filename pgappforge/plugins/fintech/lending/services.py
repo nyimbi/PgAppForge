@@ -44,6 +44,22 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Module-level CoreBankingService singleton (lazy, import-guarded)
+# ---------------------------------------------------------------------------
+
+_cb_service = None
+
+
+def _get_cb():
+	"""Return the module-level CoreBankingService instance (imported once)."""
+	global _cb_service
+	if _cb_service is None:
+		from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
+		_cb_service = CoreBankingService()
+	return _cb_service
+
+
+# ---------------------------------------------------------------------------
 # CBK classification thresholds
 # ---------------------------------------------------------------------------
 
@@ -522,8 +538,7 @@ class LoanOriginationService:
 
 		# Attempt core banking GL entries (non-fatal if CB not loaded)
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
-			cb = CoreBankingService()
+			cb = _get_cb()
 			cb.post_loan_disbursement(
 				session,
 				loan_id=loan.id,
@@ -841,8 +856,7 @@ class LoanManagementService:
 
 		# GL posting (non-fatal)
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
-			cb = CoreBankingService()
+			cb = _get_cb()
 			ledger_id = cb.post_loan_repayment(
 				session,
 				loan_id=loan.id,
@@ -1308,8 +1322,7 @@ class LoanManagementService:
 
 		# GL posting (non-fatal)
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
-			cb = CoreBankingService()
+			cb = _get_cb()
 			cb.post_loan_write_off(
 				session,
 				loan_id=loan.id,
@@ -1399,8 +1412,7 @@ class LoanManagementService:
 
 		# GL posting (non-fatal)
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
-			cb = CoreBankingService()
+			cb = _get_cb()
 			cb.post_loan_recovery(
 				session,
 				loan_id=loan.id,

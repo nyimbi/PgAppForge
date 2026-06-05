@@ -107,23 +107,34 @@ _stub_package("pgappforge.plugins.erp.crm")
 _stub_package("pgappforge.plugins.erp.foundation")
 
 # pgappforge.models.sqla — provide a declarative Base as Model
-from sqlalchemy.orm import DeclarativeBase as _DeclarativeBase
+# When run as part of the full test suite the real module is already loaded;
+# only create a stub for isolated single-file runs.
+if "pgappforge.models.sqla" not in sys.modules:
+	from sqlalchemy.orm import DeclarativeBase as _DeclarativeBase
 
-class _Base(_DeclarativeBase):
-	pass
+	class _Base(_DeclarativeBase):
+		pass
 
-_stub_module("pgappforge.models.sqla", Model=_Base)
+	_stub_module("pgappforge.models.sqla", Model=_Base)
 
-# pgappforge.plugins.audit — AuditMixin as a no-op mixin
-class _AuditMixin:
-	pass
+# pgappforge.plugins.audit — AuditMixin as a no-op mixin (isolated runs only)
+if "pgappforge.plugins.audit" not in sys.modules:
+	class _AuditMixin:
+		pass
 
-_stub_module("pgappforge.plugins.audit", AuditMixin=_AuditMixin)
+	_stub_module("pgappforge.plugins.audit", AuditMixin=_AuditMixin)
 
-# pgappforge.plugins.rules — RulesMixin as a no-op mixin
-_stub_package("pgappforge.plugins.rules")
-_stub_module("pgappforge.plugins.rules.mixin", RulesMixin=object)
-sys.modules["pgappforge.plugins.rules"].RulesMixin = object  # type: ignore[attr-defined]
+# pgappforge.plugins.rules — RulesMixin stub (isolated runs only).
+# When run in the full suite, the real module (with _fire, RulesMixin etc.) is
+# already loaded by test_rules_mixin.py's imports — do NOT replace it.
+# Also: never use `object` as RulesMixin; it causes irresolvable MRO errors when
+# combined with SQLAlchemy's DeclarativeBase.
+if "pgappforge.plugins.rules.mixin" not in sys.modules:
+	class _RulesMixin:
+		"""No-op RulesMixin stub for isolated test runs."""
+
+	_stub_package("pgappforge.plugins.rules")
+	_stub_module("pgappforge.plugins.rules.mixin", RulesMixin=_RulesMixin)
 
 # pgappforge.plugins.base_plugin
 import enum as _enum

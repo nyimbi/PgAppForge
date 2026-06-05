@@ -27,7 +27,7 @@
   },
   "build": {
     "buildCommand": "make build",
-    "testCommand": "uv run pytest tests/ci/test_tax_gap_close.py tests/ci/test_grc_gap_close.py -v 2>&1 | tail -60",
+    "testCommand": ".venv/bin/python -m pytest tests/ci/ -q --tb=no 2>&1 | tail -8",
     "lintCommand": "ruff check",
     "devCommand": null,
     "scripts": {}
@@ -356,14 +356,14 @@
   "hotPaths": [
     {
       "path": "pgappforge/plugins/fintech/core_banking/services.py",
-      "accessCount": 243,
-      "lastAccessed": 1780610193812,
+      "accessCount": 245,
+      "lastAccessed": 1780666043940,
       "type": "file"
     },
     {
       "path": "pgappforge/plugins/fintech/payments/services.py",
-      "accessCount": 119,
-      "lastAccessed": 1780516975610,
+      "accessCount": 129,
+      "lastAccessed": 1780611739649,
       "type": "file"
     },
     {
@@ -385,15 +385,15 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/regulatory/models.py",
-      "accessCount": 105,
-      "lastAccessed": 1780522374311,
+      "path": "pgappforge/plugins/fintech/lending/services.py",
+      "accessCount": 112,
+      "lastAccessed": 1780611712192,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/lending/services.py",
-      "accessCount": 101,
-      "lastAccessed": 1780507250054,
+      "path": "pgappforge/plugins/fintech/regulatory/models.py",
+      "accessCount": 105,
+      "lastAccessed": 1780522374311,
       "type": "file"
     },
     {
@@ -409,21 +409,21 @@
       "type": "file"
     },
     {
+      "path": "pgappforge/plugins/fintech/trade_finance/services.py",
+      "accessCount": 79,
+      "lastAccessed": 1780611758404,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/fintech/regulatory/services.py",
       "accessCount": 77,
       "lastAccessed": 1780522393153,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/trade_finance/services.py",
-      "accessCount": 73,
-      "lastAccessed": 1780610032030,
-      "type": "file"
-    },
-    {
       "path": "pgappforge/plugins/fintech/trade_finance/models.py",
-      "accessCount": 63,
-      "lastAccessed": 1780569370426,
+      "accessCount": 69,
+      "lastAccessed": 1780611634591,
       "type": "file"
     },
     {
@@ -547,6 +547,12 @@
       "type": "file"
     },
     {
+      "path": "tests/ci/test_core_banking_gl.py",
+      "accessCount": 20,
+      "lastAccessed": 1780611770383,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/fintech/sacco/views.py",
       "accessCount": 18,
       "lastAccessed": 1780479432630,
@@ -556,12 +562,6 @@
       "path": "pgappforge/plugins/erp/foundation/commons.py",
       "accessCount": 17,
       "lastAccessed": 1780595829274,
-      "type": "file"
-    },
-    {
-      "path": "tests/ci/test_core_banking_gl.py",
-      "accessCount": 17,
-      "lastAccessed": 1780611378139,
       "type": "file"
     },
     {
@@ -589,9 +589,21 @@
       "type": "file"
     },
     {
+      "path": "tests/ci/conftest.py",
+      "accessCount": 10,
+      "lastAccessed": 1780668001408,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/fintech/core_banking/COMPARISON.md",
       "accessCount": 9,
       "lastAccessed": 1780521023073,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/__init__.py",
+      "accessCount": 9,
+      "lastAccessed": 1780611674053,
       "type": "file"
     },
     {
@@ -610,18 +622,6 @@
       "path": "pgappforge/plugins/erp/foundation/events.py",
       "accessCount": 5,
       "lastAccessed": 1780595615869,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/__init__.py",
-      "accessCount": 5,
-      "lastAccessed": 1780606732397,
-      "type": "file"
-    },
-    {
-      "path": "tests/ci/conftest.py",
-      "accessCount": 3,
-      "lastAccessed": 1780560332827,
       "type": "file"
     },
     {

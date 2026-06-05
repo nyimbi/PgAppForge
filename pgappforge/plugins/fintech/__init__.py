@@ -37,13 +37,15 @@ Or individually::
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import Any
 
 log = logging.getLogger(__name__)
 
 
-# Plugin name → import path mapping (lazy to avoid circular imports at module load)
-_PLUGIN_REGISTRY: dict[str, str] = {
+# Plugin name → import path mapping (lazy to avoid circular imports at module load).
+# Frozen after creation — callers must not mutate this.
+PLUGIN_REGISTRY: MappingProxyType[str, str] = MappingProxyType({
 	"core_banking":    "pgappforge.plugins.fintech.core_banking",
 	"lending":         "pgappforge.plugins.fintech.lending",
 	"payments":        "pgappforge.plugins.fintech.payments",
@@ -52,7 +54,7 @@ _PLUGIN_REGISTRY: dict[str, str] = {
 	"sacco":           "pgappforge.plugins.fintech.sacco",
 	"trade_finance":   "pgappforge.plugins.fintech.trade_finance",
 	"regulatory":      "pgappforge.plugins.fintech.regulatory",
-}
+})
 
 # Install order respects dependency graph:
 #   CoreBanking → [Lending, Payments, MobileMoney, PswitchAdapter]
@@ -105,7 +107,7 @@ def install_all(
 			log.info("fintech.install_all: skipping plugin %r (in skip list)", name)
 			continue
 
-		module_path = _PLUGIN_REGISTRY[name]
+		module_path = PLUGIN_REGISTRY[name]
 		plugin_config = configs.get(name, {})
 
 		try:
@@ -162,6 +164,6 @@ def list_plugins() -> list[str]:
 __all__ = [
 	"install_all",
 	"list_plugins",
-	"_PLUGIN_REGISTRY",
+	"PLUGIN_REGISTRY",
 	"_INSTALL_ORDER",
 ]

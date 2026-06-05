@@ -1537,6 +1537,59 @@ class PresentationDiscrepancy(Model):
 
 
 # ---------------------------------------------------------------------------
+# LCPresentationDecision — INSERT-only audit trail for accept/reject decisions
+# ---------------------------------------------------------------------------
+
+class LCPresentationDecision(AuditMixin, Model):
+	"""Decision record for LC presentation — INSERT-only audit trail.
+
+	Never update this record; each decision creates a new row.
+	Replaces the object.__setattr__(_immutable) hack in accept_or_reject_presentation.
+	The actual presentation status is updated via raw SQL (controlled pathway).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tf_lc_presentation_decision"
+	__table_args__ = (
+		Index("ix_tf_lcd_presentation", "presentation_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(String(64), nullable=False, index=True)
+
+	presentation_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("tf_lc_presentation.id", ondelete="RESTRICT"),
+		nullable=False,
+		index=True,
+	)
+	decision = Column(
+		String(10),
+		nullable=False,
+		comment="ACCEPT | REJECT | WAIVE",
+	)
+	decided_by = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="Actor who made the decision (user UUID or 'system')",
+	)
+	waived_discrepancies = Column(
+		JSONB,
+		nullable=True,
+		comment="List of discrepancy descriptions being waived (WAIVE decisions only)",
+	)
+	notes = Column(Text, nullable=True)
+
+	def __repr__(self) -> str:
+		return (
+			f"<LCPresentationDecision decision={self.decision!r} "
+			f"presentation={self.presentation_id} by={self.decided_by}>"
+		)
+
+
+# ---------------------------------------------------------------------------
 # BatchResult — value object returned by batch processing methods (HIGH gap)
 # ---------------------------------------------------------------------------
 
@@ -1570,5 +1623,6 @@ __all__ = [
 	"TradeAuditEntry",
 	"StandingInstruction",
 	"PresentationDiscrepancy",
+	"LCPresentationDecision",
 	"BatchResult",
 ]

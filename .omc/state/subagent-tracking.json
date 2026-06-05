@@ -2409,11 +2409,22 @@
       "agent_type": "workflow-subagent",
       "started_at": "2026-06-04T22:14:31.859Z",
       "parent_mode": "none",
-      "status": "running"
+      "status": "completed",
+      "completed_at": "2026-06-04T22:19:14.824Z",
+      "duration_ms": 282965
+    },
+    {
+      "agent_id": "a4f8bae77c561d313",
+      "agent_type": "workflow-subagent",
+      "started_at": "2026-06-04T22:19:15.079Z",
+      "parent_mode": "none",
+      "status": "completed",
+      "completed_at": "2026-06-04T22:23:12.927Z",
+      "duration_ms": 237848
     }
   ],
-  "total_spawned": 228,
-  "total_completed": 178,
+  "total_spawned": 229,
+  "total_completed": 180,
   "total_failed": 0,
-  "last_updated": "2026-06-04T22:14:31.962Z"
+  "last_updated": "2026-06-05T12:27:16.508Z"
 }

@@ -91,7 +91,9 @@ class _Base(DeclarativeBase):
 
 sqla_stub = _make_stub("pgappforge.models.sqla")
 sqla_stub.Model = _Base
-sys.modules["pgappforge.models.sqla"] = sqla_stub
+# Only replace if not already loaded by the full test suite (avoids corrupting real Model)
+if "pgappforge.models.sqla" not in sys.modules:
+    sys.modules["pgappforge.models.sqla"] = sqla_stub
 
 # Stub AuditMixin as a no-op mixin
 class _AuditMixin:
@@ -99,7 +101,9 @@ class _AuditMixin:
 
 audit_pkg = _make_stub("pgappforge.plugins.audit")
 audit_pkg.AuditMixin = _AuditMixin
-sys.modules["pgappforge.plugins.audit"] = audit_pkg
+# Only replace if not already loaded
+if "pgappforge.plugins.audit" not in sys.modules:
+    sys.modules["pgappforge.plugins.audit"] = audit_pkg
 
 # Stub foundation events
 _events_emitted: list = []

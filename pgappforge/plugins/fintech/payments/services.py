@@ -82,6 +82,22 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Module-level CoreBankingService singleton (lazy, import-guarded)
+# ---------------------------------------------------------------------------
+
+_cb_service = None
+
+
+def _get_cb():
+	"""Return the module-level CoreBankingService instance (imported once)."""
+	global _cb_service
+	if _cb_service is None:
+		from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
+		_cb_service = CoreBankingService()
+	return _cb_service
+
+
+# ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
 
@@ -323,8 +339,7 @@ class PaymentsService:
 		hold_placed = False
 		total_required = order.amount_cents + (order.charges_cents or 0)
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService  # type: ignore[import]
-			cb_svc = CoreBankingService()
+			cb_svc = _get_cb()
 			hold = cb_svc.place_hold(
 				self._session,
 				str(order.debtor_account_id),
@@ -981,8 +996,7 @@ class PaymentsService:
 		# Credit the beneficiary account in core banking
 		cb_journal_id = ""
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService  # type: ignore[import]
-			cb_svc = CoreBankingService()
+			cb_svc = _get_cb()
 			cb_result = cb_svc.deposit(
 				session=self._session,
 				account_number=creditor_account_number,
@@ -1646,8 +1660,7 @@ class PaymentsService:
 		if not order.hold_id:
 			return False
 		try:
-			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService  # type: ignore[import]
-			cb_svc = CoreBankingService()
+			cb_svc = _get_cb()
 			cb_svc.release_hold(self._session, order.hold_id)
 			log.debug(
 				"PaymentsService._release_hold: released hold %s for %s (%s)",
