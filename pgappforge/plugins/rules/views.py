@@ -457,8 +457,9 @@ class RulesBuilderView(BaseView):
 	@has_access
 	def api_test(self):
 		"""
-		Dry-run: evaluate conditions against a synthetic record dict.
-		Does NOT execute actions — returns which actions *would* trigger.
+		Dry-run: evaluate conditions against a synthetic record dict using
+		evaluate_dry() for a full structured result.
+		Does NOT execute actions — returns what *would* happen.
 		"""
 		session = _get_session()
 		from .models import RuleSet
@@ -467,6 +468,7 @@ class RulesBuilderView(BaseView):
 		data       = request.get_json(silent=True) or {}
 		ruleset_id = data.get("ruleset_id")
 		record_ctx = data.get("record") or {}
+		event      = data.get("event", "on_create")
 
 		if not ruleset_id:
 			return _json_error("ruleset_id is required")
@@ -475,27 +477,162 @@ class RulesBuilderView(BaseView):
 		if rs is None:
 			return _json_error("RuleSet not found", 404)
 
-		engine = RulesEngine()
-		results = []
-		for rule in rs.rules:
-			if not rule.enabled:
-				continue
-			conditions = rule.conditions_json or []
-			matched = engine._evaluate_conditions(conditions, record_ctx)
-			actions_triggered = []
-			if matched:
-				actions_triggered = [
-					{"type": a.get("type"), "params": {k: v for k, v in a.items() if k != "type"}}
-					for a in (rule.actions_json or [])
-				]
-			results.append({
-				"rule_id":           rule.id,
-				"rule_name":         rule.name,
-				"matched":           matched,
-				"actions_triggered": actions_triggered,
-			})
+		# Build a proxy object that supports getattr() for evaluate_dry()
+		class _RecordProxy:
+			def __init__(self, d: dict[str, Any]) -> None:
+				self.__dict__.update(d)
 
-		return jsonify({"ruleset": rs.name, "results": results})
+		record_proxy = _RecordProxy(record_ctx)
+		engine = RulesEngine()
+		dry_run = engine.evaluate_dry(rs.model_name, event, record_proxy, session=session)
+
+		return jsonify({"ruleset": rs.name, "dry_run": dry_run})
+
+	# ------------------------------------------------------------------
+	# API — Validate rule JSON structure
+	# ------------------------------------------------------------------
+
+	@expose("/api/validate", methods=("POST",))
+	@has_access
+	def api_validate(self):
+		"""Validate rule JSON structure — conditions and actions syntax only."""
+		from .engine import _OPS
+
+		data       = request.get_json(silent=True) or {}
+		conditions = data.get("conditions_json") or []
+		actions    = data.get("actions_json") or []
+
+		errors: list[dict[str, str]] = []
+
+		# --- validate conditions ---
+		valid_ops = set(_OPS.keys())
+		for i, cond in enumerate(conditions):
+			path_prefix = f"conditions[{i}]"
+			if not isinstance(cond, dict):
+				errors.append({"path": path_prefix, "message": "must be an object"})
+				continue
+			if not cond.get("field") or not isinstance(cond.get("field"), str):
+				errors.append({"path": f"{path_prefix}.field", "message": "field is required and must be a string"})
+			op = cond.get("op")
+			if not op:
+				errors.append({"path": f"{path_prefix}.op", "message": "op is required"})
+			elif op not in valid_ops:
+				errors.append({
+					"path": f"{path_prefix}.op",
+					"message": f"unknown op {op!r}; valid: {sorted(valid_ops)}",
+				})
+			if "value" not in cond:
+				errors.append({"path": f"{path_prefix}.value", "message": "value key is required"})
+
+		# --- validate actions ---
+		valid_action_types = {
+			"block", "set_field", "add_error", "send_email",
+			"call_webhook", "create_record", "start_workflow",
+		}
+		for i, action in enumerate(actions):
+			path_prefix = f"actions[{i}]"
+			if not isinstance(action, dict):
+				errors.append({"path": path_prefix, "message": "must be an object"})
+				continue
+			atype = action.get("type")
+			if not atype:
+				errors.append({"path": f"{path_prefix}.type", "message": "type is required"})
+				continue
+			if atype not in valid_action_types:
+				errors.append({
+					"path": f"{path_prefix}.type",
+					"message": f"unknown type {atype!r}; valid: {sorted(valid_action_types)}",
+				})
+				continue
+			if atype == "set_field":
+				if not action.get("field"):
+					errors.append({"path": f"{path_prefix}.field", "message": "set_field requires field"})
+			if atype in ("block", "add_error"):
+				if not action.get("message"):
+					errors.append({"path": f"{path_prefix}.message", "message": f"{atype} requires message"})
+			if atype == "add_error":
+				if not action.get("field"):
+					errors.append({"path": f"{path_prefix}.field", "message": "add_error requires field"})
+			if atype == "call_webhook":
+				if not action.get("url"):
+					errors.append({"path": f"{path_prefix}.url", "message": "call_webhook requires url"})
+			if atype == "create_record":
+				if not action.get("model"):
+					errors.append({"path": f"{path_prefix}.model", "message": "create_record requires model"})
+			if atype == "start_workflow":
+				if not action.get("workflow_type"):
+					errors.append({"path": f"{path_prefix}.workflow_type", "message": "start_workflow requires workflow_type"})
+
+		return jsonify({"valid": len(errors) == 0, "errors": errors})
+
+	# ------------------------------------------------------------------
+	# API — Visualize ruleset as Mermaid flowchart
+	# ------------------------------------------------------------------
+
+	@expose("/api/visualize/<int:rs_id>", methods=("GET",))
+	@has_access
+	def api_visualize(self, rs_id: int):
+		"""Return a Mermaid flowchart diagram of the ruleset's rule flow."""
+		session = _get_session()
+		from .models import RuleSet
+
+		rs = session.get(RuleSet, rs_id)
+		if rs is None:
+			return _json_error("not found", 404)
+
+		rules = [r for r in rs.rules if r.enabled]
+
+		def _safe_id(text: str) -> str:
+			"""Strip Mermaid-unsafe chars from node labels."""
+			import re
+			return re.sub(r'[^a-zA-Z0-9_]', '_', text)
+
+		def _trunc(text: str, n: int = 30) -> str:
+			return text[:n] + "…" if len(text) > n else text
+
+		lines: list[str] = ["flowchart TD"]
+		rs_label = _trunc(rs.name, 35)
+		lines.append(f'    START(["{rs_label}"])')
+
+		prev = "START"
+		for i, rule in enumerate(rules):
+			rule_node = f"R{i + 1}"
+			rule_label = _trunc(f"{rule.name}\\n{rule.trigger_event}", 50)
+			lines.append(f'    {rule_node}{{"{rule_label}"}}')
+			lines.append(f'    {prev} --> {rule_node}')
+
+			# Emit one node per action
+			for j, action in enumerate(rule.actions_json or []):
+				atype = action.get("type", "unknown")
+				a_node = f"A{i + 1}_{j + 1}"
+				if atype == "block":
+					detail = _trunc(action.get("message", ""), 25)
+					a_label = f"block: {detail}"
+				elif atype == "add_error":
+					detail = _trunc(action.get("message", ""), 25)
+					a_label = f"add_error({action.get('field','')}): {detail}"
+				elif atype == "set_field":
+					a_label = f"set_field: {action.get('field','')}={_trunc(str(action.get('value','')), 15)}"
+				elif atype == "send_email":
+					a_label = f"send_email: {_trunc(action.get('to',''), 20)}"
+				elif atype == "call_webhook":
+					a_label = f"webhook: {_trunc(action.get('url',''), 20)}"
+				elif atype == "create_record":
+					a_label = f"create_record: {action.get('model','')}"
+				elif atype == "start_workflow":
+					a_label = f"start_workflow: {action.get('workflow_type','')}"
+				else:
+					a_label = f"action: {atype}"
+				lines.append(f'    {a_node}["{a_label}"]')
+				lines.append(f'    {rule_node} -->|"conditions match"| {a_node}')
+
+			prev = rule_node
+
+		lines.append(f'    END([Done])')
+		lines.append(f'    {prev} -->|"no match"| END')
+
+		mermaid = "\n".join(lines)
+		return jsonify({"mermaid": mermaid})
 
 	# ------------------------------------------------------------------
 	# API — Export / Import

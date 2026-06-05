@@ -7,11 +7,36 @@
   #conditions-container .row,
   #actions-container .row { margin-bottom: 6px; }
   .rules-toolbar { margin-bottom: 16px; }
+
+  /* Validation badges on rows */
+  .cond-valid-badge, .action-valid-badge {
+    position: absolute; right: 36px; top: 6px;
+    font-size: 11px; pointer-events: none;
+  }
+  .condition-row, .action-row { position: relative; }
+
+  /* Visualizer */
+  #visualizer-diagram svg { max-width: 100%; height: auto; }
+  #visualizer-diagram { overflow-x: auto; min-height: 80px; }
+
+  /* Dry-run result table */
+  #test-result-area table td:first-child { white-space: nowrap; font-weight: 600; }
+  #test-result-area .badge-block  { background: #d9534f; }
+  #test-result-area .badge-ok     { background: #5cb85c; }
+
+  /* Real-time validate spinner */
+  #validate-spinner { display:none; margin-left: 8px; }
+
+  /* Value helper tooltip trigger */
+  .btn-value-helper { padding: 2px 5px; font-size: 11px; }
 </style>
 {% endblock %}
 
 {% block head_js %}
 {{ super() }}
+<!-- Mermaid.js for flowchart rendering -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad: false, theme: 'default'});</script>
 <script src="{{ appbuilder.static_folder }}/js/rules_builder.js"></script>
 {% endblock %}
 
@@ -83,6 +108,10 @@
               <i class="fa fa-download"></i>
             </button>
             <button class="btn btn-xs btn-default"
+                    onclick="visualizeRuleset({{ rs.id }})">
+              <i class="fa fa-sitemap"></i> {{ _("Viz") }}
+            </button>
+            <button class="btn btn-xs btn-default"
                     onclick="toggleRuleset({{ rs.id }}, {{ 'false' if rs.enabled else 'true' }})">
               {% if rs.enabled %}
               <i class="fa fa-pause"></i> {{ _("Disable") }}
@@ -105,11 +134,24 @@
     </table>
   </div>
 
+  <!-- Visualizer panel (shown after clicking Viz button) -->
+  <div id="visualizer-panel" class="panel panel-info" style="display:none">
+    <div class="panel-heading">
+      <strong><i class="fa fa-sitemap"></i> {{ _("Ruleset Flowchart") }}</strong>
+      <button type="button" class="close" onclick="$('#visualizer-panel').hide()">&times;</button>
+    </div>
+    <div class="panel-body">
+      <div id="visualizer-diagram">
+        <span class="text-muted">{{ _("Loading diagram…") }}</span>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /container-fluid -->
 
 
 <!-- =====================================================================
-     RuleSet Modal
+     RuleSet Modal  — with Designer / Validator / Visualizer tabs
      ===================================================================== -->
 <div class="modal fade" id="rulesetModal" tabindex="-1" role="dialog"
      aria-labelledby="rulesetModalTitle">
@@ -126,92 +168,161 @@
       <div class="modal-body">
         <input type="hidden" id="ruleset-id" value=""/>
 
-        <div class="row">
-          <div class="col-sm-6">
-            <div class="form-group">
-              <label>{{ _("RuleSet Name") }} <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" id="ruleset-name"
-                     placeholder="{{ _('e.g. Invoice Validation Rules') }}"/>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="form-group">
-              <label>{{ _("Model Name") }} <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" id="ruleset-model"
-                     placeholder="{{ _('e.g. Invoice') }}"/>
-            </div>
-          </div>
-          <div class="col-sm-2">
-            <div class="form-group">
-              <label>{{ _("Priority") }}</label>
-              <input type="number" class="form-control" id="ruleset-priority" value="100"/>
-            </div>
-          </div>
-        </div>
+        <!-- Bootstrap tabs: Designer / Validator / Visualizer -->
+        <ul class="nav nav-tabs" id="modal-tabs" role="tablist">
+          <li role="presentation" class="active">
+            <a href="#tab-designer" aria-controls="tab-designer" role="tab"
+               data-toggle="tab">
+              <i class="fa fa-magic"></i> {{ _("Designer") }}
+            </a>
+          </li>
+          <li role="presentation">
+            <a href="#tab-validator" aria-controls="tab-validator" role="tab"
+               data-toggle="tab" onclick="validateRule()">
+              <i class="fa fa-check-circle"></i> {{ _("Validate") }}
+              <span id="validate-spinner">
+                <i class="fa fa-spinner fa-spin"></i>
+              </span>
+            </a>
+          </li>
+          <li role="presentation">
+            <a href="#tab-visualizer" aria-controls="tab-visualizer" role="tab"
+               data-toggle="tab" onclick="visualizeCurrentRuleset()">
+              <i class="fa fa-sitemap"></i> {{ _("Visualize") }}
+            </a>
+          </li>
+        </ul>
 
-        <div class="form-group">
-          <label>{{ _("Description") }}</label>
-          <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
-        </div>
+        <div class="tab-content" style="padding-top: 16px;">
 
-        <hr/>
-        <h5>{{ _("Rule") }}</h5>
+          <!-- ---- Designer tab ---- -->
+          <div role="tabpanel" class="tab-pane active" id="tab-designer">
 
-        <div class="row">
-          <div class="col-sm-6">
-            <div class="form-group">
-              <label>{{ _("Rule Name") }}</label>
-              <input type="text" class="form-control" id="rule-name"
-                     placeholder="{{ _('e.g. Block zero-amount invoices') }}"/>
+            <div class="row">
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label>{{ _("RuleSet Name") }} <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="ruleset-name"
+                         placeholder="{{ _('e.g. Invoice Validation Rules') }}"/>
+                </div>
+              </div>
+              <div class="col-sm-4">
+                <div class="form-group">
+                  <label>{{ _("Model Name") }} <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="ruleset-model"
+                         placeholder="{{ _('e.g. Invoice') }}"/>
+                </div>
+              </div>
+              <div class="col-sm-2">
+                <div class="form-group">
+                  <label>{{ _("Priority") }}</label>
+                  <input type="number" class="form-control" id="ruleset-priority" value="100"/>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="col-sm-6">
-            <div class="form-group">
-              <label>{{ _("Trigger Event") }}</label>
-              <select class="form-control" id="rule-trigger">
-                <option value="on_create">on_create</option>
-                <option value="on_update">on_update</option>
-                <option value="on_delete">on_delete</option>
-                <option value="on_field_change:">on_field_change: &lt;field&gt;</option>
-              </select>
-            </div>
-          </div>
-        </div>
 
-        <div class="panel panel-default">
-          <div class="panel-heading">
-            <strong>{{ _("Conditions") }}</strong>
-            <small class="text-muted">{{ _("(all AND unless logic=OR)") }}</small>
-          </div>
-          <div class="panel-body">
-            <div id="conditions-container"></div>
-            <button type="button" class="btn btn-xs btn-default"
-                    onclick="addConditionRow()">
-              <i class="fa fa-plus"></i> {{ _("Add Condition") }}
+            <div class="form-group">
+              <label>{{ _("Description") }}</label>
+              <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
+            </div>
+
+            <hr/>
+            <h5>{{ _("Rule") }}</h5>
+
+            <div class="row">
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label>{{ _("Rule Name") }}</label>
+                  <input type="text" class="form-control" id="rule-name"
+                         placeholder="{{ _('e.g. Block zero-amount invoices') }}"/>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label>{{ _("Trigger Event") }}</label>
+                  <select class="form-control" id="rule-trigger">
+                    <option value="on_create">on_create</option>
+                    <option value="on_update">on_update</option>
+                    <option value="on_delete">on_delete</option>
+                    <option value="on_field_change:">on_field_change: &lt;field&gt;</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <strong>{{ _("Conditions") }}</strong>
+                <small class="text-muted">{{ _("(all AND unless logic=OR)") }}</small>
+              </div>
+              <div class="panel-body">
+                <div id="conditions-container"></div>
+                <button type="button" class="btn btn-xs btn-default"
+                        onclick="addConditionRow()">
+                  <i class="fa fa-plus"></i> {{ _("Add Condition") }}
+                </button>
+                <small class="text-muted" style="margin-left:12px">
+                  <i class="fa fa-info-circle"></i>
+                  {{ _("Use") }} <code>$field</code> {{ _("for field reference,") }}
+                  <code>{{"{{"}}field{{"}}"}}</code> {{ _("for template value") }}
+                </small>
+              </div>
+            </div>
+
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <strong>{{ _("Actions") }}</strong>
+              </div>
+              <div class="panel-body">
+                <div id="actions-container"></div>
+                <button type="button" class="btn btn-xs btn-default"
+                        onclick="addActionRow()">
+                  <i class="fa fa-plus"></i> {{ _("Add Action") }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Test result (formatted table, shown after Test click) -->
+            <div id="test-result-area" class="well" style="display:none"></div>
+
+          </div><!-- /tab-designer -->
+
+
+          <!-- ---- Validator tab ---- -->
+          <div role="tabpanel" class="tab-pane" id="tab-validator">
+            <div id="validator-results">
+              <p class="text-muted">
+                <i class="fa fa-info-circle"></i>
+                {{ _("Click the Validate tab or the button below to check your conditions and actions.") }}
+              </p>
+            </div>
+            <button type="button" class="btn btn-default btn-sm"
+                    onclick="validateRule()">
+              <i class="fa fa-check-circle"></i> {{ _("Re-validate") }}
             </button>
-          </div>
-        </div>
+          </div><!-- /tab-validator -->
 
-        <div class="panel panel-default">
-          <div class="panel-heading">
-            <strong>{{ _("Actions") }}</strong>
-          </div>
-          <div class="panel-body">
-            <div id="actions-container"></div>
-            <button type="button" class="btn btn-xs btn-default"
-                    onclick="addActionRow()">
-              <i class="fa fa-plus"></i> {{ _("Add Action") }}
-            </button>
-          </div>
-        </div>
 
-        <div id="test-result-area" class="alert alert-info" style="display:none"></div>
+          <!-- ---- Visualizer tab ---- -->
+          <div role="tabpanel" class="tab-pane" id="tab-visualizer">
+            <div id="modal-visualizer-diagram">
+              <p class="text-muted">
+                <i class="fa fa-info-circle"></i>
+                {{ _("Save the ruleset first, then click this tab to render the flowchart.") }}
+              </p>
+            </div>
+          </div><!-- /tab-visualizer -->
+
+        </div><!-- /tab-content -->
 
       </div><!-- /modal-body -->
 
       <div class="modal-footer">
         <button type="button" class="btn btn-default" data-dismiss="modal">
           {{ _("Cancel") }}
+        </button>
+        <button type="button" class="btn btn-warning" onclick="validateRule()">
+          <i class="fa fa-check-circle"></i> {{ _("Validate") }}
         </button>
         <button type="button" class="btn btn-info" onclick="testRule()">
           <i class="fa fa-play"></i> {{ _("Test") }}
