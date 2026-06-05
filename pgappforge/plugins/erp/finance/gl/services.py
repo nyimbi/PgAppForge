@@ -510,6 +510,147 @@ class GLService:
 		return result
 
 	# ------------------------------------------------------------------
+	# get_income_statement
+	# ------------------------------------------------------------------
+
+	def get_income_statement(self, period_id: str, session: Any) -> dict:
+		"""Return an Income Statement (Profit & Loss) for a period.
+
+		Aggregates REVENUE and EXPENSE accounts from the trial balance.
+		All amounts in integer cents.
+
+		Returns::
+
+			{
+				"period_id": str,
+				"revenue": [{"account_code", "account_name", "amount_cents"}],
+				"total_revenue_cents": int,
+				"expenses": [{"account_code", "account_name", "amount_cents"}],
+				"total_expense_cents": int,
+				"net_income_cents": int,          # positive = profit, negative = loss
+				"gross_profit_cents": int | None, # if COGS accounts marked in config
+			}
+		"""
+		tb = self.get_trial_balance(period_id, session)
+
+		revenue_rows = []
+		expense_rows = []
+		total_revenue = 0
+		total_expense = 0
+
+		for row in tb:
+			atype = row["account_type"]
+			code  = row["account_code"]
+			name  = row["account_name"]
+
+			if atype == "REVENUE":
+				# Revenue accounts have CREDIT normal balance
+				amount = row["closing_credit"] - row["closing_debit"]
+				if amount != 0:
+					revenue_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
+					total_revenue += amount
+
+			elif atype == "EXPENSE":
+				# Expense accounts have DEBIT normal balance
+				amount = row["closing_debit"] - row["closing_credit"]
+				if amount != 0:
+					expense_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
+					total_expense += amount
+
+		net_income = total_revenue - total_expense
+
+		return {
+			"period_id": period_id,
+			"revenue": revenue_rows,
+			"total_revenue_cents": total_revenue,
+			"expenses": expense_rows,
+			"total_expense_cents": total_expense,
+			"net_income_cents": net_income,
+		}
+
+	# ------------------------------------------------------------------
+	# get_balance_sheet
+	# ------------------------------------------------------------------
+
+	def get_balance_sheet(self, period_id: str, session: Any) -> dict:
+		"""Return a Balance Sheet as of the end of the given period.
+
+		Assets = Liabilities + Equity (+ Net Income for the period).
+		All amounts in integer cents.
+
+		Returns::
+
+			{
+				"period_id": str,
+				"assets": {"current": [...], "non_current": [...], "total_cents": int},
+				"liabilities": {"current": [...], "non_current": [...], "total_cents": int},
+				"equity": {"accounts": [...], "total_cents": int},
+				"net_income_cents": int,     # from income statement
+				"total_equity_and_income_cents": int,
+				"balanced": bool,            # assets == liabilities + equity + net_income
+				"variance_cents": int,       # zero when accounts are complete
+			}
+		"""
+		tb    = self.get_trial_balance(period_id, session)
+		p_and_l = self.get_income_statement(period_id, session)
+		net_income = p_and_l["net_income_cents"]
+
+		asset_rows      = []
+		liability_rows  = []
+		equity_rows     = []
+		total_assets    = 0
+		total_liab      = 0
+		total_equity    = 0
+
+		for row in tb:
+			atype = row["account_type"]
+			code  = row["account_code"]
+			name  = row["account_name"]
+
+			if atype == "ASSET":
+				amount = row["closing_debit"] - row["closing_credit"]
+				if amount != 0:
+					asset_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
+					total_assets += amount
+
+			elif atype == "LIABILITY":
+				amount = row["closing_credit"] - row["closing_debit"]
+				if amount != 0:
+					liability_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
+					total_liab += amount
+
+			elif atype == "EQUITY":
+				amount = row["closing_credit"] - row["closing_debit"]
+				if amount != 0:
+					equity_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
+					total_equity += amount
+
+		# Skip REVENUE/EXPENSE here — they flow through net_income_cents
+		total_equity_and_income = total_equity + net_income
+		variance = total_assets - (total_liab + total_equity_and_income)
+
+		return {
+			"period_id": period_id,
+			"assets": {
+				"accounts": asset_rows,
+				"total_cents": total_assets,
+			},
+			"liabilities": {
+				"accounts": liability_rows,
+				"total_cents": total_liab,
+			},
+			"equity": {
+				"accounts": equity_rows,
+				"retained_earnings_cents": total_equity,
+				"net_income_cents": net_income,
+				"total_cents": total_equity_and_income,
+			},
+			"total_liabilities_and_equity_cents": total_liab + total_equity_and_income,
+			"balanced": variance == 0,
+			"variance_cents": variance,
+		}
+
+	# ------------------------------------------------------------------
 	# get_account_balance
 	# ------------------------------------------------------------------
 

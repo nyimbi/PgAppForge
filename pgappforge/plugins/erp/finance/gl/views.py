@@ -610,11 +610,37 @@ class GLReportView(BaseView):
 	def index(self):
 		return jsonify({
 			"reports": [
-				{"name": "Trial Balance", "endpoint": "/gl/reports/trial-balance/<period_id>"},
-				{"name": "Budget vs Actual", "endpoint": "/gl/reports/budget-vs-actual/<period_id>"},
-				{"name": "Account Ledger", "endpoint": "/gl/reports/account-ledger/<account_code>"},
+				{"name": "Trial Balance",     "endpoint": "/gl/reports/trial-balance/<period_id>"},
+				{"name": "Income Statement",  "endpoint": "/gl/reports/income-statement/<period_id>"},
+				{"name": "Balance Sheet",     "endpoint": "/gl/reports/balance-sheet/<period_id>"},
+				{"name": "Budget vs Actual",  "endpoint": "/gl/reports/budget-vs-actual/<period_id>"},
+				{"name": "Account Ledger",    "endpoint": "/gl/reports/account-ledger/<account_code>"},
 			]
 		})
+
+	@expose("/income-statement/<string:period_id>")
+	@has_access
+	def income_statement(self, period_id: str):
+		"""Income Statement (Profit & Loss) for a GL period.
+
+		Returns revenue accounts, expense accounts, and net income.
+		Positive net_income_cents = profit; negative = loss.
+		"""
+		session = _get_session()
+		result = _svc().get_income_statement(period_id, session)
+		return jsonify(result)
+
+	@expose("/balance-sheet/<string:period_id>")
+	@has_access
+	def balance_sheet(self, period_id: str):
+		"""Balance Sheet as of the end of a GL period.
+
+		Assets = Liabilities + Equity + Net Income for the period.
+		The 'balanced' field is True when the accounting equation holds.
+		"""
+		session = _get_session()
+		result = _svc().get_balance_sheet(period_id, session)
+		return jsonify(result)
 
 	@expose("/trial-balance/<string:period_id>")
 	@has_access
