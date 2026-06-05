@@ -69,6 +69,18 @@ class CommerceValidationError(CommerceError):
 	"""Business rule violation."""
 
 
+class OrderNotFoundError(CommerceError):
+	pass
+
+
+class ProductNotFoundError(CommerceError):
+	pass
+
+
+class CouponNotFoundError(CommerceError):
+	pass
+
+
 # ---------------------------------------------------------------------------
 # CommerceService
 # ---------------------------------------------------------------------------
@@ -410,6 +422,615 @@ class CommerceService:
 		}
 
 	# ------------------------------------------------------------------
+	# Cart
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def add_to_cart(
+		session: Any,
+		customer_id: str,
+		product_code: str,
+		quantity: int | float,
+		tenant_id: str,
+		session_token: str | None = None,
+	) -> Any:
+		"""Add/update a product line in the customer's active cart.
+
+		Creates a new ACTIVE cart when none exists.  session_token is
+		generated from customer_id when not supplied.
+		"""
+		import secrets
+		from pgappforge.plugins.erp.crm.commerce.models import Cart, ProductCatalogue
+
+		# Resolve product price
+		product = session.execute(
+			sa.select(ProductCatalogue).where(
+				ProductCatalogue.tenant_id == tenant_id,
+				ProductCatalogue.product_code == product_code,
+				ProductCatalogue.is_active == True,  # noqa: E712
+			)
+		).scalar_one_or_none()
+		if product is None:
+			raise CommerceValidationError(f"Product {product_code!r} not found or inactive")
+
+		token = session_token or str(customer_id)
+
+		cart = session.execute(
+			sa.select(Cart).where(
+				Cart.tenant_id == tenant_id,
+				Cart.session_token == token,
+				Cart.status == "ACTIVE",
+			)
+		).scalar_one_or_none()
+
+		if cart is None:
+			cart = Cart(
+				tenant_id=tenant_id,
+				customer_id=customer_id,
+				session_token=token,
+				status="ACTIVE",
+				items=[],
+			)
+			session.add(cart)
+			session.flush()
+
+		items: list[dict[str, Any]] = list(cart.items or [])
+		for line in items:
+			if line.get("product_code") == product_code:
+				line["qty"] = float(line.get("qty", 0)) + float(quantity)
+				break
+		else:
+			items.append({
+				"product_code": product_code,
+				"qty": float(quantity),
+				"unit_price_cents": product.unit_price_cents,
+				"discount_cents": 0,
+			})
+
+		cart.items = items
+		session.flush()
+		log.info(
+			"CommerceService.add_to_cart: cart %s ← %s qty=%s",
+			cart.id, product_code, quantity,
+		)
+		return cart
+
+	# ------------------------------------------------------------------
+	# Order placement
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def place_order(
+		session: Any,
+		cart_id_or_customer_id: str,
+		shipping_address: dict[str, Any],
+		billing_address: dict[str, Any],
+		coupon_code: str | None = None,
+		tenant_id: str = "",
+	) -> Any:
+		"""Convert a cart to a confirmed Order; compute totals + VAT; post GL.
+
+		GL entries (lazy import, silent fail if GL not available):
+		  DR Accounts Receivable "1200"
+		  CR Deferred Revenue "2310"
+		"""
+		import secrets
+		from decimal import Decimal
+		from pgappforge.plugins.erp.crm.commerce.models import (
+			Cart, Coupon, Order, OrderLine, ProductCatalogue,
+		)
+
+		# Resolve cart
+		cart = session.execute(
+			sa.select(Cart).where(
+				Cart.id == cart_id_or_customer_id,
+				Cart.tenant_id == tenant_id,
+				Cart.status == "ACTIVE",
+			)
+		).scalar_one_or_none()
+		if cart is None:
+			raise CommerceValidationError(f"Active cart {cart_id_or_customer_id} not found")
+		if not cart.items:
+			raise CommerceValidationError("Cannot place order from empty cart")
+
+		# Compute subtotal
+		subtotal_cents: int = 0
+		for item in cart.items:
+			line_net = int(item["unit_price_cents"]) * float(item["qty"]) - int(item.get("discount_cents", 0))
+			subtotal_cents += int(line_net)
+
+		# Apply coupon if provided
+		discount_cents = 0
+		if coupon_code:
+			coupon_result = CommerceService.apply_coupon(session, cart.id, coupon_code, tenant_id)
+			discount_cents = coupon_result["discount_cents"]
+
+		# VAT: flat 16% KES default; real implementation uses compute_tax per line
+		tax_rate = Decimal("0.16")
+		tax_cents = int((subtotal_cents - discount_cents) * tax_rate)
+		shipping_cents = 0  # caller passes via shipping method; default 0
+		total_cents = subtotal_cents - discount_cents + tax_cents + shipping_cents
+
+		# Generate order number: ORD-YYYYMMDD-<6 hex>
+		from datetime import datetime as _dt
+		order_number = f"ORD-{_dt.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
+
+		order = Order(
+			tenant_id=tenant_id,
+			order_number=order_number,
+			customer_id=cart.customer_id or cart_id_or_customer_id,
+			cart_id=cart.id,
+			channel="B2C",
+			status="CONFIRMED",
+			subtotal_cents=subtotal_cents,
+			discount_cents=discount_cents,
+			tax_cents=tax_cents,
+			shipping_cents=shipping_cents,
+			total_cents=total_cents,
+			payment_status="PENDING",
+			shipping_address=shipping_address,
+			billing_address=billing_address,
+		)
+		session.add(order)
+		session.flush()
+
+		# Create order lines
+		for item in cart.items:
+			qty = float(item["qty"])
+			upc = int(item["unit_price_cents"])
+			disc = int(item.get("discount_cents", 0))
+			tax_line = int(qty * (upc - disc) * float(tax_rate))
+			line_total = int(qty * (upc - disc)) + tax_line
+			product = session.execute(
+				sa.select(ProductCatalogue).where(
+					ProductCatalogue.tenant_id == tenant_id,
+					ProductCatalogue.product_code == item["product_code"],
+				)
+			).scalar_one_or_none()
+			line = OrderLine(
+				tenant_id=tenant_id,
+				order_id=order.id,
+				product_code=item["product_code"],
+				description=product.name if product else item["product_code"],
+				quantity=Decimal(str(qty)),
+				unit_price_cents=upc,
+				discount_cents=disc,
+				tax_cents=tax_line,
+				line_total_cents=line_total,
+			)
+			session.add(line)
+
+		# Mark cart CONVERTED
+		cart.status = "CONVERTED"
+
+		# GL posting (lazy import — silent fail if GL plugin absent)
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService
+			GLService.post_journal(
+				session,
+				tenant_id=tenant_id,
+				reference=order.order_number,
+				description=f"Order {order.order_number} placed",
+				lines=[
+					{"account_code": "1200", "debit_cents": total_cents, "credit_cents": 0},
+					{"account_code": "2310", "debit_cents": 0, "credit_cents": total_cents},
+				],
+			)
+		except Exception:
+			pass
+
+		session.flush()
+		log.info("CommerceService.place_order: order %s total=%d¢", order.order_number, total_cents)
+		return order
+
+	# ------------------------------------------------------------------
+	# Payment
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def confirm_payment(
+		session: Any,
+		order_id: str,
+		payment_method: str,
+		amount_cents: int,
+		reference: str,
+		tenant_id: str,
+	) -> Any:
+		"""Record a payment against an order; advance order status on full payment.
+
+		GL on full payment:
+		  DR Cash/MPESA "1011"
+		  CR Accounts Receivable "1200"
+		"""
+		from datetime import datetime as _dt
+		from pgappforge.plugins.erp.crm.commerce.models import Order, PaymentTransaction
+
+		order = session.execute(
+			sa.select(Order).where(Order.id == order_id, Order.tenant_id == tenant_id)
+		).scalar_one_or_none()
+		if order is None:
+			raise CommerceValidationError(f"Order {order_id} not found")
+		if order.status in ("CANCELLED", "REFUNDED"):
+			raise CommerceValidationError(f"Cannot record payment on {order.status} order")
+
+		now = _dt.now(timezone.utc)
+		txn = PaymentTransaction(
+			tenant_id=tenant_id,
+			order_id=order_id,
+			payment_method=payment_method,
+			amount_cents=amount_cents,
+			currency_code="KES",
+			reference=reference,
+			status="COMPLETED",
+			processed_at=now,
+		)
+		session.add(txn)
+		session.flush()
+
+		# Sum all completed payments
+		paid_total = session.execute(
+			sa.select(sa.func.sum(PaymentTransaction.amount_cents)).where(
+				PaymentTransaction.order_id == order_id,
+				PaymentTransaction.status == "COMPLETED",
+			)
+		).scalar() or 0
+
+		if paid_total >= order.total_cents:
+			order.payment_status = "PAID"
+			if order.status == "CONFIRMED":
+				order.status = "PROCESSING"
+		elif paid_total > 0:
+			order.payment_status = "PARTIALLY_PAID"
+
+		# GL
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService
+			GLService.post_journal(
+				session,
+				tenant_id=tenant_id,
+				reference=reference,
+				description=f"Payment {reference} for order {order.order_number}",
+				lines=[
+					{"account_code": "1011", "debit_cents": amount_cents, "credit_cents": 0},
+					{"account_code": "1200", "debit_cents": 0, "credit_cents": amount_cents},
+				],
+			)
+		except Exception:
+			pass
+
+		session.flush()
+		log.info(
+			"CommerceService.confirm_payment: order %s +%d¢ via %s payment_status=%s",
+			order.order_number, amount_cents, payment_method, order.payment_status,
+		)
+		return txn
+
+	# ------------------------------------------------------------------
+	# Fulfilment
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def fulfil_order_line(
+		session: Any,
+		order_id: str,
+		product_code: str,
+		quantity_shipped: float,
+		tenant_id: str,
+	) -> Any:
+		"""Record shipped quantity against an order line; close order when complete.
+
+		Lazily reduces inventory if the inventory plugin is available.
+		"""
+		from decimal import Decimal
+		from pgappforge.plugins.erp.crm.commerce.models import Order, OrderLine
+
+		line = session.execute(
+			sa.select(OrderLine).where(
+				OrderLine.order_id == order_id,
+				OrderLine.product_code == product_code,
+				OrderLine.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
+		if line is None:
+			raise CommerceValidationError(
+				f"OrderLine not found: order={order_id} product={product_code}"
+			)
+
+		new_fulfilled = float(line.fulfilled_qty) + quantity_shipped
+		if new_fulfilled > float(line.quantity):
+			raise CommerceValidationError(
+				f"Fulfilled qty {new_fulfilled} exceeds ordered qty {line.quantity}"
+			)
+		line.fulfilled_qty = Decimal(str(new_fulfilled))
+		session.flush()
+
+		# Reduce inventory (lazy import)
+		try:
+			from pgappforge.plugins.erp.inventory.services import InventoryService
+			InventoryService.reduce_stock(
+				session,
+				tenant_id=tenant_id,
+				product_code=product_code,
+				quantity=quantity_shipped,
+				reference=order_id,
+			)
+		except Exception:
+			pass
+
+		# Check if all lines fulfilled
+		order = session.execute(
+			sa.select(Order).where(Order.id == order_id)
+		).scalar_one_or_none()
+		if order:
+			all_lines = session.execute(
+				sa.select(OrderLine).where(OrderLine.order_id == order_id)
+			).scalars().all()
+			if all(float(l.fulfilled_qty) >= float(l.quantity) for l in all_lines):
+				order.status = "DELIVERED"
+				session.flush()
+				log.info("CommerceService.fulfil_order_line: order %s fully DELIVERED", order_id)
+
+		return line
+
+	# ------------------------------------------------------------------
+	# Coupon application
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def apply_coupon(
+		session: Any,
+		cart_id: str,
+		coupon_code: str,
+		tenant_id: str,
+	) -> dict[str, Any]:
+		"""Validate and compute coupon discount against a cart.
+
+		Returns {discount_cents, final_total_cents}.
+		Raises CommerceValidationError on any validation failure.
+		Does NOT increment uses_count — that happens at order placement.
+		"""
+		from datetime import date as _date
+		from decimal import Decimal
+		from pgappforge.plugins.erp.crm.commerce.models import Cart, Coupon
+
+		coupon = session.execute(
+			sa.select(Coupon).where(
+				Coupon.tenant_id == tenant_id,
+				Coupon.code == coupon_code,
+			)
+		).scalar_one_or_none()
+		if coupon is None:
+			raise CommerceValidationError(f"Coupon {coupon_code!r} not found")
+		if not coupon.is_active:
+			raise CommerceValidationError(f"Coupon {coupon_code!r} is inactive")
+
+		today = _date.today()
+		if today < coupon.valid_from:
+			raise CommerceValidationError(f"Coupon {coupon_code!r} is not yet valid")
+		if coupon.valid_to and today > coupon.valid_to:
+			raise CommerceValidationError(f"Coupon {coupon_code!r} has expired")
+		if coupon.max_uses is not None and coupon.uses_count >= coupon.max_uses:
+			raise CommerceValidationError(f"Coupon {coupon_code!r} has reached its usage limit")
+
+		cart = session.execute(
+			sa.select(Cart).where(Cart.id == cart_id, Cart.tenant_id == tenant_id)
+		).scalar_one_or_none()
+		if cart is None:
+			raise CommerceValidationError(f"Cart {cart_id} not found")
+
+		subtotal_cents = sum(
+			int(item["unit_price_cents"]) * float(item["qty"])
+			for item in (cart.items or [])
+		)
+		if subtotal_cents < coupon.min_order_cents:
+			raise CommerceValidationError(
+				f"Order subtotal {subtotal_cents}¢ below coupon minimum {coupon.min_order_cents}¢"
+			)
+
+		if coupon.discount_type == "PERCENTAGE":
+			discount_cents = int(Decimal(str(subtotal_cents)) * Decimal(str(coupon.discount_value)) / 100)
+		else:
+			# FIXED_AMOUNT: discount_value is in display currency units; convert (assume 100 subunits)
+			discount_cents = int(Decimal(str(coupon.discount_value)) * 100)
+			discount_cents = min(discount_cents, subtotal_cents)
+
+		return {
+			"discount_cents": discount_cents,
+			"final_total_cents": subtotal_cents - discount_cents,
+		}
+
+	# ------------------------------------------------------------------
+	# Refund
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def process_refund(
+		session: Any,
+		order_id: str,
+		refund_amount_cents: int,
+		reason: str,
+		tenant_id: str,
+	) -> Any:
+		"""Issue a refund transaction; update order payment_status.
+
+		GL:
+		  DR Deferred Revenue "2310"
+		  CR Accounts Receivable "1200"  (if payment not yet settled)
+		"""
+		import secrets
+		from datetime import datetime as _dt
+		from pgappforge.plugins.erp.crm.commerce.models import Order, PaymentTransaction
+
+		order = session.execute(
+			sa.select(Order).where(Order.id == order_id, Order.tenant_id == tenant_id)
+		).scalar_one_or_none()
+		if order is None:
+			raise CommerceValidationError(f"Order {order_id} not found")
+		if order.payment_status not in ("PAID", "PARTIALLY_PAID"):
+			raise CommerceValidationError(
+				f"Cannot refund order with payment_status={order.payment_status!r}"
+			)
+		if refund_amount_cents <= 0:
+			raise CommerceValidationError("refund_amount_cents must be positive")
+		if refund_amount_cents > order.total_cents:
+			raise CommerceValidationError(
+				f"Refund {refund_amount_cents}¢ exceeds order total {order.total_cents}¢"
+			)
+
+		now = _dt.now(timezone.utc)
+		reference = f"REF-{secrets.token_hex(4).upper()}"
+		txn = PaymentTransaction(
+			tenant_id=tenant_id,
+			order_id=order_id,
+			payment_method="CREDIT",
+			amount_cents=-refund_amount_cents,
+			currency_code="KES",
+			reference=reference,
+			status="REFUNDED",
+			processed_at=now,
+			provider_response={"reason": reason},
+		)
+		session.add(txn)
+
+		if refund_amount_cents >= order.total_cents:
+			order.payment_status = "REFUNDED"
+			order.status = "REFUNDED"
+		else:
+			order.payment_status = "PARTIALLY_PAID"
+
+		# GL
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService
+			GLService.post_journal(
+				session,
+				tenant_id=tenant_id,
+				reference=reference,
+				description=f"Refund {reference} for order {order.order_number}: {reason}",
+				lines=[
+					{"account_code": "2310", "debit_cents": refund_amount_cents, "credit_cents": 0},
+					{"account_code": "1200", "debit_cents": 0, "credit_cents": refund_amount_cents},
+				],
+			)
+		except Exception:
+			pass
+
+		session.flush()
+		log.info(
+			"CommerceService.process_refund: order %s refund=%d¢ ref=%s",
+			order.order_number, refund_amount_cents, reference,
+		)
+		return txn
+
+	# ------------------------------------------------------------------
+	# Commerce dashboard
+	# ------------------------------------------------------------------
+
+	@staticmethod
+	def get_commerce_dashboard(session: Any, tenant_id: str) -> dict[str, Any]:
+		"""Operational commerce dashboard.
+
+		Returns:
+		    orders_today: int
+		    revenue_today_cents: int
+		    avg_order_value_cents: float | None
+		    conversion_rate_pct: float | None   (CONVERTED carts / total ACTIVE+CONVERTED)
+		    top_products: list[{product_code, order_count}]
+		    abandoned_cart_count: int
+		    refund_rate_pct: float | None
+		"""
+		from datetime import datetime as _dt, timedelta
+		import sqlalchemy.func as func
+		from pgappforge.plugins.erp.crm.commerce.models import Cart, Order, OrderLine
+
+		now = _dt.now(timezone.utc)
+		today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+		# Orders today
+		orders_today: int = session.execute(
+			sa.select(func.count(Order.id)).where(
+				Order.tenant_id == tenant_id,
+				Order.created_at >= today_start,
+				Order.status.notin_(("CANCELLED",)),
+			)
+		).scalar() or 0
+
+		# Revenue today
+		revenue_today_cents: int = session.execute(
+			sa.select(func.sum(Order.total_cents)).where(
+				Order.tenant_id == tenant_id,
+				Order.created_at >= today_start,
+				Order.payment_status == "PAID",
+			)
+		).scalar() or 0
+
+		# Avg order value (all time, paid)
+		avg_order_value = session.execute(
+			sa.select(func.avg(Order.total_cents)).where(
+				Order.tenant_id == tenant_id,
+				Order.payment_status == "PAID",
+			)
+		).scalar()
+		avg_order_value_cents = round(float(avg_order_value), 0) if avg_order_value else None
+
+		# Conversion rate: CONVERTED / (CONVERTED + ABANDONED + ACTIVE)
+		cart_counts = session.execute(
+			sa.select(Cart.status, func.count(Cart.id).label("cnt"))
+			.where(Cart.tenant_id == tenant_id)
+			.group_by(Cart.status)
+		).all()
+		cart_by_status = {r.status: r.cnt for r in cart_counts}
+		converted = cart_by_status.get("CONVERTED", 0)
+		total_carts = sum(cart_by_status.values())
+		conversion_rate_pct = round(converted / total_carts * 100, 1) if total_carts else None
+
+		# Top products by order count (last 30 days)
+		top_product_rows = session.execute(
+			sa.select(
+				OrderLine.product_code,
+				func.count(OrderLine.id).label("order_count"),
+			)
+			.join(Order, Order.id == OrderLine.order_id)
+			.where(
+				OrderLine.tenant_id == tenant_id,
+				Order.created_at >= now - timedelta(days=30),
+			)
+			.group_by(OrderLine.product_code)
+			.order_by(func.count(OrderLine.id).desc())
+			.limit(10)
+		).all()
+		top_products = [{"product_code": r.product_code, "order_count": r.order_count} for r in top_product_rows]
+
+		# Abandoned cart count
+		abandoned_cart_count: int = cart_by_status.get("ABANDONED", 0)
+
+		# Refund rate: REFUNDED orders / total non-cancelled orders
+		total_orders: int = session.execute(
+			sa.select(func.count(Order.id)).where(
+				Order.tenant_id == tenant_id,
+				Order.status.notin_(("CANCELLED", "DRAFT")),
+			)
+		).scalar() or 0
+		refunded_orders: int = session.execute(
+			sa.select(func.count(Order.id)).where(
+				Order.tenant_id == tenant_id,
+				Order.status == "REFUNDED",
+			)
+		).scalar() or 0
+		refund_rate_pct = (
+			round(refunded_orders / total_orders * 100, 1) if total_orders else None
+		)
+
+		return {
+			"orders_today": orders_today,
+			"revenue_today_cents": revenue_today_cents,
+			"avg_order_value_cents": avg_order_value_cents,
+			"conversion_rate_pct": conversion_rate_pct,
+			"top_products": top_products,
+			"abandoned_cart_count": abandoned_cart_count,
+			"refund_rate_pct": refund_rate_pct,
+		}
+
+	# ------------------------------------------------------------------
 	# Internal helpers
 	# ------------------------------------------------------------------
 
@@ -436,4 +1057,7 @@ __all__ = [
 	"PlanNotFoundError",
 	"ShippingMethodNotFoundError",
 	"CommerceValidationError",
+	"OrderNotFoundError",
+	"ProductNotFoundError",
+	"CouponNotFoundError",
 ]

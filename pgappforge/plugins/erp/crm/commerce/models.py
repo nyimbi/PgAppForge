@@ -22,6 +22,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import (
+	BigInteger,
 	Boolean,
 	Column,
 	Date,
@@ -390,6 +391,479 @@ class Subscription(RulesMixin, AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# Enumerations (commerce order domain)
+# ---------------------------------------------------------------------------
+
+ORDER_CHANNEL = ("B2C", "B2B", "API")
+ORDER_STATUS = ("DRAFT", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED")
+PAYMENT_STATUS = ("PENDING", "PAID", "PARTIALLY_PAID", "REFUNDED")
+PAYMENT_METHOD = ("MPESA", "CARD", "BANK_TRANSFER", "CREDIT", "CASH")
+PAYMENT_TXN_STATUS = ("PENDING", "COMPLETED", "FAILED", "REFUNDED")
+CART_STATUS = ("ACTIVE", "ABANDONED", "CONVERTED")
+COUPON_DISCOUNT_TYPE = ("PERCENTAGE", "FIXED_AMOUNT")
+
+
+# ---------------------------------------------------------------------------
+# ProductCatalogue
+# ---------------------------------------------------------------------------
+
+class ProductCatalogue(AuditMixin, Model):
+	"""Sellable product / service definition.
+
+	unit_price_cents: catalogue list price in smallest currency unit.
+	attributes: arbitrary product attributes (colour, size, spec sheet, etc.).
+	images: ordered list of public image URLs.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_product_catalogue"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "product_code", name="uq_com_product_tenant_code"),
+		Index("ix_com_product_tenant", "tenant_id"),
+		Index("ix_com_product_category", "category"),
+		Index("ix_com_product_active", "is_active"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	product_code = Column(String(30), nullable=False)
+	name = Column(String(255), nullable=False)
+	description = Column(Text, nullable=True)
+	category = Column(String(50), nullable=True)
+	unit_price_cents = Column(BigInteger, nullable=False, comment="List price in smallest currency unit")
+	currency_code = Column(String(3), nullable=False, default="KES", server_default="KES")
+	tax_code = Column(String(20), nullable=True)
+	is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+	images: Any = Column(
+		JSONB,
+		nullable=False,
+		default=list,
+		server_default="[]",
+		comment="Ordered list of public image URLs",
+	)
+	attributes: Any = Column(
+		JSONB,
+		nullable=False,
+		default=dict,
+		server_default="{}",
+		comment="Arbitrary product attributes",
+	)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return f"<ProductCatalogue {self.product_code!r} {self.name!r} price={self.unit_price_cents}¢>"
+
+
+# ---------------------------------------------------------------------------
+# Cart
+# ---------------------------------------------------------------------------
+
+class Cart(AuditMixin, Model):
+	"""Shopping cart — persisted to allow abandoned-cart recovery.
+
+	items: JSONB list of {product_code, qty, unit_price_cents, discount_cents}.
+	session_token: anonymous / guest cart identifier (unique per tenant).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_cart"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "session_token", name="uq_com_cart_tenant_token"),
+		Index("ix_com_cart_tenant", "tenant_id"),
+		Index("ix_com_cart_customer", "customer_id"),
+		Index("ix_com_cart_status", "status"),
+		Index("ix_com_cart_expires", "expires_at"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	customer_id = Column(UUID(as_uuid=False), nullable=True, index=True, comment="FK Party.id; NULL for guest")
+	session_token = Column(String(64), nullable=False, comment="Unique per tenant; ties guest session to cart")
+	status = Column(
+		String(15),
+		nullable=False,
+		default="ACTIVE",
+		server_default="ACTIVE",
+		comment="ACTIVE|ABANDONED|CONVERTED",
+	)
+	expires_at = Column(DateTime(timezone=True), nullable=True)
+	items: Any = Column(
+		JSONB,
+		nullable=False,
+		default=list,
+		server_default="[]",
+		comment="[{product_code, qty, unit_price_cents, discount_cents}]",
+	)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	orders: list[Order] = relationship(
+		"Order",
+		back_populates="cart",
+		lazy="select",
+	)
+
+	def __repr__(self) -> str:
+		return f"<Cart {self.id!r} customer={self.customer_id!r} status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
+# Order
+# ---------------------------------------------------------------------------
+
+class Order(RulesMixin, AuditMixin, Model):
+	"""Sales order — created from a cart or directly via API/B2B.
+
+	All monetary amounts are in cents (smallest currency unit).
+	total_cents = subtotal_cents - discount_cents + tax_cents + shipping_cents
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_order"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "order_number", name="uq_com_order_tenant_number"),
+		Index("ix_com_order_tenant", "tenant_id"),
+		Index("ix_com_order_customer", "customer_id"),
+		Index("ix_com_order_status", "status"),
+		Index("ix_com_order_payment_status", "payment_status"),
+		Index("ix_com_order_cart", "cart_id"),
+		{"extend_existing": True},
+	)
+
+	_rules_mutable_fields: frozenset[str] = frozenset({
+		"status", "payment_status", "discount_cents", "notes",
+	})
+	__rules_context_fields__: list[str] = []
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	order_number = Column(String(20), nullable=False, comment="Human-readable; unique per tenant")
+	customer_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="FK Party.id")
+	cart_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("com_cart.id", ondelete="SET NULL"),
+		nullable=True,
+		index=True,
+	)
+	channel = Column(
+		String(5),
+		nullable=False,
+		default="B2C",
+		server_default="B2C",
+		comment="B2C|B2B|API",
+	)
+	status = Column(
+		String(15),
+		nullable=False,
+		default="DRAFT",
+		server_default="DRAFT",
+		comment="DRAFT|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|CANCELLED|REFUNDED",
+	)
+	subtotal_cents = Column(BigInteger, nullable=False, default=0)
+	discount_cents = Column(BigInteger, nullable=False, default=0, server_default="0")
+	tax_cents = Column(BigInteger, nullable=False, default=0)
+	shipping_cents = Column(BigInteger, nullable=False, default=0, server_default="0")
+	total_cents = Column(BigInteger, nullable=False, default=0)
+	payment_status = Column(
+		String(15),
+		nullable=False,
+		default="PENDING",
+		server_default="PENDING",
+		comment="PENDING|PAID|PARTIALLY_PAID|REFUNDED",
+	)
+	shipping_address: Any = Column(JSONB, nullable=False, default=dict, server_default="{}")
+	billing_address: Any = Column(JSONB, nullable=False, default=dict, server_default="{}")
+	notes = Column(Text, nullable=True)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	cart: Cart | None = relationship("Cart", back_populates="orders", lazy="select")
+	lines: list[OrderLine] = relationship(
+		"OrderLine",
+		back_populates="order",
+		cascade="all, delete-orphan",
+		lazy="select",
+	)
+	payments: list[PaymentTransaction] = relationship(
+		"PaymentTransaction",
+		back_populates="order",
+		cascade="all, delete-orphan",
+		lazy="select",
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<Order {self.order_number!r} status={self.status!r} "
+			f"total={self.total_cents}¢ payment={self.payment_status!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# OrderLine
+# ---------------------------------------------------------------------------
+
+class OrderLine(AuditMixin, Model):
+	"""Single line on an Order.
+
+	line_total_cents = (unit_price_cents - discount_cents) * quantity + tax_cents
+	fulfilled_qty tracks partial fulfilment.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_order_line"
+	__table_args__ = (
+		Index("ix_com_ol_order", "order_id"),
+		Index("ix_com_ol_product", "product_code"),
+		Index("ix_com_ol_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	order_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("com_order.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+	)
+	product_code = Column(String(30), nullable=False)
+	description = Column(String(255), nullable=False)
+	quantity = Column(Numeric(8, 3), nullable=False)
+	unit_price_cents = Column(BigInteger, nullable=False)
+	discount_cents = Column(BigInteger, nullable=False, default=0, server_default="0")
+	tax_cents = Column(BigInteger, nullable=False, default=0, server_default="0")
+	line_total_cents = Column(BigInteger, nullable=False)
+	fulfilled_qty = Column(Numeric(8, 3), nullable=False, default=0, server_default="0")
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	order: Order = relationship("Order", back_populates="lines", lazy="select")
+
+	def __repr__(self) -> str:
+		return (
+			f"<OrderLine order={self.order_id!r} product={self.product_code!r} "
+			f"qty={self.quantity} total={self.line_total_cents}¢>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# PaymentTransaction
+# ---------------------------------------------------------------------------
+
+class PaymentTransaction(AuditMixin, Model):
+	"""Immutable payment event linked to an Order.
+
+	Each attempt (including retries and refunds) is a separate row.
+	provider_response: raw gateway response payload for audit/reconciliation.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_payment_transaction"
+	__table_args__ = (
+		Index("ix_com_pt_order", "order_id"),
+		Index("ix_com_pt_tenant", "tenant_id"),
+		Index("ix_com_pt_status", "status"),
+		Index("ix_com_pt_reference", "reference"),
+		Index("ix_com_pt_processed", "processed_at"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	order_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("com_order.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+	)
+	payment_method = Column(
+		String(20),
+		nullable=False,
+		comment="MPESA|CARD|BANK_TRANSFER|CREDIT|CASH",
+	)
+	amount_cents = Column(BigInteger, nullable=False)
+	currency_code = Column(String(3), nullable=False, default="KES", server_default="KES")
+	reference = Column(String(100), nullable=False, index=True, comment="Gateway/provider reference")
+	status = Column(
+		String(15),
+		nullable=False,
+		default="PENDING",
+		server_default="PENDING",
+		comment="PENDING|COMPLETED|FAILED|REFUNDED",
+	)
+	provider_response: Any = Column(JSONB, nullable=True)
+	processed_at = Column(DateTime(timezone=True), nullable=True)
+
+	# Append-only but carry created_at for query convenience
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	order: Order = relationship("Order", back_populates="payments", lazy="select")
+
+	def __repr__(self) -> str:
+		return (
+			f"<PaymentTransaction order={self.order_id!r} method={self.payment_method!r} "
+			f"amount={self.amount_cents}¢ status={self.status!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# Coupon
+# ---------------------------------------------------------------------------
+
+class Coupon(AuditMixin, Model):
+	"""Discount coupon redeemable at checkout.
+
+	discount_type PERCENTAGE: discount_value is a percentage (e.g. 10.00 = 10%).
+	discount_type FIXED_AMOUNT: discount_value is subtracted in the order currency
+	  (caller scales to cents at application time).
+	max_uses: NULL = unlimited.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_coupon"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "code", name="uq_com_coupon_tenant_code"),
+		Index("ix_com_coupon_tenant", "tenant_id"),
+		Index("ix_com_coupon_active", "is_active"),
+		Index("ix_com_coupon_valid_to", "valid_to"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	code = Column(String(30), nullable=False, comment="Unique per tenant")
+	discount_type = Column(
+		String(15),
+		nullable=False,
+		comment="PERCENTAGE|FIXED_AMOUNT",
+	)
+	discount_value = Column(
+		Numeric(8, 2),
+		nullable=False,
+		comment="Percentage (e.g. 10.00) or fixed amount in display currency",
+	)
+	min_order_cents = Column(BigInteger, nullable=False, default=0, server_default="0")
+	max_uses = Column(Integer, nullable=True, comment="NULL = unlimited")
+	uses_count = Column(Integer, nullable=False, default=0, server_default="0")
+	valid_from = Column(Date, nullable=False)
+	valid_to = Column(Date, nullable=True, comment="NULL = no expiry")
+	is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<Coupon {self.code!r} type={self.discount_type!r} "
+			f"value={self.discount_value} uses={self.uses_count}>"
+		)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -398,4 +872,10 @@ __all__ = [
 	"TaxRule",
 	"SubscriptionPlan",
 	"Subscription",
+	"ProductCatalogue",
+	"Cart",
+	"Order",
+	"OrderLine",
+	"PaymentTransaction",
+	"Coupon",
 ]

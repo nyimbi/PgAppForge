@@ -372,9 +372,329 @@ class SegregationOfDuties(AuditMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# RiskRegister
+# ---------------------------------------------------------------------------
+
+class RiskRegister(AuditMixin, Model):
+	"""Enterprise Risk Register entry.
+
+	risk_score = likelihood × impact (1–25 scale).
+	Risk levels derived from score:
+	  1–4   → LOW
+	  5–9   → MEDIUM
+	  10–16 → HIGH
+	  17–25 → CRITICAL
+
+	inherent_risk_level: before controls.
+	residual_risk_level: after controls are applied.
+	treatment:
+	  ACCEPT   — risk appetite allows it; no action.
+	  MITIGATE — reduce likelihood or impact via controls.
+	  TRANSFER — insure or outsource.
+	  AVOID    — discontinue the activity.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_risk_register"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "risk_code", name="uq_erp_risk_tenant_code"),
+		Index("ix_erp_risk_tenant", "tenant_id"),
+		Index("ix_erp_risk_category", "risk_category"),
+		Index("ix_erp_risk_status", "status"),
+		Index("ix_erp_risk_owner", "risk_owner_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	risk_code = Column(String(20), nullable=False, comment="e.g. RSK-001")
+	title = Column(String(300), nullable=False)
+	description = Column(Text, nullable=False)
+	risk_category = Column(
+		String(20),
+		nullable=False,
+		comment=(
+			"STRATEGIC | OPERATIONAL | FINANCIAL | COMPLIANCE | "
+			"REPUTATIONAL | TECHNOLOGY"
+		),
+	)
+	likelihood = Column(
+		Integer,
+		nullable=False,
+		comment="1 (rare) to 5 (almost certain)",
+	)
+	impact = Column(
+		Integer,
+		nullable=False,
+		comment="1 (insignificant) to 5 (catastrophic)",
+	)
+	risk_score = Column(
+		Integer,
+		nullable=False,
+		comment="likelihood × impact; computed on insert/update",
+	)
+	inherent_risk_level = Column(
+		String(10),
+		nullable=False,
+		comment="LOW | MEDIUM | HIGH | CRITICAL — before controls",
+	)
+	residual_risk_level = Column(
+		String(10),
+		nullable=False,
+		comment="LOW | MEDIUM | HIGH | CRITICAL — after controls",
+	)
+	risk_appetite_level = Column(
+		String(10),
+		nullable=False,
+		default="MEDIUM",
+		comment="LOW | MEDIUM | HIGH — board-approved appetite",
+	)
+	treatment = Column(
+		String(10),
+		nullable=False,
+		default="MITIGATE",
+		comment="ACCEPT | MITIGATE | TRANSFER | AVOID",
+	)
+	risk_owner_id = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="Logical FK to erp_party — risk owner",
+	)
+	review_date = Column(Date, nullable=False, comment="Next scheduled review date")
+	status = Column(
+		String(15),
+		nullable=False,
+		default="OPEN",
+		comment="OPEN | MITIGATED | ACCEPTED | CLOSED",
+	)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	findings: list[AuditFinding] = relationship(
+		"AuditFinding",
+		back_populates="risk",
+		lazy="select",
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<RiskRegister {self.risk_code!r} {self.title!r} "
+			f"score={self.risk_score} level={self.residual_risk_level!r} "
+			f"status={self.status!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# AuditFinding
+# ---------------------------------------------------------------------------
+
+class AuditFinding(AuditMixin, Model):
+	"""Audit or assurance finding linked to a control and/or risk.
+
+	finding_type severity hierarchy:
+	  OBSERVATION < DEFICIENCY < SIGNIFICANT_DEFICIENCY < MATERIAL_WEAKNESS
+
+	status lifecycle:
+	  OPEN → IN_PROGRESS → REMEDIATED (or ACCEPTED if risk-accepted)
+
+	Either control_id or risk_id (or both) should be non-null.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_audit_finding"
+	__table_args__ = (
+		Index("ix_erp_afind_tenant", "tenant_id"),
+		Index("ix_erp_afind_control", "control_id"),
+		Index("ix_erp_afind_risk", "risk_id"),
+		Index("ix_erp_afind_status", "status"),
+		Index("ix_erp_afind_priority", "priority"),
+		Index("ix_erp_afind_due", "due_date"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	control_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("erp_control.id", ondelete="SET NULL"),
+		nullable=True,
+	)
+	risk_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("erp_risk_register.id", ondelete="SET NULL"),
+		nullable=True,
+	)
+	finding_type = Column(
+		String(30),
+		nullable=False,
+		comment=(
+			"DEFICIENCY | MATERIAL_WEAKNESS | SIGNIFICANT_DEFICIENCY | OBSERVATION"
+		),
+	)
+	title = Column(String(300), nullable=False)
+	description = Column(Text, nullable=False)
+	recommendation = Column(Text, nullable=False)
+	management_response = Column(Text, nullable=True)
+	priority = Column(
+		String(6),
+		nullable=False,
+		default="MEDIUM",
+		comment="HIGH | MEDIUM | LOW",
+	)
+	status = Column(
+		String(15),
+		nullable=False,
+		default="OPEN",
+		comment="OPEN | IN_PROGRESS | REMEDIATED | ACCEPTED",
+	)
+	due_date = Column(Date, nullable=False, comment="Management agreed remediation date")
+	owner_id = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="Logical FK to erp_party — person responsible for remediation",
+	)
+	closed_at = Column(DateTime(timezone=True), nullable=True)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	control: Control | None = relationship(
+		"Control",
+		lazy="select",
+		foreign_keys=[control_id],
+	)
+	risk: RiskRegister | None = relationship(
+		"RiskRegister",
+		back_populates="findings",
+		lazy="select",
+		foreign_keys=[risk_id],
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<AuditFinding {self.id!r} type={self.finding_type!r} "
+			f"priority={self.priority!r} status={self.status!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# PolicyDocument
+# ---------------------------------------------------------------------------
+
+class PolicyDocument(AuditMixin, Model):
+	"""Policy or procedure document within the GRC policy library.
+
+	version: e.g. '1.0', '2.3', '3.0-DRAFT'.
+	status lifecycle:
+	  DRAFT → APPROVED → EFFECTIVE → OBSOLETE
+
+	Immutable once EFFECTIVE — revisions create a new row with bumped version
+	and reference the prior row (optional; no FK enforced here to keep simple).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_policy_document"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "policy_code", "version",
+		                 name="uq_erp_policy_tenant_code_ver"),
+		Index("ix_erp_policy_tenant", "tenant_id"),
+		Index("ix_erp_policy_status", "status"),
+		Index("ix_erp_policy_review", "review_date"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	policy_code = Column(String(20), nullable=False, comment="e.g. POL-HR-001")
+	title = Column(String(300), nullable=False)
+	category = Column(String(50), nullable=False, comment="e.g. HR, Finance, IT, Compliance")
+	body = Column(Text, nullable=False, comment="Full policy text (markdown or plain text)")
+	version = Column(String(10), nullable=False, comment="e.g. '1.0', '2.3'")
+	status = Column(
+		String(10),
+		nullable=False,
+		default="DRAFT",
+		comment="DRAFT | APPROVED | EFFECTIVE | OBSOLETE",
+	)
+	effective_date = Column(Date, nullable=False)
+	review_date = Column(Date, nullable=False, comment="Next scheduled review date")
+	owner_id = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="Logical FK to erp_party — policy owner",
+	)
+	approved_by = Column(
+		UUID(as_uuid=False),
+		nullable=True,
+		comment="Logical FK to erp_party — approver",
+	)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<PolicyDocument {self.policy_code!r} v{self.version!r} "
+			f"status={self.status!r}>"
+		)
+
+
 __all__ = [
 	"ControlFramework",
 	"Control",
 	"ControlTest",
 	"SegregationOfDuties",
+	"RiskRegister",
+	"AuditFinding",
+	"PolicyDocument",
 ]

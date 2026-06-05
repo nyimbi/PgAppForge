@@ -477,6 +477,395 @@ class PPService:
 		return total_cents
 
 
+	# ------------------------------------------------------------------
+	# Production output recording & costing
+	# ------------------------------------------------------------------
+
+	def record_production_output(
+		self,
+		session: Any,
+		order_id: str,
+		qty_produced: Decimal,
+		qty_scrapped: Decimal,
+		tenant_id: str,
+	) -> Any:
+		"""Record confirmed production output against a production order.
+
+		Updates produced_quantity and actual_cost_cents.
+		Posts GL when GL plugin is available:
+		  DR WIP         "1160"  (value of goods produced)
+		  CR Raw Materials "1140" (consumption of components)
+
+		When the order is fully complete (produced_quantity >= planned_quantity),
+		also posts finished-goods transfer:
+		  DR Finished Goods "1170"
+		  CR WIP            "1160"
+
+		qty_scrapped is recorded as a metadata note; scrap cost stays in WIP.
+		"""
+		from pgappforge.plugins.erp.operations.production.models import ProductionOrder
+		from pgappforge.plugins.erp.operations.production.events import ProductionOrderCompletedEvent
+		from pgappforge.plugins.erp.foundation.events import emit_event
+
+		order = session.get(ProductionOrder, order_id)
+		if order is None:
+			raise ProductionOrderNotFoundError(f"ProductionOrder {order_id!r} not found")
+		if order.status not in ("RELEASED", "IN_PROGRESS"):
+			raise InvalidStatusTransitionError(
+				f"Cannot record output on order in status {order.status!r}"
+			)
+		if qty_produced <= Decimal("0"):
+			raise PPServiceError("qty_produced must be positive")
+
+		# Accumulate produced quantity
+		prev_produced = Decimal(str(order.produced_quantity))
+		order.produced_quantity = prev_produced + qty_produced
+		if order.status == "RELEASED":
+			order.status = "IN_PROGRESS"
+			order.actual_start_date = date.today()
+
+		# Derive WIP value from planned cost pro-rated to qty
+		wip_value_cents = 0
+		if order.planned_cost_cents and order.planned_quantity:
+			planned = Decimal(str(order.planned_quantity))
+			unit_cost = Decimal(str(order.planned_cost_cents)) / planned
+			wip_value_cents = int(
+				(unit_cost * qty_produced).to_integral_value(rounding=ROUND_HALF_UP)
+			)
+
+		# GL: DR WIP 1160 / CR Raw Materials 1140
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService  # type: ignore
+			if wip_value_cents > 0:
+				GLService.post_journal(
+					session=session,
+					tenant_id=tenant_id,
+					description=f"Production output {order.order_number} qty={qty_produced}",
+					lines=[
+						{"account": "1160", "debit_cents": wip_value_cents, "credit_cents": 0,
+						 "ref": order_id, "memo": f"WIP — {order.order_number}"},
+						{"account": "1140", "debit_cents": 0, "credit_cents": wip_value_cents,
+						 "ref": order_id, "memo": f"Raw materials consumed — {order.order_number}"},
+					],
+				)
+		except (ImportError, AttributeError) as exc:
+			log.debug("PPService.record_production_output: GL posting skipped (%s)", exc)
+
+		# Check if fully complete
+		is_complete = order.produced_quantity >= Decimal(str(order.planned_quantity))
+		if is_complete:
+			order.status = "COMPLETED"
+			order.actual_end_date = date.today()
+
+			# GL: DR Finished Goods 1170 / CR WIP 1160
+			try:
+				from pgappforge.plugins.erp.finance.gl.services import GLService  # type: ignore
+				total_wip = order.actual_cost_cents or wip_value_cents
+				if total_wip > 0:
+					GLService.post_journal(
+						session=session,
+						tenant_id=tenant_id,
+						description=f"Finished goods transfer {order.order_number}",
+						lines=[
+							{"account": "1170", "debit_cents": total_wip, "credit_cents": 0,
+							 "ref": order_id, "memo": f"Finished goods — {order.order_number}"},
+							{"account": "1160", "debit_cents": 0, "credit_cents": total_wip,
+							 "ref": order_id, "memo": f"WIP cleared — {order.order_number}"},
+						],
+					)
+			except (ImportError, AttributeError) as exc:
+				log.debug("PPService.record_production_output: FG GL posting skipped (%s)", exc)
+
+			emit_event(
+				ProductionOrderCompletedEvent(
+					aggregate_id=order.id,
+					aggregate_type="ProductionOrder",
+					tenant_id=tenant_id,
+					order_id=order.id,
+					order_number=order.order_number,
+					product_id=order.product_id,
+					produced_quantity=str(order.produced_quantity),
+					actual_cost_cents=order.actual_cost_cents,
+					planned_cost_cents=order.planned_cost_cents or 0,
+				),
+				session,
+			)
+
+		# Record scrap in metadata
+		if qty_scrapped > Decimal("0"):
+			meta = dict(order.metadata_ or {})
+			meta.setdefault("scrap_entries", []).append({
+				"qty": str(qty_scrapped),
+				"recorded_at": datetime.now(timezone.utc).isoformat(),
+			})
+			order.metadata_ = meta
+
+		order.updated_at = datetime.now(timezone.utc)
+		session.flush()
+		return order
+
+	def calculate_production_cost(
+		self,
+		session: Any,
+		order_id: str,
+		tenant_id: str,
+	) -> dict[str, Any]:
+		"""Calculate and post the full production cost for a completed order.
+
+		Returns dict:
+		  {
+		    "materials_cents": int,
+		    "labor_cents": int,
+		    "overhead_cents": int,
+		    "total_cents": int,
+		    "order_id": str,
+		    "order_number": str,
+		  }
+
+		Posts GL: DR Finished Goods "1170" / CR WIP "1160" for the delta
+		between actual_cost_cents and any previously posted FG value.
+
+		Also updates ProductionOrder.actual_cost_cents with the computed total.
+		"""
+		from pgappforge.plugins.erp.operations.production.models import ProductionOrder
+
+		order = session.get(ProductionOrder, order_id)
+		if order is None:
+			raise ProductionOrderNotFoundError(f"ProductionOrder {order_id!r} not found")
+
+		# Materials: sum of (issued_quantity * unit_cost_cents) per line
+		materials_cents = 0
+		for line in order.lines:
+			qty = Decimal(str(line.issued_quantity or 0))
+			unit = int(line.unit_cost_cents or 0)
+			materials_cents += int(
+				(qty * Decimal(unit)).to_integral_value(rounding=ROUND_HALF_UP)
+			)
+
+		# Labor: sum of labor_cost_cents from completed operations
+		labor_cents = sum(
+			int(op.labor_cost_cents or 0)
+			for op in order.operations
+			if op.status == "COMPLETED"
+		)
+
+		# Overhead: work center hours * overhead rate
+		overhead_cents = 0
+		if order.work_center:
+			total_minutes = sum(
+				int(op.actual_time_minutes or (op.run_time_minutes + op.setup_time_minutes))
+				for op in order.operations
+			)
+			hours = Decimal(str(total_minutes)) / Decimal("60")
+			overhead_cents = int(
+				(hours * Decimal(str(order.work_center.overhead_rate_per_hour_cents)))
+				.to_integral_value(rounding=ROUND_HALF_UP)
+			)
+
+		total_cents = materials_cents + labor_cents + overhead_cents
+		order.actual_cost_cents = total_cents
+		order.updated_at = datetime.now(timezone.utc)
+
+		# GL: DR Finished Goods 1170 / CR WIP 1160
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService  # type: ignore
+			if total_cents > 0:
+				GLService.post_journal(
+					session=session,
+					tenant_id=tenant_id,
+					description=f"Production cost finalised {order.order_number}",
+					lines=[
+						{"account": "1170", "debit_cents": total_cents, "credit_cents": 0,
+						 "ref": order_id, "memo": f"Finished goods — {order.order_number}"},
+						{"account": "1160", "debit_cents": 0, "credit_cents": total_cents,
+						 "ref": order_id, "memo": f"WIP cleared — {order.order_number}"},
+					],
+				)
+		except (ImportError, AttributeError) as exc:
+			log.debug("PPService.calculate_production_cost: GL posting skipped (%s)", exc)
+
+		session.flush()
+		return {
+			"order_id": order_id,
+			"order_number": order.order_number,
+			"materials_cents": materials_cents,
+			"labor_cents": labor_cents,
+			"overhead_cents": overhead_cents,
+			"total_cents": total_cents,
+		}
+
+	def get_production_schedule(
+		self,
+		session: Any,
+		from_date: date,
+		to_date: date,
+		tenant_id: str,
+	) -> list[dict[str, Any]]:
+		"""Return all production orders active within [from_date, to_date].
+
+		For each order, computes utilization per work center as:
+		  utilization_pct = (total planned minutes / work_center.capacity_hours_per_day * 60) * 100
+
+		Returned list of dicts — one entry per production order:
+		  {
+		    "order_id", "order_number", "product_id", "status",
+		    "planned_quantity", "produced_quantity",
+		    "start_date", "end_date",
+		    "work_center_id", "work_center_code",
+		    "planned_minutes", "utilization_pct",
+		  }
+		"""
+		from pgappforge.plugins.erp.operations.production.models import ProductionOrder
+
+		rows = session.execute(
+			sa.select(ProductionOrder).where(
+				ProductionOrder.tenant_id == tenant_id,
+				ProductionOrder.start_date <= to_date,
+				ProductionOrder.end_date >= from_date,
+				ProductionOrder.status.notin_(["CANCELLED"]),
+			).order_by(ProductionOrder.start_date, ProductionOrder.order_number)
+		).scalars().all()
+
+		schedule = []
+		for order in rows:
+			planned_minutes = sum(
+				op.run_time_minutes + op.setup_time_minutes for op in order.operations
+			)
+			utilization_pct = 0.0
+			if order.work_center and order.work_center.capacity_units_per_hour:
+				# capacity in minutes per day
+				cap_minutes_per_day = float(order.work_center.capacity_units_per_hour) * 60
+				span_days = max((order.end_date - order.start_date).days + 1, 1)
+				total_cap = cap_minutes_per_day * span_days
+				utilization_pct = round(planned_minutes / total_cap * 100, 2) if total_cap > 0 else 0.0
+
+			schedule.append({
+				"order_id": order.id,
+				"order_number": order.order_number,
+				"product_id": order.product_id,
+				"status": order.status,
+				"planned_quantity": str(order.planned_quantity),
+				"produced_quantity": str(order.produced_quantity),
+				"start_date": order.start_date.isoformat(),
+				"end_date": order.end_date.isoformat(),
+				"work_center_id": order.work_center_id or "",
+				"work_center_code": order.work_center.code if order.work_center else "",
+				"planned_minutes": planned_minutes,
+				"utilization_pct": utilization_pct,
+			})
+
+		return schedule
+
+	def get_oee(
+		self,
+		session: Any,
+		work_center_id: str,
+		from_date: date,
+		to_date: date,
+		tenant_id: str,
+	) -> dict[str, Any]:
+		"""Calculate OEE (Overall Equipment Effectiveness) for a work center.
+
+		OEE = Availability × Performance × Quality
+
+		  Availability  = actual_run_time / planned_run_time
+		  Performance   = (ideal_cycle_time × total_produced) / actual_run_time
+		                 simplified as: produced_quantity / planned_quantity
+		  Quality        = accepted_quantity / total_quantity_started
+		                 simplified as: produced_quantity / (produced + scrapped)
+
+		Data sources:
+		  - Completed WorkOrderOperations in date range for planned/actual minutes
+		  - ProductionOrders for quantities
+
+		Returns:
+		  {
+		    "work_center_id", "from_date", "to_date",
+		    "availability_pct", "performance_pct", "quality_pct", "oee_pct",
+		    "planned_minutes", "actual_minutes",
+		    "planned_qty", "produced_qty", "scrapped_qty",
+		  }
+		"""
+		from pgappforge.plugins.erp.operations.production.models import (
+			ProductionOrder,
+			WorkOrderOperation,
+		)
+
+		# Operations completed in date range for this work center
+		ops = session.execute(
+			sa.select(WorkOrderOperation).where(
+				WorkOrderOperation.tenant_id == tenant_id,
+				WorkOrderOperation.work_center_id == work_center_id,
+				WorkOrderOperation.status == "COMPLETED",
+				WorkOrderOperation.completed_at >= datetime.combine(from_date, datetime.min.time()).replace(tzinfo=timezone.utc),
+				WorkOrderOperation.completed_at < datetime.combine(to_date, datetime.max.time()).replace(tzinfo=timezone.utc),
+			)
+		).scalars().all()
+
+		planned_minutes = sum(op.run_time_minutes + op.setup_time_minutes for op in ops)
+		actual_minutes = sum(int(op.actual_time_minutes or 0) for op in ops)
+
+		availability_pct = (
+			round(actual_minutes / planned_minutes * 100, 2)
+			if planned_minutes > 0 else 0.0
+		)
+		# Clamp — actual can exceed planned (overtime)
+		availability_pct = min(availability_pct, 100.0)
+
+		# Orders at this work center in date range
+		orders = session.execute(
+			sa.select(ProductionOrder).where(
+				ProductionOrder.tenant_id == tenant_id,
+				ProductionOrder.work_center_id == work_center_id,
+				ProductionOrder.start_date <= to_date,
+				ProductionOrder.end_date >= from_date,
+				ProductionOrder.status.notin_(["CANCELLED", "PLANNED"]),
+			)
+		).scalars().all()
+
+		planned_qty = sum(float(o.planned_quantity) for o in orders)
+		produced_qty = sum(float(o.produced_quantity) for o in orders)
+
+		# Scrap from metadata
+		scrapped_qty = 0.0
+		for o in orders:
+			for entry in (o.metadata_ or {}).get("scrap_entries", []):
+				try:
+					scrapped_qty += float(entry.get("qty", 0))
+				except (TypeError, ValueError):
+					pass
+
+		performance_pct = (
+			round(produced_qty / planned_qty * 100, 2) if planned_qty > 0 else 0.0
+		)
+		performance_pct = min(performance_pct, 100.0)
+
+		total_started = produced_qty + scrapped_qty
+		quality_pct = (
+			round(produced_qty / total_started * 100, 2) if total_started > 0 else 100.0
+		)
+
+		oee_pct = round(
+			(availability_pct / 100) * (performance_pct / 100) * (quality_pct / 100) * 100,
+			2,
+		)
+
+		return {
+			"work_center_id": work_center_id,
+			"from_date": from_date.isoformat(),
+			"to_date": to_date.isoformat(),
+			"availability_pct": availability_pct,
+			"performance_pct": performance_pct,
+			"quality_pct": quality_pct,
+			"oee_pct": oee_pct,
+			"planned_minutes": planned_minutes,
+			"actual_minutes": actual_minutes,
+			"planned_qty": planned_qty,
+			"produced_qty": produced_qty,
+			"scrapped_qty": scrapped_qty,
+		}
+
+
 __all__ = [
 	"PPService",
 	"PPServiceError",

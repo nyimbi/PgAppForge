@@ -181,16 +181,24 @@ class WarehousePlugin(BasePlugin):
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.warehouse.models import (
+			StorageLocation,
 			PickList,
 			PickListLine,
+			PickTask,
 			PutawayTask,
+			CycleCount,
+			CycleCountLine,
 			StockCount,
 			StockCountLine,
 		)
 		return [
+			StorageLocation,
 			PickList,
 			PickListLine,
+			PickTask,
 			PutawayTask,
+			CycleCount,
+			CycleCountLine,
 			StockCount,
 			StockCountLine,
 		]
@@ -338,9 +346,13 @@ def create_plugin(
 # ---------------------------------------------------------------------------
 
 from pgappforge.plugins.erp.operations.warehouse.models import (  # noqa: E402
+	StorageLocation,
 	PickList,
 	PickListLine,
+	PickTask,
 	PutawayTask,
+	CycleCount,
+	CycleCountLine,
 	StockCount,
 	StockCountLine,
 )
@@ -356,8 +368,11 @@ from pgappforge.plugins.erp.operations.warehouse.services import (  # noqa: E402
 	WarehouseServiceError,
 	InvalidStatusTransitionError,
 	PickListNotFoundError,
+	PickTaskNotFoundError,
 	PutawayNotFoundError,
 	StockCountNotFoundError,
+	CycleCountNotFoundError,
+	StorageLocationNotFoundError,
 )
 
 __all__ = [
@@ -365,9 +380,13 @@ __all__ = [
 	"WarehousePlugin",
 	"create_plugin",
 	# models
+	"StorageLocation",
 	"PickList",
 	"PickListLine",
+	"PickTask",
 	"PutawayTask",
+	"CycleCount",
+	"CycleCountLine",
 	"StockCount",
 	"StockCountLine",
 	# events
@@ -381,6 +400,9 @@ __all__ = [
 	"WarehouseServiceError",
 	"InvalidStatusTransitionError",
 	"PickListNotFoundError",
+	"PickTaskNotFoundError",
 	"PutawayNotFoundError",
 	"StockCountNotFoundError",
+	"CycleCountNotFoundError",
+	"StorageLocationNotFoundError",
 ]

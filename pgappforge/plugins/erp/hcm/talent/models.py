@@ -34,6 +34,7 @@ from sqlalchemy import (
 	UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.orm import backref as sa_backref
 from sqlalchemy.orm import relationship
 
 from pgappforge.models.sqla import Model
@@ -530,6 +531,697 @@ class TrainingEnrollment(AuditMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# Goal (OKR)
+# ---------------------------------------------------------------------------
+
+class Goal(AuditMixin, Model):
+	"""First-class OKR/Goal entity.
+
+	Supports company → department → individual cascade via self-referential
+	parent_goal_id.  key_results JSONB: [{kr_text, target_value, current_value, unit}]
+
+	Status machine: DRAFT → ACTIVE → COMPLETED | CANCELLED
+	progress_pct: 0–100, updated by TalentService.update_goal_progress() which
+	  also rolls up weighted averages to parent goals.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_goal"
+	__table_args__ = (
+		Index("ix_tal_goal_tenant", "tenant_id"),
+		Index("ix_tal_goal_employee", "employee_id"),
+		Index("ix_tal_goal_parent", "parent_goal_id"),
+		Index("ix_tal_goal_cycle", "cycle_id"),
+		Index("ix_tal_goal_tenant_status", "tenant_id", "status"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Goal owner — soft FK to HCM employee")
+	parent_goal_id = Column(UUID(as_uuid=False), ForeignKey("tal_goal.id", ondelete="SET NULL"), nullable=True, index=True, comment="Self-referential for cascade alignment")
+	cycle_id = Column(UUID(as_uuid=False), nullable=True, index=True, comment="Soft FK to PerformanceCycle")
+
+	title = Column(String(255), nullable=False)
+	description = Column(Text, nullable=True)
+	level = Column(
+		String(20),
+		nullable=False,
+		default="INDIVIDUAL",
+		comment="COMPANY | DEPARTMENT | INDIVIDUAL",
+	)
+	weight = Column(Numeric(4, 1), nullable=False, default=100, comment="Weight % within parent; children weights should sum to 100")
+	key_results = Column(JSONB, nullable=False, default=list, comment="[{kr_text, target_value, current_value, unit}]")
+	progress_pct = Column(Numeric(5, 2), nullable=False, default=0, comment="0.00–100.00; computed from key_results or manually set")
+	status = Column(
+		String(20),
+		nullable=False,
+		default="DRAFT",
+		comment="DRAFT | ACTIVE | COMPLETED | CANCELLED",
+	)
+	period = Column(String(20), nullable=True, comment="e.g. '2026-Q1', '2026-H1', '2026'")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	# Relationships
+	children: list[Goal] = relationship("Goal", backref=sa_backref("parent", remote_side=[id]), lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<Goal {self.title!r} level={self.level!r} progress={self.progress_pct}% status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
+# 360-Degree Appraisal
+# ---------------------------------------------------------------------------
+
+class PerformanceCycle(AuditMixin, Model):
+	"""A governed performance review cycle (annual, 360, probation, etc.).
+
+	Status machine: PLANNING → IN_PROGRESS → CALIBRATION → CLOSED
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_performance_cycle"
+	__table_args__ = (
+		Index("ix_tal_pcycle_tenant", "tenant_id"),
+		Index("ix_tal_pcycle_status", "tenant_id", "status"),
+		UniqueConstraint("tenant_id", "period", "cycle_type", name="uq_tal_pcycle_period_type"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	name = Column(String(255), nullable=False)
+	period = Column(String(20), nullable=False, comment="e.g. '2026-Q1', '2026'")
+	cycle_type = Column(String(20), nullable=False, default="ANNUAL", comment="ANNUAL | MID_YEAR | PROBATION | 360")
+	status = Column(
+		String(20),
+		nullable=False,
+		default="PLANNING",
+		comment="PLANNING | IN_PROGRESS | CALIBRATION | CLOSED",
+	)
+	launched_at = Column(DateTime(timezone=True), nullable=True)
+	closed_at = Column(DateTime(timezone=True), nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	participants: list[ReviewParticipant] = relationship("ReviewParticipant", back_populates="cycle", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<PerformanceCycle {self.name!r} period={self.period!r} status={self.status!r}>"
+
+
+class ReviewParticipant(AuditMixin, Model):
+	"""Multi-rater participant record for 360-degree reviews.
+
+	One row per (cycle, appraisee, appraiser) pair.
+	responses JSONB: [{competency_code, score, comments}]
+
+	Status machine: INVITED → SUBMITTED | DECLINED
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_review_participant"
+	__table_args__ = (
+		Index("ix_tal_rp_cycle", "cycle_id"),
+		Index("ix_tal_rp_appraisee", "appraisee_id"),
+		Index("ix_tal_rp_appraiser", "appraiser_id"),
+		Index("ix_tal_rp_tenant", "tenant_id"),
+		UniqueConstraint("cycle_id", "appraisee_id", "appraiser_id", name="uq_tal_rp_cycle_pair"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	cycle_id = Column(UUID(as_uuid=False), ForeignKey("tal_performance_cycle.id", ondelete="CASCADE"), nullable=False, index=True)
+	appraisee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Employee being reviewed")
+	appraiser_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Employee providing feedback")
+	relationship_type = Column(
+		String(20),
+		nullable=False,
+		comment="SELF | PEER | MANAGER | SUBORDINATE | SKIP_LEVEL",
+	)
+	status = Column(
+		String(20),
+		nullable=False,
+		default="INVITED",
+		comment="INVITED | SUBMITTED | DECLINED",
+	)
+	responses = Column(JSONB, nullable=False, default=list, comment="[{competency_code, score, comments}]")
+	submitted_at = Column(DateTime(timezone=True), nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	cycle: PerformanceCycle = relationship("PerformanceCycle", back_populates="participants", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<ReviewParticipant cycle={self.cycle_id!r} appraisee={self.appraisee_id!r} rel={self.relationship_type!r} status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
+# Performance Improvement Plan (PIP)
+# ---------------------------------------------------------------------------
+
+class PIP(AuditMixin, Model):
+	"""Structured Performance Improvement Plan with workflow and check-ins.
+
+	improvement_areas JSONB: [{area, target_behaviour, success_criterion}]
+	Status machine: ACTIVE → EXTENDED | PASSED | TERMINATED
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_pip"
+	__table_args__ = (
+		Index("ix_tal_pip_employee", "employee_id"),
+		Index("ix_tal_pip_tenant", "tenant_id"),
+		Index("ix_tal_pip_status", "tenant_id", "status"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Employee on PIP — soft FK")
+	manager_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Responsible manager — soft FK")
+	triggered_by_review_id = Column(UUID(as_uuid=False), ForeignKey("tal_performance_review.id", ondelete="SET NULL"), nullable=True, index=True)
+
+	start_date = Column(Date, nullable=False)
+	end_date = Column(Date, nullable=False)
+	improvement_areas = Column(JSONB, nullable=False, default=list, comment="[{area, target_behaviour, success_criterion}]")
+	check_in_frequency = Column(String(20), nullable=False, default="WEEKLY", comment="WEEKLY | BIWEEKLY")
+	status = Column(
+		String(20),
+		nullable=False,
+		default="ACTIVE",
+		comment="ACTIVE | EXTENDED | PASSED | TERMINATED",
+	)
+	outcome_notes = Column(Text, nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	checkins: list[PIPCheckin] = relationship("PIPCheckin", back_populates="pip", cascade="all, delete-orphan", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<PIP employee={self.employee_id!r} {self.start_date}→{self.end_date} status={self.status!r}>"
+
+
+class PIPCheckin(AuditMixin, Model):
+	"""Timestamped progress note for a PIP check-in."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_pip_checkin"
+	__table_args__ = (
+		Index("ix_tal_pipc_pip", "pip_id"),
+		Index("ix_tal_pipc_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	pip_id = Column(UUID(as_uuid=False), ForeignKey("tal_pip.id", ondelete="CASCADE"), nullable=False, index=True)
+	conducted_by = Column(UUID(as_uuid=False), nullable=False, comment="Manager or HR — soft FK")
+	notes = Column(Text, nullable=False)
+	progress_rating = Column(String(20), nullable=True, comment="ON_TRACK | AT_RISK | FAILING")
+	checkin_date = Column(Date, nullable=False)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	pip: PIP = relationship("PIP", back_populates="checkins", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<PIPCheckin pip={self.pip_id!r} date={self.checkin_date} rating={self.progress_rating!r}>"
+
+
+# ---------------------------------------------------------------------------
+# Succession Planning
+# ---------------------------------------------------------------------------
+
+class SuccessionPlan(AuditMixin, Model):
+	"""Succession plan for a critical role/position.
+
+	bench_strength_score: 0–100 computed metric derived from successor readiness mix.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_succession_plan"
+	__table_args__ = (
+		Index("ix_tal_sp_tenant", "tenant_id"),
+		Index("ix_tal_sp_position", "position_id"),
+		UniqueConstraint("tenant_id", "position_id", name="uq_tal_sp_position"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	position_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Critical role — soft FK to position master")
+	review_date = Column(Date, nullable=True)
+	risk_level = Column(String(10), nullable=False, default="MEDIUM", comment="HIGH | MEDIUM | LOW")
+	bench_strength_score = Column(Numeric(5, 2), nullable=True, comment="0–100; computed from successor readiness")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	successors: list[SuccessorCandidate] = relationship("SuccessorCandidate", back_populates="plan", cascade="all, delete-orphan", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<SuccessionPlan position={self.position_id!r} risk={self.risk_level!r} bench={self.bench_strength_score}>"
+
+
+class SuccessorCandidate(AuditMixin, Model):
+	"""A nominated successor for a succession plan.
+
+	readiness: READY_NOW | 1_2_YEARS | 3_5_YEARS
+	development_actions JSONB: [{action, owner, due_date, status}]
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_successor_candidate"
+	__table_args__ = (
+		Index("ix_tal_sc_plan", "plan_id"),
+		Index("ix_tal_sc_employee", "employee_id"),
+		Index("ix_tal_sc_tenant", "tenant_id"),
+		UniqueConstraint("plan_id", "employee_id", name="uq_tal_sc_plan_employee"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	plan_id = Column(UUID(as_uuid=False), ForeignKey("tal_succession_plan.id", ondelete="CASCADE"), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Nominated successor — soft FK to HCM employee")
+	readiness = Column(String(20), nullable=False, comment="READY_NOW | 1_2_YEARS | 3_5_YEARS")
+	flight_risk = Column(Boolean, nullable=False, default=False)
+	development_actions = Column(JSONB, nullable=False, default=list, comment="[{action, owner, due_date, status}]")
+	development_notes = Column(Text, nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	plan: SuccessionPlan = relationship("SuccessionPlan", back_populates="successors", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<SuccessorCandidate plan={self.plan_id!r} employee={self.employee_id!r} readiness={self.readiness!r}>"
+
+
+# ---------------------------------------------------------------------------
+# HiPo / 9-Box Grid
+# ---------------------------------------------------------------------------
+
+class NineBoxPlacement(AuditMixin, Model):
+	"""9-box grid placement for talent review.
+
+	performance_axis: 1 (Low) → 3 (High)
+	potential_axis:   1 (Low) → 3 (High)
+	box_label: computed from axes, e.g. 'STAR' (3,3), 'CORE_PLAYER' (2,2), etc.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_nine_box_placement"
+	__table_args__ = (
+		Index("ix_tal_nbp_employee", "employee_id"),
+		Index("ix_tal_nbp_cycle", "cycle_id"),
+		Index("ix_tal_nbp_tenant", "tenant_id"),
+		UniqueConstraint("cycle_id", "employee_id", name="uq_tal_nbp_cycle_employee"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to HCM employee")
+	cycle_id = Column(UUID(as_uuid=False), ForeignKey("tal_performance_cycle.id", ondelete="CASCADE"), nullable=False, index=True)
+	performance_axis = Column(Integer, nullable=False, comment="1=Low, 2=Medium, 3=High")
+	potential_axis = Column(Integer, nullable=False, comment="1=Low, 2=Medium, 3=High")
+	box_label = Column(String(50), nullable=True, comment="STAR | HIGH_POTENTIAL | CORE_PLAYER | etc.; stored for query efficiency")
+	placed_by = Column(UUID(as_uuid=False), nullable=False, comment="Manager/HR who placed — soft FK")
+	development_track_id = Column(UUID(as_uuid=False), nullable=True, comment="Soft FK to development track")
+	notes = Column(Text, nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return f"<NineBoxPlacement employee={self.employee_id!r} perf={self.performance_axis} potential={self.potential_axis} label={self.box_label!r}>"
+
+
+# ---------------------------------------------------------------------------
+# Competency Framework (governed catalogue)
+# ---------------------------------------------------------------------------
+
+class Competency(AuditMixin, Model):
+	"""Master competency catalogue entry.
+
+	behavioural_indicators JSONB: [{level (1-5), indicator_text}]
+	competency_type: CORE | FUNCTIONAL | LEADERSHIP | TECHNICAL
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_competency"
+	__table_args__ = (
+		Index("ix_tal_comp_tenant", "tenant_id"),
+		UniqueConstraint("tenant_id", "code", name="uq_tal_competency_code"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	code = Column(String(50), nullable=False, comment="Short unique code, e.g. 'LEAD_01'")
+	name = Column(String(255), nullable=False)
+	competency_type = Column(String(20), nullable=False, comment="CORE | FUNCTIONAL | LEADERSHIP | TECHNICAL")
+	description = Column(Text, nullable=True)
+	behavioural_indicators = Column(JSONB, nullable=False, default=list, comment="[{level, indicator_text}]")
+	is_active = Column(Boolean, nullable=False, default=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return f"<Competency {self.code!r} {self.name!r} type={self.competency_type!r}>"
+
+
+class CompetencyProfile(AuditMixin, Model):
+	"""Links a position to its required competencies with weights.
+
+	required_level: 1–5 expected proficiency for this position.
+	weight: importance % within role profile; should sum to 100 per position.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_competency_profile"
+	__table_args__ = (
+		Index("ix_tal_cp_position", "position_id"),
+		Index("ix_tal_cp_tenant", "tenant_id"),
+		UniqueConstraint("position_id", "competency_id", name="uq_tal_cp_position_comp"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	position_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to position master")
+	competency_id = Column(UUID(as_uuid=False), ForeignKey("tal_competency.id"), nullable=False, index=True)
+	required_level = Column(Integer, nullable=False, default=3, comment="1–5 proficiency required")
+	weight = Column(Numeric(4, 1), nullable=False, default=10, comment="% importance in role profile")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	competency: Competency = relationship("Competency", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<CompetencyProfile position={self.position_id!r} competency={self.competency_id!r} req_level={self.required_level}>"
+
+
+# ---------------------------------------------------------------------------
+# Career Pathing
+# ---------------------------------------------------------------------------
+
+class CareerPath(AuditMixin, Model):
+	"""Defines possible moves between positions.
+
+	move_type: LATERAL | UPWARD | CROSS_FUNCTIONAL
+	required_competencies JSONB: [{competency_code, required_level}]
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_career_path"
+	__table_args__ = (
+		Index("ix_tal_cp2_from", "from_position_id"),
+		Index("ix_tal_cp2_tenant", "tenant_id"),
+		UniqueConstraint("from_position_id", "to_position_id", name="uq_tal_career_path"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	from_position_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to position master")
+	to_position_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to position master")
+	move_type = Column(String(20), nullable=False, comment="LATERAL | UPWARD | CROSS_FUNCTIONAL")
+	typical_tenure_months = Column(Integer, nullable=True)
+	required_competencies = Column(JSONB, nullable=False, default=list, comment="[{competency_code, required_level}]")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return f"<CareerPath {self.from_position_id!r}→{self.to_position_id!r} type={self.move_type!r}>"
+
+
+# ---------------------------------------------------------------------------
+# Employee NPS / Pulse Survey
+# ---------------------------------------------------------------------------
+
+class Survey(AuditMixin, Model):
+	"""Survey definition for eNPS, pulse, exit, or onboarding surveys.
+
+	anonymised=True: survey_response.employee_id stored as NULL.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_survey"
+	__table_args__ = (
+		Index("ix_tal_survey_tenant", "tenant_id"),
+		Index("ix_tal_survey_type", "survey_type"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	title = Column(String(255), nullable=False)
+	survey_type = Column(String(20), nullable=False, comment="ENPS | PULSE | EXIT | ONBOARDING")
+	period = Column(String(20), nullable=True, comment="e.g. '2026-Q1'")
+	anonymised = Column(Boolean, nullable=False, default=False)
+	status = Column(String(20), nullable=False, default="DRAFT", comment="DRAFT | ACTIVE | CLOSED")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	questions: list[SurveyQuestion] = relationship("SurveyQuestion", back_populates="survey", cascade="all, delete-orphan", lazy="select")
+	responses: list[TalentSurveyResponse] = relationship("TalentSurveyResponse", back_populates="survey", cascade="all, delete-orphan", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<Survey {self.title!r} type={self.survey_type!r} status={self.status!r}>"
+
+
+class SurveyQuestion(AuditMixin, Model):
+	"""A question within a survey.
+
+	question_type: SCALE | CHOICE | TEXT
+	scale_min/max: applicable when question_type=SCALE (e.g. 0–10 for eNPS).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_survey_question"
+	__table_args__ = (
+		Index("ix_tal_sq_survey", "survey_id"),
+		Index("ix_tal_sq_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	survey_id = Column(UUID(as_uuid=False), ForeignKey("tal_survey.id", ondelete="CASCADE"), nullable=False, index=True)
+	question_text = Column(Text, nullable=False)
+	question_type = Column(String(10), nullable=False, comment="SCALE | CHOICE | TEXT")
+	scale_min = Column(Integer, nullable=True)
+	scale_max = Column(Integer, nullable=True)
+	choices = Column(JSONB, nullable=True, comment="[{value, label}] for CHOICE type")
+	sort_order = Column(Integer, nullable=False, default=0)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	survey: Survey = relationship("Survey", back_populates="questions", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<SurveyQuestion survey={self.survey_id!r} type={self.question_type!r}>"
+
+
+class TalentSurveyResponse(AuditMixin, Model):
+	"""A submitted survey response.
+
+	employee_id is NULL when survey.anonymised=True.
+	responses JSONB: [{question_id, answer}]
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_survey_response"
+	__table_args__ = (
+		Index("ix_tal_sr_survey", "survey_id"),
+		Index("ix_tal_sr_employee", "employee_id"),
+		Index("ix_tal_sr_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	survey_id = Column(UUID(as_uuid=False), ForeignKey("tal_survey.id", ondelete="CASCADE"), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=True, index=True, comment="NULL when survey is anonymised")
+	responses = Column(JSONB, nullable=False, default=list, comment="[{question_id, answer}]")
+	submitted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	survey: Survey = relationship("Survey", back_populates="responses", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<TalentSurveyResponse survey={self.survey_id!r} employee={self.employee_id!r}>"
+
+
+# ---------------------------------------------------------------------------
+# L&D: Certification tracking
+# ---------------------------------------------------------------------------
+
+class Certification(AuditMixin, Model):
+	"""Employee certification record with expiry tracking.
+
+	Distinct from TrainingEnrollment — an employee can earn a certification
+	through multiple routes (external exam, CPD portfolio, etc.).
+	renewal_required: True triggers expiring_certifications() alerts.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_certification"
+	__table_args__ = (
+		Index("ix_tal_cert_employee", "employee_id"),
+		Index("ix_tal_cert_tenant", "tenant_id"),
+		Index("ix_tal_cert_expiry", "expiry_date"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to HCM employee")
+	certification_name = Column(String(255), nullable=False)
+	issuing_body = Column(String(255), nullable=True)
+	issued_date = Column(Date, nullable=False)
+	expiry_date = Column(Date, nullable=True, comment="NULL means does not expire")
+	renewal_required = Column(Boolean, nullable=False, default=True)
+	course_id = Column(UUID(as_uuid=False), ForeignKey("tal_training_course.id", ondelete="SET NULL"), nullable=True, index=True, comment="Optional link to the training that produced this cert")
+	certificate_url = Column(String(500), nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	course: TrainingCourse | None = relationship("TrainingCourse", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<Certification {self.certification_name!r} employee={self.employee_id!r} expiry={self.expiry_date}>"
+
+
+# ---------------------------------------------------------------------------
+# Onboarding
+# ---------------------------------------------------------------------------
+
+class TalentOnboardingPlan(AuditMixin, Model):
+	"""Onboarding plan created automatically on hire acceptance.
+
+	status: PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_onboarding_plan"
+	__table_args__ = (
+		Index("ix_tal_op_employee", "employee_id"),
+		Index("ix_tal_op_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="New hire — soft FK to HCM employee")
+	template_id = Column(UUID(as_uuid=False), nullable=True, comment="Soft FK to onboarding template")
+	buddy_id = Column(UUID(as_uuid=False), nullable=True, comment="Assigned buddy — soft FK to HCM employee")
+	target_start_date = Column(Date, nullable=False)
+	status = Column(String(20), nullable=False, default="PENDING", comment="PENDING | IN_PROGRESS | COMPLETED | CANCELLED")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	tasks: list[OnboardingTask] = relationship("OnboardingTask", back_populates="plan", cascade="all, delete-orphan", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<TalentOnboardingPlan employee={self.employee_id!r} start={self.target_start_date} status={self.status!r}>"
+
+
+class OnboardingTask(AuditMixin, Model):
+	"""Individual task within an onboarding plan.
+
+	task_type: DOCUMENT | IT_ACCESS | TRAINING | MEETING | EQUIPMENT | OTHER
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_onboarding_task"
+	__table_args__ = (
+		Index("ix_tal_ot_plan", "plan_id"),
+		Index("ix_tal_ot_tenant", "tenant_id"),
+		Index("ix_tal_ot_assigned", "assigned_to"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	plan_id = Column(UUID(as_uuid=False), ForeignKey("tal_onboarding_plan.id", ondelete="CASCADE"), nullable=False, index=True)
+	task_type = Column(String(20), nullable=False, comment="DOCUMENT | IT_ACCESS | TRAINING | MEETING | EQUIPMENT | OTHER")
+	title = Column(String(255), nullable=False)
+	description = Column(Text, nullable=True)
+	due_date = Column(Date, nullable=True)
+	assigned_to = Column(UUID(as_uuid=False), nullable=True, index=True, comment="Responsible person — soft FK")
+	completed_at = Column(DateTime(timezone=True), nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	plan: TalentOnboardingPlan = relationship("TalentOnboardingPlan", back_populates="tasks", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<OnboardingTask {self.title!r} type={self.task_type!r} due={self.due_date}>"
+
+
+# ---------------------------------------------------------------------------
+# Interview Debrief
+# ---------------------------------------------------------------------------
+
+class InterviewDebrief(AuditMixin, Model):
+	"""Post-interview debrief: structured calibration before offer creation.
+
+	attendee_ids: PostgreSQL UUID[] — all interviewers present.
+	aggregate_scorecard JSONB: {dimension: avg_score, ...}
+	hiring_decision: PROCEED_OFFER | HOLD | REJECT
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "tal_interview_debrief"
+	__table_args__ = (
+		Index("ix_tal_idbf_application", "application_id"),
+		Index("ix_tal_idbf_tenant", "tenant_id"),
+		UniqueConstraint("application_id", name="uq_tal_idbf_application"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	application_id = Column(UUID(as_uuid=False), ForeignKey("tal_application.id", ondelete="CASCADE"), nullable=False, index=True)
+	facilitated_by = Column(UUID(as_uuid=False), nullable=False, comment="Hiring manager or recruiter — soft FK")
+	scheduled_at = Column(DateTime(timezone=True), nullable=False)
+	attendee_ids = Column(ARRAY(UUID(as_uuid=False)), nullable=False, default=list, comment="UUID[] of attendees")
+	aggregate_scorecard = Column(JSONB, nullable=False, default=dict, comment="{dimension: avg_score}")
+	hiring_decision = Column(String(20), nullable=True, comment="PROCEED_OFFER | HOLD | REJECT")
+	decision_rationale = Column(Text, nullable=True)
+	decided_at = Column(DateTime(timezone=True), nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	application: Application = relationship("Application", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<InterviewDebrief app={self.application_id!r} decision={self.hiring_decision!r}>"
+
+
 __all__ = [
 	"Requisition",
 	"Candidate",
@@ -539,4 +1231,33 @@ __all__ = [
 	"PerformanceReview",
 	"TrainingCourse",
 	"TrainingEnrollment",
+	# OKR / Goals
+	"Goal",
+	# 360 Appraisal
+	"PerformanceCycle",
+	"ReviewParticipant",
+	# PIP
+	"PIP",
+	"PIPCheckin",
+	# Succession
+	"SuccessionPlan",
+	"SuccessorCandidate",
+	# HiPo
+	"NineBoxPlacement",
+	# Competency framework
+	"Competency",
+	"CompetencyProfile",
+	# Career pathing
+	"CareerPath",
+	# Surveys / eNPS
+	"Survey",
+	"SurveyQuestion",
+	"TalentSurveyResponse",
+	# L&D certifications
+	"Certification",
+	# Onboarding
+	"TalentOnboardingPlan",
+	"OnboardingTask",
+	# Interview debrief
+	"InterviewDebrief",
 ]

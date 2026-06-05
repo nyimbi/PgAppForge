@@ -6,6 +6,12 @@ PersonnelPlugin — HCM Personnel Administration ERP plugin.
 Entities managed:
   Employee → EmployeeCompensation (immutable ledger)
            → EmployeeDocument
+           → EmploymentContract
+           → DisciplinaryCase / DisciplinaryAction
+           → GrievanceCase
+           → OnboardingPlan
+           → EmployeeExit
+           → OrgJobGrade
 
 Domain: hcm
 Depends on: foundation, hcm.org
@@ -16,9 +22,28 @@ Events emitted:
   hcm.personnel.employee.transferred
   hcm.personnel.employee.terminated
   hcm.personnel.employee.rehired
+  hcm.personnel.employee.probation_confirmed
+  hcm.personnel.employee.on_leave
+  hcm.personnel.employee.returned_from_leave
+  hcm.personnel.employee.entitlements_init
+  hcm.personnel.employee.background_check
+  hcm.personnel.contract.issued
+  hcm.personnel.contract.accepted
+  hcm.personnel.contract.confirmed
+  hcm.personnel.contract.terminated
   hcm.personnel.compensation.changed
+  hcm.personnel.compensation.approved
   hcm.personnel.document.verified
   hcm.personnel.document.expiring
+  hcm.personnel.disciplinary.case_opened
+  hcm.personnel.disciplinary.outcome_recorded
+  hcm.personnel.grievance.filed
+  hcm.personnel.grievance.resolved
+  hcm.personnel.grievance.escalated
+  hcm.personnel.onboarding.completed
+  hcm.personnel.exit.initiated
+  hcm.personnel.exit.cleared
+  hcm.personnel.exit.closed
 
 Events consumed:
   hcm.org.position.created    — can pre-validate position reference
@@ -96,9 +121,28 @@ class PersonnelPlugin(BasePlugin):
 			"hcm.personnel.employee.transferred",
 			"hcm.personnel.employee.terminated",
 			"hcm.personnel.employee.rehired",
+			"hcm.personnel.employee.probation_confirmed",
+			"hcm.personnel.employee.on_leave",
+			"hcm.personnel.employee.returned_from_leave",
+			"hcm.personnel.employee.entitlements_init",
+			"hcm.personnel.employee.background_check",
+			"hcm.personnel.contract.issued",
+			"hcm.personnel.contract.accepted",
+			"hcm.personnel.contract.confirmed",
+			"hcm.personnel.contract.terminated",
 			"hcm.personnel.compensation.changed",
+			"hcm.personnel.compensation.approved",
 			"hcm.personnel.document.verified",
 			"hcm.personnel.document.expiring",
+			"hcm.personnel.disciplinary.case_opened",
+			"hcm.personnel.disciplinary.outcome_recorded",
+			"hcm.personnel.grievance.filed",
+			"hcm.personnel.grievance.resolved",
+			"hcm.personnel.grievance.escalated",
+			"hcm.personnel.onboarding.completed",
+			"hcm.personnel.exit.initiated",
+			"hcm.personnel.exit.cleared",
+			"hcm.personnel.exit.closed",
 		]
 
 	def subscribe_to(self) -> list[str]:
@@ -141,8 +185,26 @@ class PersonnelPlugin(BasePlugin):
 			Employee,
 			EmployeeCompensation,
 			EmployeeDocument,
+			EmploymentContract,
+			DisciplinaryCase,
+			DisciplinaryAction,
+			GrievanceCase,
+			OnboardingPlan,
+			EmployeeExit,
+			OrgJobGrade,
 		)
-		return [Employee, EmployeeCompensation, EmployeeDocument]
+		return [
+			Employee,
+			EmployeeCompensation,
+			EmployeeDocument,
+			EmploymentContract,
+			DisciplinaryCase,
+			DisciplinaryAction,
+			GrievanceCase,
+			OnboardingPlan,
+			EmployeeExit,
+			OrgJobGrade,
+		]
 
 	# ------------------------------------------------------------------
 	# Rules Engine pre-configuration
@@ -287,6 +349,13 @@ from pgappforge.plugins.erp.hcm.personnel.models import (  # noqa: E402
 	Employee,
 	EmployeeCompensation,
 	EmployeeDocument,
+	EmploymentContract,
+	DisciplinaryCase,
+	DisciplinaryAction,
+	GrievanceCase,
+	OnboardingPlan,
+	EmployeeExit,
+	OrgJobGrade,
 )
 from pgappforge.plugins.erp.hcm.personnel.events import (  # noqa: E402
 	EmployeeHiredEvent,
@@ -294,9 +363,28 @@ from pgappforge.plugins.erp.hcm.personnel.events import (  # noqa: E402
 	EmployeeTransferredEvent,
 	EmployeeTerminatedEvent,
 	EmployeeRehiredEvent,
+	ProbationConfirmedEvent,
+	EmployeeOnLeaveEvent,
+	EmployeeReturnedFromLeaveEvent,
+	EmployeeEntitlementsInitEvent,
+	BackgroundCheckUpdatedEvent,
+	ContractIssuedEvent,
+	ContractAcceptedEvent,
+	ContractConfirmedEvent,
+	ContractTerminatedEvent,
 	CompensationChangedEvent,
+	CompensationApprovedEvent,
 	DocumentVerifiedEvent,
 	DocumentExpiringEvent,
+	DisciplinaryCaseOpenedEvent,
+	DisciplinaryOutcomeRecordedEvent,
+	GrievanceFiledEvent,
+	GrievanceResolvedEvent,
+	GrievanceEscalatedEvent,
+	OnboardingCompletedEvent,
+	ExitInitiatedEvent,
+	ExitClearedEvent,
+	ExitClosedEvent,
 )
 from pgappforge.plugins.erp.hcm.personnel.services import (  # noqa: E402
 	PersonnelService,
@@ -304,6 +392,10 @@ from pgappforge.plugins.erp.hcm.personnel.services import (  # noqa: E402
 	EmployeeNotFoundError,
 	CompensationError,
 	DocumentError,
+	ContractError,
+	DisciplinaryError,
+	GrievanceError,
+	ExitError,
 )
 
 __all__ = [
@@ -314,19 +406,56 @@ __all__ = [
 	"Employee",
 	"EmployeeCompensation",
 	"EmployeeDocument",
-	# events
+	"EmploymentContract",
+	"DisciplinaryCase",
+	"DisciplinaryAction",
+	"GrievanceCase",
+	"OnboardingPlan",
+	"EmployeeExit",
+	"OrgJobGrade",
+	# events — employee lifecycle
 	"EmployeeHiredEvent",
 	"EmployeeAssignedEvent",
 	"EmployeeTransferredEvent",
 	"EmployeeTerminatedEvent",
 	"EmployeeRehiredEvent",
+	"ProbationConfirmedEvent",
+	"EmployeeOnLeaveEvent",
+	"EmployeeReturnedFromLeaveEvent",
+	"EmployeeEntitlementsInitEvent",
+	"BackgroundCheckUpdatedEvent",
+	# events — contract
+	"ContractIssuedEvent",
+	"ContractAcceptedEvent",
+	"ContractConfirmedEvent",
+	"ContractTerminatedEvent",
+	# events — compensation
 	"CompensationChangedEvent",
+	"CompensationApprovedEvent",
+	# events — documents
 	"DocumentVerifiedEvent",
 	"DocumentExpiringEvent",
-	# services
+	# events — disciplinary
+	"DisciplinaryCaseOpenedEvent",
+	"DisciplinaryOutcomeRecordedEvent",
+	# events — grievance
+	"GrievanceFiledEvent",
+	"GrievanceResolvedEvent",
+	"GrievanceEscalatedEvent",
+	# events — onboarding
+	"OnboardingCompletedEvent",
+	# events — exit
+	"ExitInitiatedEvent",
+	"ExitClearedEvent",
+	"ExitClosedEvent",
+	# services / exceptions
 	"PersonnelService",
 	"PersonnelServiceError",
 	"EmployeeNotFoundError",
 	"CompensationError",
 	"DocumentError",
+	"ContractError",
+	"DisciplinaryError",
+	"GrievanceError",
+	"ExitError",
 ]

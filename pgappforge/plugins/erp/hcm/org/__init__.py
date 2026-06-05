@@ -4,7 +4,7 @@ pgappforge/plugins/erp/hcm/org/__init__.py
 OrgPlugin — HCM Org Management ERP plugin.
 
 Entities managed:
-  LegalEntity → OrgUnit (hierarchy) → Position
+  HcmLegalEntity → OrgUnit (hierarchy) → Position
   JobCatalog  → CompensationGrade (effective-dated bands)
 
 Domain: hcm
@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 class OrgPlugin(BasePlugin):
 	"""HCM Org Management plugin.
 
-	Registers 6 view groups (LegalEntity, OrgUnit, Position, JobCatalog,
+	Registers 6 view groups (HcmLegalEntity, OrgUnit, Position, JobCatalog,
 	CompensationGrade, OrgReports).
 	Pre-configures 3 Rules Engine rulesets on first run.
 	"""
@@ -144,13 +144,13 @@ class OrgPlugin(BasePlugin):
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.hcm.org.models import (
-			LegalEntity,
+			HcmLegalEntity,
 			OrgUnit,
 			JobCatalog,
 			CompensationGrade,
 			Position,
 		)
-		return [LegalEntity, OrgUnit, JobCatalog, CompensationGrade, Position]
+		return [HcmLegalEntity, OrgUnit, JobCatalog, CompensationGrade, Position]
 
 	# ------------------------------------------------------------------
 	# Rules Engine pre-configuration
@@ -272,7 +272,7 @@ def create_plugin(appbuilder: Any, config: dict[str, Any] | None = None) -> OrgP
 # ---------------------------------------------------------------------------
 
 from pgappforge.plugins.erp.hcm.org.models import (  # noqa: E402
-	LegalEntity,
+	HcmLegalEntity,
 	OrgUnit,
 	JobCatalog,
 	CompensationGrade,
@@ -303,7 +303,7 @@ __all__ = [
 	"OrgPlugin",
 	"create_plugin",
 	# models
-	"LegalEntity",
+	"HcmLegalEntity",
 	"OrgUnit",
 	"JobCatalog",
 	"CompensationGrade",

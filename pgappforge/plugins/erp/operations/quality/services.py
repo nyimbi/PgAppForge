@@ -425,6 +425,441 @@ class QCService:
 		return ncr
 
 
+	# ------------------------------------------------------------------
+	# InspectionLot lifecycle
+	# ------------------------------------------------------------------
+
+	def create_inspection_lot(
+		self,
+		session: Any,
+		product_code: str,
+		quantity: Decimal,
+		source_type: str,
+		source_ref_id: str,
+		plan_id: str | None = None,
+		tenant_id: str = "",
+	) -> Any:
+		"""Create an InspectionLot in CREATED status.
+
+		Generates lot_number as LOT-YYYYMMDD-HHMMSS-<6hex>.
+		Links to InspectionPlan when plan_id is supplied.
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import InspectionLot
+		import secrets
+
+		ts = datetime.now(timezone.utc)
+		lot_number = f"LOT-{ts.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3).upper()}"
+
+		lot = InspectionLot(
+			tenant_id=tenant_id,
+			lot_number=lot_number,
+			source_type=source_type,
+			source_ref_id=source_ref_id,
+			product_code=product_code,
+			quantity=quantity,
+			plan_id=plan_id,
+			status="CREATED",
+			inspected_qty=Decimal("0"),
+			accepted_qty=Decimal("0"),
+			rejected_qty=Decimal("0"),
+		)
+		session.add(lot)
+		session.flush()
+		log.debug("QCService.create_inspection_lot: created %s for product=%s qty=%s", lot_number, product_code, quantity)
+		return lot
+
+	def record_inspection_result(
+		self,
+		session: Any,
+		lot_id: str,
+		characteristic_name: str,
+		value: Decimal | None,
+		inspector_id: str,
+		tenant_id: str,
+	) -> Any:
+		"""Record a single characteristic measurement against an InspectionLot.
+
+		Auto-checks measurement_value against USL/LSL from the lot's
+		InspectionPlan characteristics list.  Sets out_of_spec and pass_fail
+		accordingly.  Updates lot.inspected_qty / accepted_qty / rejected_qty.
+
+		Plan characteristics schema:
+		  [{"name": "...", "type": "VARIABLE|ATTRIBUTE", "usl": ..., "lsl": ..., ...}]
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import InspectionLot, InspectionResult
+
+		lot = session.get(InspectionLot, lot_id)
+		if lot is None:
+			raise InspectionNotFoundError(f"InspectionLot {lot_id!r} not found")
+
+		# Lazy-transition to IN_INSPECTION on first result
+		if lot.status == "CREATED":
+			lot.status = "IN_INSPECTION"
+			lot.inspector_id = inspector_id
+			lot.started_at = datetime.now(timezone.utc)
+
+		# Determine pass/fail from plan characteristics
+		pass_fail = "NA"
+		out_of_spec = False
+
+		if value is not None and lot.plan is not None:
+			chars: list[dict[str, Any]] = lot.plan.acceptance_criteria.get("characteristics", [])
+			char_def = next((c for c in chars if c.get("name") == characteristic_name), None)
+			if char_def:
+				usl = char_def.get("usl")
+				lsl = char_def.get("lsl")
+				v = value
+				too_high = usl is not None and v > Decimal(str(usl))
+				too_low = lsl is not None and v < Decimal(str(lsl))
+				if too_high or too_low:
+					out_of_spec = True
+					pass_fail = "FAIL"
+				else:
+					pass_fail = "PASS"
+			else:
+				# Characteristic not in plan — record measurement, result NA
+				pass_fail = "NA"
+		elif value is not None:
+			# No plan: can't auto-evaluate; default PASS (inspector responsible)
+			pass_fail = "PASS"
+
+		result = InspectionResult(
+			tenant_id=tenant_id,
+			lot_id=lot_id,
+			characteristic_name=characteristic_name,
+			measurement_value=value,
+			pass_fail=pass_fail,
+			out_of_spec=out_of_spec,
+		)
+		session.add(result)
+
+		# Update running tallies
+		lot.inspected_qty = Decimal(str(lot.inspected_qty)) + Decimal("1")
+		if pass_fail == "PASS":
+			lot.accepted_qty = Decimal(str(lot.accepted_qty)) + Decimal("1")
+		elif pass_fail == "FAIL":
+			lot.rejected_qty = Decimal(str(lot.rejected_qty)) + Decimal("1")
+		lot.updated_at = datetime.now(timezone.utc)
+
+		session.flush()
+		return result
+
+	def complete_inspection(
+		self,
+		session: Any,
+		lot_id: str,
+		tenant_id: str,
+	) -> Any:
+		"""Finalise an InspectionLot and determine PASSED or FAILED.
+
+		Pass criterion:
+		  If the linked plan has sampling_pct (used as AQL acceptance rate here):
+		    pass_rate_pct = accepted_qty / inspected_qty * 100
+		    PASSED when pass_rate_pct >= plan.sampling_pct (re-purposed as AQL threshold)
+		  If no plan or no results: status → PASSED by default.
+
+		Emits InspectionPassedEvent or InspectionFailedEvent.
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import InspectionLot
+		from pgappforge.plugins.erp.operations.quality.events import (
+			InspectionPassedEvent,
+			InspectionFailedEvent,
+		)
+		from pgappforge.plugins.erp.foundation.events import emit_event
+
+		lot = session.get(InspectionLot, lot_id)
+		if lot is None:
+			raise InspectionNotFoundError(f"InspectionLot {lot_id!r} not found")
+		if lot.status not in ("CREATED", "IN_INSPECTION"):
+			raise InvalidStatusTransitionError(
+				f"Cannot complete lot in status {lot.status!r}"
+			)
+
+		inspected = Decimal(str(lot.inspected_qty))
+		accepted = Decimal(str(lot.accepted_qty))
+
+		if inspected > Decimal("0"):
+			pass_rate = (accepted / inspected * Decimal("100")).quantize(
+				Decimal("0.01"), rounding=ROUND_HALF_UP
+			)
+		else:
+			pass_rate = Decimal("100")
+
+		# AQL threshold from plan.sampling_pct (repurposed as minimum pass rate)
+		aql_threshold = Decimal("100")
+		if lot.plan is not None:
+			aql_threshold = Decimal(str(lot.plan.sampling_pct))
+
+		passed = pass_rate >= aql_threshold
+		lot.status = "PASSED" if passed else "FAILED"
+		lot.completed_at = datetime.now(timezone.utc)
+		lot.updated_at = datetime.now(timezone.utc)
+
+		if passed:
+			emit_event(
+				InspectionPassedEvent(
+					aggregate_id=lot_id,
+					aggregate_type="InspectionLot",
+					tenant_id=tenant_id,
+					inspection_id=lot_id,
+					reference_type="InspectionLot",
+					reference_id=lot_id,
+					product_id=lot.product_code,
+					accepted_quantity=str(accepted),
+					rejected_quantity=str(lot.rejected_qty),
+					disposition="ACCEPT",
+				),
+				session,
+			)
+		else:
+			emit_event(
+				InspectionFailedEvent(
+					aggregate_id=lot_id,
+					aggregate_type="InspectionLot",
+					tenant_id=tenant_id,
+					inspection_id=lot_id,
+					reference_type="InspectionLot",
+					reference_id=lot_id,
+					product_id=lot.product_code,
+					accepted_quantity=str(accepted),
+					rejected_quantity=str(lot.rejected_qty),
+					failure_summary=f"pass_rate={pass_rate}% < aql={aql_threshold}%",
+				),
+				session,
+			)
+
+		session.flush()
+		return lot
+
+	def raise_ncr(
+		self,
+		session: Any,
+		lot_id: str,
+		description: str,
+		severity: str,
+		raised_by: str,
+		tenant_id: str,
+	) -> Any:
+		"""Raise a structured NCR against an InspectionLot.
+
+		Generates ncr_number as NCRV2-YYYYMMDD-HHMMSS.
+		Severity must be one of: CRITICAL | MAJOR | MINOR.
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import InspectionLot, NCR
+
+		lot = session.get(InspectionLot, lot_id)
+		if lot is None:
+			raise InspectionNotFoundError(f"InspectionLot {lot_id!r} not found")
+
+		ts = datetime.now(timezone.utc)
+		ncr_number = f"NCRV2-{ts.strftime('%Y%m%d-%H%M%S')}"
+
+		ncr = NCR(
+			tenant_id=tenant_id,
+			ncr_number=ncr_number,
+			lot_id=lot_id,
+			product_code=lot.product_code,
+			description=description,
+			severity=severity,
+			status="OPEN",
+			raised_by=raised_by,
+		)
+		session.add(ncr)
+		session.flush()
+		log.info("QCService.raise_ncr: %s raised for lot=%s severity=%s", ncr_number, lot_id, severity)
+		return ncr
+
+	def disposition_ncr(
+		self,
+		session: Any,
+		ncr_id: str,
+		disposition: str,
+		root_cause: str,
+		corrective_action: str,
+		tenant_id: str,
+	) -> Any:
+		"""Set disposition on an NCR and advance status to DISPOSITION.
+
+		Valid dispositions: ACCEPT_AS_IS | REWORK | SCRAP | RETURN_TO_SUPPLIER
+		Transition: any non-CLOSED status → DISPOSITION.
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import NCR
+
+		ncr = session.get(NCR, ncr_id)
+		if ncr is None:
+			raise NCRNotFoundError(f"NCR {ncr_id!r} not found")
+		if ncr.status == "CLOSED":
+			raise InvalidStatusTransitionError("Cannot disposition a CLOSED NCR")
+
+		ncr.disposition = disposition
+		ncr.root_cause = root_cause
+		ncr.corrective_action = corrective_action
+		ncr.status = "DISPOSITION"
+		ncr.updated_at = datetime.now(timezone.utc)
+		session.flush()
+		log.info(
+			"QCService.disposition_ncr: %s → DISPOSITION disposition=%s", ncr_id, disposition
+		)
+		return ncr
+
+	def create_capa(
+		self,
+		session: Any,
+		ncr_id: str | None,
+		capa_type: str,
+		description: str,
+		action_plan: str,
+		owner_id: str,
+		target_date: date,
+		tenant_id: str,
+	) -> Any:
+		"""Create a CAPA linked to an NCR (or standalone for PREVENTIVE type).
+
+		Generates capa_number as CAPA-YYYYMMDD-HHMMSS.
+		root_cause is copied from the linked NCR when ncr_id is given.
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import CAPA, NCR
+
+		root_cause = description  # fallback
+		if ncr_id is not None:
+			ncr = session.get(NCR, ncr_id)
+			if ncr is None:
+				raise NCRNotFoundError(f"NCR {ncr_id!r} not found")
+			root_cause = ncr.root_cause or description
+
+		ts = datetime.now(timezone.utc)
+		capa_number = f"CAPA-{ts.strftime('%Y%m%d-%H%M%S')}"
+
+		capa = CAPA(
+			tenant_id=tenant_id,
+			capa_number=capa_number,
+			ncr_id=ncr_id,
+			capa_type=capa_type,
+			description=description,
+			root_cause=root_cause,
+			action_plan=action_plan,
+			status="OPEN",
+			owner_id=owner_id,
+			target_date=target_date,
+			effectiveness_verified=False,
+		)
+		session.add(capa)
+		session.flush()
+		log.info("QCService.create_capa: %s created type=%s owner=%s", capa_number, capa_type, owner_id)
+		return capa
+
+	def verify_capa(
+		self,
+		session: Any,
+		capa_id: str,
+		verified_by: str,
+		tenant_id: str,
+	) -> Any:
+		"""Mark a CAPA as effectiveness-verified and advance status to VERIFIED.
+
+		Transition: IN_PROGRESS → VERIFIED.
+		Sets effectiveness_verified=True.
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import CAPA
+
+		capa = session.get(CAPA, capa_id)
+		if capa is None:
+			raise QCServiceError(f"CAPA {capa_id!r} not found")
+		if capa.status not in ("OPEN", "IN_PROGRESS"):
+			raise InvalidStatusTransitionError(
+				f"Cannot verify CAPA in status {capa.status!r}"
+			)
+
+		capa.effectiveness_verified = True
+		capa.status = "VERIFIED"
+		capa.updated_at = datetime.now(timezone.utc)
+		session.flush()
+		log.info("QCService.verify_capa: %s verified by %s", capa_id, verified_by)
+		return capa
+
+	def get_quality_dashboard(
+		self,
+		session: Any,
+		tenant_id: str,
+	) -> dict[str, Any]:
+		"""Return quality KPI summary for a tenant.
+
+		Returned dict:
+		  lots_passed      — int: InspectionLots with status=PASSED
+		  lots_failed      — int: InspectionLots with status=FAILED
+		  pass_rate_pct    — float: lots_passed / (lots_passed + lots_failed) * 100
+		  open_ncrs_by_severity — dict: {CRITICAL: n, MAJOR: n, MINOR: n}
+		  open_capas       — int: CAPAs not in VERIFIED/CLOSED
+		  overdue_calibrations — int: CalibrationRecords where next_due_date < today
+		"""
+		from pgappforge.plugins.erp.operations.quality.models import (
+			CAPA,
+			CalibrationRecord,
+			InspectionLot,
+			NCR,
+		)
+
+		today = date.today()
+
+		# Lot counts
+		lots_passed: int = session.execute(
+			sa.select(sa.func.count()).select_from(InspectionLot).where(
+				InspectionLot.tenant_id == tenant_id,
+				InspectionLot.status == "PASSED",
+			)
+		).scalar_one()
+
+		lots_failed: int = session.execute(
+			sa.select(sa.func.count()).select_from(InspectionLot).where(
+				InspectionLot.tenant_id == tenant_id,
+				InspectionLot.status == "FAILED",
+			)
+		).scalar_one()
+
+		total_closed = lots_passed + lots_failed
+		pass_rate_pct = (
+			round(lots_passed / total_closed * 100, 2) if total_closed > 0 else 0.0
+		)
+
+		# Open NCRs by severity
+		open_ncrs_rows = session.execute(
+			sa.select(NCR.severity, sa.func.count().label("cnt"))
+			.where(
+				NCR.tenant_id == tenant_id,
+				NCR.status.notin_(["CLOSED"]),
+			)
+			.group_by(NCR.severity)
+		).all()
+		open_ncrs_by_severity: dict[str, int] = {"CRITICAL": 0, "MAJOR": 0, "MINOR": 0}
+		for row in open_ncrs_rows:
+			open_ncrs_by_severity[row.severity] = row.cnt
+
+		# Open CAPAs
+		open_capas: int = session.execute(
+			sa.select(sa.func.count()).select_from(CAPA).where(
+				CAPA.tenant_id == tenant_id,
+				CAPA.status.notin_(["VERIFIED", "CLOSED"]),
+			)
+		).scalar_one()
+
+		# Overdue calibrations
+		overdue_calibrations: int = session.execute(
+			sa.select(sa.func.count()).select_from(CalibrationRecord).where(
+				CalibrationRecord.tenant_id == tenant_id,
+				CalibrationRecord.next_due_date < today,
+			)
+		).scalar_one()
+
+		return {
+			"lots_passed": lots_passed,
+			"lots_failed": lots_failed,
+			"pass_rate_pct": pass_rate_pct,
+			"open_ncrs_by_severity": open_ncrs_by_severity,
+			"open_capas": open_capas,
+			"overdue_calibrations": overdue_calibrations,
+		}
+
+
 __all__ = [
 	"QCService",
 	"QCServiceError",

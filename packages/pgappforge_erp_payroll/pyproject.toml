@@ -1,0 +1,39 @@
+[project]
+name = "pgappforge-erp-payroll"
+version = "0.1.0"
+description = "Payroll — pay runs, gross-to-net, statutory deductions, payslips, GL posting"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{name = "Nyimbi Odero", email = "nyimbi+pgaf@gmail.com"}]
+readme = "README.md"
+keywords = ["pgappforge", "erp", "payroll", "pay-run", "gross-to-net", "hcm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "pgappforge>=0.90.0",
+    "pgappforge-erp-foundation>=0.1.0",
+    "pgappforge-erp-hr-personnel>=0.1.0",
+    "pgappforge-erp-hr-time>=0.1.0",
+    "pgappforge-erp-gl>=0.1.0",
+]
+
+[project.entry-points."pgappforge.plugins"]
+erp_payroll = "pgappforge.plugins.erp.hcm.payroll:PayrollPlugin"
+
+[project.urls]
+Homepage = "https://github.com/pgappforge/pgappforge"
+Documentation = "https://pgappforge.dev/plugins/erp/payroll"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where = ["src"]

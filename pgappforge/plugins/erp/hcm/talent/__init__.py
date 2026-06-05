@@ -169,10 +169,28 @@ class TalentPlugin(BasePlugin):
 		from pgappforge.plugins.erp.hcm.talent.models import (
 			Application,
 			Candidate,
+			CareerPath,
+			Certification,
+			Competency,
+			CompetencyProfile,
+			Goal,
 			Interview,
+			InterviewDebrief,
+			NineBoxPlacement,
 			Offer,
+			TalentOnboardingPlan,
+			OnboardingTask,
+			PerformanceCycle,
 			PerformanceReview,
+			PIP,
+			PIPCheckin,
 			Requisition,
+			ReviewParticipant,
+			SuccessionPlan,
+			SuccessorCandidate,
+			Survey,
+			SurveyQuestion,
+			TalentSurveyResponse,
 			TrainingCourse,
 			TrainingEnrollment,
 		)
@@ -181,10 +199,28 @@ class TalentPlugin(BasePlugin):
 			Candidate,
 			Application,
 			Interview,
+			InterviewDebrief,
 			Offer,
 			PerformanceReview,
+			PerformanceCycle,
+			ReviewParticipant,
+			Goal,
+			PIP,
+			PIPCheckin,
+			SuccessionPlan,
+			SuccessorCandidate,
+			NineBoxPlacement,
+			Competency,
+			CompetencyProfile,
+			CareerPath,
+			Survey,
+			SurveyQuestion,
+			TalentSurveyResponse,
+			Certification,
 			TrainingCourse,
 			TrainingEnrollment,
+			TalentOnboardingPlan,
+			OnboardingTask,
 		]
 
 	# ------------------------------------------------------------------
@@ -351,10 +387,28 @@ def create_plugin(
 from pgappforge.plugins.erp.hcm.talent.models import (  # noqa: E402
 	Application,
 	Candidate,
+	CareerPath,
+	Certification,
+	Competency,
+	CompetencyProfile,
+	Goal,
 	Interview,
+	InterviewDebrief,
+	NineBoxPlacement,
 	Offer,
+	TalentOnboardingPlan,
+	OnboardingTask,
+	PerformanceCycle,
 	PerformanceReview,
+	PIP,
+	PIPCheckin,
 	Requisition,
+	ReviewParticipant,
+	SuccessionPlan,
+	SuccessorCandidate,
+	Survey,
+	SurveyQuestion,
+	TalentSurveyResponse,
 	TrainingCourse,
 	TrainingEnrollment,
 )
@@ -378,13 +432,17 @@ from pgappforge.plugins.erp.hcm.talent.services import (  # noqa: E402
 	EnrollmentNotFoundError,
 	TalentStateError,
 	TalentValidationError,
+	GoalNotFoundError,
+	PIPNotFoundError,
+	SuccessionPlanNotFoundError,
+	CycleNotFoundError,
 )
 
 __all__ = [
 	# plugin
 	"TalentPlugin",
 	"create_plugin",
-	# models
+	# models — original
 	"Requisition",
 	"Candidate",
 	"Application",
@@ -393,6 +451,35 @@ __all__ = [
 	"PerformanceReview",
 	"TrainingCourse",
 	"TrainingEnrollment",
+	# models — OKR / Goals
+	"Goal",
+	# models — 360 appraisal
+	"PerformanceCycle",
+	"ReviewParticipant",
+	# models — PIP
+	"PIP",
+	"PIPCheckin",
+	# models — Succession
+	"SuccessionPlan",
+	"SuccessorCandidate",
+	# models — HiPo
+	"NineBoxPlacement",
+	# models — Competency framework
+	"Competency",
+	"CompetencyProfile",
+	# models — Career pathing
+	"CareerPath",
+	# models — Surveys
+	"Survey",
+	"SurveyQuestion",
+	"TalentSurveyResponse",
+	# models — L&D certifications
+	"Certification",
+	# models — Onboarding
+	"TalentOnboardingPlan",
+	"OnboardingTask",
+	# models — Interview debrief
+	"InterviewDebrief",
 	# events
 	"RequisitionApprovedEvent",
 	"RequisitionFilledEvent",
@@ -412,4 +499,8 @@ __all__ = [
 	"EnrollmentNotFoundError",
 	"TalentStateError",
 	"TalentValidationError",
+	"GoalNotFoundError",
+	"PIPNotFoundError",
+	"SuccessionPlanNotFoundError",
+	"CycleNotFoundError",
 ]

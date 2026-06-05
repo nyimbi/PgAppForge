@@ -596,11 +596,25 @@ class PayrollService:
 	def post_to_gl(self, payrun_id: str, session: Any) -> dict[str, Any]:
 		"""Create double-entry GL journal for a payroll run.
 
-		Journal:
-		  DR  Salary Expense (5000)         total_gross_cents
-		  CR  Bank / Net Pay Clearing (1100) total_net_cents
-		  CR  PAYE Tax Payable (2100)        total_employee_tax_cents
-		  CR  Pension Payable (2200)         pension_employee + pension_employer
+		Kenya-aware: aggregates by PayslipLine.line_type to produce separate
+		GL lines for each statutory levy (PAYE, NSSF Tier I/II, SHIF, Housing
+		Levy, NITA).  Falls back to single PAYE/pension lines for non-KE runs.
+
+		Debit lines:
+		  5000  Salary & Wages Expense            gross_pay
+		  5010  Employer NSSF / Pension Expense   employer_nssf_total
+		  5020  Housing Levy Expense (Employer)   housing_levy_employer
+		  5025  NITA Levy Expense                 nita
+
+		Credit lines:
+		  1100  Net Pay — Bank Clearing           net_pay
+		  2100  PAYE Payable                      paye
+		  2210  NSSF Tier I Payable               nssf_tier1_employee + nssf_tier1_employer
+		  2211  NSSF Tier II Payable              nssf_tier2_employee + nssf_tier2_employer
+		  2215  SHIF Payable                      shif
+		  2220  Housing Levy Payable (Employee)   housing_levy_employee
+		  2230  NITA Payable                      nita
+		  2200  Pension Payable (non-KE)          pension_employee + pension_employer
 
 		Returns journal dict; emits PayrollGLPostedEvent.
 		If GL plugin is loaded, forwards to gl.post_journal().
@@ -609,7 +623,7 @@ class PayrollService:
 			PayrollRunNotFoundError
 			PayrollStateError: run must be APPROVED or PAID
 		"""
-		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip, PayslipLine
 		from pgappforge.plugins.erp.hcm.payroll.events import PayrollGLPostedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
@@ -623,9 +637,31 @@ class PayrollService:
 
 		journal_id = str(uuid.uuid4())
 
-		# Calculate pension total from payslips
-		from pgappforge.plugins.erp.hcm.payroll.models import Payslip
-		pension_total = session.execute(
+		# --- Aggregate statutory amounts by line_type from PayslipLine rows ---
+		# join PayslipLine → Payslip → PayrollRun
+		def _sum_lines(line_type: str, employer_cost: bool | None = None) -> int:
+			q = (
+				sa.select(sa.func.coalesce(sa.func.sum(sa.func.abs(PayslipLine.amount_cents)), 0))
+				.join(Payslip, PayslipLine.payslip_id == Payslip.id)
+				.where(Payslip.payrun_id == payrun_id)
+				.where(PayslipLine.line_type == line_type)
+			)
+			if employer_cost is not None:
+				q = q.where(PayslipLine.is_employer_cost == employer_cost)
+			return int(session.execute(q).scalar() or 0)
+
+		paye_cents = _sum_lines("PAYE")
+		nssf_t1_emp = _sum_lines("NSSF_TIER_I", employer_cost=False)
+		nssf_t1_er = _sum_lines("NSSF_TIER_I", employer_cost=True)
+		nssf_t2_emp = _sum_lines("NSSF_TIER_II", employer_cost=False)
+		nssf_t2_er = _sum_lines("NSSF_TIER_II", employer_cost=True)
+		shif_cents = _sum_lines("NHIF_SHIF")
+		housing_emp = _sum_lines("HOUSING_LEVY", employer_cost=False)
+		housing_er = _sum_lines("HOUSING_LEVY", employer_cost=True)
+		nita_cents = _sum_lines("NITA")
+
+		# Non-KE pension fallback (NSSF lines will be zero for non-KE runs)
+		pension_total_cents = session.execute(
 			sa.select(
 				sa.func.coalesce(
 					sa.func.sum(Payslip.pension_employee_cents + Payslip.pension_employer_cents), 0
@@ -633,45 +669,60 @@ class PayrollService:
 			).where(Payslip.payrun_id == payrun_id)
 		).scalar() or 0
 
+		nssf_total = nssf_t1_emp + nssf_t1_er + nssf_t2_emp + nssf_t2_er
+		employer_statutory = nssf_t1_er + nssf_t2_er + housing_er + nita_cents
+		# For non-KE: total_employer_tax_cents covers employer NI
+		if employer_statutory == 0:
+			employer_statutory = payrun.total_employer_tax_cents
+
 		assert isinstance(payrun.total_gross_cents, int)
 		assert isinstance(payrun.total_net_cents, int)
-		assert isinstance(payrun.total_employee_tax_cents, int)
+
+		# Build debit lines — omit zero-value lines
+		debit_lines: list[dict[str, Any]] = [
+			{"account": "5000", "amount_cents": payrun.total_gross_cents, "description": "Salary & Wages Expense"},
+		]
+		if nssf_t1_er + nssf_t2_er > 0:
+			debit_lines.append({"account": "5010", "amount_cents": nssf_t1_er + nssf_t2_er, "description": "Employer NSSF Expense"})
+		elif payrun.total_employer_tax_cents and nssf_total == 0:
+			debit_lines.append({"account": "5010", "amount_cents": payrun.total_employer_tax_cents, "description": "Employer NI / Social Security"})
+		if housing_er > 0:
+			debit_lines.append({"account": "5020", "amount_cents": housing_er, "description": "Housing Levy Expense (Employer)"})
+		if nita_cents > 0:
+			debit_lines.append({"account": "5025", "amount_cents": nita_cents, "description": "NITA Levy Expense"})
+
+		# Build credit lines
+		credit_lines: list[dict[str, Any]] = [
+			{"account": "1100", "amount_cents": payrun.total_net_cents, "description": "Net Pay — Bank Clearing"},
+		]
+		# PAYE
+		effective_paye = paye_cents if paye_cents else payrun.total_employee_tax_cents
+		if effective_paye:
+			credit_lines.append({"account": "2100", "amount_cents": effective_paye, "description": "PAYE Payable"})
+		# NSSF Tier I/II (Kenya)
+		if nssf_t1_emp + nssf_t1_er > 0:
+			credit_lines.append({"account": "2210", "amount_cents": nssf_t1_emp + nssf_t1_er, "description": "NSSF Tier I Payable"})
+		if nssf_t2_emp + nssf_t2_er > 0:
+			credit_lines.append({"account": "2211", "amount_cents": nssf_t2_emp + nssf_t2_er, "description": "NSSF Tier II Payable"})
+		if shif_cents > 0:
+			credit_lines.append({"account": "2215", "amount_cents": shif_cents, "description": "SHIF Payable"})
+		if housing_emp > 0:
+			credit_lines.append({"account": "2220", "amount_cents": housing_emp, "description": "Housing Levy Payable (Employee)"})
+		if nita_cents > 0:
+			credit_lines.append({"account": "2230", "amount_cents": nita_cents, "description": "NITA Payable"})
+		# Non-KE pension fallback
+		if nssf_total == 0 and int(pension_total_cents) > 0:
+			credit_lines.append({"account": "2200", "amount_cents": int(pension_total_cents), "description": "Pension Contributions Payable"})
 
 		journal = {
 			"journal_id": journal_id,
 			"payrun_id": payrun_id,
 			"tenant_id": payrun.tenant_id,
 			"journal_date": payrun.pay_date.isoformat(),
+			"currency_code": getattr(payrun, "currency_code", "KES"),
 			"description": f"Payroll {payrun.period_start}–{payrun.period_end}",
-			"debit_lines": [
-				{
-					"account": "5000",
-					"amount_cents": payrun.total_gross_cents,
-					"description": "Salary & Wages Expense",
-				},
-				{
-					"account": "5010",
-					"amount_cents": payrun.total_employer_tax_cents,
-					"description": "Employer NI / Social Security",
-				},
-			],
-			"credit_lines": [
-				{
-					"account": "1100",
-					"amount_cents": payrun.total_net_cents,
-					"description": "Net Pay — Bank Clearing",
-				},
-				{
-					"account": "2100",
-					"amount_cents": payrun.total_employee_tax_cents,
-					"description": "PAYE / Income Tax Payable",
-				},
-				{
-					"account": "2200",
-					"amount_cents": int(pension_total),
-					"description": "Pension Contributions Payable",
-				},
-			],
+			"debit_lines": debit_lines,
+			"credit_lines": credit_lines,
 		}
 
 		# Best-effort GL plugin forward
@@ -698,7 +749,7 @@ class PayrollService:
 				tax_payable_account="2100",
 				total_gross_cents=payrun.total_gross_cents,
 				total_net_cents=payrun.total_net_cents,
-				currency="USD",
+				currency=getattr(payrun, "currency_code", "KES"),
 			),
 			session,
 		)
@@ -940,6 +991,765 @@ class PayrollService:
 		)
 		return result
 
+	# ------------------------------------------------------------------
+	# generate_p9_form
+	# ------------------------------------------------------------------
+
+	def generate_p9_form(
+		self,
+		session: Any,
+		employee_id: str,
+		tax_year: int,
+		tenant_id: str = "",
+	) -> dict[str, Any]:
+		"""Generate KRA P9 certificate of earnings for annual iTax submission.
+
+		Aggregates PayrollYTD rows for employee_id / tax_year and computes the
+		12-column monthly breakdown required by KRA iTax P9 layout.
+
+		Args:
+			session: SQLAlchemy session.
+			employee_id: Employee UUID.
+			tax_year: Calendar/tax year e.g. 2025.
+			tenant_id: Tenant UUID (used for scoping if provided).
+
+		Returns:
+			Dict matching KRA P9 column layout:
+			  {
+			    employee_id, tax_year, employer_pin, employee_pin,
+			    months_employed,
+			    monthly_breakdown: [
+			      {month, gross_pay, basic_salary, benefits_in_kind,
+			       taxable_pay, paye_charged, personal_relief,
+			       insurance_relief, total_relief, paye_paid},
+			      ...  (12 rows; zero-filled for months not employed)
+			    ],
+			    totals: {gross_pay, taxable_pay, paye_paid, total_relief,
+			             nssf_tier1, nssf_tier2, shif, housing_levy, nita},
+			    generated_at,
+			  }
+		"""
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollYTD
+
+		q = (
+			sa.select(PayrollYTD)
+			.where(PayrollYTD.employee_id == employee_id)
+			.where(PayrollYTD.tax_year == tax_year)
+			.order_by(PayrollYTD.month)
+		)
+		if tenant_id:
+			q = q.where(PayrollYTD.tenant_id == tenant_id)
+
+		ytd_rows: list[Any] = session.execute(q).scalars().all()
+
+		# Index by month for O(1) lookup
+		by_month: dict[int, Any] = {r.month: r for r in ytd_rows}
+
+		# KRA personal relief: 2,400 KES/month = 240000 cents
+		_MONTHLY_PERSONAL_RELIEF = 240000
+
+		monthly_breakdown: list[dict[str, Any]] = []
+		totals: dict[str, int] = {
+			"gross_pay": 0,
+			"taxable_pay": 0,
+			"paye_paid": 0,
+			"total_relief": 0,
+			"nssf_tier1": 0,
+			"nssf_tier2": 0,
+			"shif": 0,
+			"housing_levy": 0,
+			"nita": 0,
+			"net": 0,
+		}
+
+		for m in range(1, 13):
+			row = by_month.get(m)
+			if row is None:
+				monthly_breakdown.append({
+					"month": m,
+					"gross_pay": 0,
+					"basic_salary": 0,
+					"benefits_in_kind": 0,
+					"taxable_pay": 0,
+					"paye_charged": 0,
+					"personal_relief": 0,
+					"insurance_relief": 0,
+					"total_relief": 0,
+					"paye_paid": 0,
+				})
+				continue
+
+			# Insurance relief is implicit in net PAYE; we re-derive personal relief
+			# The gross_tax_before_relief is not stored; approximate total_relief as
+			# personal_relief only (insurance detail not stored per-month in YTD).
+			personal_relief = _MONTHLY_PERSONAL_RELIEF
+			total_relief = personal_relief  # insurance relief would need premium data
+
+			monthly_breakdown.append({
+				"month": m,
+				"gross_pay": row.gross_cents,
+				"basic_salary": row.gross_cents - row.bik_cents,
+				"benefits_in_kind": row.bik_cents,
+				"taxable_pay": row.taxable_gross_cents,
+				"paye_charged": row.paye_cents,
+				"personal_relief": personal_relief,
+				"insurance_relief": 0,  # not tracked per-month in YTD; populate from TaxWithholding if needed
+				"total_relief": total_relief,
+				"paye_paid": row.paye_cents,
+			})
+
+			totals["gross_pay"] += row.gross_cents
+			totals["taxable_pay"] += row.taxable_gross_cents
+			totals["paye_paid"] += row.paye_cents
+			totals["total_relief"] += total_relief
+			totals["nssf_tier1"] += row.nssf_tier1_cents
+			totals["nssf_tier2"] += row.nssf_tier2_cents
+			totals["shif"] += row.shif_cents
+			totals["housing_levy"] += row.housing_levy_cents
+			totals["nita"] += row.nita_cents
+			totals["net"] += row.net_cents
+
+		months_employed = len(by_month)
+
+		result = {
+			"employee_id": employee_id,
+			"tax_year": tax_year,
+			"employer_pin": "",  # populate from legal entity master
+			"employee_pin": "",  # populate from employee master
+			"months_employed": months_employed,
+			"monthly_breakdown": monthly_breakdown,
+			"totals": totals,
+			"generated_at": datetime.now(timezone.utc).isoformat(),
+		}
+		log.info(
+			"PayrollService.generate_p9_form: employee=%s year=%d months=%d gross=%d¢",
+			employee_id, tax_year, months_employed, totals["gross_pay"],
+		)
+		return result
+
+	# ------------------------------------------------------------------
+	# generate_paye_return
+	# ------------------------------------------------------------------
+
+	def generate_paye_return(
+		self,
+		session: Any,
+		payrun_id: str,
+		tenant_id: str = "",
+	) -> dict[str, Any]:
+		"""Generate KRA iTax-compatible PAYE monthly return for a payroll run.
+
+		Produces a structured dict with:
+		  - period, employer metadata
+		  - employer_return_data: one row per employee matching KRA iTax PAYE
+		    Monthly Return column layout
+		  - csv_content: UTF-8 BOM encoded CSV string ready for iTax upload
+
+		Args:
+			session: SQLAlchemy session.
+			payrun_id: PayrollRun UUID.
+			tenant_id: Tenant UUID (optional scoping).
+
+		Returns:
+			{
+			  period, payrun_id,
+			  total_emoluments, total_paye,
+			  employer_return_data: [{
+			    employee_ref, employee_name, id_number, kra_pin,
+			    gross_pay, non_cash_benefits, pension_contribution,
+			    owner_occupied_interest, personal_relief, insurance_relief,
+			    taxable_pay, tax_on_taxable_pay, monthly_personal_relief,
+			    tax_payable, tax_withheld,
+			  }],
+			  csv_content,
+			  generated_at,
+			}
+		"""
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip, PayslipLine
+		import io
+		import csv as _csv
+
+		payrun = session.get(PayrollRun, payrun_id)
+		if payrun is None:
+			raise PayrollRunNotFoundError(f"PayrollRun {payrun_id!r} not found")
+		if payrun.status not in ("CALCULATED", "APPROVED", "PAID"):
+			raise PayrollStateError(
+				f"PayrollRun {payrun_id!r} is {payrun.status!r}; must be CALCULATED/APPROVED/PAID"
+			)
+
+		q = sa.select(Payslip).where(Payslip.payrun_id == payrun_id)
+		if tenant_id:
+			q = q.where(Payslip.tenant_id == tenant_id)
+		payslips: list[Any] = session.execute(q).scalars().all()
+
+		_MONTHLY_PERSONAL_RELIEF = 240000  # KES 2,400/month in cents
+
+		employer_return_data: list[dict[str, Any]] = []
+		total_emoluments = 0
+		total_paye = 0
+
+		for ps in payslips:
+			# Pull BIK from PayslipLine rows (informational lines)
+			bik_cents = int(session.execute(
+				sa.select(sa.func.coalesce(sa.func.sum(PayslipLine.amount_cents), 0))
+				.where(PayslipLine.payslip_id == ps.id)
+				.where(PayslipLine.line_type == "BIK")
+			).scalar() or 0)
+
+			# Pension contribution from NSSF lines
+			nssf_emp_cents = int(session.execute(
+				sa.select(sa.func.coalesce(sa.func.sum(sa.func.abs(PayslipLine.amount_cents)), 0))
+				.where(PayslipLine.payslip_id == ps.id)
+				.where(PayslipLine.line_type.in_(["NSSF_TIER_I", "NSSF_TIER_II"]))
+				.where(PayslipLine.is_employer_cost == False)  # noqa: E712
+			).scalar() or 0)
+
+			taxable_pay = ps.gross_pay_cents + bik_cents
+			paye = ps.income_tax_cents
+			personal_relief = _MONTHLY_PERSONAL_RELIEF
+
+			row: dict[str, Any] = {
+				"employee_ref": ps.employee_id,
+				"employee_name": "",         # populate from employee master
+				"id_number": "",             # national ID / passport
+				"kra_pin": "",               # employee KRA PIN
+				"gross_pay": ps.gross_pay_cents,
+				"non_cash_benefits": bik_cents,
+				"pension_contribution": nssf_emp_cents,
+				"owner_occupied_interest": 0,
+				"personal_relief": personal_relief,
+				"insurance_relief": 0,
+				"taxable_pay": taxable_pay,
+				"tax_on_taxable_pay": paye + personal_relief,  # gross tax before relief
+				"monthly_personal_relief": personal_relief,
+				"tax_payable": paye,
+				"tax_withheld": paye,
+			}
+			employer_return_data.append(row)
+			total_emoluments += ps.gross_pay_cents
+			total_paye += paye
+
+		# Build UTF-8 BOM CSV
+		csv_columns = [
+			"employee_ref", "employee_name", "id_number", "kra_pin",
+			"gross_pay", "non_cash_benefits", "pension_contribution",
+			"owner_occupied_interest", "personal_relief", "insurance_relief",
+			"taxable_pay", "tax_on_taxable_pay", "monthly_personal_relief",
+			"tax_payable", "tax_withheld",
+		]
+		buf = io.StringIO()
+		buf.write("﻿")  # UTF-8 BOM required by KRA iTax
+		writer = _csv.DictWriter(buf, fieldnames=csv_columns, extrasaction="ignore")
+		writer.writeheader()
+		for r in employer_return_data:
+			# Convert cents to KES (2dp) for human-readable CSV
+			csv_row = {k: (f"{v / 100:.2f}" if isinstance(v, int) else v) for k, v in r.items()}
+			writer.writerow(csv_row)
+
+		result = {
+			"period": f"{payrun.period_start.isoformat()}_{payrun.period_end.isoformat()}",
+			"payrun_id": payrun_id,
+			"total_emoluments": total_emoluments,
+			"total_paye": total_paye,
+			"employer_return_data": employer_return_data,
+			"csv_content": buf.getvalue(),
+			"generated_at": datetime.now(timezone.utc).isoformat(),
+		}
+		log.info(
+			"PayrollService.generate_paye_return: run=%s employees=%d total_paye=%d¢",
+			payrun_id, len(employer_return_data), total_paye,
+		)
+		return result
+
+	# ------------------------------------------------------------------
+	# dispatch_payslips
+	# ------------------------------------------------------------------
+
+	def dispatch_payslips(
+		self,
+		session: Any,
+		payrun_id: str,
+		delivery_method: str = "EMAIL",
+		tenant_id: str = "",
+	) -> dict[str, Any]:
+		"""Deliver payslip PDFs to employees via email or other channel.
+
+		For each PAID payslip in the run:
+		  1. Generates a PDF via generate_payslip_pdf() (WeasyPrint, lazy import).
+		  2. Dispatches via the delivery_method (EMAIL | STORE).
+		  3. Sets payslip.dispatched_at = now().
+		  4. Logs a PayslipAccessLog row with access_type="EMAIL".
+
+		delivery_method:
+		  EMAIL  — sends via a delivery service; lazy-imports to avoid hard dep.
+		           Looks for current_app.extensions["pgaf_mailer"] first;
+		           falls back to a no-op logger if unavailable.
+		  STORE  — writes PDF bytes to payrun.metadata_["payslip_pdfs"][employee_id].
+
+		Args:
+			session: SQLAlchemy session (caller commits).
+			payrun_id: PayrollRun UUID.
+			delivery_method: "EMAIL" or "STORE".
+			tenant_id: Optional tenant scoping.
+
+		Returns:
+			{dispatched: int, failed: int, errors: list[str], generated_at}
+		"""
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip, PayslipAccessLog
+
+		payrun = session.get(PayrollRun, payrun_id)
+		if payrun is None:
+			raise PayrollRunNotFoundError(f"PayrollRun {payrun_id!r} not found")
+		if payrun.status != "PAID":
+			raise PayrollStateError(
+				f"PayrollRun {payrun_id!r} is {payrun.status!r}; dispatch requires PAID status"
+			)
+
+		q = sa.select(Payslip).where(Payslip.payrun_id == payrun_id).where(Payslip.status == "PAID")
+		if tenant_id:
+			q = q.where(Payslip.tenant_id == tenant_id)
+		payslips: list[Any] = session.execute(q).scalars().all()
+
+		dispatched = 0
+		failed = 0
+		errors: list[str] = []
+		now = datetime.now(timezone.utc)
+
+		# Lazy-import mailer
+		mailer: Any = None
+		try:
+			from flask import current_app
+			mailer = current_app.extensions.get("pgaf_mailer")
+		except Exception:
+			pass
+
+		for ps in payslips:
+			try:
+				pdf_bytes = self.generate_payslip_pdf(ps.id, session)
+
+				if delivery_method == "EMAIL":
+					if mailer is not None:
+						mailer.send_payslip(
+							employee_id=ps.employee_id,
+							payslip_id=ps.id,
+							pdf_bytes=pdf_bytes,
+							period=f"{payrun.period_start}–{payrun.period_end}",
+						)
+					else:
+						log.warning(
+							"PayrollService.dispatch_payslips: mailer not available, payslip %s not emailed",
+							ps.id,
+						)
+				elif delivery_method == "STORE":
+					meta = dict(payrun.metadata_ or {})
+					pdfs = meta.setdefault("payslip_pdfs", {})
+					import base64
+					pdfs[ps.employee_id] = base64.b64encode(pdf_bytes).decode()
+					payrun.metadata_ = meta
+
+				# Mark dispatched
+				ps.dispatched_at = now
+				ps.updated_at = now
+
+				# Access log (Kenya DPA 2019)
+				session.add(PayslipAccessLog(
+					tenant_id=ps.tenant_id,
+					payslip_id=ps.id,
+					accessed_by=ps.employee_id,  # system dispatch on behalf of employee
+					access_type="EMAIL" if delivery_method == "EMAIL" else "DOWNLOAD",
+					ip_address=None,
+					accessed_at=now,
+				))
+				dispatched += 1
+
+			except Exception as exc:
+				log.error(
+					"PayrollService.dispatch_payslips: failed for payslip %s: %s",
+					ps.id, exc,
+				)
+				errors.append(f"{ps.id}: {exc}")
+				failed += 1
+
+		log.info(
+			"PayrollService.dispatch_payslips: run=%s dispatched=%d failed=%d",
+			payrun_id, dispatched, failed,
+		)
+		return {
+			"dispatched": dispatched,
+			"failed": failed,
+			"errors": errors,
+			"generated_at": now.isoformat(),
+		}
+
+	# ------------------------------------------------------------------
+	# generate_payslip_pdf
+	# ------------------------------------------------------------------
+
+	def generate_payslip_pdf(
+		self,
+		payslip_id: str,
+		session: Any,
+	) -> bytes:
+		"""Render a payslip as a password-protected PDF using WeasyPrint.
+
+		Password is the last 4 digits of the employee_id UUID (standard Kenya
+		practice — employees are told to use their last 4 ID digits).
+
+		Requires WeasyPrint and Jinja2 to be installed. If WeasyPrint is not
+		available, returns a UTF-8 encoded plain-text representation instead
+		(suitable for testing without a full rendering stack).
+
+		Args:
+			payslip_id: Payslip UUID.
+			session: SQLAlchemy session.
+
+		Returns:
+			PDF bytes (or plain-text bytes if WeasyPrint unavailable).
+
+		Raises:
+			PayslipNotFoundError: payslip not found.
+		"""
+		from pgappforge.plugins.erp.hcm.payroll.models import Payslip, PayslipLine, PayrollRun
+
+		ps = session.get(Payslip, payslip_id)
+		if ps is None:
+			raise PayslipNotFoundError(f"Payslip {payslip_id!r} not found")
+
+		payrun = session.get(PayrollRun, ps.payrun_id)
+
+		lines: list[Any] = session.execute(
+			sa.select(PayslipLine)
+			.where(PayslipLine.payslip_id == payslip_id)
+			.order_by(PayslipLine.line_type, PayslipLine.description)
+		).scalars().all()
+
+		earnings = [l for l in lines if l.amount_cents > 0 and not l.is_employer_cost]
+		deductions = [l for l in lines if l.amount_cents < 0]
+		employer_costs = [l for l in lines if l.is_employer_cost]
+
+		context = {
+			"employee_id": ps.employee_id,
+			"payslip_id": ps.id,
+			"period_start": payrun.period_start.isoformat() if payrun else "",
+			"period_end": payrun.period_end.isoformat() if payrun else "",
+			"pay_date": payrun.pay_date.isoformat() if payrun else "",
+			"currency": ps.currency_code,
+			"gross_pay": ps.gross_pay_cents,
+			"income_tax": ps.income_tax_cents,
+			"national_insurance": ps.national_insurance_cents,
+			"pension_employee": ps.pension_employee_cents,
+			"other_deductions": ps.other_deductions_cents,
+			"net_pay": ps.net_pay_cents,
+			"earnings": [
+				{"description": l.description, "amount": l.amount_cents}
+				for l in earnings
+			],
+			"deductions": [
+				{"description": l.description, "amount": l.amount_cents}
+				for l in deductions
+			],
+			"employer_costs": [
+				{"description": l.description, "amount": l.amount_cents}
+				for l in employer_costs
+			],
+		}
+
+		# Build HTML
+		try:
+			from jinja2 import Environment, BaseLoader
+			html_tmpl = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Payslip</title>
+<style>body{font-family:Arial,sans-serif;font-size:11pt;}
+table{width:100%;border-collapse:collapse;}
+td,th{border:1px solid #ccc;padding:4px 8px;}th{background:#f0f0f0;}</style>
+</head><body>
+<h2>PAYSLIP</h2>
+<p>Employee: {{ employee_id }} | Period: {{ period_start }} – {{ period_end }} | Pay Date: {{ pay_date }}</p>
+<h3>Earnings</h3>
+<table><tr><th>Description</th><th>Amount ({{ currency }} cents)</th></tr>
+{% for e in earnings %}<tr><td>{{ e.description }}</td><td>{{ e.amount }}</td></tr>{% endfor %}
+<tr><td><strong>Gross Pay</strong></td><td><strong>{{ gross_pay }}</strong></td></tr>
+</table>
+<h3>Deductions</h3>
+<table><tr><th>Description</th><th>Amount ({{ currency }} cents)</th></tr>
+{% for d in deductions %}<tr><td>{{ d.description }}</td><td>{{ d.amount }}</td></tr>{% endfor %}
+</table>
+<p><strong>NET PAY: {{ net_pay }} {{ currency }} cents</strong></p>
+<h3>Employer Contributions</h3>
+<table><tr><th>Description</th><th>Amount ({{ currency }} cents)</th></tr>
+{% for c in employer_costs %}<tr><td>{{ c.description }}</td><td>{{ c.amount }}</td></tr>{% endfor %}
+</table>
+</body></html>"""
+			env = Environment(loader=BaseLoader())
+			tmpl = env.from_string(html_tmpl)
+			html = tmpl.render(**context)
+		except ImportError:
+			html = None
+
+		# Password: last 4 hex chars of employee UUID (no dashes)
+		raw_id = ps.employee_id.replace("-", "")
+		pdf_password = raw_id[-4:] if len(raw_id) >= 4 else "0000"
+
+		if html is not None:
+			try:
+				from weasyprint import HTML as WP_HTML
+				pdf_bytes = WP_HTML(string=html).write_pdf()
+				# Apply password protection via pikepdf if available
+				try:
+					import pikepdf
+					import io as _io
+					reader = pikepdf.open(_io.BytesIO(pdf_bytes))
+					out = _io.BytesIO()
+					reader.save(
+						out,
+						encryption=pikepdf.Encryption(
+							owner=pdf_password + pdf_password,
+							user=pdf_password,
+							R=4,
+						),
+					)
+					return out.getvalue()
+				except ImportError:
+					return pdf_bytes
+			except ImportError:
+				pass
+
+		# Plain-text fallback
+		lines_txt = [
+			f"PAYSLIP — {context['employee_id']}",
+			f"Period: {context['period_start']} – {context['period_end']}",
+			f"Gross Pay: {context['gross_pay']} {context['currency']} cents",
+			f"Net Pay:   {context['net_pay']} {context['currency']} cents",
+		]
+		return "\n".join(lines_txt).encode("utf-8")
+
+	# ------------------------------------------------------------------
+	# generate_bank_eft
+	# ------------------------------------------------------------------
+
+	def generate_bank_eft(
+		self,
+		session: Any,
+		payrun_id: str,
+		bank_code: str = "KCB",
+		tenant_id: str = "",
+	) -> str:
+		"""Generate Kenya bank EFT bulk-payment CSV for net pay transfers.
+
+		Supports KCB, EQUITY, STANBIC, COOPERATIVE column layouts.
+		Falls back to a generic layout for unknown bank codes.
+
+		PayrollRun must be APPROVED or PAID.
+
+		Args:
+			session: SQLAlchemy session.
+			payrun_id: PayrollRun UUID.
+			bank_code: "KCB" | "EQUITY" | "STANBIC" | "COOPERATIVE" | "GENERIC".
+			tenant_id: Optional tenant scoping.
+
+		Returns:
+			CSV string (UTF-8, no BOM — banks prefer plain UTF-8).
+
+		Raises:
+			PayrollRunNotFoundError, PayrollStateError
+		"""
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip
+		import io
+		import csv as _csv
+
+		payrun = session.get(PayrollRun, payrun_id)
+		if payrun is None:
+			raise PayrollRunNotFoundError(f"PayrollRun {payrun_id!r} not found")
+		if payrun.status not in ("APPROVED", "PAID"):
+			raise PayrollStateError(
+				f"PayrollRun {payrun_id!r} is {payrun.status!r}; must be APPROVED or PAID to generate EFT"
+			)
+
+		q = (
+			sa.select(Payslip)
+			.where(Payslip.payrun_id == payrun_id)
+			.where(Payslip.status.in_(["APPROVED", "PAID"]))
+			.where(Payslip.net_pay_cents > 0)
+			.order_by(Payslip.employee_id)
+		)
+		if tenant_id:
+			q = q.where(Payslip.tenant_id == tenant_id)
+		payslips: list[Any] = session.execute(q).scalars().all()
+
+		buf = io.StringIO()
+		code = bank_code.upper()
+
+		if code == "KCB":
+			# KCB Bulk Payment CSV: AccountNumber,BranchCode,BeneficiaryName,Amount,Narration
+			writer = _csv.writer(buf)
+			writer.writerow(["AccountNumber", "BranchCode", "BeneficiaryName", "Amount", "Narration"])
+			for ps in payslips:
+				amount_kes = f"{ps.net_pay_cents / 100:.2f}"
+				ref = ps.payment_reference or f"PAY-{ps.id[:8].upper()}"
+				writer.writerow([
+					ps.bank_account_number or "",
+					ps.bank_branch_code or "",
+					ps.employee_id,
+					amount_kes,
+					ref,
+				])
+
+		elif code == "EQUITY":
+			# Equity Bank Bulk Payment: AccountNo,Amount,BeneficiaryName,Narration,BranchCode
+			writer = _csv.writer(buf)
+			writer.writerow(["AccountNo", "Amount", "BeneficiaryName", "Narration", "BranchCode"])
+			for ps in payslips:
+				amount_kes = f"{ps.net_pay_cents / 100:.2f}"
+				ref = ps.payment_reference or f"PAY-{ps.id[:8].upper()}"
+				writer.writerow([
+					ps.bank_account_number or "",
+					amount_kes,
+					ps.employee_id,
+					ref,
+					ps.bank_branch_code or "",
+				])
+
+		elif code == "STANBIC":
+			# Stanbic Bank Kenya: BeneficiaryAccountNumber,BeneficiaryName,PaymentAmount,BranchCode,Reference
+			writer = _csv.writer(buf)
+			writer.writerow(["BeneficiaryAccountNumber", "BeneficiaryName", "PaymentAmount", "BranchCode", "Reference"])
+			for ps in payslips:
+				amount_kes = f"{ps.net_pay_cents / 100:.2f}"
+				ref = ps.payment_reference or f"PAY-{ps.id[:8].upper()}"
+				writer.writerow([
+					ps.bank_account_number or "",
+					ps.employee_id,
+					amount_kes,
+					ps.bank_branch_code or "",
+					ref,
+				])
+
+		elif code == "COOPERATIVE":
+			# Co-operative Bank Kenya: AccountNumber,Amount,BeneficiaryName,BranchCode,TransactionReference
+			writer = _csv.writer(buf)
+			writer.writerow(["AccountNumber", "Amount", "BeneficiaryName", "BranchCode", "TransactionReference"])
+			for ps in payslips:
+				amount_kes = f"{ps.net_pay_cents / 100:.2f}"
+				ref = ps.payment_reference or f"PAY-{ps.id[:8].upper()}"
+				writer.writerow([
+					ps.bank_account_number or "",
+					f"{ps.net_pay_cents / 100:.2f}",
+					ps.employee_id,
+					ps.bank_branch_code or "",
+					ref,
+				])
+
+		else:
+			# Generic fallback: account_number, name, amount_kes, reference
+			writer = _csv.writer(buf)
+			writer.writerow(["account_number", "name", "amount_kes", "reference"])
+			for ps in payslips:
+				ref = ps.payment_reference or f"PAY-{ps.id[:8].upper()}"
+				writer.writerow([
+					ps.bank_account_number or ps.bank_account_iban or "",
+					ps.employee_id,
+					f"{ps.net_pay_cents / 100:.2f}",
+					ref,
+				])
+
+		result = buf.getvalue()
+		log.info(
+			"PayrollService.generate_bank_eft: run=%s bank=%s rows=%d",
+			payrun_id, bank_code, len(payslips),
+		)
+		return result
+
+	# ------------------------------------------------------------------
+	# gross_to_net_report
+	# ------------------------------------------------------------------
+
+	def gross_to_net_report(
+		self,
+		session: Any,
+		payrun_id: str,
+		prior_payrun_id: str | None = None,
+		tenant_id: str = "",
+	) -> list[dict[str, Any]]:
+		"""Per-employee gross-to-net reconciliation report.
+
+		For each payslip in payrun_id, returns a row with all component amounts
+		as separate columns.  If prior_payrun_id is supplied, adds variance
+		columns (current - prior) for each numeric field.
+
+		Args:
+			session: SQLAlchemy session.
+			payrun_id: PayrollRun UUID.
+			prior_payrun_id: Optional prior run UUID for month-over-month variance.
+			tenant_id: Optional tenant scoping.
+
+		Returns:
+			list of dicts, one per employee:
+			  {employee_id, gross, basic_pay, allowances, overtime, bonus,
+			   paye, nssf_tier1, nssf_tier2, shif, housing_levy, nita,
+			   other_deductions, net_pay,
+			   [variance_* columns if prior_payrun_id supplied]}
+		"""
+		from pgappforge.plugins.erp.hcm.payroll.models import Payslip, PayslipLine
+
+		def _load_payslips(run_id: str) -> dict[str, Any]:
+			q = sa.select(Payslip).where(Payslip.payrun_id == run_id)
+			if tenant_id:
+				q = q.where(Payslip.tenant_id == tenant_id)
+			return {ps.employee_id: ps for ps in session.execute(q).scalars().all()}
+
+		def _sum_lines_for_payslip(payslip_id: str, line_types: list[str], employer_cost: bool | None = None) -> int:
+			q = (
+				sa.select(sa.func.coalesce(sa.func.sum(sa.func.abs(PayslipLine.amount_cents)), 0))
+				.where(PayslipLine.payslip_id == payslip_id)
+				.where(PayslipLine.line_type.in_(line_types))
+			)
+			if employer_cost is not None:
+				q = q.where(PayslipLine.is_employer_cost == employer_cost)
+			return int(session.execute(q).scalar() or 0)
+
+		current_map = _load_payslips(payrun_id)
+		prior_map = _load_payslips(prior_payrun_id) if prior_payrun_id else {}
+
+		def _build_row(ps: Any) -> dict[str, Any]:
+			pid = ps.id
+			return {
+				"employee_id": ps.employee_id,
+				"gross": ps.gross_pay_cents,
+				"basic_pay": _sum_lines_for_payslip(pid, ["BASIC"]),
+				"allowances": _sum_lines_for_payslip(pid, ["ALLOWANCE"]),
+				"overtime": _sum_lines_for_payslip(pid, ["OVERTIME"]),
+				"bonus": _sum_lines_for_payslip(pid, ["BONUS"]),
+				"paye": ps.income_tax_cents,
+				"nssf_tier1": _sum_lines_for_payslip(pid, ["NSSF_TIER_I"], employer_cost=False),
+				"nssf_tier2": _sum_lines_for_payslip(pid, ["NSSF_TIER_II"], employer_cost=False),
+				"shif": _sum_lines_for_payslip(pid, ["NHIF_SHIF"]),
+				"housing_levy": _sum_lines_for_payslip(pid, ["HOUSING_LEVY"], employer_cost=False),
+				"nita": _sum_lines_for_payslip(pid, ["NITA"]),
+				"other_deductions": ps.other_deductions_cents,
+				"net_pay": ps.net_pay_cents,
+			}
+
+		_NUMERIC_KEYS = [
+			"gross", "basic_pay", "allowances", "overtime", "bonus",
+			"paye", "nssf_tier1", "nssf_tier2", "shif", "housing_levy", "nita",
+			"other_deductions", "net_pay",
+		]
+
+		result: list[dict[str, Any]] = []
+		for emp_id, ps in current_map.items():
+			row = _build_row(ps)
+			if prior_payrun_id and emp_id in prior_map:
+				prior_row = _build_row(prior_map[emp_id])
+				for k in _NUMERIC_KEYS:
+					row[f"variance_{k}"] = row[k] - prior_row[k]
+			result.append(row)
+
+		log.info(
+			"PayrollService.gross_to_net_report: run=%s employees=%d prior=%s",
+			payrun_id, len(result), prior_payrun_id,
+		)
+		return result
+
 
 __all__ = [
 	"PayrollService",
@@ -948,4 +1758,5 @@ __all__ = [
 	"PayslipNotFoundError",
 	"PayrollStateError",
 	"PayrollCalculationError",
+	# methods exposed via __all__ for documentation; import PayrollService directly
 ]

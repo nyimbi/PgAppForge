@@ -512,7 +512,7 @@ class StockCountView(BaseView):
 			return jsonify({"ok": False, "error": "counted_quantity required"}), 400
 		svc = WarehouseService()
 		try:
-			line = svc.record_count(count_id, line_id, qty, session)
+			line = svc.record_stock_count_line(count_id, line_id, qty, session)
 			session.commit()
 			return jsonify({
 				"ok": True,

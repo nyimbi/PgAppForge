@@ -131,8 +131,8 @@ class Plan(Model):
 		onupdate=lambda: datetime.now(timezone.utc),
 	)
 
-	subscriptions: list["Subscription"] = relationship(
-		"Subscription", back_populates="plan", passive_deletes=True
+	subscriptions: list["BillingSubscription"] = relationship(
+		"BillingSubscription", back_populates="plan", passive_deletes=True
 	)
 
 	@hybrid_property
@@ -152,10 +152,10 @@ class Plan(Model):
 
 
 # ---------------------------------------------------------------------------
-# Subscription
+# BillingSubscription
 # ---------------------------------------------------------------------------
 
-class Subscription(Model):
+class BillingSubscription(Model):
 	"""
 	One tenant's active (or historical) subscription to a Plan.
 
@@ -231,7 +231,7 @@ class Subscription(Model):
 
 	def __repr__(self) -> str:
 		return (
-			f"<Subscription id={self.id} tenant_id={self.tenant_id} "
+			f"<BillingSubscription id={self.id} tenant_id={self.tenant_id} "
 			f"status={self.status!r}>"
 		)
 
@@ -278,7 +278,7 @@ class Invoice(Model):
 		onupdate=lambda: datetime.now(timezone.utc),
 	)
 
-	subscription: "Subscription" = relationship("Subscription", back_populates="invoices")
+	subscription: "BillingSubscription" = relationship("BillingSubscription", back_populates="invoices")
 	items: list["InvoiceItem"] = relationship(
 		"InvoiceItem", back_populates="invoice", cascade="all, delete-orphan"
 	)
@@ -431,8 +431,8 @@ class UsageRecord(Model):
 	)
 	metadata: dict[str, Any] = Column(JSONB, nullable=False, default=dict)
 
-	subscription: "Subscription" = relationship(
-		"Subscription", back_populates="usage_records"
+	subscription: "BillingSubscription" = relationship(
+		"BillingSubscription", back_populates="usage_records"
 	)
 
 	def __repr__(self) -> str:
@@ -478,8 +478,8 @@ class DunningAttempt(Model):
 	next_attempt_at: datetime | None = Column(DateTime(timezone=True), nullable=True)
 	failure_reason: str | None = Column(Text, nullable=True)
 
-	subscription: "Subscription" = relationship(
-		"Subscription", back_populates="dunning_attempts"
+	subscription: "BillingSubscription" = relationship(
+		"BillingSubscription", back_populates="dunning_attempts"
 	)
 
 	# Dunning schedule: attempt_number → days offset from first failure
@@ -494,10 +494,10 @@ class DunningAttempt(Model):
 
 
 # ---------------------------------------------------------------------------
-# Coupon
+# BillingCoupon
 # ---------------------------------------------------------------------------
 
-class Coupon(Model):
+class BillingCoupon(Model):
 	"""
 	Discount coupon redeemable against a subscription.
 
@@ -552,7 +552,7 @@ class Coupon(Model):
 
 	def __repr__(self) -> str:
 		return (
-			f"<Coupon id={self.id} code={self.code!r} "
+			f"<BillingCoupon id={self.id} code={self.code!r} "
 			f"type={self.discount_type!r} value={self.discount_value}>"
 		)
 
@@ -563,13 +563,13 @@ class Coupon(Model):
 
 __all__ = [
 	"Plan",
-	"Subscription",
+	"BillingSubscription",
 	"Invoice",
 	"InvoiceItem",
 	"Payment",
 	"UsageRecord",
 	"DunningAttempt",
-	"Coupon",
+	"BillingCoupon",
 	# Enums
 	"PlanInterval",
 	"SubscriptionStatus",

@@ -7,21 +7,50 @@ All public methods accept an explicit SQLAlchemy session.
 Transaction boundaries owned by the caller.
 
 Hours are stored as Decimal / Numeric — NOT cents (hours are not monetary).
+Overtime pay is stored as INTEGER CENTS (consistent with money convention).
 All Decimal arithmetic uses explicit quantisation.
 
-Key public methods:
-  clock_in(employee_id, session)                  -> AttendanceRecord
-  clock_out(employee_id, session)                 -> AttendanceRecord
-  submit_leave_request(data, session)             -> LeaveRequest
-  approve_leave_request(request_id, approver_id, session) -> LeaveRequest
-  reject_leave_request(request_id, approver_id, reason, session) -> LeaveRequest
-  cancel_leave_request(request_id, session)       -> LeaveRequest
-  recompute_leave_balance(employee_id, leave_type, year, session) -> LeaveBalance
-  submit_timesheet(timesheet_id, session)         -> Timesheet
-  approve_timesheet(timesheet_id, approver_id, session) -> Timesheet
-  reject_timesheet(timesheet_id, approver_id, session)  -> Timesheet
-  add_time_entry(data, session)                   -> TimeEntry
-  working_days(start_date, end_date)              -> Decimal
+Kenya Employment Act 2007 references:
+  s.28  — annual leave: 21 working days per year
+  s.30  — sick leave: 7 days full pay + 7 days half pay (= 14 days entitlement block),
+           statutory minimum 10 days treated here as two separate balances
+  s.29  — maternity: 90 calendar days
+  s.29A — paternity: 14 calendar days
+  s.27  — overtime: weekday >8h = 1.5x, rest day = 1.5x, public holiday = 2.0x
+  s.35  — separation: unused annual leave paid out at daily rate
+
+Key public methods (original):
+  clock_in / clock_out / submit_leave_request / approve_leave_request
+  reject_leave_request / cancel_leave_request / recompute_leave_balance
+  submit_timesheet / approve_timesheet / reject_timesheet
+  add_time_entry / working_days
+
+New methods (CRITICAL/HIGH gap-fill):
+  # Leave accrual engine
+  accrue_monthly(session, employee_id, accrual_month, tenant_id) -> dict
+  get_leave_balance(session, employee_id, leave_type, as_of_date=None) -> dict
+  initialise_statutory_entitlements(session, employee_id, hire_date, tenant_id) -> dict
+
+  # Carry-forward
+  process_year_end_carryforward(session, carry_date, tenant_id='') -> dict
+
+  # Public holiday calendar
+  is_public_holiday(session, d, tenant_id='', country_code='KE') -> bool
+  get_working_days(session, from_date, to_date, tenant_id='', country_code='KE') -> int
+  seed_kenya_public_holidays(session, year, tenant_id='') -> int
+
+  # Overtime
+  calculate_overtime(session, employee_id, attendance_record_id, tenant_id,
+                     standard_hours=8) -> OvertimeRecord
+  calculate_overtime_pay(session, overtime_record_id, hourly_rate_cents) -> int
+
+  # Biometric import
+  import_attendance(session, records, tenant_id='') -> dict
+
+  # Shift / roster
+  create_shift_pattern(session, data) -> ShiftPattern
+  assign_shift(session, data) -> EmployeeShift
+  get_roster(session, from_date, to_date, tenant_id='', dept_id=None) -> list
 """
 from __future__ import annotations
 
@@ -35,6 +64,45 @@ import sqlalchemy as sa
 log = logging.getLogger(__name__)
 
 _HALF_UP = ROUND_HALF_UP
+
+# ---------------------------------------------------------------------------
+# Kenya Employment Act 2007 statutory constants
+# ---------------------------------------------------------------------------
+
+# Annual leave: 21 working days / year → 1.75 days / month
+_KE_ANNUAL_DAYS_PER_YEAR = Decimal("21")
+_KE_ANNUAL_ACCRUAL_RATE = Decimal("1.75")  # per month
+
+# Sick leave: 7 days full + 7 days half = effectively 10 productive days modelled
+# For accrual we credit 10 days/year → 0.83/month (rounded to 2dp)
+_KE_SICK_DAYS_PER_YEAR = Decimal("10")
+_KE_SICK_ACCRUAL_RATE = Decimal("0.83")  # per month (10 / 12, rounded)
+
+# Statutory grants on hire (granted upfront, not accrued monthly)
+_KE_MATERNITY_DAYS = Decimal("90")   # calendar days
+_KE_PATERNITY_DAYS = Decimal("14")   # calendar days
+
+# Carry-forward cap: maximum 10 days annual leave may roll over
+_KE_ANNUAL_MAX_CARRY = Decimal("10")
+
+# Overtime multipliers
+_OT_WEEKDAY_RATE = Decimal("1.50")
+_OT_WEEKEND_RATE = Decimal("1.50")
+_OT_PUBLIC_HOLIDAY_RATE = Decimal("2.00")
+
+# Biometric anomaly threshold
+_BIO_MAX_DURATION_MINUTES = 720  # 12 hours
+
+# Fixed Kenya public holidays (month, day, name)
+_KE_FIXED_HOLIDAYS: list[tuple[int, int, str]] = [
+	(1, 1, "New Year's Day"),
+	(5, 1, "Labour Day"),
+	(6, 1, "Madaraka Day"),
+	(10, 20, "Mashujaa Day"),
+	(12, 12, "Jamhuri Day"),
+	(12, 25, "Christmas Day"),
+	(12, 26, "Boxing Day"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -710,6 +778,939 @@ class TimeService:
 		return ts
 
 
+# ---------------------------------------------------------------------------
+# Easter calculation (Gregorian / Anonymous algorithm)
+# ---------------------------------------------------------------------------
+
+def _easter_date(year: int) -> date:
+	"""Return Easter Sunday for the given Gregorian year."""
+	a = year % 19
+	b, c = divmod(year, 100)
+	d, e = divmod(b, 4)
+	f = (b + 8) // 25
+	g = (b - f + 1) // 3
+	h = (19 * a + b - d - g + 15) % 30
+	i, k = divmod(c, 4)
+	l = (32 + 2 * e + 2 * i - h - k) % 7
+	m = (a + 11 * h + 22 * l) // 451
+	month, day = divmod(h + l - 7 * m + 114, 31)
+	return date(year, month, day + 1)
+
+
+# ---------------------------------------------------------------------------
+# Public Holiday helpers  [CRITICAL]
+# ---------------------------------------------------------------------------
+
+def is_public_holiday(
+	session: Any,
+	d: date,
+	tenant_id: str = "",
+	country_code: str = "KE",
+) -> bool:
+	"""Return True if *d* is an active public holiday for the given tenant/country."""
+	from pgappforge.plugins.erp.hcm.time.models import PublicHoliday
+
+	q = (
+		sa.select(sa.func.count())
+		.select_from(PublicHoliday)
+		.where(PublicHoliday.holiday_date == d)
+		.where(PublicHoliday.country_code == country_code)
+		.where(PublicHoliday.is_active.is_(True))
+	)
+	# Tenant-aware: match rows with this tenant OR the global empty-string tenant
+	q = q.where(PublicHoliday.tenant_id.in_([tenant_id, "00000000-0000-0000-0000-000000000000"]))
+	return bool(session.execute(q).scalar() or 0)
+
+
+def get_working_days(
+	session: Any,
+	from_date: date,
+	to_date: date,
+	tenant_id: str = "",
+	country_code: str = "KE",
+) -> int:
+	"""Count working days (Mon-Fri, excluding public holidays) from_date..to_date inclusive.
+
+	Replaces the naive `working_days()` helper for holiday-aware calculations.
+	"""
+	if to_date < from_date:
+		return 0
+	count = 0
+	current = from_date
+	while current <= to_date:
+		if current.weekday() < 5:  # Mon-Fri
+			if not is_public_holiday(session, current, tenant_id=tenant_id, country_code=country_code):
+				count += 1
+		current += timedelta(days=1)
+	return count
+
+
+def seed_kenya_public_holidays(
+	session: Any,
+	year: int,
+	tenant_id: str = "",
+) -> int:
+	"""Insert Kenya public holidays for *year* if they don't already exist.
+
+	Returns the count of rows inserted (0 if all already present).
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import PublicHoliday
+
+	_tid = tenant_id or "00000000-0000-0000-0000-000000000000"
+
+	easter = _easter_date(year)
+	floating: list[tuple[date, str]] = [
+		(easter - timedelta(days=2), "Good Friday"),
+		(easter + timedelta(days=1), "Easter Monday"),
+	]
+
+	holidays: list[tuple[date, str, bool]] = [
+		(date(year, m, d), name, True) for m, d, name in _KE_FIXED_HOLIDAYS
+	]
+	holidays += [(d, name, True) for d, name in floating]
+
+	inserted = 0
+	for hdate, hname, is_stat in holidays:
+		exists = session.execute(
+			sa.select(sa.func.count())
+			.select_from(PublicHoliday)
+			.where(PublicHoliday.tenant_id == _tid)
+			.where(PublicHoliday.country_code == "KE")
+			.where(PublicHoliday.holiday_date == hdate)
+		).scalar()
+		if exists:
+			continue
+		session.add(PublicHoliday(
+			tenant_id=_tid,
+			country_code="KE",
+			holiday_date=hdate,
+			name=hname,
+			is_statutory=is_stat,
+			is_active=True,
+		))
+		inserted += 1
+
+	if inserted:
+		session.flush()
+	log.info("seed_kenya_public_holidays: year=%d inserted=%d", year, inserted)
+	return inserted
+
+
+# ---------------------------------------------------------------------------
+# Leave accrual engine  [CRITICAL]
+# ---------------------------------------------------------------------------
+
+def accrue_monthly(
+	session: Any,
+	employee_id: str,
+	accrual_month: date,
+	tenant_id: str,
+) -> dict[str, Any]:
+	"""Credit monthly leave accrual for one employee.
+
+	accrual_month should be the first day of the month (e.g. date(2026, 6, 1)).
+	Accrues ANNUAL at 1.75 days/month and SICK at 0.83 days/month per
+	Kenya Employment Act 2007 s.28 and s.30.
+
+	Returns dict with keys: employee_id, accrual_month, entries (list of dicts).
+
+	Raises TimeServiceError if accrual for this month already exists for both types.
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import LeaveAccrual, LeaveBalance
+
+	# Normalise to first-of-month
+	month_start = accrual_month.replace(day=1)
+	year = month_start.year
+
+	accrual_rates = {
+		"ANNUAL": _KE_ANNUAL_ACCRUAL_RATE,
+		"SICK": _KE_SICK_ACCRUAL_RATE,
+	}
+
+	entries = []
+	for leave_type, rate in accrual_rates.items():
+		# Idempotent: skip if this month already accrued
+		existing = session.execute(
+			sa.select(LeaveAccrual)
+			.where(LeaveAccrual.employee_id == employee_id)
+			.where(LeaveAccrual.leave_type == leave_type)
+			.where(LeaveAccrual.accrual_month == month_start)
+			.where(LeaveAccrual.reason == "monthly_accrual")
+		).scalar_one_or_none()
+		if existing is not None:
+			log.debug(
+				"accrue_monthly: skip emp=%s type=%s month=%s (already accrued)",
+				employee_id, leave_type, month_start,
+			)
+			entries.append({
+				"leave_type": leave_type,
+				"days_accrued": str(existing.days_accrued),
+				"skipped": True,
+			})
+			continue
+
+		# Get or create balance row
+		balance = session.execute(
+			sa.select(LeaveBalance)
+			.where(LeaveBalance.employee_id == employee_id)
+			.where(LeaveBalance.leave_type == leave_type)
+			.where(LeaveBalance.balance_year == year)
+		).scalar_one_or_none()
+
+		if balance is None:
+			balance = LeaveBalance(
+				tenant_id=tenant_id,
+				employee_id=employee_id,
+				leave_type=leave_type,
+				balance_year=year,
+				accrued=Decimal(0),
+				taken=Decimal(0),
+				pending=Decimal(0),
+				remaining=Decimal(0),
+			)
+			session.add(balance)
+			session.flush()
+
+		balance_before = Decimal(str(balance.accrued)).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		balance_after = (balance_before + rate).quantize(Decimal("0.01"), rounding=_HALF_UP)
+
+		balance.accrued = balance_after
+		balance.remaining = (
+			balance_after
+			- Decimal(str(balance.taken))
+			- Decimal(str(balance.pending))
+		).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		balance.updated_at = _now_utc()
+
+		ledger = LeaveAccrual(
+			tenant_id=tenant_id,
+			employee_id=employee_id,
+			leave_type=leave_type,
+			accrual_month=month_start,
+			days_accrued=rate,
+			balance_before=balance_before,
+			balance_after=balance_after,
+			reason="monthly_accrual",
+		)
+		session.add(ledger)
+		entries.append({
+			"leave_type": leave_type,
+			"days_accrued": str(rate),
+			"balance_before": str(balance_before),
+			"balance_after": str(balance_after),
+			"skipped": False,
+		})
+
+	session.flush()
+	log.info("accrue_monthly: emp=%s month=%s entries=%d", employee_id, month_start, len(entries))
+	return {
+		"employee_id": employee_id,
+		"accrual_month": month_start.isoformat(),
+		"entries": entries,
+	}
+
+
+def get_leave_balance(
+	session: Any,
+	employee_id: str,
+	leave_type: str,
+	as_of_date: date | None = None,
+) -> dict[str, Any]:
+	"""Return the current leave balance snapshot for an employee + leave type.
+
+	as_of_date defaults to today. Uses balance_year = as_of_date.year.
+	Returns dict with: employee_id, leave_type, year, accrued, taken, pending, remaining.
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import LeaveBalance
+
+	target_date = as_of_date or _today_utc()
+	year = target_date.year
+
+	balance = session.execute(
+		sa.select(LeaveBalance)
+		.where(LeaveBalance.employee_id == employee_id)
+		.where(LeaveBalance.leave_type == leave_type)
+		.where(LeaveBalance.balance_year == year)
+	).scalar_one_or_none()
+
+	if balance is None:
+		return {
+			"employee_id": employee_id,
+			"leave_type": leave_type,
+			"year": year,
+			"accrued": "0.00",
+			"taken": "0.00",
+			"pending": "0.00",
+			"remaining": "0.00",
+		}
+
+	return {
+		"employee_id": employee_id,
+		"leave_type": leave_type,
+		"year": year,
+		"accrued": str(Decimal(str(balance.accrued)).quantize(Decimal("0.01"))),
+		"taken": str(Decimal(str(balance.taken)).quantize(Decimal("0.01"))),
+		"pending": str(Decimal(str(balance.pending)).quantize(Decimal("0.01"))),
+		"remaining": str(Decimal(str(balance.remaining)).quantize(Decimal("0.01"))),
+	}
+
+
+def initialise_statutory_entitlements(
+	session: Any,
+	employee_id: str,
+	hire_date: date,
+	tenant_id: str,
+) -> dict[str, Any]:
+	"""Grant statutory leave entitlements on hire per Kenya Employment Act 2007.
+
+	Grants:
+	  ANNUAL    — 21 days (upfront for first year; accrual takes over in subsequent years)
+	  SICK      — 10 days
+	  MATERNITY — 90 calendar days (upfront; female employees only — caller filters)
+	  PATERNITY — 14 calendar days (upfront; male employees only — caller filters)
+
+	All grants recorded as LeaveAccrual rows with reason='hire_grant'.
+	Idempotent: skips any leave_type that already has a hire_grant row.
+	Returns dict with employee_id, granted (list).
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import LeaveAccrual, LeaveBalance
+
+	year = hire_date.year
+	month_start = hire_date.replace(day=1)
+
+	grants: dict[str, Decimal] = {
+		"ANNUAL": _KE_ANNUAL_DAYS_PER_YEAR,
+		"SICK": _KE_SICK_DAYS_PER_YEAR,
+		"MATERNITY": _KE_MATERNITY_DAYS,
+		"PATERNITY": _KE_PATERNITY_DAYS,
+	}
+
+	granted = []
+	for leave_type, days in grants.items():
+		existing = session.execute(
+			sa.select(LeaveAccrual)
+			.where(LeaveAccrual.employee_id == employee_id)
+			.where(LeaveAccrual.leave_type == leave_type)
+			.where(LeaveAccrual.reason == "hire_grant")
+		).scalar_one_or_none()
+		if existing is not None:
+			continue
+
+		balance = session.execute(
+			sa.select(LeaveBalance)
+			.where(LeaveBalance.employee_id == employee_id)
+			.where(LeaveBalance.leave_type == leave_type)
+			.where(LeaveBalance.balance_year == year)
+		).scalar_one_or_none()
+
+		if balance is None:
+			balance = LeaveBalance(
+				tenant_id=tenant_id,
+				employee_id=employee_id,
+				leave_type=leave_type,
+				balance_year=year,
+				accrued=Decimal(0),
+				taken=Decimal(0),
+				pending=Decimal(0),
+				remaining=Decimal(0),
+			)
+			session.add(balance)
+			session.flush()
+
+		balance_before = Decimal(str(balance.accrued)).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		balance_after = (balance_before + days).quantize(Decimal("0.01"), rounding=_HALF_UP)
+
+		balance.accrued = balance_after
+		balance.remaining = (
+			balance_after
+			- Decimal(str(balance.taken))
+			- Decimal(str(balance.pending))
+		).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		balance.updated_at = _now_utc()
+
+		session.add(LeaveAccrual(
+			tenant_id=tenant_id,
+			employee_id=employee_id,
+			leave_type=leave_type,
+			accrual_month=month_start,
+			days_accrued=days,
+			balance_before=balance_before,
+			balance_after=balance_after,
+			reason="hire_grant",
+			notes=f"Statutory hire grant — Kenya Employment Act 2007 (hired {hire_date})",
+		))
+		granted.append({"leave_type": leave_type, "days": str(days)})
+
+	session.flush()
+	log.info("initialise_statutory_entitlements: emp=%s granted=%d types", employee_id, len(granted))
+	return {"employee_id": employee_id, "granted": granted}
+
+
+# ---------------------------------------------------------------------------
+# Leave carry-forward  [CRITICAL]
+# ---------------------------------------------------------------------------
+
+def process_year_end_carryforward(
+	session: Any,
+	carry_date: date,
+	tenant_id: str = "",
+) -> dict[str, Any]:
+	"""Apply carry-forward rules for ANNUAL leave at year-end.
+
+	For every employee with an ANNUAL balance in the year prior to carry_date:
+	  1. Carry forward min(remaining, _KE_ANNUAL_MAX_CARRY=10) days.
+	  2. Forfeit any days above the carry cap (record as negative LeaveAccrual).
+	  3. Create a carry_forward LeaveAccrual row in the new year.
+
+	carry_date is typically date(year, 1, 1) — first day of the new year.
+	Returns dict with: carry_date, processed (count), forfeited_total (Decimal),
+	                   carried_total (Decimal), details (list).
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import LeaveAccrual, LeaveBalance
+
+	old_year = carry_date.year - 1
+	new_year = carry_date.year
+	new_month = carry_date.replace(day=1)
+
+	if tenant_id:
+		old_balances = session.execute(
+			sa.select(LeaveBalance)
+			.where(LeaveBalance.leave_type == "ANNUAL")
+			.where(LeaveBalance.balance_year == old_year)
+			.where(LeaveBalance.tenant_id == tenant_id)
+		).scalars().all()
+	else:
+		old_balances = session.execute(
+			sa.select(LeaveBalance)
+			.where(LeaveBalance.leave_type == "ANNUAL")
+			.where(LeaveBalance.balance_year == old_year)
+		).scalars().all()
+
+	carried_total = Decimal(0)
+	forfeited_total = Decimal(0)
+	details = []
+
+	for old_bal in old_balances:
+		remaining = Decimal(str(old_bal.remaining)).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		if remaining <= Decimal(0):
+			continue
+
+		carry = min(remaining, _KE_ANNUAL_MAX_CARRY).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		forfeit = (remaining - carry).quantize(Decimal("0.01"), rounding=_HALF_UP)
+
+		# Zero out old year remaining (balance is now historical)
+		old_bal.remaining = Decimal(0)
+		old_bal.updated_at = _now_utc()
+
+		# Forfeit ledger row if any days lapse
+		if forfeit > Decimal(0):
+			_existing_forfeit = session.execute(
+				sa.select(LeaveAccrual)
+				.where(LeaveAccrual.employee_id == old_bal.employee_id)
+				.where(LeaveAccrual.leave_type == "ANNUAL")
+				.where(LeaveAccrual.accrual_month == new_month)
+				.where(LeaveAccrual.reason == "forfeiture")
+			).scalar_one_or_none()
+			if _existing_forfeit is None:
+				session.add(LeaveAccrual(
+					tenant_id=old_bal.tenant_id,
+					employee_id=old_bal.employee_id,
+					leave_type="ANNUAL",
+					accrual_month=new_month,
+					days_accrued=-forfeit,
+					balance_before=remaining,
+					balance_after=carry,
+					reason="forfeiture",
+					notes=f"Year-end forfeiture: {forfeit} days above {_KE_ANNUAL_MAX_CARRY}-day carry cap",
+				))
+
+		if carry > Decimal(0):
+			# Carry into new year balance
+			new_bal = session.execute(
+				sa.select(LeaveBalance)
+				.where(LeaveBalance.employee_id == old_bal.employee_id)
+				.where(LeaveBalance.leave_type == "ANNUAL")
+				.where(LeaveBalance.balance_year == new_year)
+			).scalar_one_or_none()
+
+			if new_bal is None:
+				new_bal = LeaveBalance(
+					tenant_id=old_bal.tenant_id,
+					employee_id=old_bal.employee_id,
+					leave_type="ANNUAL",
+					balance_year=new_year,
+					accrued=carry,
+					taken=Decimal(0),
+					pending=Decimal(0),
+					remaining=carry,
+				)
+				session.add(new_bal)
+			else:
+				new_bal.accrued = (Decimal(str(new_bal.accrued)) + carry).quantize(Decimal("0.01"), rounding=_HALF_UP)
+				new_bal.remaining = (Decimal(str(new_bal.remaining)) + carry).quantize(Decimal("0.01"), rounding=_HALF_UP)
+				new_bal.updated_at = _now_utc()
+
+			_existing_carry = session.execute(
+				sa.select(LeaveAccrual)
+				.where(LeaveAccrual.employee_id == old_bal.employee_id)
+				.where(LeaveAccrual.leave_type == "ANNUAL")
+				.where(LeaveAccrual.accrual_month == new_month)
+				.where(LeaveAccrual.reason == "carry_forward")
+			).scalar_one_or_none()
+			if _existing_carry is None:
+				session.add(LeaveAccrual(
+					tenant_id=old_bal.tenant_id,
+					employee_id=old_bal.employee_id,
+					leave_type="ANNUAL",
+					accrual_month=new_month,
+					days_accrued=carry,
+					balance_before=Decimal(0),
+					balance_after=carry,
+					reason="carry_forward",
+					notes=f"Year-end carry-forward from {old_year}",
+				))
+
+		carried_total += carry
+		forfeited_total += forfeit
+		details.append({
+			"employee_id": old_bal.employee_id,
+			"carried": str(carry),
+			"forfeited": str(forfeit),
+		})
+
+	session.flush()
+	log.info(
+		"process_year_end_carryforward: carry_date=%s processed=%d "
+		"carried=%s forfeited=%s",
+		carry_date, len(details), carried_total, forfeited_total,
+	)
+	return {
+		"carry_date": carry_date.isoformat(),
+		"processed": len(details),
+		"carried_total": str(carried_total.quantize(Decimal("0.01"))),
+		"forfeited_total": str(forfeited_total.quantize(Decimal("0.01"))),
+		"details": details,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Overtime  [CRITICAL]
+# ---------------------------------------------------------------------------
+
+def calculate_overtime(
+	session: Any,
+	employee_id: str,
+	attendance_record_id: str,
+	tenant_id: str,
+	standard_hours: int = 8,
+) -> Any:
+	"""Derive and persist an OvertimeRecord from an AttendanceRecord.
+
+	Determines overtime_type from the work_date:
+	  - PUBLIC_HOLIDAY → 2.0x
+	  - WEEKEND (Sat/Sun) → 1.5x
+	  - WEEKDAY (Mon-Fri) → 1.5x for hours beyond standard_hours
+
+	Hours stored as INTEGER HUNDREDTHS (1 h = 100 units).
+	Returns the OvertimeRecord (unsaved on error, flushed on success).
+	Idempotent: returns existing record if one already exists for the employee/date.
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import AttendanceRecord, OvertimeRecord
+
+	try:
+		att = session.get(AttendanceRecord, attendance_record_id)
+		if att is None:
+			raise TimeServiceError(f"AttendanceRecord {attendance_record_id!r} not found")
+		if att.clock_in is None or att.clock_out is None:
+			raise TimeServiceError(
+				f"AttendanceRecord {attendance_record_id!r} missing clock_in or clock_out"
+			)
+
+		# Idempotent check
+		existing = session.execute(
+			sa.select(OvertimeRecord)
+			.where(OvertimeRecord.employee_id == employee_id)
+			.where(OvertimeRecord.work_date == att.attendance_date)
+		).scalar_one_or_none()
+		if existing is not None:
+			return existing
+
+		elapsed_seconds = (att.clock_out - att.clock_in).total_seconds()
+		total_hours_dec = Decimal(str(elapsed_seconds / 3600)).quantize(Decimal("0.01"), rounding=_HALF_UP)
+		total_hundredths = int((total_hours_dec * 100).to_integral_value(rounding=_HALF_UP))
+		standard_hundredths = standard_hours * 100
+
+		work_date = att.attendance_date
+		is_ph = is_public_holiday(session, work_date, tenant_id=tenant_id)
+		is_weekend = work_date.weekday() >= 5  # Sat=5, Sun=6
+
+		if is_ph:
+			ot_type = "PUBLIC_HOLIDAY"
+			rate = _OT_PUBLIC_HOLIDAY_RATE
+			# On a public holiday the entire shift is at 2x; regular = 0
+			regular_hundredths = 0
+			ot_hundredths = total_hundredths
+		elif is_weekend:
+			ot_type = "WEEKEND"
+			rate = _OT_WEEKEND_RATE
+			regular_hundredths = 0
+			ot_hundredths = total_hundredths
+		else:
+			ot_type = "WEEKDAY"
+			rate = _OT_WEEKDAY_RATE
+			regular_hundredths = min(total_hundredths, standard_hundredths)
+			ot_hundredths = max(0, total_hundredths - standard_hundredths)
+
+		rec = OvertimeRecord(
+			tenant_id=tenant_id,
+			employee_id=employee_id,
+			attendance_record_id=attendance_record_id,
+			work_date=work_date,
+			regular_hours_hundredths=regular_hundredths,
+			overtime_hours_hundredths=ot_hundredths,
+			overtime_type=ot_type,
+			rate_multiplier=rate,
+			is_approved=False,
+		)
+		session.add(rec)
+		session.flush()
+		log.info(
+			"calculate_overtime: emp=%s date=%s type=%s ot_h=%.2f",
+			employee_id, work_date, ot_type, ot_hundredths / 100,
+		)
+		return rec
+
+	except TimeServiceError:
+		raise
+	except Exception as exc:
+		log.exception("calculate_overtime unexpected error: %s", exc)
+		raise TimeServiceError(f"Overtime calculation failed: {exc}") from exc
+
+
+def calculate_overtime_pay(
+	session: Any,
+	overtime_record_id: str,
+	hourly_rate_cents: int,
+) -> int:
+	"""Compute and persist overtime pay in cents for an OvertimeRecord.
+
+	pay_cents = (overtime_hours_hundredths / 100) * hourly_rate_cents * rate_multiplier
+	Result is rounded to nearest whole cent.
+	Returns pay_cents (int).
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import OvertimeRecord
+
+	try:
+		rec = session.get(OvertimeRecord, overtime_record_id)
+		if rec is None:
+			raise TimeServiceError(f"OvertimeRecord {overtime_record_id!r} not found")
+
+		ot_hours = Decimal(str(rec.overtime_hours_hundredths)) / Decimal("100")
+		rate = Decimal(str(rec.rate_multiplier))
+		pay = (ot_hours * Decimal(str(hourly_rate_cents)) * rate).quantize(
+			Decimal("1"), rounding=_HALF_UP
+		)
+		pay_cents = int(pay)
+
+		rec.pay_cents = pay_cents
+		rec.updated_at = _now_utc()
+		session.flush()
+		return pay_cents
+
+	except TimeServiceError:
+		raise
+	except Exception as exc:
+		log.exception("calculate_overtime_pay unexpected error: %s", exc)
+		raise TimeServiceError(f"Overtime pay calculation failed: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Biometric attendance import  [HIGH]
+# ---------------------------------------------------------------------------
+
+def import_attendance(
+	session: Any,
+	records: list[dict[str, Any]],
+	tenant_id: str = "",
+) -> dict[str, Any]:
+	"""Ingest raw biometric/manual clock events into BiometricAttendance staging.
+
+	Each record dict must contain:
+	  employee_id    (str, UUID)
+	  clock_in_iso   (str, ISO 8601 datetime with tz or naive UTC)
+	  clock_out_iso  (str or None)
+	  device_id      (str or None)
+	  source         (str: BIOMETRIC | MANUAL | SYSTEM; default BIOMETRIC)
+
+	Anomaly flags:
+	  MISSING_CLOCK_OUT  — clock_out_iso is None or empty
+	  DURATION_EXCEEDED  — duration > 720 minutes (12 h)
+
+	Returns dict: imported, anomalies, errors.
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import BiometricAttendance
+
+	imported = 0
+	anomalies = 0
+	errors: list[dict[str, Any]] = []
+
+	for i, raw in enumerate(records):
+		try:
+			emp_id = raw["employee_id"]
+			clock_in_iso = raw["clock_in_iso"]
+			clock_out_iso = raw.get("clock_out_iso") or None
+			device_id = raw.get("device_id")
+			source = raw.get("source", "BIOMETRIC").upper()
+
+			# Parse datetimes — assume UTC if naive
+			def _parse_dt(s: str) -> datetime:
+				dt = datetime.fromisoformat(s)
+				if dt.tzinfo is None:
+					dt = dt.replace(tzinfo=timezone.utc)
+				return dt
+
+			clock_in_dt = _parse_dt(clock_in_iso)
+			clock_out_dt = _parse_dt(clock_out_iso) if clock_out_iso else None
+
+			# Compute duration
+			duration_minutes: int | None = None
+			is_anomaly = False
+			anomaly_reason: str | None = None
+
+			if clock_out_dt is None:
+				is_anomaly = True
+				anomaly_reason = "MISSING_CLOCK_OUT"
+			else:
+				duration_minutes = int((clock_out_dt - clock_in_dt).total_seconds() / 60)
+				if duration_minutes > _BIO_MAX_DURATION_MINUTES:
+					is_anomaly = True
+					anomaly_reason = "DURATION_EXCEEDED"
+
+			session.add(BiometricAttendance(
+				tenant_id=tenant_id or "00000000-0000-0000-0000-000000000000",
+				employee_id=emp_id,
+				clock_in=clock_in_dt,
+				clock_out=clock_out_dt,
+				source=source,
+				device_id=device_id,
+				duration_minutes=duration_minutes,
+				is_anomaly=is_anomaly,
+				anomaly_reason=anomaly_reason,
+			))
+			imported += 1
+			if is_anomaly:
+				anomalies += 1
+
+		except Exception as exc:
+			log.warning("import_attendance: record[%d] error: %s raw=%s", i, exc, raw)
+			errors.append({"index": i, "error": str(exc), "raw": raw})
+
+	if imported:
+		session.flush()
+
+	log.info(
+		"import_attendance: imported=%d anomalies=%d errors=%d",
+		imported, anomalies, len(errors),
+	)
+	return {
+		"imported": imported,
+		"anomalies": anomalies,
+		"errors": errors,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Shift pattern & roster  [HIGH]
+# ---------------------------------------------------------------------------
+
+def create_shift_pattern(session: Any, data: dict[str, Any]) -> Any:
+	"""Create a ShiftPattern.
+
+	data keys: tenant_id, name, start_time (time or HH:MM str),
+	           end_time, days_of_week ([int]), break_minutes (opt, default 0).
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import ShiftPattern
+
+	try:
+		def _parse_time(v: Any) -> Any:
+			if isinstance(v, str):
+				from datetime import time as dt_time
+				parts = v.split(":")
+				return dt_time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+			return v
+
+		start = _parse_time(data["start_time"])
+		end = _parse_time(data["end_time"])
+		is_overnight = end < start
+
+		pattern = ShiftPattern(
+			tenant_id=data["tenant_id"],
+			name=data["name"],
+			start_time=start,
+			end_time=end,
+			days_of_week=list(data.get("days_of_week", [0, 1, 2, 3, 4])),
+			break_minutes=int(data.get("break_minutes", 0)),
+			is_overnight=is_overnight,
+			is_active=bool(data.get("is_active", True)),
+		)
+		session.add(pattern)
+		session.flush()
+		log.info("create_shift_pattern: id=%s name=%r", pattern.id, pattern.name)
+		return pattern
+
+	except KeyError as exc:
+		raise TimeServiceError(f"create_shift_pattern: missing required field {exc}") from exc
+	except Exception as exc:
+		log.exception("create_shift_pattern error: %s", exc)
+		raise TimeServiceError(f"create_shift_pattern failed: {exc}") from exc
+
+
+def assign_shift(session: Any, data: dict[str, Any]) -> Any:
+	"""Assign an employee to a ShiftPattern.
+
+	data keys: tenant_id, employee_id, shift_pattern_id,
+	           effective_from (date or ISO str),
+	           effective_to (date or ISO str, opt),
+	           department_id (opt).
+
+	Rejects overlapping open-ended assignments for the same employee.
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import EmployeeShift, ShiftPattern
+
+	try:
+		emp_id = data["employee_id"]
+		pattern_id = data["shift_pattern_id"]
+
+		pattern = session.get(ShiftPattern, pattern_id)
+		if pattern is None:
+			raise TimeServiceError(f"ShiftPattern {pattern_id!r} not found")
+
+		eff_from = data["effective_from"]
+		if isinstance(eff_from, str):
+			eff_from = date.fromisoformat(eff_from)
+
+		eff_to_raw = data.get("effective_to")
+		eff_to: date | None = None
+		if eff_to_raw:
+			eff_to = date.fromisoformat(eff_to_raw) if isinstance(eff_to_raw, str) else eff_to_raw
+			if eff_to < eff_from:
+				raise TimeServiceError("effective_to must be >= effective_from")
+
+		# Check for open-ended overlap: any current assignment (effective_to is NULL) overlaps
+		existing_open = session.execute(
+			sa.select(EmployeeShift)
+			.where(EmployeeShift.employee_id == emp_id)
+			.where(EmployeeShift.effective_to.is_(None))
+		).scalar_one_or_none()
+		if existing_open is not None:
+			raise TimeServiceError(
+				f"Employee {emp_id!r} has an open-ended shift assignment "
+				f"(id={existing_open.id!r}) — close it before assigning a new shift"
+			)
+
+		assignment = EmployeeShift(
+			tenant_id=data["tenant_id"],
+			employee_id=emp_id,
+			shift_pattern_id=pattern_id,
+			effective_from=eff_from,
+			effective_to=eff_to,
+			department_id=data.get("department_id"),
+		)
+		session.add(assignment)
+		session.flush()
+		log.info(
+			"assign_shift: emp=%s pattern=%s from=%s to=%s",
+			emp_id, pattern_id, eff_from, eff_to,
+		)
+		return assignment
+
+	except TimeServiceError:
+		raise
+	except Exception as exc:
+		log.exception("assign_shift error: %s", exc)
+		raise TimeServiceError(f"assign_shift failed: {exc}") from exc
+
+
+def get_roster(
+	session: Any,
+	from_date: date,
+	to_date: date,
+	tenant_id: str = "",
+	dept_id: str | None = None,
+) -> list[dict[str, Any]]:
+	"""Return roster entries for all employees with active shift assignments
+	in the [from_date, to_date] window, optionally filtered by department.
+
+	Each entry dict contains:
+	  employee_id, shift_pattern_id, shift_name,
+	  effective_from, effective_to, days_of_week,
+	  start_time, end_time, department_id.
+	"""
+	from pgappforge.plugins.erp.hcm.time.models import EmployeeShift, ShiftPattern
+
+	try:
+		q = (
+			sa.select(EmployeeShift, ShiftPattern)
+			.join(ShiftPattern, EmployeeShift.shift_pattern_id == ShiftPattern.id)
+			.where(EmployeeShift.effective_from <= to_date)
+			.where(
+				sa.or_(
+					EmployeeShift.effective_to.is_(None),
+					EmployeeShift.effective_to >= from_date,
+				)
+			)
+			.where(ShiftPattern.is_active.is_(True))
+		)
+		if tenant_id:
+			q = q.where(EmployeeShift.tenant_id == tenant_id)
+		if dept_id:
+			q = q.where(EmployeeShift.department_id == dept_id)
+
+		rows = session.execute(q).all()
+
+		return [
+			{
+				"employee_id": es.employee_id,
+				"shift_pattern_id": es.shift_pattern_id,
+				"shift_name": sp.name,
+				"effective_from": es.effective_from.isoformat(),
+				"effective_to": es.effective_to.isoformat() if es.effective_to else None,
+				"days_of_week": sp.days_of_week,
+				"start_time": sp.start_time.isoformat(),
+				"end_time": sp.end_time.isoformat(),
+				"break_minutes": sp.break_minutes,
+				"department_id": es.department_id,
+			}
+			for es, sp in rows
+		]
+
+	except Exception as exc:
+		log.exception("get_roster error: %s", exc)
+		raise TimeServiceError(f"get_roster failed: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Also add new methods to TimeService class for consistency
+# ---------------------------------------------------------------------------
+
+# Attach module-level helpers as methods on TimeService so callers can use
+# either the stateless functions or the service instance interchangeably.
+
+TimeService.accrue_monthly = staticmethod(accrue_monthly)  # type: ignore[attr-defined]
+TimeService.get_leave_balance = staticmethod(get_leave_balance)  # type: ignore[attr-defined]
+TimeService.initialise_statutory_entitlements = staticmethod(initialise_statutory_entitlements)  # type: ignore[attr-defined]
+TimeService.process_year_end_carryforward = staticmethod(process_year_end_carryforward)  # type: ignore[attr-defined]
+TimeService.is_public_holiday = staticmethod(is_public_holiday)  # type: ignore[attr-defined]
+TimeService.get_working_days = staticmethod(get_working_days)  # type: ignore[attr-defined]
+TimeService.seed_kenya_public_holidays = staticmethod(seed_kenya_public_holidays)  # type: ignore[attr-defined]
+TimeService.calculate_overtime = staticmethod(calculate_overtime)  # type: ignore[attr-defined]
+TimeService.calculate_overtime_pay = staticmethod(calculate_overtime_pay)  # type: ignore[attr-defined]
+TimeService.import_attendance = staticmethod(import_attendance)  # type: ignore[attr-defined]
+TimeService.create_shift_pattern = staticmethod(create_shift_pattern)  # type: ignore[attr-defined]
+TimeService.assign_shift = staticmethod(assign_shift)  # type: ignore[attr-defined]
+TimeService.get_roster = staticmethod(get_roster)  # type: ignore[attr-defined]
+
+
 __all__ = [
 	"TimeService",
 	"TimeServiceError",
@@ -717,4 +1718,29 @@ __all__ = [
 	"LeaveError",
 	"TimesheetError",
 	"working_days",
+	# new gap-fill functions
+	"accrue_monthly",
+	"get_leave_balance",
+	"initialise_statutory_entitlements",
+	"process_year_end_carryforward",
+	"is_public_holiday",
+	"get_working_days",
+	"seed_kenya_public_holidays",
+	"calculate_overtime",
+	"calculate_overtime_pay",
+	"import_attendance",
+	"create_shift_pattern",
+	"assign_shift",
+	"get_roster",
+	# constants
+	"_KE_ANNUAL_DAYS_PER_YEAR",
+	"_KE_ANNUAL_ACCRUAL_RATE",
+	"_KE_SICK_DAYS_PER_YEAR",
+	"_KE_SICK_ACCRUAL_RATE",
+	"_KE_MATERNITY_DAYS",
+	"_KE_PATERNITY_DAYS",
+	"_KE_ANNUAL_MAX_CARRY",
+	"_OT_WEEKDAY_RATE",
+	"_OT_WEEKEND_RATE",
+	"_OT_PUBLIC_HOLIDAY_RATE",
 ]

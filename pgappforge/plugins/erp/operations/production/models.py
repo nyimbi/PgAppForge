@@ -472,10 +472,10 @@ class WorkOrderOperation(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
-# DemandForecast
+# PPDemandForecast
 # ---------------------------------------------------------------------------
 
-class DemandForecast(AuditMixin, Model):
+class PPDemandForecast(AuditMixin, Model):
 	"""Demand forecast record for a product at a warehouse on a date.
 
 	forecast_method:
@@ -532,7 +532,7 @@ class DemandForecast(AuditMixin, Model):
 
 	def __repr__(self) -> str:
 		return (
-			f"<DemandForecast product={self.product_id!r} date={self.forecast_date!r} "
+			f"<PPDemandForecast product={self.product_id!r} date={self.forecast_date!r} "
 			f"qty={self.forecast_quantity} method={self.forecast_method!r}>"
 		)
 
@@ -548,5 +548,5 @@ __all__ = [
 	"ProductionOrder",
 	"ProductionOrderLine",
 	"WorkOrderOperation",
-	"DemandForecast",
+	"PPDemandForecast",
 ]

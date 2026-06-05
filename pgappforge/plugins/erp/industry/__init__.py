@@ -11,4 +11,8 @@ __all__ = [
 	"education",
 	"energy",
 	"life_sciences",
+	"agritech",
+	"water",
+	"oil_gas",
+	"financial_contracts",
 ]

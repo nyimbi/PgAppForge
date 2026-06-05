@@ -26,6 +26,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import (
+	BigInteger,
 	Boolean,
 	Column,
 	Date,
@@ -468,9 +469,243 @@ class AssetImpairment(AuditMixin, Model):
 		)
 
 
+
+# ---------------------------------------------------------------------------
+# CapexProject
+# ---------------------------------------------------------------------------
+
+class CapexProject(AuditMixin, Model):
+	"""Capital expenditure project — tracks budget vs committed vs spent.
+
+	Assets capitalised from a project are linked via capitalise_asset_from_project().
+	Status lifecycle: PLANNED → IN_PROGRESS → COMPLETED | CANCELLED
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_aa_capex_project"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "project_code", name="uq_erp_aa_capex_project_code"),
+		Index("ix_erp_aa_capex_project_tenant", "tenant_id"),
+		Index("ix_erp_aa_capex_project_status", "status"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	project_code = Column(String(20), nullable=False)
+	name = Column(String(200), nullable=False)
+	budget_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="Approved capital budget in minor currency units",
+	)
+	committed_cents = Column(
+		BigInteger,
+		nullable=False,
+		default=0,
+		comment="Amount committed via POs / contracts",
+	)
+	spent_cents = Column(
+		BigInteger,
+		nullable=False,
+		default=0,
+		comment="Actual expenditure to date (WIP balance)",
+	)
+	status = Column(
+		String(20),
+		nullable=False,
+		default="PLANNED",
+		comment="PLANNED | IN_PROGRESS | COMPLETED | CANCELLED",
+	)
+	expected_completion = Column(Date, nullable=True)
+	asset_class = Column(
+		String(30),
+		nullable=True,
+		comment="Default AssetClass.code for assets created from this project",
+	)
+	department_id = Column(UUID(as_uuid=False), nullable=True)
+	notes = Column(Text, nullable=True)
+
+	def __repr__(self) -> str:
+		return (
+			f"<CapexProject {self.project_code!r} status={self.status!r} "
+			f"budget={self.budget_cents} spent={self.spent_cents}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# AssetDisposal  (IMMUTABLE — append-only)
+# ---------------------------------------------------------------------------
+
+class AssetDisposal(AuditMixin, Model):
+	"""Full disposal record for a fixed asset.
+
+	Stores the complete disposal transaction: type, proceeds, costs, and the
+	gain/loss computed at disposal time.  NEVER UPDATE — corrections via new rows.
+
+	GL on disposal:
+	  DR  disposal_proceeds   1011  (proceeds received)
+	  CR  fixed_asset         1500  (remove cost)
+	  DR  accum_depreciation  1510  (remove accumulated depreciation)
+	  DR/CR gain_loss         5500/4500  (loss debit / gain credit)
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_aa_asset_disposal"
+	__table_args__ = (
+		UniqueConstraint("disposal_ref", "tenant_id", name="uq_erp_aa_disposal_ref"),
+		Index("ix_erp_aa_disposal_asset", "asset_id"),
+		Index("ix_erp_aa_disposal_date", "disposal_date"),
+		Index("ix_erp_aa_disposal_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	asset_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("erp_aa_fixed_asset.id", ondelete="RESTRICT"),
+		nullable=False,
+	)
+	disposal_date = Column(Date, nullable=False)
+	disposal_type = Column(
+		String(20),
+		nullable=False,
+		comment="SALE | SCRAP | DONATION | WRITE_OFF",
+	)
+	proceeds_cents = Column(
+		BigInteger,
+		nullable=False,
+		default=0,
+		comment="Cash/fair-value proceeds from disposal",
+	)
+	disposal_costs_cents = Column(
+		BigInteger,
+		nullable=False,
+		default=0,
+		comment="Costs incurred to execute the disposal (agent fees, removal, etc.)",
+	)
+	gain_loss_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="proceeds - disposal_costs - net_book_value_at_disposal; positive = gain",
+	)
+	disposal_ref = Column(String(30), nullable=False, comment="Invoice/auction/scrap ref")
+	approved_by = Column(UUID(as_uuid=False), nullable=False)
+	notes = Column(Text, nullable=True)
+	posted_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	asset: FixedAsset = relationship(
+		"FixedAsset",
+		lazy="select",
+		foreign_keys=[asset_id],
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<AssetDisposal asset={self.asset_id!r} type={self.disposal_type!r} "
+			f"proceeds={self.proceeds_cents} gain_loss={self.gain_loss_cents}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# AssetRevaluation  (IMMUTABLE — append-only)
+# ---------------------------------------------------------------------------
+
+class AssetRevaluation(AuditMixin, Model):
+	"""IAS 16 revaluation of a fixed asset to fair/appraised value.
+
+	Surplus (new > previous) → credit revaluation_reserve (equity, "3200").
+	Deficit reversing a prior surplus → debit revaluation_reserve first.
+	Deficit in excess of prior surplus → debit P&L impairment/loss account.
+
+	NEVER UPDATE — corrections are new revaluation rows.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_aa_asset_revaluation"
+	__table_args__ = (
+		Index("ix_erp_aa_revaluation_asset", "asset_id"),
+		Index("ix_erp_aa_revaluation_date", "revaluation_date"),
+		Index("ix_erp_aa_revaluation_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	asset_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("erp_aa_fixed_asset.id", ondelete="RESTRICT"),
+		nullable=False,
+	)
+	revaluation_date = Column(Date, nullable=False)
+	previous_book_value_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="NBV immediately before this revaluation",
+	)
+	new_book_value_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="NBV after revaluation (gross replacement cost less new accumulated depreciation)",
+	)
+	revaluation_surplus_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="new_book_value - previous_book_value; positive = surplus, negative = deficit",
+	)
+	method = Column(
+		String(20),
+		nullable=False,
+		comment="MARKET_VALUE | APPRAISAL",
+	)
+	reference = Column(String(50), nullable=False, comment="Valuation report reference")
+	posted_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	asset: FixedAsset = relationship(
+		"FixedAsset",
+		lazy="select",
+		foreign_keys=[asset_id],
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<AssetRevaluation asset={self.asset_id!r} date={self.revaluation_date!r} "
+			f"surplus={self.revaluation_surplus_cents}>"
+		)
+
+
 __all__ = [
 	"AssetClass",
 	"FixedAsset",
 	"AssetDepreciation",
 	"AssetImpairment",
+	"CapexProject",
+	"AssetDisposal",
+	"AssetRevaluation",
 ]

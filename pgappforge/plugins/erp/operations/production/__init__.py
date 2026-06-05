@@ -6,7 +6,7 @@ PPPlugin — Production Planning ERP plugin.
 Full manufacturing lifecycle:
   BillOfMaterials / BOMLine → WorkCenter → ProductionOrder →
   ProductionOrderLine (component requirements) → WorkOrderOperation (routing) →
-  DemandForecast (MRP input)
+  PPDemandForecast (MRP input)
 
 Domain: operations
 Depends on: foundation
@@ -129,7 +129,7 @@ class PPPlugin(BasePlugin):
         from pgappforge.plugins.erp.operations.production.models import (
             BillOfMaterials,
             BOMLine,
-            DemandForecast,
+            PPDemandForecast,
             ProductionOrder,
             ProductionOrderLine,
             WorkCenter,
@@ -142,7 +142,7 @@ class PPPlugin(BasePlugin):
             ProductionOrder,
             ProductionOrderLine,
             WorkOrderOperation,
-            DemandForecast,
+            PPDemandForecast,
         ]
 
     @staticmethod
@@ -277,7 +277,7 @@ def create_plugin(appbuilder: Any, config: dict[str, Any] | None = None) -> PPPl
 from pgappforge.plugins.erp.operations.production.models import (  # noqa: E402
     BillOfMaterials,
     BOMLine,
-    DemandForecast,
+    PPDemandForecast,
     ProductionOrder,
     ProductionOrderLine,
     WorkCenter,
@@ -313,7 +313,7 @@ __all__ = [
     "ProductionOrder",
     "ProductionOrderLine",
     "WorkOrderOperation",
-    "DemandForecast",
+    "PPDemandForecast",
     # events
     "BOMActivatedEvent",
     "BOMObsoletedEvent",
@@ -331,4 +331,7 @@ __all__ = [
     "ProductionOrderNotFoundError",
     "InvalidStatusTransitionError",
     "InsufficientQuantityError",
+    # new service methods (accessed via PPService instance)
+    # record_production_output, calculate_production_cost,
+    # get_production_schedule, get_oee
 ]

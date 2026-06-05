@@ -1,0 +1,93 @@
+{% extends 'appbuilder/base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="page-header">
+    <h1>Balance Sheet Summary</h1>
+    <p class="text-muted">Snapshot of core banking balances across all active accounts</p>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="card text-white bg-success">
+        <div class="card-body">
+          <h6 class="card-title text-uppercase">Total Deposits</h6>
+          <p class="card-text display-6">KES {{ "{:,.2f}".format(data.total_deposits_cents / 100) }}</p>
+          <small class="opacity-75">SAVINGS, CURRENT, FIXED DEPOSIT, CALL</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-white bg-danger">
+        <div class="card-body">
+          <h6 class="card-title text-uppercase">Loans Outstanding</h6>
+          <p class="card-text display-6">KES {{ "{:,.2f}".format(data.total_loans_outstanding_cents / 100) }}</p>
+          <small class="opacity-75">LOAN, OVERDRAFT, MORTGAGE, SME, CONSUMER</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-white bg-warning">
+        <div class="card-body">
+          <h6 class="card-title text-uppercase">Accrued Interest</h6>
+          <p class="card-text display-6">KES {{ "{:,.2f}".format(data.total_accrued_interest_cents / 100) }}</p>
+          <small class="opacity-75">Pending capitalisation</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">Deposits by Product</h5>
+    </div>
+    <div class="card-body p-0">
+      {% if data.by_product %}
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover table-striped mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Product Type</th>
+              <th>Product Name</th>
+              <th class="text-end">Accounts</th>
+              <th class="text-end">Total Balance (KES)</th>
+              <th class="text-end">% of Deposits</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.by_product %}
+            <tr>
+              <td><span class="badge bg-primary">{{ row.product_type }}</span></td>
+              <td>{{ row.product_name }}</td>
+              <td class="text-end">{{ "{:,}".format(row.account_count) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(row.total_balance_cents / 100) }}</td>
+              <td class="text-end">
+                {% if data.total_deposits_cents > 0 %}
+                  {{ "{:.1f}".format(row.total_balance_cents / data.total_deposits_cents * 100) }}%
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light fw-bold">
+            <tr>
+              <td colspan="2">Total</td>
+              <td class="text-end">{{ "{:,}".format(data.by_product | sum(attribute='account_count')) }}</td>
+              <td class="text-end">KES {{ "{:,.2f}".format(data.total_deposits_cents / 100) }}</td>
+              <td class="text-end">100%</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-4 text-center text-muted">
+        <i class="fa fa-inbox fa-3x mb-2"></i>
+        <p>No active deposit accounts found.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

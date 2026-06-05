@@ -153,6 +153,12 @@ class TimePlugin(BasePlugin):
 			LeaveRequest,
 			Timesheet,
 			TimeEntry,
+			PublicHoliday,
+			LeaveAccrual,
+			OvertimeRecord,
+			BiometricAttendance,
+			ShiftPattern,
+			EmployeeShift,
 		)
 		return [
 			ShiftDefinition,
@@ -162,6 +168,12 @@ class TimePlugin(BasePlugin):
 			LeaveRequest,
 			Timesheet,
 			TimeEntry,
+			PublicHoliday,
+			LeaveAccrual,
+			OvertimeRecord,
+			BiometricAttendance,
+			ShiftPattern,
+			EmployeeShift,
 		]
 
 	# ------------------------------------------------------------------
@@ -329,6 +341,12 @@ from pgappforge.plugins.erp.hcm.time.models import (  # noqa: E402
 	LeaveRequest,
 	Timesheet,
 	TimeEntry,
+	PublicHoliday,
+	LeaveAccrual,
+	OvertimeRecord,
+	BiometricAttendance,
+	ShiftPattern,
+	EmployeeShift,
 )
 from pgappforge.plugins.erp.hcm.time.events import (  # noqa: E402
 	ClockedInEvent,
@@ -340,6 +358,13 @@ from pgappforge.plugins.erp.hcm.time.events import (  # noqa: E402
 	TimesheetSubmittedEvent,
 	TimesheetApprovedEvent,
 	TimesheetRejectedEvent,
+	LeaveAccruedEvent,
+	LeaveCarryForwardEvent,
+	OvertimeCalculatedEvent,
+	OvertimePayComputedEvent,
+	BiometricImportCompleteEvent,
+	ShiftPatternCreatedEvent,
+	EmployeeShiftAssignedEvent,
 )
 from pgappforge.plugins.erp.hcm.time.services import (  # noqa: E402
 	TimeService,
@@ -348,13 +373,26 @@ from pgappforge.plugins.erp.hcm.time.services import (  # noqa: E402
 	LeaveError,
 	TimesheetError,
 	working_days,
+	accrue_monthly,
+	get_leave_balance,
+	initialise_statutory_entitlements,
+	process_year_end_carryforward,
+	is_public_holiday,
+	get_working_days,
+	seed_kenya_public_holidays,
+	calculate_overtime,
+	calculate_overtime_pay,
+	import_attendance,
+	create_shift_pattern,
+	assign_shift,
+	get_roster,
 )
 
 __all__ = [
 	# plugin
 	"TimePlugin",
 	"create_plugin",
-	# models
+	# models — original
 	"ShiftDefinition",
 	"AttendanceRecord",
 	"LeavePolicy",
@@ -362,7 +400,14 @@ __all__ = [
 	"LeaveRequest",
 	"Timesheet",
 	"TimeEntry",
-	# events
+	# models — gap-fill
+	"PublicHoliday",
+	"LeaveAccrual",
+	"OvertimeRecord",
+	"BiometricAttendance",
+	"ShiftPattern",
+	"EmployeeShift",
+	# events — original
 	"ClockedInEvent",
 	"ClockedOutEvent",
 	"LeaveRequestSubmittedEvent",
@@ -372,11 +417,33 @@ __all__ = [
 	"TimesheetSubmittedEvent",
 	"TimesheetApprovedEvent",
 	"TimesheetRejectedEvent",
-	# services
+	# events — gap-fill
+	"LeaveAccruedEvent",
+	"LeaveCarryForwardEvent",
+	"OvertimeCalculatedEvent",
+	"OvertimePayComputedEvent",
+	"BiometricImportCompleteEvent",
+	"ShiftPatternCreatedEvent",
+	"EmployeeShiftAssignedEvent",
+	# services — original
 	"TimeService",
 	"TimeServiceError",
 	"AttendanceError",
 	"LeaveError",
 	"TimesheetError",
 	"working_days",
+	# services — gap-fill
+	"accrue_monthly",
+	"get_leave_balance",
+	"initialise_statutory_entitlements",
+	"process_year_end_carryforward",
+	"is_public_holiday",
+	"get_working_days",
+	"seed_kenya_public_holidays",
+	"calculate_overtime",
+	"calculate_overtime_pay",
+	"import_attendance",
+	"create_shift_pattern",
+	"assign_shift",
+	"get_roster",
 ]

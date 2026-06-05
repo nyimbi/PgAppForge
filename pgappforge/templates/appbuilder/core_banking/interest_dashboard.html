@@ -1,0 +1,78 @@
+{% extends 'appbuilder/base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="page-header">
+    <h1>Interest Accrual Dashboard</h1>
+    <p class="text-muted">Daily interest accrual summary — {{ summary.accrual_date }}</p>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="card text-white bg-primary">
+        <div class="card-body">
+          <h5 class="card-title">Accounts Processed</h5>
+          <p class="card-text display-6">{{ "{:,}".format(summary.accounts_processed) }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-white bg-success">
+        <div class="card-body">
+          <h5 class="card-title">Total Accrued Today</h5>
+          <p class="card-text display-6">KES {{ "{:,.2f}".format(summary.total_accrued_cents / 100) }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-white bg-warning">
+        <div class="card-body">
+          <h5 class="card-title">Pending Capitalisation</h5>
+          <p class="card-text display-6">KES {{ "{:,.2f}".format(summary.pending_capitalisation_cents / 100) }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Accrual Details — {{ summary.accrual_date }}</h5>
+          <a href="{{ url_for('InterestAccrualDashboard.history') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-history"></i> View History
+          </a>
+        </div>
+        <div class="card-body">
+          <table class="table table-bordered table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Accrual Date</td>
+                <td>{{ summary.accrual_date }}</td>
+              </tr>
+              <tr>
+                <td>Accounts Processed</td>
+                <td>{{ "{:,}".format(summary.accounts_processed) }}</td>
+              </tr>
+              <tr>
+                <td>Total Accrued (KES)</td>
+                <td>{{ "{:,.2f}".format(summary.total_accrued_cents / 100) }}</td>
+              </tr>
+              <tr>
+                <td>Pending Capitalisation (KES)</td>
+                <td>{{ "{:,.2f}".format(summary.pending_capitalisation_cents / 100) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

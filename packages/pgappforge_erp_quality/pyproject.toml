@@ -1,0 +1,37 @@
+[project]
+name = "pgappforge-erp-quality"
+version = "0.1.0"
+description = "Quality Control — inspection plans, non-conformance, CAPA, certifications"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{name = "Nyimbi Odero", email = "nyimbi+pgaf@gmail.com"}]
+readme = "README.md"
+keywords = ["pgappforge", "erp", "quality", "qc", "inspection", "ncr", "capa", "operations"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "pgappforge>=0.90.0",
+    "pgappforge-erp-foundation>=0.1.0",
+    "pgappforge-erp-inventory>=0.1.0",
+]
+
+[project.entry-points."pgappforge.plugins"]
+erp_quality = "pgappforge.plugins.erp.operations.quality:QCPlugin"
+
+[project.urls]
+Homepage = "https://github.com/pgappforge/pgappforge"
+Documentation = "https://pgappforge.dev/plugins/erp/quality"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where = ["src"]

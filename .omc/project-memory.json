@@ -1,9 +1,17 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1780127392152,
+  "lastScanned": 1780414301811,
   "projectRoot": "/Users/nyimbiodero/src/pjs/fab-ext",
   "techStack": {
     "languages": [
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "pyproject.toml"
+        ]
+      },
       {
         "name": "C/C++",
         "version": null,
@@ -19,8 +27,8 @@
   },
   "build": {
     "buildCommand": "make build",
-    "testCommand": "PGAPPFORGE_DB=postgresql:///pgaf_test SQLALCHEMY_DATABASE_URI=postgresql:///pgaf_test .venv/bin/python -m pytest tests/ci/ -q --tb=no 2>&1 | tail -3",
-    "lintCommand": null,
+    "testCommand": "uv run pytest tests/ci/test_tax_gap_close.py tests/ci/test_grc_gap_close.py -v 2>&1 | tail -60",
+    "lintCommand": "ruff check",
     "devCommand": null,
     "scripts": {}
   },
@@ -51,7 +59,7 @@
       "path": "Flask_AppBuilder.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780127392138,
+      "lastAccessed": 1780414301802,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -64,7 +72,7 @@
       "path": "__pycache__",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1780127392139,
+      "lastAccessed": 1780414301804,
       "keyFiles": [
         "init_db.cpython-313.pyc",
         "setup.cpython-311.pyc",
@@ -77,7 +85,7 @@
       "path": "babel",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780127392140,
+      "lastAccessed": 1780414301804,
       "keyFiles": [
         "babel.cfg",
         "messages.pot"
@@ -87,7 +95,7 @@
       "path": "bin",
       "purpose": "Executable scripts",
       "fileCount": 13,
-      "lastAccessed": 1780127392140,
+      "lastAccessed": 1780414301804,
       "keyFiles": [
         "babel_extract.sh",
         "babel_init.sh",
@@ -100,27 +108,27 @@
       "path": "docker",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1780127392141,
+      "lastAccessed": 1780414301805,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
-      "fileCount": 95,
-      "lastAccessed": 1780127392141,
+      "fileCount": 64,
+      "lastAccessed": 1780414301805,
       "keyFiles": [
         "AI_SECURITY_DEPLOYMENT_GUIDE.md",
         "API_DOCUMENTATION.md",
         "API_REFERENCE.md",
         "APPROVAL_SYSTEM_MIGRATION_GUIDE.md",
-        "CODE_ANALYSIS_REPORT.md"
+        "CODEGEN.md"
       ]
     },
     "examples": {
       "path": "examples",
       "purpose": "Example code",
       "fileCount": 15,
-      "lastAccessed": 1780127392142,
+      "lastAccessed": 1780414301805,
       "keyFiles": [
         "README.md",
         "README.rst",
@@ -129,24 +137,24 @@
         "collaborative_service_example.py"
       ]
     },
-    "flask_appbuilder": {
-      "path": "flask_appbuilder",
+    "hardware_store": {
+      "path": "hardware_store",
       "purpose": null,
-      "fileCount": 27,
-      "lastAccessed": 1780127392143,
+      "fileCount": 10,
+      "lastAccessed": 1780414301806,
       "keyFiles": [
-        "IMPLEMENTATION_COMPLETE.md",
-        "__init__.py",
-        "_compat.py",
-        "actions.py",
-        "base.py"
+        "app.json",
+        "babel.config.js",
+        "global.css",
+        "metro.config.js",
+        "nativewind-env.d.ts"
       ]
     },
     "images": {
       "path": "images",
       "purpose": null,
       "fileCount": 23,
-      "lastAccessed": 1780127392143,
+      "lastAccessed": 1780414301806,
       "keyFiles": [
         "ListThumbnail.png",
         "chart.png",
@@ -159,7 +167,7 @@
       "path": "init-scripts",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780127392144,
+      "lastAccessed": 1780414301806,
       "keyFiles": [
         "01-init-age.sql",
         "02-sample-data.sql"
@@ -169,16 +177,62 @@
       "path": "nginx",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1780127392146,
+      "lastAccessed": 1780414301806,
       "keyFiles": [
         "nginx.conf"
+      ]
+    },
+    "packages": {
+      "path": "packages",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1780414301806,
+      "keyFiles": []
+    },
+    "pgappforge": {
+      "path": "pgappforge",
+      "purpose": null,
+      "fileCount": 26,
+      "lastAccessed": 1780414301807,
+      "keyFiles": [
+        "IMPLEMENTATION_COMPLETE.md",
+        "__init__.py",
+        "_compat.py",
+        "actions.py",
+        "base.py"
+      ]
+    },
+    "pgappforge.egg-info": {
+      "path": "pgappforge.egg-info",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1780414301807,
+      "keyFiles": [
+        "PKG-INFO",
+        "SOURCES.txt",
+        "dependency_links.txt",
+        "entry_points.txt",
+        "not-zip-safe"
+      ]
+    },
+    "pgforge.egg-info": {
+      "path": "pgforge.egg-info",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1780414301807,
+      "keyFiles": [
+        "PKG-INFO",
+        "SOURCES.txt",
+        "dependency_links.txt",
+        "entry_points.txt",
+        "not-zip-safe"
       ]
     },
     "requirements": {
       "path": "requirements",
       "purpose": null,
       "fileCount": 17,
-      "lastAccessed": 1780127392146,
+      "lastAccessed": 1780414301807,
       "keyFiles": [
         "ai.in",
         "base.in",
@@ -191,7 +245,7 @@
       "path": "requirements-fe",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780127392146,
+      "lastAccessed": 1780414301808,
       "keyFiles": [
         "package-lock.json",
         "package.json"
@@ -200,8 +254,8 @@
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
-      "fileCount": 9,
-      "lastAccessed": 1780127392146,
+      "fileCount": 11,
+      "lastAccessed": 1780414301808,
       "keyFiles": [
         "babel_extract.sh",
         "babel_init.sh",
@@ -210,23 +264,11 @@
         "create_enhanced_fab_app.py"
       ]
     },
-    "specs": {
-      "path": "specs",
-      "purpose": null,
-      "fileCount": 4,
-      "lastAccessed": 1780127392146,
-      "keyFiles": [
-        "feat-advanced-analytics-bi-platform copy.md",
-        "feat-intelligent-business-process-engine.md",
-        "feat-multi-tenant-saas-infrastructure.md",
-        "feat-realtime-collaboration-engine.md"
-      ]
-    },
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 132,
-      "lastAccessed": 1780127392147,
+      "fileCount": 94,
+      "lastAccessed": 1780414301808,
       "keyFiles": [
         "AUTHENTICATION_BYPASS_SECURITY_VALIDATION.md",
         "COMPREHENSIVE_ISSUE_RESOLUTION_REPORT.md",
@@ -239,7 +281,7 @@
       "path": "tmp",
       "purpose": null,
       "fileCount": 6,
-      "lastAccessed": 1780127392148,
+      "lastAccessed": 1780414301808,
       "keyFiles": [
         "gen_models.py",
         "gen_views.py",
@@ -252,7 +294,7 @@
       "path": "works",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1780127392148,
+      "lastAccessed": 1780414301808,
       "keyFiles": [
         "REMEDIATION_PLAN.md",
         "REORGANIZATION_LOG.md",
@@ -261,11 +303,38 @@
         "web_app_dev_research_2024.md"
       ]
     },
-    "flask_appbuilder/api": {
-      "path": "flask_appbuilder/api",
+    "hardware_store/app": {
+      "path": "hardware_store/app",
+      "purpose": "Application code",
+      "fileCount": 1,
+      "lastAccessed": 1780414301809,
+      "keyFiles": [
+        "_layout.tsx"
+      ]
+    },
+    "hardware_store/components": {
+      "path": "hardware_store/components",
+      "purpose": "UI components",
+      "fileCount": 0,
+      "lastAccessed": 1780414301809,
+      "keyFiles": []
+    },
+    "hardware_store/lib": {
+      "path": "hardware_store/lib",
+      "purpose": "Library code",
+      "fileCount": 5,
+      "lastAccessed": 1780414301810,
+      "keyFiles": [
+        "auth.ts",
+        "config.ts",
+        "permissions.ts"
+      ]
+    },
+    "pgappforge/api": {
+      "path": "pgappforge/api",
       "purpose": "API routes",
       "fileCount": 5,
-      "lastAccessed": 1780127392150,
+      "lastAccessed": 1780414301810,
       "keyFiles": [
         "__init__.py",
         "convert.py",
@@ -276,7 +345,7 @@
       "path": "tmp/utils",
       "purpose": "Utility functions",
       "fileCount": 10,
-      "lastAccessed": 1780127392152,
+      "lastAccessed": 1780414301811,
       "keyFiles": [
         "__init__.py",
         "additional-utils.md",
@@ -286,303 +355,303 @@
   },
   "hotPaths": [
     {
-      "path": "pgappforge/security/sqla/manager.py",
-      "accessCount": 35,
-      "lastAccessed": 1780179253461,
+      "path": "pgappforge/plugins/fintech/core_banking/services.py",
+      "accessCount": 243,
+      "lastAccessed": 1780610193812,
       "type": "file"
     },
     {
-      "path": "pgappforge/base.py",
-      "accessCount": 27,
-      "lastAccessed": 1780180851025,
+      "path": "pgappforge/plugins/fintech/payments/services.py",
+      "accessCount": 119,
+      "lastAccessed": 1780516975610,
       "type": "file"
     },
     {
-      "path": "pgappforge/baseviews.py",
-      "accessCount": 26,
-      "lastAccessed": 1780177646648,
+      "path": "pgappforge/plugins/fintech/lending/models.py",
+      "accessCount": 118,
+      "lastAccessed": 1780610509900,
       "type": "file"
     },
     {
-      "path": "pgappforge/security/manager.py",
+      "path": "pgappforge/plugins/fintech/sacco/services.py",
+      "accessCount": 116,
+      "lastAccessed": 1780518928383,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/core_banking/models.py",
+      "accessCount": 116,
+      "lastAccessed": 1780522061281,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/regulatory/models.py",
+      "accessCount": 105,
+      "lastAccessed": 1780522374311,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/lending/services.py",
+      "accessCount": 101,
+      "lastAccessed": 1780507250054,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/payments/models.py",
+      "accessCount": 84,
+      "lastAccessed": 1780507656812,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/sacco/models.py",
+      "accessCount": 84,
+      "lastAccessed": 1780518751541,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/regulatory/services.py",
+      "accessCount": 77,
+      "lastAccessed": 1780522393153,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/trade_finance/services.py",
+      "accessCount": 73,
+      "lastAccessed": 1780610032030,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/trade_finance/models.py",
+      "accessCount": 63,
+      "lastAccessed": 1780569370426,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/mobile_money/services.py",
+      "accessCount": 61,
+      "lastAccessed": 1780519330452,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/mobile_money/models.py",
+      "accessCount": 60,
+      "lastAccessed": 1780502957925,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/core_banking/__init__.py",
+      "accessCount": 52,
+      "lastAccessed": 1780521629348,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/payments/views.py",
+      "accessCount": 51,
+      "lastAccessed": 1780508272870,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/payments/events.py",
+      "accessCount": 50,
+      "lastAccessed": 1780507454145,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/core_banking/events.py",
+      "accessCount": 47,
+      "lastAccessed": 1780521634755,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/regulatory/events.py",
+      "accessCount": 46,
+      "lastAccessed": 1780502559418,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/mobile_money/events.py",
+      "accessCount": 45,
+      "lastAccessed": 1780502473788,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/trade_finance/events.py",
+      "accessCount": 44,
+      "lastAccessed": 1780569382965,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/regulatory/__init__.py",
+      "accessCount": 41,
+      "lastAccessed": 1780480298769,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/core_banking/views.py",
+      "accessCount": 41,
+      "lastAccessed": 1780609955442,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/sacco/events.py",
+      "accessCount": 40,
+      "lastAccessed": 1780479989656,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/lending/events.py",
+      "accessCount": 40,
+      "lastAccessed": 1780480193626,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/lending/views.py",
+      "accessCount": 40,
+      "lastAccessed": 1780480193830,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/mobile_money/views.py",
+      "accessCount": 37,
+      "lastAccessed": 1780480209706,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/trade_finance/views.py",
+      "accessCount": 36,
+      "lastAccessed": 1780480217865,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/regulatory/views.py",
+      "accessCount": 36,
+      "lastAccessed": 1780480298571,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/mobile_money/__init__.py",
+      "accessCount": 28,
+      "lastAccessed": 1780502992654,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/trade_finance/__init__.py",
+      "accessCount": 28,
+      "lastAccessed": 1780569375696,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/erp/finance/gl/services.py",
+      "accessCount": 20,
+      "lastAccessed": 1780610608616,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/sacco/views.py",
       "accessCount": 18,
-      "lastAccessed": 1780179919230,
+      "lastAccessed": 1780479432630,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/base_plugin.py",
+      "path": "pgappforge/plugins/erp/foundation/commons.py",
+      "accessCount": 17,
+      "lastAccessed": 1780595829274,
+      "type": "file"
+    },
+    {
+      "path": "tests/ci/test_core_banking_gl.py",
+      "accessCount": 17,
+      "lastAccessed": 1780611378139,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/payments/COMPARISON.md",
+      "accessCount": 16,
+      "lastAccessed": 1780507644937,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/payments/__init__.py",
+      "accessCount": 15,
+      "lastAccessed": 1780501320794,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/lending/__init__.py",
       "accessCount": 13,
-      "lastAccessed": 1780163429157,
+      "lastAccessed": 1780507155002,
       "type": "file"
     },
     {
-      "path": "pgappforge/config/models.py",
+      "path": "pgappforge/plugins/erp/finance/gl/models.py",
+      "accessCount": 11,
+      "lastAccessed": 1780610610547,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/core_banking/COMPARISON.md",
       "accessCount": 9,
-      "lastAccessed": 1780176464188,
+      "lastAccessed": 1780521023073,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/hooks.py",
+      "path": "pgappforge/plugins/fintech/sacco/__init__.py",
       "accessCount": 6,
-      "lastAccessed": 1780159709304,
+      "lastAccessed": 1780478236419,
       "type": "file"
     },
     {
-      "path": "pgappforge/models/base.py",
-      "accessCount": 6,
-      "lastAccessed": 1780159724042,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/models/sqla/__init__.py",
-      "accessCount": 6,
-      "lastAccessed": 1780159741983,
-      "type": "file"
-    },
-    {
-      "path": "setup.py",
-      "accessCount": 6,
-      "lastAccessed": 1780171047201,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/config/__init__.py",
+      "path": "pgappforge/plugins/fintech/lending/COMPARISON.md",
       "accessCount": 5,
-      "lastAccessed": 1780158591732,
+      "lastAccessed": 1780506299755,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/voice/__init__.py",
+      "path": "pgappforge/plugins/erp/foundation/events.py",
       "accessCount": 5,
-      "lastAccessed": 1780159722033,
+      "lastAccessed": 1780595615869,
       "type": "file"
     },
     {
-      "path": "pgappforge/database/age/graph.py",
-      "accessCount": 4,
-      "lastAccessed": 1780158293177,
+      "path": "pgappforge/plugins/fintech/__init__.py",
+      "accessCount": 5,
+      "lastAccessed": 1780606732397,
       "type": "file"
     },
     {
-      "path": "pgappforge/database/age/types.py",
-      "accessCount": 4,
-      "lastAccessed": 1780158298151,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/cli/generators/cli_commands.py",
-      "accessCount": 4,
-      "lastAccessed": 1780160177862,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/cli/generators/__init__.py",
-      "accessCount": 4,
-      "lastAccessed": 1780160573532,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/models/mixins.py",
-      "accessCount": 4,
-      "lastAccessed": 1780163422219,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/config/views.py",
+      "path": "tests/ci/conftest.py",
       "accessCount": 3,
-      "lastAccessed": 1780158581035,
+      "lastAccessed": 1780560332827,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/offline/__init__.py",
+      "path": "pgappforge/plugins/erp/foundation/services.py",
       "accessCount": 3,
-      "lastAccessed": 1780158624213,
+      "lastAccessed": 1780570314488,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/workflow/__init__.py",
+      "path": "pgappforge/plugins/erp/foundation/models.py",
       "accessCount": 3,
-      "lastAccessed": 1780159254663,
+      "lastAccessed": 1780610628000,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/tenancy/__init__.py",
-      "accessCount": 3,
-      "lastAccessed": 1780163424380,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/analytics/__init__.py",
-      "accessCount": 3,
-      "lastAccessed": 1780163434546,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/models/tenant_models.py",
-      "accessCount": 3,
-      "lastAccessed": 1780172560154,
-      "type": "file"
-    },
-    {
-      "path": "docs/FEATURE_IMPLEMENTATION_MATRIX.md",
+      "path": "pgappforge/plugins/fintech/mobile_money/COMPARISON.md",
       "accessCount": 2,
-      "lastAccessed": 1780127562772,
+      "lastAccessed": 1780502275505,
       "type": "file"
     },
     {
-      "path": "docs/CODE_REVIEW_REPORT.md",
-      "accessCount": 2,
-      "lastAccessed": 1780128008937,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/realtime/__init__.py",
-      "accessCount": 2,
-      "lastAccessed": 1780157686807,
-      "type": "file"
-    },
-    {
-      "path": "README.md",
-      "accessCount": 2,
-      "lastAccessed": 1780157882080,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/sqla/models.py",
-      "accessCount": 2,
-      "lastAccessed": 1780157949211,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/cli/generators/database_inspector.py",
-      "accessCount": 2,
-      "lastAccessed": 1780158435663,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/theming/wizard_themes.py",
-      "accessCount": 2,
-      "lastAccessed": 1780158443062,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/config/wizard.py",
-      "accessCount": 2,
-      "lastAccessed": 1780158453726,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/models/__init__.py",
-      "accessCount": 2,
-      "lastAccessed": 1780158473665,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/views.py",
-      "accessCount": 2,
-      "lastAccessed": 1780175560354,
-      "type": "file"
-    },
-    {
-      "path": "docs/DEVELOPMENT_ROADMAP.md",
+      "path": "pgappforge/plugins/rules/scheduler.py",
       "accessCount": 1,
-      "lastAccessed": 1780127556709,
+      "lastAccessed": 1780466845105,
       "type": "file"
     },
     {
-      "path": "docs/enhancement-proposals.md",
+      "path": "pgappforge/plugins/erp/industry/financial_services/models.py",
       "accessCount": 1,
-      "lastAccessed": 1780127563282,
-      "type": "file"
-    },
-    {
-      "path": "docs/JHIPSTER_WORKFLOW_SYSTEM.md",
-      "accessCount": 1,
-      "lastAccessed": 1780127563981,
-      "type": "file"
-    },
-    {
-      "path": "docs/PROJECT_COMPLETION_REPORT.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128003004,
-      "type": "file"
-    },
-    {
-      "path": "docs/PRODUCTION_READINESS_CERTIFICATION.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128003441,
-      "type": "file"
-    },
-    {
-      "path": "docs/FINAL_COMPLETENESS_REPORT.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128003569,
-      "type": "file"
-    },
-    {
-      "path": "docs/COMPLETENESS_ANALYSIS_REPORT.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128009301,
-      "type": "file"
-    },
-    {
-      "path": "docs/SELF_REVIEW_IMPLEMENTATION_STATUS.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128010902,
-      "type": "file"
-    },
-    {
-      "path": "docs/QUALITY_ASSURANCE.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128011304,
-      "type": "file"
-    },
-    {
-      "path": "docs/CODE_ANALYSIS_REPORT.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128015902,
-      "type": "file"
-    },
-    {
-      "path": "docs/CRITICAL_FIXES_IMPLEMENTATION_PLAN.md",
-      "accessCount": 1,
-      "lastAccessed": 1780128016962,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/models/dashboard_models.py",
-      "accessCount": 1,
-      "lastAccessed": 1780156510907,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/classify/__init__.py",
-      "accessCount": 1,
-      "lastAccessed": 1780157622443,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/__init__.py",
-      "accessCount": 1,
-      "lastAccessed": 1780157677931,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/database/age/manager.py",
-      "accessCount": 1,
-      "lastAccessed": 1780157758458,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/cli/generators/mobile_generator.py",
-      "accessCount": 1,
-      "lastAccessed": 1780157810954,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/security/integrations/__init__.py",
-      "accessCount": 1,
-      "lastAccessed": 1780157814953,
+      "lastAccessed": 1780473251056,
       "type": "file"
     }
   ],

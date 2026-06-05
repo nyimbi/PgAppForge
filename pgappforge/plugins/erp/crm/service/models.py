@@ -31,7 +31,7 @@ from sqlalchemy import (
 	Text,
 	UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import relationship
 
 from pgappforge.models.sqla import Model
@@ -293,6 +293,7 @@ class KnowledgeArticle(AuditMixin, Model):
 		Index("ix_sc_ka_status", "status"),
 		Index("ix_sc_ka_category", "category"),
 		Index("ix_sc_ka_author", "author_id"),
+		Index("ix_sc_ka_content_gin", "content_tsv", postgresql_using="gin"),
 		{"extend_existing": True},
 	)
 
@@ -330,6 +331,21 @@ class KnowledgeArticle(AuditMixin, Model):
 		JSONB,
 		nullable=True,
 		comment="1536-dim embedding vector stored as JSON array; use pgvector cast at query time",
+	)
+
+	# Full-text search vector — maintained via PostgreSQL trigger on INSERT/UPDATE.
+	# Trigger DDL (run once per schema migration):
+	#   CREATE OR REPLACE FUNCTION sc_ka_tsv_update() RETURNS trigger LANGUAGE plpgsql AS $$
+	#   BEGIN
+	#     NEW.content_tsv := to_tsvector('english', coalesce(NEW.title,'') || ' ' || coalesce(NEW.content,''));
+	#     RETURN NEW;
+	#   END $$;
+	#   CREATE TRIGGER trg_sc_ka_tsv BEFORE INSERT OR UPDATE ON sc_knowledge_article
+	#     FOR EACH ROW EXECUTE FUNCTION sc_ka_tsv_update();
+	content_tsv = Column(
+		TSVECTOR,
+		nullable=True,
+		comment="Full-text search vector over title+content; maintained by PostgreSQL trigger",
 	)
 
 	created_at = Column(
@@ -486,6 +502,142 @@ class SurveyResponse(Model):
 
 
 # ---------------------------------------------------------------------------
+# CaseFeedback
+# ---------------------------------------------------------------------------
+
+class CaseFeedback(Model):
+	"""Post-resolution customer feedback on a specific case.
+
+	Append-only — never update submitted feedback.
+	rating: 1 (very dissatisfied) → 5 (very satisfied).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sc_case_feedback"
+	__table_args__ = (
+		Index("ix_sc_cf_case", "case_id"),
+		Index("ix_sc_cf_tenant", "tenant_id"),
+		Index("ix_sc_cf_submitted", "submitted_at"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	case_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sc_case.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+	)
+	rating = Column(
+		Integer,
+		nullable=False,
+		comment="1=very dissatisfied … 5=very satisfied",
+	)
+	comments = Column(Text, nullable=True)
+	submitted_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	is_resolved_as_expected = Column(
+		Boolean,
+		nullable=False,
+		default=False,
+		server_default="false",
+	)
+
+	# No updated_at — append-only
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	case: Case = relationship("Case", lazy="select", foreign_keys=[case_id])
+
+	def __repr__(self) -> str:
+		return f"<CaseFeedback case={self.case_id!r} rating={self.rating}>"
+
+
+# ---------------------------------------------------------------------------
+# CaseEscalation
+# ---------------------------------------------------------------------------
+
+class CaseEscalation(Model):
+	"""Audit record for each escalation event on a case.
+
+	Immutable once created — corrections are new rows.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sc_case_escalation"
+	__table_args__ = (
+		Index("ix_sc_ce_case", "case_id"),
+		Index("ix_sc_ce_tenant", "tenant_id"),
+		Index("ix_sc_ce_escalated_to", "escalated_to"),
+		Index("ix_sc_ce_escalated_at", "escalated_at"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	case_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sc_case.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+	)
+	escalated_to = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		index=True,
+		comment="FK Employee.id — escalation target",
+	)
+	escalated_by = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="FK Employee.id — who triggered the escalation",
+	)
+	reason = Column(Text, nullable=False)
+	escalated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+	# No updated_at — append-only audit record
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	case: Case = relationship("Case", lazy="select", foreign_keys=[case_id])
+
+	def __repr__(self) -> str:
+		return (
+			f"<CaseEscalation case={self.case_id!r} "
+			f"escalated_to={self.escalated_to!r} at={self.escalated_at!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -495,4 +647,6 @@ __all__ = [
 	"KnowledgeArticle",
 	"CaseComment",
 	"SurveyResponse",
+	"CaseFeedback",
+	"CaseEscalation",
 ]

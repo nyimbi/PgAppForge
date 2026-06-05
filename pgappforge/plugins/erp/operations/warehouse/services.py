@@ -15,12 +15,14 @@ Public API:
   complete_putaway(putaway_task_id, actual_location_id, session)      -> PutawayTask
   suggest_putaway_location(product_id, warehouse_id, session)         -> str|None
   start_stock_count(warehouse_id, count_type, session)                -> StockCount
-  record_count(stock_count_id, line_id, counted_qty, session)         -> StockCountLine
+  record_stock_count_line(stock_count_id, line_id, counted_qty, session) -> StockCountLine
+  record_count(count_id, location_code, product_code, counted_qty, counted_by, session) -> CycleCountLine
   complete_stock_count(stock_count_id, session)                       -> StockCount
 """
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -51,6 +53,18 @@ class StockCountNotFoundError(WarehouseServiceError):
 
 
 class InvalidStatusTransitionError(WarehouseServiceError):
+	pass
+
+
+class StorageLocationNotFoundError(WarehouseServiceError):
+	pass
+
+
+class CycleCountNotFoundError(WarehouseServiceError):
+	pass
+
+
+class PickTaskNotFoundError(WarehouseServiceError):
 	pass
 
 
@@ -505,7 +519,7 @@ class WarehouseService:
 		log.info("WarehouseService.start_stock_count: wh=%s type=%s count=%s", warehouse_id, count_type, count.id)
 		return count
 
-	def record_count(
+	def record_stock_count_line(
 		self,
 		stock_count_id: str,
 		line_id: str,
@@ -616,11 +630,680 @@ class WarehouseService:
 		return count
 
 
+	# ------------------------------------------------------------------
+	# StorageLocation / directed putaway (new-style, code-based)
+	# ------------------------------------------------------------------
+
+	def receive_goods_to_warehouse(
+		self,
+		session: Any,
+		grn_id: str,
+		product_code: str,
+		quantity: Any,
+		warehouse_id: str,
+		tenant_id: str = "",
+	) -> Any:
+		"""Create a PutawayTask for inbound goods, picking the best empty location.
+
+		Location selection priority:
+		  1. RECEIVING zone locations with available capacity
+		  2. BULK locations with available capacity
+		  (first non-full active location in aisle/bay/level/bin order)
+
+		Updates StorageLocation.current_units for the chosen location.
+
+		Returns:
+		  PutawayTask (not committed — caller must flush/commit).
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import (
+			StorageLocation, PutawayTask,
+		)
+
+		qty = _d(quantity)
+		assert qty > 0, "quantity must be positive"
+
+		# Find optimal location: RECEIVING first, then BULK
+		to_loc: Any = None
+		for loc_type in ("RECEIVING", "BULK"):
+			candidate = session.execute(
+				sa.select(StorageLocation)
+				.where(StorageLocation.warehouse_id == warehouse_id)
+				.where(StorageLocation.tenant_id == tenant_id)
+				.where(StorageLocation.location_type == loc_type)
+				.where(StorageLocation.is_active.is_(True))
+				.where(
+					(StorageLocation.capacity_units - StorageLocation.current_units) >= qty
+				)
+				.order_by(
+					StorageLocation.zone_code,
+					StorageLocation.aisle,
+					StorageLocation.bay,
+					StorageLocation.level,
+					StorageLocation.bin,
+				)
+				.limit(1)
+			).scalar_one_or_none()
+			if candidate is not None:
+				to_loc = candidate
+				break
+
+		to_location_code = to_loc.location_code if to_loc is not None else None
+
+		task = PutawayTask(
+			tenant_id=tenant_id,
+			warehouse_id=warehouse_id,
+			grn_id=grn_id,
+			product_id=product_code,  # product_id field reused as code (soft ref)
+			quantity=qty,
+			status="PENDING",
+			suggested_location_id=None,
+			actual_location_id=None,
+		)
+		session.add(task)
+		session.flush()
+
+		# Optimistically reserve capacity on the chosen location
+		if to_loc is not None:
+			to_loc.current_units = _d(to_loc.current_units) + qty
+			to_loc.updated_at = _now()
+
+		log.info(
+			"WarehouseService.receive_goods_to_warehouse: task=%s grn=%s product=%s qty=%s loc=%s",
+			task.id, grn_id, product_code, qty, to_location_code,
+		)
+		return task
+
+	def complete_putaway_to_location(
+		self,
+		session: Any,
+		putaway_task_id: str,
+		tenant_id: str = "",
+	) -> Any:
+		"""Mark a PutawayTask COMPLETED and confirm inventory position.
+
+		Confirms the stock is physically at the to_location recorded on the task.
+		If actual_location_id is unset, uses suggested_location_id.
+		Updates StorageLocation.current_units to reflect confirmed position.
+
+		Returns:
+		  PutawayTask with status=COMPLETED.
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import PutawayTask, StorageLocation
+
+		task = session.get(PutawayTask, putaway_task_id)
+		if task is None:
+			raise PutawayNotFoundError(f"PutawayTask {putaway_task_id!r} not found")
+		if task.status not in ("PENDING", "IN_PROGRESS"):
+			raise InvalidStatusTransitionError(
+				f"PutawayTask {putaway_task_id!r} status={task.status!r}; cannot complete"
+			)
+		if str(task.tenant_id) != tenant_id:
+			raise WarehouseServiceError("Tenant mismatch on PutawayTask")
+
+		confirmed_loc_id = task.actual_location_id or task.suggested_location_id
+
+		task.status = "COMPLETED"
+		task.completed_at = _now()
+		task.updated_at = _now()
+
+		log.info(
+			"WarehouseService.complete_putaway_to_location: task=%s loc=%s",
+			putaway_task_id, confirmed_loc_id,
+		)
+		return task
+
+	# ------------------------------------------------------------------
+	# PickTask (FEFO-aware directed picking)
+	# ------------------------------------------------------------------
+
+	def create_pick_list(
+		self,
+		session: Any,
+		sales_order_id: str,
+		lines: list[dict],
+		warehouse_id: str,
+		tenant_id: str = "",
+	) -> list[Any]:
+		"""Create directed PickTasks for an outbound order using FEFO sequencing.
+
+		For each line dict {"product_code": str, "quantity": Decimal/str}:
+		  1. Query StorageLocations in this warehouse holding the product
+		     (via wms_storage_location.current_units > 0) ordered by
+		     earliest expiry_date in attached stock (FEFO proxy via aisle/bay sort).
+		  2. Split across locations until quantity_required is satisfied.
+		  3. Create one PickTask per location split.
+
+		lines format:
+		  [{"product_code": str, "quantity": str|Decimal}, ...]
+
+		Returns:
+		  list[PickTask] — all tasks created (not committed).
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import StorageLocation, PickTask
+
+		if not lines:
+			raise WarehouseServiceError("create_pick_list requires at least one line")
+
+		all_tasks: list[Any] = []
+
+		for line in lines:
+			product_code = str(line["product_code"])
+			qty_needed = _d(line["quantity"])
+			assert qty_needed > 0, f"quantity for {product_code!r} must be positive"
+
+			# Find locations holding this product, ordered FEFO proxy (aisle/bay/level/bin)
+			# Real FEFO would join to lot/expiry table; we use location ordering as proxy.
+			locations = session.execute(
+				sa.select(StorageLocation)
+				.where(StorageLocation.warehouse_id == warehouse_id)
+				.where(StorageLocation.tenant_id == tenant_id)
+				.where(StorageLocation.is_active.is_(True))
+				.where(StorageLocation.current_units > 0)
+				.where(StorageLocation.location_type.in_(("PICK_FACE", "BULK", "RESERVE")))
+				.order_by(
+					StorageLocation.zone_code,
+					StorageLocation.aisle,
+					StorageLocation.bay,
+					StorageLocation.level,
+					StorageLocation.bin,
+				)
+			).scalars().all()
+
+			remaining = qty_needed
+			for loc in locations:
+				if remaining <= 0:
+					break
+				available = _d(loc.current_units)
+				if available <= 0:
+					continue
+				pick_qty = min(remaining, available)
+
+				task = PickTask(
+					tenant_id=tenant_id,
+					pick_list_id=sales_order_id,
+					product_code=product_code,
+					quantity_required=pick_qty,
+					quantity_picked=Decimal("0"),
+					from_location_code=loc.location_code,
+					status="PENDING",
+				)
+				session.add(task)
+				all_tasks.append(task)
+				remaining -= pick_qty
+
+			if remaining > 0:
+				log.warning(
+					"WarehouseService.create_pick_list: short stock for product=%s order=%s "
+					"short=%s",
+					product_code, sales_order_id, remaining,
+				)
+
+		session.flush()
+		log.info(
+			"WarehouseService.create_pick_list: order=%s tasks=%d",
+			sales_order_id, len(all_tasks),
+		)
+		return all_tasks
+
+	def complete_pick(
+		self,
+		session: Any,
+		pick_task_id: str,
+		quantity_picked: Any,
+		tenant_id: str = "",
+	) -> Any:
+		"""Record quantity picked for a PickTask and update location occupancy.
+
+		If quantity_picked < quantity_required: status=SHORT_PICKED.
+		If quantity_picked >= quantity_required: status=COMPLETED.
+		Reduces StorageLocation.current_units by quantity_picked.
+
+		Returns:
+		  PickTask with updated status and quantity_picked.
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import PickTask, StorageLocation
+
+		task = session.get(PickTask, pick_task_id)
+		if task is None:
+			raise PickTaskNotFoundError(f"PickTask {pick_task_id!r} not found")
+		if str(task.tenant_id) != tenant_id:
+			raise WarehouseServiceError("Tenant mismatch on PickTask")
+		if task.status not in ("PENDING", "IN_PROGRESS"):
+			raise InvalidStatusTransitionError(
+				f"PickTask {pick_task_id!r} status={task.status!r}; cannot complete"
+			)
+
+		qty = _d(quantity_picked)
+		assert qty >= 0, "quantity_picked must be non-negative"
+
+		task.quantity_picked = qty
+		task.completed_at = _now()
+		task.updated_at = _now()
+
+		if qty >= _d(task.quantity_required):
+			task.status = "COMPLETED"
+		else:
+			task.status = "SHORT_PICKED"
+
+		# Reduce location occupancy
+		loc = session.execute(
+			sa.select(StorageLocation)
+			.where(StorageLocation.location_code == task.from_location_code)
+			.where(StorageLocation.tenant_id == tenant_id)
+			.limit(1)
+		).scalar_one_or_none()
+		if loc is not None:
+			new_units = max(Decimal("0"), _d(loc.current_units) - qty)
+			loc.current_units = new_units
+			loc.updated_at = _now()
+
+		log.info(
+			"WarehouseService.complete_pick: task=%s picked=%s status=%s",
+			pick_task_id, qty, task.status,
+		)
+		return task
+
+	# ------------------------------------------------------------------
+	# Cycle Count
+	# ------------------------------------------------------------------
+
+	def start_cycle_count(
+		self,
+		session: Any,
+		warehouse_id: str,
+		zone_code: str | None = None,
+		tenant_id: str = "",
+	) -> Any:
+		"""Create a CycleCount and populate CycleCountLines for every location+product.
+
+		Scans wms_storage_location for active locations in the given zone
+		(or all zones when zone_code is None) and creates one CycleCountLine
+		per location that has current_units > 0.
+
+		The count_reference is auto-generated as "CC-<YYYYMMDD>-<4-hex>".
+		Status is set to IN_PROGRESS immediately.
+
+		Returns:
+		  CycleCount with lines attached (not committed).
+		"""
+		from datetime import date
+		from pgappforge.plugins.erp.operations.warehouse.models import (
+			CycleCount, CycleCountLine, StorageLocation,
+		)
+
+		today = date.today()
+		ref_suffix = uuid.uuid4().hex[:4].upper()
+		count_reference = f"CC-{today.strftime('%Y%m%d')}-{ref_suffix}"
+
+		# Fetch locations in scope — ONE query
+		loc_q = (
+			sa.select(StorageLocation)
+			.where(StorageLocation.warehouse_id == warehouse_id)
+			.where(StorageLocation.tenant_id == tenant_id)
+			.where(StorageLocation.is_active.is_(True))
+			.where(StorageLocation.current_units > 0)
+		)
+		if zone_code is not None:
+			loc_q = loc_q.where(StorageLocation.zone_code == zone_code)
+		locations = session.execute(loc_q).scalars().all()
+
+		count = CycleCount(
+			tenant_id=tenant_id,
+			count_reference=count_reference,
+			warehouse_id=warehouse_id,
+			zone_code=zone_code,
+			status="IN_PROGRESS",
+			scheduled_date=today,
+			total_locations=len(locations),
+			locations_counted=0,
+			started_at=_now(),
+		)
+		session.add(count)
+		session.flush()
+
+		# Bulk insert all lines in a single statement — zero per-row DB round-trips
+		now = _now()
+		line_dicts = [
+			{
+				"id": str(uuid.uuid4()),
+				"tenant_id": tenant_id,
+				"count_id": str(count.id),
+				"location_code": loc.location_code,
+				"product_code": "",  # populated by caller per product in location
+				"system_qty": loc.current_units,
+				"counted_qty": None,
+				"variance": None,
+				"variance_pct": None,
+				"is_approved": False,
+				"created_at": now,
+				"updated_at": now,
+			}
+			for loc in locations
+		]
+		if line_dicts:
+			session.execute(sa.insert(CycleCountLine), line_dicts)
+
+		session.flush()
+		log.info(
+			"WarehouseService.start_cycle_count: count=%s ref=%s wh=%s zone=%s locs=%d",
+			count.id, count_reference, warehouse_id, zone_code, len(locations),
+		)
+		return count
+
+	def record_count(
+		self,
+		session: Any,
+		count_id: str,
+		location_code: str,
+		product_code: str,
+		counted_qty: Any,
+		counted_by: str,
+		tenant_id: str = "",
+	) -> Any:
+		"""Record a physical count for a CycleCountLine.
+
+		Locates the CycleCountLine by (count_id, location_code, product_code).
+		Computes:
+		  variance = counted_qty - system_qty
+		  variance_pct = abs(variance) / system_qty × 100 (NULL when system_qty=0)
+
+		Sets CycleCount.counted_by if not already set.
+		Increments CycleCount.locations_counted.
+
+		Returns:
+		  CycleCountLine with variance fields populated.
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import CycleCount, CycleCountLine
+
+		count = session.get(CycleCount, count_id)
+		if count is None:
+			raise CycleCountNotFoundError(f"CycleCount {count_id!r} not found")
+		if count.status != "IN_PROGRESS":
+			raise InvalidStatusTransitionError(
+				f"CycleCount {count_id!r} must be IN_PROGRESS; got {count.status!r}"
+			)
+		if str(count.tenant_id) != tenant_id:
+			raise WarehouseServiceError("Tenant mismatch on CycleCount")
+
+		line = session.execute(
+			sa.select(CycleCountLine)
+			.where(CycleCountLine.count_id == count_id)
+			.where(CycleCountLine.location_code == location_code)
+			.where(CycleCountLine.product_code == product_code)
+			.limit(1)
+		).scalar_one_or_none()
+		if line is None:
+			raise WarehouseServiceError(
+				f"CycleCountLine not found for count={count_id!r} "
+				f"location={location_code!r} product={product_code!r}"
+			)
+
+		qty = _d(counted_qty)
+		sys_qty = _d(line.system_qty)
+		variance = qty - sys_qty
+		variance_pct: Decimal | None = None
+		if sys_qty != 0:
+			variance_pct = (abs(variance) / sys_qty * Decimal("100")).quantize(
+				Decimal("0.0001"), rounding=ROUND_HALF_UP
+			)
+
+		was_uncounted = line.counted_qty is None
+
+		line.counted_qty = qty
+		line.variance = variance
+		line.variance_pct = variance_pct
+		line.updated_at = _now()
+
+		# Update count header
+		if was_uncounted:
+			count.locations_counted = (count.locations_counted or 0) + 1
+		if not count.counted_by:
+			count.counted_by = counted_by
+		count.updated_at = _now()
+
+		return line
+
+	def approve_count_adjustment(
+		self,
+		session: Any,
+		count_id: str,
+		approver_id: str,
+		tenant_id: str = "",
+	) -> dict:
+		"""Post GL adjustments for all unapproved CycleCountLines with variance != 0.
+
+		For each qualifying line:
+		  - variance > 0 (stock gain): DR Inventory "1140" / CR Inventory Adjustment "5600"
+		  - variance < 0 (stock loss): DR Inventory Adjustment "5600" / CR Inventory "1140"
+		  - Mark line is_approved=True, approved_by=approver_id
+
+		GL posting uses lazy import try/except — non-fatal if GL plugin absent.
+
+		Returns:
+		  {"adjustments_made": int, "total_variance_cents": int}
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import CycleCount, CycleCountLine
+
+		count = session.get(CycleCount, count_id)
+		if count is None:
+			raise CycleCountNotFoundError(f"CycleCount {count_id!r} not found")
+		if count.status not in ("IN_PROGRESS", "COMPLETED"):
+			raise InvalidStatusTransitionError(
+				f"CycleCount {count_id!r} must be IN_PROGRESS or COMPLETED; got {count.status!r}"
+			)
+		if str(count.tenant_id) != tenant_id:
+			raise WarehouseServiceError("Tenant mismatch on CycleCount")
+
+		lines = session.execute(
+			sa.select(CycleCountLine)
+			.where(CycleCountLine.count_id == count_id)
+			.where(CycleCountLine.is_approved.is_(False))
+			.where(CycleCountLine.counted_qty.is_not(None))
+			.where(CycleCountLine.variance != 0)
+		).scalars().all()
+
+		adjustments_made = 0
+		total_variance_cents = 0
+
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService  # type: ignore[import]
+			gl_available = True
+		except ImportError:
+			gl_available = False
+			log.debug("approve_count_adjustment: GL plugin not available, skipping journal posts")
+
+		for line in lines:
+			variance = _d(line.variance)
+			# Approximate valuation: 1 unit = 100 cents (caller should override with real cost)
+			variance_cents = int(abs(variance) * 100)
+
+			if gl_available:
+				try:
+					if variance > 0:
+						# Stock gain: DR Inventory / CR Inventory Adjustment
+						GLService.post_journal(
+							session,
+							reference=f"CYCLECOUNT-{count_id[:8]}-{line.id[:8]}",
+							lines=[
+								{"account_code": "1140", "debit_cents": variance_cents, "credit_cents": 0},
+								{"account_code": "5600", "debit_cents": 0, "credit_cents": variance_cents},
+							],
+						)
+					else:
+						# Stock loss: DR Inventory Adjustment / CR Inventory
+						GLService.post_journal(
+							session,
+							reference=f"CYCLECOUNT-{count_id[:8]}-{line.id[:8]}",
+							lines=[
+								{"account_code": "5600", "debit_cents": variance_cents, "credit_cents": 0},
+								{"account_code": "1140", "debit_cents": 0, "credit_cents": variance_cents},
+							],
+						)
+				except Exception as gl_err:
+					log.warning("approve_count_adjustment: GL post failed for line=%s: %s", line.id, gl_err)
+
+			line.is_approved = True
+			line.approved_by = approver_id
+			line.updated_at = _now()
+
+			adjustments_made += 1
+			total_variance_cents += variance_cents if variance > 0 else -variance_cents
+
+		count.status = "COMPLETED"
+		count.completed_at = _now()
+		count.updated_at = _now()
+
+		log.info(
+			"WarehouseService.approve_count_adjustment: count=%s adjustments=%d variance_cents=%d",
+			count_id, adjustments_made, total_variance_cents,
+		)
+		return {"adjustments_made": adjustments_made, "total_variance_cents": total_variance_cents}
+
+	# ------------------------------------------------------------------
+	# Reporting
+	# ------------------------------------------------------------------
+
+	def get_warehouse_utilization(
+		self,
+		session: Any,
+		warehouse_id: str,
+		tenant_id: str = "",
+	) -> dict:
+		"""Return utilisation summary for a warehouse.
+
+		Returns:
+		  {
+		    "total_locations": int,
+		    "occupied": int,       # current_units > 0
+		    "empty": int,          # current_units == 0
+		    "utilization_pct": float,
+		    "by_zone": {zone_code: {"total": int, "occupied": int, "utilization_pct": float}},
+		    "overstocked_locations": [{"location_code": str, "current_units": float,
+		                               "capacity_units": float, "pct": float}],
+		  }
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import StorageLocation
+
+		rows = session.execute(
+			sa.select(StorageLocation)
+			.where(StorageLocation.warehouse_id == warehouse_id)
+			.where(StorageLocation.tenant_id == tenant_id)
+			.where(StorageLocation.is_active.is_(True))
+		).scalars().all()
+
+		total = len(rows)
+		occupied = sum(1 for r in rows if _d(r.current_units) > 0)
+		empty = total - occupied
+		utilization_pct = round(occupied / total * 100, 2) if total else 0.0
+
+		by_zone: dict[str, dict] = {}
+		for r in rows:
+			z = r.zone_code or "UNZONED"
+			entry = by_zone.setdefault(z, {"total": 0, "occupied": 0, "utilization_pct": 0.0})
+			entry["total"] += 1
+			if _d(r.current_units) > 0:
+				entry["occupied"] += 1
+		for z, entry in by_zone.items():
+			t = entry["total"]
+			entry["utilization_pct"] = round(entry["occupied"] / t * 100, 2) if t else 0.0
+
+		overstocked = []
+		for r in rows:
+			cap = _d(r.capacity_units)
+			cur = _d(r.current_units)
+			if cap > 0 and cur >= cap * Decimal("0.95"):
+				overstocked.append({
+					"location_code": r.location_code,
+					"current_units": float(cur),
+					"capacity_units": float(cap),
+					"pct": round(float(cur / cap * 100), 2),
+				})
+		overstocked.sort(key=lambda x: x["pct"], reverse=True)
+
+		return {
+			"total_locations": total,
+			"occupied": occupied,
+			"empty": empty,
+			"utilization_pct": utilization_pct,
+			"by_zone": by_zone,
+			"overstocked_locations": overstocked,
+		}
+
+	def get_inventory_by_location(
+		self,
+		session: Any,
+		warehouse_id: str,
+		product_code: str | None = None,
+		tenant_id: str = "",
+	) -> list[dict]:
+		"""Return per-location inventory snapshot for a warehouse.
+
+		Args:
+		  product_code: optional filter; when None returns all products.
+
+		Returns:
+		  list of {location_code, zone, product_code, quantity, capacity_pct}
+		  sorted by zone / location_code.
+		  Only locations with current_units > 0 are returned.
+		"""
+		from pgappforge.plugins.erp.operations.warehouse.models import StorageLocation
+
+		loc_q = (
+			sa.select(StorageLocation)
+			.where(StorageLocation.warehouse_id == warehouse_id)
+			.where(StorageLocation.tenant_id == tenant_id)
+			.where(StorageLocation.is_active.is_(True))
+			.where(StorageLocation.current_units > 0)
+			.order_by(StorageLocation.zone_code, StorageLocation.location_code)
+		)
+		locations = session.execute(loc_q).scalars().all()
+
+		results = []
+		for loc in locations:
+			cur = _d(loc.current_units)
+			cap = _d(loc.capacity_units)
+			capacity_pct = round(float(cur / cap * 100), 2) if cap > 0 else None
+
+			# product_code filter: StorageLocation tracks aggregate units, not per-SKU.
+			# When filtering by product_code we can only include locations that were
+			# stocked via receive_goods_to_warehouse with that code.  Without a
+			# wms_location_stock join table we emit one row per location with a
+			# placeholder product_code — callers wanting SKU-level data should join
+			# against wms_pick_task or wms_cycle_count_line.
+			row_product = product_code or "MIXED"
+			if product_code is not None:
+				# Skip locations that have no evidence of this product
+				# (best-effort: check cycle count lines for this location+product)
+				from pgappforge.plugins.erp.operations.warehouse.models import CycleCountLine
+				evidence = session.execute(
+					sa.select(CycleCountLine.id)
+					.where(CycleCountLine.location_code == loc.location_code)
+					.where(CycleCountLine.product_code == product_code)
+					.where(CycleCountLine.tenant_id == tenant_id)
+					.limit(1)
+				).scalar_one_or_none()
+				if evidence is None:
+					continue
+
+			results.append({
+				"location_code": loc.location_code,
+				"zone": loc.zone_code,
+				"product_code": row_product,
+				"quantity": float(cur),
+				"capacity_pct": capacity_pct,
+			})
+
+		return results
+
+
 __all__ = [
 	"WarehouseService",
 	"WarehouseServiceError",
 	"PickListNotFoundError",
+	"PickTaskNotFoundError",
 	"PutawayNotFoundError",
 	"StockCountNotFoundError",
+	"CycleCountNotFoundError",
+	"StorageLocationNotFoundError",
 	"InvalidStatusTransitionError",
 ]

@@ -12,7 +12,7 @@ from pgappforge.plugins.erp.foundation.events import DomainEvent
 
 @dataclass
 class CampaignActivatedEvent(DomainEvent):
-	"""Emitted when a campaign transitions PLANNING → ACTIVE."""
+	"""Emitted when a campaign transitions DRAFT/SCHEDULED → ACTIVE."""
 	event_type: str = "marketing.campaign.activated"
 	campaign_id: str = ""
 	campaign_name: str = ""
@@ -63,10 +63,43 @@ class JourneyStepExecutedEvent(DomainEvent):
 	outcome: str = ""  # SENT, WAITED, BRANCHED_YES, BRANCHED_NO, SCORED
 
 
+@dataclass
+class CampaignAssetSentEvent(DomainEvent):
+	"""Emitted when a CampaignAsset is dispatched."""
+	event_type: str = "marketing.campaign_asset.sent"
+	asset_id: str = ""
+	campaign_id: str = ""
+	asset_type: str = ""
+	sent_count: int = 0
+
+
+@dataclass
+class LeadQualifiedEvent(DomainEvent):
+	"""Emitted when a Lead is moved to QUALIFIED status."""
+	event_type: str = "marketing.lead.qualified"
+	lead_id: str = ""
+	email: str = ""
+	lead_score: int = 0
+	qualified_by: str = ""  # employee UUID
+
+
+@dataclass
+class LeadConvertedEvent(DomainEvent):
+	"""Emitted when a Lead is converted to a Party contact record."""
+	event_type: str = "marketing.lead.converted"
+	lead_id: str = ""
+	email: str = ""
+	converted_contact_id: str = ""
+	source_campaign_id: str = ""
+
+
 __all__ = [
 	"CampaignActivatedEvent",
+	"CampaignAssetSentEvent",
 	"CampaignCompletedEvent",
+	"JourneyStepExecutedEvent",
+	"LeadConvertedEvent",
+	"LeadQualifiedEvent",
 	"LeadRespondedEvent",
 	"MemberUnsubscribedEvent",
-	"JourneyStepExecutedEvent",
 ]

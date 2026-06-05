@@ -631,6 +631,153 @@ class GLService:
 		return result
 
 	# ------------------------------------------------------------------
+	# post_simple_journal — convenience wrapper for automated CB postings
+	# ------------------------------------------------------------------
+
+	def post_simple_journal(
+		self,
+		lines: list[dict],
+		session: Any,
+		tenant_id: str,
+		description: str,
+		source_doc_id: str = "",
+		source_doc_type: str = "CB_LEDGER_ENTRY",
+		**_extra: object,
+	) -> str | None:
+		"""Create and immediately post a balanced AUTO journal in one call.
+
+		This is a convenience wrapper used by CoreBankingService._post_to_gl()
+		to avoid the 3-step create-batch / add-entries / post-journal flow for
+		automated CB transactions.
+
+		Each dict in *lines* must have::
+
+		    {
+		        "account_code": str,
+		        "debit_cents":  int,   # 0 for credit lines
+		        "credit_cents": int,   # 0 for debit lines
+		        "party_id":     str | None,  (optional)
+		        "description":  str | None,  (optional)
+		    }
+
+		Args:
+		    lines: Balanced list of debit/credit line dicts.
+		    session: SQLAlchemy session; caller owns the transaction.
+		    tenant_id: Tenant identifier string.
+		    description: Human-readable description for the batch/entry.
+		    source_doc_id: Source document id (e.g. LedgerEntry.id).
+		    source_doc_type: Source document type tag.
+
+		Returns:
+		    The GLJournalEntry.id string if posted, or None if no open period
+		    exists for today (non-fatal — no GL period configured).
+
+		Raises:
+		    JournalImbalancedError: if sum(debit_cents) != sum(credit_cents).
+		"""
+		from pgappforge.plugins.erp.finance.gl.models import (
+			GLJournalBatch,
+			GLJournalEntry,
+			GLJournalLine,
+			GLPeriod,
+		)
+		import uuid as _uuid
+		from datetime import date as _date
+
+		today = _date.today()
+
+		# Validate balance before touching the DB
+		total_dr = sum(int(ln.get("debit_cents", 0)) for ln in lines)
+		total_cr = sum(int(ln.get("credit_cents", 0)) for ln in lines)
+		if total_dr != total_cr:
+			raise JournalImbalancedError(
+				f"post_simple_journal: lines not balanced — DR={total_dr} CR={total_cr}"
+			)
+
+		# Find the current open GL period for this tenant
+		period = session.execute(
+			select(GLPeriod).where(
+				GLPeriod.tenant_id == tenant_id,
+				GLPeriod.status == "OPEN",
+				GLPeriod.start_date <= today,
+				GLPeriod.end_date >= today,
+			).order_by(GLPeriod.start_date.desc()).limit(1)
+		).scalar_one_or_none()
+
+		if period is None:
+			# Non-fatal: no open period configured — skip GL posting
+			log.debug(
+				"post_simple_journal: no open GL period for tenant %r on %s — skipping",
+				tenant_id,
+				today,
+			)
+			return None
+
+		batch_num = f"AUTO-{_uuid.uuid4().hex[:12].upper()}"
+		batch = GLJournalBatch(
+			tenant_id=tenant_id,
+			batch_number=batch_num,
+			batch_type="AUTO",
+			period_id=period.id,
+			description=description,
+			status="DRAFT",
+			total_debits=total_dr,
+			total_credits=total_cr,
+			is_balanced=True,
+		)
+		session.add(batch)
+		session.flush()
+
+		entry_num = f"E-{_uuid.uuid4().hex[:10].upper()}"
+		entry = GLJournalEntry(
+			tenant_id=tenant_id,
+			batch_id=batch.id,
+			entry_number=entry_num,
+			entry_type="AUTO",
+			posting_date=today,
+			description=description,
+			source_document_type=source_doc_type or None,
+			source_document_id=source_doc_id or None,
+			status="DRAFT",
+		)
+		session.add(entry)
+		session.flush()
+
+		for i, ln in enumerate(lines, 1):
+			debit_c = int(ln.get("debit_cents", 0))
+			credit_c = int(ln.get("credit_cents", 0))
+			gl_line = GLJournalLine(
+				tenant_id=tenant_id,
+				entry_id=entry.id,
+				line_number=i,
+				account_code=ln["account_code"],
+				debit_amount=debit_c,
+				credit_amount=credit_c,
+				currency_code="KES",
+				fx_rate=1,
+				base_debit=debit_c,
+				base_credit=credit_c,
+				description=ln.get("description") or description,
+				party_id=ln.get("party_id") or None,
+			)
+			session.add(gl_line)
+		session.flush()
+
+		# Post immediately (status DRAFT → POSTED)
+		entry.status = "POSTED"
+		batch.status = "POSTED"
+		session.flush()
+
+		log.debug(
+			"post_simple_journal: posted batch %r entry %r DR=%d CR=%d",
+			batch_num,
+			entry_num,
+			total_dr,
+			total_cr,
+		)
+		return entry.id
+
+	# ------------------------------------------------------------------
 	# Internal helpers
 	# ------------------------------------------------------------------
 

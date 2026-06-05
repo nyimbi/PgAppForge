@@ -1,0 +1,49 @@
+{% extends 'appbuilder/base.html' %}
+
+{% block content %}
+<div class="container" style="max-width: 600px;">
+  <div class="page-header">
+    <h1>Transfer Funds</h1>
+    <p class="text-muted">From Account: <strong>{{ account_number }}</strong></p>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="POST">
+        <div class="mb-3">
+          <label for="to_account_number" class="form-label">To Account Number</label>
+          <input type="text" class="form-control" id="to_account_number" name="to_account_number"
+                 required placeholder="e.g. 20260601-NBI001-00000002">
+        </div>
+        <div class="mb-3">
+          <label for="amount_cents" class="form-label">Amount (KES)</label>
+          <input type="number" class="form-control" id="amount_cents" name="amount_cents"
+                 min="0.01" step="0.01" required placeholder="e.g. 1000.00">
+        </div>
+        <div class="mb-3">
+          <label for="reference" class="form-label">Reference</label>
+          <input type="text" class="form-control" id="reference" name="reference"
+                 maxlength="100" placeholder="e.g. TRF-001">
+        </div>
+        <div class="mb-3">
+          <label for="narrative" class="form-label">Narrative (optional)</label>
+          <input type="text" class="form-control" id="narrative" name="narrative"
+                 maxlength="200">
+        </div>
+        <div class="mb-3">
+          <label for="exchange_rate" class="form-label">Exchange Rate (optional, default 1)</label>
+          <input type="number" class="form-control" id="exchange_rate" name="exchange_rate"
+                 min="0.000001" step="0.000001" value="1" placeholder="1.000000">
+          <div class="form-text">For cross-currency transfers only.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="fa fa-exchange"></i> Post Transfer
+          </button>
+          <a href="{{ url_for('AccountView.list') }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -4,9 +4,13 @@ pgappforge/plugins/erp/operations/warehouse/models.py
 SQLAlchemy models for the Warehouse Management plugin.
 
 Models:
+  StorageLocation — WMS-native bin/bay/aisle location with capacity tracking
   PickList        — order picking batch header
   PickListLine    — per-product pick instruction
+  PickTask        — directed pick task per location split (FEFO-aware)
   PutawayTask     — directs received stock to storage location
+  CycleCount      — rolling cycle-count header (zone-scoped)
+  CycleCountLine  — per-location/SKU count line with variance approval
   StockCount      — physical inventory count run header
   StockCountLine  — expected vs. counted quantity per SKU per location
 
@@ -15,8 +19,9 @@ Design invariants:
   - TIMESTAMPTZ DEFAULT NOW() for all timestamps
   - Integer cents for all financial amounts (variance_value_cents)
   - lazy='select' (SA 2.x)
-  - NEVER UPDATE StockCount rows once APPROVED — post COUNT_ADJUSTMENT
-    movements via InventoryService instead
+  - NEVER UPDATE StockCount/CycleCount rows once APPROVED — post
+    COUNT_ADJUSTMENT movements via InventoryService instead
+  - StorageLocation.location_code is unique per tenant (not globally)
 
 Table prefix: wms_
 """
@@ -24,6 +29,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -49,6 +55,79 @@ from pgappforge.plugins.audit import AuditMixin
 
 def _uuid4() -> str:
 	return str(uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# StorageLocation
+# ---------------------------------------------------------------------------
+
+class StorageLocation(AuditMixin, Model):
+	"""WMS-native bin/bay/aisle storage location with live capacity tracking.
+
+	Complements inv_warehouse_location with finer-grained addressing
+	(zone_code + aisle + bay + level + bin) and real-time utilisation
+	(current_units vs capacity_units) for directed putaway and pick-face
+	assignment.
+
+	location_code is computed by convention as
+	  "<zone_code>-<aisle>-<bay>-<level>-<bin>" and must be unique per tenant.
+
+	location_type enum:
+	  BULK       — floor / racking bulk storage
+	  PICK_FACE  — active pick face replenished from BULK
+	  RESERVE    — overflow / reserve storage
+	  STAGING    — pre-despatch staging
+	  RECEIVING  — inbound goods receipt staging (preferred for putaway)
+	  DESPATCH   — outbound despatch area
+	  QUARANTINE — quarantined / quality-hold stock
+
+	Status machine: is_active flag; deactivated locations reject new movements.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "wms_storage_location"
+	__table_args__ = (
+		Index("ix_wms_sl_warehouse", "warehouse_id"),
+		Index("ix_wms_sl_tenant", "tenant_id"),
+		Index("ix_wms_sl_zone", "warehouse_id", "zone_code"),
+		Index("ix_wms_sl_type", "warehouse_id", "location_type"),
+		UniqueConstraint("tenant_id", "location_code", name="uq_wms_sl_tenant_code"),
+		CheckConstraint(
+			"location_type IN ('BULK','PICK_FACE','RESERVE','STAGING','RECEIVING','DESPATCH','QUARANTINE')",
+			name="ck_wms_sl_location_type",
+		),
+		CheckConstraint("capacity_units > 0", name="ck_wms_sl_capacity_positive"),
+		CheckConstraint("current_units >= 0", name="ck_wms_sl_current_non_negative"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	warehouse_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("inv_warehouse.id"),
+		nullable=False,
+		index=True,
+	)
+	zone_code = Column(String(10), nullable=False, comment="Zone within warehouse, e.g. A, B, COLD")
+	aisle = Column(String(5), nullable=True)
+	bay = Column(String(5), nullable=True)
+	level = Column(String(5), nullable=True)
+	bin = Column(String(5), nullable=True)
+	location_code = Column(String(30), nullable=False, comment="Unique per tenant; e.g. A-01-02-01-01")
+	capacity_units = Column(Numeric(10, 3), nullable=False, comment="Max storable units (pallets, CBM, etc.)")
+	current_units = Column(Numeric(10, 3), nullable=False, default=Decimal("0"), server_default="0", comment="Current occupancy")
+	location_type = Column(String(20), nullable=False, default="BULK")
+	is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return (
+			f"<StorageLocation {self.location_code!r} wh={self.warehouse_id!r} "
+			f"type={self.location_type!r} {self.current_units}/{self.capacity_units}>"
+		)
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +253,62 @@ class PickListLine(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# PickTask
+# ---------------------------------------------------------------------------
+
+class PickTask(AuditMixin, Model):
+	"""Directed pick task for a single location split within a pick list.
+
+	Created by create_pick_list() per location/product combination using
+	FEFO (First-Expired, First-Out) sequencing.
+
+	quantity_required: how much to pick from from_location_code
+	quantity_picked:   how much was actually picked (updated by complete_pick())
+
+	Status machine:
+	  PENDING → IN_PROGRESS → COMPLETED | SHORT_PICKED
+	  SHORT_PICKED: operative picked less than required (stock discrepancy)
+
+	Uses product_code/location_code soft references to avoid cross-plugin FKs.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "wms_pick_task"
+	__table_args__ = (
+		Index("ix_wms_pkt_pick_list", "pick_list_id"),
+		Index("ix_wms_pkt_tenant", "tenant_id"),
+		Index("ix_wms_pkt_assigned_to", "assigned_to"),
+		Index("ix_wms_pkt_tenant_status", "tenant_id", "status"),
+		CheckConstraint(
+			"status IN ('PENDING','IN_PROGRESS','COMPLETED','SHORT_PICKED')",
+			name="ck_wms_pkt_status",
+		),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	pick_list_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to wms_picklist.id or sales order id")
+	product_code = Column(String(30), nullable=False, index=True, comment="Soft FK to inv_product.code")
+	quantity_required = Column(Numeric(12, 3), nullable=False)
+	quantity_picked = Column(Numeric(12, 3), nullable=False, default=Decimal("0"), server_default="0")
+	from_location_code = Column(String(30), nullable=False, comment="Soft FK to wms_storage_location.location_code")
+	assigned_to = Column(UUID(as_uuid=False), nullable=True, comment="FK to ab_user — picker")
+	status = Column(String(20), nullable=False, default="PENDING")
+	started_at = Column(DateTime(timezone=True), nullable=True)
+	completed_at = Column(DateTime(timezone=True), nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return (
+			f"<PickTask list={self.pick_list_id!r} product={self.product_code!r} "
+			f"loc={self.from_location_code!r} req={self.quantity_required} picked={self.quantity_picked}>"
+		)
+
+
+# ---------------------------------------------------------------------------
 # PutawayTask
 # ---------------------------------------------------------------------------
 
@@ -240,6 +375,117 @@ class PutawayTask(AuditMixin, Model):
 
 	def __repr__(self) -> str:
 		return f"<PutawayTask grn={self.grn_id!r} product={self.product_id!r} qty={self.quantity} status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
+# CycleCount
+# ---------------------------------------------------------------------------
+
+class CycleCount(AuditMixin, Model):
+	"""Rolling cycle-count header scoped to a warehouse zone.
+
+	Cycle counts are narrower than full StockCounts — they cover a zone
+	(or the entire warehouse when zone_code is NULL) on a scheduled date.
+
+	Status machine: PLANNED → IN_PROGRESS → COMPLETED | CANCELLED
+	  COMPLETED triggers approve_count_adjustment() to post GL entries.
+
+	total_locations / locations_counted track progress for UX display.
+	count_reference is a human-readable reference (e.g. "CC-2026-001").
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "wms_cycle_count"
+	__table_args__ = (
+		Index("ix_wms_cc_warehouse", "warehouse_id"),
+		Index("ix_wms_cc_tenant", "tenant_id"),
+		Index("ix_wms_cc_scheduled", "scheduled_date"),
+		Index("ix_wms_cc_tenant_status", "tenant_id", "status"),
+		UniqueConstraint("count_reference", name="uq_wms_cc_reference"),
+		CheckConstraint(
+			"status IN ('PLANNED','IN_PROGRESS','COMPLETED','CANCELLED')",
+			name="ck_wms_cc_status",
+		),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	count_reference = Column(String(20), nullable=False, comment="Human-readable reference e.g. CC-2026-001")
+	warehouse_id = Column(UUID(as_uuid=False), ForeignKey("inv_warehouse.id"), nullable=False, index=True)
+	zone_code = Column(String(10), nullable=True, comment="NULL = entire warehouse")
+	status = Column(String(20), nullable=False, default="PLANNED")
+	scheduled_date = Column(Date, nullable=False)
+	counted_by = Column(UUID(as_uuid=False), nullable=True, comment="Primary operative FK to ab_user")
+	started_at = Column(DateTime(timezone=True), nullable=True)
+	completed_at = Column(DateTime(timezone=True), nullable=True)
+	total_locations = Column(Integer, nullable=False, default=0, server_default="0")
+	locations_counted = Column(Integer, nullable=False, default=0, server_default="0")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	# Relationships
+	lines: list[CycleCountLine] = relationship(
+		"CycleCountLine", back_populates="cycle_count", cascade="all, delete-orphan", lazy="select"
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<CycleCount ref={self.count_reference!r} wh={self.warehouse_id!r} "
+			f"zone={self.zone_code!r} status={self.status!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# CycleCountLine
+# ---------------------------------------------------------------------------
+
+class CycleCountLine(AuditMixin, Model):
+	"""Per-location/SKU line within a CycleCount.
+
+	system_qty: quantity on-hand per inventory records at count freeze.
+	counted_qty: what the operative physically counted (NULL until recorded).
+	variance = counted_qty - system_qty
+	variance_pct = abs(variance) / system_qty × 100  (NULL when system_qty=0)
+
+	is_approved / approved_by: approval gate before GL adjustment posting.
+	Unapproved lines are skipped by approve_count_adjustment().
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "wms_cycle_count_line"
+	__table_args__ = (
+		Index("ix_wms_ccl_count", "count_id"),
+		Index("ix_wms_ccl_tenant", "tenant_id"),
+		Index("ix_wms_ccl_product", "product_code"),
+		Index("ix_wms_ccl_location", "location_code"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	count_id = Column(UUID(as_uuid=False), ForeignKey("wms_cycle_count.id", ondelete="CASCADE"), nullable=False, index=True)
+	location_code = Column(String(30), nullable=False, comment="Soft FK to wms_storage_location.location_code")
+	product_code = Column(String(30), nullable=False, comment="Soft FK to inv_product.code")
+	system_qty = Column(Numeric(12, 3), nullable=False, comment="System QOH at count freeze")
+	counted_qty = Column(Numeric(12, 3), nullable=True, comment="NULL until operative records count")
+	variance = Column(Numeric(12, 3), nullable=True, comment="counted_qty - system_qty; NULL until counted")
+	variance_pct = Column(Numeric(8, 4), nullable=True, comment="abs(variance)/system_qty × 100; NULL when system_qty=0")
+	is_approved = Column(Boolean, nullable=False, default=False, server_default="false")
+	approved_by = Column(UUID(as_uuid=False), nullable=True, comment="FK to ab_user — approver")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	# Relationships
+	cycle_count: CycleCount = relationship("CycleCount", back_populates="lines", lazy="select")
+
+	def __repr__(self) -> str:
+		return (
+			f"<CycleCountLine count={self.count_id!r} loc={self.location_code!r} "
+			f"product={self.product_code!r} sys={self.system_qty} counted={self.counted_qty}>"
+		)
 
 
 # ---------------------------------------------------------------------------
@@ -374,9 +620,13 @@ class StockCountLine(AuditMixin, Model):
 # ---------------------------------------------------------------------------
 
 __all__ = [
+	"StorageLocation",
 	"PickList",
 	"PickListLine",
+	"PickTask",
 	"PutawayTask",
+	"CycleCount",
+	"CycleCountLine",
 	"StockCount",
 	"StockCountLine",
 ]

@@ -67,7 +67,7 @@ log = logging.getLogger(__name__)
 def _import_models():
 	from .models import (
 		Plan,
-		Subscription,
+		BillingSubscription,
 		Invoice,
 		InvoiceItem,
 		Payment,
@@ -75,7 +75,7 @@ def _import_models():
 		DunningAttempt,
 		Coupon,
 	)
-	return [Plan, Subscription, Invoice, InvoiceItem, Payment, UsageRecord, DunningAttempt, Coupon]
+	return [Plan, BillingSubscription, Invoice, InvoiceItem, Payment, UsageRecord, DunningAttempt, Coupon]
 
 
 def _import_views():
@@ -303,27 +303,27 @@ class BillingPlugin(BasePlugin):
 		try:
 			from flask import flash
 			from sqlalchemy import select
-			from .models import Subscription, SubscriptionStatus
+			from .models import BillingSubscription, SubscriptionStatus
 
 			session = self.appbuilder.get_session
 
 			# Find any active/trialing subscription for this tenant
 			sub = session.execute(
-				select(Subscription).where(
-					Subscription.tenant_id == tenant_id,
-					Subscription.status.in_([
+				select(BillingSubscription).where(
+					BillingSubscription.tenant_id == tenant_id,
+					BillingSubscription.status.in_([
 						SubscriptionStatus.ACTIVE.value,
 						SubscriptionStatus.TRIALING.value,
 					]),
-				).order_by(Subscription.id.desc())
+				).order_by(BillingSubscription.id.desc())
 			).scalar_one_or_none()
 
 			if sub is None:
 				# No active subscription — past-due or canceled
 				past_due = session.execute(
-					select(Subscription).where(
-						Subscription.tenant_id == tenant_id,
-						Subscription.status == SubscriptionStatus.PAST_DUE.value,
+					select(BillingSubscription).where(
+						BillingSubscription.tenant_id == tenant_id,
+						BillingSubscription.status == SubscriptionStatus.PAST_DUE.value,
 					)
 				).scalar_one_or_none()
 				if past_due:
@@ -443,7 +443,7 @@ __all__ = [
 	"create_plugin",
 	# Models (re-exported for convenience)
 	"Plan",
-	"Subscription",
+	"BillingSubscription",
 	"Invoice",
 	"InvoiceItem",
 	"Payment",
@@ -458,7 +458,7 @@ __all__ = [
 # near zero for apps that don't use the billing plugin.
 def __getattr__(name: str):
 	_model_names = {
-		"Plan", "Subscription", "Invoice", "InvoiceItem",
+		"Plan", "BillingSubscription", "Invoice", "InvoiceItem",
 		"Payment", "UsageRecord", "DunningAttempt", "Coupon",
 	}
 	if name in _model_names:

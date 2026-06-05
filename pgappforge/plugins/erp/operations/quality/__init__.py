@@ -119,11 +119,25 @@ class QCPlugin(BasePlugin):
 
     def register_models(self) -> list:
         from pgappforge.plugins.erp.operations.quality.models import (
+            CAPA,
+            CalibrationRecord,
+            InspectionLot,
             InspectionPlan,
+            InspectionResult,
+            NCR,
             NonConformanceReport,
             QualityInspection,
         )
-        return [InspectionPlan, QualityInspection, NonConformanceReport]
+        return [
+            InspectionPlan,
+            QualityInspection,
+            NonConformanceReport,
+            InspectionLot,
+            InspectionResult,
+            NCR,
+            CalibrationRecord,
+            CAPA,
+        ]
 
     @staticmethod
     def setup_rules(session: Any) -> None:
@@ -279,6 +293,11 @@ from pgappforge.plugins.erp.operations.quality.models import (  # noqa: E402
     InspectionPlan,
     NonConformanceReport,
     QualityInspection,
+    InspectionLot,
+    InspectionResult,
+    NCR,
+    CalibrationRecord,
+    CAPA,
 )
 from pgappforge.plugins.erp.operations.quality.events import (  # noqa: E402
     InspectionCreatedEvent,
@@ -307,6 +326,11 @@ __all__ = [
     "InspectionPlan",
     "QualityInspection",
     "NonConformanceReport",
+    "InspectionLot",
+    "InspectionResult",
+    "NCR",
+    "CalibrationRecord",
+    "CAPA",
     # events
     "InspectionCreatedEvent",
     "InspectionStartedEvent",

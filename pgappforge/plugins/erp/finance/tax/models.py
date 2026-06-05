@@ -47,6 +47,7 @@ from sqlalchemy.orm import relationship
 
 from pgappforge.models.sqla import Model
 from pgappforge.plugins.audit import AuditMixin
+from pgappforge.plugins.erp.foundation.commons import ImmutableRecordMixin
 from pgappforge.plugins.rules.mixin import RulesMixin
 
 
@@ -407,7 +408,7 @@ class TaxReturn(AuditMixin, Model):
 # TaxTransaction  (IMMUTABLE — append-only, never update)
 # ---------------------------------------------------------------------------
 
-class TaxTransaction(RulesMixin, Model):
+class TaxTransaction(ImmutableRecordMixin, RulesMixin, AuditMixin, Model):
 	"""Individual tax line generated from a source document.
 
 	CRITICAL: NEVER UPDATE. If a tax line was posted in error, insert a
@@ -520,9 +521,112 @@ class TaxTransaction(RulesMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# WHTCertificate  (Withholding Tax Certificate)
+# ---------------------------------------------------------------------------
+
+class WHTCertificate(AuditMixin, Model):
+	"""Withholding Tax Certificate issued to a payee.
+
+	Issued after deducting WHT at source.  cert_number is globally unique
+	within a tenant: WHT-YYYY-NNNNNN.
+
+	gross_amount_cents:  payment amount before WHT deduction.
+	wht_amount_cents:    tax deducted (gross × wht_rate_pct / 100).
+	net_amount_cents:    amount actually remitted to payee (gross - wht).
+
+	income_type: e.g. 'DIVIDEND', 'INTEREST', 'RENT', 'PROFESSIONAL_FEES',
+	             'MANAGEMENT_FEES', 'ROYALTIES', 'CONTRACT'.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "erp_tx_wht_certificate"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "cert_number",
+		                 name="uq_erp_tx_whtcert_tenant_number"),
+		Index("ix_erp_tx_whtcert_tenant", "tenant_id"),
+		Index("ix_erp_tx_whtcert_payee", "payee_id"),
+		Index("ix_erp_tx_whtcert_payment_date", "payment_date"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	cert_number = Column(
+		String(30),
+		nullable=False,
+		comment="Format: WHT-YYYY-NNNNNN; unique per tenant",
+	)
+	payee_id = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="Logical FK to erp_party — the party from whom tax was withheld",
+	)
+	payee_pin = Column(
+		String(20),
+		nullable=False,
+		comment="Payee's tax identification number (PIN/TIN/KRA PIN)",
+	)
+	payment_date = Column(Date, nullable=False, comment="Date of the underlying payment")
+	gross_amount_cents = Column(
+		Integer,
+		nullable=False,
+		comment="Payment amount before WHT deduction",
+	)
+	wht_rate_pct = Column(
+		Numeric(6, 4),
+		nullable=False,
+		comment="WHT rate applied e.g. 5.0000 = 5%",
+	)
+	wht_amount_cents = Column(
+		Integer,
+		nullable=False,
+		comment="Tax deducted at source = gross × rate / 100",
+	)
+	net_amount_cents = Column(
+		Integer,
+		nullable=False,
+		comment="Net amount remitted to payee = gross - wht",
+	)
+	income_type = Column(
+		String(50),
+		nullable=False,
+		comment=(
+			"DIVIDEND | INTEREST | RENT | PROFESSIONAL_FEES | "
+			"MANAGEMENT_FEES | ROYALTIES | CONTRACT"
+		),
+	)
+	issued_by = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		comment="Logical FK to erp_party — employee who issued the certificate",
+	)
+	issued_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	voided_at = Column(DateTime(timezone=True), nullable=True)
+	notes = Column(Text, nullable=True)
+
+	def __repr__(self) -> str:
+		return (
+			f"<WHTCertificate {self.cert_number!r} "
+			f"payee={self.payee_id!r} "
+			f"wht={self.wht_amount_cents} date={self.payment_date!r}>"
+		)
+
+
 __all__ = [
 	"TaxJurisdiction",
 	"TaxCode",
 	"TaxReturn",
 	"TaxTransaction",
+	"WHTCertificate",
 ]

@@ -1,0 +1,90 @@
+{% extends 'appbuilder/base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="page-header">
+    <h1>Interest Accrual History</h1>
+    <p class="text-muted">Showing results from {{ from_date }} to {{ to_date }}</p>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0">Filter by Date Range</h5>
+    </div>
+    <div class="card-body">
+      <form method="GET" class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label for="from_date" class="form-label">From Date</label>
+          <input type="date" class="form-control" id="from_date" name="from_date"
+                 value="{{ from_date }}">
+        </div>
+        <div class="col-md-4">
+          <label for="to_date" class="form-label">To Date</label>
+          <input type="date" class="form-control" id="to_date" name="to_date"
+                 value="{{ to_date }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fa fa-search"></i> Filter
+          </button>
+        </div>
+        <div class="col-md-2">
+          <a href="{{ url_for('InterestAccrualDashboard.history') }}" class="btn btn-outline-secondary w-100">
+            Reset
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">Accrual Records (max 100)</h5>
+      <a href="{{ url_for('InterestAccrualDashboard.index') }}" class="btn btn-sm btn-outline-primary">
+        <i class="fa fa-tachometer"></i> Dashboard
+      </a>
+    </div>
+    <div class="card-body p-0">
+      {% if rows %}
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover table-striped mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Accrual Date</th>
+              <th>Product Type</th>
+              <th class="text-end">Accounts</th>
+              <th class="text-end">Accrued (KES)</th>
+              <th class="text-end">Cumulative (KES)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td>{{ row.accrual_date }}</td>
+              <td><span class="badge bg-info text-dark">{{ row.product_type }}</span></td>
+              <td class="text-end">{{ "{:,}".format(row.accounts_count) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(row.total_accrued_cents / 100) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(row.total_cumulative_cents / 100) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light fw-bold">
+            <tr>
+              <td colspan="2">Totals</td>
+              <td class="text-end">{{ "{:,}".format(rows | sum(attribute='accounts_count')) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format((rows | sum(attribute='total_accrued_cents')) / 100) }}</td>
+              <td class="text-end">—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-4 text-center text-muted">
+        <i class="fa fa-inbox fa-3x mb-2"></i>
+        <p>No accrual records found for the selected date range.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

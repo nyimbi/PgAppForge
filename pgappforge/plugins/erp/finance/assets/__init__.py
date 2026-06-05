@@ -68,6 +68,9 @@ class AssetsPlugin(BasePlugin):
 				"can_assets_depreciation_read",
 				"can_assets_depreciation_run",
 				"can_assets_reports",
+				"can_assets_capex_read",
+				"can_assets_capex_write",
+				"can_assets_revalue",
 			],
 			safe_mode_compatible=True,
 		)
@@ -79,6 +82,9 @@ class AssetsPlugin(BasePlugin):
 			"asset.disposed",
 			"asset.impaired",
 			"asset.impairment_reversed",
+			"asset.capex_project_created",
+			"asset.capitalised_from_project",
+			"asset.revalued",
 		]
 
 	def subscribe_to(self) -> list[str]:
@@ -112,10 +118,16 @@ class AssetsPlugin(BasePlugin):
 		from pgappforge.plugins.erp.finance.assets.models import (
 			AssetClass,
 			AssetDepreciation,
+			AssetDisposal,
 			AssetImpairment,
+			AssetRevaluation,
+			CapexProject,
 			FixedAsset,
 		)
-		return [AssetClass, FixedAsset, AssetDepreciation, AssetImpairment]
+		return [
+			AssetClass, FixedAsset, AssetDepreciation, AssetImpairment,
+			CapexProject, AssetDisposal, AssetRevaluation,
+		]
 
 	@staticmethod
 	def setup_rules(session: Any) -> None:
@@ -233,7 +245,10 @@ def create_plugin(appbuilder: Any, config: dict[str, Any] | None = None) -> Asse
 from pgappforge.plugins.erp.finance.assets.models import (  # noqa: E402
 	AssetClass,
 	AssetDepreciation,
+	AssetDisposal,
 	AssetImpairment,
+	AssetRevaluation,
+	CapexProject,
 	FixedAsset,
 )
 from pgappforge.plugins.erp.finance.assets.services import (  # noqa: E402
@@ -259,6 +274,9 @@ __all__ = [
 	"FixedAsset",
 	"AssetDepreciation",
 	"AssetImpairment",
+	"CapexProject",
+	"AssetDisposal",
+	"AssetRevaluation",
 	# services
 	"AssetService",
 	"AssetServiceError",

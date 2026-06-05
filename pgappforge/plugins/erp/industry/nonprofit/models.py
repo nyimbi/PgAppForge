@@ -175,10 +175,10 @@ class Donation(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
-# Program
+# NPOProgram
 # ---------------------------------------------------------------------------
 
-class Program(AuditMixin, Model):
+class NPOProgram(AuditMixin, Model):
 	"""Nonprofit program — a structured initiative delivering social impact.
 
 	theory_of_change describes the causal chain from inputs → activities →
@@ -226,7 +226,7 @@ class Program(AuditMixin, Model):
 	measurements: list[ImpactMeasurement] = relationship("ImpactMeasurement", back_populates="program", lazy="select")
 
 	def __repr__(self) -> str:
-		return f"<Program {self.program_code!r} {self.program_name!r} status={self.status!r}>"
+		return f"<NPOProgram {self.program_code!r} {self.program_name!r} status={self.status!r}>"
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +266,7 @@ class ImpactMeasurement(AuditMixin, Model):
 
 	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
 
-	program: Program = relationship("Program", back_populates="measurements", lazy="select")
+	program: NPOProgram = relationship("NPOProgram", back_populates="measurements", lazy="select")
 
 	def __repr__(self) -> str:
 		return f"<ImpactMeasurement prog={self.program_id!r} metric={self.metric_name!r} actual={self.actual_value}>"
@@ -275,6 +275,6 @@ class ImpactMeasurement(AuditMixin, Model):
 __all__ = [
 	"Donor",
 	"Donation",
-	"Program",
+	"NPOProgram",
 	"ImpactMeasurement",
 ]

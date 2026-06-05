@@ -1,0 +1,37 @@
+[project]
+name = "pgappforge-erp-cpq"
+version = "0.1.0"
+description = "Configure Price Quote — product configurator, pricing rules, discount approvals"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{name = "Nyimbi Odero", email = "nyimbi+pgaf@gmail.com"}]
+readme = "README.md"
+keywords = ["pgappforge", "erp", "cpq", "configure-price-quote", "pricing", "crm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "pgappforge>=0.90.0",
+    "pgappforge-erp-foundation>=0.1.0",
+    "pgappforge-erp-sales>=0.1.0",
+]
+
+[project.entry-points."pgappforge.plugins"]
+erp_cpq = "pgappforge.plugins.erp.crm.cpq:CPQPlugin"
+
+[project.urls]
+Homepage = "https://github.com/pgappforge/pgappforge"
+Documentation = "https://pgappforge.dev/plugins/erp/cpq"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -55,9 +55,16 @@ class MarketingPlugin(BasePlugin):
 				"can_mkt_campaign_activate",
 				"can_mkt_template_write",
 				"can_mkt_list_write",
+				"can_mkt_list_member_write",
 				"can_mkt_member_write",
 				"can_mkt_journey_write",
+				"can_mkt_lead_write",
+				"can_mkt_lead_qualify",
+				"can_mkt_lead_convert",
+				"can_mkt_asset_write",
+				"can_mkt_asset_send",
 				"can_mkt_reports",
+				"can_mkt_dashboard",
 			],
 			safe_mode_compatible=True,
 		)
@@ -66,7 +73,10 @@ class MarketingPlugin(BasePlugin):
 		return [
 			"marketing.campaign.activated",
 			"marketing.campaign.completed",
+			"marketing.campaign_asset.sent",
 			"marketing.lead.responded",
+			"marketing.lead.qualified",
+			"marketing.lead.converted",
 			"marketing.member.unsubscribed",
 			"marketing.journey.step_executed",
 		]
@@ -106,12 +116,28 @@ class MarketingPlugin(BasePlugin):
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.crm.marketing.models import (
 			Campaign,
+			CampaignAsset,
 			CampaignMember,
+			CampaignMetrics,
 			EmailTemplate,
 			JourneyStep,
+			MarketingLead,
+			LeadActivity,
 			MarketingList,
+			MarketingListMember,
 		)
-		return [Campaign, EmailTemplate, CampaignMember, MarketingList, JourneyStep]
+		return [
+			MarketingList,
+			MarketingListMember,
+			Campaign,
+			CampaignAsset,
+			CampaignMetrics,
+			EmailTemplate,
+			CampaignMember,
+			MarketingLead,
+			LeadActivity,
+			JourneyStep,
+		]
 
 	@staticmethod
 	def setup_rules(session: Any) -> None:
@@ -236,40 +262,69 @@ def create_plugin(appbuilder: Any, config: dict[str, Any] | None = None) -> Mark
 
 from pgappforge.plugins.erp.crm.marketing.models import (  # noqa: E402
 	Campaign,
+	CampaignAsset,
 	CampaignMember,
+	CampaignMetrics,
 	EmailTemplate,
 	JourneyStep,
+	MarketingLead,
+	LeadActivity,
 	MarketingList,
+	MarketingListMember,
 )
 from pgappforge.plugins.erp.crm.marketing.events import (  # noqa: E402
 	CampaignActivatedEvent,
+	CampaignAssetSentEvent,
 	CampaignCompletedEvent,
+	JourneyStepExecutedEvent,
+	LeadConvertedEvent,
+	LeadQualifiedEvent,
 	LeadRespondedEvent,
 	MemberUnsubscribedEvent,
-	JourneyStepExecutedEvent,
 )
 from pgappforge.plugins.erp.crm.marketing.services import (  # noqa: E402
 	MarketingService,
 	MarketingError,
+	AssetNotFoundError,
 	CampaignNotFoundError,
+	CampaignMemberNotFoundError,
+	LeadNotFoundError,
+	ListNotFoundError,
 	MarketingValidationError,
 )
 
 __all__ = [
+	# Plugin entry point
 	"MarketingPlugin",
 	"create_plugin",
+	# Models
 	"Campaign",
+	"CampaignAsset",
 	"CampaignMember",
+	"CampaignMetrics",
 	"EmailTemplate",
 	"JourneyStep",
+	"MarketingLead",
+	"LeadActivity",
 	"MarketingList",
+	"MarketingListMember",
+	# Events
 	"CampaignActivatedEvent",
+	"CampaignAssetSentEvent",
 	"CampaignCompletedEvent",
+	"JourneyStepExecutedEvent",
+	"LeadConvertedEvent",
+	"LeadQualifiedEvent",
 	"LeadRespondedEvent",
 	"MemberUnsubscribedEvent",
-	"JourneyStepExecutedEvent",
+	# Service
 	"MarketingService",
-	"MarketingError",
+	# Exceptions
+	"AssetNotFoundError",
+	"CampaignMemberNotFoundError",
 	"CampaignNotFoundError",
+	"LeadNotFoundError",
+	"ListNotFoundError",
+	"MarketingError",
 	"MarketingValidationError",
 ]

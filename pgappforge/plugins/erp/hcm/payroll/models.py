@@ -254,9 +254,14 @@ class Payslip(AuditMixin, Model):
 		comment="gross - income_tax - ni_employee - pension_employee - other_deductions")
 
 	# Payment details (snapshot at calculation time)
-	bank_account_iban = Column(String(34), nullable=True, comment="Snapshot IBAN at calculation time")
-	currency_code = Column(String(3), nullable=False, default="USD")
+	bank_account_iban = Column(String(34), nullable=True, comment="Snapshot IBAN at calculation time — used for SWIFT/international transfers")
+	# Kenya local bank fields (domestic EFT — mutually exclusive with IBAN path)
+	bank_account_number = Column(String(30), nullable=True, comment="Local bank account number (Kenya EFT)")
+	bank_name = Column(String(60), nullable=True, comment="Bank name e.g. KCB, Equity, Stanbic")
+	bank_branch_code = Column(String(10), nullable=True, comment="Bank branch sort/routing code")
+	currency_code = Column(String(3), nullable=False, default="KES")
 	payment_reference = Column(String(100), nullable=True, comment="End-to-end bank reference")
+	dispatched_at = Column(DateTime(timezone=True), nullable=True, comment="Set by dispatch_payslips() after PDF/email delivery")
 
 	status = Column(
 		String(20),
@@ -397,10 +402,162 @@ class TaxWithholding(AuditMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# PayrollYTD — year-to-date accumulator per employee per tax year
+# ---------------------------------------------------------------------------
+
+class PayrollYTD(AuditMixin, Model):
+	"""Year-to-date payroll accumulator per employee per tax year.
+
+	One row per (tenant_id, employee_id, tax_year, month).
+	Written as an INSERT-only side effect of calculate_payrun().
+	Used by NITA cap enforcement, P9 generation, and PAYE cumulative method.
+
+	month: 1–12 (calendar month of the pay period).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "pay_ytd"
+	__table_args__ = (
+		Index("ix_pay_ytd_tenant", "tenant_id"),
+		Index("ix_pay_ytd_employee_year", "tenant_id", "employee_id", "tax_year"),
+		UniqueConstraint(
+			"tenant_id", "employee_id", "tax_year", "month",
+			name="uq_pay_ytd_emp_year_month",
+		),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	payrun_id = Column(UUID(as_uuid=False), ForeignKey("pay_run.id"), nullable=False, index=True)
+
+	tax_year = Column(Integer, nullable=False, comment="Calendar / tax year e.g. 2025")
+	month = Column(Integer, nullable=False, comment="1–12")
+
+	# Snapshot amounts for this specific month (integer cents)
+	gross_cents = Column(Integer, nullable=False, default=0)
+	taxable_gross_cents = Column(Integer, nullable=False, default=0)
+	paye_cents = Column(Integer, nullable=False, default=0)
+	nssf_tier1_cents = Column(Integer, nullable=False, default=0)
+	nssf_tier2_cents = Column(Integer, nullable=False, default=0)
+	shif_cents = Column(Integer, nullable=False, default=0)
+	housing_levy_cents = Column(Integer, nullable=False, default=0)
+	nita_cents = Column(Integer, nullable=False, default=0)
+	net_cents = Column(Integer, nullable=False, default=0)
+
+	# Benefits-in-kind included in taxable_gross (informational)
+	bik_cents = Column(Integer, nullable=False, default=0)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return (
+			f"<PayrollYTD employee={self.employee_id!r} "
+			f"year={self.tax_year} month={self.month} gross={self.gross_cents}¢>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# BenefitInKind — non-cash benefits for taxable income computation
+# ---------------------------------------------------------------------------
+
+class BenefitInKind(AuditMixin, Model):
+	"""Non-cash employee benefit that forms part of taxable income.
+
+	Loaded during calculate_payrun() to add to taxable_gross before PAYE.
+	Excluded from pensionable_pay (NSSF) per KRA rules.
+
+	benefit_type: CAR | HOUSING | MEDICAL | OTHER
+	is_taxable: False means informational-only (still appears on payslip).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "pay_bik"
+	__table_args__ = (
+		Index("ix_pay_bik_tenant", "tenant_id"),
+		Index("ix_pay_bik_employee", "employee_id"),
+		Index("ix_pay_bik_effective", "employee_id", "effective_from"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	employee_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to HCM employee master")
+
+	benefit_type = Column(
+		String(20),
+		nullable=False,
+		comment="CAR | HOUSING | MEDICAL | OTHER",
+	)
+	description = Column(String(255), nullable=False)
+	monthly_value_cents = Column(Integer, nullable=False, default=0, comment="Monthly BIK value in KES cents")
+	is_taxable = Column(Boolean, nullable=False, default=True, comment="False = informational only, not added to taxable gross")
+	effective_from = Column(Date, nullable=False, comment="BIK active from this date")
+	effective_to = Column(Date, nullable=True, comment="BIK ends on this date (NULL = current)")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return (
+			f"<BenefitInKind employee={self.employee_id!r} "
+			f"type={self.benefit_type!r} value={self.monthly_value_cents}¢>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# PayslipAccessLog — audit trail for payslip downloads (Kenya DPA 2019)
+# ---------------------------------------------------------------------------
+
+class PayslipAccessLog(AuditMixin, Model):
+	"""Immutable access log for payslip retrieval events.
+
+	Required under Kenya Data Protection Act 2019 for personal financial data.
+	access_type: VIEW | DOWNLOAD | EMAIL
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "pay_payslip_access_log"
+	__table_args__ = (
+		Index("ix_pay_access_log_tenant", "tenant_id"),
+		Index("ix_pay_access_log_payslip", "payslip_id"),
+		Index("ix_pay_access_log_accessed_by", "accessed_by"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	payslip_id = Column(UUID(as_uuid=False), ForeignKey("pay_payslip.id"), nullable=False, index=True)
+	accessed_by = Column(UUID(as_uuid=False), nullable=False, comment="ab_user UUID who performed the access")
+	access_type = Column(String(10), nullable=False, comment="VIEW | DOWNLOAD | EMAIL")
+	ip_address = Column(String(45), nullable=True, comment="IPv4 or IPv6 address of requester")
+	accessed_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return (
+			f"<PayslipAccessLog payslip={self.payslip_id!r} "
+			f"by={self.accessed_by!r} type={self.access_type!r}>"
+		)
+
+
 __all__ = [
 	"PayrollCalendar",
 	"PayrollRun",
 	"Payslip",
 	"PayslipLine",
 	"TaxWithholding",
+	"PayrollYTD",
+	"BenefitInKind",
+	"PayslipAccessLog",
 ]

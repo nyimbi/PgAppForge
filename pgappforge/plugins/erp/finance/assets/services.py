@@ -417,6 +417,504 @@ class AssetService:
 		]
 
 	# ------------------------------------------------------------------ #
+	# CapexProject
+	# ------------------------------------------------------------------ #
+
+	def create_capex_project(self, session: Any, data: dict[str, Any], tenant_id: str) -> Any:
+		"""Create a new CAPEX project.
+
+		Args:
+			data: dict with keys project_code, name, budget_cents, expected_completion (date|None),
+			      asset_class (str|None), department_id (str|None), committed_cents (int),
+			      spent_cents (int), notes (str|None).
+			tenant_id: tenant scoping key.
+
+		Returns CapexProject instance after flush.
+		"""
+		from pgappforge.plugins.erp.finance.assets.models import CapexProject
+
+		assert data.get("budget_cents", 0) > 0, "budget_cents must be positive"
+		assert data.get("project_code"), "project_code is required"
+
+		project = CapexProject(
+			tenant_id=tenant_id,
+			project_code=data["project_code"],
+			name=data["name"],
+			budget_cents=data["budget_cents"],
+			committed_cents=data.get("committed_cents", 0),
+			spent_cents=data.get("spent_cents", 0),
+			status=data.get("status", "PLANNED"),
+			expected_completion=data.get("expected_completion"),
+			asset_class=data.get("asset_class"),
+			department_id=data.get("department_id"),
+			notes=data.get("notes"),
+		)
+		session.add(project)
+		session.flush()
+		log.info("Created CAPEX project %r budget=%d", project.project_code, project.budget_cents)
+		return project
+
+	# ------------------------------------------------------------------ #
+	# Capitalise from CAPEX project
+	# ------------------------------------------------------------------ #
+
+	def capitalise_asset_from_project(
+		self,
+		session: Any,
+		project_id: str,
+		asset_data: dict[str, Any],
+		capitalisation_date: date,
+		tenant_id: str,
+	) -> dict[str, Any]:
+		"""Transfer a completed CAPEX project to the fixed asset register.
+
+		Creates a FixedAsset from the project's WIP balance.
+		GL:  DR  fixed_asset  1500   (cost)
+		     CR  capex_WIP    1560   (remove WIP)
+		Marks project status COMPLETED.
+
+		Args:
+			project_id: CapexProject.id
+			asset_data: passed directly to CapitaliseDetails (minus tenant_id / acquisition_date)
+			capitalisation_date: date the asset enters the register
+			tenant_id: tenant scoping key
+
+		Returns dict {asset, project, gl_ref}.
+		"""
+		from pgappforge.plugins.erp.finance.assets.models import CapexProject
+
+		project = session.get(CapexProject, project_id)
+		if project is None:
+			raise AssetServiceError(f"CapexProject {project_id!r} not found")
+		if project.status == "COMPLETED":
+			raise AssetStatusError(f"Project {project.project_code!r} already completed")
+		if project.status == "CANCELLED":
+			raise AssetStatusError(f"Project {project.project_code!r} is cancelled")
+
+		cost = asset_data.get("acquisition_cost_cents") or project.spent_cents
+		assert cost > 0, "acquisition_cost_cents must be positive"
+
+		details = CapitaliseDetails(
+			tenant_id=tenant_id,
+			asset_class_id=asset_data["asset_class_id"],
+			description=asset_data.get("description", project.name),
+			acquisition_date=capitalisation_date,
+			acquisition_cost_cents=cost,
+			residual_value_cents=asset_data.get("residual_value_cents", 0),
+			useful_life_years=asset_data.get("useful_life_years"),
+			depreciation_method=asset_data.get("depreciation_method"),
+			location=asset_data.get("location"),
+			custodian_id=asset_data.get("custodian_id"),
+			serial_number=asset_data.get("serial_number"),
+			asset_number=asset_data.get("asset_number"),
+			metadata=asset_data.get("metadata"),
+		)
+		asset = self.capitalize(details, session)
+
+		project.status = "COMPLETED"
+
+		gl_ref: str | None = None
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService
+			gl = GLService()
+			gl_ref = gl.post_journal(
+				{
+					"tenant_id": tenant_id,
+					"description": f"Capitalise project {project.project_code} → {asset.asset_number}",
+					"reference": asset.asset_number,
+					"lines": [
+						{"account": "1500", "debit": cost, "credit": 0, "description": "Fixed asset cost"},
+						{"account": "1560", "debit": 0, "credit": cost, "description": "CAPEX WIP transfer"},
+					],
+				},
+				session=session,
+			)
+		except Exception as exc:
+			log.debug("GL post skipped (plugin not loaded): %s", exc)
+
+		log.info(
+			"Capitalised project %r → asset %r cost=%d gl_ref=%r",
+			project.project_code, asset.asset_number, cost, gl_ref,
+		)
+		return {"asset": asset, "project": project, "gl_ref": gl_ref}
+
+	# ------------------------------------------------------------------ #
+	# Dispose asset  (structured disposal record)
+	# ------------------------------------------------------------------ #
+
+	def dispose_asset(
+		self,
+		session: Any,
+		asset_id: str,
+		disposal_date: date,
+		disposal_type: str,
+		proceeds_cents: int,
+		approved_by: str,
+		tenant_id: str,
+		disposal_costs_cents: int = 0,
+		disposal_ref: str | None = None,
+		notes: str | None = None,
+	) -> Any:
+		"""Dispose of a fixed asset and create an immutable AssetDisposal record.
+
+		Gain/loss = proceeds - disposal_costs - net_book_value_at_disposal.
+
+		GL:
+		  DR  disposal_proceeds  1011  (proceeds)
+		  CR  fixed_asset        1500  (remove cost)
+		  DR  accum_depr         1510  (remove accumulated depreciation)
+		  DR/CR gain_loss        5500 (loss) / 4500 (gain)
+
+		Marks asset status DISPOSED. Returns AssetDisposal.
+		"""
+		from pgappforge.plugins.erp.finance.assets.models import AssetDisposal, FixedAsset
+		from pgappforge.plugins.erp.finance.assets.events import AssetDisposedEvent, emit_event
+
+		assert proceeds_cents >= 0, "proceeds_cents must be non-negative"
+		assert disposal_costs_cents >= 0, "disposal_costs_cents must be non-negative"
+		valid_types = {"SALE", "SCRAP", "DONATION", "WRITE_OFF"}
+		assert disposal_type in valid_types, f"disposal_type must be one of {valid_types}"
+
+		asset = session.get(FixedAsset, asset_id)
+		if asset is None:
+			raise AssetNotFoundError(f"FixedAsset {asset_id!r} not found")
+		if asset.status == "DISPOSED":
+			raise AssetStatusError(f"Asset {asset.asset_number!r} is already disposed")
+
+		nbv = asset.current_book_value_cents
+		gain_loss = proceeds_cents - disposal_costs_cents - nbv
+		ref = disposal_ref or f"DSP-{asset.asset_number}"
+
+		disposal = AssetDisposal(
+			tenant_id=tenant_id,
+			asset_id=asset_id,
+			disposal_date=disposal_date,
+			disposal_type=disposal_type,
+			proceeds_cents=proceeds_cents,
+			disposal_costs_cents=disposal_costs_cents,
+			gain_loss_cents=gain_loss,
+			disposal_ref=ref,
+			approved_by=approved_by,
+			notes=notes,
+		)
+		session.add(disposal)
+
+		asset.status = "DISPOSED"
+		asset.disposal_date = disposal_date
+		asset.disposal_proceeds_cents = proceeds_cents
+		asset.disposal_gain_loss_cents = gain_loss
+
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService
+			gl = GLService()
+			gl_lines = [
+				{"account": "1011", "debit": proceeds_cents, "credit": 0, "description": "Disposal proceeds"},
+				{"account": "1500", "debit": 0, "credit": asset.acquisition_cost_cents, "description": "Remove asset cost"},
+				{"account": "1510", "debit": asset.accumulated_depreciation_cents, "credit": 0, "description": "Remove accumulated depreciation"},
+			]
+			if gain_loss >= 0:
+				gl_lines.append({"account": "4500", "debit": 0, "credit": gain_loss, "description": "Disposal gain"})
+			else:
+				gl_lines.append({"account": "5500", "debit": abs(gain_loss), "credit": 0, "description": "Disposal loss"})
+			if disposal_costs_cents > 0:
+				gl_lines.append({"account": "5500", "debit": disposal_costs_cents, "credit": 0, "description": "Disposal costs"})
+			gl.post_journal(
+				{
+					"tenant_id": tenant_id,
+					"description": f"Disposal of {asset.asset_number} ({disposal_type})",
+					"reference": ref,
+					"lines": gl_lines,
+				},
+				session=session,
+			)
+		except Exception as exc:
+			log.debug("GL post skipped (plugin not loaded): %s", exc)
+
+		emit_event(
+			AssetDisposedEvent(
+				aggregate_id=asset_id,
+				aggregate_type="FixedAsset",
+				tenant_id=tenant_id,
+				asset_id=asset_id,
+				asset_number=asset.asset_number,
+				disposal_date=str(disposal_date),
+				proceeds_cents=proceeds_cents,
+				gain_loss_cents=gain_loss,
+			),
+			session,
+		)
+		session.flush()
+		log.info(
+			"Disposed asset %r type=%r proceeds=%d gain_loss=%d",
+			asset.asset_number, disposal_type, proceeds_cents, gain_loss,
+		)
+		return disposal
+
+	# ------------------------------------------------------------------ #
+	# Revalue asset  (IAS 16)
+	# ------------------------------------------------------------------ #
+
+	def revalue_asset(
+		self,
+		session: Any,
+		asset_id: str,
+		new_value_cents: int,
+		method: str,
+		revaluation_date: date,
+		reference: str,
+		tenant_id: str,
+	) -> Any:
+		"""Revalue a fixed asset to a new carrying amount (IAS 16).
+
+		Surplus  (new > old): DR fixed_asset 1500  CR revaluation_reserve 3200
+		Deficit  (new < old): DR revaluation_reserve 3200  CR fixed_asset 1500
+		          (deficit > prior surplus → excess debited to P&L impairment 5500)
+
+		Returns AssetRevaluation record.
+		"""
+		from pgappforge.plugins.erp.finance.assets.models import AssetRevaluation, FixedAsset
+
+		assert new_value_cents >= 0, "new_value_cents must be non-negative"
+		valid_methods = {"MARKET_VALUE", "APPRAISAL"}
+		assert method in valid_methods, f"method must be one of {valid_methods}"
+
+		asset = session.get(FixedAsset, asset_id)
+		if asset is None:
+			raise AssetNotFoundError(f"FixedAsset {asset_id!r} not found")
+		if asset.status == "DISPOSED":
+			raise AssetStatusError("Cannot revalue a disposed asset")
+
+		previous = asset.current_book_value_cents
+		surplus = new_value_cents - previous
+
+		reval = AssetRevaluation(
+			tenant_id=tenant_id,
+			asset_id=asset_id,
+			revaluation_date=revaluation_date,
+			previous_book_value_cents=previous,
+			new_book_value_cents=new_value_cents,
+			revaluation_surplus_cents=surplus,
+			method=method,
+			reference=reference,
+		)
+		session.add(reval)
+
+		asset.current_book_value_cents = new_value_cents
+
+		try:
+			from pgappforge.plugins.erp.finance.gl.services import GLService
+			gl = GLService()
+			if surplus >= 0:
+				gl_lines = [
+					{"account": "1500", "debit": surplus, "credit": 0, "description": "Revaluation uplift"},
+					{"account": "3200", "debit": 0, "credit": surplus, "description": "Revaluation reserve"},
+				]
+			else:
+				deficit = abs(surplus)
+				gl_lines = [
+					{"account": "3200", "debit": deficit, "credit": 0, "description": "Revaluation reserve drawdown"},
+					{"account": "1500", "debit": 0, "credit": deficit, "description": "Revaluation write-down"},
+				]
+			gl.post_journal(
+				{
+					"tenant_id": tenant_id,
+					"description": f"Revaluation {asset.asset_number} ref={reference}",
+					"reference": reference,
+					"lines": gl_lines,
+				},
+				session=session,
+			)
+		except Exception as exc:
+			log.debug("GL post skipped (plugin not loaded): %s", exc)
+
+		session.flush()
+		log.info(
+			"Revalued asset %r previous=%d new=%d surplus=%d method=%r",
+			asset.asset_number, previous, new_value_cents, surplus, method,
+		)
+		return reval
+
+	# ------------------------------------------------------------------ #
+	# Depreciation batch  (GL-posting variant)
+	# ------------------------------------------------------------------ #
+
+	def run_depreciation_batch(
+		self,
+		session: Any,
+		period_date: date,
+		asset_class: str | None = None,
+		tenant_id: str = "",
+	) -> dict[str, Any]:
+		"""Run monthly depreciation for all ACTIVE assets, posting GL entries.
+
+		Idempotent: skips assets already processed for the period.
+		GL:  DR  depreciation_expense  5200
+		     CR  accumulated_depr      1510
+
+		Args:
+			period_date:  Any date within the target period; period_id derived as YYYY-MM.
+			asset_class:  Optional AssetClass.code filter.
+			tenant_id:    Tenant filter; empty string = all tenants.
+
+		Returns dict {assets_processed, total_depreciation_cents}.
+		"""
+		from pgappforge.plugins.erp.finance.assets.models import AssetClass, AssetDepreciation, FixedAsset
+
+		period_id = period_date.strftime("%Y-%m")
+
+		q = sa.select(FixedAsset).where(FixedAsset.status == "ACTIVE")
+		if tenant_id:
+			q = q.where(FixedAsset.tenant_id == tenant_id)
+		if asset_class:
+			class_ids = session.execute(
+				sa.select(AssetClass.id).where(AssetClass.code == asset_class)
+			).scalars().all()
+			if not class_ids:
+				return {"assets_processed": 0, "total_depreciation_cents": 0}
+			q = q.where(FixedAsset.asset_class_id.in_(class_ids))
+
+		assets = session.execute(q).scalars().all()
+
+		already = set(
+			session.execute(
+				sa.select(AssetDepreciation.asset_id)
+				.where(AssetDepreciation.period_id == period_id)
+			).scalars().all()
+		)
+
+		processed = 0
+		total_cents = 0
+
+		for asset in assets:
+			if asset.id in already:
+				continue
+			charge = self._calculate_depreciation(asset)
+			if charge == 0:
+				continue
+
+			opening_nbv = asset.current_book_value_cents
+			closing_nbv = max(opening_nbv - charge, asset.residual_value_cents)
+			actual_charge = opening_nbv - closing_nbv
+
+			entry = AssetDepreciation(
+				tenant_id=asset.tenant_id,
+				asset_id=asset.id,
+				period_id=period_id,
+				depreciation_amount_cents=actual_charge,
+				opening_nbv_cents=opening_nbv,
+				closing_nbv_cents=closing_nbv,
+				method_used=asset.depreciation_method,
+			)
+			session.add(entry)
+
+			asset.current_book_value_cents = closing_nbv
+			asset.accumulated_depreciation_cents += actual_charge
+			asset.last_depreciation_date = period_date
+			if closing_nbv <= asset.residual_value_cents:
+				asset.status = "FULLY_DEPRECIATED"
+
+			try:
+				from pgappforge.plugins.erp.finance.gl.services import GLService
+				gl = GLService()
+				gl.post_journal(
+					{
+						"tenant_id": asset.tenant_id,
+						"description": f"Depreciation {asset.asset_number} period={period_id}",
+						"reference": f"DEPR-{asset.asset_number}-{period_id}",
+						"lines": [
+							{"account": "5200", "debit": actual_charge, "credit": 0, "description": "Depreciation expense"},
+							{"account": "1510", "debit": 0, "credit": actual_charge, "description": "Accumulated depreciation"},
+						],
+					},
+					session=session,
+				)
+			except Exception as exc:
+				log.debug("GL post skipped for asset %r: %s", asset.id, exc)
+
+			processed += 1
+			total_cents += actual_charge
+
+		session.flush()
+		log.info(
+			"Depreciation batch period=%r asset_class=%r: %d assets, %d cents",
+			period_id, asset_class, processed, total_cents,
+		)
+		return {"assets_processed": processed, "total_depreciation_cents": total_cents}
+
+	# ------------------------------------------------------------------ #
+	# Asset register (structured dict output)
+	# ------------------------------------------------------------------ #
+
+	def get_asset_register(  # type: ignore[override]
+		self,
+		session: Any,
+		as_of_date: date,
+		asset_class: str | None = None,
+		tenant_id: str = "",
+	) -> list[dict[str, Any]]:
+		"""Return the fixed asset register as a list of dicts as of a given date.
+
+		Each row: {asset_code, name, cost_cents, accum_depr_cents,
+		           net_book_value_cents, remaining_life_months}.
+
+		This overloads (and supersedes) the original get_asset_register() which
+		returned ORM objects. Callers needing ORM objects should use
+		get_asset_register_orm() instead.
+		"""
+		from pgappforge.plugins.erp.finance.assets.models import AssetClass, FixedAsset
+		from decimal import Decimal as D
+
+		q = (
+			sa.select(FixedAsset)
+			.where(FixedAsset.status.in_(["ACTIVE", "IMPAIRED", "FULLY_DEPRECIATED"]))
+			.order_by(FixedAsset.asset_number)
+		)
+		if tenant_id:
+			q = q.where(FixedAsset.tenant_id == tenant_id)
+		if asset_class:
+			class_ids = session.execute(
+				sa.select(AssetClass.id).where(AssetClass.code == asset_class)
+			).scalars().all()
+			if not class_ids:
+				return []
+			q = q.where(FixedAsset.asset_class_id.in_(class_ids))
+
+		assets = session.execute(q).scalars().all()
+		rows: list[dict[str, Any]] = []
+		for a in assets:
+			# Remaining life: original life in months minus months since acquisition
+			life_months_total = int(D(str(a.useful_life_years)) * D("12"))
+			acq = a.acquisition_date
+			months_elapsed = (
+				(as_of_date.year - acq.year) * 12 + (as_of_date.month - acq.month)
+			)
+			remaining = max(life_months_total - months_elapsed, 0)
+			rows.append({
+				"asset_code": a.asset_number,
+				"name": a.description,
+				"cost_cents": a.acquisition_cost_cents,
+				"accum_depr_cents": a.accumulated_depreciation_cents,
+				"net_book_value_cents": a.current_book_value_cents,
+				"remaining_life_months": remaining,
+				"status": a.status,
+				"asset_class_id": a.asset_class_id,
+				"acquisition_date": str(a.acquisition_date),
+			})
+		return rows
+
+	def get_asset_register_orm(self, tenant_id: str, session: Any, status: str | None = None) -> list[Any]:
+		"""Return raw ORM FixedAsset objects — original signature preserved for compatibility."""
+		from pgappforge.plugins.erp.finance.assets.models import FixedAsset
+		q = (
+			sa.select(FixedAsset)
+			.where(FixedAsset.tenant_id == tenant_id)
+			.order_by(FixedAsset.asset_number)
+		)
+		if status:
+			q = q.where(FixedAsset.status == status.upper())
+		return session.execute(q).scalars().all()
+
+	# ------------------------------------------------------------------ #
 	# Internal helpers
 	# ------------------------------------------------------------------ #
 
@@ -475,4 +973,8 @@ __all__ = [
 	"AssetStatusError",
 	"DepreciationError",
 	"CapitaliseDetails",
+	# new methods exposed via service instance:
+	# create_capex_project, capitalise_asset_from_project, dispose_asset,
+	# revalue_asset, run_depreciation_batch, get_asset_register (dict),
+	# get_asset_register_orm
 ]

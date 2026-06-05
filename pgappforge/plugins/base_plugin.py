@@ -7,12 +7,28 @@ that address the scope explosion issue identified in the code review.
 
 import abc
 import logging
-from typing import Dict, List, Optional, Any, Set, Callable
+from typing import Dict, List, Optional, Any, Set, Callable, Protocol, runtime_checkable
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class PluginProtocol(Protocol):
+	"""Contract every plugin must satisfy.
+
+	register_models returns SQLAlchemy model classes (for Alembic autogenerate).
+	get_events returns dotted event-name strings (e.g. 'finance.gl.journal.posted').
+	subscribe_to returns dotted event-name strings this plugin listens for.
+	activate initialises the plugin against a live Flask/SQLAlchemy context.
+	"""
+
+	def register_models(self) -> list[type]: ...
+	def get_events(self) -> list[str]: ...
+	def subscribe_to(self) -> list[str]: ...
+	def activate(self, app: Any = None, db: Any = None, appbuilder: Any = None) -> None: ...
 
 
 class PluginStatus(Enum):
