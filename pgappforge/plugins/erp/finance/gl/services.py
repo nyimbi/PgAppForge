@@ -544,15 +544,17 @@ class GLService:
 			name  = row["account_name"]
 
 			if atype == "REVENUE":
+				# Use period_credit/period_debit (current period activity, not cumulative YTD)
 				# Revenue accounts have CREDIT normal balance
-				amount = row["closing_credit"] - row["closing_debit"]
+				amount = row["period_credit"] - row["period_debit"]
 				if amount != 0:
 					revenue_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
 					total_revenue += amount
 
 			elif atype == "EXPENSE":
+				# Use period_debit/period_credit (current period activity, not cumulative YTD)
 				# Expense accounts have DEBIT normal balance
-				amount = row["closing_debit"] - row["closing_credit"]
+				amount = row["period_debit"] - row["period_credit"]
 				if amount != 0:
 					expense_rows.append({"account_code": code, "account_name": name, "amount_cents": amount})
 					total_expense += amount
