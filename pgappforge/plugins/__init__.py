@@ -61,3 +61,11 @@ __all__ = [
 
 # Plugin architecture version for compatibility checking
 PLUGIN_API_VERSION = "1.0.0"
+
+# Load BPM action registrations at startup so all capabilities are available
+# to workflow steps without explicit imports.  Non-fatal: missing optional
+# plugins (fintech, erp sub-packages) are handled inside each registration.
+try:
+	from pgappforge.plugins import bpm_actions as _bpm_actions  # noqa: F401
+except ImportError:
+	pass
