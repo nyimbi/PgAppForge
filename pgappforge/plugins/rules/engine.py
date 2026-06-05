@@ -6,8 +6,10 @@ Rules evaluation engine.
 Public surface
 --------------
 RulesValidationError   — raised by a "block" action
+RulesFieldError        — raised for field-level validation (field_name, message)
 RulesEngine            — evaluates rule sets against model events
 get_rules_engine()     — module-level singleton accessor
+_resolve_value()       — resolves $field references and {{template}} strings in rule values
 """
 from __future__ import annotations
 
@@ -271,7 +273,7 @@ class RulesEngine:
 		for cond in conditions:
 			field   = cond.get("field", "")
 			op      = cond.get("op", "=")
-			value   = cond.get("value")
+			value   = _resolve_value(cond.get("value"), ctx)  # supports $field and {{template}}
 			logic   = (cond.get("logic") or "AND").upper()
 
 			actual = ctx.get(field)
