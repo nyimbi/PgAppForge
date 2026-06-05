@@ -10,6 +10,8 @@ ProcessInstanceView     — read-only list of all running/completed instances
 ProcessDashboardView    — /bpm/          summary cards + my queue + overdue table
 ProcessTimelineView     — /bpm/timeline/<id>   per-instance visual timeline
 ProcessQueueView        — /bpm/queue/          "my work queue" with inline actions
+DelegationView          — /bpm/delegations/    CRUD for UserDelegation records
+BPMNDesignerView        — /bpm/designer/       BPMN 2.0 visual process designer
 
 API Blueprint (registered separately)
 --------------------------------------
@@ -18,6 +20,7 @@ POST /bpm/api/reject/<instance_id>
 POST /bpm/api/cancel/<instance_id>
 POST /bpm/api/form-time
 GET  /bpm/api/instance/<model>/<record_id>
+POST /bpm/api/bulk-action              (GAP 7)
 """
 from __future__ import annotations
 
@@ -42,7 +45,7 @@ from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access_api
 
 from .engine import WorkflowEngine
-from .models import ProcessDefinition, ProcessEvent, ProcessInstance, ProcessStep
+from .models import ProcessDefinition, ProcessEvent, ProcessInstance, ProcessStep, UserDelegation
 
 log = logging.getLogger(__name__)
 
@@ -676,6 +679,117 @@ class ProcessQueueView(BaseView):
 
 		return redirect(url_for("ProcessQueueView.index"))
 
+	@expose("/bulk-action", methods=("POST",))
+	@has_access
+	def bulk_action(self):
+		"""
+		POST /bpm/queue/bulk-action
+
+		JSON body:
+		  {
+		    "action":       "advance" | "reject",
+		    "instance_ids": [1, 2, 3],
+		    "comment":      "optional comment"
+		  }
+
+		Returns:
+		  {
+		    "succeeded": [1, 3],
+		    "failed":    {2: "error message"}
+		  }
+		"""
+		body: dict = request.get_json(silent=True) or {}
+		action_name: str = body.get("action", "")
+		raw_ids = body.get("instance_ids", [])
+		comment: str = body.get("comment", "")
+		user_id = _current_user_id()
+
+		if action_name not in ("advance", "reject"):
+			return jsonify({"error": f"Unknown action: {action_name!r}. Must be 'advance' or 'reject'."}), 400
+
+		try:
+			instance_ids: list[int] = [int(i) for i in raw_ids]
+		except (TypeError, ValueError) as exc:
+			return jsonify({"error": f"Invalid instance_ids: {exc}"}), 400
+
+		if not instance_ids:
+			return jsonify({"error": "instance_ids must be a non-empty list"}), 400
+
+		eng = _engine()
+		try:
+			if action_name == "advance":
+				result = eng.bulk_advance(instance_ids, actor_id=user_id, comment=comment)
+			else:
+				result = eng.bulk_reject(instance_ids, actor_id=user_id, comment=comment)
+			eng.session.commit()
+		except Exception as exc:
+			log.exception("ProcessQueueView.bulk_action failed")
+			eng.session.rollback()
+			return jsonify({"error": "Internal error", "detail": str(exc)}), 500
+
+		return jsonify({
+			"succeeded": result["succeeded"],
+			"failed": {str(k): v for k, v in result["failed"].items()},
+		})
+
+
+# ---------------------------------------------------------------------------
+# DelegationView — CRUD for bpm_user_delegation
+# ---------------------------------------------------------------------------
+
+class DelegationView(ModelView):
+	"""
+	/bpm/delegations/ — manage out-of-office task delegation records.
+
+	A delegation record means: while the delegation is active, any task
+	assigned to *delegator* is also visible and actionable by *delegate*.
+	"""
+
+	datamodel = SQLAInterface(UserDelegation)
+	route_base = "/bpm/delegations"
+
+	list_title = "Task Delegations"
+	show_title = "Delegation Detail"
+	add_title  = "Add Delegation"
+	edit_title = "Edit Delegation"
+
+	list_columns = [
+		"delegator_id", "delegate_id",
+		"start_date", "end_date",
+		"is_active", "reason",
+	]
+	show_columns = [
+		"delegator_id", "delegate_id",
+		"start_date", "end_date",
+		"is_active", "reason", "roles_included",
+		"created_at",
+	]
+	add_columns = [
+		"delegator_id", "delegate_id",
+		"start_date", "end_date",
+		"is_active", "reason", "roles_included",
+	]
+	edit_columns = [
+		"delegator_id", "delegate_id",
+		"start_date", "end_date",
+		"is_active", "reason", "roles_included",
+	]
+
+	search_columns = ["delegator_id", "delegate_id", "is_active"]
+
+	label_columns = {
+		"delegator_id":    "Delegating User",
+		"delegate_id":     "Acting User (Delegate)",
+		"start_date":      "Start Date",
+		"end_date":        "End Date (blank = indefinite)",
+		"is_active":       "Active",
+		"reason":          "Reason",
+		"roles_included":  "Roles Covered (JSON, empty = all)",
+		"created_at":      "Created",
+	}
+
+	base_order = ("created_at", "desc")
+
 
 # ---------------------------------------------------------------------------
 # REST API blueprint
@@ -854,15 +968,436 @@ def api_stats():
 	return jsonify(_engine().dashboard_stats())
 
 
+@bpm_api.route("/bulk-action", methods=("POST",))
+@has_access_api
+def api_bulk_action():
+	"""
+	POST /bpm/api/bulk-action   (GAP 7)
+
+	JSON body:
+	  {
+	    "action":       "advance" | "reject",
+	    "instance_ids": [1, 2, 3],
+	    "comment":      "optional"
+	  }
+
+	Returns:
+	  {
+	    "succeeded": [1, 3],
+	    "failed":    {"2": "error message"}
+	  }
+	"""
+	body: dict = request.get_json(silent=True) or {}
+	action_name: str = body.get("action", "")
+	raw_ids = body.get("instance_ids", [])
+	comment: str = body.get("comment", "")
+	user_id = _current_user_id()
+
+	if action_name not in ("advance", "reject"):
+		return jsonify({"error": f"Unknown action: {action_name!r}. Must be 'advance' or 'reject'."}), 400
+
+	try:
+		instance_ids: list[int] = [int(i) for i in raw_ids]
+	except (TypeError, ValueError) as exc:
+		return jsonify({"error": f"Invalid instance_ids: {exc}"}), 400
+
+	if not instance_ids:
+		return jsonify({"error": "instance_ids must be a non-empty list"}), 400
+
+	eng = _engine()
+	try:
+		if action_name == "advance":
+			result = eng.bulk_advance(instance_ids, actor_id=user_id, comment=comment)
+		else:
+			result = eng.bulk_reject(instance_ids, actor_id=user_id, comment=comment)
+		eng.session.commit()
+	except Exception as exc:
+		log.exception("api_bulk_action failed")
+		eng.session.rollback()
+		return jsonify({"error": "Internal error", "detail": str(exc)}), 500
+
+	return jsonify({
+		"succeeded": result["succeeded"],
+		"failed": {str(k): v for k, v in result["failed"].items()},
+	})
+
+
+# ---------------------------------------------------------------------------
+# BPMNDesignerView — /bpm/designer/   (GAP 8)
+# ---------------------------------------------------------------------------
+
+class BPMNDesignerView(BaseView):
+	"""
+	/bpm/designer/<definition_id>
+
+	Full-page BPMN 2.0 process designer backed by bpmn-js (CDN).
+
+	Endpoints
+	---------
+	GET  /bpm/designer/<definition_id>          — render designer.html
+	GET  /bpm/designer/<definition_id>?xml_only=1 — return saved XML as JSON
+	POST /bpm/designer/save                     — persist bpmn_xml in definition.config
+	POST /bpm/designer/sync-steps               — parse XML → upsert ProcessStep rows
+	"""
+
+	route_base = "/bpm/designer"
+	default_view = "designer"
+
+	# ------------------------------------------------------------------
+	# GET /bpm/designer/<definition_id>
+	# ------------------------------------------------------------------
+
+	@expose("/<int:definition_id>")
+	@has_access
+	def designer(self, definition_id: int):
+		from sqlalchemy import select as _select
+		from flask import render_template, request as _req
+
+		session = _get_session()
+		defn: ProcessDefinition | None = session.get(ProcessDefinition, definition_id)
+		if defn is None:
+			from flask import abort
+			abort(404)
+
+		# ?xml_only=1 — lightweight JSON endpoint used by the toolbar "Load" button
+		if _req.args.get("xml_only") == "1":
+			saved_xml = (defn.config or {}).get("bpmn_xml", "")
+			return jsonify({"bpmn_xml": saved_xml})
+
+		saved_xml: str = (defn.config or {}).get("bpmn_xml", "")
+
+		return render_template(
+			"appbuilder/workflow/designer.html",
+			definition=defn,
+			saved_xml=saved_xml,
+		)
+
+	# ------------------------------------------------------------------
+	# POST /bpm/designer/save
+	# ------------------------------------------------------------------
+
+	@expose("/save", methods=("POST",))
+	@has_access
+	def save(self):
+		"""
+		Persist bpmn_xml into ProcessDefinition.config['bpmn_xml'].
+
+		JSON body:
+		  {
+		    "definition_id": 1,
+		    "bpmn_xml":      "<?xml ...",
+		    "ext_data":      {elementId: {role, timeout, conditions}, ...}
+		  }
+		"""
+		body: dict = request.get_json(silent=True) or {}
+		try:
+			definition_id = int(body["definition_id"])
+		except (KeyError, TypeError, ValueError) as exc:
+			return jsonify({"error": f"definition_id required: {exc}"}), 400
+
+		bpmn_xml: str = body.get("bpmn_xml", "").strip()
+		if not bpmn_xml:
+			return jsonify({"error": "bpmn_xml is required"}), 400
+
+		ext_data: dict = body.get("ext_data", {})
+
+		session = _get_session()
+		defn: ProcessDefinition | None = session.get(ProcessDefinition, definition_id)
+		if defn is None:
+			return jsonify({"error": f"ProcessDefinition #{definition_id} not found"}), 404
+
+		cfg: dict = dict(defn.config or {})
+		cfg["bpmn_xml"] = bpmn_xml
+		cfg["bpmn_ext_data"] = ext_data
+		defn.config = cfg
+
+		try:
+			session.commit()
+		except Exception as exc:
+			log.exception("BPMNDesignerView.save failed")
+			session.rollback()
+			return jsonify({"error": "DB error", "detail": str(exc)}), 500
+
+		log.info("BPMNDesignerView: saved BPMN XML for definition #%d (%d bytes)", definition_id, len(bpmn_xml))
+		return jsonify({"ok": True, "definition_id": definition_id, "bytes": len(bpmn_xml)})
+
+	# ------------------------------------------------------------------
+	# POST /bpm/designer/sync-steps
+	# ------------------------------------------------------------------
+
+	@expose("/sync-steps", methods=("POST",))
+	@has_access
+	def sync_steps(self):
+		"""
+		Parse BPMN 2.0 XML and upsert ProcessStep + ProcessTransition rows.
+
+		Mapping
+		-------
+		bpmn:Task / bpmn:UserTask / bpmn:ServiceTask  → step_type=TASK
+		bpmn:StartEvent                               → step_type=START
+		bpmn:EndEvent                                 → step_type=END
+		bpmn:ParallelGateway                          → AND_SPLIT (first) / AND_JOIN (second)
+		bpmn:ExclusiveGateway                         → XOR_SPLIT
+		bpmn:InclusiveGateway                         → XOR_SPLIT (treated equivalently)
+		bpmn:SequenceFlow                             → ProcessTransition
+
+		ext_data (from the properties panel) supplies:
+		  role, timeout, conditions per element ID.
+
+		JSON body:
+		  {
+		    "definition_id": 1,
+		    "bpmn_xml":      "<?xml ...",
+		    "ext_data":      {elementId: {role, timeout, conditions}, ...}
+		  }
+		"""
+		import xml.etree.ElementTree as ET
+		from sqlalchemy import select as _select
+
+		body: dict = request.get_json(silent=True) or {}
+		try:
+			definition_id = int(body["definition_id"])
+		except (KeyError, TypeError, ValueError) as exc:
+			return jsonify({"error": f"definition_id required: {exc}"}), 400
+
+		bpmn_xml: str = body.get("bpmn_xml", "").strip()
+		if not bpmn_xml:
+			return jsonify({"error": "bpmn_xml is required"}), 400
+
+		ext_data: dict[str, dict] = body.get("ext_data", {})
+
+		session = _get_session()
+		defn: ProcessDefinition | None = session.get(ProcessDefinition, definition_id)
+		if defn is None:
+			return jsonify({"error": f"ProcessDefinition #{definition_id} not found"}), 404
+
+		# Parse XML --------------------------------------------------------
+		try:
+			root = ET.fromstring(bpmn_xml)
+		except ET.ParseError as exc:
+			return jsonify({"error": f"XML parse error: {exc}"}), 400
+
+		NS = {
+			"bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL",
+			"bpmn2": "http://www.omg.org/spec/BPMN/20100524/MODEL",
+		}
+
+		# Collect elements from all <bpmn:process> children
+		elements: list[dict] = []   # {bpmn_id, name, tag, type}
+		flows:    list[dict] = []   # {bpmn_id, name, source, target, label}
+
+		def _localname(tag: str) -> str:
+			"""Strip namespace URI: '{ns}Tag' → 'Tag'"""
+			return tag.split("}")[-1] if "}" in tag else tag
+
+		def _step_type_for(local_tag: str, gateway_seen: dict) -> str:
+			"""Map BPMN element local tag → ProcessStep step_type."""
+			if local_tag in ("Task", "UserTask", "ServiceTask", "ScriptTask", "BusinessRuleTask", "CallActivity", "SubProcess"):
+				return "TASK"
+			if local_tag == "StartEvent":
+				return "START"
+			if local_tag == "EndEvent":
+				return "END"
+			if local_tag == "ParallelGateway":
+				gw_id = gateway_seen.get("parallel_count", 0)
+				gateway_seen["parallel_count"] = gw_id + 1
+				return "AND_JOIN" if gw_id > 0 else "AND_SPLIT"
+			if local_tag in ("ExclusiveGateway", "InclusiveGateway", "ComplexGateway"):
+				return "XOR_SPLIT"
+			return "TASK"
+
+		gw_seen: dict = {"parallel_count": 0}
+
+		for proc_el in root.iter():
+			local = _localname(proc_el.tag)
+			if local != "process":
+				continue
+			order = 0
+			for child in list(proc_el):
+				child_local = _localname(child.tag)
+				if child_local == "sequenceFlow":
+					flows.append({
+						"bpmn_id": child.get("id", ""),
+						"name":    child.get("name", "") or "",
+						"source":  child.get("sourceRef", ""),
+						"target":  child.get("targetRef", ""),
+					})
+				elif child_local in (
+					"task", "userTask", "serviceTask", "scriptTask",
+					"businessRuleTask", "callActivity", "subProcess",
+					"startEvent", "endEvent",
+					"parallelGateway", "exclusiveGateway",
+					"inclusiveGateway", "complexGateway",
+					# capitalised variants
+					"Task", "UserTask", "ServiceTask", "ScriptTask",
+					"BusinessRuleTask", "CallActivity", "SubProcess",
+					"StartEvent", "EndEvent",
+					"ParallelGateway", "ExclusiveGateway",
+					"InclusiveGateway", "ComplexGateway",
+				):
+					# Normalise to title-case for step_type lookup
+					cap = child_local[0].upper() + child_local[1:]
+					elements.append({
+						"bpmn_id":   child.get("id", ""),
+						"name":      child.get("name", "") or cap,
+						"tag":       cap,
+						"step_type": _step_type_for(cap, gw_seen),
+						"order":     order,
+					})
+					order += 1
+
+		if not elements:
+			return jsonify({"error": "No BPMN flow elements found in the XML"}), 400
+
+		# Build bpmn_id → existing ProcessStep mapping -----------------
+		existing_steps: list[ProcessStep] = list(
+			session.execute(
+				_select(ProcessStep).where(ProcessStep.definition_id == definition_id)
+			).scalars()
+		)
+		# We store the BPMN element ID in the step name after a separator so we
+		# can look it up on re-sync.  Format: "<human name> [bpmn:<id>]"
+		def _bpmn_id_from_step(step: ProcessStep) -> str | None:
+			if step.name and "[bpmn:" in step.name:
+				try:
+					return step.name.split("[bpmn:")[1].rstrip("]")
+				except IndexError:
+					pass
+			return None
+
+		step_by_bpmn: dict[str, ProcessStep] = {}
+		for s in existing_steps:
+			bid = _bpmn_id_from_step(s)
+			if bid:
+				step_by_bpmn[bid] = s
+
+		# Collect existing transitions for this definition
+		from .models import ProcessTransition
+		existing_trans: list[ProcessTransition] = list(
+			session.execute(
+				_select(ProcessTransition).where(ProcessTransition.definition_id == definition_id)
+			).scalars()
+		)
+		# Key: (from_step_id, to_step_id) → transition
+		trans_by_pair: dict[tuple[int, int], ProcessTransition] = {
+			(t.from_step_id, t.to_step_id): t for t in existing_trans if t.from_step_id and t.to_step_id
+		}
+
+		steps_upserted = 0
+		new_step_by_bpmn: dict[str, ProcessStep] = {}
+
+		for idx, el in enumerate(elements):
+			bpmn_id: str = el["bpmn_id"]
+			if not bpmn_id:
+				continue
+
+			ext = ext_data.get(bpmn_id, {})
+			role: str | None = ext.get("role") or None
+			try:
+				timeout_h: int = int(ext.get("timeout") or 24)
+			except (TypeError, ValueError):
+				timeout_h = 24
+
+			human_name: str = el["name"] or bpmn_id
+			stored_name = f"{human_name} [bpmn:{bpmn_id}]"
+
+			if bpmn_id in step_by_bpmn:
+				# Update existing
+				step = step_by_bpmn[bpmn_id]
+				step.name          = stored_name
+				step.order_num     = idx
+				step.step_type     = el["step_type"]
+				step.assigned_role = role or step.assigned_role
+				step.timeout_hours = timeout_h
+			else:
+				# Insert new
+				step = ProcessStep(
+					definition_id=definition_id,
+					name=stored_name,
+					order_num=idx,
+					step_type=el["step_type"],
+					assigned_role=role,
+					timeout_hours=timeout_h,
+					escalate_to_role=None,
+					actions={},
+				)
+				session.add(step)
+
+			new_step_by_bpmn[bpmn_id] = step
+			steps_upserted += 1
+
+		session.flush()  # populate IDs for new steps
+
+		# Upsert transitions from SequenceFlow elements ----------------
+		trans_upserted = 0
+		for flow in flows:
+			src_bpmn = flow["source"]
+			tgt_bpmn = flow["target"]
+			src_step = new_step_by_bpmn.get(src_bpmn)
+			tgt_step = new_step_by_bpmn.get(tgt_bpmn)
+			if src_step is None or tgt_step is None:
+				continue
+			if src_step.id is None or tgt_step.id is None:
+				continue
+
+			# Parse conditions from ext_data of the flow element
+			flow_ext = ext_data.get(flow["bpmn_id"], {})
+			conditions_raw: str = flow_ext.get("conditions", "") or ""
+			import json as _json
+			try:
+				conditions_list = _json.loads(conditions_raw) if conditions_raw.strip() else []
+			except _json.JSONDecodeError:
+				conditions_list = []
+
+			pair_key = (src_step.id, tgt_step.id)
+			if pair_key in trans_by_pair:
+				trans = trans_by_pair[pair_key]
+				trans.label          = flow["name"] or trans.label
+				trans.conditions_json = conditions_list if conditions_list else trans.conditions_json
+			else:
+				trans = ProcessTransition(
+					definition_id=definition_id,
+					from_step_id=src_step.id,
+					to_step_id=tgt_step.id,
+					label=flow["name"] or None,
+					conditions_json=conditions_list,
+					priority=0,
+					is_default=not bool(conditions_list),
+				)
+				session.add(trans)
+				trans_by_pair[pair_key] = trans
+			trans_upserted += 1
+
+		try:
+			session.commit()
+		except Exception as exc:
+			log.exception("BPMNDesignerView.sync_steps failed")
+			session.rollback()
+			return jsonify({"error": "DB error", "detail": str(exc)}), 500
+
+		log.info(
+			"BPMNDesignerView: sync_steps definition #%d — %d steps, %d transitions upserted",
+			definition_id, steps_upserted, trans_upserted,
+		)
+		return jsonify({
+			"ok": True,
+			"definition_id": definition_id,
+			"steps_upserted": steps_upserted,
+			"transitions_upserted": trans_upserted,
+		})
+
+
 __all__ = [
 	# ModelViews
 	"ProcessDefinitionView",
 	"ProcessStepView",
 	"ProcessInstanceView",
+	"DelegationView",
 	# Custom views
 	"ProcessDashboardView",
 	"ProcessTimelineView",
 	"ProcessQueueView",
+	"BPMNDesignerView",
 	# API
 	"bpm_api",
 ]

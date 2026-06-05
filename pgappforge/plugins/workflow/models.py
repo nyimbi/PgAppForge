@@ -9,6 +9,9 @@ bpm_process_definition  — authored workflow templates
 bpm_process_step        — ordered steps within a definition
 bpm_process_instance    — a running execution for a specific record
 bpm_process_event       — every state change, handoff, comment, escalation
+bpm_process_transition  — conditional edges between steps (XOR/AND gateways)
+bpm_process_token       — parallel execution tokens (AND_SPLIT/AND_JOIN)
+bpm_user_delegation     — out-of-office task delegation
 """
 from __future__ import annotations
 
@@ -19,6 +22,7 @@ from typing import Any
 from sqlalchemy import (
 	Boolean,
 	Column,
+	Date,
 	DateTime,
 	ForeignKey,
 	Index,
@@ -54,6 +58,15 @@ class ProcessDefinition(Model):
 	config: dict[str, Any] = Column(JSONB, nullable=False, default=dict)
 	created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 	created_by_id = Column(Integer, ForeignKey("ab_user.id"), nullable=True)
+
+	# --- GAP 3: versioning ---
+	version = Column(Integer, nullable=False, default=1)
+	parent_definition_id = Column(
+		Integer,
+		ForeignKey("bpm_process_definition.id", ondelete="SET NULL"),
+		nullable=True,
+	)
+	is_latest = Column(Boolean, nullable=False, default=True)
 
 	steps: list[ProcessStep] = relationship(
 		"ProcessStep",
@@ -108,6 +121,30 @@ class ProcessStep(Model):
 	# {on_enter: ["notify_role", ...], on_exit: [...], is_final: bool, auto_advance: bool}
 	actions: dict[str, Any] = Column(JSONB, nullable=False, default=dict)
 
+	# --- GAP 1: gateway type + timer columns ---
+	step_type = Column(
+		String(20),
+		nullable=False,
+		default="TASK",
+		comment="TASK|AND_SPLIT|AND_JOIN|XOR_SPLIT|XOR_JOIN|TIMER|START|END",
+	)
+	auto_advance_hours = Column(
+		Integer,
+		nullable=True,
+		comment="If set, auto-advance after this many hours (timer event)",
+	)
+	timer_action = Column(
+		String(20),
+		nullable=True,
+		default="ADVANCE",
+		comment="ADVANCE|REJECT|ESCALATE — what timer does on trigger",
+	)
+	role_expression = Column(
+		String(256),
+		nullable=True,
+		comment="Python expression for dynamic role: e.g. record.requester.manager_role",
+	)
+
 	definition: ProcessDefinition = relationship("ProcessDefinition", back_populates="steps")
 
 	def __repr__(self) -> str:
@@ -156,6 +193,13 @@ class ProcessInstance(Model):
 	step_entered_at = Column(
 		DateTime(timezone=True), nullable=True,
 		comment="Timestamp when current_step_id was last set — used to compute age",
+	)
+	# --- GAP 3: snapshot definition version at start time ---
+	definition_version = Column(
+		Integer,
+		nullable=False,
+		default=1,
+		comment="Snapshot of definition.version at start time",
 	)
 
 	definition: ProcessDefinition = relationship("ProcessDefinition", back_populates="instances")
@@ -254,9 +298,160 @@ class ProcessEvent(Model):
 		)
 
 
+class ProcessTransition(Model):
+	"""
+	A directed edge between two steps in a process definition.
+
+	Supports conditional routing (XOR_SPLIT) and unconditional fan-out
+	(AND_SPLIT).  ``conditions_json`` uses the same format as the rules engine
+	so the same evaluator can be reused at runtime.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "bpm_process_transition"
+	__table_args__ = (
+		Index("ix_bpm_trans_definition", "definition_id"),
+		Index("ix_bpm_trans_from_step", "from_step_id"),
+		Index("ix_bpm_trans_to_step", "to_step_id"),
+		{"extend_existing": True},
+	)
+
+	id            = Column(Integer, primary_key=True, autoincrement=True)
+	definition_id = Column(
+		Integer,
+		ForeignKey("bpm_process_definition.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	from_step_id  = Column(
+		Integer,
+		ForeignKey("bpm_process_step.id", ondelete="CASCADE"),
+		nullable=True,
+	)
+	to_step_id    = Column(
+		Integer,
+		ForeignKey("bpm_process_step.id", ondelete="SET NULL"),
+		nullable=True,
+	)
+	# human-readable label, e.g. "Amount > 1M" or "Approved"
+	label: str | None = Column(String(128), nullable=True)
+	# same condition format as rules engine — list of condition dicts
+	conditions_json: list[dict[str, Any]] = Column(JSONB, nullable=False, default=list)
+	# lower value fires first for XOR_SPLIT evaluation order
+	priority      = Column(Integer, nullable=False, default=0)
+	# fallback when no condition matches (XOR_SPLIT)
+	is_default    = Column(Boolean, nullable=False, default=False)
+
+	definition: ProcessDefinition = relationship("ProcessDefinition")
+	from_step: ProcessStep | None = relationship(
+		"ProcessStep", foreign_keys=[from_step_id], lazy="joined"
+	)
+	to_step: ProcessStep | None = relationship(
+		"ProcessStep", foreign_keys=[to_step_id], lazy="joined"
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<ProcessTransition #{self.id} "
+			f"from={self.from_step_id} to={self.to_step_id} "
+			f"priority={self.priority} default={self.is_default}>"
+		)
+
+
+class ProcessToken(Model):
+	"""
+	One parallel branch of execution within a process instance.
+
+	When an AND_SPLIT fires, one token per outgoing branch is created.
+	An AND_JOIN gate waits until every token for the join step is in
+	``completed`` state before advancing the instance.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "bpm_process_token"
+	__table_args__ = (
+		Index("ix_bpm_token_instance_status", "instance_id", "status"),
+		Index("ix_bpm_token_step", "step_id"),
+		{"extend_existing": True},
+	)
+
+	id           = Column(Integer, primary_key=True, autoincrement=True)
+	instance_id  = Column(
+		Integer,
+		ForeignKey("bpm_process_instance.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	step_id      = Column(
+		Integer,
+		ForeignKey("bpm_process_step.id", ondelete="SET NULL"),
+		nullable=True,
+	)
+	# active | completed | cancelled
+	status       = Column(String(20), nullable=False, default="active")
+	created_at   = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+	completed_at = Column(DateTime(timezone=True), nullable=True)
+
+	instance: ProcessInstance = relationship("ProcessInstance")
+	step: ProcessStep | None  = relationship("ProcessStep", foreign_keys=[step_id])
+
+	def __repr__(self) -> str:
+		return (
+			f"<ProcessToken #{self.id} instance={self.instance_id} "
+			f"step={self.step_id} status={self.status!r}>"
+		)
+
+
+class UserDelegation(Model):
+	"""
+	Out-of-office / authority delegation: tasks assigned to *delegator*
+	are also visible and actionable by *delegate* during the active period.
+
+	``roles_included`` — empty list means delegate ALL roles; non-empty list
+	restricts delegation to those specific FAB role names.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "bpm_user_delegation"
+	__table_args__ = (
+		Index("ix_bpm_deleg_delegator_active", "delegator_id", "is_active"),
+		Index("ix_bpm_deleg_delegate_active", "delegate_id", "is_active"),
+		{"extend_existing": True},
+	)
+
+	id           = Column(Integer, primary_key=True, autoincrement=True)
+	delegator_id = Column(
+		Integer,
+		ForeignKey("ab_user.id", ondelete="SET NULL"),
+		nullable=True,
+		comment="User who is delegating their tasks",
+	)
+	delegate_id  = Column(
+		Integer,
+		ForeignKey("ab_user.id", ondelete="SET NULL"),
+		nullable=True,
+		comment="User who receives the delegated tasks",
+	)
+	start_date   = Column(Date, nullable=False)
+	end_date     = Column(Date, nullable=True, comment="None = indefinite delegation")
+	is_active    = Column(Boolean, nullable=False, default=True)
+	reason       = Column(Text, nullable=True)
+	# empty = delegate ALL roles; non-empty = only these FAB role names
+	roles_included: list[str] = Column(JSONB, nullable=False, default=list)
+	created_at   = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+	def __repr__(self) -> str:
+		return (
+			f"<UserDelegation #{self.id} "
+			f"delegator={self.delegator_id} delegate={self.delegate_id} "
+			f"active={self.is_active}>"
+		)
+
+
 __all__ = [
 	"ProcessDefinition",
 	"ProcessStep",
 	"ProcessInstance",
 	"ProcessEvent",
+	"ProcessTransition",
+	"ProcessToken",
+	"UserDelegation",
 ]
