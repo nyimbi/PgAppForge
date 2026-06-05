@@ -54,17 +54,6 @@ def _stub_fab() -> None:
 
 _stub_fab()
 
-# Pre-load key pgappforge modules BEFORE any test file is imported.
-# This ensures test files that stub these modules (e.g. test_clm_plugin.py)
-# find them already in sys.modules and skip stubbing, preserving real implementations.
-try:
-    import pgappforge.models.sqla  # noqa: F401 — registers Model
-    import pgappforge.plugins.audit  # noqa: F401 — registers AuditMixin
-    import pgappforge.plugins.rules.mixin  # noqa: F401 — registers RulesMixin, _fire
-except Exception:
-    pass  # graceful degradation if dependencies not yet available
-
-
 _PG_URI = (
     os.environ.get("SQLALCHEMY_DATABASE_URI")
     or os.environ.get("PGAPPFORGE_DB")

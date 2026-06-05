@@ -133,8 +133,15 @@ if "pgappforge.plugins.rules.mixin" not in sys.modules:
 	class _RulesMixin:
 		"""No-op RulesMixin stub for isolated test runs."""
 
+	def _fire_stub(model_name: str, event: str, target: Any) -> None:
+		"""No-op _fire stub — rules engine not loaded in isolation."""
+
 	_stub_package("pgappforge.plugins.rules")
-	_stub_module("pgappforge.plugins.rules.mixin", RulesMixin=_RulesMixin)
+	_stub_module(
+		"pgappforge.plugins.rules.mixin",
+		RulesMixin=_RulesMixin,
+		_fire=_fire_stub,
+	)
 
 # pgappforge.plugins.base_plugin
 import enum as _enum
