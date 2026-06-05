@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>BPMN Designer — {{ definition.name }}</title>
+
+	<!-- Bootstrap 3 (matches FAB base) -->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+
+	<!-- bpmn-js styles -->
+	<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
+	<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
+	<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn.css">
+
+	<style>
+		body { padding-top: 50px; overflow: hidden; }
+
+		#designer-toolbar {
+			position: fixed;
+			top: 50px;
+			left: 0;
+			right: 0;
+			z-index: 1000;
+			background: #fff;
+			border-bottom: 1px solid #ddd;
+			padding: 6px 12px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+
+		#designer-toolbar .toolbar-sep {
+			width: 1px;
+			height: 24px;
+			background: #ddd;
+			margin: 0 4px;
+		}
+
+		#designer-toolbar .def-name {
+			font-weight: 600;
+			color: #333;
+			margin-right: 8px;
+			font-size: 14px;
+		}
+
+		#canvas-container {
+			position: fixed;
+			top: 96px;   /* navbar(50) + toolbar(46) */
+			left: 0;
+			bottom: 0;
+			/* leave room for properties panel */
+			right: 280px;
+			background: #f8f8f8;
+		}
+
+		#properties-panel {
+			position: fixed;
+			top: 96px;
+			right: 0;
+			bottom: 0;
+			width: 280px;
+			background: #fff;
+			border-left: 1px solid #ddd;
+			overflow-y: auto;
+			padding: 12px;
+			font-size: 12px;
+		}
+
+		#properties-panel h5 {
+			margin-top: 0;
+			border-bottom: 1px solid #eee;
+			padding-bottom: 6px;
+			font-size: 13px;
+			font-weight: 600;
+		}
+
+		#properties-panel .prop-group {
+			margin-bottom: 10px;
+		}
+
+		#properties-panel label {
+			font-weight: 600;
+			display: block;
+			margin-bottom: 2px;
+			color: #555;
+		}
+
+		#properties-panel input,
+		#properties-panel select,
+		#properties-panel textarea {
+			width: 100%;
+			padding: 4px 6px;
+			font-size: 12px;
+			border: 1px solid #ccc;
+			border-radius: 3px;
+			box-sizing: border-box;
+		}
+
+		#properties-panel textarea { resize: vertical; min-height: 60px; }
+
+		#status-bar {
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 280px;
+			height: 24px;
+			background: #333;
+			color: #ccc;
+			font-size: 11px;
+			line-height: 24px;
+			padding: 0 10px;
+			z-index: 900;
+		}
+
+		.btn-toolbar-action {
+			padding: 3px 10px;
+			font-size: 12px;
+		}
+
+		#save-indicator {
+			font-size: 11px;
+			color: #5cb85c;
+			margin-left: 6px;
+			display: none;
+		}
+
+		.djs-container { background: #fafafa; }
+
+		/* bpmn-js zoom controls look fine against light bg */
+	</style>
+</head>
+<body>
+
+<!-- FAB Navbar shim -->
+<nav class="navbar navbar-default navbar-fixed-top">
+	<div class="container-fluid">
+		<div class="navbar-header">
+			<a class="navbar-brand" href="{{ url_for('ProcessDashboardView.index') }}">BPM</a>
+		</div>
+		<ul class="nav navbar-nav">
+			<li><a href="{{ url_for('ProcessDefinitionView.list') }}">Definitions</a></li>
+			<li class="active"><a href="#">Designer</a></li>
+		</ul>
+	</div>
+</nav>
+
+<!-- Toolbar -->
+<div id="designer-toolbar">
+	<span class="def-name">{{ definition.name }} <small class="text-muted">v{{ definition.version }}</small></span>
+	<div class="toolbar-sep"></div>
+
+	<button class="btn btn-sm btn-primary btn-toolbar-action" id="btn-save" title="Save BPMN XML to definition">
+		<span class="glyphicon glyphicon-floppy-disk"></span> Save
+	</button>
+	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-load" title="Reload saved XML">
+		<span class="glyphicon glyphicon-refresh"></span> Load
+	</button>
+	<button class="btn btn-sm btn-info btn-toolbar-action" id="btn-sync" title="Parse BPMN and sync process steps">
+		<span class="glyphicon glyphicon-cog"></span> Sync Steps
+	</button>
+	<button class="btn btn-sm btn-warning btn-toolbar-action" id="btn-export-png" title="Export diagram as PNG">
+		<span class="glyphicon glyphicon-picture"></span> Export PNG
+	</button>
+	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-new" title="Create a new blank process diagram">
+		<span class="glyphicon glyphicon-file"></span> New
+	</button>
+
+	<div class="toolbar-sep"></div>
+	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-zoom-in" title="Zoom in">+</button>
+	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-zoom-reset" title="Fit diagram">⊙</button>
+	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-zoom-out" title="Zoom out">−</button>
+
+	<span id="save-indicator"><span class="glyphicon glyphicon-ok"></span> Saved</span>
+</div>
+
+<!-- Canvas -->
+<div id="canvas-container">
+	<div id="bpmn-canvas" style="width:100%;height:100%;"></div>
+</div>
+
+<!-- Properties panel -->
+<div id="properties-panel">
+	<h5>Properties</h5>
+	<div id="prop-placeholder" class="text-muted" style="font-size:12px;padding:8px 0">
+		Select an element to edit its properties.
+	</div>
+	<div id="prop-form" style="display:none">
+		<div class="prop-group">
+			<label>ID</label>
+			<input type="text" id="prop-id" readonly style="background:#f5f5f5">
+		</div>
+		<div class="prop-group">
+			<label>Name</label>
+			<input type="text" id="prop-name" placeholder="Element name">
+		</div>
+		<div class="prop-group" id="prop-role-group">
+			<label>Assigned Role</label>
+			<input type="text" id="prop-role" placeholder="FAB role name">
+		</div>
+		<div class="prop-group" id="prop-timeout-group">
+			<label>Timeout (hours)</label>
+			<input type="number" id="prop-timeout" min="0" placeholder="24">
+		</div>
+		<div class="prop-group" id="prop-conditions-group">
+			<label>Conditions (JSON)</label>
+			<textarea id="prop-conditions" placeholder='[{"field":"amount","op":">","value":1000}]'></textarea>
+		</div>
+		<div class="prop-group" id="prop-type-group">
+			<label>Element Type</label>
+			<input type="text" id="prop-type" readonly style="background:#f5f5f5">
+		</div>
+		<button class="btn btn-xs btn-primary" id="btn-apply-props" style="margin-top:4px">Apply</button>
+	</div>
+</div>
+
+<!-- Status bar -->
+<div id="status-bar">Ready — {{ definition.name }}</div>
+
+<!-- bpmn-js modeler -->
+<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-modeler.development.js"></script>
+<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+
+<script>
+(function () {
+	'use strict';
+
+	/* ------------------------------------------------------------------ */
+	/* Config injected from Flask                                          */
+	/* ------------------------------------------------------------------ */
+	var DEF_ID     = {{ definition.id }};
+	var SAVE_URL   = {{ url_for('BPMNDesignerView.save') | tojson }};
+	var SYNC_URL   = {{ url_for('BPMNDesignerView.sync_steps') | tojson }};
+	var LOAD_URL   = {{ url_for('BPMNDesignerView.designer', definition_id=definition.id) | tojson }};
+	var SAVED_XML  = {{ saved_xml | tojson }};
+	var CSRF_TOKEN = {{ csrf_token() | tojson if csrf_token is defined else 'null' }};
+
+	/* ------------------------------------------------------------------ */
+	/* Default empty diagram used for "New"                                */
+	/* ------------------------------------------------------------------ */
+	var EMPTY_DIAGRAM = [
+		'<?xml version="1.0" encoding="UTF-8"?>',
+		'<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"',
+		'  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"',
+		'  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"',
+		'  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"',
+		'  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">',
+		'  <bpmn:process id="Process_1" isExecutable="false">',
+		'    <bpmn:startEvent id="StartEvent_1" name="Start">',
+		'      <bpmn:outgoing>Flow_1</bpmn:outgoing>',
+		'    </bpmn:startEvent>',
+		'    <bpmn:userTask id="Task_1" name="Review">',
+		'      <bpmn:incoming>Flow_1</bpmn:incoming>',
+		'      <bpmn:outgoing>Flow_2</bpmn:outgoing>',
+		'    </bpmn:userTask>',
+		'    <bpmn:endEvent id="EndEvent_1" name="End">',
+		'      <bpmn:incoming>Flow_2</bpmn:incoming>',
+		'    </bpmn:endEvent>',
+		'    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1"/>',
+		'    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="EndEvent_1"/>',
+		'  </bpmn:process>',
+		'  <bpmndi:BPMNDiagram id="BPMNDiagram_1">',
+		'    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">',
+		'      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">',
+		'        <dc:Bounds x="152" y="82" width="36" height="36"/>',
+		'        <bpmndi:BPMNLabel><dc:Bounds x="145" y="125" width="50" height="14"/></bpmndi:BPMNLabel>',
+		'      </bpmndi:BPMNShape>',
+		'      <bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1">',
+		'        <dc:Bounds x="250" y="60" width="100" height="80"/>',
+		'      </bpmndi:BPMNShape>',
+		'      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">',
+		'        <dc:Bounds x="412" y="82" width="36" height="36"/>',
+		'        <bpmndi:BPMNLabel><dc:Bounds x="408" y="125" width="44" height="14"/></bpmndi:BPMNLabel>',
+		'      </bpmndi:BPMNShape>',
+		'      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">',
+		'        <di:waypoint x="188" y="100"/><di:waypoint x="250" y="100"/>',
+		'      </bpmndi:BPMNEdge>',
+		'      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">',
+		'        <di:waypoint x="350" y="100"/><di:waypoint x="412" y="100"/>',
+		'      </bpmndi:BPMNEdge>',
+		'    </bpmndi:BPMNPlane>',
+		'  </bpmndi:BPMNDiagram>',
+		'</bpmn:definitions>'
+	].join('\n');
+
+	/* ------------------------------------------------------------------ */
+	/* In-memory extension data keyed by BPMN element ID                  */
+	/* {elementId: {role, timeout, conditions}}                            */
+	/* ------------------------------------------------------------------ */
+	var extData = {};
+
+	/* ------------------------------------------------------------------ */
+	/* Modeler init                                                        */
+	/* ------------------------------------------------------------------ */
+	var modeler = new BpmnJS({
+		container: '#bpmn-canvas',
+		keyboard: { bindTo: document }
+	});
+
+	function setStatus(msg) {
+		document.getElementById('status-bar').textContent = msg;
+	}
+
+	function flashSaved() {
+		var el = document.getElementById('save-indicator');
+		el.style.display = 'inline';
+		setTimeout(function () { el.style.display = 'none'; }, 2500);
+	}
+
+	function loadXml(xml) {
+		modeler.importXML(xml).then(function (result) {
+			if (result.warnings && result.warnings.length) {
+				console.warn('bpmn-js import warnings:', result.warnings);
+			}
+			modeler.get('canvas').zoom('fit-viewport');
+			setStatus('Diagram loaded — ' + document.title.split('—')[1].trim());
+		}).catch(function (err) {
+			setStatus('ERROR loading diagram: ' + err.message);
+			console.error(err);
+		});
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Initial load                                                        */
+	/* ------------------------------------------------------------------ */
+	if (SAVED_XML && SAVED_XML.length > 10) {
+		loadXml(SAVED_XML);
+	} else {
+		loadXml(EMPTY_DIAGRAM);
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Selection → properties panel                                        */
+	/* ------------------------------------------------------------------ */
+	var eventBus = modeler.get('eventBus');
+	var modeling  = modeler.get('modeling');
+	var elementRegistry = modeler.get('elementRegistry');
+
+	var _selectedElement = null;
+
+	eventBus.on('selection.changed', function (e) {
+		var selected = e.newSelection;
+		if (!selected || selected.length === 0) {
+			_selectedElement = null;
+			document.getElementById('prop-placeholder').style.display = 'block';
+			document.getElementById('prop-form').style.display = 'none';
+			return;
+		}
+
+		_selectedElement = selected[0];
+		var el = _selectedElement;
+		var bo = el.businessObject;
+
+		document.getElementById('prop-placeholder').style.display = 'none';
+		document.getElementById('prop-form').style.display = 'block';
+
+		document.getElementById('prop-id').value   = bo.id || '';
+		document.getElementById('prop-name').value = bo.name || '';
+		document.getElementById('prop-type').value = bo.$type || '';
+
+		var ext = extData[bo.id] || {};
+		document.getElementById('prop-role').value       = ext.role || '';
+		document.getElementById('prop-timeout').value    = ext.timeout != null ? ext.timeout : '';
+		document.getElementById('prop-conditions').value = ext.conditions || '';
+
+		/* Show/hide fields by element type */
+		var isFlow = bo.$type === 'bpmn:SequenceFlow';
+		document.getElementById('prop-role-group').style.display      = isFlow ? 'none' : 'block';
+		document.getElementById('prop-timeout-group').style.display   = isFlow ? 'none' : 'block';
+		document.getElementById('prop-conditions-group').style.display = isFlow ? 'block' : 'none';
+	});
+
+	/* Apply button */
+	document.getElementById('btn-apply-props').addEventListener('click', function () {
+		if (!_selectedElement) return;
+		var bo = _selectedElement.businessObject;
+
+		var newName = document.getElementById('prop-name').value.trim();
+		if (newName !== (bo.name || '')) {
+			modeling.updateLabel(_selectedElement, newName);
+		}
+
+		extData[bo.id] = {
+			role:       document.getElementById('prop-role').value.trim(),
+			timeout:    document.getElementById('prop-timeout').value.trim(),
+			conditions: document.getElementById('prop-conditions').value.trim(),
+		};
+
+		setStatus('Properties applied for ' + (newName || bo.id));
+	});
+
+	/* ------------------------------------------------------------------ */
+	/* Toolbar actions                                                     */
+	/* ------------------------------------------------------------------ */
+
+	/* Save */
+	document.getElementById('btn-save').addEventListener('click', function () {
+		modeler.saveXML({ format: true }).then(function (result) {
+			var xml = result.xml;
+			setStatus('Saving…');
+
+			var payload = {
+				definition_id: DEF_ID,
+				bpmn_xml: xml,
+				ext_data: extData
+			};
+			if (CSRF_TOKEN) payload.csrf_token = CSRF_TOKEN;
+
+			fetch(SAVE_URL, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			})
+			.then(function (r) { return r.json(); })
+			.then(function (data) {
+				if (data.ok) {
+					setStatus('Saved successfully.');
+					flashSaved();
+				} else {
+					setStatus('Save failed: ' + (data.error || 'unknown error'));
+				}
+			})
+			.catch(function (err) {
+				setStatus('Save error: ' + err.message);
+			});
+		}).catch(function (err) {
+			setStatus('XML export error: ' + err.message);
+		});
+	});
+
+	/* Load / reload */
+	document.getElementById('btn-load').addEventListener('click', function () {
+		if (!confirm('Reload saved XML? Unsaved changes will be lost.')) return;
+		setStatus('Reloading…');
+		fetch(LOAD_URL + '?xml_only=1')
+			.then(function (r) { return r.json(); })
+			.then(function (data) {
+				if (data.bpmn_xml) {
+					loadXml(data.bpmn_xml);
+					setStatus('Reloaded from saved XML.');
+				} else {
+					setStatus('No saved XML found — using current diagram.');
+				}
+			})
+			.catch(function (err) {
+				setStatus('Load error: ' + err.message);
+			});
+	});
+
+	/* Sync Steps */
+	document.getElementById('btn-sync').addEventListener('click', function () {
+		modeler.saveXML({ format: true }).then(function (result) {
+			var xml = result.xml;
+			setStatus('Syncing steps…');
+
+			var payload = {
+				definition_id: DEF_ID,
+				bpmn_xml: xml,
+				ext_data: extData
+			};
+			if (CSRF_TOKEN) payload.csrf_token = CSRF_TOKEN;
+
+			fetch(SYNC_URL, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			})
+			.then(function (r) { return r.json(); })
+			.then(function (data) {
+				if (data.ok) {
+					setStatus('Steps synced: ' + data.steps_upserted + ' upserted, ' + data.transitions_upserted + ' transitions.');
+				} else {
+					setStatus('Sync failed: ' + (data.error || 'unknown'));
+				}
+			})
+			.catch(function (err) {
+				setStatus('Sync error: ' + err.message);
+			});
+		});
+	});
+
+	/* Export PNG (via SVG → canvas → PNG) */
+	document.getElementById('btn-export-png').addEventListener('click', function () {
+		modeler.saveSVG().then(function (result) {
+			var svgStr = result.svg;
+			/* Render SVG to canvas then download as PNG */
+			var img = new Image();
+			var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+			var url  = URL.createObjectURL(blob);
+			img.onload = function () {
+				var canvas = document.createElement('canvas');
+				canvas.width  = img.naturalWidth  || 1200;
+				canvas.height = img.naturalHeight || 800;
+				var ctx2d = canvas.getContext('2d');
+				ctx2d.fillStyle = '#ffffff';
+				ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+				ctx2d.drawImage(img, 0, 0);
+				URL.revokeObjectURL(url);
+
+				canvas.toBlob(function (pngBlob) {
+					var a = document.createElement('a');
+					a.download = 'bpmn-diagram.png';
+					a.href = URL.createObjectURL(pngBlob);
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+					setStatus('PNG exported.');
+				});
+			};
+			img.onerror = function () {
+				setStatus('PNG export failed — SVG could not be rasterized.');
+				URL.revokeObjectURL(url);
+			};
+			img.src = url;
+		}).catch(function (err) {
+			setStatus('SVG export error: ' + err.message);
+		});
+	});
+
+	/* New process */
+	document.getElementById('btn-new').addEventListener('click', function () {
+		if (!confirm('Create a new blank process? Current diagram will be replaced.')) return;
+		loadXml(EMPTY_DIAGRAM);
+		extData = {};
+		setStatus('New blank diagram created.');
+	});
+
+	/* Zoom controls */
+	document.getElementById('btn-zoom-in').addEventListener('click', function () {
+		modeler.get('zoomScroll').stepZoom(1);
+	});
+	document.getElementById('btn-zoom-out').addEventListener('click', function () {
+		modeler.get('zoomScroll').stepZoom(-1);
+	});
+	document.getElementById('btn-zoom-reset').addEventListener('click', function () {
+		modeler.get('canvas').zoom('fit-viewport');
+	});
+
+})();
+</script>
+</body>
+</html>
