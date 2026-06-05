@@ -8,6 +8,8 @@ Public surface
 RulesValidationError   — raised by a "block" action
 RulesFieldError        — raised for field-level validation (field_name, message)
 RulesEngine            — evaluates rule sets against model events
+  .evaluate()          — live evaluation (mutates record, raises on block)
+  .evaluate_dry()      — dry-run simulation (no mutations, returns summary dict)
 get_rules_engine()     — module-level singleton accessor
 _resolve_value()       — resolves $field references and {{template}} strings in rule values
 """
@@ -192,6 +194,91 @@ class RulesEngine:
 				self._log_execution(rule, record, "error", session, error=str(exc))
 				continue
 			self._log_execution(rule, record, outcome, session)
+			# stop_on_match: halt after first matching rule (checked on ruleset)
+			if getattr(getattr(rule, "ruleset", None), "stop_on_match", False):
+				break
+			# stop_after_actions: halt after this rule completes (checked on rule)
+			if getattr(rule, "stop_after_actions", False):
+				break
+
+	def evaluate_dry(
+		self,
+		model_name: str,
+		event: str,
+		record: Any,
+		session=None,
+	) -> dict[str, Any]:
+		"""Simulate rule evaluation without applying any mutations.
+
+		Returns a summary dict describing what WOULD happen:
+		  would_block          — True if any block/add_error action would fire
+		  block_message        — the block/add_error message
+		  block_field          — field name for add_error, None for block
+		  would_set            — {field: value} for set_field actions
+		  would_send_emails    — list of send_email action dicts
+		  would_call_webhooks  — list of call_webhook action dicts
+		  would_create_records — list of create_record action dicts
+		  would_start_workflows— list of workflow action dicts
+		  rules_matched        — list of rule names that matched
+		"""
+		if session is None:
+			session = self._get_session()
+
+		result: dict[str, Any] = {
+			"would_block": False,
+			"block_message": "",
+			"block_field": None,
+			"would_set": {},
+			"would_send_emails": [],
+			"would_call_webhooks": [],
+			"would_create_records": [],
+			"would_start_workflows": [],
+			"rules_matched": [],
+		}
+
+		ctx = self._record_to_dict(record)
+		rules = self._load_rules(session, model_name)
+
+		for rule in rules:
+			if not self._event_matches(rule.trigger_event, event, record):
+				continue
+			conditions = rule.conditions_json or []
+			if not self._evaluate_conditions(conditions, ctx):
+				continue
+
+			result["rules_matched"].append(rule.name)
+
+			for action in rule.actions_json or []:
+				atype = action.get("type", "")
+				if atype == "block":
+					result["would_block"] = True
+					result["block_message"] = action.get("message", "")
+					result["block_field"] = None
+					return result  # first block short-circuits
+				elif atype == "add_error":
+					result["would_block"] = True
+					result["block_field"] = action.get("field", "")
+					result["block_message"] = action.get("message", "")
+					return result  # field error short-circuits
+				elif atype == "set_field":
+					field = action.get("field", "")
+					if field:
+						result["would_set"][field] = _resolve_value(action.get("value"), ctx)
+				elif atype == "send_email":
+					result["would_send_emails"].append(dict(action))
+				elif atype == "call_webhook":
+					result["would_call_webhooks"].append(dict(action))
+				elif atype == "create_record":
+					result["would_create_records"].append(dict(action))
+				elif atype == "start_workflow":
+					result["would_start_workflows"].append(dict(action))
+
+			if getattr(getattr(rule, "ruleset", None), "stop_on_match", False):
+				break
+			if getattr(rule, "stop_after_actions", False):
+				break
+
+		return result
 
 	# ------------------------------------------------------------------
 	# Internal helpers
@@ -305,10 +392,15 @@ class RulesEngine:
 
 		Action types
 		------------
-		set_field   — {type, field, value}
-		block       — {type, message}
-		send_email  — {type, to, subject, body}  (stubbed — logs only)
+		set_field    — {type, field, value}
+		block        — {type, message}
+		add_error    — {type, field, message}  raises RulesFieldError(field, message)
+		send_email   — {type, to, subject, body}  (stubbed — logs only)
 		call_webhook — {type, url, payload}
+
+		Stop flags (checked on the rule/ruleset after successful execution):
+		  rule.stop_after_actions  — stop processing further rules after this one
+		  rule.ruleset.stop_on_match — stop after the first matching rule in the set
 		"""
 		outcome = "executed"
 
@@ -341,6 +433,11 @@ class RulesEngine:
 			elif atype == "block":
 				message = action.get("message", "Action blocked by business rule.")
 				raise RulesValidationError(message)
+
+			elif atype == "add_error":
+				field = action.get("field", "")
+				message = action.get("message", "Validation error.")
+				raise RulesFieldError(field, message)
 
 			elif atype == "send_email":
 				to      = action.get("to", "")
