@@ -1450,8 +1450,12 @@ def _bpm_set_field(record_ctx: dict, session: Any, model: str = "", record_id: A
 
 @BPMActionRegistry.register("bpm.notify.email", "Send an email notification")
 def _bpm_notify_email(record_ctx: dict, session: Any, to: str = "", subject: str = "", body: str = "", **kw: Any) -> dict:
-	log.info("BPM notify_email stub: to=%r subject=%r", to, subject)
-	return {"status": "queued", "to": to, "subject": subject}
+	"""Default email implementation — logs the notification.
+	Override by re-registering 'bpm.notify.email' with a real email provider
+	(e.g. SendGrid, SES, or the app's existing notification service).
+	"""
+	log.info("BPM email notification: to=%r subject=%r (wire bpm.notify.email to a real provider)", to, subject)
+	return {"status": "logged", "to": to, "subject": subject}
 
 
 @BPMActionRegistry.register("bpm.notify.webhook", "Call a webhook URL")
