@@ -164,6 +164,7 @@ class RulesEngine:
 		event: str,
 		record: Any,
 		session=None,
+		context: dict | None = None,
 	) -> None:
 		"""
 		Fire all enabled rules that match *event* for *model_name*.

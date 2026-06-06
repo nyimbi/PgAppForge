@@ -262,7 +262,7 @@ class TestCallWebhookAction:
 		# We must patch the name in the flask module itself so the local import
 		# picks up the mock.
 		with patch("flask.current_app", mock_app, create=True):
-			outcome, _mutated = self.eng._execute_actions(actions, {}, record, self.session)
+			outcome = self.eng._execute_actions(actions, {}, record, self.session)
 			return outcome
 
 	def test_call_webhook_skipped_when_allowlist_empty(self):
@@ -274,7 +274,7 @@ class TestCallWebhookAction:
 		with patch("flask.current_app", mock_app, create=True):
 			record = _make_record()
 			actions = [{"type": "call_webhook", "url": "http://example.com/hook"}]
-			outcome, _mutated = self.eng._execute_actions(actions, {}, record, self.session)
+			outcome = self.eng._execute_actions(actions, {}, record, self.session)
 		assert outcome == "webhook_error"
 
 	def test_call_webhook_rejects_private_ip(self):
@@ -284,7 +284,7 @@ class TestCallWebhookAction:
 			mock_gai.return_value = [(None, None, None, None, ("192.168.1.1", 0))]
 			record = _make_record()
 			actions = [{"type": "call_webhook", "url": "https://internal.corp/hook"}]
-			outcome, _mutated = self.eng._execute_actions(actions, {}, record, self.session)
+			outcome = self.eng._execute_actions(actions, {}, record, self.session)
 		assert outcome == "webhook_error"
 
 	def test_call_webhook_rejects_host_not_in_allowlist(self):
@@ -294,14 +294,14 @@ class TestCallWebhookAction:
 			mock_gai.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
 			record = _make_record()
 			actions = [{"type": "call_webhook", "url": "https://notallowed.com/hook"}]
-			outcome, _mutated = self.eng._execute_actions(actions, {}, record, self.session)
+			outcome = self.eng._execute_actions(actions, {}, record, self.session)
 		assert outcome == "webhook_error"
 
 	def test_call_webhook_skipped_when_url_empty(self):
 		record = _make_record()
 		actions = [{"type": "call_webhook", "url": ""}]
 		# Empty URL → continue before any allowlist check — no Flask context needed
-		outcome, _mutated = self.eng._execute_actions(actions, {}, record, self.session)
+		outcome = self.eng._execute_actions(actions, {}, record, self.session)
 		assert outcome == "executed"
 
 

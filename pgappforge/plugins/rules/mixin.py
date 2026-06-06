@@ -90,7 +90,10 @@ def _fire(model_name: str, event: str, target: object) -> None:
 		from .engine import get_rules_engine, RulesValidationError
 		from flask import current_app
 		session = current_app.appbuilder.get_session
-		get_rules_engine().evaluate(model_name, event, target, session=session)
+		ctx: dict = {}
+		if hasattr(target, "__dict__"):
+			ctx = {k: v for k, v in vars(target).items() if not k.startswith("_")}
+		get_rules_engine().evaluate(model_name, event, target, session=session, context=ctx)
 	except Exception as exc:
 		from .engine import RulesValidationError
 		if isinstance(exc, RulesValidationError):

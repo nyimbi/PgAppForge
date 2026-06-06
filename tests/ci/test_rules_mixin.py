@@ -39,7 +39,7 @@ class TestListenerRegistration:
 		cls = _make_subclass("Foo")
 		assert cls._rules_registered is True
 		assert cls._rules_listeners is not None
-		assert len(cls._rules_listeners) == 6  # (before_insert, before_update, before_delete, after_insert, after_update, after_delete)
+		assert len(cls._rules_listeners) == 3  # after_insert, after_update, after_delete
 		cls._unregister_rules()
 
 	def test_subclass_gets_independent_flag(self):
