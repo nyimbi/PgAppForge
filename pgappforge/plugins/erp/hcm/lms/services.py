@@ -8,7 +8,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from pgappforge.plugins.workflow.engine import BPMActionRegistry
-from pgappforge.plugins.erp.foundation.events import emit_event
+from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
+
+
+def _emit(event: Any, session: Any = None) -> None:
+	"""Fire-and-forget event emission. Session=None gracefully degrades to handler-only."""
+	try:
+		_emit_event(event, session)
+	except Exception:  # noqa: BLE001
+		log.debug("Event bus unavailable; event %s not published", type(event).__name__)
 
 from .events import (
 	CertificateIssuedEvent,
@@ -90,7 +98,7 @@ class LmsService:
 		course.published_at = now
 		session.flush()
 
-		emit_event(
+		_emit(
 			CoursePublishedEvent(
 				course_id=course.id,
 				title=course.title,
@@ -195,7 +203,7 @@ class LmsService:
 
 		session.flush()
 
-		emit_event(
+		_emit(
 			EnrollmentCreatedEvent(
 				enrollment_id=enrollment.id,
 				employee_id=employee_id,
@@ -264,7 +272,7 @@ class LmsService:
 		progress.completed_at = now
 		session.flush()
 
-		emit_event(
+		_emit(
 			LessonCompletedEvent(
 				enrollment_id=enrollment_id,
 				lesson_id=lesson_id,
@@ -337,7 +345,7 @@ class LmsService:
 		enrollment.passed = passed
 		session.flush()
 
-		emit_event(
+		_emit(
 			CourseCompletedEvent(
 				enrollment_id=enrollment_id,
 				employee_id=enrollment.employee_id,
@@ -390,7 +398,7 @@ class LmsService:
 		session.add(certificate)
 		session.flush()
 
-		emit_event(
+		_emit(
 			CertificateIssuedEvent(
 				certificate_id=certificate.id,
 				employee_id=employee_id,
@@ -531,7 +539,7 @@ class LmsService:
 						"type": "OVERDUE",
 					}
 					violations.append(violation)
-					emit_event(
+					_emit(
 						MandatoryTrainingOverdueEvent(
 							enrollment_id=enrollment.id,
 							employee_id=enrollment.employee_id,

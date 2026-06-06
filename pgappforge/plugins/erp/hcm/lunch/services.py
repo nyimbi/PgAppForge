@@ -58,11 +58,11 @@ def _now_utc() -> datetime:
 	return datetime.now(tz=timezone.utc)
 
 
-def _emit(event: Any) -> None:
+def _emit(event: Any, session: Any = None) -> None:
 	"""Fire-and-forget event emission. Swallows if no bus is wired."""
 	try:
 		from pgappforge.plugins.erp.foundation.events import emit_event
-		emit_event(event)
+		emit_event(event, session)
 	except Exception:  # noqa: BLE001
 		_log.debug("Event bus unavailable; event %s not published", type(event).__name__)
 
