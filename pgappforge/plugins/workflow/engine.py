@@ -24,6 +24,7 @@ composable with larger transactions.
 """
 from __future__ import annotations
 
+import ast
 import logging
 import re as _re
 from datetime import date, datetime, timezone
@@ -1254,12 +1255,22 @@ class WorkflowEngine:
 			)
 			return step.assigned_role
 
-		# Python expression — restricted eval
+		# Safe AST-based expression — whitelist of node types only
+		# Supports: ternary (IfExp), comparisons, string/int constants, name lookups
+		_SAFE_NODES = (
+			ast.Expression, ast.IfExp, ast.Compare, ast.BoolOp,
+			ast.And, ast.Or, ast.Not, ast.UnaryOp,
+			ast.Constant, ast.Name, ast.Load,
+			ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+			ast.In, ast.NotIn,
+		)
 		try:
-			# Build a safe namespace from record_ctx values only
+			tree = ast.parse(expr, mode="eval")
+			for node in ast.walk(tree):
+				if not isinstance(node, _SAFE_NODES):
+					raise ValueError(f"Disallowed node type {type(node).__name__!r} in role_expression")
 			safe_ns: dict[str, Any] = {k: v for k, v in record_ctx.items()}
-			# Disallow builtins to limit attack surface
-			result = eval(expr, {"__builtins__": {}}, safe_ns)  # noqa: S307
+			result = eval(compile(tree, "<role_expr>", "eval"), {"__builtins__": {}}, safe_ns)  # noqa: S307
 			if result is not None:
 				return str(result)
 		except Exception as exc:
@@ -1364,8 +1375,19 @@ class BPMActionRegistry:
 
 	@classmethod
 	def register(cls, name: str, description: str = "") -> Any:
-		"""Decorator: register a function as a callable BPM capability."""
+		"""Decorator: register a function as a callable BPM capability.
+
+		Raises ValueError if the name is already registered by a different function
+		so that silent capability shadowing is caught at import time.
+		"""
 		def decorator(fn: Any) -> Any:
+			existing = cls._registry.get(name)
+			if existing is not None and existing["fn"] is not fn:
+				raise ValueError(
+					f"BPMActionRegistry: capability {name!r} already registered by "
+					f"{existing['fn'].__module__}.{existing['fn'].__qualname__}. "
+					f"Cannot override with {fn.__module__}.{fn.__qualname__}."
+				)
 			cls._registry[name] = {"fn": fn, "name": name, "description": description}
 			return fn
 		return decorator

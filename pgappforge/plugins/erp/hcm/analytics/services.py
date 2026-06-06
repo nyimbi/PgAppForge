@@ -168,41 +168,53 @@ class HrAnalyticsService:
 				"entity_id": entity_id,
 			}
 
-		stmt = (
-			sa.select(Employee)
-			.where(Employee.tenant_id == tenant_id)
-			.where(Employee.employment_status == "ACTIVE")
-			.where(Employee.start_date <= as_of_date)
-			.where(
-				sa.or_(
-					Employee.termination_date.is_(None),
-					Employee.termination_date > as_of_date,
-				)
-			)
-		)
+		base = [
+			Employee.tenant_id == tenant_id,
+			Employee.employment_status == "ACTIVE",
+			Employee.start_date <= as_of_date,
+			sa.or_(
+				Employee.termination_date.is_(None),
+				Employee.termination_date > as_of_date,
+			),
+		]
 		if entity_id:
-			stmt = stmt.where(Employee.department_id == entity_id)
+			base.append(Employee.department_id == entity_id)
 
-		rows = session.execute(stmt).scalars().all()
+		# Total via COUNT — no full fetch
+		total: int = session.execute(
+			sa.select(sa.func.count()).select_from(Employee).where(*base)
+		).scalar() or 0
 
-		by_dept: dict[str, int] = {}
-		by_type: dict[str, int] = {}
-		by_gender: dict[str, int] = {}
+		# By department — GROUP BY
+		by_dept: dict[str, int] = {
+			(str(r[0]) if r[0] else "UNASSIGNED"): r[1]
+			for r in session.execute(
+				sa.select(Employee.department_id, sa.func.count().label("cnt"))
+				.where(*base).group_by(Employee.department_id)
+			)
+		}
 
-		for emp in rows:
-			dept = str(emp.department_id) if emp.department_id else "UNASSIGNED"
-			by_dept[dept] = by_dept.get(dept, 0) + 1
+		# By employment_type — GROUP BY
+		by_type: dict[str, int] = {
+			(str(r[0]) if r[0] else "UNSPECIFIED"): r[1]
+			for r in session.execute(
+				sa.select(Employee.employment_type, sa.func.count().label("cnt"))
+				.where(*base).group_by(Employee.employment_type)
+			)
+		}
 
-			etype = str(emp.employment_type) if emp.employment_type else "UNSPECIFIED"
-			by_type[etype] = by_type.get(etype, 0) + 1
-
-			gender = str(emp.gender).upper() if emp.gender else "UNSPECIFIED"
-			if gender not in ("M", "F", "OTHER"):
-				gender = "UNSPECIFIED"
-			by_gender[gender] = by_gender.get(gender, 0) + 1
+		# By gender — GROUP BY with normalisation
+		by_gender: dict[str, int] = {"M": 0, "F": 0, "OTHER": 0, "UNSPECIFIED": 0}
+		for g_raw, cnt in session.execute(
+			sa.select(Employee.gender, sa.func.count().label("cnt"))
+			.where(*base).group_by(Employee.gender)
+		):
+			g = str(g_raw or "").upper()
+			key = g if g in ("M", "F", "OTHER") else "UNSPECIFIED"
+			by_gender[key] = by_gender.get(key, 0) + cnt
 
 		result = {
-			"total": len(rows),
+			"total": total,
 			"by_department": by_dept,
 			"by_type": by_type,
 			"by_gender": by_gender,

@@ -159,12 +159,18 @@ class BenefitsService:
 		self,
 		enrollment_id: str,
 		session: Session,
+		*,
+		tenant_id: str = "",
 	) -> BenefitEnrollment:
 		"""Transition a PENDING enrollment to ACTIVE."""
 		assert enrollment_id, "enrollment_id is required"
 
+		filters = [BenefitEnrollment.id == enrollment_id]
+		if tenant_id:
+			filters.append(BenefitEnrollment.tenant_id == tenant_id)
+
 		enrollment = session.execute(
-			select(BenefitEnrollment).where(BenefitEnrollment.id == enrollment_id)
+			select(BenefitEnrollment).where(*filters)
 		).scalar_one_or_none()
 
 		if enrollment is None:
@@ -187,13 +193,19 @@ class BenefitsService:
 		termination_date: Any,
 		reason: str,
 		session: Session,
+		*,
+		tenant_id: str = "",
 	) -> BenefitEnrollment:
 		"""Terminate an ACTIVE enrollment."""
 		assert enrollment_id, "enrollment_id is required"
 		assert termination_date, "termination_date is required"
 
+		filters = [BenefitEnrollment.id == enrollment_id]
+		if tenant_id:
+			filters.append(BenefitEnrollment.tenant_id == tenant_id)
+
 		enrollment = session.execute(
-			select(BenefitEnrollment).where(BenefitEnrollment.id == enrollment_id)
+			select(BenefitEnrollment).where(*filters)
 		).scalar_one_or_none()
 
 		if enrollment is None:

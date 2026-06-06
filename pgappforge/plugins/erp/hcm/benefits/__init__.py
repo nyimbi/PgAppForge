@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from pgappforge.plugins.base_plugin import BasePlugin, PluginMetadata, PluginPriority
+from pgappforge.plugins.erp.foundation.events import subscribe
 from pgappforge.plugins.erp.hcm.benefits.events import (
 	BenefitClaimAdjudicatedEvent,
 	BenefitClaimSubmittedEvent,
