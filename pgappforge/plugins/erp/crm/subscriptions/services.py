@@ -657,14 +657,11 @@ class SubscriptionService:
 
 		for sub in subs:
 			try:
-				before_status = sub.status
 				self.renew_subscription(sub.id, session)
-				after_status = session.execute(
-					sa.select(Subscription.status).where(Subscription.id == sub.id)
-				).scalar_one_or_none()
-				if after_status == "PAST_DUE":
+				# sub is already mutated in-session by renew_subscription — no extra query
+				if sub.status == "PAST_DUE":
 					past_due += 1
-				elif after_status == "CANCELLED":
+				elif sub.status == "CANCELLED":
 					cancelled += 1
 				else:
 					renewed += 1

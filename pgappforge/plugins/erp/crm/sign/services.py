@@ -17,6 +17,8 @@ Key methods
 """
 from __future__ import annotations
 
+import hashlib
+import hmac as _hmac_mod
 import logging
 import secrets
 from datetime import datetime, timezone
@@ -25,6 +27,11 @@ from typing import Any
 import sqlalchemy as sa
 
 log = logging.getLogger(__name__)
+
+
+def _hash_token(raw: str) -> str:
+	"""SHA-256 hash of a raw access token for safe DB storage."""
+	return hashlib.sha256(raw.encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +110,10 @@ class SignatureService:
 		session.flush()
 
 		signatory_ids: list[str] = []
+		# Collect raw tokens (transient — sent to signers via email link, never re-read from DB)
+		raw_tokens: list[str] = []
 		for i, sig_data in enumerate(signatories_data):
-			token = secrets.token_urlsafe(32)
+			raw_token = secrets.token_urlsafe(32)
 			signatory = SignatureSignatory(
 				tenant_id=tenant_id,
 				request_id=request.id,
@@ -114,11 +123,15 @@ class SignatureService:
 				signer_role=sig_data.get("signer_role"),
 				order_number=sig_data.get("order_number", i),
 				status="PENDING",
-				access_token=token,
+				access_token=_hash_token(raw_token),
 			)
+			signatory._raw_token = raw_token  # transient — available on the in-memory object
+			raw_tokens.append(raw_token)
 			session.add(signatory)
 			signatory_ids.append(sig_data["signer_email"])
 		session.flush()
+		# Attach raw tokens to request for immediate caller access (not persisted)
+		request._raw_tokens = raw_tokens
 
 		# Log CREATED
 		session.add(SignatureAuditLog(
@@ -261,7 +274,7 @@ class SignatureService:
 
 		signatory = session.execute(
 			sa.select(SignatureSignatory).where(
-				SignatureSignatory.access_token == access_token
+				SignatureSignatory.access_token == _hash_token(access_token)
 			)
 		).scalar_one_or_none()
 		if signatory is None:
@@ -362,7 +375,7 @@ class SignatureService:
 
 		signatory = session.execute(
 			sa.select(SignatureSignatory).where(
-				SignatureSignatory.access_token == access_token
+				SignatureSignatory.access_token == _hash_token(access_token)
 			)
 		).scalar_one_or_none()
 		if signatory is None:

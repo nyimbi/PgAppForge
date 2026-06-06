@@ -494,10 +494,16 @@ class WhatsAppService:
 		payload: dict[str, Any],
 		tenant_id: str,
 		session: Any,
+		*,
+		hmac_signature: str | None = None,
+		app_secret: str | None = None,
+		raw_body: bytes | None = None,
 	) -> dict[str, Any]:
 		"""Persist and route a raw webhook payload from WhatsApp.
 
 		Flow:
+		  0. If hmac_signature + app_secret + raw_body provided, verify
+		     X-Hub-Signature-256 before any processing (raises ValueError on mismatch).
 		  1. Append a WhatsAppWebhookLog row (processed=False).
 		  2. Route by event_type:
 		       messages.statuses  → update_delivery_status for each status entry
@@ -509,15 +515,25 @@ class WhatsAppService:
 		error is stored in log.error — caller can retry.
 
 		Args:
-			event_type: Logical type derived by the webhook endpoint controller
-			            (e.g. "messages.statuses", "messages.inbound").
-			payload:    Raw parsed JSON from the WhatsApp webhook POST body.
-			tenant_id:  Tenant scoping UUID string (resolved from phone number ID).
-			session:    Active SQLAlchemy session.
+			event_type:     Logical type derived by the webhook endpoint controller.
+			payload:        Raw parsed JSON from the WhatsApp webhook POST body.
+			tenant_id:      Tenant scoping UUID string.
+			session:        Active SQLAlchemy session.
+			hmac_signature: Value of X-Hub-Signature-256 header (optional).
+			app_secret:     WhatsApp app secret for HMAC verification (optional).
+			raw_body:       Raw request bytes for HMAC computation (optional).
 
 		Returns:
 			dict with keys: processed (bool), action (str), detail (str|None).
 		"""
+		import hashlib
+		import hmac as _hmac_lib
+		if hmac_signature and app_secret and raw_body is not None:
+			expected = "sha256=" + _hmac_lib.new(
+				app_secret.encode(), raw_body, hashlib.sha256
+			).hexdigest()
+			if not _hmac_lib.compare_digest(expected, hmac_signature):
+				raise ValueError("WhatsApp webhook HMAC verification failed — request rejected")
 		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppWebhookLog
 
 		log_row = WhatsAppWebhookLog(

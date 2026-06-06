@@ -6,6 +6,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from pgappforge.plugins.erp.foundation.events import emit_event
 from pgappforge.plugins.workflow.engine import BPMActionRegistry
 
 from .events import (
@@ -144,7 +145,7 @@ class SelfServiceService:
 
 		assert req.id, "LeaveRequest must have an id after flush"
 
-		self._bus.emit(
+		emit_event(
 			LeaveRequestSubmittedEvent(
 				request_id=req.id,
 				employee_id=employee_id,
@@ -152,7 +153,8 @@ class SelfServiceService:
 				start_date=str(start_date),
 				end_date=str(end_date),
 				days=days,
-			)
+			),
+		session,
 		)
 		return req
 
@@ -193,12 +195,13 @@ class SelfServiceService:
 
 		session.flush()
 
-		self._bus.emit(
+		emit_event(
 			LeaveRequestApprovedEvent(
 				request_id=req.id,
 				employee_id=req.employee_id,
 				approved_by=approver_id,
-			)
+			),
+		session,
 		)
 		return req
 
@@ -228,13 +231,14 @@ class SelfServiceService:
 		req.rejection_reason = reason
 		session.flush()
 
-		self._bus.emit(
+		emit_event(
 			LeaveRequestRejectedEvent(
 				request_id=req.id,
 				employee_id=req.employee_id,
 				rejected_by=rejector_id,
 				reason=reason,
-			)
+			),
+		session,
 		)
 		return req
 
@@ -350,12 +354,13 @@ class SelfServiceService:
 
 		assert req.id, "ProfileUpdateRequest must have an id after flush"
 
-		self._bus.emit(
+		emit_event(
 			ProfileUpdateRequestedEvent(
 				request_id=req.id,
 				employee_id=employee_id,
 				fields_changed=list(changes_dict.keys()),
-			)
+			),
+		session,
 		)
 		return req
 
@@ -607,11 +612,12 @@ class SelfServiceService:
 
 		assert ann.id, "Announcement must have an id after flush"
 
-		self._bus.emit(
+		emit_event(
 			AnnouncementPublishedEvent(
 				announcement_id=ann.id,
 				title=title,
 				audience_roles=audience_roles or [],
-			)
+			),
+		session,
 		)
 		return ann

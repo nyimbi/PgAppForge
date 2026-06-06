@@ -788,12 +788,9 @@ class TestSignService:
         assert req.status == "PENDING"
         assert req.document_id == "DOC001"
 
-        # Retrieve the signatory access_token before sending (send_request
-        # transitions to IN_PROGRESS but does not clear the token)
-        signatory = session.execute(
-            sa.select(_SgnSignatory).where(_SgnSignatory.request_id == req.id)
-        ).scalar_one()
-        token = signatory.access_token
+        # Raw token is attached transiently on req._raw_tokens[0] by create_request
+        # (the DB stores the sha256 hash — callers use the raw value for signing links)
+        token = req._raw_tokens[0]
         assert token is not None
 
         SignatureService.send_request(req.id, session)
@@ -827,10 +824,7 @@ class TestSignService:
             session=session,
         )
 
-        signatory = session.execute(
-            sa.select(_SgnSignatory).where(_SgnSignatory.request_id == req.id)
-        ).scalar_one()
-        token = signatory.access_token
+        token = req._raw_tokens[0]  # raw token (DB stores sha256 hash)
 
         SignatureService.send_request(req.id, session)
         SignatureService.decline_document(token, "Not agreed", session)
