@@ -9,7 +9,7 @@ Strategy
 - Service tests use a real SQLAlchemy Session over an in-memory SQLite engine
   with SQLite-compatible table definitions (JSON not JSONB, String(36) not
   UUID, DateTime not DateTime(timezone=True), Float not Numeric).
-- ``emit_event`` (LMS) and ``SelfServiceService._bus`` (ESS) are patched to
+- ``_emit`` and ``_emit_event`` (LMS and ESS) are patched to
   no-ops so tests never need a Flask context or event log table.
 - No @pytest.mark.asyncio, no MagicMock for the session.
 """
@@ -359,11 +359,6 @@ def _noop_emit(*_args: Any, **_kwargs: Any) -> None:
     """Drop-in for emit_event that requires no session or Flask context."""
 
 
-class _FakeBus:
-    def emit(self, *_args: Any, **_kwargs: Any) -> None:
-        pass
-
-
 # ---------------------------------------------------------------------------
 # Patch: redirect service model lookups to the test-local ORM classes.
 #
@@ -381,7 +376,8 @@ _LMS_PATCHES: dict[str, Any] = {
     "LmsEnrollment": _LmsEnrollment,
     "LmsProgress": _LmsProgress,
     "LmsCertificate": _LmsCertificate,
-    "emit_event": _noop_emit,
+    "_emit": _noop_emit,          # module renamed emit_event → _emit helper
+    "_emit_event": _noop_emit,    # guard the underlying import too
 }
 
 _ESS_PATCHES: dict[str, Any] = {
@@ -390,6 +386,8 @@ _ESS_PATCHES: dict[str, Any] = {
     "ProfileUpdateRequest": _ProfileUpdateRequest,
     "EssDocument": _EssDocument,
     "Announcement": _Announcement,
+    "_emit": _noop_emit,          # replaced _bus.emit pattern with _emit helper
+    "_emit_event": _noop_emit,    # guard underlying import
 }
 
 
@@ -400,11 +398,9 @@ def _lms_service():
 
 
 def _ess_service():
-    """Return a real SelfServiceService with models patched and _bus stubbed."""
+    """Return a real SelfServiceService with models patched."""
     from pgappforge.plugins.erp.hcm.self_service.services import SelfServiceService
-    svc = SelfServiceService.__new__(SelfServiceService)
-    svc._bus = _FakeBus()
-    return svc
+    return SelfServiceService()
 
 
 # ===========================================================================
