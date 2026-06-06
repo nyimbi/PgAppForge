@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from pgappforge.plugins.erp.foundation.events import emit_event
@@ -346,7 +347,7 @@ class DocumentService:
 			# JSONB containment: document.tags @> '["tag1","tag2"]'::jsonb
 			import json
 			stmt = stmt.where(
-				Document.tags.op("@>")(sa.cast(json.dumps(tags), sa.Text))
+				Document.tags.op("@>")(sa.cast(json.dumps(tags), JSONB))
 			)
 
 		if owner_id is not None:
@@ -593,7 +594,7 @@ class DocumentService:
 			)
 		)
 		# Expire the attribute so it is re-loaded on next access
-		sa.inspect(doc).expire_attributes(["search_vector"])
+		session.expire(doc, ["search_vector"])
 
 
 # ---------------------------------------------------------------------------

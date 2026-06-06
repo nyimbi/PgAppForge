@@ -341,7 +341,8 @@ class BenefitsService:
 			)
 
 		claim.status = decision
-		claim.approved_amount_cents = approved_amount_cents
+		if approved_amount_cents is not None:
+			claim.approved_amount_cents = approved_amount_cents
 		claim.adjudicator_id = adjudicator_id
 		claim.adjudicated_at = _now_utc()
 		if denial_reason:
@@ -423,11 +424,11 @@ class BenefitsService:
 			)
 			try:
 				session.add(deduction)
-				session.flush()
+				with session.begin_nested():
+					session.flush()
 				created.append(deduction)
 				total_cents += employee_cents + employer_cents
 			except IntegrityError:
-				session.rollback()
 				_log.debug(
 					"Deduction for enrollment=%s period=%s already exists — skipped",
 					enrollment.id, period,
