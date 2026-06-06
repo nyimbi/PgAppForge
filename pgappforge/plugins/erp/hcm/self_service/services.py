@@ -6,8 +6,19 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from pgappforge.plugins.erp.foundation.events import emit_event
+from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
 from pgappforge.plugins.workflow.engine import BPMActionRegistry
+
+import logging as _logging
+_log = _logging.getLogger(__name__)
+
+
+def _emit(event: Any, session: Any = None) -> None:
+	"""Fire-and-forget event emission. Session=None degrades gracefully."""
+	try:
+		_emit_event(event, session)
+	except Exception:  # noqa: BLE001
+		_log.debug("Event bus unavailable; event %s not published", type(event).__name__)
 
 from .events import (
 	AnnouncementPublishedEvent,
@@ -145,7 +156,7 @@ class SelfServiceService:
 
 		assert req.id, "LeaveRequest must have an id after flush"
 
-		emit_event(
+		_emit(
 			LeaveRequestSubmittedEvent(
 				request_id=req.id,
 				employee_id=employee_id,
@@ -195,7 +206,7 @@ class SelfServiceService:
 
 		session.flush()
 
-		emit_event(
+		_emit(
 			LeaveRequestApprovedEvent(
 				request_id=req.id,
 				employee_id=req.employee_id,
@@ -231,7 +242,7 @@ class SelfServiceService:
 		req.rejection_reason = reason
 		session.flush()
 
-		emit_event(
+		_emit(
 			LeaveRequestRejectedEvent(
 				request_id=req.id,
 				employee_id=req.employee_id,
@@ -354,7 +365,7 @@ class SelfServiceService:
 
 		assert req.id, "ProfileUpdateRequest must have an id after flush"
 
-		emit_event(
+		_emit(
 			ProfileUpdateRequestedEvent(
 				request_id=req.id,
 				employee_id=employee_id,
@@ -612,7 +623,7 @@ class SelfServiceService:
 
 		assert ann.id, "Announcement must have an id after flush"
 
-		emit_event(
+		_emit(
 			AnnouncementPublishedEvent(
 				announcement_id=ann.id,
 				title=title,
