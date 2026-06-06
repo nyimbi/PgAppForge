@@ -49,6 +49,10 @@ class _ProcessDefinition(_Base):
     config        = Column(JSON, nullable=False, default=dict)
     created_at    = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by_id = Column(Integer, ForeignKey("ab_user.id"), nullable=True)
+    # Versioning columns added in workflow-gaps work
+    version              = Column(Integer, nullable=False, default=1)
+    parent_definition_id = Column(Integer, ForeignKey("bpm_process_definition.id", ondelete="SET NULL"), nullable=True)
+    is_latest            = Column(Boolean, nullable=False, default=True)
 
     steps     = relationship("_ProcessStep",    order_by="_ProcessStep.order_num",
                              back_populates="definition", cascade="all, delete-orphan")
@@ -74,6 +78,11 @@ class _ProcessStep(_Base):
     timeout_hours    = Column(Integer, nullable=False, default=24)
     escalate_to_role = Column(String(64))
     actions          = Column(JSON, nullable=False, default=dict)
+    # Columns added in workflow-gaps work
+    step_type        = Column(String(20), nullable=False, default="TASK")
+    auto_advance_hours = Column(Integer, nullable=True)
+    timer_action     = Column(String(20), nullable=True)
+    role_expression  = Column(String(256), nullable=True)
 
     definition = relationship("_ProcessDefinition", back_populates="steps")
 
@@ -93,7 +102,9 @@ class _ProcessInstance(_Base):
     started_at      = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     completed_at    = Column(DateTime(timezone=True))
     started_by_id   = Column(Integer, ForeignKey("ab_user.id"), nullable=True)
-    step_entered_at = Column(DateTime(timezone=True))
+    step_entered_at      = Column(DateTime(timezone=True))
+    # Versioning column added in workflow-gaps work
+    definition_version   = Column(Integer, nullable=False, default=1)
 
     definition   = relationship("_ProcessDefinition", back_populates="instances")
     current_step = relationship("_ProcessStep", foreign_keys=[current_step_id])
@@ -128,6 +139,47 @@ class _ProcessInstance(_Base):
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
         return (end - started).total_seconds() / 3600.0
+
+
+class _ProcessTransition(_Base):
+    """Stub for ProcessTransition (workflow-gaps conditional routing)."""
+    __tablename__ = "bpm_process_transition"
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    definition_id  = Column(Integer, ForeignKey("bpm_process_definition.id", ondelete="CASCADE"))
+    from_step_id   = Column(Integer, ForeignKey("bpm_process_step.id", ondelete="CASCADE"), nullable=True)
+    to_step_id     = Column(Integer, ForeignKey("bpm_process_step.id", ondelete="SET NULL"), nullable=True)
+    label          = Column(String(128), nullable=True)
+    conditions_json = Column(JSON, nullable=False, default=dict)
+    priority       = Column(Integer, nullable=False, default=0)
+    is_default     = Column(Boolean, nullable=False, default=False)
+
+    from_step = relationship("_ProcessStep", foreign_keys=[from_step_id])
+    to_step   = relationship("_ProcessStep", foreign_keys=[to_step_id])
+
+
+class _ProcessToken(_Base):
+    """Stub for ProcessToken (parallel gateway tokens)."""
+    __tablename__ = "bpm_process_token"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    instance_id  = Column(Integer, ForeignKey("bpm_process_instance.id", ondelete="CASCADE"))
+    step_id      = Column(Integer, ForeignKey("bpm_process_step.id", ondelete="SET NULL"), nullable=True)
+    status       = Column(String(20), nullable=False, default="active")
+    created_at   = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class _UserDelegation(_Base):
+    """Stub for UserDelegation (workflow delegation)."""
+    __tablename__ = "bpm_user_delegation"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    delegator_id = Column(Integer, ForeignKey("ab_user.id", ondelete="SET NULL"), nullable=True)
+    delegate_id  = Column(Integer, ForeignKey("ab_user.id", ondelete="SET NULL"), nullable=True)
+    start_date   = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    end_date     = Column(DateTime(timezone=True), nullable=True)
+    is_active    = Column(Boolean, nullable=False, default=True)
+    reason       = Column(Text, nullable=True)
+    roles_included = Column(JSON, nullable=False, default=list)
+    created_at   = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class _ProcessEvent(_Base):
@@ -198,10 +250,13 @@ def _make_engine(session):
     # can operate without PostgreSQL.
     orig = {}
     for attr, repl in [
-        ("ProcessDefinition", _ProcessDefinition),
-        ("ProcessInstance",   _ProcessInstance),
-        ("ProcessStep",       _ProcessStep),
-        ("ProcessEvent",      _ProcessEvent),
+        ("ProcessDefinition",  _ProcessDefinition),
+        ("ProcessInstance",    _ProcessInstance),
+        ("ProcessStep",        _ProcessStep),
+        ("ProcessEvent",       _ProcessEvent),
+        ("ProcessTransition",  _ProcessTransition),
+        ("ProcessToken",       _ProcessToken),
+        ("UserDelegation",     _UserDelegation),
     ]:
         orig[attr] = getattr(_mod, attr)
         setattr(_mod, attr, repl)

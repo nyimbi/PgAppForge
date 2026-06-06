@@ -1237,10 +1237,11 @@ class WorkflowEngine:
 
 		Falls back to ``step.assigned_role`` on any error.
 		"""
-		if not step.role_expression:
-			return step.assigned_role
+		role_expression = getattr(step, "role_expression", None)
+		if not role_expression:
+			return getattr(step, "assigned_role", None)
 
-		expr = step.role_expression.strip()
+		expr = role_expression.strip()
 
 		# Simple $field reference
 		if expr.startswith("$"):
