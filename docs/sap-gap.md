@@ -21,13 +21,14 @@
 
 | SAP Capability | Our Status | Priority | Notes |
 |---|---|---|---|
-| Purchase Order management | ❌ Missing | 🔴 P1 | AP exists but has no upstream PO; 3-way match impossible |
-| 3-way match (PO / GR / Invoice) | ❌ Missing | 🔴 P1 | Core AP control; required for most audit frameworks |
-| Revenue recognition engine (ASC 606 / IFRS 15) | ❌ Missing | 🔴 P1 | Mandatory for SaaS, project, subscription billing |
-| Group consolidation + intercompany eliminations | ❌ Missing | 🟠 P2 | Holding companies (common in KE) need entity rollup |
-| Profit center / segment accounting | ❌ Missing | 🟠 P2 | Dimensional P&L; GL exists but no cost object accounting |
-| Product cost controlling (standard/actual costing) | ❌ Missing | 🟠 P2 | Required for manufacturing margin analysis |
-| Credit management / credit exposure tracking | ❌ Missing | 🟠 P2 | Live AR exposure aggregation per customer |
+| Purchase Order management | ✅ Implemented | ~~🔴 P1~~ | SCM module: `create_purchase_order()` + GL posting |
+| Goods Receipt | ✅ Implemented | ~~🔴 P1~~ | SCM module: `receive_goods()` with GRN |
+| 3-way match (PO / GR / Invoice) | ✅ Implemented | ~~🔴 P1~~ | SCM: `match_supplier_invoice()` with tolerance check |
+| Revenue recognition engine (ASC 606 / IFRS 15) | ✅ Implemented | ~~🔴 P1~~ | `finance/revenue_recognition/` — contracts, obligations, allocation |
+| Group consolidation + intercompany eliminations | ✅ Implemented | ~~🟠 P2~~ | `finance/consolidation/` — FX translation, IC elimination, minority interest |
+| Profit center / segment accounting | ✅ Implemented | ~~🟠 P2~~ | `finance/profit_center/` — dimensional P&L, allocation rules |
+| Product cost controlling (standard/actual costing) | ✅ Implemented | ~~🟠 P2~~ | `finance/product_costing/` — BOM-driven standard, variance analysis |
+| Credit management / credit exposure tracking | ✅ Implemented | ~~🟠 P2~~ | `finance/credit_management/` — live exposure, credit hold |
 | Material ledger (actual costing, parallel currencies) | ❌ Missing | 🟡 P3 | Complex; requires inventory + costing integration |
 | Cash flow forecasting (direct method) | Partial (FP&A) | 🟡 P3 | FP&A has planning; no real-time cash flow statement |
 | Joint venture / cost sharing accounting | ❌ Missing | 🟢 OOS | Upstream-specific |
@@ -56,10 +57,10 @@
 
 | SAP Capability | Our Status | Priority | Notes |
 |---|---|---|---|
-| Multi-country statutory payroll | Partial (Kenya only) | 🔴 P1 | Uganda, Tanzania next; SuccessFactors has 100+ countries |
+| Multi-country statutory payroll | ✅ Kenya + Uganda + Tanzania | ~~🔴 P1~~ | `payroll/ke/`, `payroll/ug/`, `payroll/tz/` — authoritative statutory calculators |
 | Equity compensation (stock options, RSUs, ESPP) | ❌ Missing | 🟠 P2 | Vesting schedules, tax withholding on exercise |
-| Workforce planning / headcount budgeting | ❌ Missing | 🟠 P2 | FTE plan integrated with Finance |
-| Variable pay / sales incentive management | ❌ Missing | 🟠 P2 | Quota, attainment, payout calculation |
+| Workforce planning / headcount budgeting | ✅ Implemented | ~~🟠 P2~~ | `hcm/workforce_planning/` — FTE budget, scenarios, GL cost center integration |
+| Variable pay / sales incentive management | ✅ Implemented | ~~🟠 P2~~ | `hcm/variable_pay/` — quota, tiered commission, accelerators, BPM-driven approval |
 | Contingent workforce management (Fieldglass) | ❌ Missing | 🟡 P3 | SOW, staffing agency, time-and-materials |
 | People analytics with ML attrition models | Partial (rules-based flight risk) | 🟡 P3 | We have heuristic scoring; SAP has trained ML models |
 | Global employee experience (Qualtrics integration) | ❌ Missing | 🟡 P3 | We have surveys; SAP embeds experience data in HR records |
@@ -72,8 +73,8 @@
 
 | SAP Capability | Our Status | Priority | Notes |
 |---|---|---|---|
-| MRP / Materials Requirements Planning | ❌ Missing | 🔴 P1 | Manufacturing/distribution can't run without it |
-| Goods Receipt (inventory inbound) | ❌ Missing | 🔴 P1 | Required for 3-way match; links PO → Inventory |
+| MRP / Materials Requirements Planning | ✅ Implemented | ~~🔴 P1~~ | `operations/mrp/` — BOM explosion, net requirements, planned orders, purchase req auto-creation |
+| Goods Receipt (inventory inbound) | ✅ Implemented | ~~🔴 P1~~ | SCM module `receive_goods()` with accepted/rejected qty and GL |
 | Production planning with capacity constraints | Partial (Production module) | 🟠 P2 | We have BOM/work orders; no finite capacity scheduler |
 | Demand planning / forecasting | ❌ Missing | 🟠 P2 | Statistical forecasting, consensus planning |
 | Transportation management | ❌ Missing | 🟡 P3 | Route optimization, carrier management, freight costing |

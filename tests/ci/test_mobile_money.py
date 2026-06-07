@@ -1093,10 +1093,10 @@ class TestAllExports:
 		)
 		# New models (CRITICAL + HIGH gaps) must also be present
 		required_new = {
-			"FeeSchedule", "OutboxEvent", "MMGLJournalLine",
-			"StandingOrder", "DisbursementBatch", "DisbursementLine",
+			"FeeSchedule", "MMOutboxEvent", "MMGLJournalLine",
+			"MMStandingOrder", "DisbursementBatch", "DisbursementLine",
 			"FraudSignal", "NotificationRequest",
-			"ReconciliationRun", "ReconciliationBreak", "WalletAuditEvent",
+			"MMReconciliationRun", "ReconciliationBreak", "WalletAuditEvent",
 		}
 		assert required_new.issubset(exports), (
 			f"Missing new models: {required_new - exports}"
