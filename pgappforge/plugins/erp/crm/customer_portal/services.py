@@ -124,6 +124,11 @@ def _verify_password(password: str, hashed: str) -> bool:
 	return False
 
 
+# Pre-computed dummy hash for constant-time authentication (prevents user enumeration).
+# Uses a fixed salt so scrypt cost is paid once at import, not per request.
+_DUMMY_HASH = "scrypt:" + ("ab" * 32) + ":" + ("cd" * 32)
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -219,12 +224,16 @@ class CustomerPortalService:
 			)
 		).scalar_one_or_none()
 
-		# Timing-safe: always verify to prevent enumeration
-		dummy_hash = _hash_password("__dummy__")
-		candidate_hash = user.password_hash if user else dummy_hash
-
+		# Timing-safe: always verify even when user absent (prevents enumeration).
+		# _DUMMY_HASH is precomputed at module load — no per-request computation.
+		candidate_hash = user.password_hash if user else _DUMMY_HASH
 		if user is None:
 			_verify_password(password, candidate_hash)
+			return None
+
+		# Active check — disabled accounts cannot authenticate
+		if not user.is_active:
+			_verify_password(password, candidate_hash)  # timing-safe
 			return None
 
 		# Lockout check
@@ -493,6 +502,26 @@ class CustomerPortalService:
 		user: CustomerPortalUser = db_session.execute(
 			sa.select(CustomerPortalUser).where(CustomerPortalUser.id == ps.user_id)
 		).scalar_one()
+
+		# Validate invoice ownership — every invoice must belong to this customer + tenant
+		if invoice_ids:
+			try:
+				from pgappforge.plugins.erp.finance.ar.models import ARInvoice
+				invoices = db_session.execute(
+					sa.select(ARInvoice).where(
+						ARInvoice.id.in_(invoice_ids),
+						ARInvoice.tenant_id == user.tenant_id,
+						ARInvoice.customer_id == user.customer_id,
+					)
+				).scalars().all()
+				found_ids = {inv.id for inv in invoices}
+				invalid = [i for i in invoice_ids if i not in found_ids]
+				if invalid:
+					raise CustomerPortalValidationError(
+						f"Invoice(s) not found or not owned by this customer: {invalid}"
+					)
+			except ImportError:
+				pass  # AR module unavailable — skip validation
 
 		payment = PortalPayment(
 			id=_new_id(),
