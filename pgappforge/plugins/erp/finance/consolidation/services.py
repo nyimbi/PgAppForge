@@ -15,7 +15,7 @@ Critical invariants:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -612,11 +612,10 @@ class ConsolidationService:
 				import sqlalchemy as _sa
 
 				# Parse period "YYYY-MM" → date range for sent_at filter
-				from datetime import date as _dt
 				_year, _month = int(period[:4]), int(period[5:7])
-				_period_start = _dt(_year, _month, 1)
+				_period_start = date(_year, _month, 1)
 				_next_y, _next_m = (_year, _month + 1) if _month < 12 else (_year + 1, 1)
-				_period_end = _dt(_next_y, _next_m, 1)
+				_period_end = date(_next_y, _next_m, 1)
 
 				ic_txs = session.execute(
 					_sa.select(ICOutboxTransaction).where(
