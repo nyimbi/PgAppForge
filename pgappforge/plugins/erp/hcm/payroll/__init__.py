@@ -344,6 +344,10 @@ from pgappforge.plugins.erp.hcm.payroll.services import (  # noqa: E402
 	PayrollStateError,
 	PayrollCalculationError,
 )
+from pgappforge.plugins.erp.hcm.payroll.assembly import (  # noqa: E402
+	PayrollAssemblyService,
+	PayrollAssemblyError,
+)
 
 __all__ = [
 	# plugin
@@ -369,4 +373,7 @@ __all__ = [
 	"PayslipNotFoundError",
 	"PayrollStateError",
 	"PayrollCalculationError",
+	# assembly
+	"PayrollAssemblyService",
+	"PayrollAssemblyError",
 ]

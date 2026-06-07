@@ -155,12 +155,14 @@ def _get_open_demand(
 
 	# --- Open sales order lines (commerce.OrderLine) ---
 	# Queries unfulfilled OrderLine rows whose parent Order is CONFIRMED/PROCESSING.
-	# product_code on OrderLine is matched against product_id (soft-key convention).
-	# required_date is estimated as Order.created_at + 30 days (configurable lead).
+	# product_id (UUID) is bridged to OrderLine.product_code (SKU) via inv_product.
+	# required_date is estimated as Order.created_at + 30 days.
 	try:
 		from pgappforge.plugins.erp.crm.commerce.models import Order as _CommerceOrder, OrderLine as _OrderLine  # type: ignore[import]
+		from pgappforge.plugins.erp.operations.inventory.models import Product as _InvProduct  # type: ignore[import]
 		from datetime import timedelta as _td
 
+		# Bridge: product_id (UUID) → inventory Product.sku → OrderLine.product_code
 		so_rows = session.execute(
 			sa.select(
 				_OrderLine.quantity,
@@ -168,11 +170,15 @@ def _get_open_demand(
 				_CommerceOrder.created_at,
 			)
 			.join(_CommerceOrder, _OrderLine.order_id == _CommerceOrder.id)
+			.join(_InvProduct, sa.and_(
+				_InvProduct.id == product_id,
+				_InvProduct.tenant_id == tenant_id,
+				_OrderLine.product_code == _InvProduct.sku,
+			))
 			.where(
 				_OrderLine.tenant_id == tenant_id,
-				_OrderLine.product_code == product_id,
 				_CommerceOrder.status.in_(["CONFIRMED", "PROCESSING"]),
-				_CommerceOrder.created_at <= sa.func.now(),  # within horizon
+				_CommerceOrder.created_at <= sa.func.now(),
 			)
 		).all()
 
@@ -180,12 +186,11 @@ def _get_open_demand(
 			remaining = _d(qty) - _d(fulfilled or 0)
 			if remaining <= 0:
 				continue
-			# Estimated required date: order creation + 30 days
 			req_date = (created_at.date() + _td(days=30)) if created_at else date.today()
 			if req_date <= horizon_date:
 				demand.append((remaining, req_date))
 	except ImportError:
-		log.debug("_get_open_demand: commerce plugin not loaded — no SO demand")
+		log.debug("_get_open_demand: commerce or inventory plugin not loaded — no SO demand")
 	except Exception as exc:
 		log.warning("_get_open_demand: SO query failed: %s", exc)
 
