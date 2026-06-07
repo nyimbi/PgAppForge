@@ -138,6 +138,17 @@ class GLAccount(AuditMixin, RulesMixin, Model):
 		nullable=True,
 		comment="US GAAP taxonomy concept",
 	)
+	is_statistical = Column(
+		Boolean,
+		nullable=False,
+		default=False,
+		comment="True for non-monetary statistical accounts (headcount, sq ft)",
+	)
+	stat_unit = Column(
+		String(30),
+		nullable=True,
+		comment="Unit of measure for statistical accounts: FTE/SQFT/HOURS/COUNT",
+	)
 	is_active = Column(Boolean, nullable=False, default=True)
 	description = Column(Text, nullable=True)
 	attributes: dict[str, Any] = Column(
@@ -724,6 +735,17 @@ class GLJournalLine(AuditMixin, Model):
 		index=True,
 	)
 	tax_code = Column(String(20), nullable=True)
+	dimensions = Column(
+		JSONB,
+		nullable=False,
+		default=dict,
+		comment="Tenant-defined dimension values e.g. {project: PRJ001, grant: GRT001}",
+	)
+	quantity = Column(
+		Numeric(15, 4),
+		nullable=True,
+		comment="For statistical accounts: quantity in stat_unit (no monetary amount)",
+	)
 	created_at = Column(
 		DateTime(timezone=True),
 		nullable=False,
@@ -804,6 +826,12 @@ class GLAccountBalance(Model):
 	closing_credit = Column(BigInteger, nullable=False, default=0)
 	ytd_debit = Column(BigInteger, nullable=False, default=0)
 	ytd_credit = Column(BigInteger, nullable=False, default=0)
+	dimensions = Column(
+		JSONB,
+		nullable=False,
+		default=dict,
+		comment="Dimension values for this balance row",
+	)
 	refreshed_at = Column(
 		DateTime(timezone=True),
 		nullable=False,
@@ -915,6 +943,43 @@ class GLBudget(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# GLDimensionDefinition
+# ---------------------------------------------------------------------------
+
+class GLDimensionDefinition(AuditMixin, Model):
+	"""Tenant-defined GL dimension catalogue (equivalent to Intacct dimension types).
+
+	Examples: project, grant, department, location, product_line, fund.
+	Up to 12 active dimensions per tenant (Intacct parity).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "gl_dimension_def"
+	__table_args__ = (
+		sa.UniqueConstraint("tenant_id", "dimension_code", name="uq_gl_dim_code"),
+		sa.Index("ix_gl_dim_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	dimension_code = Column(String(50), nullable=False, comment="Machine key: project, grant, department")
+	name = Column(String(200), nullable=False, comment="Human label: Project, Grant, Department")
+	is_required = Column(Boolean, nullable=False, default=False)
+	allowed_values = Column(JSONB, nullable=True, comment="If set, restricts valid values. None = any string")
+	is_active = Column(Boolean, nullable=False, default=True)
+	description = Column(Text, nullable=True)
+
+	def __repr__(self) -> str:
+		return f"<GLDimensionDefinition {self.dimension_code!r} tenant={self.tenant_id!r}>"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -928,4 +993,5 @@ __all__ = [
 	"GLJournalLine",
 	"GLAccountBalance",
 	"GLBudget",
+	"GLDimensionDefinition",
 ]

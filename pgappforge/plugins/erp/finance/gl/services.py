@@ -911,6 +911,36 @@ class GLService:
 		batch.status = "POSTED"
 		session.flush()
 
+		# Auto-create intercompany mirror entries
+		for line in lines:
+			ic_entity = line.get("intercompany_entity_id")
+			if not ic_entity or ic_entity == tenant_id:
+				continue
+			try:
+				from pgappforge.plugins.erp.finance.intercompany.services import IntercompanyService
+				mirror_lines = [{
+					"account_code": line.get("account_code", "1100"),
+					"debit_cents": line.get("credit_cents", 0),
+					"credit_cents": line.get("debit_cents", 0),
+				}]
+				IntercompanyService().send_transaction(
+					source_entity_id=str(tenant_id),
+					target_entity_id=str(ic_entity),
+					transaction_type="JOURNAL_MIRROR",
+					document_data={
+						"amount_cents": line.get("debit_cents", line.get("credit_cents", 0)),
+						"account_code": line.get("account_code", "1100"),
+						"source_journal_id": str(batch.id),
+					},
+					tenant_id=str(tenant_id),
+					session=session,
+				)
+				log.debug("post_simple_journal: IC mirror posted → entity %s", ic_entity)
+			except ImportError:
+				log.debug("post_simple_journal: intercompany plugin not loaded")
+			except Exception as ic_exc:
+				log.warning("post_simple_journal: IC mirror failed: %s", ic_exc)
+
 		log.debug(
 			"post_simple_journal: posted batch %r entry %r DR=%d CR=%d",
 			batch_num,

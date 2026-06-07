@@ -251,6 +251,16 @@ class BudgetLine(AuditMixin, Model):
 		comment="MANUAL|HEADCOUNT|REVENUE_PCT|PRIOR_YEAR|FORMULA",
 	)
 	driver_params = Column(JSONB, nullable=True)
+	dimensions = Column(
+		JSONB,
+		nullable=False,
+		default=dict,
+		comment=(
+			"Tenant-defined dimension values for this budget line. "
+			"Mirrors GLJournalLine.dimensions — enables dimension-aware variance analysis. "
+			"e.g. {\"project\": \"PRJ001\", \"grant\": \"GRT001\", \"fund\": \"RECURRENT\"}"
+		),
+	)
 	narrative = Column(Text, nullable=True)
 	status = Column(
 		String(20),

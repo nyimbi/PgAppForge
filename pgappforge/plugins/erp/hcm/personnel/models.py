@@ -803,6 +803,45 @@ class OrgJobGrade(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# EmployeePositionHistory — Workday worker timeline pattern
+# ---------------------------------------------------------------------------
+
+class EmployeePositionHistory(AuditMixin, Model):
+	"""Effective-dated position history — Workday worker timeline pattern.
+
+	Insert-only: never update. Close previous row (set effective_to) then insert new.
+	Current position: effective_to IS NULL.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "hcm_position_history"
+	__table_args__ = (
+		sa.Index("ix_hcm_ph_employee", "employee_id"),
+		sa.Index("ix_hcm_ph_effective", "employee_id", "effective_from"),
+		{"extend_existing": True},
+	)
+
+	id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid4, server_default=sa.text("gen_random_uuid()"))
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	employee_id = Column(String(50), nullable=False)
+	position_code = Column(String(100), nullable=True)
+	position_title = Column(String(300), nullable=True)
+	department_id = Column(String(50), nullable=True)
+	manager_id = Column(String(50), nullable=True)
+	org_unit_id = Column(String(50), nullable=True)
+	change_reason = Column(String(200), nullable=True)
+	changed_by = Column(String(50), nullable=True)
+	effective_from = Column(Date, nullable=False)
+	effective_to = Column(Date, nullable=True, comment="NULL = current record")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return f"<EmployeePositionHistory emp={self.employee_id!r} pos={self.position_code!r} from={self.effective_from} to={self.effective_to}>"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -817,4 +856,5 @@ __all__ = [
 	"OnboardingPlan",
 	"EmployeeExit",
 	"OrgJobGrade",
+	"EmployeePositionHistory",
 ]
