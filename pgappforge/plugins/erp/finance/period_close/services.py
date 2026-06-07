@@ -481,6 +481,42 @@ class PeriodCloseService:
 		close.closed_by = closed_by
 		session.flush()
 
+		# Lock the matching GLPeriod(s) so post_journal rejects new postings.
+		# GLPeriod.post_journal() already raises ClosedPeriodError when status != 'OPEN'.
+		try:
+			from pgappforge.plugins.erp.finance.gl.models import GLPeriod
+			from datetime import date as _date
+			year_str, month_str = close.period.split("-")
+			year, month = int(year_str), int(month_str)
+			period_start = _date(year, month, 1)
+			next_month = month + 1 if month < 12 else 1
+			next_year = year if month < 12 else year + 1
+			period_end_exclusive = _date(next_year, next_month, 1)
+
+			gl_periods = session.execute(
+				sa.select(GLPeriod).where(
+					GLPeriod.tenant_id == close.tenant_id,
+					GLPeriod.start_date >= period_start,
+					GLPeriod.start_date < period_end_exclusive,
+					GLPeriod.status == "OPEN",
+				)
+			).scalars().all()
+
+			for gp in gl_periods:
+				gp.status = "CLOSED"
+				gp.closed_by = closed_by
+				gp.closed_at = close.closed_at
+				log.info(
+					"PeriodCloseService: GL period %s locked (period_name=%r)",
+					gp.id, gp.period_name,
+				)
+			if gl_periods:
+				session.flush()
+		except ImportError:
+			log.debug("finalize_close: GL plugin not available; GL period not locked")
+		except ValueError:
+			log.warning("finalize_close: period %r not parseable as YYYY-MM; GL period not locked", close.period)
+
 		_emit(
 			PeriodCloseFinalizedEvent(
 				aggregate_id=close_id,

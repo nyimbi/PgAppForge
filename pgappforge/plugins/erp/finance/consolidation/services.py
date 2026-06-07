@@ -440,7 +440,12 @@ class ConsolidationService:
 		# ── 4 & 5. Intercompany elimination ─────────────────────────────
 		eliminations_count = 0
 		# Build IC matrix: (entity_a, entity_b, account_code) → amount_cents
-		ic_matrix = self._build_ic_matrix(translated_tb, members)
+		ic_matrix = self._build_ic_matrix(
+			translated_tb, members,
+			session=session,
+			tenant_id=str(group.tenant_id),
+			period=run.period,
+		)
 
 		for (entity_a, entity_b, account_code), amount_cents in ic_matrix.items():
 			if amount_cents <= 0:
@@ -581,15 +586,54 @@ class ConsolidationService:
 		self,
 		translated_tb: dict[str, list[dict]],
 		members: list[dict],
+		session: Any = None,
+		tenant_id: str = "",
+		period: str = "",
 	) -> dict[tuple[str, str, str], int]:
-		"""Identify intercompany balances that need elimination.
+		"""Identify intercompany balances for elimination.
 
-		Simple heuristic: for AR accounts (1x-2x range) in entity A, look for matching
-		AP accounts in entity B with the same or mirrored amounts.
+		Priority 1 (authoritative): Load ICOutboxTransaction records (ACCEPTED)
+		between group entities for the period — explicit IC postings registered
+		via the intercompany module. These are deterministic eliminations.
+
+		Priority 2 (fallback heuristic): Amount-sign matching across entity TBs
+		for any IC balances not captured by Priority 1. Kept as a safety net.
 
 		Returns: {(entity_a, entity_b, account_code): amount_cents}
 		"""
-		# Build per-entity account→net_cents lookup
+		entity_ids = [m["entity_id"] for m in members]
+		entity_id_set = set(entity_ids)
+		matrix: dict[tuple[str, str, str], int] = {}
+
+		# Priority 1: authoritative IC eliminations from ICOutboxTransaction
+		if session is not None and tenant_id and period:
+			try:
+				from pgappforge.plugins.erp.finance.intercompany.models import ICOutboxTransaction  # type: ignore[import]
+				import sqlalchemy as _sa
+
+				ic_txs = session.execute(
+					_sa.select(ICOutboxTransaction).where(
+						ICOutboxTransaction.tenant_id == tenant_id,
+						ICOutboxTransaction.status == "ACCEPTED",
+						ICOutboxTransaction.source_entity_id.in_(entity_id_set),
+						ICOutboxTransaction.target_entity_id.in_(entity_id_set),
+					)
+				).scalars().all()
+
+				for tx in ic_txs:
+					doc = tx.document_data or {}
+					# document_data carries {amount_cents, account_code, currency_code}
+					amount = int(doc.get("amount_cents", 0))
+					acct = str(doc.get("account_code", "1100"))
+					if amount > 0:
+						key = (str(tx.source_entity_id), str(tx.target_entity_id), acct)
+						matrix[key] = matrix.get(key, 0) + amount
+			except ImportError:
+				log.debug("_build_ic_matrix: intercompany plugin not loaded")
+			except Exception as exc:
+				log.warning("_build_ic_matrix: IC transaction query failed: %s", exc)
+
+		# Priority 2: heuristic fallback — same-account, opposite-sign balances
 		entity_acct_map: dict[str, dict[str, int]] = {}
 		for member in members:
 			eid = member["entity_id"]
@@ -599,21 +643,17 @@ class ConsolidationService:
 				for row in tb
 			}
 
-		matrix: dict[tuple[str, str, str], int] = {}
-		entity_ids = [m["entity_id"] for m in members]
-
 		for i, entity_a in enumerate(entity_ids):
 			for entity_b in entity_ids[i + 1:]:
 				accts_a = entity_acct_map.get(entity_a, {})
 				accts_b = entity_acct_map.get(entity_b, {})
 				for account_code, net_a in accts_a.items():
 					net_b = accts_b.get(account_code, 0)
-					# If A has a positive balance and B has an equal negative balance on the
-					# same account, they are intercompany and can be eliminated.
+					# Only add heuristic match if not already captured by authoritative path
 					if net_a > 0 and net_b < 0:
-						elim_amount = min(net_a, abs(net_b))
-						key = (entity_a, entity_b, account_code)
-						matrix[key] = elim_amount
+						heuristic_key = (entity_a, entity_b, account_code)
+						if heuristic_key not in matrix:
+							matrix[heuristic_key] = min(net_a, abs(net_b))
 
 		return matrix
 

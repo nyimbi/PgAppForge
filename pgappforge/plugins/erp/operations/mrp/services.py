@@ -153,14 +153,41 @@ def _get_open_demand(
 	"""
 	demand: list[tuple[Decimal, date]] = []
 
-	# --- Open sales orders (soft dependency on SCM / sales plugin) ---
+	# --- Open sales order lines (commerce.OrderLine) ---
+	# Queries unfulfilled OrderLine rows whose parent Order is CONFIRMED/PROCESSING.
+	# product_code on OrderLine is matched against product_id (soft-key convention).
+	# required_date is estimated as Order.created_at + 30 days (configurable lead).
 	try:
-		# Try to import SOLine or equivalent from a sales plugin
-		from pgappforge.plugins.erp.operations.scm.models import PurchaseRequisition  # type: ignore[import]
-		# placeholder: real impl would query SO lines here
-		# For now we return empty from this source to avoid hard coupling
+		from pgappforge.plugins.erp.crm.commerce.models import Order as _CommerceOrder, OrderLine as _OrderLine  # type: ignore[import]
+		from datetime import timedelta as _td
+
+		so_rows = session.execute(
+			sa.select(
+				_OrderLine.quantity,
+				_OrderLine.fulfilled_qty,
+				_CommerceOrder.created_at,
+			)
+			.join(_CommerceOrder, _OrderLine.order_id == _CommerceOrder.id)
+			.where(
+				_OrderLine.tenant_id == tenant_id,
+				_OrderLine.product_code == product_id,
+				_CommerceOrder.status.in_(["CONFIRMED", "PROCESSING"]),
+				_CommerceOrder.created_at <= sa.func.now(),  # within horizon
+			)
+		).all()
+
+		for qty, fulfilled, created_at in so_rows:
+			remaining = _d(qty) - _d(fulfilled or 0)
+			if remaining <= 0:
+				continue
+			# Estimated required date: order creation + 30 days
+			req_date = (created_at.date() + _td(days=30)) if created_at else date.today()
+			if req_date <= horizon_date:
+				demand.append((remaining, req_date))
 	except ImportError:
-		pass
+		log.debug("_get_open_demand: commerce plugin not loaded — no SO demand")
+	except Exception as exc:
+		log.warning("_get_open_demand: SO query failed: %s", exc)
 
 	# --- Approved demand forecasts (dp_forecast) ---
 	try:
