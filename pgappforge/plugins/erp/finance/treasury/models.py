@@ -566,10 +566,81 @@ class BankStatementLine(Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# BankStatementImport  (audit log of file import operations)
+# ---------------------------------------------------------------------------
+
+class BankStatementImport(AuditMixin, Model):
+	"""Log of bank statement file imports.
+
+	One row per import attempt. Linked to the resulting BankStatement (if
+	parsing succeeded). error_log accumulates per-row parse failures so the
+	user can diagnose partial imports without losing successfully parsed rows.
+
+	status:
+	  OK      — all rows parsed, BankStatement created
+	  PARTIAL — some rows failed; statement still created with good rows
+	  FAILED  — zero rows parsed; no BankStatement created
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "fin_bank_statement_import"
+	__table_args__ = (
+		Index("ix_fin_bsi_tenant", "tenant_id"),
+		Index("ix_fin_bsi_account", "bank_account_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	bank_account_id = Column(UUID(as_uuid=False), nullable=False)
+	file_format = Column(
+		String(20),
+		nullable=False,
+		comment="MT940 | OFX | CSV",
+	)
+	row_count = Column(Integer, nullable=False, default=0)
+	statement_id = Column(
+		UUID(as_uuid=False),
+		nullable=True,
+		comment="FK to BankStatement created by this import (NULL if FAILED)",
+	)
+	status = Column(
+		String(20),
+		nullable=False,
+		default="OK",
+		comment="OK | PARTIAL | FAILED",
+	)
+	error_log: list[dict] = Column(
+		JSONB,
+		nullable=False,
+		default=list,
+		comment="List of per-row parse errors: [{row/line, error}]",
+	)
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<BankStatementImport fmt={self.file_format!r} "
+			f"rows={self.row_count} status={self.status!r}>"
+		)
+
+
 __all__ = [
 	"BankAccount",
 	"CashPosition",
 	"FXDeal",
 	"BankStatement",
 	"BankStatementLine",
+	"BankStatementImport",
 ]

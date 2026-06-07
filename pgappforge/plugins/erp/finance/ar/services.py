@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import sqlalchemy as sa
@@ -1009,6 +1009,295 @@ class ARService:
 			)
 		except Exception as exc:
 			log.warning("_post_gl_journal: failed for %r: %s", reference, exc)
+
+
+	# ------------------------------------------------------------------
+	# compute_finance_charges
+	# ------------------------------------------------------------------
+
+	def compute_finance_charges(
+		self,
+		tenant_id: str,
+		session: Any,
+		*,
+		as_of_date: date | None = None,
+		interest_rate_annual: Decimal = Decimal("0.18"),
+		min_charge_cents: int = 100_00,
+	) -> list[Any]:
+		"""Compute and post finance charges on overdue AR invoices.
+
+		For each overdue invoice: daily_rate = annual_rate / 365
+		Charge = balance_due × daily_rate × days_overdue, min min_charge_cents.
+		Creates a new finance-charge ARInvoice linked to the original via
+		po_reference = 'FC:{original_id}:{YYYY-MM}' for idempotency.
+		Posts GL: DR Accounts Receivable (1100), CR Finance Income (4900).
+
+		Idempotent per original invoice per calendar month — will not create a
+		second charge if one already exists for the same invoice + period.
+
+		Returns list of created finance charge invoices.
+		"""
+		from pgappforge.plugins.erp.finance.ar.models import ARInvoice
+
+		today = as_of_date or date.today()
+		period = today.strftime("%Y-%m")
+		created: list[Any] = []
+
+		overdue = session.execute(
+			sa.select(ARInvoice)
+			.where(ARInvoice.tenant_id == tenant_id)
+			.where(ARInvoice.balance_due_cents > 0)
+			.where(ARInvoice.due_date < today)
+			.where(ARInvoice.status.not_in(["CANCELLED", "WRITTEN_OFF", "PAID"]))
+		).scalars().all()
+
+		for inv in overdue:
+			# Idempotency: skip if a finance charge already exists for this period
+			fc_ref = f"FC:{inv.id}:{period}"
+			existing = session.execute(
+				sa.select(ARInvoice)
+				.where(ARInvoice.tenant_id == tenant_id)
+				.where(ARInvoice.po_reference == fc_ref)
+			).scalar_one_or_none()
+			if existing is not None:
+				continue
+
+			days_overdue = (today - inv.due_date).days
+			if days_overdue <= 0:
+				continue
+
+			# interest = balance × (annual_rate / 365) × days
+			charge_dec = (
+				Decimal(inv.balance_due_cents)
+				* (interest_rate_annual / Decimal("365"))
+				* Decimal(days_overdue)
+			).to_integral_value(rounding=ROUND_HALF_UP)
+			charge_cents = max(min_charge_cents, int(charge_dec))
+
+			charge_inv = ARInvoice(
+				tenant_id=tenant_id,
+				customer_id=inv.customer_id,
+				invoice_number=f"FC-{inv.invoice_number}-{period}",
+				invoice_date=today,
+				due_date=today,
+				currency_code=inv.currency_code,
+				subtotal_cents=charge_cents,
+				discount_cents=0,
+				tax_cents=0,
+				total_cents=charge_cents,
+				balance_due_cents=charge_cents,
+				status="ISSUED",
+				gl_ar_account=inv.gl_ar_account or "1100",
+				gl_revenue_account="4900",
+				po_reference=fc_ref,
+				notes=(
+					f"Finance charge on invoice {inv.invoice_number} "
+					f"({days_overdue} days overdue, {float(interest_rate_annual * 100):.1f}% p.a.)"
+				),
+			)
+			session.add(charge_inv)
+			session.flush()
+
+			# GL: DR AR control, CR Finance Income
+			try:
+				self._post_gl_journal(
+					tenant_id=tenant_id,
+					reference=charge_inv.invoice_number,
+					debit_account=inv.gl_ar_account or "1100",
+					credit_account="4900",
+					amount_cents=charge_cents,
+					currency_code=inv.currency_code,
+					effective_date=today,
+					description=f"Finance charge {charge_inv.invoice_number}",
+					session=session,
+				)
+			except Exception as exc:
+				log.warning(
+					"compute_finance_charges: GL post failed for %s: %s",
+					charge_inv.invoice_number, exc,
+				)
+
+			created.append(charge_inv)
+			log.debug(
+				"compute_finance_charges: created %s — %d¢ on inv %s (%d days)",
+				charge_inv.invoice_number, charge_cents, inv.invoice_number, days_overdue,
+			)
+
+		log.info(
+			"ARService.compute_finance_charges: tenant=%s period=%s created=%d",
+			tenant_id, period, len(created),
+		)
+		return created
+
+	# ------------------------------------------------------------------
+	# generate_dunning_letter
+	# ------------------------------------------------------------------
+
+	def generate_dunning_letter(
+		self,
+		dunning_event_id: str,
+		session: Any,
+		*,
+		company_name: str = "Our Company",
+		company_address: str = "",
+	) -> dict:
+		"""Generate a structured dunning letter for a dunning event.
+
+		Returns a dict suitable for Jinja2/HTML template rendering. No PDF deps.
+
+		Keys: customer_name, customer_address, date, dunning_level,
+		      overdue_invoices (list), total_overdue_cents, currency_code,
+		      text_body, company_name, company_address.
+		"""
+		from pgappforge.plugins.erp.finance.ar.models import (
+			ARDunningEvent, ARDunningRun, ARCustomer, ARInvoice,
+		)
+
+		event = session.execute(
+			sa.select(ARDunningEvent).where(ARDunningEvent.id == dunning_event_id)
+		).scalar_one_or_none()
+		if event is None:
+			raise ARInvoiceNotFoundError(f"DunningEvent {dunning_event_id!r} not found")
+
+		# Fetch dunning level from parent run to avoid lazy-load ambiguity
+		dunning_run = session.execute(
+			sa.select(ARDunningRun).where(ARDunningRun.id == event.dunning_run_id)
+		).scalar_one_or_none()
+		dunning_level = dunning_run.dunning_level if dunning_run is not None else 1
+
+		customer = session.execute(
+			sa.select(ARCustomer).where(ARCustomer.id == event.customer_id)
+		).scalar_one_or_none()
+
+		overdue_invoices = session.execute(
+			sa.select(ARInvoice)
+			.where(ARInvoice.customer_id == event.customer_id)
+			.where(ARInvoice.tenant_id == event.tenant_id)
+			.where(ARInvoice.balance_due_cents > 0)
+			.where(ARInvoice.status.not_in(["CANCELLED", "WRITTEN_OFF", "PAID"]))
+			.order_by(ARInvoice.due_date)
+		).scalars().all()
+
+		today = date.today()
+		total_overdue = sum(i.balance_due_cents for i in overdue_invoices)
+
+		inv_list = [
+			{
+				"invoice_number": i.invoice_number,
+				"invoice_date": i.invoice_date.isoformat() if i.invoice_date else "",
+				"due_date": i.due_date.isoformat() if i.due_date else "",
+				"balance_due_cents": i.balance_due_cents,
+				"days_overdue": max(0, (today - i.due_date).days) if i.due_date else 0,
+				"currency": i.currency_code,
+			}
+			for i in overdue_invoices
+		]
+
+		level_messages = {
+			1: "This is a friendly reminder that the following invoices are past due.",
+			2: (
+				"Despite our previous reminder, the following invoices remain unpaid. "
+				"Please remit payment immediately to avoid further action."
+			),
+			3: (
+				"This is our final notice. Failure to pay within 7 days will result in "
+				"referral to our collections team and may affect your credit standing."
+			),
+		}
+		text_body = level_messages.get(dunning_level, level_messages[3])
+
+		billing_address = getattr(customer, "billing_address", None) or {}
+		customer_address = (
+			", ".join(str(v) for v in billing_address.values() if v)
+			if isinstance(billing_address, dict)
+			else str(billing_address)
+		)
+
+		return {
+			"customer_name": customer.account_number if customer else event.customer_id,
+			"customer_address": customer_address,
+			"date": today.isoformat(),
+			"dunning_level": dunning_level,
+			"overdue_invoices": inv_list,
+			"total_overdue_cents": total_overdue,
+			"currency_code": overdue_invoices[0].currency_code if overdue_invoices else "USD",
+			"text_body": text_body,
+			"company_name": company_name,
+			"company_address": company_address,
+		}
+
+	# ------------------------------------------------------------------
+	# get_customer_statistics
+	# ------------------------------------------------------------------
+
+	def get_customer_statistics(
+		self,
+		customer_id: str,
+		tenant_id: str,
+		session: Any,
+	) -> dict:
+		"""Live AR statistics for a customer.
+
+		Returns aging buckets (current, 1-30, 31-60, 61-90, 90+ days),
+		YTD revenue, average payment days (invoice_date → paid_date),
+		and total outstanding balance.
+		"""
+		from pgappforge.plugins.erp.finance.ar.models import ARInvoice
+
+		today = date.today()
+		year_start = today.replace(month=1, day=1)
+
+		invoices = session.execute(
+			sa.select(ARInvoice)
+			.where(ARInvoice.customer_id == customer_id)
+			.where(ARInvoice.tenant_id == tenant_id)
+			.where(ARInvoice.status.not_in(["CANCELLED"]))
+		).scalars().all()
+
+		aging: dict[str, int] = {
+			"current": 0,
+			"1_30": 0,
+			"31_60": 0,
+			"61_90": 0,
+			"90_plus": 0,
+		}
+		ytd_revenue = 0
+		payment_days_list: list[int] = []
+
+		for inv in invoices:
+			if inv.invoice_date and inv.invoice_date >= year_start:
+				ytd_revenue += inv.total_cents
+
+			if inv.balance_due_cents > 0 and inv.due_date:
+				days_overdue = max(0, (today - inv.due_date).days)
+				if days_overdue == 0:
+					aging["current"] += inv.balance_due_cents
+				elif days_overdue <= 30:
+					aging["1_30"] += inv.balance_due_cents
+				elif days_overdue <= 60:
+					aging["31_60"] += inv.balance_due_cents
+				elif days_overdue <= 90:
+					aging["61_90"] += inv.balance_due_cents
+				else:
+					aging["90_plus"] += inv.balance_due_cents
+
+			# Average payment days: PAID invoices with invoice_date and paid_date
+			if inv.status == "PAID" and inv.paid_date and inv.invoice_date:
+				payment_days_list.append((inv.paid_date - inv.invoice_date).days)
+
+		avg_payment_days = (
+			sum(payment_days_list) // len(payment_days_list)
+			if payment_days_list else 0
+		)
+		outstanding = sum(aging.values())
+
+		return {
+			"customer_id": customer_id,
+			"ytd_revenue_cents": ytd_revenue,
+			"outstanding_cents": outstanding,
+			"avg_payment_days": avg_payment_days,
+			"aging": aging,
+		}
 
 
 __all__ = [

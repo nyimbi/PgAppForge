@@ -25,6 +25,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import (
+	BigInteger,
 	Boolean,
 	CheckConstraint,
 	Column,
@@ -466,6 +467,117 @@ class StockMovement(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# CostLayer — FIFO/LIFO/Weighted Average inventory cost layers
+# ---------------------------------------------------------------------------
+
+class CostLayer(AuditMixin, Model):
+	"""Inventory cost layer for FIFO/LIFO/Weighted Average valuation.
+
+	Each stock receipt creates one CostLayer.  Issues consume layers based on
+	the product's valuation_method: FIFO (oldest first), LIFO (newest first),
+	WEIGHTED_AVG (existing logic in StockLevel.average_cost_cents).
+
+	remaining_qty is decremented to zero (is_exhausted=True) as stock is
+	consumed.  Do NOT update rows for other purposes — treat as append-only
+	except for remaining_qty / is_exhausted.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "inv_cost_layer"
+	__table_args__ = (
+		Index("ix_inv_cost_layer_product_wh", "product_id", "warehouse_id"),
+		Index("ix_inv_cost_layer_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	product_id = Column(UUID(as_uuid=False), nullable=False)
+	warehouse_id = Column(UUID(as_uuid=False), nullable=False)
+	received_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+		comment="Timestamp of the originating receipt; used for FIFO/LIFO ordering",
+	)
+	received_qty = Column(Numeric(15, 4), nullable=False, comment="Original quantity received into this layer")
+	unit_cost_cents = Column(BigInteger, nullable=False, comment="Unit cost at receipt time, in cents")
+	remaining_qty = Column(Numeric(15, 4), nullable=False, comment="Quantity not yet consumed; decremented on issue")
+	is_exhausted = Column(Boolean, nullable=False, default=False, comment="True when remaining_qty reaches zero")
+	source_grn_id = Column(UUID(as_uuid=False), nullable=True, comment="Originating GRN UUID (soft FK)")
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return (
+			f"<CostLayer product={self.product_id!r} wh={self.warehouse_id!r} "
+			f"unit_cost={self.unit_cost_cents}¢ remaining={self.remaining_qty}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# TransferOrder — inter-location inventory transfer
+# ---------------------------------------------------------------------------
+
+class TransferOrder(AuditMixin, Model):
+	"""Inter-location inventory transfer with in-transit status.
+
+	Lifecycle: DRAFT → SHIPPED (stock deducted from source) → RECEIVED
+	           (stock added to destination) | CANCELLED
+
+	lines JSONB schema:
+	  [{"product_id": str, "qty": str, "unit_cost_cents": int,
+	    "lot_number": str | null}, ...]
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "inv_transfer_order"
+	__table_args__ = (
+		Index("ix_inv_to_tenant_status", "tenant_id", "status"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	transfer_ref = Column(String(50), nullable=False, comment="Human-readable reference e.g. TO-20260607120000")
+	from_location_id = Column(UUID(as_uuid=False), nullable=False, comment="Source warehouse/location UUID (soft FK)")
+	to_location_id = Column(UUID(as_uuid=False), nullable=False, comment="Destination warehouse/location UUID (soft FK)")
+	status = Column(
+		String(20),
+		nullable=False,
+		default="DRAFT",
+		comment="DRAFT | SHIPPED | RECEIVED | CANCELLED",
+	)
+	lines = Column(
+		JSONB,
+		nullable=False,
+		default=list,
+		comment="[{product_id, qty, unit_cost_cents, lot_number?}]",
+	)
+	shipped_at = Column(DateTime(timezone=True), nullable=True)
+	received_at = Column(DateTime(timezone=True), nullable=True)
+	notes = Column(Text, nullable=True)
+
+	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
+
+	def __repr__(self) -> str:
+		return f"<TransferOrder {self.transfer_ref!r} status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -476,4 +588,6 @@ __all__ = [
 	"WarehouseLocation",
 	"StockLevel",
 	"StockMovement",
+	"CostLayer",
+	"TransferOrder",
 ]

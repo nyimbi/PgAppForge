@@ -525,6 +525,277 @@ class TreasuryService:
 		# by amount_cents, is_debit, and date proximity
 		return None
 
+	# ------------------------------------------------------------------ #
+	# Bank Statement Import  (MT940 / OFX / CSV)
+	# ------------------------------------------------------------------ #
+
+	def import_bank_statement(
+		self,
+		file_content: str,
+		file_format: str,
+		bank_account_id: str,
+		session: Any,
+	) -> Any:
+		"""Import a bank statement from MT940, OFX, or CSV content.
+
+		Parses the file into BankStatement + BankStatementLine rows, then
+		auto-runs reconciliation. Returns the created BankStatement.
+
+		MT940: SWIFT statement format used by most African banks (KCB, Equity, NCBA).
+		OFX:  Open Financial Exchange (used by US banks; Quicken format).
+		CSV:  Fallback; expects columns: date, amount, reference, description.
+
+		amount_cents in parsed dicts is signed: positive = credit, negative = debit.
+		Conversion to (abs amount_cents, is_debit) happens here before DB insert.
+		"""
+		from pgappforge.plugins.erp.finance.treasury.models import (
+			BankAccount, BankStatement, BankStatementLine, BankStatementImport,
+		)
+
+		account = session.execute(
+			sa.select(BankAccount).where(BankAccount.id == bank_account_id)
+		).scalar_one_or_none()
+		if account is None:
+			raise BankAccountNotFoundError(f"BankAccount {bank_account_id!r} not found")
+
+		import_log = BankStatementImport(
+			tenant_id=account.tenant_id,
+			bank_account_id=bank_account_id,
+			file_format=file_format.upper(),
+			error_log=[],
+		)
+		session.add(import_log)
+
+		fmt = file_format.upper()
+		if fmt == "MT940":
+			lines_data = self._parse_mt940(file_content, import_log)
+		elif fmt == "OFX":
+			lines_data = self._parse_ofx(file_content, import_log)
+		elif fmt == "CSV":
+			lines_data = self._parse_csv_statement(file_content, import_log)
+		else:
+			import_log.status = "FAILED"
+			session.flush()
+			raise TreasuryServiceError(
+				f"Unsupported file format: {file_format!r}. Use MT940/OFX/CSV."
+			)
+
+		if not lines_data:
+			import_log.status = "FAILED"
+			session.flush()
+			raise TreasuryServiceError(f"No transactions parsed from {file_format} file")
+
+		# Derive statement date range from parsed lines
+		dates = [ld["date"] for ld in lines_data if ld.get("date")]
+		statement_date = max(dates) if dates else date.today()
+
+		statement = BankStatement(
+			tenant_id=account.tenant_id,
+			bank_account_id=bank_account_id,
+			statement_date=statement_date,
+			# Balance totals unknown at import time; caller may update post-reconcile.
+			opening_balance_cents=0,
+			closing_balance_cents=0,
+			status="IMPORTED",
+		)
+		session.add(statement)
+		session.flush()  # populate statement.id
+
+		for ld in lines_data:
+			signed_cents: int = ld["amount_cents"]
+			is_debit = signed_cents < 0
+			abs_cents = abs(signed_cents)
+			session.add(BankStatementLine(
+				statement_id=statement.id,
+				transaction_date=ld["date"],
+				amount_cents=abs_cents,
+				is_debit=is_debit,
+				bank_reference=ld.get("reference", "")[:100] or None,
+				description=ld.get("description", "")[:500],
+				match_status="UNMATCHED",
+			))
+
+		import_log.row_count = len(lines_data)
+		import_log.statement_id = statement.id
+		import_log.status = "PARTIAL" if import_log.error_log else "OK"
+		session.flush()
+
+		# Auto-reconcile; non-fatal if it fails (statement is still usable)
+		try:
+			self.run_bank_reconciliation(bank_account_id, str(statement.id), session)
+		except Exception as exc:
+			log.warning("Auto-reconciliation failed after import: %s", exc)
+
+		return statement
+
+	def _parse_mt940(self, content: str, import_log: Any) -> list[dict]:
+		"""Parse MT940 SWIFT bank statement format.
+
+		MT940 tag :61: carries the transaction record:
+		  :61: YYMMDD[MMDD](C|D|RC|RD)AMOUNT[Nxxx]//BANK_REF\\nNARRATIVE
+		  C/RC = credit (money in), D/RD = debit (money out).
+		  AMOUNT uses comma as decimal separator (European convention).
+
+		Returns list of dicts with signed amount_cents (positive=credit).
+		"""
+		import re
+		from decimal import Decimal, ROUND_HALF_UP
+
+		lines_data: list[dict] = []
+
+		# Match :61: tag through to next tag or end of string
+		transaction_re = re.compile(
+			r":61:(\d{6})(\d{4})?(C|D|RC|RD)(\d+,\d{0,2})([A-Z]{4})(.*?)(?=:\d{2}[A-Z]?:|$)",
+			re.DOTALL,
+		)
+
+		for m in transaction_re.finditer(content):
+			date_str, _value_date, cr_dr, amount_str, _fund_code, narrative = m.groups()
+			try:
+				amount_dec = Decimal(amount_str.replace(",", "."))
+				amount_cents = int(
+					amount_dec.quantize(Decimal("0.01"), ROUND_HALF_UP) * 100
+				)
+				# D/RD = debit (money leaves account) → negative
+				if cr_dr in ("D", "RD"):
+					amount_cents = -amount_cents
+
+				parsed_date = date(
+					2000 + int(date_str[:2]),
+					int(date_str[2:4]),
+					int(date_str[4:6]),
+				)
+
+				# Extract narrative from :86: tag if present in remainder
+				description = ""
+				narr_match = re.search(r":86:(.*?)(?=:\d{2}[A-Z]?:|$)", narrative, re.DOTALL)
+				if narr_match:
+					description = " ".join(narr_match.group(1).split())[:500]
+
+				lines_data.append({
+					"date": parsed_date,
+					"amount_cents": amount_cents,
+					"reference": (narrative.strip().splitlines()[0] if narrative.strip() else "")[:100],
+					"description": description,
+				})
+			except Exception as exc:
+				import_log.error_log.append({
+					"line": m.group(0)[:80],
+					"error": str(exc),
+				})
+
+		return lines_data
+
+	def _parse_ofx(self, content: str, import_log: Any) -> list[dict]:
+		"""Parse OFX (Open Financial Exchange) bank statement.
+
+		Handles both OFX 1.x (SGML, no closing tags) and OFX 2.x (XML).
+		Extracts <STMTTRN> blocks: DTPOSTED, TRNAMT, NAME/MEMO, FITID.
+
+		TRNAMT is already signed in OFX (positive = credit, negative = debit).
+		Returns list of dicts with signed amount_cents.
+		"""
+		import re
+		from decimal import Decimal, ROUND_HALF_UP
+
+		lines_data: list[dict] = []
+
+		# For SGML OFX 1.x, <STMTTRN> may lack a closing tag; use lookahead
+		trn_re = re.compile(
+			r"<STMTTRN>(.*?)(?:</STMTTRN>|(?=<STMTTRN>)|$)",
+			re.DOTALL | re.IGNORECASE,
+		)
+		field_re = re.compile(r"<(\w+)>([^<\n\r]+)", re.IGNORECASE)
+
+		for trn_match in trn_re.finditer(content):
+			block = trn_match.group(1)
+			if not block.strip():
+				continue
+			fields = {k.upper(): v.strip() for k, v in field_re.findall(block)}
+			try:
+				dt_str = fields.get("DTPOSTED", "")[:8]
+				parsed_date = date(
+					int(dt_str[:4]), int(dt_str[4:6]), int(dt_str[6:8])
+				)
+				amount_dec = Decimal(fields.get("TRNAMT", "0").strip())
+				amount_cents = int(
+					amount_dec.quantize(Decimal("0.01"), ROUND_HALF_UP) * 100
+				)
+				description = fields.get("NAME", fields.get("MEMO", ""))[:500]
+				lines_data.append({
+					"date": parsed_date,
+					"amount_cents": amount_cents,
+					"reference": fields.get("FITID", "")[:100],
+					"description": description,
+				})
+			except Exception as exc:
+				import_log.error_log.append({
+					"raw": trn_match.group(0)[:80],
+					"error": str(exc),
+				})
+
+		return lines_data
+
+	def _parse_csv_statement(self, content: str, import_log: Any) -> list[dict]:
+		"""Parse CSV bank statement.
+
+		Flexible column detection (case-insensitive, stripped):
+		  date          — transaction_date, value_date
+		  amount        — credit_debit_indicator (already signed)
+		  reference     — ref
+		  description   — narration, narrative, memo
+
+		Delimiter auto-detected: semicolon wins if it occurs more than comma.
+		Amount: positive = credit, negative = debit. Commas inside numbers stripped.
+		Returns list of dicts with signed amount_cents.
+		"""
+		import csv
+		import io
+		from decimal import Decimal, ROUND_HALF_UP
+
+		lines_data: list[dict] = []
+		delimiter = ";" if content.count(";") > content.count(",") else ","
+		reader = csv.DictReader(io.StringIO(content.strip()), delimiter=delimiter)
+
+		for i, row in enumerate(reader):
+			try:
+				keys = {k.lower().strip(): v.strip() for k, v in row.items() if k}
+				date_str = (
+					keys.get("date")
+					or keys.get("transaction_date")
+					or keys.get("value_date")
+					or ""
+				)
+				amount_str = (
+					keys.get("amount")
+					or keys.get("credit_debit_indicator")
+					or "0"
+				).replace(",", "")
+				parsed_date = date.fromisoformat(date_str.replace("/", "-"))
+				amount_cents = int(
+					Decimal(amount_str).quantize(Decimal("0.01"), ROUND_HALF_UP) * 100
+				)
+				reference = (
+					keys.get("reference") or keys.get("ref") or ""
+				)[:100]
+				description = (
+					keys.get("description")
+					or keys.get("narration")
+					or keys.get("narrative")
+					or keys.get("memo")
+					or ""
+				)[:500]
+				lines_data.append({
+					"date": parsed_date,
+					"amount_cents": amount_cents,
+					"reference": reference,
+					"description": description,
+				})
+			except Exception as exc:
+				import_log.error_log.append({"row": i + 2, "error": str(exc)})
+
+		return lines_data
+
 
 __all__ = [
 	"TreasuryService",

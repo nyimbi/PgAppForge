@@ -121,7 +121,7 @@ class InventoryService:
 			InventoryServiceError: GRN not found or not in accepted status.
 		"""
 		from pgappforge.plugins.erp.operations.inventory.models import (
-			StockMovement, StockLevel, Product, Warehouse,
+			StockMovement, StockLevel, Product, Warehouse, CostLayer,
 		)
 		from pgappforge.plugins.erp.operations.inventory.events import (
 			StockReceivedEvent, StockLowEvent,
@@ -222,6 +222,17 @@ class InventoryService:
 				tenant_id=tenant_id,
 				session=session,
 			)
+
+			# Create cost layer for FIFO/LIFO tracking
+			session.add(CostLayer(
+				tenant_id=tenant_id,
+				product_id=product_id,
+				warehouse_id=warehouse_id,
+				received_qty=accepted,
+				unit_cost_cents=unit_cost,
+				remaining_qty=accepted,
+				source_grn_id=grn_id,
+			))
 
 			movements.append(movement)
 
@@ -1086,6 +1097,168 @@ class InventoryService:
 			"PRODUCTION": "MANUAL",
 		}
 		return mapping.get(order_type, "MANUAL")
+
+	# ------------------------------------------------------------------
+	# create_transfer_order
+	# ------------------------------------------------------------------
+
+	def create_transfer_order(
+		self,
+		from_location_id: str,
+		to_location_id: str,
+		lines: list[dict],
+		tenant_id: str,
+		session: Any,
+		*,
+		notes: str | None = None,
+	) -> Any:
+		"""Create a transfer order between two locations.
+
+		lines: [{"product_id": str, "qty": str|Decimal, "unit_cost_cents": int, "lot_number": str|None}]
+
+		Does NOT immediately move stock — call ship_transfer() to deduct from
+		the source and receive_transfer() to credit the destination.
+
+		Returns:
+			TransferOrder instance (status=DRAFT).
+		"""
+		from pgappforge.plugins.erp.operations.inventory.models import TransferOrder
+
+		ref = f"TO-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+		order = TransferOrder(
+			tenant_id=tenant_id,
+			transfer_ref=ref,
+			from_location_id=from_location_id,
+			to_location_id=to_location_id,
+			lines=lines,
+			status="DRAFT",
+			notes=notes,
+		)
+		session.add(order)
+		session.flush()
+		log.info(
+			"InventoryService.create_transfer_order: ref=%s from=%s to=%s lines=%d",
+			ref, from_location_id, to_location_id, len(lines),
+		)
+		return order
+
+	# ------------------------------------------------------------------
+	# ship_transfer
+	# ------------------------------------------------------------------
+
+	def ship_transfer(
+		self,
+		transfer_id: str,
+		session: Any,
+	) -> Any:
+		"""Ship a transfer order — deduct stock from the source location.
+
+		Transition: DRAFT → SHIPPED (stock now in-transit).
+
+		Decrements quantity_on_hand / quantity_available on the source
+		StockLevel for each line.  Does not yet credit the destination —
+		that happens in receive_transfer().
+
+		Raises:
+			ValueError: TransferOrder not found or not in DRAFT status.
+			InsufficientStockError: Source has insufficient on-hand quantity.
+		"""
+		from pgappforge.plugins.erp.operations.inventory.models import TransferOrder
+
+		order = session.execute(
+			sa.select(TransferOrder).where(TransferOrder.id == transfer_id)
+		).scalar_one_or_none()
+		if order is None:
+			raise ValueError(f"TransferOrder {transfer_id!r} not found")
+		if order.status != "DRAFT":
+			raise ValueError(f"Cannot ship TransferOrder in status {order.status!r}")
+
+		for line in order.lines:
+			qty = _d(str(line["qty"]))
+			assert qty > 0, f"Transfer line qty must be positive; got {qty}"
+			self._update_stock_level(
+				product_id=str(line["product_id"]),
+				warehouse_id=str(order.from_location_id),
+				location_id=None,
+				lot_number=line.get("lot_number"),
+				expiry_date=None,
+				qty_delta=qty,
+				unit_cost_cents=int(line.get("unit_cost_cents", 0)),
+				direction=-1,
+				tenant_id=str(order.tenant_id),
+				session=session,
+			)
+
+		order.status = "SHIPPED"
+		order.shipped_at = datetime.now(timezone.utc)
+		order.updated_at = datetime.now(timezone.utc)
+		session.flush()
+		log.info("InventoryService.ship_transfer: id=%s", transfer_id)
+		return order
+
+	# ------------------------------------------------------------------
+	# receive_transfer
+	# ------------------------------------------------------------------
+
+	def receive_transfer(
+		self,
+		transfer_id: str,
+		session: Any,
+	) -> Any:
+		"""Receive a transfer order — add stock to the destination location.
+
+		Transition: SHIPPED → RECEIVED.
+
+		Credits quantity_on_hand / quantity_available on the destination
+		StockLevel for each line and updates weighted average cost.
+
+		Raises:
+			ValueError: TransferOrder not found or not in SHIPPED status.
+		"""
+		from pgappforge.plugins.erp.operations.inventory.models import TransferOrder, CostLayer
+
+		order = session.execute(
+			sa.select(TransferOrder).where(TransferOrder.id == transfer_id)
+		).scalar_one_or_none()
+		if order is None:
+			raise ValueError(f"TransferOrder {transfer_id!r} not found")
+		if order.status != "SHIPPED":
+			raise ValueError(f"Cannot receive TransferOrder in status {order.status!r}")
+
+		for line in order.lines:
+			qty = _d(str(line["qty"]))
+			assert qty > 0, f"Transfer line qty must be positive; got {qty}"
+			unit_cost = int(line.get("unit_cost_cents", 0))
+			self._update_stock_level(
+				product_id=str(line["product_id"]),
+				warehouse_id=str(order.to_location_id),
+				location_id=None,
+				lot_number=line.get("lot_number"),
+				expiry_date=None,
+				qty_delta=qty,
+				unit_cost_cents=unit_cost,
+				direction=1,
+				tenant_id=str(order.tenant_id),
+				session=session,
+			)
+			# Record cost layer at destination for FIFO/LIFO continuity
+			if unit_cost > 0:
+				session.add(CostLayer(
+					tenant_id=str(order.tenant_id),
+					product_id=str(line["product_id"]),
+					warehouse_id=str(order.to_location_id),
+					received_qty=qty,
+					unit_cost_cents=unit_cost,
+					remaining_qty=qty,
+					source_grn_id=None,
+				))
+
+		order.status = "RECEIVED"
+		order.received_at = datetime.now(timezone.utc)
+		order.updated_at = datetime.now(timezone.utc)
+		session.flush()
+		log.info("InventoryService.receive_transfer: id=%s", transfer_id)
+		return order
 
 
 __all__ = [

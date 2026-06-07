@@ -1014,6 +1014,101 @@ class APService:
 		return invoice
 
 
+	# ------------------------------------------------------------------
+	# get_vendor_statistics
+	# ------------------------------------------------------------------
+
+	def get_vendor_statistics(
+		self,
+		vendor_id: str,
+		tenant_id: str,
+		session: Any,
+	) -> dict:
+		"""Live AP statistics for a vendor.
+
+		Returns YTD purchases, outstanding balance, average payment days
+		(invoice_date → payment_date via joined APPayment rows), and on-time
+		payment rate.
+
+		payment_date comes from APPayment.payment_date (CONFIRMED payments)
+		since APInvoice has no paid_at column — we join payments explicitly.
+		"""
+		from pgappforge.plugins.erp.finance.ap.models import APInvoice, APPayment
+
+		today = _today()
+		year_start = today.replace(month=1, day=1)
+
+		invoices = session.execute(
+			sa.select(APInvoice)
+			.where(APInvoice.supplier_id == vendor_id)
+			.where(APInvoice.tenant_id == tenant_id)
+			.where(APInvoice.status.not_in(["CANCELLED"]))
+		).scalars().all()
+
+		ytd_purchases = 0
+		outstanding = 0
+		paid_invoice_ids: list[str] = []
+
+		for inv in invoices:
+			if inv.invoice_date and inv.invoice_date >= year_start:
+				ytd_purchases += inv.total_cents
+			if inv.paid_cents < inv.total_cents:
+				outstanding += (inv.total_cents - inv.paid_cents)
+			if inv.status in ("PAID", "PAYMENT_SCHEDULED"):
+				paid_invoice_ids.append(inv.id)
+
+		# Fetch CONFIRMED payments for paid invoices to compute payment days
+		payment_days_list: list[int] = []
+		on_time_count = 0
+		paid_count = 0
+
+		if paid_invoice_ids:
+			# Build a lookup: invoice_id → (invoice_date, due_date)
+			inv_meta: dict[str, tuple[date, date | None]] = {
+				inv.id: (inv.invoice_date, inv.due_date)
+				for inv in invoices
+				if inv.id in paid_invoice_ids
+			}
+
+			payments = session.execute(
+				sa.select(APPayment)
+				.where(APPayment.supplier_id == vendor_id)
+				.where(APPayment.invoice_id.in_(paid_invoice_ids))
+				.where(APPayment.status == "CONFIRMED")
+			).scalars().all()
+
+			# Group: take first CONFIRMED payment per invoice as settlement date
+			settled: dict[str, date] = {}
+			for pmt in payments:
+				if pmt.invoice_id not in settled:
+					settled[pmt.invoice_id] = pmt.payment_date
+
+			for inv_id, pmt_date in settled.items():
+				invoice_date, due_date = inv_meta[inv_id]
+				paid_count += 1
+				days_to_pay = (pmt_date - invoice_date).days
+				payment_days_list.append(days_to_pay)
+				if due_date is not None and pmt_date <= due_date:
+					on_time_count += 1
+
+		return {
+			"vendor_id": vendor_id,
+			"ytd_purchases_cents": ytd_purchases,
+			"outstanding_cents": outstanding,
+			"avg_payment_days": (
+				sum(payment_days_list) // len(payment_days_list)
+				if payment_days_list else 0
+			),
+			"on_time_payment_rate_pct": (
+				round(on_time_count / paid_count * 100) if paid_count else 0
+			),
+			"invoice_count_ytd": sum(
+				1 for inv in invoices
+				if inv.invoice_date and inv.invoice_date >= year_start
+			),
+		}
+
+
 __all__ = [
 	"APService",
 	"APServiceError",
