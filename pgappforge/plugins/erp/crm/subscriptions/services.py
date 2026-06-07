@@ -455,13 +455,44 @@ class SubscriptionService:
 		amount_cents: int,
 		session: Any,
 	) -> bool:
-		"""Attempt to charge for renewal.
+		"""Attempt to charge for renewal via Hyperion-X payment gateway.
 
-		Default implementation always returns True (no payment gateway wired).
-		Override this method or register a payment handler via subscribe() on
-		the crm.subscriptions.charge_requested event to integrate a gateway.
+		Falls back to True (dev mode) when HYPERION_API_KEY is absent or when
+		outside a Flask context.  Returns False only on a hard gateway rejection.
 		"""
-		return True
+		try:
+			from flask import current_app
+			api_key = current_app.config.get("HYPERION_API_KEY", "")
+		except (RuntimeError, AttributeError):
+			return True  # outside Flask context (tests)
+		if not api_key:
+			log.warning("HYPERION_API_KEY not set — charge skipped (dev mode)")
+			return True
+		try:
+			import sys
+			if "/Users/nyimbiodero/src/pjs/pswitch/sdks/python" not in sys.path:
+				sys.path.insert(0, "/Users/nyimbiodero/src/pjs/pswitch/sdks/python")
+			from hyperion import HyperionClient
+			sandbox = current_app.config.get("HYPERION_SANDBOX", True)
+			base_url = current_app.config.get("HYPERION_BASE_URL", "https://api.hyperion-x.com")
+			client = HyperionClient(api_key, base_url=base_url, sandbox=sandbox)
+			charge = client.charges.create(
+				amount=amount_cents,
+				currency=(plan.currency_code if plan else "KES"),
+				customer_id=str(sub.metadata_.get("hyperion_customer_id", "")),
+				payment_method_id=str(sub.metadata_.get("hyperion_payment_method_id", "")),
+				metadata={"subscription_id": str(sub.id), "tenant_id": str(sub.tenant_id)},
+			)
+			succeeded = charge.status in ("succeeded", "pending")
+			if succeeded:
+				sub.metadata_ = {**(sub.metadata_ or {}), "hyperion_charge_id": charge.id}
+			return succeeded
+		except ImportError:
+			log.warning("Hyperion SDK not available (install from pswitch/sdks/python) — charge skipped")
+			return True
+		except Exception as exc:
+			log.error("Hyperion charge failed for subscription %s: %s", sub.id, exc)
+			return False
 
 	# ------------------------------------------------------------------ #
 	# change_plan                                                          #
@@ -853,6 +884,104 @@ class SubscriptionService:
 	# ------------------------------------------------------------------ #
 	# get_customer_subscriptions                                           #
 	# ------------------------------------------------------------------ #
+
+	def compute_usage_charge(
+		self,
+		sub_id: str,
+		metric_name: str,
+		quantity: int | Decimal,
+		period: str,
+		session: Any,
+	) -> int:
+		"""Compute the charge in cents for metered usage using plan tier pricing.
+
+		Tier algorithms:
+		  GRADUATED  — each unit priced at its own tier rate (waterfall).
+		               Most common; enables free-tier first N units + overage.
+		  VOLUME     — entire quantity charged at the rate of the highest tier
+		               reached. Simpler but creates "cliff" pricing effects.
+		  STAIRSTEP  — flat fee per tier boundary crossed; price_per_unit_cents
+		               is a flat fee, not per-unit. Used for seat/licence steps.
+
+		Returns 0 if no tiers are configured for (plan, metric_name).
+		Raises SubscriptionNotFoundError if sub_id is unknown.
+
+		Does NOT record usage — call record_usage() separately.
+		"""
+		from decimal import Decimal as _D, ROUND_HALF_UP as _RHU
+		from pgappforge.plugins.erp.crm.subscriptions.models import (
+			Subscription,
+			SubscriptionUsageTier,
+		)
+
+		sub = session.execute(
+			sa.select(Subscription).where(Subscription.id == sub_id)
+		).scalar_one_or_none()
+		if sub is None:
+			raise SubscriptionNotFoundError(f"Subscription {sub_id!r} not found")
+
+		tiers: list[Any] = list(session.execute(
+			sa.select(SubscriptionUsageTier)
+			.where(
+				SubscriptionUsageTier.plan_id == sub.plan_id,
+				SubscriptionUsageTier.metric_name == metric_name,
+			)
+			.order_by(SubscriptionUsageTier.from_unit)
+		).scalars().all())
+
+		if not tiers:
+			log.debug(
+				"compute_usage_charge: no tiers for plan=%s metric=%s — charge=0",
+				sub.plan_id, metric_name,
+			)
+			return 0
+
+		qty = int(quantity)
+		tier_type = tiers[0].tier_type
+		total_cents = 0
+
+		if tier_type == "GRADUATED":
+			remaining = qty
+			for tier in tiers:
+				if remaining <= 0:
+					break
+				# Capacity of this tier bucket
+				if tier.to_unit is not None:
+					tier_capacity = tier.to_unit - tier.from_unit + 1
+				else:
+					tier_capacity = remaining  # unlimited — consume all remaining
+				units_in_tier = min(remaining, tier_capacity)
+				total_cents += units_in_tier * int(tier.price_per_unit_cents)
+				remaining -= units_in_tier
+
+		elif tier_type == "VOLUME":
+			# Find the tier that the total quantity falls into
+			applicable_tier = tiers[0]
+			for tier in tiers:
+				if qty >= tier.from_unit:
+					applicable_tier = tier
+				else:
+					break
+			total_cents = qty * int(applicable_tier.price_per_unit_cents)
+
+		elif tier_type == "STAIRSTEP":
+			# Flat fee for each tier boundary crossed
+			for tier in tiers:
+				if qty >= tier.from_unit:
+					total_cents += int(tier.price_per_unit_cents)
+
+		else:
+			log.warning(
+				"compute_usage_charge: unknown tier_type %r for plan=%s metric=%s — charge=0",
+				tier_type, sub.plan_id, metric_name,
+			)
+			return 0
+
+		log.debug(
+			"compute_usage_charge: sub=%s metric=%s qty=%d tier_type=%s total_cents=%d",
+			sub_id, metric_name, qty, tier_type, total_cents,
+		)
+		return total_cents
 
 	def get_customer_subscriptions(
 		self,

@@ -122,6 +122,89 @@ def _translate_amount(
 	return int(result.to_integral_value(rounding=ROUND_HALF_UP))
 
 
+def _compute_and_post_cta(
+	entity_id: str,
+	translated_rows: list[dict],
+	reporting_currency: str,
+	group_tenant_id: Any,
+	run_period: str,
+	session: Any,
+) -> None:
+	"""IAS 21: post Currency Translation Adjustment to OCI (account 3900).
+
+	CTA = net_assets_at_closing - equity_at_historical - net_income_at_average.
+	The residual makes the consolidated BS balance.  Posted as:
+	  DR/CR 3900  (OCI — CTA)
+	  CR/DR 3100  (Retained Earnings — offset)
+
+	Below-materiality threshold: abs(cta) < 100 cents → skip.
+	Failures are swallowed after logging — CTA is non-blocking for consolidation.
+	"""
+	assets_cents = sum(
+		r.get("translated_net_cents", 0) for r in translated_rows
+		if r.get("account_type") == "ASSET"
+	)
+	liabilities_cents = sum(
+		r.get("translated_net_cents", 0) for r in translated_rows
+		if r.get("account_type") == "LIABILITY"
+	)
+	equity_cents = sum(
+		r.get("translated_net_cents", 0) for r in translated_rows
+		if r.get("account_type") == "EQUITY"
+	)
+	revenue_cents = sum(
+		r.get("translated_net_cents", 0) for r in translated_rows
+		if r.get("account_type") == "REVENUE"
+	)
+	expense_cents = sum(
+		r.get("translated_net_cents", 0) for r in translated_rows
+		if r.get("account_type") == "EXPENSE"
+	)
+
+	net_assets = assets_cents - liabilities_cents
+	net_income = revenue_cents - expense_cents
+	cta = net_assets - equity_cents - net_income
+
+	if abs(cta) < 100:
+		return  # Below materiality threshold — skip
+
+	log.debug(
+		"_compute_and_post_cta: entity=%s cta=%d net_assets=%d equity=%d net_income=%d",
+		entity_id, cta, net_assets, equity_cents, net_income,
+	)
+
+	try:
+		from pgappforge.plugins.erp.finance.gl.services import GLService  # type: ignore[import]
+		oci_dr = max(0, cta)
+		oci_cr = max(0, -cta)
+		re_dr = oci_cr   # reverse: if OCI is CR, RE is DR
+		re_cr = oci_dr   # reverse: if OCI is DR, RE is CR
+		GLService().post_simple_journal(
+			lines=[
+				{
+					"account_code": "3900",
+					"debit_cents": oci_dr,
+					"credit_cents": oci_cr,
+					"description": f"CTA {entity_id}",
+				},
+				{
+					"account_code": "3100",
+					"debit_cents": re_dr,
+					"credit_cents": re_cr,
+					"description": f"CTA offset {entity_id}",
+				},
+			],
+			session=session,
+			tenant_id=str(group_tenant_id),
+			description=f"CTA — {entity_id} period {run_period}",
+			source_doc_type="CONSOLIDATION_RUN",
+		)
+	except ImportError:
+		log.debug("_compute_and_post_cta: GL plugin not loaded; CTA not posted for entity=%s", entity_id)
+	except Exception as exc:
+		log.warning("_compute_and_post_cta: posting failed for entity=%s: %s", entity_id, exc)
+
+
 # ---------------------------------------------------------------------------
 # ConsolidationService
 # ---------------------------------------------------------------------------
@@ -421,6 +504,16 @@ class ConsolidationService:
 				translated_net = _translate_amount(net, rate)
 				translated_rows.append({**row, "translated_net_cents": translated_net})
 			translated_tb[entity_id] = translated_rows
+
+			# IAS 21: compute and post CTA to OCI (account 3900)
+			_compute_and_post_cta(
+				entity_id=entity_id,
+				translated_rows=translated_rows,
+				reporting_currency=reporting_currency,
+				group_tenant_id=group.tenant_id,
+				run_period=period,
+				session=session,
+			)
 
 			_emit(
 				FXTranslationAppliedEvent(

@@ -245,6 +245,71 @@ class SignatureService:
 			signatory.signer_email,
 			signatory.access_token[:8] + "…" if signatory.access_token else "?",
 		)
+		try:
+			from flask import current_app
+			import requests as _req
+			api_url = current_app.config.get("DOCUSEAL_API_URL", "")
+			api_key = current_app.config.get("DOCUSEAL_API_KEY", "")
+			if api_url and api_key:
+				template_id = request.metadata_.get("docuseal_template_id") if request.metadata_ else None
+				payload = {
+					"send_email": True,
+					"submitters": [{
+						"role": signatory.signer_role or "Signer",
+						"email": signatory.signer_email,
+						"name": signatory.signer_name,
+						"external_id": signatory.access_token,  # hashed token as external reference
+					}],
+				}
+				if template_id:
+					payload["template_id"] = template_id
+				resp = _req.post(
+					f"{api_url}/api/submissions",
+					json=payload,
+					headers={"X-Auth-Token": api_key, "Content-Type": "application/json"},
+					timeout=10,
+				)
+				if resp.ok:
+					ds_id = resp.json().get("id") or (resp.json()[0].get("id") if isinstance(resp.json(), list) else None)
+					if ds_id:
+						signatory.metadata_ = {**(signatory.metadata_ or {}), "docuseal_submission_id": str(ds_id)}
+				else:
+					log.warning("DocuSeal submission failed: %s %s", resp.status_code, resp.text[:200])
+		except ImportError:
+			pass  # requests not installed
+		except RuntimeError:
+			pass  # outside Flask context
+		except Exception as ds_exc:
+			log.warning("DocuSeal notify failed: %s", ds_exc)
+
+	def handle_docuseal_webhook(self, payload: dict, session: Any) -> dict:
+		"""Process DocuSeal webhook — auto-sign when form is completed.
+
+		DocuSeal sends: {"event_type": "form.completed", "data": {"submission": {"id": ..., "submitters": [{"external_id": ..., "status": "completed"}]}}}
+		external_id maps to SignatureSignatory.access_token (hashed).
+		"""
+		from pgappforge.plugins.erp.crm.sign.models import SignatureSignatory
+		event_type = payload.get("event_type", "")
+		if event_type not in ("form.completed", "submitter.completed"):
+			return {"processed": False}
+		submission = payload.get("data", {}).get("submission", payload.get("data", {}))
+		submitters = submission.get("submitters", [])
+		for sub in submitters:
+			ext_id = sub.get("external_id", "")
+			if not ext_id:
+				continue
+			# ext_id is the stored hashed token; look up directly
+			signatory = session.execute(
+				sa.select(SignatureSignatory).where(SignatureSignatory.access_token == ext_id)
+			).scalar_one_or_none()
+			if signatory and signatory.status == "PENDING":
+				self.sign_document(
+					ext_id,
+					f"docuseal-{submission.get('id', '')}",
+					session,
+					ip_address="docuseal-webhook",
+				)
+		return {"processed": True}
 
 	# ------------------------------------------------------------------
 	# 3. sign_document

@@ -304,6 +304,43 @@ class RevRecObligation(AuditMixin, Model):
 		default="UNSATISFIED",
 		comment="UNSATISFIED | PARTIALLY | FULLY_SATISFIED",
 	)
+
+	# ── Series obligations (ASC 606-10-25-15 / IFRS 15.22–23) ──────────────
+	is_series = Column(
+		Boolean,
+		nullable=False,
+		default=False,
+		comment="True for a series of distinct services that are substantially the same",
+	)
+
+	# ── Percentage-of-completion (POC) method fields ─────────────────────────
+	poc_method = Column(
+		String(30),
+		nullable=True,
+		comment="OUTPUT method: UNITS_DELIVERED. INPUT method: COSTS_INCURRED | MILESTONES",
+	)
+	total_units = Column(
+		Integer,
+		nullable=True,
+		comment="Total expected units for OUTPUT/UNITS_DELIVERED method",
+	)
+	delivered_units = Column(
+		Integer,
+		nullable=True,
+		comment="Units delivered to date for OUTPUT method",
+	)
+	total_estimated_cost_cents = Column(
+		BigInteger,
+		nullable=True,
+		comment="Total estimated cost in integer cents for INPUT/COSTS_INCURRED method",
+	)
+	costs_incurred_cents = Column(
+		BigInteger,
+		nullable=True,
+		default=0,
+		comment="Cumulative costs incurred to date in integer cents (INPUT method)",
+	)
+
 	metadata_ = Column(
 		"metadata_",
 		JSONB,

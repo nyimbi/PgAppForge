@@ -707,7 +707,94 @@ class WhatsAppService:
 		return list(session.execute(stmt).scalars().all())
 
 	# ------------------------------------------------------------------
-	# 8. get_analytics
+	# 8. dispatch_pending
+	# ------------------------------------------------------------------
+
+	def dispatch_pending(self, tenant_id: str, session: Any) -> dict:
+		"""Dispatch QUEUED outbound WhatsApp messages via WhatsApp Cloud API.
+
+		Requires config: WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN.
+		Processes up to 50 messages per call. Marks SENT on success, FAILED on error.
+		"""
+		try:
+			from flask import current_app
+			phone_number_id = current_app.config.get("WHATSAPP_PHONE_NUMBER_ID", "")
+			token = current_app.config.get("WHATSAPP_ACCESS_TOKEN", "")
+		except (RuntimeError, AttributeError):
+			return {"dispatched": 0, "reason": "no_flask_context"}
+		if not phone_number_id or not token:
+			return {
+				"dispatched": 0,
+				"reason": "WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN not set",
+			}
+		import requests as _req
+		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppMessage, WhatsAppTemplate
+		pending = self.get_pending_outbound(tenant_id, session)[:50]
+		dispatched = 0
+		errors: list[dict] = []
+		for msg in pending:
+			try:
+				if msg.message_type == "TEMPLATE" and msg.template_id:
+					tmpl = session.execute(
+						sa.select(WhatsAppTemplate).where(WhatsAppTemplate.id == msg.template_id)
+					).scalar_one_or_none()
+					payload: dict = {
+						"messaging_product": "whatsapp",
+						"recipient_type": "individual",
+						"to": msg.to_phone,
+						"type": "template",
+						"template": {
+							"name": tmpl.template_name if tmpl else "unknown",
+							"language": {"code": "en"},
+							"components": [],
+						},
+					}
+					if msg.template_params:
+						params = [
+							{"type": "text", "text": str(v)}
+							for v in (
+								msg.template_params.values()
+								if isinstance(msg.template_params, dict)
+								else []
+							)
+						]
+						if params:
+							payload["template"]["components"] = [{"type": "body", "parameters": params}]
+				else:
+					payload = {
+						"messaging_product": "whatsapp",
+						"recipient_type": "individual",
+						"to": msg.to_phone,
+						"type": "text",
+						"text": {"body": msg.body or ""},
+					}
+				resp = _req.post(
+					f"https://graph.facebook.com/v18.0/{phone_number_id}/messages",
+					headers={
+						"Authorization": f"Bearer {token}",
+						"Content-Type": "application/json",
+					},
+					json=payload,
+					timeout=10,
+				)
+				if resp.ok:
+					wa_id = resp.json().get("messages", [{}])[0].get("id", "")
+					msg.wa_message_id = wa_id
+					msg.status = "SENT"
+					session.flush()
+					dispatched += 1
+				else:
+					errors.append({"to": msg.to_phone, "error": resp.text[:200]})
+					msg.status = "FAILED"
+					msg.error_code = str(resp.status_code)
+					session.flush()
+			except Exception as exc:
+				log.warning("dispatch_pending: failed for msg %s: %s", msg.id, exc)
+				errors.append({"to": msg.to_phone, "error": str(exc)})
+		return {"dispatched": dispatched, "errors": errors, "total_pending": len(pending)}
+
+	# ------------------------------------------------------------------
+	# 9. get_analytics
 	# ------------------------------------------------------------------
 
 	@staticmethod

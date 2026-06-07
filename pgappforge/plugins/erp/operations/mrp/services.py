@@ -225,6 +225,85 @@ def _get_open_demand(
 	return demand
 
 
+def _round_up_to_lot_qty(net: Decimal, lot: Decimal) -> Decimal:
+	"""Round net up to nearest multiple of lot.  lot <= 0 treated as 1."""
+	import math
+	if lot <= 0:
+		lot = Decimal("1")
+	return Decimal(str(math.ceil(float(net) / float(lot)))) * lot
+
+
+def _compute_lot_size(cfg: Any, net_req: Decimal) -> Decimal:
+	"""Compute planned qty from cfg.lot_sizing_method (FIXED_LOT/LOT_FOR_LOT/MIN_MAX/EOQ).
+
+	Falls back to FIXED_LOT when the attribute is absent (older config rows).
+	"""
+	import math
+	net = _d(net_req)
+	lot = _d(cfg.lot_size_qty) if _d(cfg.lot_size_qty) > 0 else Decimal("1")
+	method: str = getattr(cfg, "lot_sizing_method", "FIXED_LOT") or "FIXED_LOT"
+
+	if method == "LOT_FOR_LOT":
+		return net if net > 0 else Decimal("0")
+
+	if method == "MIN_MAX":
+		min_qty = _d(getattr(cfg, "min_order_qty", lot) or lot)
+		return max(min_qty, _round_up_to_lot_qty(net, lot))
+
+	if method == "EOQ":
+		D = _d(getattr(cfg, "eoq_annual_demand", 1000) or 1000)
+		S = _d(getattr(cfg, "ordering_cost_cents", 10000) or 10000)
+		H = _d(getattr(cfg, "holding_cost_rate", Decimal("0.25")) or Decimal("0.25"))
+		eoq = Decimal(str(math.sqrt(float(2 * D * S / max(H, Decimal("0.01"))))))
+		return max(net, eoq)
+
+	# FIXED_LOT (default)
+	return _round_up_to_lot_qty(net, lot)
+
+
+def _explode_bom_multilevel(
+	bom_id: str,
+	qty: Decimal,
+	tenant_id: str,
+	session: Any,
+	*,
+	visited: set[str] | None = None,
+	depth: int = 0,
+) -> list[tuple[str, Decimal]]:
+	"""Multi-level BOM explosion with cycle detection.
+
+	Recursively expands sub-assemblies up to depth 20.  Cycle detection via
+	visited set of bom_ids prevents infinite loops on circular BOMs.
+
+	Returns: flat list of (component_product_id, total_component_qty)
+	"""
+	if visited is None:
+		visited = set()
+	if depth > 20 or bom_id in visited:
+		if bom_id in visited:
+			log.warning("_explode_bom_multilevel: cycle detected at bom_id=%s depth=%d", bom_id, depth)
+		return []
+	visited.add(bom_id)
+
+	components = list(_get_bom_components(bom_id, qty, session))
+
+	for comp_product_id, comp_qty in list(components):
+		sub_cfg: Any = session.execute(
+			sa.select(MRPProductConfig).where(
+				MRPProductConfig.product_id == comp_product_id,
+				MRPProductConfig.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
+		if sub_cfg is not None and sub_cfg.bom_id:
+			sub_components = _explode_bom_multilevel(
+				sub_cfg.bom_id, comp_qty, tenant_id, session,
+				visited=visited, depth=depth + 1,
+			)
+			components.extend(sub_components)
+
+	return components
+
+
 def _get_bom_components(
 	bom_id: str,
 	qty: Decimal,
@@ -354,7 +433,6 @@ class MRPService:
 			for cfg in configs:
 				product_id = cfg.product_id
 				safety_stock = _d(cfg.safety_stock_qty)
-				lot_size = _d(cfg.lot_size_qty) if _d(cfg.lot_size_qty) > 0 else Decimal("1")
 				lead_time = int(cfg.lead_time_days)
 
 				# Current available stock (from pre-loaded map — no per-product query)
@@ -381,8 +459,8 @@ class MRPService:
 					# Exhaust remaining credit against this bucket
 					stock_credit = Decimal("0")
 
-					# Round up to lot_size
-					planned_qty = _round_up_to_lot(net_req, lot_size)
+					# Lot sizing — honours lot_sizing_method on MRPProductConfig
+					planned_qty = _compute_lot_size(cfg, net_req)
 
 					# Planned start date — workback by lead time
 					planned_start = required_date - timedelta(days=lead_time)
@@ -457,9 +535,9 @@ class MRPService:
 							session,
 						)
 
-						# One-level BOM explosion for INTERNAL products
+						# Multi-level BOM explosion for INTERNAL products (DFS, cycle-safe)
 						if cfg.bom_id:
-							components = _get_bom_components(cfg.bom_id, planned_qty, session)
+							components = _explode_bom_multilevel(cfg.bom_id, planned_qty, tenant_id, session)
 							for comp_product_id, comp_qty in components:
 								# Fetch component config — skip if not configured
 								comp_cfg: MRPProductConfig | None = session.execute(
@@ -469,12 +547,11 @@ class MRPService:
 									)
 								).scalar_one_or_none()
 
-								comp_lot = (
-									_d(comp_cfg.lot_size_qty)
-									if comp_cfg and _d(comp_cfg.lot_size_qty) > 0
-									else Decimal("1")
+								comp_planned = (
+									_compute_lot_size(comp_cfg, comp_qty)
+									if comp_cfg is not None
+									else _round_up_to_lot_qty(comp_qty, Decimal("1"))
 								)
-								comp_planned = _round_up_to_lot(comp_qty, comp_lot)
 								comp_lead = int(comp_cfg.lead_time_days) if comp_cfg else lead_time
 								comp_start = planned_start - timedelta(days=comp_lead)
 

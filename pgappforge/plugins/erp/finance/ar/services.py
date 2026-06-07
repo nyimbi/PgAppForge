@@ -1213,7 +1213,7 @@ class ARService:
 			else str(billing_address)
 		)
 
-		return {
+		letter = {
 			"customer_name": customer.account_number if customer else event.customer_id,
 			"customer_address": customer_address,
 			"date": today.isoformat(),
@@ -1225,6 +1225,28 @@ class ARService:
 			"company_name": company_name,
 			"company_address": company_address,
 		}
+
+		# Send email if customer has email address
+		try:
+			customer_email = getattr(customer, "contact_email", None) if customer else None
+			if customer_email:
+				from pgappforge.plugins.erp.platform.email.sender import EmailSender
+				email_text = (
+					letter.get("text_body", "")
+					+ "\n\nOverdue amount: "
+					+ str(letter.get("total_overdue_cents", 0))
+					+ " cents"
+				)
+				EmailSender().send(
+					customer_email,
+					f"Payment Reminder — Level {letter['dunning_level']}",
+					email_text,
+					session,
+				)
+		except Exception as em_exc:
+			log.debug("generate_dunning_letter: email send failed: %s", em_exc)
+
+		return letter
 
 	# ------------------------------------------------------------------
 	# get_customer_statistics

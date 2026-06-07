@@ -51,6 +51,8 @@ __all__ = [
 	"EmployeeQuota",
 	"CommissionCalculation",
 	"CommissionPayout",
+	"CommissionCredit",
+	"CommissionClawback",
 ]
 
 
@@ -292,3 +294,112 @@ class CommissionPayout(AuditMixin, Model):
 	paid_at = Column(DateTime(timezone=True), nullable=True)
 
 	calculation = relationship("CommissionCalculation", back_populates="payout", lazy="select")
+
+
+# ---------------------------------------------------------------------------
+# CommissionCredit
+# ---------------------------------------------------------------------------
+
+class CommissionCredit(AuditMixin, Model):
+	"""Split credit — records how a commission calculation is divided among employees.
+
+	reason codes:
+	  SPLIT        — territory/overlay split agreed upfront
+	  OVERLAY      — overlay/specialist rep partial credit
+	  MANAGER_ROLLUP — manager receives credit for team deal
+	"""
+
+	__tablename__ = "vp_credit"
+	__table_args__ = (
+		Index("ix_vp_credit_calculation", "calculation_id"),
+		Index("ix_vp_credit_employee_calc", "credited_to_employee_id", "calculation_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+		nullable=False,
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+
+	calculation_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("vp_calculation.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	credited_to_employee_id = Column(VARCHAR(50), nullable=False)
+	split_pct = Column(
+		Numeric(6, 4),
+		nullable=False,
+		comment="Fraction of commission: 0.3000 = 30%",
+	)
+	split_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="total_commission_cents × split_pct, rounded HALF_UP",
+	)
+	reason = Column(
+		VARCHAR(30),
+		nullable=False,
+		default="SPLIT",
+		server_default=sa.text("'SPLIT'"),
+		comment="SPLIT/OVERLAY/MANAGER_ROLLUP",
+	)
+	notes = Column(Text, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# CommissionClawback
+# ---------------------------------------------------------------------------
+
+class CommissionClawback(AuditMixin, Model):
+	"""Clawback record — tracks commission recovery when a deal is reversed.
+
+	status lifecycle: PENDING → RECOVERED | WAIVED
+	recovery_payrun_id links to the payroll run that deducted the amount.
+	"""
+
+	__tablename__ = "vp_clawback"
+	__table_args__ = (
+		Index("ix_vp_clawback_payout", "payout_id"),
+		Index("ix_vp_clawback_employee_status", "employee_id", "status"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+		nullable=False,
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+
+	payout_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("vp_payout.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	employee_id = Column(VARCHAR(50), nullable=False)
+	amount_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="Positive integer — the amount to recover",
+	)
+	reason = Column(Text, nullable=False)
+	clawback_date = Column(Date, nullable=False)
+	status = Column(
+		VARCHAR(20),
+		nullable=False,
+		default="PENDING",
+		server_default=sa.text("'PENDING'"),
+		comment="PENDING/RECOVERED/WAIVED",
+	)
+	recovery_payrun_id = Column(
+		VARCHAR(50),
+		nullable=True,
+		comment="Payrun that deducted this clawback",
+	)

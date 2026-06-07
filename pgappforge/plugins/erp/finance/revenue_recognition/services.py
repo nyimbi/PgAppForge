@@ -909,14 +909,33 @@ class RevRecService:
 			return 0
 
 		elif method in ("OUTPUT", "INPUT"):
-			# Percentage-of-completion methods require externally provided metrics.
-			# recognize_period() cannot determine the period completion fraction;
-			# callers must use satisfy_obligation() directly with the measured amount.
-			log.debug(
-				"RevRecService: obligation %s uses %s method; skipping automatic recognition",
-				obligation.id, method,
-			)
-			return 0
+			allocated = Decimal(obligation.allocated_transaction_price_cents)
+			if method == "OUTPUT":
+				total_units = obligation.total_units
+				delivered = obligation.delivered_units or 0
+				if total_units and total_units > 0:
+					pct = min(Decimal(delivered) / Decimal(total_units), Decimal("1"))
+					earned_to_date = (pct * allocated).to_integral_value(rounding=ROUND_HALF_UP)
+					recognized_cents = int(earned_to_date) - (obligation.satisfied_cents or 0)
+					return max(0, recognized_cents)
+				log.debug(
+					"RevRecService: OUTPUT obligation %s missing total_units; returning 0",
+					obligation.id,
+				)
+				return 0
+			else:  # INPUT
+				total_cost = obligation.total_estimated_cost_cents
+				incurred = obligation.costs_incurred_cents or 0
+				if total_cost and total_cost > 0:
+					pct = min(Decimal(incurred) / Decimal(total_cost), Decimal("1"))
+					earned_to_date = (pct * allocated).to_integral_value(rounding=ROUND_HALF_UP)
+					recognized_cents = int(earned_to_date) - (obligation.satisfied_cents or 0)
+					return max(0, recognized_cents)
+				log.debug(
+					"RevRecService: INPUT obligation %s missing total_estimated_cost_cents; returning 0",
+					obligation.id,
+				)
+				return 0
 
 		else:
 			log.warning(
@@ -924,6 +943,97 @@ class RevRecService:
 				method, obligation.id,
 			)
 			return 0
+
+	# ------------------------------------------------------------------
+	# update_poc_progress — update OUTPUT/INPUT progress metrics + auto-recognize
+	# ------------------------------------------------------------------
+
+	def update_poc_progress(
+		self,
+		obligation_id: str,
+		session: Any,
+		*,
+		delivered_units: int | None = None,
+		costs_incurred_cents: int | None = None,
+		period: str | None = None,
+		gl_post: bool = True,
+	) -> dict[str, Any]:
+		"""Update POC progress metrics and automatically recognize the incremental revenue.
+
+		For OUTPUT obligations: supply delivered_units (cumulative to date).
+		For INPUT obligations:  supply costs_incurred_cents (cumulative to date).
+
+		If period is None, defaults to the current calendar month ("YYYY-MM").
+		After updating the metrics the method calls _compute_period_revenue() and,
+		if the result is positive, calls satisfy_obligation() to post the journal entry.
+
+		Returns:
+		  {
+		    "obligation_id": str,
+		    "recognized_cents": int,   # 0 if nothing to recognize this call
+		    "journal_entry_id": str | None,
+		    "obligation_status": str,
+		  }
+		"""
+		from datetime import date as _date
+		from pgappforge.plugins.erp.finance.revenue_recognition.models import RevRecObligation
+
+		obligation: Any = session.execute(
+			select(RevRecObligation).where(RevRecObligation.id == obligation_id)
+		).scalar_one_or_none()
+		if obligation is None:
+			raise ObligationNotFoundError(f"RevRecObligation {obligation_id!r} not found")
+
+		if obligation.recognition_method not in ("OUTPUT", "INPUT"):
+			raise RevRecError(
+				f"update_poc_progress is only valid for OUTPUT/INPUT obligations; "
+				f"obligation {obligation_id!r} uses {obligation.recognition_method!r}"
+			)
+
+		# Apply updates
+		if delivered_units is not None:
+			obligation.delivered_units = delivered_units
+		if costs_incurred_cents is not None:
+			obligation.costs_incurred_cents = costs_incurred_cents
+		session.flush()
+
+		# Compute incremental recognition
+		incremental = self._compute_period_revenue(obligation, period or _date.today().strftime("%Y-%m"))
+
+		if incremental <= 0:
+			log.info(
+				"RevRecService.update_poc_progress: obligation=%s no incremental revenue (incremental=%d)",
+				obligation_id, incremental,
+			)
+			return {
+				"obligation_id": obligation_id,
+				"recognized_cents": 0,
+				"journal_entry_id": None,
+				"obligation_status": obligation.status,
+			}
+
+		# Cap at remaining to prevent over-recognition
+		incremental = min(incremental, obligation.remaining_cents)
+
+		effective_period = period or _date.today().strftime("%Y-%m")
+		entry = self.satisfy_obligation(
+			obligation_id=obligation_id,
+			satisfied_cents=incremental,
+			period=effective_period,
+			session=session,
+			gl_post=gl_post,
+		)
+
+		log.info(
+			"RevRecService.update_poc_progress: obligation=%s period=%s recognized=%d",
+			obligation_id, effective_period, incremental,
+		)
+		return {
+			"obligation_id": obligation_id,
+			"recognized_cents": incremental,
+			"journal_entry_id": entry.id,
+			"obligation_status": obligation.status,
+		}
 
 	def _recompute_contract_status(self, contract: Any, session: Any) -> None:
 		"""Recompute contract status based on obligation statuses."""

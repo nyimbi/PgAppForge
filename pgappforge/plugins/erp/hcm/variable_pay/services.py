@@ -572,6 +572,180 @@ class VariablePayService:
 		}
 
 	@staticmethod
+	def split_commission(
+		calculation_id: str,
+		splits: list[dict[str, Any]],
+		session: Any,
+	) -> list[Any]:
+		"""Divide a commission calculation among multiple employees.
+
+		splits: list of {employee_id, split_pct, reason?, notes?}
+		  split_pct is a float/str fraction, e.g. 0.30 for 30%.
+		  All split_pct values must sum to 1.0 (±0.001 tolerance).
+
+		split_cents for each credit is computed as:
+		  round(total_commission_cents × split_pct, HALF_UP)
+
+		Returns list of CommissionCredit rows (not yet committed).
+		Raises ValueError if calculation not found or percentages don't sum to 1.
+		"""
+		from pgappforge.plugins.erp.hcm.variable_pay.models import (
+			CommissionCalculation,
+			CommissionCredit,
+		)
+
+		calc = session.execute(
+			sa.select(CommissionCalculation).where(CommissionCalculation.id == calculation_id)
+		).scalar_one_or_none()
+		if calc is None:
+			raise ValueError(f"CommissionCalculation {calculation_id!r} not found")
+
+		total_pct = sum(Decimal(str(s["split_pct"])) for s in splits)
+		if abs(total_pct - Decimal("1")) > Decimal("0.001"):
+			raise ValueError(
+				f"Split percentages must sum to 1.0, got {total_pct}"
+			)
+
+		credits: list[Any] = []
+		for s in splits:
+			pct = Decimal(str(s["split_pct"]))
+			split_cents = _round_cents(Decimal(calc.total_commission_cents) * pct)
+			credit = CommissionCredit(
+				tenant_id=calc.tenant_id,
+				calculation_id=calculation_id,
+				credited_to_employee_id=s["employee_id"],
+				split_pct=pct,
+				split_cents=split_cents,
+				reason=s.get("reason", "SPLIT"),
+				notes=s.get("notes"),
+			)
+			session.add(credit)
+			credits.append(credit)
+
+		session.flush()
+		log.info(
+			"VariablePayService.split_commission: calc=%s splits=%d total_pct=%s",
+			calculation_id, len(credits), total_pct,
+		)
+		return credits
+
+	@staticmethod
+	def record_clawback(
+		payout_id: str,
+		amount_cents: int,
+		reason: str,
+		session: Any,
+	) -> Any:
+		"""Record a commission clawback against a PAID or APPROVED payout.
+
+		Creates a CommissionClawback in PENDING status.  The actual deduction
+		from payroll is tracked via recovery_payrun_id once a payrun processes it.
+
+		Raises ValueError if payout not found or in an ineligible status.
+		"""
+		from datetime import date as _date
+		from pgappforge.plugins.erp.hcm.variable_pay.models import (
+			CommissionClawback,
+			CommissionPayout,
+		)
+
+		assert amount_cents > 0, "amount_cents must be positive"
+
+		payout = session.execute(
+			sa.select(CommissionPayout).where(CommissionPayout.id == payout_id)
+		).scalar_one_or_none()
+		if payout is None:
+			raise ValueError(f"CommissionPayout {payout_id!r} not found")
+		if payout.status not in ("PAID", "APPROVED"):
+			raise ValueError(
+				f"Cannot clawback payout in status {payout.status!r}; must be PAID or APPROVED"
+			)
+
+		clawback = CommissionClawback(
+			tenant_id=payout.tenant_id,
+			payout_id=payout_id,
+			employee_id=payout.employee_id,
+			amount_cents=amount_cents,
+			reason=reason,
+			clawback_date=_date.today(),
+			status="PENDING",
+		)
+		session.add(clawback)
+		session.flush()
+		log.info(
+			"VariablePayService.record_clawback: payout=%s employee=%s amount=%d",
+			payout_id, payout.employee_id, amount_cents,
+		)
+		return clawback
+
+	@staticmethod
+	def get_team_commissions(
+		manager_id: str,
+		period: str,
+		tenant_id: str,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Manager rollup: aggregate commission payouts for direct reports in a period.
+
+		Attempts to resolve direct reports via the HCM org hierarchy.  Falls back
+		to an empty list gracefully if the org model is unavailable.
+
+		Returns:
+		  {
+		    manager_id, period,
+		    team_count: int,
+		    total_commission_cents: int,
+		    payouts: [{employee_id, amount_cents, status}]
+		  }
+		"""
+		from pgappforge.plugins.erp.hcm.variable_pay.models import CommissionPayout
+
+		# Resolve direct reports — best-effort; degrade gracefully
+		direct_reports: list[str] = []
+		try:
+			from pgappforge.plugins.erp.hcm.org.models import Employee
+			rows = session.execute(
+				sa.select(Employee.id).where(
+					Employee.manager_id == manager_id,
+					Employee.tenant_id == tenant_id,
+				)
+			).all()
+			direct_reports = [str(r[0]) for r in rows]
+		except Exception as exc:
+			log.debug("get_team_commissions: could not load direct reports: %s", exc)
+
+		if not direct_reports:
+			return {
+				"manager_id": manager_id,
+				"period": period,
+				"team_count": 0,
+				"total_commission_cents": 0,
+				"payouts": [],
+			}
+
+		payouts: list[Any] = list(session.execute(
+			sa.select(CommissionPayout).where(
+				CommissionPayout.employee_id.in_(direct_reports),
+				CommissionPayout.period == period,
+			)
+		).scalars().all())
+
+		return {
+			"manager_id": manager_id,
+			"period": period,
+			"team_count": len(direct_reports),
+			"total_commission_cents": sum(p.amount_cents for p in payouts),
+			"payouts": [
+				{
+					"employee_id": p.employee_id,
+					"amount_cents": p.amount_cents,
+					"status": p.status,
+				}
+				for p in payouts
+			],
+		}
+
+	@staticmethod
 	def get_plan_analytics(
 		plan_id: str,
 		period: str,

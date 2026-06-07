@@ -302,11 +302,97 @@ class SubscriptionUsage(AuditMixin, Model):
 		return f"<SubscriptionUsage sub={self.subscription_id} {self.metric_name}/{self.period} qty={self.quantity}>"
 
 
+# ---------------------------------------------------------------------------
+# SubscriptionUsageTier
+# ---------------------------------------------------------------------------
+
+class SubscriptionUsageTier(AuditMixin, Model):
+	"""Tiered pricing configuration for metered (usage-based) billing.
+
+	One row per tier boundary per (plan, metric_name) combination.
+	Rows must be ordered by from_unit ascending (enforced by service, not DB).
+
+	tier_type controls the pricing algorithm applied by compute_usage_charge():
+	  GRADUATED  — each unit priced at the rate of its tier (most common)
+	  VOLUME     — all units priced at the rate of the highest tier reached
+	  STAIRSTEP  — flat fee per tier crossed (price_per_unit_cents = flat fee)
+
+	Example — GRADUATED "api_calls" tiers for a plan:
+	  from_unit=0,    to_unit=10000,  price_per_unit_cents=1   → first 10k @ 0.01
+	  from_unit=10001, to_unit=50000, price_per_unit_cents=0   → next 40k free
+	  from_unit=50001, to_unit=None,  price_per_unit_cents=2   → overage @ 0.02
+	"""
+
+	__tablename__ = "sub_usage_tier"
+	__table_args__ = (
+		Index(
+			"ix_sub_usage_tier_plan_metric_from",
+			"plan_id", "metric_name", "from_unit",
+		),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+
+	plan_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sub_plan.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	metric_name = Column(
+		String(100),
+		nullable=False,
+		comment="e.g. 'api_calls', 'seats', 'gb_storage'",
+	)
+	from_unit = Column(
+		Integer,
+		nullable=False,
+		comment="Inclusive lower bound (0-based; 0 = first unit)",
+	)
+	to_unit = Column(
+		Integer,
+		nullable=True,
+		comment="Inclusive upper bound; NULL = unlimited",
+	)
+	price_per_unit_cents = Column(
+		BigInteger,
+		nullable=False,
+		comment="Cents per unit (STAIRSTEP: flat fee per tier crossed)",
+	)
+	tier_type = Column(
+		String(20),
+		nullable=False,
+		default="GRADUATED",
+		server_default=sa.text("'GRADUATED'"),
+		comment="GRADUATED/VOLUME/STAIRSTEP",
+	)
+	currency_code = Column(String(3), nullable=False, default="KES", server_default=sa.text("'KES'"))
+
+	plan = relationship(
+		"SubscriptionPlan",
+		lazy="select",
+		foreign_keys=[plan_id],
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<SubscriptionUsageTier plan={self.plan_id} metric={self.metric_name} "
+			f"[{self.from_unit},{self.to_unit}] {self.price_per_unit_cents}c {self.tier_type}>"
+		)
+
+
 __all__ = [
 	"SubscriptionPlan",
 	"Subscription",
 	"SubscriptionInvoice",
 	"SubscriptionUsage",
+	"SubscriptionUsageTier",
 	"BILLING_INTERVAL",
 	"SUBSCRIPTION_STATUS",
 	"INVOICE_STATUS",
