@@ -488,27 +488,35 @@ class SourcingService:
 		po_id = ""
 		try:
 			from pgappforge.plugins.erp.operations.scm.services import SCMService
+			from datetime import date as _date, timedelta as _td
+			# Convert bid line_items to SCM PO lines format
 			po_lines = [
 				{
-					"item_code": li.get("item_code", ""),
-					"description": "",
-					"quantity": li.get("qty", 1),
-					"unit_cost_cents": li.get("unit_price_cents", 0),
-					"currency_code": winning_bid.currency_code,
+					"product_code": li.get("item_code", f"ITEM-{i}"),
+					"description": li.get("description", ""),
+					"ordered_qty": li.get("qty", 1),
+					"unit_of_measure": li.get("unit", "EA"),
+					"unit_price_cents": li.get("unit_price_cents", 0),
 				}
-				for li in (winning_bid.line_items or [])
+				for i, li in enumerate(winning_bid.line_items or [])
 			]
-			po = SCMService.create_purchase_order(
+			today = _date.today()
+			delivery_days = int(winning_bid.delivery_days or 30)
+			# SCMService is an instance method — must instantiate
+			po = SCMService().create_purchase_order(
 				session=session,
 				supplier_id=winning_bid.supplier_id,
 				lines=po_lines,
+				order_date=today,
+				expected_delivery=today + _td(days=delivery_days),
 				tenant_id=rfq.tenant_id,
-				reference=rfq.rfq_ref,
-				currency_code=winning_bid.currency_code,
+				req_id=rfq.rfq_ref,  # cross-reference to RFQ
 			)
 			po_id = po.id if po else ""
+		except ImportError:
+			log.debug("SCM plugin not available — PO creation skipped")
 		except Exception as exc:  # noqa: BLE001
-			log.info("SCM plugin not available or PO creation failed (%s) — continuing", exc)
+			log.warning("PO creation from RFQ award failed: %s", exc)
 
 		_emit(
 			PurchaseOrderAwardedEvent(

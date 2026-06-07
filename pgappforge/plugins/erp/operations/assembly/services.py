@@ -509,31 +509,22 @@ class AssemblyService:
 			gl_svc = GLService()
 			abs_variance = abs(variance_cents)
 			if variance_cents > 0:
-				# Over-cost: debit variance account, credit clearing
-				gl_svc.post_journal(
-					tenant_id=tenant_id,
-					description=f"Assembly variance — order {order.id}",
-					lines=[
-						{"account": "5990", "debit_cents": abs_variance, "credit_cents": 0},
-						{"account": "5980", "debit_cents": 0, "credit_cents": abs_variance},
-					],
-					reference_type="ASSEMBLY",
-					reference_id=order.id,
-					session=session,
-				)
+				# Over-cost: DR Production Variance / CR WIP Clearing
+				dr_acct, cr_acct = "5990", "5980"
 			else:
-				# Under-cost: debit clearing, credit variance account
-				gl_svc.post_journal(
-					tenant_id=tenant_id,
-					description=f"Assembly variance (credit) — order {order.id}",
-					lines=[
-						{"account": "5980", "debit_cents": abs_variance, "credit_cents": 0},
-						{"account": "5990", "debit_cents": 0, "credit_cents": abs_variance},
-					],
-					reference_type="ASSEMBLY",
-					reference_id=order.id,
-					session=session,
-				)
+				# Under-cost: DR WIP Clearing / CR Production Variance
+				dr_acct, cr_acct = "5980", "5990"
+			gl_svc.post_simple_journal(
+				lines=[
+					{"account_code": dr_acct, "debit_cents": abs_variance, "credit_cents": 0},
+					{"account_code": cr_acct, "debit_cents": 0, "credit_cents": abs_variance},
+				],
+				session=session,
+				tenant_id=tenant_id,
+				description=f"Assembly variance — order {order.id}",
+				source_doc_id=order.id,
+				source_doc_type="ASSEMBLY_ORDER",
+			)
 			log.info(
 				"AssemblyService._post_variance_gl: order=%s variance=%d GL posted",
 				order.id, variance_cents,

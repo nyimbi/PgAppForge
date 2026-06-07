@@ -968,33 +968,29 @@ class RevRecService:
 			posting_date = date(int(year_str), int(month_str), 1)
 
 			svc = GLService()
-			# Build a minimal journal batch dict for GL posting
-			# Actual implementation depends on GLService.create_batch() API;
-			# we call the lower-level method that accepts pre-validated line data.
-			result = svc.post_auto_entry(
+			result = svc.post_simple_journal(
+				lines=[
+					{
+						"account_code": "2500",  # Deferred Revenue — DR (decreasing liability)
+						"debit_cents": recognized_cents,
+						"credit_cents": 0,
+					},
+					{
+						"account_code": "4000",  # Revenue — CR
+						"debit_cents": 0,
+						"credit_cents": recognized_cents,
+					},
+				],
 				session=session,
 				tenant_id=obligation.tenant_id,
-				posting_date=posting_date,
 				description=(
 					f"Rev rec: obligation {obligation.id} period {period} "
 					f"amount={recognized_cents}"
 				),
-				lines=[
-					{
-						"account_code": "2500",  # Deferred Revenue
-						"debit_amount": recognized_cents,
-						"credit_amount": 0,
-					},
-					{
-						"account_code": "4000",  # Revenue
-						"debit_amount": 0,
-						"credit_amount": recognized_cents,
-					},
-				],
-				source_document_type="REV_REC_OBLIGATION",
-				source_document_id=obligation.id,
+				source_doc_id=obligation.id,
+				source_doc_type="REV_REC_OBLIGATION",
 			)
-			return result.get("entry_id") if isinstance(result, dict) else None
+			return result
 
 		except Exception as exc:
 			log.warning(
