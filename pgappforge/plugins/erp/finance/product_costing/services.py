@@ -689,27 +689,24 @@ class ProductCostingService:
 		Gracefully skips when GL plugin is not loaded.
 		"""
 		try:
-			from pgappforge.plugins.erp.finance.gl.models import GLJournalEntry  # type: ignore[import]
+			from pgappforge.plugins.erp.finance.gl.services import GLService  # type: ignore[import]
 
 			if variance_cents > 0:
-				debit_acct = "5990"     # Production Variance
-				credit_acct = "1410"    # WIP Inventory
+				dr_acct, cr_acct = "5990", "1410"   # DR Production Variance / CR WIP
 			else:
-				debit_acct = "1410"     # WIP Inventory
-				credit_acct = "5990"    # Production Variance
+				dr_acct, cr_acct = "1410", "5990"   # DR WIP / CR Production Variance
 
-			entry = GLJournalEntry(
+			GLService().post_simple_journal(
+				lines=[
+					{"account_code": dr_acct, "debit_cents": abs(variance_cents), "credit_cents": 0},
+					{"account_code": cr_acct, "debit_cents": 0, "credit_cents": abs(variance_cents)},
+				],
+				session=session,
 				tenant_id=tenant_id,
-				reference=f"VAR-{order_id}",
-				debit_account=debit_acct,
-				credit_account=credit_acct,
-				amount_cents=abs(variance_cents),
-				currency_code="USD",
-				effective_date=date.today(),
 				description=f"Production variance for order {order_id}",
-				source_plugin="product_costing",
+				source_doc_id=order_id,
+				source_doc_type="PRODUCTION_ORDER",
 			)
-			session.add(entry)
 		except ImportError:
 			log.debug("_post_variance_gl: GL plugin not available, skipping for order %r", order_id)
 		except Exception as exc:
