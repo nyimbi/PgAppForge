@@ -393,6 +393,31 @@ class SubscriptionService:
 		session.add(invoice)
 		session.flush()
 
+		# Mirror to AR sub-ledger so aging, dunning, credit exposure are updated
+		try:
+			from pgappforge.plugins.erp.finance.ar.models import ARInvoice
+			ar_inv = ARInvoice(
+				tenant_id=sub.tenant_id,
+				customer_id=sub.customer_id,
+				invoice_number=invoice_ref,
+				invoice_type="SUBSCRIPTION",
+				invoice_date=date.today(),
+				due_date=old_period_end,
+				subtotal_cents=amount_cents,
+				tax_cents=0,
+				total_cents=amount_cents,
+				balance_due_cents=amount_cents,
+				status="ISSUED",
+				currency_code=plan.currency_code if plan else "KES",
+				description=f"Subscription renewal {invoice_ref}",
+			)
+			session.add(ar_inv)
+			session.flush()
+		except ImportError:
+			log.debug("renew_subscription: AR plugin not loaded; AR invoice skipped")
+		except Exception as ar_exc:
+			log.warning("renew_subscription: AR invoice creation failed: %s", ar_exc)
+
 		emit_event(
 			SubscriptionRenewedEvent(
 				aggregate_id=sub.id,

@@ -97,13 +97,15 @@ class CarbonTrackingService:
 
 		period_date = _period_to_date(period)
 
-		# Find best matching emission factor: source_type + country_code, effective_from <= period_date, latest first
+		# Find best matching emission factor: source_type + country_code, within effective date range
+		_not_expired = (EmissionFactor.effective_to.is_(None)) | (EmissionFactor.effective_to >= period_date)
 		factor_stmt = (
 			select(EmissionFactor)
 			.where(EmissionFactor.tenant_id == tenant_id)
 			.where(EmissionFactor.source_type == source_type)
 			.where(EmissionFactor.country_code == country_code)
 			.where(EmissionFactor.effective_from <= period_date)
+			.where(_not_expired)
 			.order_by(EmissionFactor.effective_from.desc())
 		)
 		factor = session.execute(factor_stmt).scalars().first()
@@ -112,12 +114,14 @@ class CarbonTrackingService:
 			co2e_per_unit = _decimal(factor.co2e_per_unit)
 			emission_factor_id: str | None = str(factor.id)
 		else:
-			# Fallback: try any country
+			# Fallback: try any country with same date constraints
+			_not_expired_any = (EmissionFactor.effective_to.is_(None)) | (EmissionFactor.effective_to >= period_date)
 			factor_stmt_any = (
 				select(EmissionFactor)
 				.where(EmissionFactor.tenant_id == tenant_id)
 				.where(EmissionFactor.source_type == source_type)
 				.where(EmissionFactor.effective_from <= period_date)
+				.where(_not_expired_any)
 				.order_by(EmissionFactor.effective_from.desc())
 			)
 			factor_any = session.execute(factor_stmt_any).scalars().first()
@@ -222,6 +226,40 @@ class CarbonTrackingService:
 			session,
 		)
 		return report
+
+	def compute_emission_intensity(
+		self,
+		tenant_id: str,
+		period: str,
+		revenue_cents: int,
+		session: Session,
+	) -> dict[str, Any]:
+		"""kgCO2e per currency unit of revenue for a period.
+
+		Returns:
+		    total_co2e_kg: str  — Decimal string
+		    revenue_currency: str  — revenue expressed in whole currency units
+		    intensity_co2e_per_unit_revenue: str  — kgCO2e / currency unit
+		"""
+		assert revenue_cents > 0, "revenue_cents must be positive"
+
+		rec_stmt = (
+			select(EmissionRecord)
+			.where(EmissionRecord.tenant_id == tenant_id)
+			.where(EmissionRecord.period == period)
+		)
+		records = list(session.execute(rec_stmt).scalars())
+		total_co2e = sum((_decimal(r.co2e_kg) for r in records), Decimal("0"))
+
+		revenue = _decimal(revenue_cents) / Decimal("100")
+		intensity = total_co2e / revenue if revenue > Decimal("0") else Decimal("0")
+
+		return {
+			"total_co2e_kg": str(total_co2e),
+			"revenue_currency": str(revenue),
+			"intensity_co2e_per_unit_revenue": str(intensity),
+			"period": period,
+		}
 
 	def apply_offset(
 		self,

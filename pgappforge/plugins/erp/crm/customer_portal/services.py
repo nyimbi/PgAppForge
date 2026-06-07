@@ -321,17 +321,37 @@ class CustomerPortalService:
 		ar_data: dict[str, Any] = {
 			"outstanding_cents": 0,
 			"overdue_cents": 0,
-			"aging": {},
+			"aging": {"current": 0, "1_30": 0, "31_60": 0, "61_90": 0, "90_plus": 0},
 			"recent_invoices": [],
 			"open_orders": [],
 		}
 		try:
 			from pgappforge.plugins.erp.finance.ar.services import ARService
+			from pgappforge.plugins.erp.finance.ar.models import ARInvoice
 			svc = ARService()
-			customer = svc.get_customer_by_id(user.customer_id, user.tenant_id, db_session)
-			if customer is not None:
-				ar_data["outstanding_cents"] = getattr(customer, "outstanding_cents", 0)
-				ar_data["overdue_cents"] = getattr(customer, "overdue_cents", 0)
+			# Use get_customer_statistics for live aging (added in NAV gap work)
+			stats = svc.get_customer_statistics(user.customer_id, user.tenant_id, db_session)
+			ar_data["outstanding_cents"] = stats.get("outstanding_cents", 0)
+			ar_data["overdue_cents"] = (
+				stats.get("aging", {}).get("1_30", 0)
+				+ stats.get("aging", {}).get("31_60", 0)
+				+ stats.get("aging", {}).get("61_90", 0)
+				+ stats.get("aging", {}).get("90_plus", 0)
+			)
+			ar_data["aging"] = stats.get("aging", ar_data["aging"])
+			# Pull 5 most recent invoices
+			recent = db_session.execute(
+				sa.select(ARInvoice)
+				.where(ARInvoice.tenant_id == user.tenant_id, ARInvoice.customer_id == user.customer_id)
+				.order_by(ARInvoice.invoice_date.desc())
+				.limit(5)
+			).scalars().all()
+			ar_data["recent_invoices"] = [
+				{"id": inv.id, "invoice_number": inv.invoice_number,
+				 "total_cents": inv.total_cents, "balance_cents": inv.balance_due_cents,
+				 "status": inv.status, "due_date": str(inv.due_date)}
+				for inv in recent
+			]
 		except Exception as exc:
 			log.debug("get_customer_dashboard: ARService unavailable: %s", exc)
 

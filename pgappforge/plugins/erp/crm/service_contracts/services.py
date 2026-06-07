@@ -123,6 +123,7 @@ class ServiceContractService:
 				f"Cannot invoice contract in status {contract.status!r}"
 			)
 		invoice_id = ""
+		ar_created = False
 		try:
 			from pgappforge.plugins.erp.finance.ar.models import ARInvoice
 
@@ -145,13 +146,20 @@ class ServiceContractService:
 			session.add(inv)
 			session.flush()
 			invoice_id = str(inv.id)
+			ar_created = True
+		except ImportError:
+			log.debug("generate_invoice: AR plugin not loaded; invoice skipped for contract %s", contract_id)
+			ar_created = True  # not an error — AR plugin optional
 		except Exception as exc:
-			log.warning("generate_invoice: AR plugin unavailable: %s", exc)
+			log.error("generate_invoice: AR invoice creation failed for contract %s: %s", contract_id, exc)
+			raise ServiceContractError(f"AR invoice creation failed: {exc}") from exc
 
-		freq_days = {"MONTHLY": 30, "QUARTERLY": 91, "ANNUAL": 365, "WEEKLY": 7}
-		contract.last_invoiced_at = date.today()
-		days = freq_days.get(contract.billing_frequency, 30)
-		contract.next_billing_date = date.today() + timedelta(days=days)
+		# Only advance billing cycle after a successful (or gracefully skipped) invoice creation
+		if ar_created:
+			freq_days = {"MONTHLY": 30, "QUARTERLY": 91, "ANNUAL": 365, "WEEKLY": 7}
+			contract.last_invoiced_at = date.today()
+			days = freq_days.get(contract.billing_frequency, 30)
+			contract.next_billing_date = date.today() + timedelta(days=days)
 		session.flush()
 		_emit(
 			ServiceContractInvoiceGeneratedEvent(
