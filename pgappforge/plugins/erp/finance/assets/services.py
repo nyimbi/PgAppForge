@@ -27,6 +27,32 @@ import sqlalchemy as sa
 
 log = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# MACRS half-year convention rates — IRS Rev. Proc. 87-57
+# Keys are recovery periods; values are annual rate lists (year 1 … year n+1).
+# ---------------------------------------------------------------------------
+MACRS_RATES: dict[int, list[Decimal]] = {
+	3: [
+		Decimal("0.3333"), Decimal("0.4445"),
+		Decimal("0.1481"), Decimal("0.0741"),
+	],
+	5: [
+		Decimal("0.2000"), Decimal("0.3200"), Decimal("0.1920"),
+		Decimal("0.1152"), Decimal("0.1152"), Decimal("0.0576"),
+	],
+	7: [
+		Decimal("0.1429"), Decimal("0.2449"), Decimal("0.1749"),
+		Decimal("0.1249"), Decimal("0.0893"), Decimal("0.0892"),
+		Decimal("0.0893"), Decimal("0.0446"),
+	],
+	10: [
+		Decimal("0.1000"), Decimal("0.1800"), Decimal("0.1440"),
+		Decimal("0.1152"), Decimal("0.0922"), Decimal("0.0737"),
+		Decimal("0.0655"), Decimal("0.0655"), Decimal("0.0656"),
+		Decimal("0.0655"), Decimal("0.0328"),
+	],
+}
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -918,10 +944,39 @@ class AssetService:
 	# Internal helpers
 	# ------------------------------------------------------------------ #
 
+	def _get_asset_age_years(self, asset: Any) -> Decimal:
+		"""Return asset age in years as a Decimal.
+
+		Prefers acquisition_date; falls back to NBV-based estimate when the
+		date is absent (should not happen with valid data, but defensive).
+		"""
+		acq: date | None = getattr(asset, "acquisition_date", None)
+		if acq is not None:
+			delta_days = (date.today() - acq).days
+			return Decimal(str(delta_days)) / Decimal("365")
+		# Fallback: back-compute from remaining NBV fraction
+		cost = Decimal(asset.acquisition_cost_cents)
+		nbv = Decimal(asset.current_book_value_cents)
+		life_years = Decimal(str(asset.useful_life_years))
+		if cost <= 0:
+			return Decimal("0")
+		consumed_fraction = (cost - nbv) / cost
+		return (consumed_fraction * life_years).max(Decimal("0"))
+
 	def _calculate_depreciation(self, asset: Any) -> int:
 		"""Calculate depreciation charge for one period (month).
 
 		Returns integer cents. Uses Decimal arithmetic — never float.
+
+		Supported methods
+		-----------------
+		STRAIGHT_LINE        — equal monthly charge over useful life
+		DECLINING            — double-declining balance (2/N × NBV)
+		SUM_OF_YEARS_DIGITS  — front-loaded; SYD factor × depreciable cost
+		MACRS                — US MACRS half-year convention (IRS Rev. Proc. 87-57)
+		                       supported recovery periods: 3, 5, 7, 10 years;
+		                       falls back to STRAIGHT_LINE for other periods
+		UNITS_OF_PRODUCTION  — returns 0; charge via record_units_depreciation()
 		"""
 		method = asset.depreciation_method
 		cost = Decimal(asset.acquisition_cost_cents)
@@ -943,6 +998,44 @@ class AssetService:
 		elif method == "DECLINING":
 			rate = Decimal("2") / life_years
 			annual = nbv * rate
+			monthly = annual / Decimal("12")
+
+		elif method == "SUM_OF_YEARS_DIGITS":
+			# SYD denominator = n*(n+1)/2  where n = total useful life in years
+			n = life_years.to_integral_value(rounding=ROUND_HALF_UP)
+			syd_denominator = n * (n + Decimal("1")) / Decimal("2")
+			if syd_denominator <= 0:
+				return 0
+			# Remaining life in years (integer) based on actual asset age
+			age_years = self._get_asset_age_years(asset)
+			remaining_life = (life_years - age_years).to_integral_value(
+				rounding=ROUND_HALF_UP
+			)
+			remaining_life = max(Decimal("0"), remaining_life)
+			syd_factor = remaining_life / syd_denominator
+			annual = depreciable * syd_factor
+			monthly = annual / Decimal("12")
+
+		elif method == "MACRS":
+			# MACRS half-year convention — rates indexed from year 1
+			recovery_period = int(life_years.to_integral_value(rounding=ROUND_HALF_UP))
+			rates = MACRS_RATES.get(recovery_period)
+			if rates is None:
+				# Unsupported recovery period → fall back to straight-line
+				log.debug(
+					"MACRS: unsupported recovery period %d for asset %r; "
+					"falling back to STRAIGHT_LINE",
+					recovery_period,
+					asset.id,
+				)
+				annual = depreciable / life_years
+			else:
+				age_years = self._get_asset_age_years(asset)
+				# year_number is 1-based calendar year of the asset's life
+				year_number = int(age_years.to_integral_value(rounding=ROUND_HALF_UP)) + 1
+				year_number = max(1, year_number)
+				year_idx = max(0, min(len(rates) - 1, year_number - 1))
+				annual = cost * rates[year_idx]
 			monthly = annual / Decimal("12")
 
 		elif method == "UNITS_OF_PRODUCTION":

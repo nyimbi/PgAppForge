@@ -38,6 +38,7 @@ from sqlalchemy import (
 	String,
 	Text,
 	UniqueConstraint,
+	BigInteger,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -636,6 +637,47 @@ class BankStatementImport(AuditMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# BankFeedConnection
+# ---------------------------------------------------------------------------
+
+class BankFeedConnection(AuditMixin, Model):
+	"""Live bank feed connection for real-time statement sync.
+
+	Supports Kenya banks (Equity, KCB), M-Pesa, and Plaid (generic).
+	Credentials are stored encrypted (Fernet) in credentials_encrypted JSONB.
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "fin_bank_feed_connection"
+	__table_args__ = (
+		Index("ix_fin_bfc_tenant", "tenant_id"),
+		Index("ix_fin_bfc_account", "bank_account_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	bank_account_id = Column(UUID(as_uuid=False), nullable=False)
+	provider = Column(String(30), nullable=False)  # EQUITY/KCB/MPESA/PLAID/GENERIC
+	credentials_encrypted = Column(JSONB, nullable=False, default=dict)  # Fernet-encrypted
+	last_sync_at = Column(DateTime(timezone=True), nullable=True)
+	is_active = Column(Boolean, nullable=False, default=True)
+	sync_frequency_minutes = Column(Integer, nullable=False, default=60)
+	error_log: list[dict] = Column(JSONB, nullable=False, default=list)
+
+	def __repr__(self) -> str:
+		return (
+			f"<BankFeedConnection provider={self.provider!r} "
+			f"account={self.bank_account_id!r} active={self.is_active!r}>"
+		)
+
+
 __all__ = [
 	"BankAccount",
 	"CashPosition",
@@ -643,4 +685,5 @@ __all__ = [
 	"BankStatement",
 	"BankStatementLine",
 	"BankStatementImport",
+	"BankFeedConnection",
 ]

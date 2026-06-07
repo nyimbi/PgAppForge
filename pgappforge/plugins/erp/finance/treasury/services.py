@@ -796,6 +796,177 @@ class TreasuryService:
 
 		return lines_data
 
+	# ------------------------------------------------------------------ #
+	# Bank Feed (live sync)
+	# ------------------------------------------------------------------ #
+
+	def register_feed_connection(
+		self,
+		bank_account_id: str,
+		provider: str,
+		credentials: dict,
+		tenant_id: str,
+		session: Any,
+		*,
+		sync_frequency_minutes: int = 60,
+	) -> Any:
+		"""Register a live bank feed connection.
+
+		Credentials are encrypted at rest using Fernet symmetric encryption.
+		If the cryptography package is unavailable, stores as JSON (log warning).
+
+		Providers: EQUITY (Equity Bank Kenya REST API), KCB (KCB Open Banking API),
+		           MPESA (Daraja API transaction history), PLAID (generic Plaid Link).
+		"""
+		from pgappforge.plugins.erp.finance.treasury.models import BankFeedConnection
+		import json
+
+		# Encrypt credentials
+		try:
+			from cryptography.fernet import Fernet
+			import base64
+			import hashlib
+			key = base64.urlsafe_b64encode(hashlib.sha256(tenant_id.encode()).digest())
+			f = Fernet(key)
+			encrypted = {"_fernet": f.encrypt(json.dumps(credentials).encode()).decode()}
+		except ImportError:
+			log.warning("cryptography not installed — bank feed credentials stored unencrypted")
+			encrypted = credentials
+
+		conn = BankFeedConnection(
+			tenant_id=tenant_id,
+			bank_account_id=bank_account_id,
+			provider=provider.upper(),
+			credentials_encrypted=encrypted,
+			sync_frequency_minutes=sync_frequency_minutes,
+		)
+		session.add(conn)
+		session.flush()
+		return conn
+
+	def sync_feed(
+		self,
+		connection_id: str,
+		session: Any,
+	) -> dict:
+		"""Fetch transactions since last sync and import as bank statement.
+
+		Routes to provider-specific fetcher. Parsed transactions are imported
+		via import_bank_statement() and auto-reconciled.
+
+		Returns: {connection_id, provider, transactions_fetched, statement_id, reconciled}
+		"""
+		from pgappforge.plugins.erp.finance.treasury.models import BankFeedConnection
+
+		conn = session.execute(
+			sa.select(BankFeedConnection).where(BankFeedConnection.id == connection_id)
+		).scalar_one_or_none()
+		if conn is None:
+			raise TreasuryServiceError(f"BankFeedConnection {connection_id!r} not found")
+		if not conn.is_active:
+			raise TreasuryServiceError(f"Feed connection {connection_id!r} is inactive")
+
+		since = conn.last_sync_at or datetime.now(timezone.utc).replace(day=1)
+
+		try:
+			if conn.provider == "EQUITY":
+				raw_lines = self._fetch_equity_bank(conn, since)
+			elif conn.provider == "KCB":
+				raw_lines = self._fetch_kcb(conn, since)
+			elif conn.provider == "MPESA":
+				raw_lines = self._fetch_mpesa(conn, since)
+			else:
+				raw_lines = self._fetch_generic_rest(conn, since)
+
+			if not raw_lines:
+				conn.last_sync_at = datetime.now(timezone.utc)
+				session.flush()
+				return {
+					"connection_id": connection_id,
+					"provider": conn.provider,
+					"transactions_fetched": 0,
+					"statement_id": None,
+				}
+
+			# Format as CSV for import_bank_statement
+			csv_lines = ["date,amount,reference,description"]
+			for t in raw_lines:
+				csv_lines.append(
+					f"{t['date']},{t['amount_cents'] / 100:.2f},"
+					f"{t.get('reference', '')},{t.get('description', '')}"
+				)
+			csv_content = "\n".join(csv_lines)
+
+			statement = self.import_bank_statement(csv_content, "CSV", str(conn.bank_account_id), session)
+			conn.last_sync_at = datetime.now(timezone.utc)
+			session.flush()
+
+			return {
+				"connection_id": connection_id,
+				"provider": conn.provider,
+				"transactions_fetched": len(raw_lines),
+				"statement_id": str(statement.id),
+				"synced_at": conn.last_sync_at.isoformat(),
+			}
+		except Exception as exc:
+			conn.error_log = (conn.error_log or []) + [
+				{"ts": datetime.now(timezone.utc).isoformat(), "error": str(exc)[:200]}
+			]
+			session.flush()
+			raise
+
+	def _fetch_equity_bank(self, conn: Any, since: Any) -> list[dict]:
+		"""Fetch transactions from Equity Bank Kenya Open Banking API.
+
+		API Reference: https://developer.equitybankgroup.com/api (REST, OAuth2)
+		Endpoint: GET /v1/accounts/{accountId}/transactions?fromDate={since}
+		Auth: Bearer token from OAuth2 client_credentials flow
+
+		Credentials expected: {client_id, client_secret, account_id}
+
+		NOTE: This is a framework stub. Implement HTTP calls when API access is provisioned.
+		Returns list of {date, amount_cents, reference, description}.
+		"""
+		log.info("_fetch_equity_bank: stub — implement with requests library when API credentials available")
+		return []
+
+	def _fetch_kcb(self, conn: Any, since: Any) -> list[dict]:
+		"""Fetch transactions from KCB Open Banking API.
+
+		API Reference: https://developer.kcbgroup.com (REST, API Key)
+		Endpoint: GET /accounts/{accountNumber}/statement?startDate={since}
+		Auth: x-api-key header
+
+		Credentials expected: {api_key, account_number}
+
+		NOTE: Framework stub. Implement with requests library when provisioned.
+		"""
+		log.info("_fetch_kcb: stub — implement with requests library when API credentials available")
+		return []
+
+	def _fetch_mpesa(self, conn: Any, since: Any) -> list[dict]:
+		"""Fetch M-Pesa transaction history via Safaricom Daraja API.
+
+		API Reference: https://developer.safaricom.co.ke/APIs/MpesaExpressQuery
+		Endpoint: POST /mpesa/c2b/v1/transactionstatus (Business Request)
+		Auth: OAuth2 Bearer token
+
+		Credentials expected: {consumer_key, consumer_secret, shortcode, initiator, security_credential}
+
+		NOTE: Framework stub. Integrate with existing pswitch_adapter for live connection.
+		"""
+		log.info("_fetch_mpesa: stub — integrate with pswitch_adapter")
+		return []
+
+	def _fetch_generic_rest(self, conn: Any, since: Any) -> list[dict]:
+		"""Generic REST bank feed fetcher (Plaid-compatible response format).
+
+		Credentials expected: {base_url, api_key, account_id}
+		Expected response: {transactions: [{date, amount, name, transaction_id}]}
+		"""
+		log.info("_fetch_generic_rest: stub for provider %s", conn.provider)
+		return []
+
 
 __all__ = [
 	"TreasuryService",
