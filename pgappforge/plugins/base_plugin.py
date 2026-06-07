@@ -230,8 +230,33 @@ class BasePlugin(abc.ABC):
 		pass
 
 	def post_initialize(self) -> None:
-		"""Hook called after initialize(). Override for custom logic."""
-		pass
+		"""Hook called after initialize(). Wires subscribe_to() event subscriptions.
+
+		For each event type returned by subscribe_to(), looks for a handler method
+		named `_on_<event_type_with_dots_as_underscores>` on the plugin and registers
+		it with the foundation event bus.
+
+		Example: subscribe_to() returns ["crm.subscriptions.activated"]
+		→ auto-wires self._on_crm_subscriptions_activated if it exists.
+		"""
+		try:
+			from pgappforge.plugins.erp.foundation.events import subscribe as _subscribe
+			for event_type in (self.subscribe_to() or []):
+				handler_name = "_on_" + event_type.replace(".", "_")
+				handler = getattr(self, handler_name, None)
+				if handler is not None and callable(handler):
+					_subscribe(event_type, handler)
+					logger.debug(
+						"Plugin %s wired handler %s → %s",
+						getattr(self, "name", type(self).__name__), handler_name, event_type,
+					)
+				else:
+					logger.debug(
+						"Plugin %s declares subscribe_to %r but has no handler %s — skipped",
+						getattr(self, "name", type(self).__name__), event_type, handler_name,
+					)
+		except ImportError:
+			pass  # foundation events not available (test environments)
 
 	def register_views(self) -> None:
 		"""

@@ -150,6 +150,64 @@ class RevRecPlugin(BasePlugin):
 		if self.config.get("REV_REC_SEED_RULES_ON_INIT", True):
 			self._try_setup_rules()
 
+	def _on_crm_subscriptions_activated(self, event: Any) -> None:
+		"""Auto-create a RevRec contract when a subscription is activated.
+
+		Called automatically by BasePlugin.post_initialize() subscription wiring
+		when crm.subscriptions.activated is emitted.
+		"""
+		try:
+			from flask import current_app
+			session = current_app.appbuilder.get_session
+		except (RuntimeError, AttributeError):
+			log.debug("RevRecPlugin._on_crm_subscriptions_activated: no Flask context — skipped")
+			return
+
+		try:
+			from pgappforge.plugins.erp.crm.subscriptions.models import Subscription, SubscriptionPlan
+			from pgappforge.plugins.erp.finance.revenue_recognition.services import RevRecService
+
+			sub_id = getattr(event, "sub_id", None) or getattr(event, "aggregate_id", None)
+			if not sub_id:
+				return
+
+			import sqlalchemy as _sa
+			sub = session.execute(
+				_sa.select(Subscription).where(Subscription.id == sub_id)
+			).scalar_one_or_none()
+			if sub is None:
+				return
+
+			plan = session.execute(
+				_sa.select(SubscriptionPlan).where(SubscriptionPlan.id == sub.plan_id)
+			).scalar_one_or_none()
+
+			total_cents = int(sub.quantity or 1) * (plan.base_price_cents if plan else 0)
+			if total_cents <= 0:
+				return
+
+			svc = RevRecService()
+			svc.create_contract(
+				customer_id=str(sub.customer_id),
+				contract_ref=f"SUB-{sub_id[:8]}",
+				total_cents=total_cents,
+				obligations_data=[{
+					"description": f"{plan.name if plan else 'Subscription'} — recurring service",
+					"standalone_selling_price_cents": total_cents,
+					"satisfaction_type": "OVER_TIME",
+					"recognition_method": "STRAIGHT_LINE",
+					"start_date": sub.current_period_start,
+					"end_date": sub.current_period_end,
+				}],
+				session=session,
+				tenant_id=str(sub.tenant_id),
+				source_module="crm.subscriptions",
+				source_record_id=str(sub_id),
+			)
+			log.info("RevRecPlugin: auto-created contract for subscription %s", sub_id)
+		except Exception as exc:
+			log.warning("RevRecPlugin._on_crm_subscriptions_activated failed: %s", exc)
+
 	def register_models(self) -> list:
 		"""Model classes for Alembic autogenerate discovery."""
 		from pgappforge.plugins.erp.finance.revenue_recognition.models import (
