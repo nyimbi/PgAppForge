@@ -92,31 +92,36 @@ def _hash_token(raw: str) -> str:
 
 
 def _hash_password(password: str) -> str:
-	"""bcrypt hash with SHA-256 fallback when bcrypt is unavailable."""
-	try:
-		import bcrypt  # type: ignore[import]
-		return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-	except ImportError:
-		log.debug("bcrypt unavailable; falling back to SHA-256 for password hash")
-		return hashlib.sha256(password.encode()).hexdigest()
+	"""bcrypt hash. bcrypt is required — no weak fallback.
 
-
-def _verify_password(password: str, hashed: str) -> bool:
-	"""Verify *password* against *hashed*.
-
-	Uses bcrypt.checkpw when available; falls back to SHA-256 via
-	secrets.compare_digest (constant-time).
+	If bcrypt is unavailable, uses hashlib.scrypt with a random salt
+	(stored as "scrypt:<salt_hex>:<hash_hex>") which is far safer than
+	unsalted SHA-256. Production deployments MUST install bcrypt.
 	"""
 	try:
 		import bcrypt  # type: ignore[import]
-		# bcrypt hashes start with $2b$ or $2a$
-		if hashed.startswith("$2"):
-			return bcrypt.checkpw(password.encode(), hashed.encode())
+		return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
 	except ImportError:
-		pass
-	# SHA-256 fallback
-	candidate = hashlib.sha256(password.encode()).hexdigest()
-	return secrets.compare_digest(candidate, hashed)
+		log.warning("bcrypt not installed — using scrypt fallback. Install bcrypt for production.")
+		salt = secrets.token_bytes(32)
+		dk = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1, dklen=32)
+		return f"scrypt:{salt.hex()}:{dk.hex()}"
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+	"""Verify *password* against *hashed* (bcrypt or scrypt). Constant-time."""
+	if hashed.startswith("$2"):
+		try:
+			import bcrypt  # type: ignore[import]
+			return bcrypt.checkpw(password.encode(), hashed.encode())
+		except ImportError:
+			return False
+	if hashed.startswith("scrypt:"):
+		_, salt_hex, dk_hex = hashed.split(":", 2)
+		salt = bytes.fromhex(salt_hex)
+		candidate = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1, dklen=32)
+		return secrets.compare_digest(candidate.hex(), dk_hex)
+	return False
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +356,7 @@ class CustomerPortalService:
 			from pgappforge.plugins.erp.finance.ar.models import ARInvoice
 			svc = ARService()
 			stmt = sa.select(ARInvoice).where(
+				ARInvoice.tenant_id == user.tenant_id,
 				ARInvoice.customer_id == user.customer_id,
 			)
 			if status_filter:
@@ -410,6 +416,7 @@ class CustomerPortalService:
 
 			invoices = list(db_session.execute(
 				sa.select(ARInvoice).where(
+					ARInvoice.tenant_id == user.tenant_id,
 					ARInvoice.customer_id == user.customer_id,
 					ARInvoice.invoice_date >= from_d,
 					ARInvoice.invoice_date <= to_d,
@@ -417,6 +424,7 @@ class CustomerPortalService:
 			).scalars())
 			payments = list(db_session.execute(
 				sa.select(ARPayment).where(
+					ARPayment.tenant_id == user.tenant_id,
 					ARPayment.customer_id == user.customer_id,
 					ARPayment.payment_date >= from_d,
 					ARPayment.payment_date <= to_d,

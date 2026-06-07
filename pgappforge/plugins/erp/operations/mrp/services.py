@@ -101,25 +101,38 @@ def _emit(event: Any, session: Any = None) -> None:
 		log.debug("_emit: non-fatal event emit failure for %s: %s", type(event).__name__, exc)
 
 
-def _get_current_stock(product_id: str, tenant_id: str, session: Any) -> Decimal:
-	"""Fetch quantity_available from inventory StockLevel if the inventory plugin
-	is loaded.  Falls back to 0 when the inventory module is not available or the
-	product has no stock record.
+def _preload_stock_levels(tenant_id: str, session: Any) -> dict[str, Decimal]:
+	"""Load ALL stock levels for a tenant in one GROUP BY query.
 
-	Aggregates across all warehouses for the tenant.
+	Returns a dict of {product_id: total_quantity_available}.
+	Avoids N+1 queries in run_mrp (one query for all products vs one per product).
 	"""
 	try:
 		from pgappforge.plugins.erp.operations.inventory.models import StockLevel  # type: ignore[import]
 		rows = session.execute(
+			sa.select(StockLevel.product_id, sa.func.coalesce(sa.func.sum(StockLevel.quantity_available), 0).label("qty"))
+			.where(StockLevel.tenant_id == tenant_id)
+			.group_by(StockLevel.product_id)
+		).all()
+		return {str(r.product_id): _d(r.qty) for r in rows}
+	except ImportError:
+		log.debug("_preload_stock_levels: inventory plugin not loaded — all stock assumed 0")
+		return {}
+	except Exception as exc:
+		log.warning("_preload_stock_levels: bulk query failed: %s", exc)
+		return {}
+
+
+def _get_current_stock(product_id: str, tenant_id: str, session: Any) -> Decimal:
+	"""Single-product stock lookup. Use _preload_stock_levels() for batch MRP runs."""
+	try:
+		from pgappforge.plugins.erp.operations.inventory.models import StockLevel  # type: ignore[import]
+		rows = session.execute(
 			sa.select(sa.func.coalesce(sa.func.sum(StockLevel.quantity_available), 0))
-			.where(
-				StockLevel.tenant_id == tenant_id,
-				StockLevel.product_id == product_id,
-			)
+			.where(StockLevel.tenant_id == tenant_id, StockLevel.product_id == product_id)
 		).scalar()
 		return _d(rows or 0)
 	except ImportError:
-		log.debug("_get_current_stock: inventory plugin not loaded — stock assumed 0")
 		return Decimal("0")
 	except Exception as exc:
 		log.warning("_get_current_stock: query failed for product %s: %s", product_id, exc)
@@ -298,6 +311,9 @@ class MRPService:
 				)
 			).scalars().all()
 
+			# Pre-load ALL stock levels in one query (avoids N+1 for large SKU counts)
+			stock_map: dict[str, Decimal] = _preload_stock_levels(tenant_id, session)
+
 			log.info(
 				"MRPService.run_mrp: run=%s tenant=%s products=%d horizon=%dd",
 				run.id, tenant_id, len(configs), horizon_days,
@@ -309,8 +325,8 @@ class MRPService:
 				lot_size = _d(cfg.lot_size_qty) if _d(cfg.lot_size_qty) > 0 else Decimal("1")
 				lead_time = int(cfg.lead_time_days)
 
-				# Current available stock for this product
-				current_stock = _get_current_stock(product_id, tenant_id, session)
+				# Current available stock (from pre-loaded map — no per-product query)
+				current_stock = stock_map.get(product_id, Decimal("0"))
 
 				# Remaining stock credit — depleted by demand buckets in date order
 				stock_credit = current_stock - safety_stock
@@ -646,19 +662,23 @@ class MRPService:
 		# Attempt to create actual PO via SCM plugin (graceful degradation)
 		try:
 			from pgappforge.plugins.erp.operations.scm.services import SCMService  # type: ignore[import]
-			po_result = SCMService.create_purchase_order(
-				tenant_id=order.tenant_id,
-				supplier_id=supplier_id,
-				lines=[{
-					"product_id": order.product_id,
-					"qty": str(order.planned_qty),
-					"required_date": order.required_date.isoformat(),
-					"source": "MRP",
-					"source_id": order.id,
-				}],
+			scm = SCMService()
+			po_obj = scm.create_purchase_order(
 				session=session,
+				supplier_id=supplier_id or "",
+				lines=[{
+					"product_code": order.product_id,
+					"description": f"MRP planned order {order.id}",
+					"ordered_qty": str(order.planned_qty),
+					"unit_of_measure": "EACH",
+					"unit_price_cents": 0,
+				}],
+				order_date=date.today(),
+				expected_delivery=order.required_date,
+				tenant_id=order.tenant_id,
+				req_id=order.id,
 			)
-			po_id = str(po_result.get("id") or po_result.get("po_id") or _uuid4())
+			po_id = str(po_obj.id)
 			log.info(
 				"MRPService.convert_to_po: created PO=%s for planned_order=%s",
 				po_id, planned_order_id,

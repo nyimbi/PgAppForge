@@ -821,14 +821,26 @@ class TreasuryService:
 		from pgappforge.plugins.erp.finance.treasury.models import BankFeedConnection
 		import json
 
-		# Encrypt credentials
+		# Encrypt credentials using master key + tenant salt (HKDF).
+		# Production: set FAB_FEED_MASTER_KEY env var to 32 random bytes (base64).
+		# Without it, credentials are stored with a weak tenant-derived key — DO NOT use in production.
 		try:
 			from cryptography.fernet import Fernet
-			import base64
-			import hashlib
-			key = base64.urlsafe_b64encode(hashlib.sha256(tenant_id.encode()).digest())
+			import base64, hashlib, hmac as _hmac, os
+			master_raw = os.environ.get("FAB_FEED_MASTER_KEY", "")
+			if master_raw:
+				# Proper HMAC-based key derivation: master key + tenant_id salt
+				master = base64.urlsafe_b64decode(master_raw + "==")  # pad for decode safety
+				key_bytes = _hmac.new(master, tenant_id.encode(), hashlib.sha256).digest()
+			else:
+				log.warning(
+					"FAB_FEED_MASTER_KEY not set — bank credentials encrypted with tenant-derived key only. "
+					"Set FAB_FEED_MASTER_KEY for production deployments."
+				)
+				key_bytes = hashlib.sha256(tenant_id.encode() + b"_bankfeed_v1").digest()
+			key = base64.urlsafe_b64encode(key_bytes)
 			f = Fernet(key)
-			encrypted = {"_fernet": f.encrypt(json.dumps(credentials).encode()).decode()}
+			encrypted = {"_fernet": f.encrypt(json.dumps(credentials).encode()).decode(), "_v": 1}
 		except ImportError:
 			log.warning("cryptography not installed — bank feed credentials stored unencrypted")
 			encrypted = credentials
@@ -909,9 +921,8 @@ class TreasuryService:
 				"synced_at": conn.last_sync_at.isoformat(),
 			}
 		except Exception as exc:
-			conn.error_log = (conn.error_log or []) + [
-				{"ts": datetime.now(timezone.utc).isoformat(), "error": str(exc)[:200]}
-			]
+			new_entry = {"ts": datetime.now(timezone.utc).isoformat(), "error": str(exc)[:200]}
+			conn.error_log = ((conn.error_log or []) + [new_entry])[-50:]  # cap at 50 entries
 			session.flush()
 			raise
 

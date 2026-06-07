@@ -164,7 +164,7 @@ _NHIF_RATE: Decimal = Decimal("0.04")
 # LST annual flat bands: (min_annual_gross_cents_exclusive, max_annual_gross_cents_inclusive, annual_lst_cents)
 # First entry: below 10_000_000 cents (UGX 100,000) → exempt
 _LST_BANDS: list[tuple[int, int, int]] = [
-	(0,              9_999_999,     0),             # < UGX 100,000 — exempt
+	(0,              10_000_000,    0),             # <= UGX 100,000 — exempt (LST applies above 100,000)
 	(10_000_000,   999_999_999,     500_000),        # UGX 100,000–10,000,000 → UGX 5,000
 	(1_000_000_000, 2_999_999_999,  2_000_000),      # UGX 10,000,001–30,000,000 → UGX 20,000
 	(3_000_000_000, 2**62,          10_000_000),     # > UGX 30,000,000 → UGX 100,000
