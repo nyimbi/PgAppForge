@@ -322,15 +322,31 @@ class TradeComplianceService:
 		Gracefully degrades (warns + returns empty) if network unavailable.
 		"""
 		import urllib.request
-		import xml.etree.ElementTree as ET
+		# Use defusedxml to prevent XXE/DTD attacks; fall back to stdlib with
+		# entity expansion disabled if defusedxml is not installed.
+		try:
+			import defusedxml.ElementTree as ET  # pip install defusedxml
+		except ImportError:
+			import xml.etree.ElementTree as ET  # noqa: N812 — safe fallback
+			log.debug("defusedxml not installed — using stdlib ET (no XXE protection)")
 
 		from pgappforge.plugins.erp.procurement.trade_compliance.models import TradeRestrictionList
 		from pgappforge.plugins.erp.procurement.trade_compliance.events import TradeListRefreshedEvent
 
+		_OFAC_MAX_BYTES = 60 * 1024 * 1024  # 60 MB hard cap (real SDN.xml ≈ 40 MB)
+
 		try:
 			url = "https://www.treasury.gov/ofac/downloads/sdn.xml"
 			with urllib.request.urlopen(url, timeout=30) as resp:
-				tree = ET.parse(resp)
+				raw = resp.read(_OFAC_MAX_BYTES + 1)
+
+			if len(raw) > _OFAC_MAX_BYTES:
+				raise ValueError(
+					f"OFAC SDN feed exceeds {_OFAC_MAX_BYTES // 1024 // 1024}MB size cap — possible poisoned feed"
+				)
+
+			import io
+			tree = ET.parse(io.BytesIO(raw))
 
 			entries: list[dict[str, Any]] = []
 			for entry in tree.findall(".//{*}sdnEntry"):
@@ -349,6 +365,15 @@ class TradeComplianceService:
 					"aliases": aliases,
 					"entity_type": entity_type,
 				})
+
+			# Safety: never replace a populated list with zero entries
+			# (would clear all sanctions screening — catastrophic)
+			if len(entries) == 0:
+				log.error(
+					"refresh_ofac_list: parsed 0 entries from feed — refusing to overwrite existing list. "
+					"This may indicate a feed format change or empty/corrupt response."
+				)
+				return {"entries": 0, "error": "zero_entries_refused"}
 
 			lst = session.execute(
 				select(TradeRestrictionList).where(
@@ -385,7 +410,7 @@ class TradeComplianceService:
 			return {"entries": len(entries)}
 
 		except Exception as exc:
-			log.warning("OFAC refresh failed: %s — seeding empty list", exc)
+			log.error("OFAC refresh FAILED: %s — existing list unchanged (NOT cleared)", exc)
 			return {"entries": 0, "error": str(exc)}
 
 

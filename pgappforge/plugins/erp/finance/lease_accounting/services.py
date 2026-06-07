@@ -744,16 +744,16 @@ class LeaseService:
 			interest = int(
 				(Decimal(str(opening)) * r).to_integral_value(ROUND_HALF_UP)
 			)
-			principal = pmt - interest
-			closing = opening - principal
-
-			# Cap last period rounding
 			if i == n_periods:
-				closing = 0
-				principal = opening - (pmt - interest - opening + opening)
-				# Simpler: just zero out on last period
+				# Last period: zero out liability exactly.
+				# Interest absorbs rounding drift: interest = payment - remaining_principal
+				# This ensures: payment = interest + principal = pmt, closing = 0.
 				principal = opening
+				interest = pmt - principal  # may differ slightly from opening*r by ≤1 cent
 				closing = 0
+			else:
+				principal = pmt - interest
+				closing = opening - principal
 
 			session.add(LeasePaymentSchedule(
 				lease_id=lease.id,

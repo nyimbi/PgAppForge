@@ -204,41 +204,66 @@ class AnalyticsEngineService:
 			raise ValueError(f"AnalyticsCube {cube_id} not found")
 
 		view_name = cube.materialized_view_name
+
+		# Security: validate view_name is a safe materialized view identifier
+		import re as _re
+		if not _re.match(r'^anl_cube_[a-z0-9_]{1,60}$', view_name or ""):
+			raise ValueError(f"Invalid materialized view name {view_name!r} — possible injection")
+
+		# Build allowed field set from cube definition (whitelist approach)
+		allowed_fields: set[str] = set()
+		for dim in (cube.dimensions or {}).keys():
+			allowed_fields.add(str(dim))
+		for meas in (cube.measures or {}).keys():
+			allowed_fields.add(str(meas))
+		# Allow * only when no group_by and no filters (full-table read)
+
+		def _safe_field(name: str) -> str:
+			"""Raise if field name is not in the cube's allowed dimension/measure set."""
+			if allowed_fields and name not in allowed_fields:
+				raise ValueError(
+					f"Field {name!r} not in cube dimensions/measures — possible injection. "
+					f"Allowed: {sorted(allowed_fields)}"
+				)
+			# Additional safety: identifier-safe characters only
+			if not _re.match(r'^[a-zA-Z_][a-zA-Z0-9_.]{0,127}$', name):
+				raise ValueError(f"Unsafe field name {name!r}")
+			return name
+
 		t0 = time.monotonic()
+
+		# Cap limit to prevent unbounded result sets
+		limit = min(int(limit), 10_000)
 
 		# Build WHERE clause from filters [{field, op, value}]
 		where_parts: list[str] = []
 		bind_params: dict[str, Any] = {}
+		_SAFE_OPS = {"eq": "=", "gt": ">", "lt": "<", "gte": ">=", "lte": "<=", "in": "IN"}
 		for i, f in enumerate(filters or []):
-			field = f.get("field", "")
+			raw_field = f.get("field", "")
 			op = f.get("op", "eq")
 			value = f.get("value")
+			if op not in _SAFE_OPS:
+				continue
+			field = _safe_field(raw_field)
 			param_key = f"p{i}"
-			if op == "eq":
-				where_parts.append(f"{field} = :{param_key}")
-			elif op == "gt":
-				where_parts.append(f"{field} > :{param_key}")
-			elif op == "lt":
-				where_parts.append(f"{field} < :{param_key}")
-			elif op == "gte":
-				where_parts.append(f"{field} >= :{param_key}")
-			elif op == "lte":
-				where_parts.append(f"{field} <= :{param_key}")
-			elif op == "in":
+			if op == "in":
 				where_parts.append(f"{field} = ANY(:{param_key})")
 			else:
-				continue
+				where_parts.append(f"{field} {_SAFE_OPS[op]} :{param_key}")
 			bind_params[param_key] = value
 
 		select_clause = "*"
 		group_clause = ""
 		if group_by:
-			cols = ", ".join(group_by)
+			safe_cols = [_safe_field(c) for c in group_by]
+			cols = ", ".join(safe_cols)
 			select_clause = cols
 			group_clause = f"GROUP BY {cols}"
 
 		where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-		sql = f"SELECT {select_clause} FROM {view_name} {where_clause} {group_clause} LIMIT {limit}"
+		sql = f"SELECT {select_clause} FROM {view_name} {where_clause} {group_clause} LIMIT :lim"
+		bind_params["lim"] = limit
 
 		rows = []
 		try:

@@ -171,10 +171,6 @@ class CapacityScheduler:
 	# schedule_order
 	# ------------------------------------------------------------------
 
-	@BPMActionRegistry.register(
-		"ops.capacity.schedule_order",
-		"Schedule production order on work center",
-	)
 	def schedule_order(
 		self,
 		production_order_id: str,
@@ -513,10 +509,6 @@ class CapacityScheduler:
 	# detect_bottleneck
 	# ------------------------------------------------------------------
 
-	@BPMActionRegistry.register(
-		"ops.capacity.detect_bottleneck",
-		"Detect manufacturing bottlenecks",
-	)
 	def detect_bottleneck(
 		self,
 		from_date: date,
@@ -612,3 +604,18 @@ __all__ = [
 	"ScheduleNotFoundError",
 	"InsufficientCapacityError",
 ]
+
+# BPM action wrappers — use module-level functions so BPMActionRegistry.call() has no self
+@BPMActionRegistry.register("ops.capacity.schedule_order", "Schedule production order on work center")
+def _bpm_schedule_order(record_ctx, session, production_order_id, work_center_id, required_hours,
+                         required_date_str, tenant_id, **kw):
+	from datetime import date as _date
+	req_date = _date.fromisoformat(str(required_date_str))
+	return CapacityScheduler().schedule_order(
+		production_order_id, work_center_id, required_hours, req_date, tenant_id, session)
+
+@BPMActionRegistry.register("ops.capacity.detect_bottleneck", "Detect manufacturing bottlenecks")
+def _bpm_detect_bottleneck(record_ctx, session, from_date_str, to_date_str, tenant_id, **kw):
+	from datetime import date as _date
+	return CapacityScheduler().detect_bottleneck(
+		_date.fromisoformat(str(from_date_str)), _date.fromisoformat(str(to_date_str)), tenant_id, session)
