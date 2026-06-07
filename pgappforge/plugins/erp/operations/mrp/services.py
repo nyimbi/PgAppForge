@@ -178,7 +178,7 @@ def _get_open_demand(
 			.where(
 				_OrderLine.tenant_id == tenant_id,
 				_CommerceOrder.status.in_(["CONFIRMED", "PROCESSING"]),
-				_CommerceOrder.created_at <= sa.func.now(),
+				# No past-only filter — MRP needs forward demand; req_date<=horizon_date enforced below
 			)
 		).all()
 

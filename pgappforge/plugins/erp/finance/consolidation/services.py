@@ -611,12 +611,22 @@ class ConsolidationService:
 				from pgappforge.plugins.erp.finance.intercompany.models import ICOutboxTransaction  # type: ignore[import]
 				import sqlalchemy as _sa
 
+				# Parse period "YYYY-MM" → date range for sent_at filter
+				from datetime import date as _dt
+				_year, _month = int(period[:4]), int(period[5:7])
+				_period_start = _dt(_year, _month, 1)
+				_next_y, _next_m = (_year, _month + 1) if _month < 12 else (_year + 1, 1)
+				_period_end = _dt(_next_y, _next_m, 1)
+
 				ic_txs = session.execute(
 					_sa.select(ICOutboxTransaction).where(
 						ICOutboxTransaction.tenant_id == tenant_id,
 						ICOutboxTransaction.status == "ACCEPTED",
-						ICOutboxTransaction.source_entity_id.in_(entity_id_set),
-						ICOutboxTransaction.target_entity_id.in_(entity_id_set),
+						ICOutboxTransaction.source_entity_id.in_(list(entity_id_set)),
+						ICOutboxTransaction.target_entity_id.in_(list(entity_id_set)),
+						# Bound to period to avoid unbounded cross-year fetches
+						ICOutboxTransaction.sent_at >= _sa.cast(_period_start, _sa.Date),
+						ICOutboxTransaction.sent_at < _sa.cast(_period_end, _sa.Date),
 					)
 				).scalars().all()
 
@@ -652,7 +662,9 @@ class ConsolidationService:
 					# Only add heuristic match if not already captured by authoritative path
 					if net_a > 0 and net_b < 0:
 						heuristic_key = (entity_a, entity_b, account_code)
-						if heuristic_key not in matrix:
+						reverse_key = (entity_b, entity_a, account_code)
+						# Check both directions to prevent double-counting (P1 may have captured reverse)
+						if heuristic_key not in matrix and reverse_key not in matrix:
 							matrix[heuristic_key] = min(net_a, abs(net_b))
 
 		return matrix

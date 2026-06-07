@@ -73,23 +73,65 @@ class PayrollAssemblyService:
 	) -> list[dict]:
 		"""Build the full employee_data list for a payrun.
 
-		Iterates personnel records for the entity; for each employee calls
-		_build_employee_data().  Employees that fail assembly are skipped with
-		a WARNING (payroll should not fail because of one bad employee record).
+		Pre-loads BenefitDeduction and CommissionPayout rows for ALL employees
+		in two bulk queries (avoiding N+1 per-employee queries). CompensationService
+		is still called per-employee since it performs inline arithmetic.
 
 		Returns:
 		    List of employee_data dicts ready for PayrollService.calculate_payrun().
 		"""
 		import sqlalchemy as sa
 
-		employee_ids = self._load_employee_ids(entity_id, tenant_id, session, sa)
+		employee_rows = self._load_employee_ids(entity_id, tenant_id, session, sa)
+		emp_ids = [r[0] for r in employee_rows]
 		log.info(
 			"PayrollAssemblyService.assemble: payrun=%s entity=%s employees=%d",
-			payrun_id, entity_id, len(employee_ids),
+			payrun_id, entity_id, len(emp_ids),
 		)
+		if not emp_ids:
+			return []
+
+		period_str = period_start.strftime("%Y-%m")
+
+		# Pre-load BenefitDeduction rows for ALL employees in one query
+		benefit_map: dict[str, list[Any]] = {e: [] for e in emp_ids}
+		try:
+			from pgappforge.plugins.erp.hcm.benefits.models import BenefitDeduction  # type: ignore[import]
+			bd_rows = session.execute(
+				sa.select(BenefitDeduction).where(
+					BenefitDeduction.tenant_id == tenant_id,
+					BenefitDeduction.employee_id.in_(emp_ids),
+					BenefitDeduction.period == period_str,
+					BenefitDeduction.status.in_(["PENDING"]),
+				)
+			).scalars().all()
+			for bd in bd_rows:
+				benefit_map.setdefault(bd.employee_id, []).append(bd)
+		except ImportError:
+			log.debug("PayrollAssemblyService: benefits plugin not loaded")
+		except Exception as exc:
+			log.warning("PayrollAssemblyService: bulk benefits query failed: %s", exc)
+
+		# Pre-load CommissionPayout rows for ALL employees in one query
+		commission_map: dict[str, list[Any]] = {e: [] for e in emp_ids}
+		try:
+			from pgappforge.plugins.erp.hcm.variable_pay.models import CommissionPayout  # type: ignore[import]
+			cp_rows = session.execute(
+				sa.select(CommissionPayout).where(
+					CommissionPayout.employee_id.in_(emp_ids),
+					CommissionPayout.status == "APPROVED",
+					CommissionPayout.period == period_str,
+				)
+			).scalars().all()
+			for cp in cp_rows:
+				commission_map.setdefault(cp.employee_id, []).append(cp)
+		except ImportError:
+			log.debug("PayrollAssemblyService: variable_pay plugin not loaded")
+		except Exception as exc:
+			log.warning("PayrollAssemblyService: bulk commission query failed: %s", exc)
 
 		result: list[dict] = []
-		for emp_id, bank_iban, currency_code in employee_ids:
+		for emp_id, bank_iban, currency_code in employee_rows:
 			try:
 				emp_data = self._build_employee_data(
 					employee_id=emp_id,
@@ -100,6 +142,8 @@ class PayrollAssemblyService:
 					period_end=period_end,
 					tenant_id=tenant_id,
 					session=session,
+					benefit_deductions=benefit_map.get(emp_id, []),
+					commission_payouts=commission_map.get(emp_id, []),
 				)
 				result.append(emp_data)
 			except Exception as exc:
@@ -153,6 +197,9 @@ class PayrollAssemblyService:
 		period_end: date,
 		tenant_id: str,
 		session: Any,
+		*,
+		benefit_deductions: list[Any] | None = None,
+		commission_payouts: list[Any] | None = None,
 	) -> dict:
 		"""Assemble the employee_data dict for one employee.
 
@@ -214,59 +261,67 @@ class PayrollAssemblyService:
 			log.warning("PayrollAssemblyService: compensation failed for %s: %s", employee_id, exc)
 
 		# ── 2. Benefits — pending deductions for this period ────────────
-		try:
-			import sqlalchemy as sa
-			from pgappforge.plugins.erp.hcm.benefits.models import BenefitDeduction  # type: ignore[import]
-			period_str = period_start.strftime("%Y-%m")
-			benefit_deds = session.execute(
-				sa.select(BenefitDeduction).where(
-					BenefitDeduction.tenant_id == tenant_id,
-					BenefitDeduction.employee_id == employee_id,
-					BenefitDeduction.period == period_str,
-					BenefitDeduction.status.in_(["PENDING"]),
-				)
-			).scalars().all()
-			for bd in benefit_deds:
-				emp_ded = int(bd.employee_deduction_cents)
-				if emp_ded > 0:
-					deductions.append({
-						"line_type": "BENEFIT_DEDUCTION",
-						"description": f"Benefit deduction {bd.id[:8]}",
-						"amount_cents": emp_ded,
-					})
-		except ImportError:
-			log.debug("PayrollAssemblyService: benefits plugin not loaded for %s", employee_id)
-		except Exception as exc:
-			log.warning("PayrollAssemblyService: benefits failed for %s: %s", employee_id, exc)
+		# benefit_deductions pre-loaded by assemble(); fallback to per-employee query
+		if benefit_deductions is not None:
+			bd_list = benefit_deductions
+		else:
+			bd_list = []
+			try:
+				import sqlalchemy as sa
+				from pgappforge.plugins.erp.hcm.benefits.models import BenefitDeduction  # type: ignore[import]
+				bd_list = session.execute(
+					sa.select(BenefitDeduction).where(
+						BenefitDeduction.tenant_id == tenant_id,
+						BenefitDeduction.employee_id == employee_id,
+						BenefitDeduction.period == period_start.strftime("%Y-%m"),
+						BenefitDeduction.status.in_(["PENDING"]),
+					)
+				).scalars().all()
+			except ImportError:
+				log.debug("PayrollAssemblyService: benefits plugin not loaded for %s", employee_id)
+			except Exception as exc:
+				log.warning("PayrollAssemblyService: benefits failed for %s: %s", employee_id, exc)
+		for bd in bd_list:
+			emp_ded = int(bd.employee_deduction_cents)
+			if emp_ded > 0:
+				deductions.append({
+					"line_type": "BENEFIT_DEDUCTION",
+					"description": f"Benefit deduction {bd.id[:8]}",
+					"amount_cents": emp_ded,
+				})
 
 		# ── 3. Variable Pay — approved commission payouts ───────────────
-		try:
-			import sqlalchemy as sa
-			from pgappforge.plugins.erp.hcm.variable_pay.models import CommissionPayout  # type: ignore[import]
-			period_str = period_start.strftime("%Y-%m")
-			payouts = session.execute(
-				sa.select(CommissionPayout).where(
-					CommissionPayout.employee_id == employee_id,
-					CommissionPayout.status == "APPROVED",
-					CommissionPayout.period == period_str,
-				)
-			).scalars().all()
-			for payout in payouts:
-				payout_cents = int(payout.amount_cents)
-				if payout_cents > 0:
-					earnings.append({
-						"line_type": "COMMISSION",
-						"description": f"Commission payout {payout.id[:8]}",
-						"units": "PERIOD",
-						"rate_cents": payout_cents,
-						"amount_cents": payout_cents,
-						"gl_account": "5120",  # Commission expense
-						"cost_center": "",
-					})
-		except ImportError:
-			log.debug("PayrollAssemblyService: variable_pay plugin not loaded for %s", employee_id)
-		except Exception as exc:
-			log.warning("PayrollAssemblyService: variable_pay failed for %s: %s", employee_id, exc)
+		# commission_payouts pre-loaded by assemble(); fallback to per-employee query
+		if commission_payouts is not None:
+			cp_list = commission_payouts
+		else:
+			cp_list = []
+			try:
+				import sqlalchemy as sa
+				from pgappforge.plugins.erp.hcm.variable_pay.models import CommissionPayout  # type: ignore[import]
+				cp_list = session.execute(
+					sa.select(CommissionPayout).where(
+						CommissionPayout.employee_id == employee_id,
+						CommissionPayout.status == "APPROVED",
+						CommissionPayout.period == period_start.strftime("%Y-%m"),
+					)
+				).scalars().all()
+			except ImportError:
+				log.debug("PayrollAssemblyService: variable_pay plugin not loaded for %s", employee_id)
+			except Exception as exc:
+				log.warning("PayrollAssemblyService: variable_pay failed for %s: %s", employee_id, exc)
+		for payout in cp_list:
+			payout_cents = int(payout.amount_cents)
+			if payout_cents > 0:
+				earnings.append({
+					"line_type": "COMMISSION",
+					"description": f"Commission payout {payout.id[:8]}",
+					"units": "PERIOD",
+					"rate_cents": payout_cents,
+					"amount_cents": payout_cents,
+					"gl_account": "5120",
+					"cost_center": "",
+				})
 
 		return {
 			"employee_id": employee_id,
