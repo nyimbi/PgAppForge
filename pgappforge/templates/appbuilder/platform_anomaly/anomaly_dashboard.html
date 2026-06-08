@@ -1,0 +1,264 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Anomaly Detection — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .anomaly-type-GL_OUTLIER      { background:#ede9fe;color:#5b21b6; }
+  .anomaly-type-AP_DUPLICATE    { background:#fef3c7;color:#92400e; }
+  .anomaly-type-WEEKEND_POSTING { background:#fee2e2;color:#991b1b; }
+  .anomaly-type-default         { background:var(--erp-neutral-lt);color:var(--erp-neutral); }
+  .anomaly-type-badge { display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em; }
+  .anom-severity-CRITICAL { border-left:4px solid var(--erp-danger);  padding-left:8px; }
+  .anom-severity-HIGH     { border-left:4px solid var(--erp-warning); padding-left:8px; }
+  .anom-severity-MEDIUM   { border-left:4px solid var(--erp-info);    padding-left:8px; }
+  .anom-severity-LOW      { border-left:4px solid var(--erp-success); padding-left:8px; }
+  .scan-btn-group { display:flex; gap:8px; flex-wrap:wrap; }
+  .trend-mini-chart { height:60px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-exclamation-triangle"></i> Anomaly Detection</h1>
+    <p class="erp-page-subtitle">Automated detection of GL outliers, AP duplicates, weekend postings, and other anomalies.</p>
+  </div>
+  <div class="scan-btn-group" style="margin-top:4px;">
+    <form method="POST" action="/api/platform/anomaly/scan-gl" style="display:inline;">
+      <button type="submit" class="btn btn-warning btn-sm">
+        <i class="fa fa-search"></i> Scan GL
+      </button>
+    </form>
+    <form method="POST" action="/api/platform/anomaly/scan-ap" style="display:inline;">
+      <button type="submit" class="btn btn-warning btn-sm">
+        <i class="fa fa-copy"></i> Scan AP Duplicates
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ──────────────────────────────────────────────────────── #}
+{% set st = stats | default({}) %}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <div class="erp-card-icon"><i class="fa fa-exclamation-circle"></i></div>
+    <p class="erp-card-title">Open Anomalies</p>
+    <p class="erp-card-value">{{ st.total_open | default('—') }}</p>
+    <p class="erp-card-sub">Requires review</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <div class="erp-card-icon"><i class="fa fa-fire"></i></div>
+    <p class="erp-card-title">Critical</p>
+    <p class="erp-card-value" style="color:var(--erp-danger);">{{ st.critical_count | default('—') }}</p>
+    <p class="erp-card-sub">Immediate action needed</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <div class="erp-card-icon"><i class="fa fa-exclamation"></i></div>
+    <p class="erp-card-title">High</p>
+    <p class="erp-card-value" style="color:var(--erp-warning);">{{ st.high_count | default('—') }}</p>
+    <p class="erp-card-sub">Elevated severity</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon"><i class="fa fa-check-circle"></i></div>
+    <p class="erp-card-title">Resolved This Week</p>
+    <p class="erp-card-value" style="color:var(--erp-success);">{{ st.resolved_this_week | default('—') }}</p>
+    <p class="erp-card-sub">Cleared in last 7 days</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Anomalies table ──────────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-list"></i> Anomalies</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="type-filter" class="form-control input-sm" style="width:auto;">
+            <option value="">All Types</option>
+            <option value="GL_OUTLIER">GL Outlier</option>
+            <option value="AP_DUPLICATE">AP Duplicate</option>
+            <option value="WEEKEND_POSTING">Weekend Posting</option>
+          </select>
+          <select id="severity-filter" class="form-control input-sm" style="width:auto;">
+            <option value="">All Severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          <select id="status-filter" class="form-control input-sm" style="width:auto;">
+            <option value="">All Statuses</option>
+            <option value="OPEN">Open</option>
+            <option value="RESOLVED">Resolved</option>
+            <option value="FALSE_POSITIVE">False Positive</option>
+          </select>
+        </div>
+      </div>
+      <table class="erp-table" id="anomalies-table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Source Record</th>
+            <th>Detected</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if anomalies %}
+            {% for a in anomalies %}
+            {% set atype = a.type | default('') %}
+            {% set asev  = a.severity | default('MEDIUM') %}
+            {% set astat = a.status | default('OPEN') %}
+            <tr data-type="{{ atype }}" data-severity="{{ asev }}" data-status="{{ astat }}"
+                class="anom-severity-{{ asev }}">
+              <td>
+                <span class="anomaly-type-badge anomaly-type-{{ atype if atype in ['GL_OUTLIER','AP_DUPLICATE','WEEKEND_POSTING'] else 'default' }}">
+                  <i class="fa fa-{{ 'bar-chart' if atype == 'GL_OUTLIER' else ('copy' if atype == 'AP_DUPLICATE' else 'moon-o') }}"></i>
+                  &nbsp;{{ atype | replace('_', ' ') }}
+                </span>
+              </td>
+              <td>
+                <span class="erp-badge {{ 'erp-badge-red' if asev == 'CRITICAL' else ('erp-badge-yellow' if asev == 'HIGH' else ('erp-badge-blue' if asev == 'MEDIUM' else 'erp-badge-green')) }}">
+                  {{ asev }}
+                </span>
+              </td>
+              <td>
+                <span style="font-family:monospace;font-size:12px;">{{ a.source_record_id | default('—') }}</span>
+              </td>
+              <td style="font-size:12px;white-space:nowrap;">{{ a.detected_at | default('—') }}</td>
+              <td>
+                <span class="erp-badge {{ 'erp-badge-red' if astat == 'OPEN' else ('erp-badge-gray' if astat == 'FALSE_POSITIVE' else 'erp-badge-green') }}">
+                  {{ astat | replace('_', ' ') }}
+                </span>
+              </td>
+              <td>
+                {% if astat == 'OPEN' %}
+                <form method="POST" action="/api/platform/anomaly/{{ a.id }}/resolve" style="display:inline;">
+                  <button type="submit" class="btn btn-xs btn-success" title="Resolve">
+                    <i class="fa fa-check"></i> Resolve
+                  </button>
+                </form>
+                <form method="POST" action="/api/platform/anomaly/{{ a.id }}/false-positive" style="display:inline;">
+                  <button type="submit" class="btn btn-xs btn-default" title="Mark False Positive">
+                    <i class="fa fa-times"></i> FP
+                  </button>
+                </form>
+                {% else %}
+                <span style="color:var(--erp-text-muted);font-size:12px;">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="6" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+              <i class="fa fa-check-circle" style="color:var(--erp-success);margin-right:6px;"></i>
+              No anomalies detected. Use Scan buttons to run detection.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Trend chart ──────────────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title"><i class="fa fa-area-chart"></i> Anomaly Trend — Last 30 Days</h4>
+      <canvas id="anomaly-trend-chart" height="180" aria-label="Anomaly trend" role="img"></canvas>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Table filters ─────────────────────────────────────────────────── */
+  function applyFilters() {
+    var typeVal = document.getElementById('type-filter').value;
+    var sevVal  = document.getElementById('severity-filter').value;
+    var statVal = document.getElementById('status-filter').value;
+    var rows = document.querySelectorAll('#anomalies-table tbody tr[data-type]');
+    rows.forEach(function (tr) {
+      var show = (!typeVal || tr.getAttribute('data-type') === typeVal) &&
+                 (!sevVal  || tr.getAttribute('data-severity') === sevVal) &&
+                 (!statVal || tr.getAttribute('data-status') === statVal);
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+
+  ['type-filter','severity-filter','status-filter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+
+  /* ── Trend chart ───────────────────────────────────────────────────── */
+  var canvas = document.getElementById('anomaly-trend-chart');
+  if (canvas && window.Chart) {
+    var trendData = {{ stats.trend | tojson if stats and stats.trend else 'null' }};
+    if (!trendData) {
+      /* Placeholder data so the chart is never empty */
+      trendData = { labels: [], values: [] };
+      /* Build last-30-day labels from server-injected today string if available,
+         otherwise fall back to index labels — avoids client-side new Date() */
+      var todayStr = '{{ today_iso | default("") }}';
+      for (var i = 29; i >= 0; i--) {
+        trendData.labels.push('D-' + i);
+        trendData.values.push(0);
+      }
+    }
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: trendData.labels,
+        datasets: [{
+          label: 'Anomalies',
+          data: trendData.values,
+          backgroundColor: 'rgba(224,36,36,.55)',
+          borderColor: 'rgba(224,36,36,.9)',
+          borderWidth: 1,
+          borderRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { stepSize: 1 } },
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 10, maxRotation: 0 } }
+        }
+      }
+    });
+  }
+
+  /* ── Chart.js lazy load if needed ─────────────────────────────────── */
+  if (canvas && !window.Chart) {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js';
+    s.onload = function () {
+      /* re-run the chart init above */
+      canvas.dispatchEvent(new Event('chartjs-ready'));
+    };
+    document.head.appendChild(s);
+  }
+}());
+</script>
+{% endblock %}

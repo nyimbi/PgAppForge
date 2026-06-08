@@ -1,0 +1,505 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Enterprise Asset Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Health KPI tiles ──────────────────────────────────────────────── */
+  .eam-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .eam-health-tile {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--erp-shadow-sm);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .eam-health-tile-count {
+    font-size: 40px; font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    line-height: 1; margin-bottom: 6px;
+  }
+  .eam-health-tile-label {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .07em;
+    color: var(--erp-text-muted);
+  }
+  .eam-health-tile-bar {
+    height: 4px; border-radius: 2px; margin-top: 12px;
+    background: currentColor; opacity: .3;
+  }
+  .eam-operational { color: var(--erp-success); border-top: 3px solid var(--erp-success); }
+  .eam-maintenance  { color: #d97706; border-top: 3px solid #d97706; }
+  .eam-breakdown    { color: var(--erp-danger); border-top: 3px solid var(--erp-danger); }
+
+  /* ── Maintenance calendar ──────────────────────────────────────────── */
+  .maint-cal {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    box-shadow: var(--erp-shadow-sm);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .maint-cal-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--erp-border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .maint-cal-scroll { overflow-x: auto; }
+  .maint-cal-table { width: 100%; border-collapse: collapse; min-width: 700px; font-size: 12px; }
+  .maint-cal-table th {
+    padding: 8px 10px; text-align: center;
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--erp-text-muted); background: var(--erp-neutral-lt);
+    border-bottom: 2px solid var(--erp-border);
+    border-right: 1px solid var(--erp-border);
+    white-space: nowrap;
+  }
+  .maint-cal-table th.today-col { background: var(--erp-primary-lt); color: var(--erp-primary); }
+  .maint-cal-table th.asset-hd { text-align: left; min-width: 160px; position: sticky; left: 0; background: var(--erp-neutral-lt); z-index: 5; }
+  .maint-cal-table td { padding: 6px 8px; border-bottom: 1px solid var(--erp-border); border-right: 1px solid var(--erp-border); text-align: center; vertical-align: middle; }
+  .maint-cal-table td.asset-cell {
+    text-align: left; font-weight: 600; position: sticky; left: 0;
+    background: var(--erp-surface); z-index: 3; padding: 8px 12px;
+  }
+  .maint-cal-table tbody tr:hover td { background: #fafafa; }
+  .maint-cal-table tbody tr:hover td.asset-cell { background: #fafafa; }
+
+  .wo-pill {
+    display: inline-block;
+    font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .wo-pm         { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .wo-corrective { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+  .wo-inspection { background: var(--erp-success-lt); color: var(--erp-success); }
+  .wo-overhaul   { background: #f3e8ff;               color: #7c3aed; }
+
+  /* ── MTBF/MTTR stats ───────────────────────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .stat-tile {
+    background: var(--erp-neutral-lt);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .stat-tile-val { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--erp-text); }
+  .stat-tile-unit { font-size: 11px; color: var(--erp-text-muted); }
+  .stat-tile-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--erp-text-muted); margin-top: 4px; }
+
+  /* ── Asset status ──────────────────────────────────────────────────── */
+  .asset-status-OPERATIONAL { background: var(--erp-success-lt); color: var(--erp-success); }
+  .asset-status-MAINTENANCE  { background: #fef3c7;               color: #92400e; }
+  .asset-status-BREAKDOWN    { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+  .asset-status-RETIRED      { background: var(--erp-neutral-lt); color: var(--erp-neutral); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-industry" style="color:var(--erp-primary);margin-right:8px;"></i>Enterprise Asset Management
+      </h1>
+      <p class="erp-page-subtitle">Asset health, maintenance schedules, and reliability statistics.</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#create-wo-modal">
+        <i class="fa fa-plus"></i> Create Work Order
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Asset health KPIs ────────────────────────────────────────────────── #}
+<div class="eam-health-grid">
+  {% set op_count   = assets | selectattr('status','eq','OPERATIONAL') | list | length %}
+  {% set maint_count= assets | selectattr('status','eq','MAINTENANCE')  | list | length %}
+  {% set down_count = assets | selectattr('status','eq','BREAKDOWN')    | list | length %}
+
+  <div class="eam-health-tile eam-operational">
+    <div class="eam-health-tile-count">{{ op_count }}</div>
+    <div class="eam-health-tile-label">Operational</div>
+    <div class="eam-health-tile-bar" style="width:{{ (op_count / [assets|length,1]|max * 100)|int }}%;"></div>
+  </div>
+  <div class="eam-health-tile eam-maintenance">
+    <div class="eam-health-tile-count">{{ maint_count }}</div>
+    <div class="eam-health-tile-label">Maintenance</div>
+    <div class="eam-health-tile-bar" style="width:{{ (maint_count / [assets|length,1]|max * 100)|int }}%;"></div>
+  </div>
+  <div class="eam-health-tile eam-breakdown">
+    <div class="eam-health-tile-count">{{ down_count }}</div>
+    <div class="eam-health-tile-label">Breakdown</div>
+    <div class="eam-health-tile-bar" style="width:{{ (down_count / [assets|length,1]|max * 100)|int }}%;"></div>
+  </div>
+  <div class="eam-health-tile" style="border-top:3px solid var(--erp-primary);">
+    <div class="eam-health-tile-count" style="color:var(--erp-primary);">{{ assets | length }}</div>
+    <div class="eam-health-tile-label">Total Assets</div>
+    <div class="eam-health-tile-bar" style="width:100%;background:var(--erp-primary);"></div>
+  </div>
+
+  {# MTBF / MTTR summary tiles #}
+  {% if stats %}
+  <div class="eam-health-tile" style="border-top:3px solid var(--erp-info);">
+    <div class="eam-health-tile-count" style="color:var(--erp-info);font-size:28px;">
+      {{ '%.0f'|format(stats.avg_mtbf_hours|default(0)) }}<span style="font-size:14px;font-weight:400;">h</span>
+    </div>
+    <div class="eam-health-tile-label">Avg MTBF</div>
+  </div>
+  <div class="eam-health-tile" style="border-top:3px solid var(--erp-warning);">
+    <div class="eam-health-tile-count" style="color:var(--erp-warning);font-size:28px;">
+      {{ '%.1f'|format(stats.avg_mttr_hours|default(0)) }}<span style="font-size:14px;font-weight:400;">h</span>
+    </div>
+    <div class="eam-health-tile-label">Avg MTTR</div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Maintenance Calendar ─────────────────────────────────────────────── #}
+<div class="maint-cal">
+  <div class="maint-cal-header">
+    <div>
+      <h4 class="erp-chart-title erp-mb-0">Maintenance Calendar — Next 30 Days</h4>
+      {% if upcoming_work_orders %}
+      <p class="erp-page-subtitle erp-mb-0" style="margin-top:2px;">
+        {{ upcoming_work_orders | length }} scheduled work orders
+      </p>
+      {% endif %}
+    </div>
+    <div class="erp-flex erp-gap-8" style="font-size:12px;color:var(--erp-text-muted);">
+      <span style="display:flex;align-items:center;gap:4px;"><span class="wo-pill wo-pm">PM</span> Preventive</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span class="wo-pill wo-corrective">CM</span> Corrective</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span class="wo-pill wo-inspection">INS</span> Inspection</span>
+    </div>
+  </div>
+
+  {% if upcoming_work_orders %}
+  <div class="maint-cal-scroll">
+    <table class="maint-cal-table">
+      <thead>
+        <tr>
+          <th class="asset-hd">Asset</th>
+          {% for col in upcoming_work_orders.columns|default([]) %}
+          <th {% if col.is_today %}class="today-col"{% endif %}>
+            {{ col.label }}{% if col.is_today %}<br><small>TODAY</small>{% endif %}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in upcoming_work_orders.rows|default([]) %}
+        <tr>
+          <td class="asset-cell">
+            <div>{{ row.asset_name }}</div>
+            {% if row.asset_number %}
+            <div style="font-size:10px;color:var(--erp-text-muted);">{{ row.asset_number }}</div>
+            {% endif %}
+          </td>
+          {% for cell in row.cells %}
+          <td>
+            {% if cell.work_orders %}
+            {% for wo in cell.work_orders %}
+            <span class="wo-pill wo-{{ wo.wo_type | lower }}"
+                  title="{{ wo.title }}">
+              {{ wo.abbrev }}
+            </span>
+            {% endfor %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:32px;text-align:center;color:var(--erp-text-muted);">
+    <i class="fa fa-calendar-check-o" style="font-size:32px;opacity:.3;display:block;margin-bottom:10px;"></i>
+    No scheduled work orders in the next 30 days.
+  </div>
+  {% endif %}
+</div>
+
+{# ── Asset List Table ──────────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <h4 class="erp-chart-title erp-mb-0">Assets</h4>
+    <div class="erp-flex erp-gap-8">
+      <input type="text" id="asset-search" class="form-control input-sm"
+             placeholder="Search asset…" style="width:170px;">
+      <select id="status-filter" class="form-control input-sm" style="width:130px;">
+        <option value="">All statuses</option>
+        <option value="OPERATIONAL">Operational</option>
+        <option value="MAINTENANCE">Maintenance</option>
+        <option value="BREAKDOWN">Breakdown</option>
+        <option value="RETIRED">Retired</option>
+      </select>
+    </div>
+  </div>
+  {% if assets %}
+  <div style="overflow-x:auto;">
+    <table class="erp-table" id="asset-table">
+      <thead>
+        <tr>
+          <th>Asset #</th>
+          <th>Name</th>
+          <th>Location</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th>Last Maintenance</th>
+          <th>Next Due</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in assets %}
+        <tr data-status="{{ a.status }}">
+          <td style="font-weight:600;color:var(--erp-primary);">{{ a.asset_number }}</td>
+          <td>
+            <div style="font-weight:600;">{{ a.name }}</div>
+            {% if a.model %}<div style="font-size:11px;color:var(--erp-text-muted);">{{ a.model }}</div>{% endif %}
+          </td>
+          <td style="font-size:12px;">{{ a.location }}</td>
+          <td style="font-size:12px;color:var(--erp-text-muted);">{{ a.asset_class or '—' }}</td>
+          <td>
+            <span class="erp-badge asset-status-{{ a.status }}">
+              {{ a.status }}
+            </span>
+          </td>
+          <td style="font-size:12px;{% if not a.last_maintenance_date %}color:var(--erp-text-muted);{% endif %}">
+            {{ a.last_maintenance_date or 'Never' }}
+          </td>
+          <td>
+            {% if a.next_due_date %}
+            <span style="font-weight:600;color:{% if a.days_until_due is defined and a.days_until_due <= 7 %}var(--erp-danger){% elif a.days_until_due is defined and a.days_until_due <= 30 %}var(--erp-warning){% else %}var(--erp-text){% endif %};">
+              {{ a.next_due_date }}
+            </span>
+            {% if a.days_until_due is defined and a.days_until_due <= 7 %}
+            <span class="erp-badge erp-badge-red" style="margin-left:4px;">Due soon</span>
+            {% endif %}
+            {% else %}
+            <span style="color:var(--erp-text-muted);">—</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;">
+            <button class="btn btn-xs btn-primary create-wo-quick"
+                    data-asset-id="{{ a.id }}"
+                    data-asset-name="{{ a.name | e }}"
+                    data-toggle="modal" data-target="#create-wo-modal">
+              <i class="fa fa-plus"></i> Work Order
+            </button>
+            <a href="{{ url_for('AssetView.show', pk=a.id) if 'AssetView' in dir() else '#' }}"
+               class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--erp-text-muted);">
+    <i class="fa fa-industry" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px;"></i>
+    No assets registered.
+  </div>
+  {% endif %}
+</div>
+
+{# ── MTBF/MTTR by asset class ──────────────────────────────────────────── #}
+{% if stats and stats.by_class %}
+<div class="erp-table-wrap">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);">
+    <h4 class="erp-chart-title erp-mb-0">Reliability Statistics by Asset Class</h4>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Asset Class</th>
+          <th style="text-align:right;">Asset Count</th>
+          <th style="text-align:right;">MTBF (hours)</th>
+          <th style="text-align:right;">MTTR (hours)</th>
+          <th style="text-align:right;">Availability %</th>
+          <th style="text-align:right;">Failures (30d)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cls in stats.by_class %}
+        <tr>
+          <td style="font-weight:600;">{{ cls.asset_class }}</td>
+          <td style="text-align:right;">{{ cls.asset_count }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ '%.0f'|format(cls.mtbf_hours|default(0)) }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ '%.1f'|format(cls.mttr_hours|default(0)) }}</td>
+          <td style="text-align:right;">
+            <span style="font-weight:700;color:{% if cls.availability_pct|default(0) >= 95 %}var(--erp-success){% elif cls.availability_pct|default(0) >= 85 %}var(--erp-warning){% else %}var(--erp-danger){% endif %};">
+              {{ '%.1f'|format(cls.availability_pct|default(0)) }}%
+            </span>
+          </td>
+          <td style="text-align:right;">{{ cls.failure_count_30d|default(0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Create Work Order Modal ──────────────────────────────────────────── #}
+<div class="modal fade" id="create-wo-modal" tabindex="-1" role="dialog" aria-labelledby="wo-modal-title">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" id="wo-modal-title">
+          <i class="fa fa-wrench" style="color:var(--erp-primary);margin-right:6px;"></i>Create Work Order
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-sm-8">
+            <div class="form-group">
+              <label>Title <span style="color:var(--erp-danger);">*</span></label>
+              <input type="text" id="wo-title" class="form-control" placeholder="Brief description" required>
+            </div>
+          </div>
+          <div class="col-sm-4">
+            <div class="form-group">
+              <label>Type</label>
+              <select id="wo-type" class="form-control">
+                <option value="PM">Preventive (PM)</option>
+                <option value="CORRECTIVE">Corrective (CM)</option>
+                <option value="INSPECTION">Inspection</option>
+                <option value="OVERHAUL">Overhaul</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Asset</label>
+              <select id="wo-asset" class="form-control">
+                <option value="">— select asset —</option>
+                {% for a in assets %}
+                <option value="{{ a.id }}">{{ a.asset_number }} — {{ a.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-3">
+            <div class="form-group">
+              <label>Priority</label>
+              <select id="wo-priority" class="form-control">
+                <option value="LOW">Low</option>
+                <option value="MEDIUM" selected>Medium</option>
+                <option value="HIGH">High</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-3">
+            <div class="form-group">
+              <label>Scheduled Date</label>
+              <input type="text" id="wo-scheduled" class="form-control" placeholder="YYYY-MM-DD">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="wo-description" class="form-control" rows="3" placeholder="Work instructions, safety notes…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="wo-submit-btn">
+          <i class="fa fa-save"></i> Create Work Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _csrf() { var m = document.cookie.match(/csrf_token=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+  function _esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* ── Asset search / filter ─────────────────────────────────────────── */
+  function applyFilters() {
+    var q      = (document.getElementById('asset-search').value || '').toLowerCase();
+    var status = (document.getElementById('status-filter').value || '');
+    document.querySelectorAll('#asset-table tbody tr').forEach(function (row) {
+      var matchText   = !q      || row.textContent.toLowerCase().indexOf(q) > -1;
+      var matchStatus = !status || row.dataset.status === status;
+      row.style.display = (matchText && matchStatus) ? '' : 'none';
+    });
+  }
+  document.getElementById('asset-search').addEventListener('input', applyFilters);
+  document.getElementById('status-filter').addEventListener('change', applyFilters);
+
+  /* ── Pre-fill asset in WO modal from quick button ──────────────────── */
+  document.querySelectorAll('.create-wo-quick').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var sel = document.getElementById('wo-asset');
+      if (sel) sel.value = btn.dataset.assetId;
+    });
+  });
+
+  /* ── Create work order ─────────────────────────────────────────────── */
+  document.getElementById('wo-submit-btn').addEventListener('click', function () {
+    var title = document.getElementById('wo-title').value.trim();
+    if (!title) { alert('Title is required.'); return; }
+    var self = this;
+    self.disabled = true;
+    self.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Creating…';
+
+    _post('/api/eam/work_orders', {
+      title:          title,
+      wo_type:        document.getElementById('wo-type').value,
+      asset_id:       document.getElementById('wo-asset').value || null,
+      priority:       document.getElementById('wo-priority').value,
+      scheduled_date: document.getElementById('wo-scheduled').value.trim() || null,
+      description:    document.getElementById('wo-description').value.trim()
+    })
+      .then(function (data) {
+        $('#create-wo-modal').modal('hide');
+        window.location.reload();
+      })
+      .catch(function (err) {
+        alert('Failed to create work order: ' + err.message);
+        self.disabled = false;
+        self.innerHTML = '<i class="fa fa-save"></i> Create Work Order';
+      });
+  });
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,266 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Supplier Portal — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .kyc-PENDING  { background:#fef3c7;color:#92400e; }
+  .kyc-APPROVED { background:#d1fae5;color:#065f46; }
+  .kyc-REJECTED { background:#fee2e2;color:#991b1b; }
+  .kyc-badge { display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase; }
+  .tier-GOLD     { background:#fef3c7;color:#92400e; }
+  .tier-SILVER   { background:#f3f4f6;color:#374151; }
+  .tier-BRONZE   { background:#fed7aa;color:#9a3412; }
+  .tier-STANDARD { background:#e0f2fe;color:#0369a1; }
+  .tier-badge { display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;text-transform:uppercase; }
+  .supplier-score-bar { height:6px; background:var(--erp-border); border-radius:3px; overflow:hidden; width:60px; display:inline-block; vertical-align:middle; }
+  .supplier-score-fill { height:100%; border-radius:3px; }
+  .sanctions-ok     { color:var(--erp-success); font-size:11px; font-weight:600; }
+  .sanctions-flagged{ color:var(--erp-danger);  font-size:11px; font-weight:600; }
+  .kyc-queue-card { background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--erp-radius); padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+  .kyc-queue-name { font-weight:600; font-size:13px; flex:1; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-building"></i> Supplier Portal Admin</h1>
+    <p class="erp-page-subtitle">Manage suppliers, KYC approvals, performance scorecards, and sanctions screening.</p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#invite-supplier-modal" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> Invite Supplier
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+
+  {# ── Left: KYC queue ───────────────────────────────────────────────── #}
+  <div class="col-md-4">
+
+    {% if kyc_queue %}
+    <div class="erp-card erp-mb-24">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <p class="erp-section-title erp-mb-0">
+          <i class="fa fa-id-card-o"></i> KYC Queue
+        </p>
+        <span class="erp-badge erp-badge-yellow">{{ kyc_queue | length }} pending</span>
+      </div>
+      {% for sup in kyc_queue %}
+      <div class="kyc-queue-card">
+        <div class="kyc-queue-name">
+          {{ sup.company_name }}
+          <div style="font-size:11px;color:var(--erp-text-muted);">{{ sup.contact_email | default('') }}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <form method="POST" action="/procurement/suppliers/{{ sup.id }}/kyc/approve" style="display:inline;">
+            <button type="submit" class="btn btn-xs btn-success" title="Approve KYC">
+              <i class="fa fa-check"></i> Approve
+            </button>
+          </form>
+          <form method="POST" action="/procurement/suppliers/{{ sup.id }}/kyc/reject" style="display:inline;"
+                onsubmit="return confirm('Reject KYC for {{ sup.company_name }}?');">
+            <button type="submit" class="btn btn-xs btn-danger" title="Reject KYC">
+              <i class="fa fa-times"></i> Reject
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="erp-card erp-mb-24" style="text-align:center;padding:24px;color:var(--erp-text-muted);">
+      <i class="fa fa-check-circle" style="font-size:24px;color:var(--erp-success);display:block;margin-bottom:8px;"></i>
+      <p style="margin:0;font-size:13px;">KYC queue is clear.</p>
+    </div>
+    {% endif %}
+
+    {# Performance scorecards mini-table #}
+    {% if performance_cards %}
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:10px 16px;border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-star"></i> Top Performers</h4>
+      </div>
+      <table class="erp-table">
+        <thead>
+          <tr><th>Supplier</th><th>Score</th><th>Deliveries</th></tr>
+        </thead>
+        <tbody>
+          {% for pc in performance_cards | sort(attribute='overall_score', reverse=True) | list[:5] %}
+          {% set sc = pc.overall_score | default(0) | float %}
+          <tr>
+            <td style="font-weight:600;font-size:12px;">{{ pc.company_name }}</td>
+            <td>
+              <div class="supplier-score-bar">
+                <div class="supplier-score-fill" style="width:{{ sc }}%;background:{{ 'var(--erp-success)' if sc >= 80 else ('var(--erp-warning)' if sc >= 60 else 'var(--erp-danger)') }};"></div>
+              </div>
+              <span style="font-size:11px;font-weight:700;margin-left:5px;">{{ '{:.0f}'.format(sc) }}</span>
+            </td>
+            <td style="font-size:12px;">{{ pc.on_time_deliveries | default('—') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Right: Supplier list ────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-building-o"></i> Suppliers</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="supplier-search" class="form-control input-sm" placeholder="Search…" style="width:160px;">
+          <select id="kyc-filter" class="form-control input-sm" style="width:auto;">
+            <option value="">All KYC</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+          <select id="tier-filter" class="form-control input-sm" style="width:auto;">
+            <option value="">All Tiers</option>
+            <option value="GOLD">Gold</option>
+            <option value="SILVER">Silver</option>
+            <option value="BRONZE">Bronze</option>
+            <option value="STANDARD">Standard</option>
+          </select>
+        </div>
+      </div>
+      <table class="erp-table" id="supplier-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Tier</th>
+            <th>KYC Status</th>
+            <th>Score</th>
+            <th>Sanctions</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if suppliers %}
+            {% for sup in suppliers %}
+            {% set kyc  = sup.kyc_status | default('PENDING') %}
+            {% set tier = sup.tier | default('STANDARD') %}
+            {% set sc   = sup.overall_score | default(0) | float %}
+            <tr data-kyc="{{ kyc }}" data-tier="{{ tier }}" data-name="{{ sup.company_name | lower }}">
+              <td>
+                <div style="font-weight:600;">{{ sup.company_name }}</div>
+                {% if sup.contact_email %}<div style="font-size:11px;color:var(--erp-text-muted);">{{ sup.contact_email }}</div>{% endif %}
+              </td>
+              <td><span class="tier-badge tier-{{ tier }}">{{ tier }}</span></td>
+              <td>
+                <span class="kyc-badge kyc-{{ kyc }}">
+                  <i class="fa {{ 'fa-check' if kyc == 'APPROVED' else ('fa-times' if kyc == 'REJECTED' else 'fa-clock-o') }}"></i>
+                  &nbsp;{{ kyc }}
+                </span>
+              </td>
+              <td>
+                {% if sup.overall_score is defined %}
+                <div class="supplier-score-bar">
+                  <div class="supplier-score-fill" style="width:{{ sc }}%;background:{{ 'var(--erp-success)' if sc >= 80 else ('var(--erp-warning)' if sc >= 60 else 'var(--erp-danger)') }};"></div>
+                </div>
+                <span style="font-size:11px;font-weight:700;margin-left:5px;">{{ '{:.0f}'.format(sc) }}</span>
+                {% else %}<span style="color:var(--erp-text-muted);">—</span>{% endif %}
+              </td>
+              <td>
+                {% if sup.sanctions_clear is defined %}
+                  {% if sup.sanctions_clear %}
+                  <span class="sanctions-ok"><i class="fa fa-shield"></i> Clear</span>
+                  {% else %}
+                  <span class="sanctions-flagged"><i class="fa fa-exclamation-triangle"></i> Flagged</span>
+                  {% endif %}
+                {% else %}
+                <span style="color:var(--erp-text-muted);font-size:11px;">Not screened</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="/procurement/suppliers/{{ sup.id }}" class="btn btn-xs btn-default" title="View">
+                  <i class="fa fa-eye"></i>
+                </a>
+                <a href="/procurement/suppliers/edit/{{ sup.id }}" class="btn btn-xs btn-default" title="Edit">
+                  <i class="fa fa-pencil"></i>
+                </a>
+                {% if kyc == 'PENDING' %}
+                <form method="POST" action="/procurement/suppliers/{{ sup.id }}/kyc/approve" style="display:inline;">
+                  <button type="submit" class="btn btn-xs btn-success" title="Approve KYC">
+                    <i class="fa fa-check"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="6" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+              No suppliers. <button class="btn btn-link btn-sm" style="padding:0;" data-toggle="modal" data-target="#invite-supplier-modal">Invite one</button>.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{# ── Invite Supplier Modal ───────────────────────────────────────────── #}
+<div class="modal fade" id="invite-supplier-modal" tabindex="-1" role="dialog" aria-labelledby="inv-sup-label">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/procurement/suppliers/invite">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="inv-sup-label"><i class="fa fa-plus"></i> Invite Supplier</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">Company Name <span class="text-danger">*</span></label>
+            <input type="text" name="company_name" class="form-control" required placeholder="e.g. Acme Supplies Ltd">
+          </div>
+          <div class="form-group">
+            <label class="control-label">Contact Email <span class="text-danger">*</span></label>
+            <input type="email" name="contact_email" class="form-control" required placeholder="procurement@example.com">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane-o"></i> Send Invitation</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function applyFilters() {
+    var kycVal    = document.getElementById('kyc-filter').value;
+    var tierVal   = document.getElementById('tier-filter').value;
+    var searchVal = (document.getElementById('supplier-search').value || '').toLowerCase();
+    document.querySelectorAll('#supplier-table tbody tr[data-kyc]').forEach(function (tr) {
+      var matchKyc    = !kycVal    || tr.getAttribute('data-kyc')  === kycVal;
+      var matchTier   = !tierVal   || tr.getAttribute('data-tier') === tierVal;
+      var matchSearch = !searchVal || (tr.getAttribute('data-name') || '').includes(searchVal);
+      tr.style.display = (matchKyc && matchTier && matchSearch) ? '' : 'none';
+    });
+  }
+
+  ['kyc-filter','tier-filter','supplier-search'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', applyFilters);
+  });
+}());
+</script>
+{% endblock %}

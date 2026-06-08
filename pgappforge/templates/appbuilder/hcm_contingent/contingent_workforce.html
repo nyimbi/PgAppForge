@@ -1,0 +1,613 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Contingent Workforce — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Summary tiles ── */
+  .cw-tile-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:24px; }
+  .cw-tile { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px 20px; position:relative; overflow:hidden; }
+  .cw-tile::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:10px 0 0 10px; background:var(--ta,#1a56db); }
+  .cw-tile .tl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 3px; }
+  .cw-tile .tv { font-size:26px; font-weight:800; color:#111827; margin:0 0 2px; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .cw-tile .ts { font-size:11px; color:#9ca3af; margin:0; }
+
+  /* ── Worker type badges ── */
+  .wtype { font-size:10px; font-weight:700; padding:2px 9px; border-radius:10px; white-space:nowrap; }
+  .wtype-CONTRACTOR { background:#dbeafe; color:#1e40af; }
+  .wtype-FREELANCER { background:#f3e8ff; color:#6b21a8; }
+  .wtype-SOW        { background:#d1fae5; color:#065f46; }
+  .wtype-TEMP       { background:#fef3c7; color:#92400e; }
+
+  /* ── Status badges ── */
+  .ws { font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; }
+  .ws-ACTIVE    { background:#d1fae5; color:#065f46; }
+  .ws-INACTIVE  { background:#f3f4f6; color:#6b7280; }
+  .ws-PENDING   { background:#fef3c7; color:#92400e; }
+  .ws-ENDED     { background:#fee2e2; color:#991b1b; }
+
+  /* ── SOW utilization bar ── */
+  .sow-util-bar { height:7px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin-top:5px; }
+  .sow-util-fill { height:100%; border-radius:4px; transition:width .4s; }
+  .sow-util-ok      { background:linear-gradient(90deg,#1a56db,#10b981); }
+  .sow-util-warning { background:#f59e0b; }
+  .sow-util-over    { background:#ef4444; }
+
+  /* ── Timesheet queue ── */
+  .ts-card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:14px; }
+  .ts-avatar { width:36px; height:36px; border-radius:50%; background:#e0e7ff; color:#3730a3; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .ts-body { flex:1; min-width:0; }
+  .ts-name { font-size:13px; font-weight:600; color:#111827; margin:0 0 2px; }
+  .ts-meta { font-size:11px; color:#9ca3af; margin:0; }
+  .ts-hours { font-size:16px; font-weight:800; color:#1a56db; text-align:right; white-space:nowrap; }
+  .ts-actions { display:flex; gap:6px; flex-shrink:0; }
+
+  /* ── Tab nav ── */
+  .cw-tabs { display:flex; border-bottom:2px solid #e5e7eb; margin-bottom:0; gap:0; background:#fafafa; }
+  .cw-tab { padding:10px 18px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .12s, border-color .12s; white-space:nowrap; }
+  .cw-tab:hover { color:#374151; }
+  .cw-tab.active { color:#1a56db; border-bottom-color:#1a56db; }
+  .cw-panel { display:none; padding:20px; }
+  .cw-panel.active { display:block; }
+
+  /* ── Toast ── */
+  .cw-toasts { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .cw-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .cw-toast.success { border-left:4px solid #10b981; }
+  .cw-toast.error   { border-left:4px solid #ef4444; }
+
+  /* chart wrap */
+  .cw-chart-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-briefcase"></i> Contingent Workforce
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Workers · SOW Management · Timesheets · Spend Analytics</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-default btn-sm" onclick="window.location='/hcm/contingent/export'">
+      <i class="fa fa-download"></i> Export
+    </button>
+    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal-add-worker">
+      <i class="fa fa-plus"></i> Add Worker
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ── #}
+{% set total_hc = (headcount.permanent|default(0)) + (headcount.contingent|default(0)) %}
+{% set cont_pct = ((headcount.contingent|default(0) / total_hc) * 100) | round(1) if total_hc else 0 %}
+<div class="cw-tile-row">
+  <div class="cw-tile" style="--ta:#1a56db;">
+    <p class="tl">Permanent</p>
+    <p class="tv">{{ headcount.permanent | default('—') }}</p>
+    <p class="ts">full-time employees</p>
+  </div>
+  <div class="cw-tile" style="--ta:#7c3aed;">
+    <p class="tl">Contingent</p>
+    <p class="tv">{{ headcount.contingent | default('—') }}</p>
+    <p class="ts">contractors, freelancers, SOW</p>
+  </div>
+  <div class="cw-tile" style="--ta:#0e9f6e;">
+    <p class="tl">Total Workforce</p>
+    <p class="tv">{{ total_hc if total_hc else '—' }}</p>
+    <p class="ts">headcount</p>
+  </div>
+  <div class="cw-tile" style="--ta:{% if cont_pct > 40 %}#ef4444{% elif cont_pct > 25 %}#f59e0b{% else %}#10b981{% endif %};">
+    <p class="tl">Contingent Mix</p>
+    <p class="tv" style="{% if cont_pct > 40 %}color:#dc2626;{% endif %}">{{ cont_pct }}%</p>
+    <p class="ts">of total headcount</p>
+  </div>
+  <div class="cw-tile" style="--ta:#06b6d4;">
+    <p class="tl">Active SOWs</p>
+    <p class="tv">{{ sows | selectattr('status','equalto','ACTIVE') | list | length if sows else '—' }}</p>
+    <p class="ts">statements of work</p>
+  </div>
+  <div class="cw-tile" style="--ta:#f59e0b;">
+    <p class="tl">Pending Timesheets</p>
+    <p class="tv" style="{% if pending_timesheets and pending_timesheets|length > 10 %}color:#d97706;{% endif %}">
+      {{ pending_timesheets | length if pending_timesheets else '0' }}
+    </p>
+    <p class="ts">awaiting approval</p>
+  </div>
+</div>
+
+{# ── Main card with tabs ── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+
+  <div class="cw-tabs">
+    <div class="cw-tab active" data-tab="workers" onclick="cwTab(this)"><i class="fa fa-users"></i> Workers</div>
+    <div class="cw-tab" data-tab="sow" onclick="cwTab(this)"><i class="fa fa-file-text-o"></i> SOW Management</div>
+    <div class="cw-tab" data-tab="timesheets" onclick="cwTab(this)">
+      <i class="fa fa-clock-o"></i> Timesheets
+      {% if pending_timesheets and pending_timesheets|length %}
+        <span style="background:#ef4444; color:#fff; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:5px; font-weight:700;">{{ pending_timesheets|length }}</span>
+      {% endif %}
+    </div>
+    <div class="cw-tab" data-tab="spend" onclick="cwTab(this)"><i class="fa fa-bar-chart"></i> Spend</div>
+  </div>
+
+  {# ── Workers tab ── #}
+  <div id="panel-workers" class="cw-panel active">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+      <input type="text" id="worker-search" class="form-control input-sm" placeholder="Search name, agency…" style="width:200px;" oninput="filterWorkers()">
+      <select id="worker-type-filter" class="form-control input-sm" style="width:140px;" onchange="filterWorkers()">
+        <option value="">All Types</option>
+        <option value="CONTRACTOR">Contractor</option>
+        <option value="FREELANCER">Freelancer</option>
+        <option value="SOW">SOW</option>
+        <option value="TEMP">Temp</option>
+      </select>
+      <select id="worker-status-filter" class="form-control input-sm" style="width:130px;" onchange="filterWorkers()">
+        <option value="">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+        <option value="PENDING">Pending</option>
+        <option value="ENDED">Ended</option>
+      </select>
+      <span id="worker-count" style="font-size:12px; color:#9ca3af; margin-left:auto;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="erp-table" id="workers-table">
+        <thead>
+          <tr>
+            <th>Worker</th>
+            <th>Type</th>
+            <th>Agency / Vendor</th>
+            <th style="text-align:right;">Bill Rate / hr</th>
+            <th>Status</th>
+            <th>End Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="workers-tbody">
+          {% if workers %}
+            {% for w in workers %}
+            <tr data-wtype="{{ w.worker_type }}" data-wstatus="{{ w.status }}" data-wname="{{ w.name | lower }}{{ (' ' ~ (w.agency | default('') | lower)) }}">
+              <td>
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="width:28px; height:28px; border-radius:50%; background:#e0e7ff; color:#3730a3; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    {{ w.name[:2] | upper if w.name else '??' }}
+                  </div>
+                  <div>
+                    <div style="font-weight:600; font-size:13px;">{{ w.name }}</div>
+                    <div style="font-size:11px; color:#9ca3af;">{{ w.job_title | default('') }}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="wtype wtype-{{ w.worker_type }}">{{ w.worker_type }}</span></td>
+              <td style="font-size:13px; color:#374151;">{{ w.agency | default('—') }}</td>
+              <td style="text-align:right; font-family:monospace; font-size:13px; font-weight:600;">
+                {% if w.rate_cents %}
+                  {{ "{:,.2f}".format(w.rate_cents / 100) }}
+                {% else %}—{% endif %}
+              </td>
+              <td><span class="ws ws-{{ w.status | default('ACTIVE') }}">{{ w.status | default('ACTIVE') }}</span></td>
+              <td style="font-size:12px; color:#6b7280;">{{ w.end_date | default('—') }}</td>
+              <td>
+                <div style="display:flex; gap:5px;">
+                  <a href="/hcm/contingent/workers/{{ w.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+                  <button class="btn btn-xs btn-default" title="Edit" onclick="editWorker('{{ w.id }}')"><i class="fa fa-pencil"></i></button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="7" style="text-align:center; padding:40px; color:#9ca3af;">
+              <i class="fa fa-users fa-2x" style="margin-bottom:8px; display:block;"></i>
+              No contingent workers found.
+            </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── SOW tab ── #}
+  <div id="panel-sow" class="cw-panel">
+    {% if sows %}
+      {% for sow in sows %}
+      {% set util = ((sow.actual_spend_cents / sow.budget_cents) * 100) | round(1) if sow.budget_cents else 0 %}
+      <div style="background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:16px 18px; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <div>
+            <span style="font-size:14px; font-weight:700; color:#111827;">{{ sow.sow_number | default('SOW-' ~ loop.index) }}</span>
+            <span style="margin-left:8px; font-size:12px; color:#6b7280;">{{ sow.vendor | default('') }}</span>
+            {% if sow.status %}
+              <span class="ws ws-{{ sow.status }}" style="margin-left:8px;">{{ sow.status }}</span>
+            {% endif %}
+          </div>
+          <div style="display:flex; gap:8px;">
+            <a href="/hcm/contingent/sows/{{ sow.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i> View</a>
+            <button class="btn btn-xs btn-default" onclick="amendSOW('{{ sow.id }}')"><i class="fa fa-pencil"></i> Amend</button>
+          </div>
+        </div>
+        <div class="row" style="margin:0 -6px 10px;">
+          <div class="col-xs-3" style="padding:0 6px; text-align:center;">
+            <div style="font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; margin-bottom:2px;">Budget</div>
+            <div style="font-size:14px; font-weight:700; color:#111827;">{{ "{:,.0f}".format(sow.budget_cents / 100) if sow.budget_cents else '—' }}</div>
+          </div>
+          <div class="col-xs-3" style="padding:0 6px; text-align:center;">
+            <div style="font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; margin-bottom:2px;">Actual Spend</div>
+            <div style="font-size:14px; font-weight:700; color:#111827;">{{ "{:,.0f}".format(sow.actual_spend_cents / 100) if sow.actual_spend_cents else '—' }}</div>
+          </div>
+          <div class="col-xs-3" style="padding:0 6px; text-align:center;">
+            <div style="font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; margin-bottom:2px;">Start</div>
+            <div style="font-size:13px; font-weight:600;">{{ sow.start_date | default('—') }}</div>
+          </div>
+          <div class="col-xs-3" style="padding:0 6px; text-align:center;">
+            <div style="font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; margin-bottom:2px;">End</div>
+            <div style="font-size:13px; font-weight:600;">{{ sow.end_date | default('—') }}</div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b7280; margin-bottom:3px;">
+            <span>Utilization</span>
+            <span style="font-weight:700; color:{% if util > 100 %}#dc2626{% elif util > 85 %}#d97706{% else %}#1a56db{% endif %};">{{ util }}%</span>
+          </div>
+          <div class="sow-util-bar">
+            <div class="sow-util-fill {% if util > 100 %}sow-util-over{% elif util > 85 %}sow-util-warning{% else %}sow-util-ok{% endif %}"
+                 style="width:{{ [util | int, 100] | min }}%;"></div>
+          </div>
+        </div>
+        {% if sow.deliverables %}
+        <div style="margin-top:10px; font-size:12px; color:#6b7280;">
+          <strong>Deliverables:</strong> {{ sow.deliverables | join(', ') }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center; padding:40px; color:#9ca3af;">
+        <i class="fa fa-file-text-o fa-2x" style="margin-bottom:10px; display:block;"></i>
+        No active SOWs found.
+        <br><a href="/hcm/contingent/sows/new" class="btn btn-sm btn-primary" style="margin-top:12px;"><i class="fa fa-plus"></i> Create SOW</a>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Timesheets tab ── #}
+  <div id="panel-timesheets" class="cw-panel">
+    {% if pending_timesheets %}
+      <div style="margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <span style="font-size:13px; font-weight:600; color:#374151;">
+          <i class="fa fa-clock-o" style="color:#f59e0b;"></i>
+          {{ pending_timesheets | length }} timesheet(s) awaiting approval
+        </span>
+        <button class="btn btn-sm btn-success" id="btn-approve-all" onclick="approveAllTimesheets()">
+          <i class="fa fa-check-double"></i> Approve All
+        </button>
+      </div>
+      {% for ts in pending_timesheets %}
+      <div class="ts-card" id="ts-row-{{ ts.id }}">
+        <div class="ts-avatar">{{ ts.worker_name[:2] | upper if ts.worker_name else '??' }}</div>
+        <div class="ts-body">
+          <p class="ts-name">{{ ts.worker_name }}</p>
+          <p class="ts-meta">Period: {{ ts.period_start | default('') }} — {{ ts.period_end | default('') }} &bull; {{ ts.worker_type | default('') }}</p>
+        </div>
+        <div class="ts-hours">{{ ts.total_hours | default(0) }}h</div>
+        <div style="text-align:right; min-width:70px;">
+          <div style="font-size:13px; font-weight:700; color:#111827; font-family:monospace;">
+            {% if ts.amount_cents %}{{ "{:,.2f}".format(ts.amount_cents / 100) }}{% else %}—{% endif %}
+          </div>
+          <div style="font-size:10px; color:#9ca3af;">{{ ts.currency | default('USD') }}</div>
+        </div>
+        <div class="ts-actions">
+          <button class="btn btn-sm btn-success btn-approve-ts" data-ts-id="{{ ts.id }}"
+                  title="Approve"><i class="fa fa-check"></i></button>
+          <button class="btn btn-sm btn-danger btn-reject-ts" data-ts-id="{{ ts.id }}"
+                  title="Reject"><i class="fa fa-times"></i></button>
+          <a href="/hcm/contingent/timesheets/{{ ts.id }}" class="btn btn-sm btn-default" title="Detail"><i class="fa fa-eye"></i></a>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center; padding:40px; color:#9ca3af;">
+        <i class="fa fa-check-circle fa-2x" style="color:#10b981; margin-bottom:10px; display:block;"></i>
+        <strong style="color:#111827;">All clear</strong> — no timesheets pending approval.
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Spend tab ── #}
+  <div id="panel-spend" class="cw-panel">
+    <div class="row">
+      <div class="col-md-8">
+        <div class="cw-chart-wrap">
+          <h5 style="font-size:14px; font-weight:700; color:#111827; margin:0 0 16px;">Contingent Spend by Period</h5>
+          <canvas id="spend-chart" height="200"></canvas>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="cw-chart-wrap" style="margin-bottom:14px;">
+          <h5 style="font-size:14px; font-weight:700; color:#111827; margin:0 0 16px;">By Worker Type</h5>
+          <canvas id="type-chart" height="180"></canvas>
+        </div>
+        {% if spend_summary %}
+        <div class="erp-card erp-mb-0" style="padding:14px 16px;">
+          <p style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#9ca3af; font-weight:600; margin:0 0 10px;">YTD Summary</p>
+          {% for row in spend_summary %}
+          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f3f4f6; font-size:13px;">
+            <span style="color:#374151;">{{ row.label }}</span>
+            <span style="font-weight:700; font-family:monospace;">{{ "{:,.0f}".format(row.amount_cents / 100) if row.amount_cents else '—' }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>{# /erp-card #}
+
+{# ── Add Worker Modal ── #}
+<div class="modal fade" id="modal-add-worker" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;"><i class="fa fa-user-plus" style="color:#7c3aed;"></i> Add Contingent Worker</h4>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Full Name</label>
+              <input type="text" id="nw-name" class="form-control" placeholder="Jane Smith">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Worker Type</label>
+              <select id="nw-type" class="form-control">
+                <option value="CONTRACTOR">Contractor</option>
+                <option value="FREELANCER">Freelancer</option>
+                <option value="SOW">SOW</option>
+                <option value="TEMP">Temp</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Agency / Vendor</label>
+              <input type="text" id="nw-agency" class="form-control" placeholder="e.g. Randstad">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Bill Rate (per hour)</label>
+              <input type="number" id="nw-rate" class="form-control" placeholder="85.00" step="0.01" min="0">
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Start Date</label>
+              <input type="date" id="nw-start" class="form-control">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">End Date</label>
+              <input type="date" id="nw-end" class="form-control">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-worker" style="font-weight:600;">
+          <i class="fa fa-save"></i> Add Worker
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cw-toasts" id="cw-toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var SPEND   = {{ spend_summary | tojson if spend_summary else '[]' }};
+  var PERIODS = {{ spend_by_period | tojson if spend_by_period else '[]' }};
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('cw-toasts');
+    var el = document.createElement('div');
+    el.className = 'cw-toast ' + (type || 'info');
+    var icon = type==='success' ? 'fa-check-circle' : type==='error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── tab switching ── */
+  window.cwTab = function(tab) {
+    document.querySelectorAll('.cw-tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.cw-panel').forEach(function(p){ p.classList.remove('active'); });
+    tab.classList.add('active');
+    var panel = document.getElementById('panel-' + tab.getAttribute('data-tab'));
+    if (panel) panel.classList.add('active');
+  };
+
+  /* ── worker table filter ── */
+  window.filterWorkers = function() {
+    var q      = (document.getElementById('worker-search').value || '').toLowerCase();
+    var type   = (document.getElementById('worker-type-filter').value || '').toUpperCase();
+    var status = (document.getElementById('worker-status-filter').value || '').toUpperCase();
+    var rows   = document.querySelectorAll('#workers-tbody tr[data-wtype]');
+    var count  = 0;
+    rows.forEach(function(row) {
+      var match =
+        (!q      || (row.getAttribute('data-wname')||'').indexOf(q) !== -1) &&
+        (!type   || row.getAttribute('data-wtype') === type) &&
+        (!status || row.getAttribute('data-wstatus') === status);
+      row.style.display = match ? '' : 'none';
+      if (match) count++;
+    });
+    var el = document.getElementById('worker-count');
+    if (el) el.textContent = count + ' of ' + rows.length + ' workers';
+  };
+  filterWorkers();
+
+  /* ── timesheet approve / reject ── */
+  function updateTimesheet(tsId, action) {
+    fetch('/api/hcm/contingent/timesheets/' + tsId + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ timesheet_id: tsId })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        var row = document.getElementById('ts-row-' + tsId);
+        if (row) {
+          row.style.transition = 'opacity .3s';
+          row.style.opacity = '0';
+          setTimeout(function(){ if(row.parentNode) row.parentNode.removeChild(row); }, 320);
+        }
+        toast('Timesheet ' + (action === 'approve' ? 'approved' : 'rejected') + '.', 'success');
+      } else {
+        toast(res.data.message || 'Action failed.', 'error');
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); });
+  }
+
+  document.addEventListener('click', function(e) {
+    var appBtn = e.target.closest('.btn-approve-ts');
+    var rejBtn = e.target.closest('.btn-reject-ts');
+    if (appBtn) { appBtn.disabled=true; updateTimesheet(appBtn.getAttribute('data-ts-id'), 'approve'); }
+    if (rejBtn) { rejBtn.disabled=true; updateTimesheet(rejBtn.getAttribute('data-ts-id'), 'reject'); }
+  });
+
+  window.approveAllTimesheets = function() {
+    var btns = document.querySelectorAll('.btn-approve-ts');
+    btns.forEach(function(b) { b.disabled=true; updateTimesheet(b.getAttribute('data-ts-id'), 'approve'); });
+  };
+
+  /* ── save new worker ── */
+  document.getElementById('btn-save-worker').addEventListener('click', function() {
+    var name   = document.getElementById('nw-name').value.trim();
+    var type   = document.getElementById('nw-type').value;
+    var agency = document.getElementById('nw-agency').value.trim();
+    var rate   = parseFloat(document.getElementById('nw-rate').value) || 0;
+    var start  = document.getElementById('nw-start').value;
+    var end    = document.getElementById('nw-end').value;
+    if (!name) { toast('Worker name required.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/hcm/contingent/workers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name, worker_type: type, agency, rate_cents: Math.round(rate*100), start_date: start, end_date: end })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        $('#modal-add-worker').modal('hide');
+        toast('Worker added.', 'success');
+        setTimeout(function(){ window.location.reload(); }, 1400);
+      } else {
+        toast(res.data.message || 'Failed to add.', 'error');
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); })
+    .finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fa fa-save"></i> Add Worker'; });
+  });
+
+  /* ── Spend bar chart ── */
+  var spendCtx = document.getElementById('spend-chart');
+  if (spendCtx && PERIODS.length) {
+    new Chart(spendCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: PERIODS.map(function(p){ return p.period; }),
+        datasets: [
+          {
+            label: 'Contingent Spend',
+            data: PERIODS.map(function(p){ return (p.amount_cents||0)/100; }),
+            backgroundColor: 'rgba(124,58,237,0.75)',
+            borderColor: '#7c3aed',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+          {
+            label: 'Budget',
+            data: PERIODS.map(function(p){ return (p.budget_cents||0)/100; }),
+            backgroundColor: 'rgba(26,86,219,0.15)',
+            borderColor: '#1a56db',
+            borderWidth: 2,
+            borderRadius: 4,
+            type: 'line',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { position:'top', labels:{ font:{ size:11 } } } },
+        scales: {
+          y: { beginAtZero:true, ticks:{ callback: function(v){ return v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v; }, font:{ size:11 } } },
+          x: { ticks:{ font:{ size:11 } } }
+        }
+      }
+    });
+  }
+
+  /* ── Type doughnut ── */
+  var typeCtx = document.getElementById('type-chart');
+  if (typeCtx) {
+    var typeData = {};
+    {% if workers %}
+      var WORKERS = {{ workers | tojson }};
+      WORKERS.forEach(function(w){ typeData[w.worker_type] = (typeData[w.worker_type]||0)+1; });
+    {% endif %}
+    var labels = Object.keys(typeData);
+    var data   = labels.map(function(k){ return typeData[k]; });
+    if (labels.length) {
+      new Chart(typeCtx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{ data: data, backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'], borderWidth:2, borderColor:'#fff' }]
+        },
+        options: { responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'right', labels:{ font:{ size:11 } } } }, cutout:'65%' }
+      });
+    }
+  }
+
+}());
+</script>
+{% endblock %}

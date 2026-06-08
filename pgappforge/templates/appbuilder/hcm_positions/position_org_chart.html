@@ -1,0 +1,603 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Position Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Org chart ── */
+  .oc-wrap {
+    background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+    padding:20px; overflow:auto; position:relative; min-height:360px;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  .oc-tree { display:flex; flex-direction:column; align-items:center; }
+  .oc-level { display:flex; justify-content:center; gap:16px; flex-wrap:wrap; margin-bottom:8px; position:relative; }
+  .oc-level::before {
+    content:''; position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+    width:2px; height:14px; background:#e5e7eb;
+  }
+  .oc-level:first-child::before { display:none; }
+
+  /* connecting lines for children */
+  .oc-children { position:relative; display:flex; justify-content:center; }
+  .oc-connector-row { display:flex; justify-content:center; height:14px; position:relative; }
+  .oc-connector-row::before {
+    content:''; position:absolute; top:0; left:10%; right:10%; height:1px; background:#d1d5db;
+  }
+
+  .oc-box {
+    width:160px; min-height:70px; border-radius:8px; padding:10px 12px;
+    cursor:pointer; transition:box-shadow .15s, transform .15s;
+    position:relative; text-align:center; flex-shrink:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .oc-box:hover { transform:translateY(-2px); }
+  .oc-box.filled {
+    background:#eff6ff; border:2px solid #1a56db;
+    box-shadow:0 2px 8px rgba(26,86,219,.1);
+  }
+  .oc-box.filled:hover { box-shadow:0 4px 14px rgba(26,86,219,.18); }
+  .oc-box.vacant {
+    background:#fafafa; border:2px dashed #d1d5db;
+    box-shadow:none;
+  }
+  .oc-box.vacant:hover { border-color:#1a56db; background:#f0f4ff; }
+  .oc-box.frozen { background:#f3f4f6; border:2px solid #e5e7eb; opacity:.6; }
+
+  .oc-box-title { font-size:11px; font-weight:700; color:#111827; margin:0 0 2px; line-height:1.3; }
+  .oc-box-code  { font-size:10px; color:#9ca3af; font-family:monospace; margin:0 0 4px; }
+  .oc-box.filled .oc-box-incumbent  { font-size:11px; font-weight:600; color:#1a56db; margin:0; }
+  .oc-box.vacant .oc-box-vacant-lbl { font-size:10px; color:#9ca3af; font-style:italic; margin:2px 0 0; }
+
+  .oc-dept-badge { font-size:9px; padding:1px 6px; border-radius:8px; margin-top:4px; }
+  .oc-dept-badge { background:#f3f4f6; color:#6b7280; }
+
+  /* ── Position status badges ── */
+  .pos-status { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap; }
+  .ps-ACTIVE    { background:#d1fae5; color:#065f46; }
+  .ps-VACANT    { background:#dbeafe; color:#1e40af; }
+  .ps-FROZEN    { background:#f3f4f6; color:#6b7280; }
+  .ps-ELIMINATED{ background:#fee2e2; color:#991b1b; }
+
+  /* ── KPI tiles ── */
+  .pos-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .pos-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; position:relative; overflow:hidden; }
+  .pos-kpi::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:8px 0 0 8px; background:var(--ta,#1a56db); }
+  .pos-kpi .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 3px; }
+  .pos-kpi .val { font-size:22px; font-weight:800; color:#111827; margin:0; line-height:1.1; }
+  .pos-kpi .sub { font-size:11px; color:#9ca3af; margin:2px 0 0; }
+
+  /* ── Position popup ── */
+  .oc-popup {
+    position:fixed; background:#fff; border:1px solid #e5e7eb;
+    border-radius:10px; padding:16px 18px; box-shadow:0 8px 24px rgba(0,0,0,.12);
+    z-index:500; width:240px; display:none;
+  }
+  .oc-popup .pop-title { font-size:13px; font-weight:700; color:#111827; margin:0 0 4px; }
+  .oc-popup .pop-meta  { font-size:11px; color:#9ca3af; margin:0 0 10px; }
+  .oc-popup .pop-close { position:absolute; top:8px; right:10px; font-size:16px; cursor:pointer; color:#9ca3af; background:none; border:none; padding:0; line-height:1; }
+  .oc-popup .pop-actions { display:flex; flex-direction:column; gap:6px; }
+
+  /* ── Toast ── */
+  .pos-toasts { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .pos-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .pos-toast.success { border-left:4px solid #10b981; }
+  .pos-toast.error   { border-left:4px solid #ef4444; }
+  .pos-toast.info    { border-left:4px solid #1a56db; }
+
+  .tabnum { font-family:monospace; font-variant-numeric:tabular-nums; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-sitemap"></i> Position Management
+      {% if entity %}
+        <span style="font-size:15px; font-weight:400; color:#6b7280; margin-left:8px;">{{ entity.name | default('') }}</span>
+      {% endif %}
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Org chart · Vacancies · Budget vs Actual · Position lifecycle</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-default btn-sm" onclick="window.location='/hcm/positions/export'">
+      <i class="fa fa-download"></i> Export
+    </button>
+    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal-new-position">
+      <i class="fa fa-plus"></i> New Position
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ── #}
+{% set total_pos     = positions | length if positions else 0 %}
+{% set filled_count  = positions | selectattr('status','equalto','ACTIVE') | list | length if positions else 0 %}
+{% set vacant_count  = positions | selectattr('status','equalto','VACANT') | list | length if positions else 0 %}
+{% set frozen_count  = positions | selectattr('status','equalto','FROZEN') | list | length if positions else 0 %}
+{% set fill_rate     = ((filled_count / total_pos) * 100) | round(1) if total_pos else 0 %}
+<div class="pos-kpi-row">
+  <div class="pos-kpi" style="--ta:#1a56db;">
+    <p class="lbl">Total Positions</p>
+    <p class="val">{{ total_pos }}</p>
+    <p class="sub">approved headcount</p>
+  </div>
+  <div class="pos-kpi" style="--ta:#10b981;">
+    <p class="lbl">Filled</p>
+    <p class="val">{{ filled_count }}</p>
+    <p class="sub">active incumbents</p>
+  </div>
+  <div class="pos-kpi" style="--ta:#3b82f6;">
+    <p class="lbl">Vacant</p>
+    <p class="val" style="color:#1e40af;">{{ vacant_count }}</p>
+    <p class="sub">open to hire</p>
+  </div>
+  <div class="pos-kpi" style="--ta:#9ca3af;">
+    <p class="lbl">Frozen</p>
+    <p class="val" style="color:#6b7280;">{{ frozen_count }}</p>
+    <p class="sub">hiring hold</p>
+  </div>
+  <div class="pos-kpi" style="--ta:{% if fill_rate < 80 %}#f59e0b{% else %}#10b981{% endif %};">
+    <p class="lbl">Fill Rate</p>
+    <p class="val" style="color:{% if fill_rate < 80 %}#d97706{% else %}#10b981{% endif %};">{{ fill_rate }}%</p>
+    <p class="sub">positions filled</p>
+  </div>
+  {% if headcount_summary %}
+  <div class="pos-kpi" style="--ta:#7c3aed;">
+    <p class="lbl">Budget vs Actual</p>
+    <p class="val tabnum" style="font-size:16px;">
+      {% if headcount_summary.budget_fte and headcount_summary.actual_fte %}
+        {{ "{:.1f}".format(headcount_summary.actual_fte) }} / {{ "{:.1f}".format(headcount_summary.budget_fte) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="sub">actual vs budgeted FTE</p>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Org Chart ── #}
+<div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+  <div style="padding:12px 16px; background:#fafafa; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+    <h5 style="margin:0; font-size:14px; font-weight:700; color:#111827;"><i class="fa fa-sitemap"></i> Org Chart</h5>
+    <div style="display:flex; align-items:center; gap:12px; font-size:12px;">
+      <span><span style="display:inline-block; width:12px; height:12px; background:#eff6ff; border:2px solid #1a56db; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>Filled</span>
+      <span><span style="display:inline-block; width:12px; height:12px; background:#fafafa; border:2px dashed #d1d5db; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>Vacant</span>
+      <span><span style="display:inline-block; width:12px; height:12px; background:#f3f4f6; border:2px solid #e5e7eb; border-radius:2px; vertical-align:middle; margin-right:4px; opacity:.6;"></span>Frozen</span>
+      <select id="dept-filter-oc" class="form-control input-sm" style="width:140px;" onchange="renderOrgChart()">
+        <option value="">All Departments</option>
+        {% set depts = positions | map(attribute='department') | unique | list if positions else [] %}
+        {% for dept in depts %}
+        <option value="{{ dept }}">{{ dept }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="oc-wrap" id="oc-wrap">
+    <div id="oc-tree-root"></div>
+  </div>
+</div>
+
+{# ── Position list table ── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div style="padding:12px 16px; background:#fafafa; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+    <h5 style="margin:0; font-size:14px; font-weight:700; color:#111827;"><i class="fa fa-list"></i> All Positions</h5>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="text" id="pos-search" class="form-control input-sm" placeholder="Search title, code…" style="width:180px;" oninput="filterPosTable()">
+      <select id="pos-status-filter" class="form-control input-sm" style="width:120px;" onchange="filterPosTable()">
+        <option value="">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="VACANT">Vacant</option>
+        <option value="FROZEN">Frozen</option>
+        <option value="ELIMINATED">Eliminated</option>
+      </select>
+      <select id="pos-dept-filter" class="form-control input-sm" style="width:130px;" onchange="filterPosTable()">
+        <option value="">All Depts</option>
+        {% set depts = positions | map(attribute='department') | unique | list if positions else [] %}
+        {% for dept in depts %}
+        <option value="{{ dept }}">{{ dept }}</option>
+        {% endfor %}
+      </select>
+      <span id="pos-table-count" style="font-size:12px; color:#9ca3af;"></span>
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table" id="pos-table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Title</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th style="text-align:right;">Budget Salary</th>
+          <th>Incumbent</th>
+          <th>Grade</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="pos-tbody">
+        {% if positions %}
+          {% for pos in positions %}
+          <tr id="pos-row-{{ pos.id }}"
+              data-pstatus="{{ pos.status | default('ACTIVE') }}"
+              data-pdept="{{ pos.department | default('') | lower }}"
+              data-ptitle="{{ pos.title | default('') | lower ~ ' ' ~ (pos.position_code | default('') | lower) }}">
+            <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ pos.position_code | default('—') }}</td>
+            <td>
+              <span style="font-weight:600; font-size:13px;">{{ pos.title | default('—') }}</span>
+              {% if pos.is_new %}
+                <span style="font-size:9px; background:#dbeafe; color:#1e40af; padding:1px 5px; border-radius:6px; margin-left:4px; font-weight:700;">NEW</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px; color:#374151;">{{ pos.department | default('—') }}</td>
+            <td><span class="pos-status ps-{{ pos.status | default('ACTIVE') }}">{{ pos.status | default('ACTIVE') }}</span></td>
+            <td style="text-align:right;" class="tabnum">
+              {% if pos.budget_salary_cents %}
+                {{ "{:,.0f}".format(pos.budget_salary_cents / 100) }}
+              {% else %}—{% endif %}
+            </td>
+            <td style="font-size:13px;">
+              {% if pos.incumbent_name %}
+                <div style="display:flex; align-items:center; gap:7px;">
+                  <div style="width:22px;height:22px;border-radius:50%;background:#e0e7ff;color:#3730a3;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    {{ pos.incumbent_name[:2]|upper }}
+                  </div>
+                  <span>{{ pos.incumbent_name }}</span>
+                </div>
+              {% else %}
+                <span style="color:#9ca3af; font-style:italic; font-size:12px;">Vacant</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px; color:#6b7280; font-weight:600;">{{ pos.grade | default('—') }}</td>
+            <td>
+              <div style="display:flex; gap:4px;">
+                {% if pos.status == 'VACANT' %}
+                  <button class="btn btn-xs btn-primary btn-post-vacancy" data-pos-id="{{ pos.id }}" data-pos-title="{{ pos.title | default('') | replace('"','&quot;') }}" title="Post Vacancy">
+                    <i class="fa fa-bullhorn"></i> Post
+                  </button>
+                {% elif pos.status == 'ACTIVE' %}
+                  <button class="btn btn-xs btn-default btn-fill-pos" data-pos-id="{{ pos.id }}" title="Fill Position">
+                    <i class="fa fa-user-plus"></i> Fill
+                  </button>
+                {% endif %}
+                {% if pos.status not in ['FROZEN','ELIMINATED'] %}
+                  <button class="btn btn-xs btn-default btn-freeze-pos" data-pos-id="{{ pos.id }}" title="Freeze Position">
+                    <i class="fa fa-pause"></i>
+                  </button>
+                {% elif pos.status == 'FROZEN' %}
+                  <button class="btn btn-xs btn-default btn-unfreeze-pos" data-pos-id="{{ pos.id }}" title="Unfreeze">
+                    <i class="fa fa-play"></i>
+                  </button>
+                {% endif %}
+                <a href="/hcm/positions/{{ pos.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="8" style="text-align:center; padding:40px; color:#9ca3af;">
+            <i class="fa fa-sitemap fa-2x" style="margin-bottom:8px; display:block;"></i>
+            No positions found.
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div style="padding:10px 16px; background:#fafafa; border-top:1px solid #e5e7eb; font-size:12px; color:#9ca3af;">
+    <span id="pos-table-summary"></span>
+  </div>
+</div>
+
+{# ── Position popup (contextual) ── #}
+<div class="oc-popup" id="oc-popup">
+  <button class="pop-close" onclick="closePopup()">&times;</button>
+  <p class="pop-title" id="pop-title">—</p>
+  <p class="pop-meta" id="pop-meta">—</p>
+  <div class="pop-actions" id="pop-actions"></div>
+</div>
+
+{# ── New Position Modal ── #}
+<div class="modal fade" id="modal-new-position" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;"><i class="fa fa-plus-circle" style="color:#1a56db;"></i> New Position</h4>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-sm-7">
+            <div class="form-group">
+              <label style="font-size:12px;font-weight:600;">Position Title</label>
+              <input type="text" id="np-title" class="form-control" placeholder="e.g. Senior Engineer">
+            </div>
+          </div>
+          <div class="col-sm-5">
+            <div class="form-group">
+              <label style="font-size:12px;font-weight:600;">Position Code</label>
+              <input type="text" id="np-code" class="form-control" placeholder="ENG-042" style="font-family:monospace;">
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px;font-weight:600;">Department</label>
+              <input type="text" id="np-dept" class="form-control" placeholder="Engineering">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px;font-weight:600;">Grade</label>
+              <input type="text" id="np-grade" class="form-control" placeholder="L4">
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px;font-weight:600;">Budget Salary</label>
+              <input type="number" id="np-salary" class="form-control" placeholder="0" min="0" step="1000">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px;font-weight:600;">Reports To (Position Code)</label>
+              <input type="text" id="np-reports-to" class="form-control" placeholder="ENG-001" style="font-family:monospace;">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-position" style="font-weight:600;"><i class="fa fa-save"></i> Create Position</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pos-toasts" id="pos-toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var POSITIONS = {{ positions | tojson if positions else '[]' }};
+
+  function _esc(s) {
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('pos-toasts');
+    var el = document.createElement('div');
+    el.className = 'pos-toast ' + (type||'info');
+    var icon = type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle';
+    el.innerHTML = '<i class="fa '+icon+'"></i> '+_esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Org chart renderer ── */
+  window.renderOrgChart = function() {
+    var deptFilter = (document.getElementById('dept-filter-oc').value||'').toLowerCase();
+    var root = document.getElementById('oc-tree-root');
+
+    var filtered = deptFilter
+      ? POSITIONS.filter(function(p){ return (p.department||'').toLowerCase() === deptFilter; })
+      : POSITIONS;
+
+    if (!filtered.length) {
+      root.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fa fa-sitemap fa-2x" style="margin-bottom:8px;display:block;"></i>No positions to display.</div>';
+      return;
+    }
+
+    /* Build tree map */
+    var byId = {}, byParent = {};
+    filtered.forEach(function(p) {
+      byId[p.position_code||p.id] = p;
+      var parent = p.reports_to || '__root__';
+      if (!byParent[parent]) byParent[parent] = [];
+      byParent[parent].push(p);
+    });
+
+    /* Find roots (no parent in filtered set) */
+    var roots = filtered.filter(function(p) {
+      return !p.reports_to || !byId[p.reports_to];
+    });
+    if (!roots.length) roots = filtered.slice(0, Math.min(5, filtered.length));
+
+    function renderLevel(nodes, depth) {
+      if (!nodes || !nodes.length) return '';
+      var html = '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:' + (depth === 0 ? '0' : '6') + 'px;">';
+      nodes.forEach(function(pos) {
+        var status    = pos.status || 'ACTIVE';
+        var isFilled  = status === 'ACTIVE';
+        var isVacant  = status === 'VACANT';
+        var isFrozen  = status === 'FROZEN';
+        var cls       = isFilled ? 'filled' : isFrozen ? 'frozen' : 'vacant';
+        var children  = byParent[pos.position_code||pos.id] || [];
+
+        html += '<div style="display:flex;flex-direction:column;align-items:center;">';
+        html +=   '<div class="oc-box '+cls+'" onclick="openPositionPopup(\''+_esc(String(pos.id))+'\',event)" title="'+_esc(pos.title||'')+(isVacant?' — VACANT':'')+'">';
+        html +=     '<p class="oc-box-code">'+_esc(pos.position_code||'')+'</p>';
+        html +=     '<p class="oc-box-title">'+_esc(pos.title||'')+'</p>';
+        if (isFilled && pos.incumbent_name) {
+          html +=   '<p class="oc-box-incumbent"><i class="fa fa-user" style="font-size:10px;"></i> '+_esc(pos.incumbent_name)+'</p>';
+        } else if (isVacant) {
+          html +=   '<p class="oc-box-vacant-lbl">vacant</p>';
+        } else if (isFrozen) {
+          html +=   '<p class="oc-box-vacant-lbl"><i class="fa fa-pause"></i> frozen</p>';
+        }
+        if (pos.department) html += '<span class="oc-dept-badge">'+_esc(pos.department)+'</span>';
+        html +=   '</div>';
+
+        if (children.length) {
+          html += '<div style="width:2px;height:14px;background:#e5e7eb;margin:0 auto;"></div>';
+          if (children.length > 1) {
+            html += '<div style="height:1px;background:#e5e7eb;width:'+Math.min(children.length*170,600)+'px;max-width:90vw;margin:0 auto;"></div>';
+          }
+          html += renderLevel(children, depth+1);
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    root.innerHTML = renderLevel(roots, 0);
+  };
+
+  /* ── Position popup ── */
+  window.openPositionPopup = function(posId, event) {
+    var pos = null;
+    for (var i=0; i<POSITIONS.length; i++) { if (String(POSITIONS[i].id) === posId) { pos = POSITIONS[i]; break; } }
+    if (!pos) return;
+
+    var popup = document.getElementById('oc-popup');
+    document.getElementById('pop-title').textContent = pos.title || '—';
+    document.getElementById('pop-meta').textContent  = (pos.position_code||'') + (pos.department ? ' · ' + pos.department : '');
+
+    var actions = '';
+    if (pos.status === 'VACANT') {
+      actions += '<button class="btn btn-sm btn-primary btn-block" onclick="postVacancy(\''+posId+'\',\''+_esc(pos.title||'')+'\')"><i class="fa fa-bullhorn"></i> Post Vacancy</button>';
+    } else if (pos.status === 'ACTIVE') {
+      actions += '<button class="btn btn-sm btn-default btn-block" onclick="fillPosition(\''+posId+'\')"><i class="fa fa-user-plus"></i> Fill Position</button>';
+    }
+    if (pos.status !== 'FROZEN' && pos.status !== 'ELIMINATED') {
+      actions += '<button class="btn btn-sm btn-default btn-block" onclick="freezePosition(\''+posId+'\')"><i class="fa fa-pause"></i> Freeze Position</button>';
+    } else if (pos.status === 'FROZEN') {
+      actions += '<button class="btn btn-sm btn-default btn-block" onclick="freezePosition(\''+posId+'\',true)"><i class="fa fa-play"></i> Unfreeze Position</button>';
+    }
+    actions += '<a href="/hcm/positions/'+_esc(posId)+'" class="btn btn-sm btn-default btn-block"><i class="fa fa-eye"></i> View Detail</a>';
+    document.getElementById('pop-actions').innerHTML = actions;
+
+    var x = Math.min(event.clientX + 10, window.innerWidth  - 260);
+    var y = Math.min(event.clientY + 10, window.innerHeight - 200);
+    popup.style.left    = x + 'px';
+    popup.style.top     = y + 'px';
+    popup.style.display = 'block';
+
+    event.stopPropagation();
+  };
+
+  window.closePopup = function() { document.getElementById('oc-popup').style.display='none'; };
+  document.addEventListener('click', function(e) { if (!e.target.closest('.oc-box') && !e.target.closest('.oc-popup')) closePopup(); });
+
+  /* ── Post Vacancy ── */
+  window.postVacancy = function(posId, title) {
+    closePopup();
+    if (!confirm('Create a job requisition for "' + (title||posId) + '"?')) return;
+    fetch('/api/hcm/positions/' + posId + '/post_vacancy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ position_id: posId })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) toast('Job requisition created. Ref: ' + (res.data.requisition_ref||'—'), 'success');
+      else toast(res.data.message||'Failed to post vacancy.','error');
+    })
+    .catch(function(err){ toast('Network error: '+err.message,'error'); });
+  };
+
+  /* ── Fill Position ── */
+  window.fillPosition = function(posId) {
+    closePopup();
+    window.location.href = '/hcm/positions/' + posId + '/fill';
+  };
+
+  /* ── Freeze / Unfreeze ── */
+  window.freezePosition = function(posId, unfreeze) {
+    closePopup();
+    var action = unfreeze ? 'unfreeze' : 'freeze';
+    fetch('/api/hcm/positions/' + posId + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ position_id: posId })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) { toast('Position ' + (unfreeze?'unfrozen':'frozen') + '.', 'success'); setTimeout(function(){ window.location.reload(); }, 1200); }
+      else toast(res.data.message||'Action failed.','error');
+    })
+    .catch(function(err){ toast('Network error: '+err.message,'error'); });
+  };
+
+  /* ── Table row actions ── */
+  document.addEventListener('click', function(e) {
+    var pvBtn = e.target.closest('.btn-post-vacancy');
+    var fpBtn = e.target.closest('.btn-fill-pos');
+    var fzBtn = e.target.closest('.btn-freeze-pos');
+    var ufBtn = e.target.closest('.btn-unfreeze-pos');
+    if (pvBtn) { postVacancy(pvBtn.getAttribute('data-pos-id'), pvBtn.getAttribute('data-pos-title')); }
+    if (fpBtn) { fillPosition(fpBtn.getAttribute('data-pos-id')); }
+    if (fzBtn) { freezePosition(fzBtn.getAttribute('data-pos-id'), false); }
+    if (ufBtn) { freezePosition(ufBtn.getAttribute('data-pos-id'), true); }
+  });
+
+  /* ── Table filter ── */
+  window.filterPosTable = function() {
+    var q  = (document.getElementById('pos-search').value||'').toLowerCase();
+    var st = (document.getElementById('pos-status-filter').value||'').toUpperCase();
+    var dt = (document.getElementById('pos-dept-filter').value||'').toLowerCase();
+    var rows = document.querySelectorAll('#pos-tbody tr[data-pstatus]');
+    var count = 0;
+    rows.forEach(function(row) {
+      var show =
+        (!q  || (row.getAttribute('data-ptitle')||'').indexOf(q)!==-1) &&
+        (!st || row.getAttribute('data-pstatus')===st) &&
+        (!dt || (row.getAttribute('data-pdept')||'').indexOf(dt)!==-1);
+      row.style.display = show ? '' : 'none';
+      if(show) count++;
+    });
+    var el = document.getElementById('pos-table-count'); if(el) el.textContent=count+' of '+rows.length;
+    var sm = document.getElementById('pos-table-summary');
+    if (sm) {
+      var fil = Array.from(rows).filter(function(r){ return r.style.display!=='none' && r.getAttribute('data-pstatus')==='ACTIVE'; }).length;
+      var vac = Array.from(rows).filter(function(r){ return r.style.display!=='none' && r.getAttribute('data-pstatus')==='VACANT'; }).length;
+      sm.textContent = 'Showing: '+count+' positions — '+fil+' filled, '+vac+' vacant';
+    }
+  };
+  filterPosTable();
+
+  /* ── Save new position ── */
+  document.getElementById('btn-save-position').addEventListener('click', function() {
+    var title  = document.getElementById('np-title').value.trim();
+    var code   = document.getElementById('np-code').value.trim();
+    var dept   = document.getElementById('np-dept').value.trim();
+    var grade  = document.getElementById('np-grade').value.trim();
+    var salary = parseFloat(document.getElementById('np-salary').value)||0;
+    var rpt    = document.getElementById('np-reports-to').value.trim();
+    if (!title) { toast('Position title required.','error'); return; }
+    var btn = this; btn.disabled=true; btn.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
+    fetch('/api/hcm/positions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      credentials:'same-origin',
+      body:JSON.stringify({ title, position_code:code, department:dept, grade, budget_salary_cents:Math.round(salary*100), reports_to:rpt })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res){
+      if(res.ok){ $('#modal-new-position').modal('hide'); toast('Position created.','success'); setTimeout(function(){ window.location.reload(); },1400); }
+      else toast(res.data.message||'Failed.','error');
+    })
+    .catch(function(err){ toast('Network error: '+err.message,'error'); })
+    .finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fa fa-save"></i> Create Position'; });
+  });
+
+  /* ── Init ── */
+  renderOrgChart();
+
+}());
+</script>
+{% endblock %}

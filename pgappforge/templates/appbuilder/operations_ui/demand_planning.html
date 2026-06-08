@@ -1,0 +1,431 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Demand Planning — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .forecast-controls {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--erp-shadow-sm);
+    margin-bottom: 24px;
+  }
+  .forecast-controls label {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .05em;
+    color: var(--erp-text-muted); margin-bottom: 5px; display: block;
+  }
+  .forecast-controls .form-control {
+    height: 34px; font-size: 13px;
+    border-color: var(--erp-border); border-radius: var(--erp-radius);
+  }
+  .forecast-controls .form-control:focus {
+    border-color: var(--erp-primary);
+    box-shadow: 0 0 0 3px rgba(26,86,219,.12); outline: none;
+  }
+
+  .metric-tile {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 16px 20px;
+    box-shadow: var(--erp-shadow-sm);
+    text-align: center;
+  }
+  .metric-tile-label {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--erp-text-muted); margin-bottom: 8px;
+  }
+  .metric-tile-value {
+    font-size: 32px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--erp-text); line-height: 1;
+  }
+  .metric-tile-unit {
+    font-size: 14px; font-weight: 400; color: var(--erp-text-muted);
+  }
+  .metric-tile-sub {
+    font-size: 11px; color: var(--erp-text-muted); margin-top: 6px;
+  }
+  .metric-good  { border-top: 3px solid var(--erp-success); }
+  .metric-warn  { border-top: 3px solid var(--erp-warning); }
+  .metric-bad   { border-top: 3px solid var(--erp-danger); }
+
+  .forecast-table-wrap {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    box-shadow: var(--erp-shadow-sm);
+    overflow: hidden;
+  }
+  .forecast-row-approved {
+    background: var(--erp-success-lt) !important;
+  }
+  .method-tag {
+    display: inline-block;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .method-ma   { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .method-hw   { background: #f3e8ff; color: #7c3aed; }
+
+  #forecast-chart-container canvas { max-height: 320px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-line-chart" style="color:var(--erp-primary);margin-right:8px;"></i>Demand Planning
+      </h1>
+      <p class="erp-page-subtitle">Statistical forecasting with MAPE / bias accuracy metrics.</p>
+    </div>
+    {% if selected_product %}
+    <div style="align-self:center;">
+      <span class="erp-badge erp-badge-blue">
+        <i class="fa fa-cube" style="margin-right:3px;"></i>{{ selected_product.name }}
+      </span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Forecast generation controls ────────────────────────────────────────── #}
+<div class="forecast-controls">
+  <h4 class="erp-chart-title" style="margin-bottom:14px;">
+    <i class="fa fa-sliders" style="color:var(--erp-primary);margin-right:6px;"></i>Generate Forecast
+  </h4>
+  <form id="forecast-form">
+    <div class="row">
+      <div class="col-sm-4">
+        <div class="form-group">
+          <label for="fp-product">Product</label>
+          <select id="fp-product" name="product_id" class="form-control" required>
+            <option value="">— select product —</option>
+            {% for p in products|default([]) %}
+            <option value="{{ p.id }}"
+              {% if selected_product and selected_product.id == p.id %}selected{% endif %}>
+              {{ p.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="col-sm-3">
+        <div class="form-group">
+          <label for="fp-method">Method</label>
+          <select id="fp-method" name="method" class="form-control">
+            <option value="MOVING_AVERAGE">Moving Average</option>
+            <option value="HOLT_WINTERS">Holt-Winters</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-sm-2">
+        <div class="form-group">
+          <label for="fp-periods">Horizon (periods)</label>
+          <select id="fp-periods" name="periods" class="form-control">
+            <option value="3">3</option>
+            <option value="6" selected>6</option>
+            <option value="12">12</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-sm-3" style="display:flex; align-items:flex-end; padding-bottom:16px; gap:8px;">
+        <button type="submit" id="generate-btn" class="btn btn-primary">
+          <i class="fa fa-calculator"></i> Generate
+        </button>
+        <button type="button" id="approve-btn" class="btn btn-success"
+                style="display:none;" disabled>
+          <i class="fa fa-check-circle"></i> Approve
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{# ── Accuracy metrics ────────────────────────────────────────────────────── #}
+{% if forecasts %}
+<div class="row erp-mb-24">
+  <div class="col-sm-3">
+    <div class="metric-tile {% if forecasts[0].mape_pct is defined %}
+      {% if forecasts[0].mape_pct < 10 %}metric-good{% elif forecasts[0].mape_pct < 20 %}metric-warn{% else %}metric-bad{% endif %}
+    {% endif %}">
+      <div class="metric-tile-label">MAPE</div>
+      <div class="metric-tile-value">
+        {{ '%.1f'|format(forecasts[0].mape_pct|default(0)) }}<span class="metric-tile-unit">%</span>
+      </div>
+      <div class="metric-tile-sub">Mean Abs. Percentage Error</div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="metric-tile {% if forecasts[0].bias_pct is defined %}
+      {% if forecasts[0].bias_pct|abs < 5 %}metric-good{% elif forecasts[0].bias_pct|abs < 15 %}metric-warn{% else %}metric-bad{% endif %}
+    {% endif %}">
+      <div class="metric-tile-label">Bias</div>
+      <div class="metric-tile-value">
+        {{ '%.1f'|format(forecasts[0].bias_pct|default(0)) }}<span class="metric-tile-unit">%</span>
+      </div>
+      <div class="metric-tile-sub">Forecast Bias</div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="metric-tile">
+      <div class="metric-tile-label">Method</div>
+      <div class="metric-tile-value" style="font-size:18px; padding-top:6px;">
+        {{ forecasts[0].method|default('—') }}
+      </div>
+      <div class="metric-tile-sub">Forecasting model used</div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="metric-tile">
+      <div class="metric-tile-label">Status</div>
+      <div class="metric-tile-value" style="font-size:18px; padding-top:6px;">
+        {% if forecasts[0].approved %}
+        <span style="color:var(--erp-success);font-size:14px;"><i class="fa fa-check-circle"></i> Approved</span>
+        {% else %}
+        <span style="color:var(--erp-warning);font-size:14px;"><i class="fa fa-clock-o"></i> Draft</span>
+        {% endif %}
+      </div>
+      <div class="metric-tile-sub">{{ forecasts[0].approved_by|default('Pending approval') }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Forecast Chart ──────────────────────────────────────────────────────── #}
+<div class="erp-chart-wrap erp-mb-24" id="forecast-chart-container">
+  <div class="erp-flex" style="justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+    <h4 class="erp-chart-title erp-mb-0">
+      Demand History &amp; Forecast
+      {% if selected_product %}&mdash; {{ selected_product.name }}{% endif %}
+    </h4>
+    <div class="erp-flex erp-gap-8" style="font-size:12px; color:var(--erp-text-muted);">
+      <span style="display:flex;align-items:center;gap:4px;">
+        <span style="display:inline-block;width:16px;height:3px;background:#1a56db;border-radius:2px;"></span> Actual
+      </span>
+      <span style="display:flex;align-items:center;gap:4px;">
+        <span style="display:inline-block;width:16px;height:3px;background:#0e9f6e;border-radius:2px;border-top:2px dashed #0e9f6e;background:none;"></span> Forecast
+      </span>
+    </div>
+  </div>
+  {% if chart_data %}
+  <div data-island="demandForecastChart" class="erp-island">
+    <canvas id="forecast-canvas" height="80" aria-label="Demand forecast chart" role="img"></canvas>
+  </div>
+  {% else %}
+  <div style="height:200px; display:flex; align-items:center; justify-content:center; color:var(--erp-text-muted);">
+    <div style="text-align:center;">
+      <i class="fa fa-line-chart" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px;"></i>
+      Select a product and click Generate to view forecast.
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Forecasts table ─────────────────────────────────────────────────────── #}
+{% if forecasts %}
+<div class="forecast-table-wrap erp-mb-24">
+  <div style="padding:14px 18px; border-bottom:1px solid var(--erp-border); display:flex; align-items:center; justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0">Forecast Periods</h4>
+    <span class="erp-badge erp-badge-gray">{{ forecasts|length }} periods</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th>Product</th>
+          <th>Method</th>
+          <th style="text-align:right;">Forecast Qty</th>
+          <th style="text-align:right;">MAPE %</th>
+          <th style="text-align:right;">Bias %</th>
+          <th>Status</th>
+          <th style="text-align:right;">Generated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in forecasts %}
+        <tr {% if f.approved %}class="forecast-row-approved"{% endif %}>
+          <td style="font-weight:600;">{{ f.period_label }}</td>
+          <td>{{ f.product_name or f.product_id }}</td>
+          <td>
+            <span class="method-tag {% if f.method == 'MOVING_AVERAGE' %}method-ma{% else %}method-hw{% endif %}">
+              {{ f.method }}
+            </span>
+          </td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums; font-weight:600;">
+            {{ f.forecast_qty | default(0) }}
+          </td>
+          <td style="text-align:right;">{{ '%.1f'|format(f.mape_pct|default(0)) }}%</td>
+          <td style="text-align:right;">
+            <span style="color:{% if f.bias_pct|default(0) > 0 %}var(--erp-warning){% elif f.bias_pct|default(0) < 0 %}var(--erp-danger){% else %}var(--erp-success){% endif %};">
+              {{ '%+.1f'|format(f.bias_pct|default(0)) }}%
+            </span>
+          </td>
+          <td>
+            {% if f.approved %}
+            <span class="erp-badge erp-badge-green">Approved</span>
+            {% else %}
+            <span class="erp-badge erp-badge-yellow">Draft</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right; font-size:11px; color:var(--erp-text-muted);">{{ f.generated_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Server-provided chart data — no Date() calls */
+var CHART_DATA = {{ chart_data | tojson if chart_data else 'null' }};
+var FORECAST_ID = {{ forecasts[0].id | tojson if forecasts else 'null' }};
+</script>
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* ── Demand forecast chart island ──────────────────────────────────── */
+  ERPIslands.register('demandForecastChart', ['chartjs'], function (el) {
+    if (!CHART_DATA) return;
+    var canvas = el.querySelector('#forecast-canvas');
+    if (!canvas) return;
+
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: CHART_DATA.labels,
+        datasets: [
+          {
+            label:           'Actual',
+            data:            CHART_DATA.actual,
+            borderColor:     '#1a56db',
+            backgroundColor: 'rgba(26,86,219,.08)',
+            borderWidth:     2,
+            pointRadius:     3,
+            fill:            true,
+            tension:         0.3
+          },
+          {
+            label:           'Forecast',
+            data:            CHART_DATA.forecast,
+            borderColor:     '#0e9f6e',
+            backgroundColor: 'rgba(14,159,110,.06)',
+            borderWidth:     2,
+            borderDash:      [6, 3],
+            pointRadius:     4,
+            pointStyle:      'triangle',
+            fill:            true,
+            tension:         0.3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString();
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(0,0,0,.04)' },
+            ticks: { callback: function (v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  });
+
+  /* ── Generate forecast ─────────────────────────────────────────────── */
+  var generateBtn = document.getElementById('generate-btn');
+  var approveBtn  = document.getElementById('approve-btn');
+  var forecastForm = document.getElementById('forecast-form');
+
+  forecastForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var productId = document.getElementById('fp-product').value;
+    var method    = document.getElementById('fp-method').value;
+    var periods   = parseInt(document.getElementById('fp-periods').value, 10);
+    if (!productId) { alert('Select a product.'); return; }
+
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Generating…';
+
+    _post('/api/demand_planning/forecast', { product_id: productId, method: method, periods: periods })
+      .then(function (data) {
+        /* Reload page to display new forecast */
+        window.location.href = window.location.pathname + '?product_id=' + encodeURIComponent(productId);
+      })
+      .catch(function (err) {
+        alert('Forecast failed: ' + err.message);
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fa fa-calculator"></i> Generate';
+      });
+  });
+
+  /* ── Approve forecast ──────────────────────────────────────────────── */
+  if (approveBtn) {
+    approveBtn.style.display = FORECAST_ID ? '' : 'none';
+    if (FORECAST_ID) {
+      approveBtn.disabled = false;
+      approveBtn.addEventListener('click', function () {
+        if (!confirm('Approve this forecast? It will be used for procurement planning.')) return;
+        approveBtn.disabled = true;
+        approveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Approving…';
+        _post('/api/demand_planning/approve', { forecast_id: FORECAST_ID })
+          .then(function () { window.location.reload(); })
+          .catch(function (err) {
+            alert('Approve failed: ' + err.message);
+            approveBtn.disabled = false;
+            approveBtn.innerHTML = '<i class="fa fa-check-circle"></i> Approve';
+          });
+      });
+    }
+  }
+
+  /* Show approve button if we have forecasts */
+  if (FORECAST_ID && approveBtn) {
+    approveBtn.style.display = '';
+    approveBtn.disabled = false;
+  }
+}());
+</script>
+{% endblock %}

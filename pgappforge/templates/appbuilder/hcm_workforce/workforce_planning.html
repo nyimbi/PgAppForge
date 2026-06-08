@@ -1,0 +1,514 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Workforce Planning — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Plan header strip ── */
+  .wp-header-strip {
+    background:linear-gradient(135deg,#0f2d5e 0%,#1a56db 100%);
+    color:#fff; border-radius:10px; padding:20px 24px; margin-bottom:24px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+  }
+  .wp-header-strip h2 { margin:0 0 2px; font-size:16px; font-weight:700; }
+  .wp-header-strip .sub { font-size:12px; opacity:.75; margin:0; }
+  .wp-strip-kpis { display:flex; gap:28px; flex-wrap:wrap; }
+  .wp-strip-kpi .lbl { font-size:10px; opacity:.7; text-transform:uppercase; letter-spacing:.5px; margin:0 0 2px; }
+  .wp-strip-kpi .val { font-size:20px; font-weight:800; margin:0; font-variant-numeric:tabular-nums; }
+  .wp-strip-kpi .sub2 { font-size:10px; opacity:.6; margin:0; }
+
+  /* ── Plan status badge ── */
+  .plan-status { font-size:11px; font-weight:700; padding:3px 10px; border-radius:10px; }
+  .plan-DRAFT      { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.3); }
+  .plan-SUBMITTED  { background:#fef3c7; color:#92400e; }
+  .plan-APPROVED   { background:#d1fae5; color:#065f46; }
+  .plan-REJECTED   { background:#fee2e2; color:#991b1b; }
+
+  /* ── KPI row ── */
+  .wp-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .wp-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; position:relative; overflow:hidden; }
+  .wp-kpi::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:8px 0 0 8px; background:var(--ta,#1a56db); }
+  .wp-kpi .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 3px; }
+  .wp-kpi .val { font-size:22px; font-weight:800; color:#111827; margin:0; line-height:1.1; }
+  .wp-kpi .sub { font-size:11px; color:#9ca3af; margin:2px 0 0; }
+
+  /* ── Position change type badges ── */
+  .pct { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap; }
+  .pct-NEW      { background:#dbeafe; color:#1e40af; }
+  .pct-BACKFILL { background:#fef3c7; color:#92400e; }
+  .pct-EXISTING { background:#f3f4f6; color:#374151; }
+  .pct-ELIMINATE{ background:#fee2e2; color:#991b1b; }
+
+  /* ── Scenario cards ── */
+  .scenario-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:24px; }
+  .scenario-card {
+    background:#fff; border:2px solid #e5e7eb; border-radius:10px; padding:16px 18px;
+    cursor:pointer; transition:border-color .15s, box-shadow .15s;
+  }
+  .scenario-card:hover { border-color:#c7d2fe; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .scenario-card.selected-scenario { border-color:#1a56db; box-shadow:0 0 0 3px rgba(26,86,219,.12); }
+  .scenario-card .s-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; }
+  .scenario-card .s-fte   { font-size:24px; font-weight:800; color:#111827; margin:0 0 2px; }
+  .scenario-card .s-cost  { font-size:13px; font-weight:700; color:#1a56db; margin:0 0 4px; }
+  .scenario-card .s-delta { font-size:11px; font-weight:600; padding:2px 6px; border-radius:6px; }
+  .scenario-card .s-delta.up   { background:#d1fae5; color:#065f46; }
+  .scenario-card .s-delta.down { background:#fee2e2; color:#991b1b; }
+
+  /* ── Chart ── */
+  .wp-chart-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .wp-chart-title { font-size:14px; font-weight:700; color:#111827; margin:0 0 14px; }
+
+  /* ── Toast ── */
+  .wp-toasts { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .wp-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .wp-toast.success { border-left:4px solid #10b981; }
+  .wp-toast.error   { border-left:4px solid #ef4444; }
+  .wp-toast.info    { border-left:4px solid #1a56db; }
+
+  /* tabular numbers */
+  .tabnum { font-family:monospace; font-variant-numeric:tabular-nums; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-area-chart"></i> Workforce Planning
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Headcount planning · Position budgets · Scenario modelling</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-default btn-sm" onclick="window.location='/hcm/workforce/export'">
+      <i class="fa fa-download"></i> Export Plan
+    </button>
+    {% if plan and plan.status in ['DRAFT','SUBMITTED'] %}
+    <button class="btn btn-success btn-sm" id="btn-approve-plan" data-plan-id="{{ plan.id | default('') }}" style="font-weight:600;">
+      <i class="fa fa-check"></i> Approve Plan
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Plan header strip ── #}
+{% if plan %}
+<div class="wp-header-strip">
+  <div>
+    <h2>
+      {{ plan.entity_name | default('Organisation') }} — {{ plan.plan_year | default('FY Plan') }}
+      <span class="plan-status plan-{{ plan.status | default('DRAFT') }}" style="margin-left:10px; vertical-align:middle;">{{ plan.status | default('DRAFT') }}</span>
+    </h2>
+    <p class="sub">Prepared by: {{ plan.prepared_by | default('—') }} &bull; Last updated: {{ plan.updated_at | default('—') }}</p>
+  </div>
+  <div class="wp-strip-kpis">
+    <div class="wp-strip-kpi">
+      <p class="lbl">Total FTE</p>
+      <p class="val">{{ "{:,.1f}".format(plan.total_fte) if plan.total_fte else '—' }}</p>
+      <p class="sub2">planned headcount</p>
+    </div>
+    <div class="wp-strip-kpi">
+      <p class="lbl">Total Budget</p>
+      <p class="val">{{ "{:,.0f}".format(plan.total_budget_cents / 100) if plan.total_budget_cents else '—' }}</p>
+      <p class="sub2">annual personnel cost</p>
+    </div>
+    <div class="wp-strip-kpi">
+      <p class="lbl">New Positions</p>
+      <p class="val">{{ positions | selectattr('change_type','equalto','NEW') | list | length if positions else '—' }}</p>
+      <p class="sub2">net new roles</p>
+    </div>
+    <div class="wp-strip-kpi">
+      <p class="lbl">Backfills</p>
+      <p class="val">{{ positions | selectattr('change_type','equalto','BACKFILL') | list | length if positions else '—' }}</p>
+      <p class="sub2">replacement hires</p>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="erp-card" style="text-align:center; padding:32px; color:#9ca3af; margin-bottom:24px;">
+  <i class="fa fa-area-chart fa-2x" style="margin-bottom:8px; display:block;"></i>
+  No active workforce plan. <a href="/hcm/workforce/plans/new" class="btn btn-sm btn-primary" style="margin-left:10px;"><i class="fa fa-plus"></i> Create Plan</a>
+</div>
+{% endif %}
+
+{# ── KPI row ── #}
+{% set total_pos = positions | length if positions else 0 %}
+{% set new_pos   = positions | selectattr('change_type','equalto','NEW') | list | length if positions else 0 %}
+{% set backfills = positions | selectattr('change_type','equalto','BACKFILL') | list | length if positions else 0 %}
+{% set elim      = positions | selectattr('change_type','equalto','ELIMINATE') | list | length if positions else 0 %}
+<div class="wp-kpi-row">
+  <div class="wp-kpi" style="--ta:#1a56db;">
+    <p class="lbl">Total Positions</p>
+    <p class="val">{{ total_pos }}</p>
+    <p class="sub">in this plan</p>
+  </div>
+  <div class="wp-kpi" style="--ta:#10b981;">
+    <p class="lbl">New Roles</p>
+    <p class="val">{{ new_pos }}</p>
+    <p class="sub">headcount additions</p>
+  </div>
+  <div class="wp-kpi" style="--ta:#f59e0b;">
+    <p class="lbl">Backfills</p>
+    <p class="val">{{ backfills }}</p>
+    <p class="sub">replacements</p>
+  </div>
+  <div class="wp-kpi" style="--ta:#ef4444;">
+    <p class="lbl">Eliminations</p>
+    <p class="val">{{ elim }}</p>
+    <p class="sub">roles to remove</p>
+  </div>
+  <div class="wp-kpi" style="--ta:#7c3aed;">
+    <p class="lbl">Net HC Change</p>
+    <p class="val" style="color:{% if new_pos - elim >= 0 %}#10b981{% else %}#ef4444{% endif %};">
+      {{ '%+d' % (new_pos - elim) }}
+    </p>
+    <p class="sub">new minus eliminated</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Left: Headcount chart + Scenario comparison ── #}
+  <div class="col-md-5">
+
+    {# Department headcount chart #}
+    <div class="wp-chart-wrap erp-mb-16">
+      <p class="wp-chart-title"><i class="fa fa-bar-chart"></i> Headcount by Department</p>
+      <canvas id="dept-hc-chart" height="220"></canvas>
+    </div>
+
+    {# Scenario comparison #}
+    {% if scenarios %}
+    <h5 style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 10px;">Scenario Comparison</h5>
+    <div class="scenario-row" id="scenario-row">
+      {% for sc in scenarios %}
+      {% set is_base = loop.first %}
+      {% set base_fte  = scenarios[0].total_fte if scenarios else 0 %}
+      {% set base_cost = scenarios[0].total_cost_cents if scenarios else 0 %}
+      {% set delta_fte = sc.total_fte - base_fte if not loop.first and base_fte else 0 %}
+      <div class="scenario-card {% if loop.first %}selected-scenario{% endif %}" onclick="selectScenario(this, {{ sc | tojson }})" data-scenario-id="{{ sc.id | default(loop.index0) }}">
+        <p class="s-label">{{ sc.name | default('Scenario ' ~ loop.index) }}</p>
+        <p class="s-fte">{{ "{:,.1f}".format(sc.total_fte) if sc.total_fte else '—' }} FTE</p>
+        <p class="s-cost">{{ "{:,.0f}".format(sc.total_cost_cents / 100) if sc.total_cost_cents else '—' }}</p>
+        {% if not loop.first and delta_fte != 0 %}
+          <span class="s-delta {% if delta_fte > 0 %}up{% else %}down{% endif %}">{{ '%+.1f' % delta_fte }} FTE vs Base</span>
+        {% elif loop.first %}
+          <span class="s-delta" style="background:#e0e7ff;color:#3730a3;">Baseline</span>
+        {% endif %}
+        {% if sc.growth_rate is defined %}
+        <p style="font-size:11px; color:#9ca3af; margin:6px 0 0;">Growth rate: {{ sc.growth_rate }}%</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Scenario comparison bar chart #}
+    <div class="wp-chart-wrap erp-mb-16">
+      <p class="wp-chart-title"><i class="fa fa-columns"></i> Scenario FTE &amp; Cost</p>
+      <canvas id="scenario-chart" height="200"></canvas>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Right: Position breakdown table ── #}
+  <div class="col-md-7">
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:12px 16px; background:#fafafa; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <h5 style="margin:0; font-size:14px; font-weight:700; color:#111827;"><i class="fa fa-list"></i> Position Breakdown</h5>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="pos-search" class="form-control input-sm" placeholder="Search position…" style="width:170px;" oninput="filterPositions()">
+          <select id="pos-change-filter" class="form-control input-sm" style="width:120px;" onchange="filterPositions()">
+            <option value="">All Types</option>
+            <option value="NEW">New</option>
+            <option value="BACKFILL">Backfill</option>
+            <option value="EXISTING">Existing</option>
+            <option value="ELIMINATE">Eliminate</option>
+          </select>
+          <select id="pos-dept-filter" class="form-control input-sm" style="width:130px;" onchange="filterPositions()">
+            <option value="">All Depts</option>
+            {% set depts = positions | map(attribute='department') | unique | list if positions else [] %}
+            {% for dept in depts %}
+            <option value="{{ dept }}">{{ dept }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="erp-table" id="positions-table">
+          <thead>
+            <tr>
+              <th>Position</th>
+              <th>Department</th>
+              <th>Change Type</th>
+              <th style="text-align:center;">FTE</th>
+              <th style="text-align:right;">Annual Cost</th>
+              <th>Grade</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="positions-tbody">
+            {% if positions %}
+              {% for pos in positions %}
+              <tr id="pos-row-{{ pos.id }}"
+                  data-pchange="{{ pos.change_type | default('EXISTING') }}"
+                  data-pdept="{{ pos.department | default('') | lower }}"
+                  data-ptitle="{{ pos.title | default('') | lower ~ ' ' ~ (pos.position_code | default('') | lower) }}">
+                <td>
+                  <div style="font-weight:600; font-size:13px;">{{ pos.title }}</div>
+                  <div style="font-size:11px; color:#9ca3af; font-family:monospace;">{{ pos.position_code | default('') }}</div>
+                </td>
+                <td style="font-size:13px; color:#374151;">{{ pos.department | default('—') }}</td>
+                <td>
+                  <span class="pct pct-{{ pos.change_type | default('EXISTING') }}">
+                    {{ pos.change_type | default('EXISTING') }}
+                  </span>
+                </td>
+                <td style="text-align:center; font-weight:700; font-size:13px;">{{ pos.fte | default(1.0) }}</td>
+                <td style="text-align:right;" class="tabnum">
+                  {% if pos.annual_cost_cents %}
+                    {{ "{:,.0f}".format(pos.annual_cost_cents / 100) }}
+                  {% else %}—{% endif %}
+                </td>
+                <td style="font-size:12px; color:#6b7280; font-weight:600;">{{ pos.grade | default('—') }}</td>
+                <td>
+                  <a href="/hcm/workforce/positions/{{ pos.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="7" style="text-align:center; padding:40px; color:#9ca3af;">No positions in plan.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:10px 16px; background:#fafafa; border-top:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+        <span id="pos-count" style="font-size:12px; color:#9ca3af;"></span>
+        <span style="font-size:12px; font-weight:700; color:#111827;">
+          Total FTE: <span id="pos-total-fte">{{ "{:,.1f}".format(positions | sum(attribute='fte') | default(0)) if positions else '—' }}</span>
+          &nbsp;|&nbsp;
+          Total Cost: <span id="pos-total-cost" class="tabnum">
+            {% if positions %}
+              {{ "{:,.0f}".format(positions | selectattr('annual_cost_cents') | sum(attribute='annual_cost_cents') / 100) }}
+            {% else %}—{% endif %}
+          </span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Approve Plan Modal ── #}
+<div class="modal fade" id="modal-approve-plan" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;"><i class="fa fa-check" style="color:#10b981;"></i> Approve Workforce Plan</h4>
+      </div>
+      <div class="modal-body">
+        <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px 16px; font-size:13px; margin-bottom:14px;">
+          <strong style="color:#15803d;">You are approving plan:</strong>
+          {{ plan.plan_year if plan else '' }} — {{ plan.entity_name if plan else '' }}
+        </div>
+        <p style="font-size:13px; color:#374151;">
+          Approving locks the plan and triggers position requisition creation for all NEW and BACKFILL positions.
+        </p>
+        <div style="background:#fef9ec; border:1px solid #fde68a; border-radius:4px; padding:10px 14px; font-size:12px; color:#92400e;">
+          <i class="fa fa-exclamation-triangle"></i> This action cannot be undone.
+        </div>
+        <div class="form-group" style="margin-top:14px;">
+          <label style="font-size:12px; font-weight:600;">Approval Notes</label>
+          <textarea id="approval-notes" class="form-control" rows="2" placeholder="Optional approval notes…" style="resize:none; font-size:12px;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button class="btn btn-success" id="btn-approve-confirm" style="font-weight:600;">
+          <i class="fa fa-check"></i> Confirm Approval
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wp-toasts" id="wp-toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var POSITIONS = {{ positions | tojson if positions else '[]' }};
+  var SCENARIOS = {{ scenarios | tojson if scenarios else '[]' }};
+  var PLAN_ID   = '{{ plan.id if plan else "" }}';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('wp-toasts');
+    var el = document.createElement('div');
+    el.className = 'wp-toast ' + (type||'info');
+    var icon = type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function fmtK(v) {
+    if (v >= 1000000) return (v/1000000).toFixed(1)+'M';
+    if (v >= 1000) return (v/1000).toFixed(0)+'K';
+    return v.toString();
+  }
+
+  /* ── Position table filter ── */
+  window.filterPositions = function() {
+    var q      = (document.getElementById('pos-search').value||'').toLowerCase();
+    var change = (document.getElementById('pos-change-filter').value||'').toUpperCase();
+    var dept   = (document.getElementById('pos-dept-filter').value||'').toLowerCase();
+    var rows   = document.querySelectorAll('#positions-tbody tr[data-pchange]');
+    var count  = 0;
+    rows.forEach(function(row) {
+      var show =
+        (!q      || (row.getAttribute('data-ptitle')||'').indexOf(q) !== -1) &&
+        (!change || row.getAttribute('data-pchange') === change) &&
+        (!dept   || (row.getAttribute('data-pdept')||'').indexOf(dept) !== -1);
+      row.style.display = show ? '' : 'none';
+      if (show) count++;
+    });
+    var el = document.getElementById('pos-count');
+    if (el) el.textContent = count + ' of ' + rows.length + ' positions';
+  };
+  filterPositions();
+
+  /* ── Scenario selection ── */
+  window.selectScenario = function(card, sc) {
+    document.querySelectorAll('.scenario-card').forEach(function(c){ c.classList.remove('selected-scenario'); });
+    card.classList.add('selected-scenario');
+    toast('Scenario "' + (sc.name||'selected') + '" selected — ' + (sc.total_fte||'?') + ' FTE, ' + (sc.total_cost_cents ? fmtK(Math.round(sc.total_cost_cents/100)) : '?') + ' cost.', 'info');
+  };
+
+  /* ── Department headcount chart ── */
+  var deptData = {};
+  POSITIONS.forEach(function(p) {
+    var d = p.department || 'Other';
+    deptData[d] = (deptData[d]||0) + (p.fte||1);
+  });
+  var deptCtx = document.getElementById('dept-hc-chart');
+  if (deptCtx && Object.keys(deptData).length) {
+    var depts  = Object.keys(deptData).sort(function(a,b){ return deptData[b]-deptData[a]; });
+    var ftesD  = depts.map(function(d){ return +deptData[d].toFixed(1); });
+    var colors = ['#1a56db','#7c3aed','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16'];
+    new Chart(deptCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: depts,
+        datasets: [{
+          label: 'Planned FTE',
+          data: ftesD,
+          backgroundColor: depts.map(function(_,i){ return colors[i % colors.length]; }),
+          borderRadius: 5,
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend:{ display:false } },
+        scales: {
+          x: { beginAtZero:true, ticks:{ font:{ size:11 } } },
+          y: { ticks:{ font:{ size:11 } } }
+        }
+      }
+    });
+  }
+
+  /* ── Scenario chart ── */
+  var scCtx = document.getElementById('scenario-chart');
+  if (scCtx && SCENARIOS.length) {
+    new Chart(scCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: SCENARIOS.map(function(sc){ return sc.name||'Scenario'; }),
+        datasets: [
+          {
+            label: 'FTE',
+            data: SCENARIOS.map(function(sc){ return sc.total_fte||0; }),
+            backgroundColor: ['#1a56db','#10b981','#f59e0b','#7c3aed'],
+            borderRadius: 5,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Cost (000s)',
+            data: SCENARIOS.map(function(sc){ return sc.total_cost_cents ? Math.round(sc.total_cost_cents/100000) : 0; }),
+            type: 'line',
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239,68,68,.1)',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 5,
+            yAxisID: 'y2'
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend:{ position:'top', labels:{ font:{ size:11 } } } },
+        scales: {
+          y:  { beginAtZero:true, ticks:{ font:{ size:11 } }, title:{ display:true, text:'FTE', font:{ size:10 } } },
+          y2: { position:'right', beginAtZero:true, ticks:{ font:{ size:11 } }, title:{ display:true, text:'Cost (000s)', font:{ size:10 } }, grid:{ drawOnChartArea:false } }
+        }
+      }
+    });
+  }
+
+  /* ── Approve plan ── */
+  var approveBtn = document.getElementById('btn-approve-plan');
+  if (approveBtn) {
+    approveBtn.addEventListener('click', function() {
+      $('#modal-approve-plan').modal('show');
+    });
+  }
+
+  var confirmBtn = document.getElementById('btn-approve-confirm');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function() {
+      var btn = this;
+      var notes = document.getElementById('approval-notes').value.trim();
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Approving…';
+
+      fetch('/api/hcm/workforce/plans/' + PLAN_ID + '/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+        credentials: 'same-origin',
+        body: JSON.stringify({ plan_id: PLAN_ID, notes: notes })
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+      .then(function(res) {
+        $('#modal-approve-plan').modal('hide');
+        if (res.ok) {
+          toast('Plan approved. Requisitions queued for new and backfill positions.', 'success');
+          setTimeout(function(){ window.location.reload(); }, 1800);
+        } else {
+          toast(res.data.message || 'Approval failed.', 'error');
+          btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Confirm Approval';
+        }
+      })
+      .catch(function(err){ toast('Network error: ' + err.message, 'error'); btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Confirm Approval'; });
+    });
+  }
+
+}());
+</script>
+{% endblock %}

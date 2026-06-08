@@ -1,0 +1,529 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Employee Journeys — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Journey type badges ── */
+  .jtype { font-size:10px; font-weight:700; padding:2px 9px; border-radius:10px; white-space:nowrap; }
+  .jtype-ONBOARDING   { background:#d1fae5; color:#065f46; }
+  .jtype-OFFBOARDING  { background:#fee2e2; color:#991b1b; }
+  .jtype-TRANSITION   { background:#dbeafe; color:#1e40af; }
+  .jtype-LEAVE_RETURN { background:#f3e8ff; color:#6b21a8; }
+  .jtype-REHIRE       { background:#fef3c7; color:#92400e; }
+
+  /* ── Journey list ── */
+  .jny-list { display:flex; flex-direction:column; gap:8px; }
+  .jny-item {
+    background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px;
+    cursor:pointer; transition:box-shadow .12s, border-color .12s;
+    display:flex; align-items:center; gap:12px;
+  }
+  .jny-item:hover { box-shadow:0 2px 8px rgba(0,0,0,.07); border-color:#c7d2fe; }
+  .jny-item.active-jny { border-color:#1a56db; box-shadow:0 0 0 2px rgba(26,86,219,.12); background:#f0f4ff; }
+  .jny-avatar { width:36px; height:36px; border-radius:50%; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .jny-body { flex:1; min-width:0; }
+  .jny-name { font-size:13px; font-weight:700; color:#111827; margin:0 0 2px; }
+  .jny-meta { font-size:11px; color:#9ca3af; margin:0; }
+  .jny-pct-wrap { width:90px; flex-shrink:0; }
+  .jny-pct-bar-bg { height:5px; background:#e5e7eb; border-radius:3px; overflow:hidden; }
+  .jny-pct-bar { height:100%; border-radius:3px; transition:width .4s; }
+  .jny-pct-lbl { font-size:10px; color:#6b7280; text-align:right; margin-top:2px; }
+
+  /* ── Task list ── */
+  .task-item {
+    border-radius:8px; padding:11px 14px; margin-bottom:6px;
+    background:#fff; border:1px solid #e5e7eb;
+    display:flex; align-items:flex-start; gap:10px;
+    transition:background .1s;
+  }
+  .task-item.completed-task { background:#f8fafb; opacity:.7; }
+  .task-item.dep-indent { margin-left:24px; border-left:3px solid #e0e7ff; }
+  .task-cat-icon { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+  .cat-IT        { background:#dbeafe; color:#1e40af; }
+  .cat-HR        { background:#d1fae5; color:#065f46; }
+  .cat-FINANCE   { background:#fef3c7; color:#92400e; }
+  .cat-LEGAL     { background:#fee2e2; color:#991b1b; }
+  .cat-FACILITIES{ background:#f3e8ff; color:#6b21a8; }
+  .cat-MANAGER   { background:#e0f2fe; color:#0369a1; }
+  .cat-OTHER     { background:#f3f4f6; color:#6b7280; }
+
+  .task-body { flex:1; min-width:0; }
+  .task-title { font-size:13px; font-weight:600; color:#111827; margin:0 0 2px; }
+  .task-meta  { font-size:11px; color:#9ca3af; margin:0; }
+  .task-status { font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px; white-space:nowrap; flex-shrink:0; }
+  .ts-TODO        { background:#f3f4f6; color:#6b7280; }
+  .ts-IN_PROGRESS { background:#dbeafe; color:#1e40af; }
+  .ts-DONE        { background:#d1fae5; color:#065f46; }
+  .ts-BLOCKED     { background:#fee2e2; color:#991b1b; }
+  .ts-SKIPPED     { background:#f3f4f6; color:#9ca3af; }
+
+  /* ── Start journey form ── */
+  .start-jny-card { background:#f0f4ff; border:1px solid #c7d2fe; border-radius:10px; padding:18px 20px; }
+
+  /* ── Layout ── */
+  .jny-layout { display:grid; grid-template-columns:300px 1fr; gap:20px; align-items:start; }
+  @media(max-width:900px){ .jny-layout { grid-template-columns:1fr; } }
+
+  .jny-left { position:sticky; top:72px; }
+
+  /* ── Toast ── */
+  .jny-toasts { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .jny-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .jny-toast.success { border-left:4px solid #10b981; }
+  .jny-toast.error   { border-left:4px solid #ef4444; }
+
+  /* ── KPI ── */
+  .jny-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+  .jny-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:12px 15px; }
+  .jny-kpi .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 2px; }
+  .jny-kpi .val { font-size:22px; font-weight:800; color:#111827; margin:0; line-height:1.1; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-map-signs"></i> Employee Journeys
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Onboarding · Offboarding · Transitions · Task orchestration</p>
+  </div>
+  <button class="btn btn-primary btn-sm" onclick="scrollToStart()">
+    <i class="fa fa-play-circle"></i> Start Journey
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI strip ── #}
+{% set active_count = journeys | selectattr('status','ne','COMPLETED') | list | length if journeys else 0 %}
+{% set completed_count = journeys | selectattr('status','equalto','COMPLETED') | list | length if journeys else 0 %}
+{% set onboarding_count = journeys | selectattr('journey_type','equalto','ONBOARDING') | list | length if journeys else 0 %}
+{% set offboarding_count = journeys | selectattr('journey_type','equalto','OFFBOARDING') | list | length if journeys else 0 %}
+<div class="jny-kpi-row">
+  <div class="jny-kpi"><p class="lbl">Active Journeys</p><p class="val" style="color:#1a56db;">{{ active_count }}</p></div>
+  <div class="jny-kpi"><p class="lbl">Completed</p><p class="val" style="color:#10b981;">{{ completed_count }}</p></div>
+  <div class="jny-kpi"><p class="lbl">Onboarding</p><p class="val">{{ onboarding_count }}</p></div>
+  <div class="jny-kpi"><p class="lbl">Offboarding</p><p class="val" style="color:#ef4444;">{{ offboarding_count }}</p></div>
+  <div class="jny-kpi"><p class="lbl">Overdue Tasks</p><p class="val" style="color:#f59e0b;">{{ overdue_task_count | default('—') }}</p></div>
+</div>
+
+<div class="jny-layout">
+
+  {# ── Left: journey list + start form ── #}
+  <div class="jny-left">
+
+    {# Search ── #}
+    <div style="margin-bottom:10px;">
+      <input type="text" id="jny-search" class="form-control input-sm" placeholder="Search employee…" oninput="filterJourneys()">
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+      <button class="btn btn-xs btn-default jny-type-filter active-filter" data-filter="" onclick="setJnyFilter(this,'')">All</button>
+      <button class="btn btn-xs btn-default jny-type-filter" data-filter="ONBOARDING" onclick="setJnyFilter(this,'ONBOARDING')">Onboarding</button>
+      <button class="btn btn-xs btn-default jny-type-filter" data-filter="OFFBOARDING" onclick="setJnyFilter(this,'OFFBOARDING')">Offboarding</button>
+    </div>
+
+    <div class="jny-list" id="jny-list">
+      {% if journeys %}
+        {% for j in journeys %}
+        {% set colors = {'ONBOARDING':'#d1fae5,#065f46','OFFBOARDING':'#fee2e2,#991b1b','TRANSITION':'#dbeafe,#1e40af','LEAVE_RETURN':'#f3e8ff,#6b21a8','REHIRE':'#fef3c7,#92400e'} %}
+        {% set bg_col = colors.get(j.journey_type, '#e0e7ff,#3730a3').split(',')[0] %}
+        {% set fg_col = colors.get(j.journey_type, '#e0e7ff,#3730a3').split(',')[1] %}
+        <div class="jny-item" id="jny-{{ j.id }}"
+             data-jid="{{ j.id }}"
+             data-jtype="{{ j.journey_type }}"
+             data-jname="{{ j.employee_name | lower }}"
+             onclick="loadJourney('{{ j.id }}')">
+          <div class="jny-avatar" style="background:{{ bg_col }}; color:{{ fg_col }};">
+            {{ j.employee_name[:2] | upper if j.employee_name else '??' }}
+          </div>
+          <div class="jny-body">
+            <p class="jny-name">{{ j.employee_name }}</p>
+            <p class="jny-meta">
+              <span class="jtype jtype-{{ j.journey_type }}">{{ j.journey_type | replace('_',' ') }}</span>
+              &nbsp;{{ j.trigger_date | default('') }}
+            </p>
+          </div>
+          <div class="jny-pct-wrap">
+            <div class="jny-pct-bar-bg">
+              <div class="jny-pct-bar"
+                   style="width:{{ j.completion_pct | default(0) | int }}%; background:{% if j.completion_pct and j.completion_pct >= 80 %}#10b981{% elif j.completion_pct and j.completion_pct >= 40 %}#f59e0b{% else %}#1a56db{% endif %};"></div>
+            </div>
+            <div class="jny-pct-lbl">{{ j.completion_pct | default(0) | int }}%</div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="text-align:center; padding:30px; color:#9ca3af; font-size:13px;">
+          <i class="fa fa-map-signs fa-2x" style="margin-bottom:8px; display:block;"></i>
+          No active journeys.
+        </div>
+      {% endif %}
+    </div>
+
+    {# ── Start Journey form ── #}
+    <div class="start-jny-card" id="start-journey-form" style="margin-top:16px;">
+      <h5 style="font-size:13px; font-weight:700; color:#1e3a8a; margin:0 0 12px;"><i class="fa fa-play-circle"></i> Start a New Journey</h5>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label style="font-size:11px; font-weight:600; color:#374151;">Employee</label>
+        <select id="start-employee" class="form-control input-sm">
+          <option value="">— select —</option>
+          {% for emp in employees | default([]) %}
+          <option value="{{ emp.id }}">{{ emp.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label style="font-size:11px; font-weight:600; color:#374151;">Journey Type</label>
+        <select id="start-type" class="form-control input-sm">
+          <option value="ONBOARDING">Onboarding</option>
+          <option value="OFFBOARDING">Offboarding</option>
+          <option value="TRANSITION">Role Transition</option>
+          <option value="LEAVE_RETURN">Leave Return</option>
+          <option value="REHIRE">Rehire</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label style="font-size:11px; font-weight:600; color:#374151;">Trigger Date</label>
+        <input type="date" id="start-trigger-date" class="form-control input-sm">
+      </div>
+      <button class="btn btn-primary btn-sm btn-block" id="btn-start-journey" style="font-weight:600;">
+        <i class="fa fa-play"></i> Start Journey
+      </button>
+    </div>
+
+  </div>
+
+  {# ── Right: journey detail ── #}
+  <div id="jny-detail">
+    <div style="text-align:center; padding:60px 30px; color:#9ca3af;" id="jny-empty-state">
+      <i class="fa fa-mouse-pointer fa-2x" style="margin-bottom:12px; display:block;"></i>
+      <strong style="color:#374151;">Select a journey</strong> from the list to view its task plan.
+    </div>
+
+    <div id="jny-detail-content" style="display:none;">
+
+      {# Journey header ── #}
+      <div class="erp-card" style="padding:16px 20px; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h4 style="margin:0 0 4px; font-size:16px; font-weight:700; color:#111827;" id="jd-employee-name">—</h4>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="jtype" id="jd-type-badge"></span>
+              <span style="font-size:12px; color:#6b7280;">Triggered: <strong id="jd-trigger-date">—</strong></span>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:22px; font-weight:800; color:#1a56db;" id="jd-completion-pct">0%</div>
+            <div style="font-size:11px; color:#9ca3af;">complete</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden;">
+            <div id="jd-progress-bar" style="height:100%; background:#1a56db; border-radius:4px; transition:width .5s;"></div>
+          </div>
+        </div>
+
+        {# Task category summary ── #}
+        <div id="jd-cat-summary" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;"></div>
+      </div>
+
+      {# Task list ── #}
+      <div class="erp-card" style="padding:0; overflow:hidden;">
+        <div style="padding:12px 16px; background:#fafafa; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <h5 style="margin:0; font-size:14px; font-weight:700; color:#111827;"><i class="fa fa-tasks"></i> Tasks</h5>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="task-filter-status" class="form-control input-sm" style="width:130px;" onchange="filterTasks()">
+              <option value="">All Statuses</option>
+              <option value="TODO">To Do</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="DONE">Done</option>
+              <option value="BLOCKED">Blocked</option>
+            </select>
+            <select id="task-filter-cat" class="form-control input-sm" style="width:120px;" onchange="filterTasks()">
+              <option value="">All Categories</option>
+              <option value="IT">IT</option>
+              <option value="HR">HR</option>
+              <option value="FINANCE">Finance</option>
+              <option value="LEGAL">Legal</option>
+              <option value="FACILITIES">Facilities</option>
+              <option value="MANAGER">Manager</option>
+            </select>
+          </div>
+        </div>
+        <div style="padding:14px 16px;" id="task-list-body">
+          <div style="text-align:center; padding:24px; color:#9ca3af;">Loading tasks…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div class="jny-toasts" id="jny-toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var JOURNEYS = {{ journeys | tojson if journeys else '[]' }};
+  var TASKS_BY_JOURNEY = {{ tasks | tojson if tasks else '{}' }};
+  var _activeJnyId = null;
+  var _jnyTypeFilter = '';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('jny-toasts');
+    var el = document.createElement('div');
+    el.className = 'jny-toast ' + (type || 'info');
+    var icon = type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  var CAT_ICONS = {
+    IT:'fa-laptop', HR:'fa-user', FINANCE:'fa-money', LEGAL:'fa-gavel',
+    FACILITIES:'fa-building-o', MANAGER:'fa-user-secret', OTHER:'fa-tasks'
+  };
+  var STATUS_LABEL = {
+    TODO:'To Do', IN_PROGRESS:'In Progress', DONE:'Done', BLOCKED:'Blocked', SKIPPED:'Skipped'
+  };
+  var TYPE_COLORS = {
+    ONBOARDING:'jtype-ONBOARDING', OFFBOARDING:'jtype-OFFBOARDING',
+    TRANSITION:'jtype-TRANSITION', LEAVE_RETURN:'jtype-LEAVE_RETURN', REHIRE:'jtype-REHIRE'
+  };
+
+  /* ── journey list filtering ── */
+  window.filterJourneys = function() {
+    var q = (document.getElementById('jny-search').value || '').toLowerCase();
+    document.querySelectorAll('#jny-list .jny-item').forEach(function(item) {
+      var name  = (item.getAttribute('data-jname') || '').toLowerCase();
+      var jtype = item.getAttribute('data-jtype') || '';
+      var show  = (!q || name.indexOf(q) !== -1) &&
+                  (!_jnyTypeFilter || jtype === _jnyTypeFilter);
+      item.style.display = show ? '' : 'none';
+    });
+  };
+
+  window.setJnyFilter = function(btn, type) {
+    document.querySelectorAll('.jny-type-filter').forEach(function(b){ b.classList.remove('active-filter','btn-primary'); b.classList.add('btn-default'); });
+    btn.classList.add('active-filter','btn-primary'); btn.classList.remove('btn-default');
+    _jnyTypeFilter = type;
+    filterJourneys();
+  };
+
+  /* ── load journey detail ── */
+  window.loadJourney = function(jnyId) {
+    /* highlight selected */
+    document.querySelectorAll('.jny-item').forEach(function(i){ i.classList.remove('active-jny'); });
+    var item = document.getElementById('jny-' + jnyId);
+    if (item) item.classList.add('active-jny');
+    _activeJnyId = jnyId;
+
+    /* find in JOURNEYS array */
+    var jny = null;
+    for (var i=0; i<JOURNEYS.length; i++) { if (String(JOURNEYS[i].id) === String(jnyId)) { jny = JOURNEYS[i]; break; } }
+    if (!jny) { fetchAndRenderJourney(jnyId); return; }
+
+    renderJourneyHeader(jny);
+    var tasks = TASKS_BY_JOURNEY[jnyId] || [];
+    renderTasks(tasks);
+  };
+
+  function fetchAndRenderJourney(jnyId) {
+    document.getElementById('jny-empty-state').style.display = 'none';
+    document.getElementById('jny-detail-content').style.display = '';
+    document.getElementById('task-list-body').innerHTML = '<div style="text-align:center;padding:24px;"><i class="fa fa-spinner fa-spin fa-2x"></i></div>';
+
+    fetch('/api/hcm/journeys/' + jnyId, { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      renderJourneyHeader(data.journey || data);
+      renderTasks(data.tasks || []);
+    })
+    .catch(function(err){ toast('Failed to load journey: ' + err.message, 'error'); });
+  }
+
+  function renderJourneyHeader(jny) {
+    document.getElementById('jny-empty-state').style.display = 'none';
+    document.getElementById('jny-detail-content').style.display = '';
+
+    document.getElementById('jd-employee-name').textContent = jny.employee_name || '—';
+    var typeBadge = document.getElementById('jd-type-badge');
+    typeBadge.textContent = (jny.journey_type || '').replace(/_/g,' ');
+    typeBadge.className   = 'jtype ' + (TYPE_COLORS[jny.journey_type] || '');
+    document.getElementById('jd-trigger-date').textContent = jny.trigger_date || '—';
+    var pct = jny.completion_pct || 0;
+    document.getElementById('jd-completion-pct').textContent = Math.round(pct) + '%';
+    document.getElementById('jd-progress-bar').style.width = Math.min(100, Math.round(pct)) + '%';
+    document.getElementById('jd-progress-bar').style.background = pct >= 80 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#1a56db';
+  }
+
+  function renderTasks(tasks) {
+    var body = document.getElementById('task-list-body');
+    var catSummary = document.getElementById('jd-cat-summary');
+
+    if (!tasks.length) {
+      body.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;">No tasks in this journey.</div>';
+      catSummary.innerHTML = '';
+      return;
+    }
+
+    /* category summary pills */
+    var catCounts = {};
+    tasks.forEach(function(t){ catCounts[t.category||'OTHER'] = (catCounts[t.category||'OTHER']||0)+1; });
+    catSummary.innerHTML = Object.keys(catCounts).map(function(cat){
+      return '<span class="task-cat-icon ' + 'cat-' + cat + '" style="font-size:11px;padding:3px 9px;border-radius:10px;display:inline-flex;align-items:center;gap:4px;">' +
+             '<i class="fa ' + (CAT_ICONS[cat]||'fa-tasks') + '"></i> ' + cat + ' <span style="font-weight:700;">' + catCounts[cat] + '</span></span>';
+    }).join('');
+
+    body.setAttribute('data-tasks', JSON.stringify(tasks));
+    renderFilteredTasks(tasks);
+  }
+
+  window.filterTasks = function() {
+    var tasksJson = document.getElementById('task-list-body').getAttribute('data-tasks');
+    if (!tasksJson) return;
+    renderFilteredTasks(JSON.parse(tasksJson));
+  };
+
+  function renderFilteredTasks(tasks) {
+    var statusF = (document.getElementById('task-filter-status').value || '');
+    var catF    = (document.getElementById('task-filter-cat').value || '');
+    var body    = document.getElementById('task-list-body');
+
+    /* build dependency map */
+    var taskMap = {};
+    tasks.forEach(function(t){ taskMap[t.id] = t; });
+
+    var filtered = tasks.filter(function(t){
+      return (!statusF || t.status === statusF) && (!catF || t.category === catF);
+    });
+
+    if (!filtered.length) {
+      body.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af;">No tasks match the filter.</div>';
+      return;
+    }
+
+    body.innerHTML = filtered.map(function(t) {
+      var isDep  = !!t.depends_on_id;
+      var isDone = t.status === 'DONE';
+      var icon   = CAT_ICONS[t.category||'OTHER'] || 'fa-tasks';
+      var statusCls = 'ts-' + (t.status||'TODO');
+
+      return '<div class="task-item ' + (isDone ? 'completed-task' : '') + (isDep ? ' dep-indent' : '') + '" id="task-item-' + t.id + '" data-tstatus="' + (t.status||'TODO') + '" data-tcat="' + (t.category||'OTHER') + '">' +
+        '<div class="task-cat-icon cat-' + (t.category||'OTHER') + '"><i class="fa ' + icon + '"></i></div>' +
+        '<div class="task-body">' +
+          '<p class="task-title">' + (isDone ? '<s>' : '') + _esc(t.title) + (isDone ? '</s>' : '') + '</p>' +
+          '<p class="task-meta">' +
+            '<i class="fa fa-user-o" style="margin-right:3px;"></i>' + _esc(t.owner_role||'—') +
+            (t.due_date ? ' &bull; Due: <strong>' + _esc(t.due_date) + '</strong>' : '') +
+            (isDep ? ' &bull; <i class="fa fa-link" title="depends on #' + _esc(t.depends_on_id) + '"></i> Dependent' : '') +
+          '</p>' +
+        '</div>' +
+        '<span class="task-status ' + statusCls + '">' + _esc(STATUS_LABEL[t.status]||t.status||'Todo') + '</span>' +
+        (t.status === 'IN_PROGRESS' ?
+          '<button class="btn btn-xs btn-success btn-mark-done" data-task-id="' + t.id + '" style="flex-shrink:0;"><i class="fa fa-check"></i> Done</button>'
+          : '') +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── mark task complete ── */
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-mark-done');
+    if (!btn) return;
+    var taskId = btn.getAttribute('data-task-id');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/hcm/journeys/tasks/' + taskId + '/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin'
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        var item = document.getElementById('task-item-' + taskId);
+        if (item) {
+          item.setAttribute('data-tstatus','DONE');
+          item.classList.add('completed-task');
+          var badge = item.querySelector('.task-status');
+          if (badge) { badge.className='task-status ts-DONE'; badge.textContent='Done'; }
+          btn.remove();
+        }
+        toast('Task marked complete.', 'success');
+        /* refresh journey progress */
+        if (_activeJnyId) fetchAndRenderJourney(_activeJnyId);
+      } else {
+        toast(res.data.message || 'Could not complete task.', 'error');
+        btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Done';
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Done'; });
+  });
+
+  /* ── start journey ── */
+  window.scrollToStart = function() {
+    document.getElementById('start-journey-form').scrollIntoView({ behavior:'smooth' });
+  };
+
+  document.getElementById('btn-start-journey').addEventListener('click', function() {
+    var empId   = document.getElementById('start-employee').value;
+    var jtype   = document.getElementById('start-type').value;
+    var trigger = document.getElementById('start-trigger-date').value;
+    if (!empId)   { toast('Select an employee.', 'error'); return; }
+    if (!trigger) { toast('Set a trigger date.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Starting…';
+
+    fetch('/api/hcm/journeys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ employee_id: empId, journey_type: jtype, trigger_date: trigger })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        toast('Journey started!', 'success');
+        setTimeout(function(){ window.location.reload(); }, 1400);
+      } else {
+        toast(res.data.message || 'Failed to start journey.', 'error');
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); })
+    .finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fa fa-play"></i> Start Journey'; });
+  });
+
+  /* ── pre-load selected journey from URL hash ── */
+  (function() {
+    var hash = window.location.hash.replace('#','');
+    if (hash && hash.startsWith('journey-')) {
+      var id = hash.replace('journey-','');
+      setTimeout(function(){ loadJourney(id); }, 100);
+    } else if (JOURNEYS.length && JOURNEYS[0]) {
+      setTimeout(function(){ loadJourney(JOURNEYS[0].id); }, 100);
+    }
+  })();
+
+}());
+</script>
+{% endblock %}

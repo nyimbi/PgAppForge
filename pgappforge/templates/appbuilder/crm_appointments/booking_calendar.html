@@ -1,0 +1,244 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Appointment Booking — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cal-wrap { overflow-x:auto; background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--erp-radius-lg); box-shadow:var(--erp-shadow-sm); margin-bottom:24px; }
+  .cal-grid { display:grid; min-width:700px; }
+  .cal-header-row { display:flex; background:var(--erp-neutral-lt); border-bottom:2px solid var(--erp-border); border-radius:var(--erp-radius-lg) var(--erp-radius-lg) 0 0; }
+  .cal-corner { flex:0 0 120px; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--erp-text-muted); border-right:1px solid var(--erp-border); }
+  .cal-time-col { flex:0 0 60px; border-right:1px solid var(--erp-border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--erp-text-muted); padding:0; }
+  .cal-staff-header { flex:1; text-align:center; padding:8px 4px; font-size:12px; font-weight:700; color:var(--erp-text); border-right:1px solid var(--erp-border); }
+  .cal-staff-header:last-child { border-right:none; }
+  .cal-body-row { display:flex; border-bottom:1px solid var(--erp-border); min-height:40px; }
+  .cal-body-row:last-child { border-bottom:none; }
+  .cal-body-row:hover { background:#fafafa; }
+  .cal-time-label { flex:0 0 120px; padding:10px 12px; font-size:11px; color:var(--erp-text-muted); font-weight:500; border-right:1px solid var(--erp-border); white-space:nowrap; }
+  .cal-slot { flex:1; border-right:1px solid var(--erp-border); min-height:40px; padding:3px; position:relative; cursor:pointer; transition:background var(--erp-transition); }
+  .cal-slot:last-child { border-right:none; }
+  .cal-slot-avail  { background:rgba(14,159,110,.08); }
+  .cal-slot-avail:hover  { background:rgba(14,159,110,.18); }
+  .cal-slot-booked { background:rgba(26,86,219,.10); cursor:default; }
+  .cal-slot-blocked{ background:var(--erp-neutral-lt); cursor:not-allowed; }
+  .cal-slot-label { font-size:10px; font-weight:600; padding:2px 4px; border-radius:3px; line-height:1.3; }
+  .cal-slot-avail .cal-slot-label   { color:var(--erp-success); }
+  .cal-slot-booked .cal-slot-label  { color:var(--erp-primary); }
+  .cal-slot-blocked .cal-slot-label { color:var(--erp-text-muted); }
+  .cal-legend { display:flex; gap:16px; padding:10px 16px; border-top:1px solid var(--erp-border); font-size:12px; }
+  .cal-legend-dot { width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:5px; vertical-align:middle; }
+  .appt-status-badge { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:3px; text-transform:uppercase; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-calendar-check-o"></i> Appointment Booking</h1>
+    <p class="erp-page-subtitle">
+      Week of {{ week_start | default('—') }}
+      <a href="?week_offset=-1" class="btn btn-xs btn-default" style="margin-left:8px;"><i class="fa fa-chevron-left"></i></a>
+      <a href="?week_offset=0"  class="btn btn-xs btn-default">Today</a>
+      <a href="?week_offset=1"  class="btn btn-xs btn-default"><i class="fa fa-chevron-right"></i></a>
+    </p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#book-modal" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> Book Appointment
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Week calendar grid ─────────────────────────────────────────────── #}
+<div class="cal-wrap erp-mb-24">
+  <div class="cal-header-row">
+    <div class="cal-corner">Time / Staff</div>
+    {% if staff %}
+      {% for s in staff %}
+      <div class="cal-staff-header">
+        <div>{{ s.name }}</div>
+        {% if s.role %}<div style="font-size:10px;font-weight:400;color:var(--erp-text-muted);">{{ s.role }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="cal-staff-header" style="color:var(--erp-text-muted);">No staff configured</div>
+    {% endif %}
+  </div>
+
+  {% set time_slots = [
+    '09:00','09:30','10:00','10:30','11:00','11:30',
+    '12:00','12:30','13:00','13:30','14:00','14:30',
+    '15:00','15:30','16:00','16:30','17:00'
+  ] %}
+
+  {% for slot in time_slots %}
+  <div class="cal-body-row">
+    <div class="cal-time-label">{{ slot }}</div>
+    {% if staff %}
+      {% for s in staff %}
+        {% set grid_key = (s.id | string) + '_' + slot %}
+        {% set slot_info = availability_grid.get(grid_key, {}) if availability_grid else {} %}
+        {% set slot_type = slot_info.get('type', 'available') if slot_info else 'available' %}
+        <div class="cal-slot cal-slot-{{ slot_type }}"
+             {% if slot_type == 'available' %}
+             onclick="openBookModal('{{ s.id }}', '{{ s.name }}', '{{ slot }}')"
+             title="Book {{ slot }} with {{ s.name }}"
+             {% else %}
+             title="{{ slot_info.get('label', slot_type) if slot_info else slot_type }}"
+             {% endif %}>
+          {% if slot_info and slot_info.get('label') %}
+          <div class="cal-slot-label">{{ slot_info.label | truncate(20, true, '…') }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="cal-legend">
+    <span><span class="cal-legend-dot" style="background:rgba(14,159,110,.3);"></span>Available</span>
+    <span><span class="cal-legend-dot" style="background:rgba(26,86,219,.2);"></span>Booked</span>
+    <span><span class="cal-legend-dot" style="background:var(--erp-neutral-lt);border:1px solid var(--erp-border);"></span>Blocked</span>
+  </div>
+</div>
+
+{# ── Upcoming appointments ──────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-clock-o"></i> Upcoming Appointments</h4>
+    <span style="font-size:12px;color:var(--erp-text-muted);">{{ appointments | length if appointments else 0 }} total</span>
+  </div>
+  <table class="erp-table">
+    <thead>
+      <tr>
+        <th>Customer</th>
+        <th>Service</th>
+        <th>Staff</th>
+        <th>Time</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if appointments %}
+        {% for appt in appointments %}
+        {% set as = appt.status | default('PENDING') %}
+        <tr>
+          <td style="font-weight:600;">{{ appt.customer_name | default('—') }}</td>
+          <td>{{ appt.service_name | default('—') }}</td>
+          <td>{{ appt.staff_name | default('—') }}</td>
+          <td style="white-space:nowrap;font-size:12px;">{{ appt.start_at | default('—') }}</td>
+          <td>
+            <span class="erp-badge {{ 'erp-badge-green' if as == 'CONFIRMED' else ('erp-badge-red' if as == 'CANCELLED' else ('erp-badge-gray' if as == 'COMPLETED' else 'erp-badge-yellow')) }}">
+              {{ as }}
+            </span>
+          </td>
+          <td>
+            {% if as == 'PENDING' %}
+            <form method="POST" action="/crm/appointments/{{ appt.id }}/confirm" style="display:inline;">
+              <button type="submit" class="btn btn-xs btn-success" title="Confirm"><i class="fa fa-check"></i> Confirm</button>
+            </form>
+            <form method="POST" action="/crm/appointments/{{ appt.id }}/cancel" style="display:inline;" onsubmit="return confirm('Cancel this appointment?');">
+              <button type="submit" class="btn btn-xs btn-danger" title="Cancel"><i class="fa fa-times"></i> Cancel</button>
+            </form>
+            {% else %}
+            <a href="/crm/appointments/{{ appt.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+      <tr>
+        <td colspan="6" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+          No upcoming appointments.
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Book Appointment Modal ──────────────────────────────────────────── #}
+<div class="modal fade" id="book-modal" tabindex="-1" role="dialog" aria-labelledby="book-modal-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/crm/appointments/book">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="book-modal-label"><i class="fa fa-calendar-plus-o"></i> Book Appointment</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">Customer Name <span class="text-danger">*</span></label>
+            <input type="text" name="customer_name" class="form-control" required placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label class="control-label">Service <span class="text-danger">*</span></label>
+            <select name="service_id" id="modal-service" class="form-control" required>
+              <option value="">— Select service —</option>
+              {% if services %}
+                {% for svc in services %}
+                <option value="{{ svc.id }}">{{ svc.name }}{% if svc.duration_min %} ({{ svc.duration_min }} min){% endif %}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Staff Member</label>
+            <select name="staff_id" id="modal-staff" class="form-control">
+              <option value="">— Any available —</option>
+              {% if staff %}
+                {% for s in staff %}
+                <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Date &amp; Time <span class="text-danger">*</span></label>
+            <input type="datetime-local" name="start_at" id="modal-start-at" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-calendar-check-o"></i> Book</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  window.openBookModal = function (staffId, staffName, timeSlot) {
+    var staffSel = document.getElementById('modal-staff');
+    if (staffSel) {
+      for (var i = 0; i < staffSel.options.length; i++) {
+        if (staffSel.options[i].value === String(staffId)) {
+          staffSel.selectedIndex = i;
+          break;
+        }
+      }
+    }
+    /* Pre-fill date to week_start + time_slot */
+    var startAt = document.getElementById('modal-start-at');
+    if (startAt && timeSlot) {
+      var base = '{{ week_start | default("") }}';
+      if (base) {
+        startAt.value = base + 'T' + timeSlot;
+      }
+    }
+    $('#book-modal').modal('show');
+  };
+}());
+</script>
+{% endblock %}

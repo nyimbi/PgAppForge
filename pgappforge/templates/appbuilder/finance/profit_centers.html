@@ -1,0 +1,368 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Profit Centers — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* filter bar */
+  .filter-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  /* P&L table */
+  .pc-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .pc-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .pc-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .pc-table tr:last-child td { border-bottom:none; }
+  .pc-table tr:hover td { background:#fafafa; }
+  .pc-table .pc-row-total td { background:#f0f9ff; font-weight:700; border-top:2px solid #bfdbfe; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* hierarchy indent */
+  .pc-indent-0 { padding-left:12px; }
+  .pc-indent-1 { padding-left:28px; }
+  .pc-indent-2 { padding-left:44px; }
+  .pc-indent-3 { padding-left:60px; }
+  /* variance indicators */
+  .var-pos { color:#10b981; font-weight:600; }
+  .var-neg { color:#ef4444; font-weight:600; }
+  .var-zero { color:#9ca3af; }
+  /* margin coloring */
+  .margin-high   { color:#10b981; font-weight:700; }
+  .margin-med    { color:#f59e0b; font-weight:700; }
+  .margin-low    { color:#ef4444; font-weight:700; }
+  /* allocation rules panel */
+  .alloc-rule-row { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid #f3f4f6; }
+  .alloc-rule-row:last-child { border-bottom:none; }
+  .alloc-rule-name { font-size:13px; font-weight:600; color:#111827; flex:1; }
+  .alloc-rule-meta { font-size:11px; color:#9ca3af; }
+  .badge-auto   { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-manual { background:#fef3c7; color:#92400e; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Profit Center Accounting</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">P&amp;L by profit center with variance vs budget and cost allocation</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Filters ──────────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:14px 20px; margin-bottom:20px;">
+  <div class="filter-bar">
+    <label for="sel-period">Period:</label>
+    <select id="sel-period" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+      {% if pnl_data and pnl_data.available_periods %}
+        {% for p in pnl_data.available_periods %}
+        <option value="{{ p }}" {% if pnl_data.current_period == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      {% else %}
+        <option value="{{ pnl_data.current_period if pnl_data else '' }}">
+          {{ pnl_data.current_period if pnl_data else '—' }}
+        </option>
+      {% endif %}
+    </select>
+
+    <label for="sel-entity" style="margin-left:8px;">Entity:</label>
+    <select id="sel-entity" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+      <option value="">All Entities</option>
+      {% if pnl_data and pnl_data.entities %}
+        {% for ent in pnl_data.entities %}
+        <option value="{{ ent.id }}" {% if pnl_data.current_entity == ent.id %}selected{% endif %}>{{ ent.name }}</option>
+        {% endfor %}
+      {% endif %}
+    </select>
+
+    <button id="btn-apply" class="btn btn-default btn-sm" style="height:32px;">
+      <i class="fa fa-filter"></i> Apply
+    </button>
+    <button id="btn-expand-all" class="btn btn-link btn-sm" style="height:32px; padding:0 8px; font-size:12px;">
+      <i class="fa fa-expand"></i> Expand All
+    </button>
+    <button id="btn-collapse-all" class="btn btn-link btn-sm" style="height:32px; padding:0 8px; font-size:12px;">
+      <i class="fa fa-compress"></i> Collapse All
+    </button>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Main P&L Table ───────────────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:14px 20px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-table" style="color:#1a56db; margin-right:6px;"></i>
+          P&amp;L by Profit Center
+        </h4>
+        <span style="font-size:12px; color:#9ca3af;">Amounts in reporting currency</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="pc-table">
+          <thead>
+            <tr>
+              <th style="min-width:200px;">Profit Center</th>
+              <th class="nums">Revenue</th>
+              <th class="nums">Costs</th>
+              <th class="nums">Gross Margin</th>
+              <th class="nums">GM %</th>
+              <th class="nums">Op. Profit</th>
+              <th class="nums">Budget Op. Profit</th>
+              <th class="nums">Variance</th>
+            </tr>
+          </thead>
+          <tbody id="pc-tbody">
+            {% if profit_centers and pnl_data %}
+              {% for pc in profit_centers %}
+                {# look up P&L data for this PC #}
+                {% set pnl = namespace(found=None) %}
+                {% if pnl_data.rows %}
+                  {% for row in pnl_data.rows %}
+                    {% if row.profit_center_id == pc.id %}{% set pnl.found = row %}{% endif %}
+                  {% endfor %}
+                {% endif %}
+                {% set row = pnl.found %}
+                {% set gm_pct = ((row.gross_margin_cents / row.revenue_cents) * 100) | round(1) if row and row.revenue_cents else 0 %}
+                {% set op_var = (row.operating_profit_cents - row.budget_op_profit_cents) if row and row.budget_op_profit_cents else 0 %}
+
+              <tr class="pc-data-row" data-depth="{{ pc.depth or 0 }}"
+                  data-pc-id="{{ pc.id }}"
+                  data-parent="{{ pc.parent_id or '' }}">
+                <td>
+                  <div style="display:flex; align-items:center; gap:8px;"
+                       class="pc-indent-{{ pc.depth or 0 }}">
+                    {% if pc.has_children %}
+                    <button class="btn btn-link btn-sm pc-toggle"
+                            data-pc="{{ pc.id }}"
+                            style="padding:0; width:18px; height:18px; font-size:10px; color:#6b7280; line-height:1;">
+                      <i class="fa fa-minus-square-o"></i>
+                    </button>
+                    {% else %}
+                    <span style="width:18px; display:inline-block;"></span>
+                    {% endif %}
+                    <span style="font-weight:{% if (pc.depth or 0) == 0 %}700{% else %}400{% endif %}; color:#111827;">
+                      {{ pc.name }}
+                    </span>
+                    <span style="font-size:10px; color:#9ca3af; font-family:monospace;">{{ pc.code }}</span>
+                  </div>
+                </td>
+                <td class="nums">{% if row %}{{ "{:,.0f}".format(row.revenue_cents / 100) }}{% else %}—{% endif %}</td>
+                <td class="nums">{% if row %}{{ "{:,.0f}".format(row.costs_cents / 100) }}{% else %}—{% endif %}</td>
+                <td class="nums {% if row and row.gross_margin_cents >= 0 %}var-pos{% else %}var-neg{% endif %}">
+                  {% if row %}{{ "{:,.0f}".format(row.gross_margin_cents / 100) }}{% else %}—{% endif %}
+                </td>
+                <td class="nums {% if gm_pct >= 40 %}margin-high{% elif gm_pct >= 20 %}margin-med{% else %}margin-low{% endif %}">
+                  {% if row and row.revenue_cents %}{{ "{:.1f}".format(gm_pct) }}%{% else %}—{% endif %}
+                </td>
+                <td class="nums {% if row and row.operating_profit_cents >= 0 %}var-pos{% else %}var-neg{% endif %}">
+                  {% if row %}{{ "{:,.0f}".format(row.operating_profit_cents / 100) }}{% else %}—{% endif %}
+                </td>
+                <td class="nums" style="color:#6b7280;">
+                  {% if row and row.budget_op_profit_cents %}{{ "{:,.0f}".format(row.budget_op_profit_cents / 100) }}{% else %}—{% endif %}
+                </td>
+                <td class="nums {% if op_var > 0 %}var-pos{% elif op_var < 0 %}var-neg{% else %}var-zero{% endif %}">
+                  {% if row and row.budget_op_profit_cents %}{{ "{:+,.0f}".format(op_var / 100) }}{% else %}—{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+
+              {# Totals row #}
+              {% if pnl_data.totals %}
+              <tr class="pc-row-total">
+                <td style="padding:10px 12px; font-weight:700;">TOTAL</td>
+                <td class="nums">{{ "{:,.0f}".format(pnl_data.totals.revenue_cents / 100) }}</td>
+                <td class="nums">{{ "{:,.0f}".format(pnl_data.totals.costs_cents / 100) }}</td>
+                <td class="nums var-pos">{{ "{:,.0f}".format(pnl_data.totals.gross_margin_cents / 100) }}</td>
+                <td class="nums">
+                  {% if pnl_data.totals.revenue_cents %}
+                    {{ "{:.1f}".format((pnl_data.totals.gross_margin_cents / pnl_data.totals.revenue_cents) * 100) }}%
+                  {% else %}—{% endif %}
+                </td>
+                <td class="nums {% if pnl_data.totals.operating_profit_cents >= 0 %}var-pos{% else %}var-neg{% endif %}">
+                  {{ "{:,.0f}".format(pnl_data.totals.operating_profit_cents / 100) }}
+                </td>
+                <td class="nums" style="color:#6b7280;">{{ "{:,.0f}".format(pnl_data.totals.budget_op_profit_cents / 100) }}</td>
+                <td class="nums {% if pnl_data.totals.operating_profit_cents - pnl_data.totals.budget_op_profit_cents > 0 %}var-pos{% else %}var-neg{% endif %}">
+                  {{ "{:+,.0f}".format((pnl_data.totals.operating_profit_cents - pnl_data.totals.budget_op_profit_cents) / 100) }}
+                </td>
+              </tr>
+              {% endif %}
+
+            {% else %}
+              <tr><td colspan="8" style="text-align:center; padding:32px; color:#9ca3af;">
+                <i class="fa fa-inbox" style="font-size:28px; display:block; margin-bottom:8px; opacity:.4;"></i>
+                No profit center data for the selected period.
+              </td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Right: Allocation Rules ───────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:14px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-random" style="color:#1a56db; margin-right:6px;"></i> Allocation Rules
+        </h4>
+      </div>
+      {% if allocation_rules %}
+        {% for rule in allocation_rules %}
+        <div class="alloc-rule-row">
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
+              <span class="alloc-rule-name">{{ rule.name }}</span>
+              {% if rule.is_auto %}<span class="badge-auto">Auto</span>
+              {% else %}<span class="badge-manual">Manual</span>{% endif %}
+            </div>
+            <p class="alloc-rule-meta">
+              {{ rule.driver or 'Fixed %' }}
+              {% if rule.source_cost_center %}&mdash; From: {{ rule.source_cost_center }}{% endif %}
+            </p>
+          </div>
+          <button class="btn btn-default btn-sm btn-run-alloc"
+                  data-rule-id="{{ rule.id }}"
+                  style="font-size:11px; padding:3px 10px; font-weight:600; flex-shrink:0;">
+            <i class="fa fa-play"></i> Run
+          </button>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+          <i class="fa fa-random" style="font-size:24px; display:block; margin-bottom:8px; opacity:.3;"></i>
+          No allocation rules configured.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Period / entity filter nav ─────────────────────────────────────── */
+  document.getElementById('btn-apply').addEventListener('click', function () {
+    var period = document.getElementById('sel-period').value;
+    var entity = document.getElementById('sel-entity').value;
+    window.location.href = window.location.pathname
+      + '?period=' + encodeURIComponent(period)
+      + '&entity=' + encodeURIComponent(entity);
+  });
+
+  /* ── Tree expand/collapse ────────────────────────────────────────────── */
+  function getChildRows(parentId) {
+    return document.querySelectorAll('.pc-data-row[data-parent="' + parentId + '"]');
+  }
+  function setSubtreeVisible(parentId, visible) {
+    var children = getChildRows(parentId);
+    children.forEach(function (row) {
+      row.style.display = visible ? '' : 'none';
+      setSubtreeVisible(row.getAttribute('data-pc-id'), visible);
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.pc-toggle');
+    if (!btn) return;
+    var pcId     = btn.getAttribute('data-pc');
+    var icon     = btn.querySelector('i');
+    var expanded = icon.classList.contains('fa-minus-square-o');
+    if (expanded) {
+      setSubtreeVisible(pcId, false);
+      icon.classList.replace('fa-minus-square-o', 'fa-plus-square-o');
+    } else {
+      setSubtreeVisible(pcId, true);
+      icon.classList.replace('fa-plus-square-o', 'fa-minus-square-o');
+    }
+  });
+
+  document.getElementById('btn-expand-all').addEventListener('click', function () {
+    document.querySelectorAll('.pc-data-row').forEach(function (r) { r.style.display = ''; });
+    document.querySelectorAll('.pc-toggle i').forEach(function (i) {
+      i.className = 'fa fa-minus-square-o';
+    });
+  });
+  document.getElementById('btn-collapse-all').addEventListener('click', function () {
+    document.querySelectorAll('.pc-data-row[data-depth="1"], .pc-data-row[data-depth="2"], .pc-data-row[data-depth="3"]')
+      .forEach(function (r) { r.style.display = 'none'; });
+    document.querySelectorAll('.pc-toggle i').forEach(function (i) {
+      i.className = 'fa fa-plus-square-o';
+    });
+  });
+
+  /* ── Run Allocation Rule ─────────────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-run-alloc');
+    if (!btn) return;
+    e.preventDefault();
+    var ruleId = btn.getAttribute('data-rule-id');
+    var period = document.getElementById('sel-period').value;
+    if (!period) { toast('Select a period first.', 'error'); return; }
+    if (!ruleId) return;
+
+    btn.disabled = true;
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/profit_centers/run_allocation', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ rule_id: ruleId, period: period })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('Allocation complete. ' + (res.data.allocations_created || 0) + ' entries posted.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Allocation failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    });
+  });
+
+}());
+</script>
+{% endblock %}

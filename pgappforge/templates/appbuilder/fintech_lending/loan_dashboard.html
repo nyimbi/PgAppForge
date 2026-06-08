@@ -1,0 +1,413 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Lending Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* PAR gauge */
+  .par-gauge-wrap { position:relative; width:160px; height:90px; margin:0 auto 8px; }
+  .par-gauge-label { text-align:center; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--erp-text-muted); }
+  .par-score-overlay { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+  /* Loan status badges */
+  .loan-CURRENT    { background:#d1fae5;color:#065f46; }
+  .loan-OVERDUE    { background:#fee2e2;color:#991b1b; }
+  .loan-DEFAULTED  { background:#7f1d1d;color:#fecaca; }
+  .loan-PAID_OFF   { background:#e0f2fe;color:#0369a1; }
+  .loan-DISBURSED  { background:#dbeafe;color:#1e40af; }
+  .loan-badge { display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;text-transform:uppercase; }
+
+  .loan-row-overdue { background:rgba(224,36,36,.04); }
+  .loan-row-overdue td:first-child { border-left:3px solid var(--erp-danger); }
+
+  /* Trend chart */
+  .disbursement-chart-wrap { background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--erp-radius-lg); padding:16px 20px; }
+
+  /* Record payment modal */
+  .pay-loan-ref { font-family:monospace; font-size:13px; color:var(--erp-text-muted); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-credit-card"></i> Lending Dashboard</h1>
+    <p class="erp-page-subtitle">Portfolio KPIs, risk gauges, loan book, and payment recording.</p>
+  </div>
+  <a href="/lending/loans/disburse" class="btn btn-primary btn-sm" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> New Disbursement
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% set p = portfolio | default({}) %}
+
+{# ── Portfolio KPI tiles ────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <div class="erp-card-icon"><i class="fa fa-money"></i></div>
+    <p class="erp-card-title">Total Disbursed</p>
+    <p class="erp-card-value">
+      KES {{ '{:,.0f}'.format(p.total_disbursed_cents / 100) if p.total_disbursed_cents is defined else '—' }}
+    </p>
+    <p class="erp-card-sub">Cumulative</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <div class="erp-card-icon"><i class="fa fa-balance-scale"></i></div>
+    <p class="erp-card-title">Outstanding</p>
+    <p class="erp-card-value">
+      KES {{ '{:,.0f}'.format(p.outstanding_cents / 100) if p.outstanding_cents is defined else '—' }}
+    </p>
+    <p class="erp-card-sub">Active loan book</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon"><i class="fa fa-check-circle"></i></div>
+    <p class="erp-card-title">Collected This Month</p>
+    <p class="erp-card-value" style="color:var(--erp-success);">
+      KES {{ '{:,.0f}'.format(p.collected_this_month_cents / 100) if p.collected_this_month_cents is defined else '—' }}
+    </p>
+    <p class="erp-card-sub">Repayments received</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent {{ 'erp-card-accent-danger' if p.par30_pct | default(0) > 5 else 'erp-card-accent-success' }}"></div>
+    <div class="erp-card-icon"><i class="fa fa-exclamation-triangle"></i></div>
+    <p class="erp-card-title">PAR 30 / PAR 90</p>
+    <p class="erp-card-value" style="color:{{ 'var(--erp-danger)' if p.par30_pct | default(0) > 5 else 'var(--erp-success)' }};">
+      {{ '{:.1f}'.format(p.par30_pct | default(0)) }}%
+    </p>
+    <p class="erp-card-sub">PAR90: {{ '{:.1f}'.format(p.par90_pct | default(0)) }}%</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── PAR gauge ───────────────────────────────────────────────────── #}
+  <div class="col-md-3">
+    <div class="erp-card erp-mb-24" style="text-align:center;">
+      <p class="erp-section-title" style="text-align:left;"><i class="fa fa-tachometer"></i> PAR 30 Gauge</p>
+      <div class="par-gauge-wrap">
+        <canvas id="par30-gauge" width="160" height="90"></canvas>
+        <div class="par-score-overlay" id="par30-overlay"
+             style="color:{{ 'var(--erp-success)' if p.par30_pct | default(0) <= 5 else ('var(--erp-warning)' if p.par30_pct | default(0) <= 15 else 'var(--erp-danger)') }};">
+          {{ '{:.1f}'.format(p.par30_pct | default(0)) }}%
+        </div>
+      </div>
+      <div class="par-gauge-label">Portfolio at Risk &gt;30 Days</div>
+      <div style="margin-top:12px;font-size:11px;display:flex;justify-content:center;gap:16px;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--erp-success);margin-right:4px;vertical-align:middle;"></span>&lt;5% Good</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--erp-warning);margin-right:4px;vertical-align:middle;"></span>5–15%</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--erp-danger);margin-right:4px;vertical-align:middle;"></span>&gt;15%</span>
+      </div>
+    </div>
+  </div>
+
+  {# ── Disbursement trend chart ─────────────────────────────────────── #}
+  <div class="col-md-9">
+    <div class="disbursement-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title"><i class="fa fa-line-chart"></i> Disbursement Trend</h4>
+      <canvas id="disbursement-chart" height="80" aria-label="Disbursement trend" role="img"></canvas>
+    </div>
+  </div>
+
+</div>
+
+{# ── Loan book table ────────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-table"></i> Loan Book</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <select id="loan-status-filter" class="form-control input-sm" style="width:auto;">
+        <option value="">All Statuses</option>
+        <option value="CURRENT">Current</option>
+        <option value="OVERDUE">Overdue</option>
+        <option value="DEFAULTED">Defaulted</option>
+        <option value="PAID_OFF">Paid Off</option>
+      </select>
+      <input type="text" id="loan-search" class="form-control input-sm" placeholder="Ref or borrower…" style="width:160px;">
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table" id="loan-table">
+      <thead>
+        <tr>
+          <th>Loan Ref</th>
+          <th>Borrower</th>
+          <th>Disbursed (KES)</th>
+          <th>Outstanding (KES)</th>
+          <th>Status</th>
+          <th>Next Payment</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if loans %}
+          {% for loan in loans %}
+          {% set ls = loan.status | default('CURRENT') %}
+          {% set is_overdue = ls in ['OVERDUE', 'DEFAULTED'] %}
+          <tr class="{{ 'loan-row-overdue' if is_overdue else '' }}"
+              data-status="{{ ls }}"
+              data-ref="{{ loan.loan_ref | default('') | lower }}"
+              data-borrower="{{ loan.borrower_name | default('') | lower }}">
+            <td style="font-family:monospace;font-size:12px;font-weight:600;">
+              {{ loan.loan_ref | default('—') }}
+            </td>
+            <td style="font-weight:600;">
+              {{ loan.borrower_name | default('—') }}
+              {% if is_overdue %}
+              <i class="fa fa-exclamation-circle" style="color:var(--erp-danger);margin-left:4px;" title="Overdue"></i>
+              {% endif %}
+            </td>
+            <td style="font-variant-numeric:tabular-nums;">
+              {{ '{:,.0f}'.format(loan.disbursed_cents / 100) if loan.disbursed_cents is defined else '—' }}
+            </td>
+            <td style="font-variant-numeric:tabular-nums;font-weight:{{ '700' if is_overdue else '400' }};color:{{ 'var(--erp-danger)' if is_overdue else 'inherit' }};">
+              {{ '{:,.0f}'.format(loan.outstanding_cents / 100) if loan.outstanding_cents is defined else '—' }}
+            </td>
+            <td>
+              <span class="loan-badge loan-{{ ls }}">{{ ls | replace('_',' ') }}</span>
+            </td>
+            <td style="font-size:12px;white-space:nowrap;{{ 'color:var(--erp-danger);font-weight:600;' if is_overdue else '' }}">
+              {{ loan.next_payment_date | default('—') }}
+            </td>
+            <td>
+              <button class="btn btn-xs btn-success" title="Record payment"
+                      onclick="openPaymentModal('{{ loan.id }}', '{{ loan.loan_ref | default('') }}', '{{ loan.borrower_name | default('') }}')">
+                <i class="fa fa-plus-circle"></i> Pay
+              </button>
+              <a href="/lending/loans/{{ loan.id }}" class="btn btn-xs btn-default" title="View">
+                <i class="fa fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+            No loans in the book. <a href="/lending/loans/disburse">Disburse the first loan</a>.
+          </td>
+        </tr>
+        {% endif %}
+
+        {# Overdue loans extra section if passed separately #}
+        {% if overdue_loans %}
+          {% for loan in overdue_loans %}
+          {% if not (loans and loan in loans) %}
+          {% set ls = loan.status | default('OVERDUE') %}
+          <tr class="loan-row-overdue" data-status="{{ ls }}"
+              data-ref="{{ loan.loan_ref | default('') | lower }}"
+              data-borrower="{{ loan.borrower_name | default('') | lower }}">
+            <td style="font-family:monospace;font-size:12px;font-weight:600;">{{ loan.loan_ref | default('—') }}</td>
+            <td style="font-weight:600;">{{ loan.borrower_name | default('—') }} <i class="fa fa-exclamation-circle" style="color:var(--erp-danger);margin-left:4px;"></i></td>
+            <td>{{ '{:,.0f}'.format(loan.disbursed_cents / 100) if loan.disbursed_cents is defined else '—' }}</td>
+            <td style="font-weight:700;color:var(--erp-danger);">{{ '{:,.0f}'.format(loan.outstanding_cents / 100) if loan.outstanding_cents is defined else '—' }}</td>
+            <td><span class="loan-badge loan-{{ ls }}">{{ ls | replace('_',' ') }}</span></td>
+            <td style="font-size:12px;color:var(--erp-danger);font-weight:600;">{{ loan.next_payment_date | default('—') }}</td>
+            <td>
+              <button class="btn btn-xs btn-success"
+                      onclick="openPaymentModal('{{ loan.id }}', '{{ loan.loan_ref | default('') }}', '{{ loan.borrower_name | default('') }}')">
+                <i class="fa fa-plus-circle"></i> Pay
+              </button>
+              <a href="/lending/loans/{{ loan.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Record Payment Modal ────────────────────────────────────────────── #}
+<div class="modal fade" id="record-payment-modal" tabindex="-1" role="dialog" aria-labelledby="rp-label">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <form method="POST" id="record-payment-form" action="/lending/loans/0/payment">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="rp-label"><i class="fa fa-plus-circle"></i> Record Payment</h4>
+        </div>
+        <div class="modal-body">
+          <div style="background:var(--erp-neutral-lt);border-radius:var(--erp-radius);padding:10px 12px;margin-bottom:12px;">
+            <div class="pay-loan-ref" id="modal-loan-ref">—</div>
+            <div style="font-weight:600;font-size:13px;" id="modal-borrower-name">—</div>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Amount (KES) <span class="text-danger">*</span></label>
+            <input type="number" name="amount" class="form-control" required min="0" step="0.01" placeholder="e.g. 15000">
+          </div>
+          <div class="form-group">
+            <label class="control-label">Payment Date <span class="text-danger">*</span></label>
+            <input type="date" name="payment_date" id="modal-payment-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Channel</label>
+            <select name="channel" class="form-control">
+              <option value="MPESA">M-PESA</option>
+              <option value="BANK_TRANSFER">Bank Transfer</option>
+              <option value="CASH">Cash</option>
+              <option value="CHEQUE">Cheque</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Reference</label>
+            <input type="text" name="reference" class="form-control" placeholder="e.g. QKJ3X7A2B1">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Record Payment</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── PAR Gauge (semi-circle canvas) ───────────────────────────────── */
+  var gaugeCanvas = document.getElementById('par30-gauge');
+  if (gaugeCanvas) {
+    var par30 = {{ p.par30_pct | default(0) | float }};
+    var ctx   = gaugeCanvas.getContext('2d');
+    var cx = 80, cy = 86, r = 66;
+    /* Background arc */
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
+    ctx.lineWidth = 16;
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.stroke();
+    /* Zone arcs: green 0-5%, amber 5-15%, red 15-100% */
+    var zones = [
+      { from: 0, to: 5,   color: '#0e9f6e' },
+      { from: 5, to: 15,  color: '#ff5a1f' },
+      { from: 15, to: 50, color: '#e02424' }
+    ];
+    zones.forEach(function (z) {
+      var sa = Math.PI + (z.from / 50) * Math.PI;
+      var ea = Math.PI + (Math.min(z.to, 50) / 50) * Math.PI;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, sa, ea);
+      ctx.lineWidth = 16;
+      ctx.strokeStyle = z.color;
+      ctx.stroke();
+    });
+    /* Needle */
+    var needlePct = Math.min(par30, 50) / 50;
+    var needleAngle = Math.PI + needlePct * Math.PI;
+    var nx = cx + (r - 8) * Math.cos(needleAngle);
+    var ny = cy + (r - 8) * Math.sin(needleAngle);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(nx, ny);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#111827';
+    ctx.stroke();
+    /* Centre dot */
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+    ctx.fillStyle = '#111827';
+    ctx.fill();
+  }
+
+  /* ── Disbursement trend chart ─────────────────────────────────────── */
+  var dcCanvas = document.getElementById('disbursement-chart');
+  if (dcCanvas && window.Chart) {
+    var trendData = {{ portfolio.disbursement_trend | tojson if portfolio and portfolio.disbursement_trend else 'null' }};
+    if (!trendData) {
+      trendData = { labels: [], values: [] };
+    }
+    new Chart(dcCanvas, {
+      type: 'line',
+      data: {
+        labels: trendData.labels,
+        datasets: [{
+          label: 'Disbursed (KES)',
+          data: trendData.values,
+          borderColor: '#1a56db',
+          backgroundColor: 'rgba(26,86,219,.07)',
+          borderWidth: 2,
+          pointRadius: 3,
+          fill: true,
+          tension: 0.35
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                return ' KES ' + ctx.parsed.y.toLocaleString();
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(0,0,0,.04)' },
+            ticks: {
+              callback: function (v) {
+                return v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' :
+                       v >= 1000    ? (v / 1000).toFixed(0) + 'k' : v;
+              }
+            }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  /* ── Table filters ────────────────────────────────────────────────── */
+  function applyLoanFilters() {
+    var statusVal = (document.getElementById('loan-status-filter') || {}).value || '';
+    var searchVal = ((document.getElementById('loan-search') || {}).value || '').toLowerCase();
+    document.querySelectorAll('#loan-table tbody tr[data-status]').forEach(function (tr) {
+      var matchStatus = !statusVal || tr.getAttribute('data-status') === statusVal;
+      var matchSearch = !searchVal ||
+        (tr.getAttribute('data-ref')      || '').includes(searchVal) ||
+        (tr.getAttribute('data-borrower') || '').includes(searchVal);
+      tr.style.display = (matchStatus && matchSearch) ? '' : 'none';
+    });
+  }
+
+  var sf = document.getElementById('loan-status-filter');
+  var ss = document.getElementById('loan-search');
+  if (sf) sf.addEventListener('change', applyLoanFilters);
+  if (ss) ss.addEventListener('input', applyLoanFilters);
+
+  /* ── Payment modal ────────────────────────────────────────────────── */
+  window.openPaymentModal = function (loanId, loanRef, borrowerName) {
+    var form = document.getElementById('record-payment-form');
+    if (form) form.action = '/lending/loans/' + loanId + '/payment';
+    var refEl = document.getElementById('modal-loan-ref');
+    var nameEl = document.getElementById('modal-borrower-name');
+    if (refEl)  refEl.textContent  = loanRef || '—';
+    if (nameEl) nameEl.textContent = borrowerName || '—';
+
+    /* Pre-fill payment date from server-rendered today string */
+    var dateEl = document.getElementById('modal-payment-date');
+    if (dateEl) {
+      var serverToday = '{{ today_iso | default("") }}';
+      if (serverToday) { dateEl.value = serverToday; }
+    }
+    $('#record-payment-modal').modal('show');
+  };
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,368 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Warehouse Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wh-selector-bar {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 14px 20px;
+    box-shadow: var(--erp-shadow-sm);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .wh-selector-bar label {
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em;
+    color: var(--erp-text-muted); white-space: nowrap;
+  }
+  .wh-selector-bar .form-control {
+    height: 34px; font-size: 13px;
+    border-color: var(--erp-border); border-radius: var(--erp-radius);
+    min-width: 200px; max-width: 320px;
+  }
+
+  /* ── KPI tiles ─────────────────────────────────────────────────────── */
+  .wh-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .wh-kpi-tile {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 16px 20px;
+    box-shadow: var(--erp-shadow-sm);
+    position: relative;
+    overflow: hidden;
+  }
+  .wh-kpi-tile-label {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--erp-text-muted); margin-bottom: 8px;
+  }
+  .wh-kpi-tile-value {
+    font-size: 28px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--erp-text); line-height: 1; margin-bottom: 4px;
+  }
+  .wh-kpi-tile-sub { font-size: 11px; color: var(--erp-text-muted); }
+  .wh-kpi-tile-accent {
+    position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+    border-radius: var(--erp-radius-lg) 0 0 var(--erp-radius-lg);
+  }
+  .wh-kpi-icon {
+    position: absolute; top: 14px; right: 16px;
+    font-size: 24px; opacity: .1; color: var(--erp-text);
+  }
+
+  /* ── Stock table ───────────────────────────────────────────────────── */
+  .below-reorder { background: #fffbeb !important; }
+  .stock-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .stock-bar { flex: 1; height: 5px; background: var(--erp-border); border-radius: 3px; overflow: hidden; min-width: 60px; }
+  .stock-bar-fill { height: 100%; border-radius: 3px; }
+
+  /* ── Transfer status ───────────────────────────────────────────────── */
+  .tfr-status-pending   { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .tfr-status-in_transit{ background: #fef3c7;               color: #92400e; }
+  .tfr-status-done      { background: var(--erp-success-lt); color: var(--erp-success); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-cubes" style="color:var(--erp-primary);margin-right:8px;"></i>Warehouse Management
+      </h1>
+      <p class="erp-page-subtitle">Stock levels, SKU valuations, and pending transfers.</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      <button class="btn btn-default btn-sm" id="stock-count-btn">
+        <i class="fa fa-calculator"></i> Run Stock Count
+      </button>
+      <a href="{{ url_for('StockTransferView.add') if 'StockTransferView' in dir() else '#' }}"
+         class="btn btn-primary btn-sm">
+        <i class="fa fa-exchange"></i> New Transfer
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Warehouse selector ────────────────────────────────────────────────── #}
+<div class="wh-selector-bar">
+  <label for="wh-select"><i class="fa fa-building" style="margin-right:5px;"></i>Warehouse</label>
+  <select id="wh-select" class="form-control" onchange="switchWarehouse(this.value)">
+    {% for wh in warehouses %}
+    <option value="{{ wh.id }}" {% if warehouse and warehouse.id == wh.id %}selected{% endif %}>
+      {{ wh.name }}{% if wh.code %} ({{ wh.code }}){% endif %}
+    </option>
+    {% endfor %}
+  </select>
+  {% if warehouse %}
+  <span style="font-size:12px;color:var(--erp-text-muted);">
+    <i class="fa fa-map-marker" style="margin-right:3px;"></i>{{ warehouse.location }}
+  </span>
+  {% endif %}
+  <span id="stock-count-result" style="font-size:12px; margin-left:auto;"></span>
+</div>
+
+{# ── KPI tiles ────────────────────────────────────────────────────────── #}
+{% if stock_levels %}
+<div class="wh-kpi-grid">
+  <div class="wh-kpi-tile">
+    <div class="wh-kpi-tile-accent" style="background:var(--erp-primary);"></div>
+    <i class="fa fa-cubes wh-kpi-icon"></i>
+    <div class="wh-kpi-tile-label">Total SKUs</div>
+    <div class="wh-kpi-tile-value">{{ stock_levels.total_items | default(0) }}</div>
+    <div class="wh-kpi-tile-sub">distinct items on hand</div>
+  </div>
+  <div class="wh-kpi-tile">
+    <div class="wh-kpi-tile-accent" style="background:var(--erp-success);"></div>
+    <i class="fa fa-usd wh-kpi-icon"></i>
+    <div class="wh-kpi-tile-label">Total Value</div>
+    <div class="wh-kpi-tile-value">
+      ${{ '%,.0f'|format(stock_levels.total_value_cents|default(0) / 100) }}
+    </div>
+    <div class="wh-kpi-tile-sub">at standard cost</div>
+  </div>
+  <div class="wh-kpi-tile">
+    <div class="wh-kpi-tile-accent" style="background:{% if stock_levels.items_below_reorder|default(0) > 0 %}var(--erp-danger){% else %}var(--erp-success){% endif %};"></div>
+    <i class="fa fa-exclamation-triangle wh-kpi-icon"></i>
+    <div class="wh-kpi-tile-label">Below Reorder</div>
+    <div class="wh-kpi-tile-value" style="color:{% if stock_levels.items_below_reorder|default(0) > 0 %}var(--erp-danger){% else %}var(--erp-success){% endif %};">
+      {{ stock_levels.items_below_reorder | default(0) }}
+    </div>
+    <div class="wh-kpi-tile-sub">need replenishment</div>
+  </div>
+  {% if stock_levels.last_count_date %}
+  <div class="wh-kpi-tile">
+    <div class="wh-kpi-tile-accent" style="background:var(--erp-info);"></div>
+    <i class="fa fa-clock-o wh-kpi-icon"></i>
+    <div class="wh-kpi-tile-label">Last Count</div>
+    <div class="wh-kpi-tile-value" style="font-size:16px;padding-top:4px;">{{ stock_levels.last_count_date }}</div>
+    <div class="wh-kpi-tile-sub">cycle count date</div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Top 20 SKUs by value ─────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <h4 class="erp-chart-title erp-mb-0">Top SKUs by Value</h4>
+    <div class="erp-flex erp-gap-8">
+      <input type="text" id="sku-search" class="form-control input-sm"
+             placeholder="Search SKU, name…" style="width:180px;">
+      {% if stock_levels and stock_levels.items_below_reorder|default(0) > 0 %}
+      <label style="font-size:12px;color:var(--erp-text-muted);display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;">
+        <input type="checkbox" id="show-below-reorder"> Show alerts only
+      </label>
+      {% endif %}
+    </div>
+  </div>
+  {% if stock_levels and stock_levels.top_skus %}
+  <div style="overflow-x:auto;">
+    <table class="erp-table" id="sku-table">
+      <thead>
+        <tr>
+          <th style="width:36px;">#</th>
+          <th>SKU</th>
+          <th>Name</th>
+          <th style="text-align:right;">Qty On Hand</th>
+          <th style="text-align:right;">Unit Cost</th>
+          <th style="text-align:right;">Total Value</th>
+          <th>% of Total</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set total_val = stock_levels.total_value_cents | default(1) %}
+        {% for s in stock_levels.top_skus %}
+        {% set pct = (s.total_value / total_val * 100) if total_val else 0 %}
+        {% set is_below = s.qty_on_hand < s.reorder_point | default(0) %}
+        <tr {% if is_below %}class="below-reorder"{% endif %}
+            data-below="{{ 'true' if is_below else 'false' }}">
+          <td style="color:var(--erp-text-muted);font-size:11px;">{{ loop.index }}</td>
+          <td>
+            <a href="{{ url_for('ProductView.show', pk=s.product_id) if 'ProductView' in dir() else '#' }}"
+               style="font-weight:700;color:var(--erp-primary);">{{ s.sku }}</a>
+          </td>
+          <td>{{ s.name }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">
+            {{ '{:,.0f}'.format(s.qty_on_hand) }}
+            {% if s.uom %}<span style="font-size:11px;color:var(--erp-text-muted);"> {{ s.uom }}</span>{% endif %}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">
+            ${{ '%.2f'|format(s.unit_cost_cents / 100) }}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">
+            ${{ '%,.0f'|format(s.total_value / 100) }}
+          </td>
+          <td style="min-width:120px;">
+            <div class="stock-bar-wrap">
+              <div class="stock-bar">
+                <div class="stock-bar-fill"
+                     style="width:{{ [pct, 100]|min }}%; background:var(--erp-primary); opacity:.7;"></div>
+              </div>
+              <span style="font-size:11px;color:var(--erp-text-muted);width:34px;text-align:right;">
+                {{ '%.1f'|format(pct) }}%
+              </span>
+            </div>
+          </td>
+          <td>
+            {% if is_below %}
+            <span class="erp-badge erp-badge-red">Low Stock</span>
+            {% else %}
+            <span class="erp-badge erp-badge-green">OK</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--erp-text-muted);">
+    <i class="fa fa-cubes" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px;"></i>
+    No stock data available for this warehouse.
+  </div>
+  {% endif %}
+</div>
+
+{# ── Pending Transfers ─────────────────────────────────────────────────── #}
+{% if pending_transfers %}
+<div class="erp-table-wrap">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0">Pending Transfers</h4>
+    <span class="erp-badge erp-badge-yellow">{{ pending_transfers | length }}</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Ref</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Product</th>
+          <th style="text-align:right;">Qty</th>
+          <th>Status</th>
+          <th>Scheduled</th>
+          <th style="text-align:right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in pending_transfers %}
+        <tr>
+          <td style="font-weight:600;color:var(--erp-primary);">{{ t.ref }}</td>
+          <td style="font-size:12px;">{{ t.from_warehouse }}</td>
+          <td style="font-size:12px;">{{ t.to_warehouse }}</td>
+          <td>
+            <div style="font-weight:600;">{{ t.product_name }}</div>
+            {% if t.sku %}<div style="font-size:11px;color:var(--erp-text-muted);">{{ t.sku }}</div>{% endif %}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ t.qty }}</td>
+          <td>
+            <span class="erp-badge tfr-status-{{ t.status | lower }}">{{ t.status }}</span>
+          </td>
+          <td style="font-size:12px;color:var(--erp-text-muted);">{{ t.scheduled_date }}</td>
+          <td style="text-align:right;">
+            <a href="{{ url_for('StockTransferView.show', pk=t.id) if 'StockTransferView' in dir() else '#' }}"
+               class="btn btn-xs btn-default"><i class="fa fa-eye"></i> View</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _csrf() { var m = document.cookie.match(/csrf_token=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+  function _esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* ── Warehouse switch ──────────────────────────────────────────────── */
+  window.switchWarehouse = function (id) {
+    window.location.href = window.location.pathname + '?warehouse_id=' + encodeURIComponent(id);
+  };
+
+  /* ── SKU search ────────────────────────────────────────────────────── */
+  var skuSearch = document.getElementById('sku-search');
+  if (skuSearch) {
+    skuSearch.addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('#sku-table tbody tr').forEach(function (row) {
+        row.style.display = row.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+      });
+    });
+  }
+
+  /* ── Show alerts only checkbox ─────────────────────────────────────── */
+  var belowChk = document.getElementById('show-below-reorder');
+  if (belowChk) {
+    belowChk.addEventListener('change', function () {
+      document.querySelectorAll('#sku-table tbody tr').forEach(function (row) {
+        if (belowChk.checked) {
+          row.style.display = row.dataset.below === 'true' ? '' : 'none';
+        } else {
+          row.style.display = '';
+        }
+      });
+    });
+  }
+
+  /* ── Run stock count ───────────────────────────────────────────────── */
+  var countBtn    = document.getElementById('stock-count-btn');
+  var countResult = document.getElementById('stock-count-result');
+  var whSelect    = document.getElementById('wh-select');
+
+  if (countBtn) {
+    countBtn.addEventListener('click', function () {
+      var whId = whSelect ? whSelect.value : '';
+      if (!whId) { alert('Select a warehouse first.'); return; }
+      if (!confirm('Start a stock count for this warehouse? This locks movements until the count is closed.')) return;
+      countBtn.disabled = true;
+      countBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Running…';
+      countResult.innerHTML = '';
+
+      _post('/api/warehouse/stock_count', { warehouse_id: whId })
+        .then(function (data) {
+          countResult.innerHTML =
+            '<span style="color:var(--erp-success);"><i class="fa fa-check"></i> Count ' +
+            _esc(data.count_ref || 'started') + '</span>';
+          countBtn.disabled = false;
+          countBtn.innerHTML = '<i class="fa fa-calculator"></i> Run Stock Count';
+        })
+        .catch(function (err) {
+          countResult.innerHTML = '<span style="color:var(--erp-danger);">' + _esc(err.message) + '</span>';
+          countBtn.disabled = false;
+          countBtn.innerHTML = '<i class="fa fa-calculator"></i> Run Stock Count';
+        });
+    });
+  }
+}());
+</script>
+{% endblock %}

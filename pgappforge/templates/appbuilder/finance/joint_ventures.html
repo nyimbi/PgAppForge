@@ -1,0 +1,450 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Joint Ventures — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* JV list */
+  .jv-list { padding:0; margin:0; list-style:none; }
+  .jv-item { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #f3f4f6; cursor:pointer; transition:background .12s; }
+  .jv-item:last-child { border-bottom:none; }
+  .jv-item:hover, .jv-item.active { background:#eff6ff; }
+  .jv-item.active { border-left:3px solid #1a56db; }
+  .jv-icon { width:36px; height:36px; border-radius:8px; background:#e0e7ff; display:flex; align-items:center; justify-content:center; color:#3730a3; font-size:15px; flex-shrink:0; }
+  .jv-body { flex:1; min-width:0; }
+  .jv-name { font-size:13px; font-weight:700; color:#111827; margin:0 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .jv-meta { font-size:11px; color:#6b7280; margin:0; }
+  /* operator badge */
+  .badge-operator { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-non-op   { background:#f3f4f6; color:#374151; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-wind-down { background:#fef3c7; color:#92400e; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-completed { background:#f3f4f6; color:#6b7280; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* partner table */
+  .partner-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .partner-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:9px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .partner-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .partner-table tr:last-child td { border-bottom:none; }
+  .partner-table tr:hover td { background:#fafafa; }
+  /* billings table */
+  .billing-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .billing-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:9px 10px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .billing-table td { padding:8px 10px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .billing-table tr:last-child td { border-bottom:none; }
+  .billing-table tr:hover td { background:#fafafa; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* ownership bar */
+  .own-bar-wrap { display:flex; align-items:center; gap:8px; }
+  .own-bar { flex:1; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; min-width:60px; }
+  .own-bar-inner { height:100%; background:#1a56db; border-radius:3px; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Joint Ventures</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">JV partner ownership, billings &amp; expense distribution</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+
+  {# ── Left: JV List ────────────────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:14px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-handshake-o" style="color:#1a56db; margin-right:6px;"></i>
+          Joint Ventures
+          {% if ventures %}<span style="margin-left:6px; font-size:11px; background:#e0e7ff; color:#3730a3; padding:2px 8px; border-radius:10px; font-weight:600;">{{ ventures | length }}</span>{% endif %}
+        </h4>
+      </div>
+      <ul class="jv-list">
+        {% if ventures %}
+          {% for jv in ventures %}
+          <li class="jv-item {% if selected_jv and selected_jv.id == jv.id %}active{% endif %}"
+              onclick="window.location.href='?jv_id={{ jv.id }}'">
+            <div class="jv-icon">
+              <i class="fa fa-building-o"></i>
+            </div>
+            <div class="jv-body">
+              <p class="jv-name">{{ jv.name }}</p>
+              <p class="jv-meta">
+                Operator: {{ jv.operator_name or jv.operator_entity_id }}
+                &mdash; {{ jv.currency }}
+                &mdash; {{ jv.partner_count }} partner{{ 's' if jv.partner_count != 1 else '' }}
+              </p>
+            </div>
+            <div>
+              {% if jv.status == 'ACTIVE' %}<span class="badge-active">Active</span>
+              {% elif jv.status == 'WIND_DOWN' %}<span class="badge-wind-down">Wind Down</span>
+              {% elif jv.status == 'COMPLETED' %}<span class="badge-completed">Completed</span>
+              {% else %}<span class="badge-active">{{ jv.status }}</span>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        {% else %}
+          <li style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+            No joint ventures found.
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  {# ── Right: Detail ────────────────────────────────────────────────────── #}
+  <div class="col-md-8">
+    {% if selected_jv %}
+
+    {# JV header card #}
+    <div class="erp-card" style="padding:16px 20px; margin-bottom:16px;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h3 style="margin:0 0 4px; font-size:18px; font-weight:700; color:#111827;">{{ selected_jv.name }}</h3>
+          <p style="margin:0; font-size:12px; color:#6b7280;">
+            JV Ref: <strong>{{ selected_jv.jv_ref }}</strong>
+            &mdash; Currency: <strong>{{ selected_jv.currency }}</strong>
+            &mdash; Commenced: {{ selected_jv.commencement_date or '—' }}
+          </p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="btn-distribute" class="btn btn-primary btn-sm" style="font-weight:600; font-size:12px; padding:5px 14px;">
+            <i class="fa fa-share-alt"></i> Distribute Expense
+          </button>
+          <button id="btn-cash-call" class="btn btn-default btn-sm" style="font-weight:600; font-size:12px; padding:5px 14px;">
+            <i class="fa fa-money"></i> Issue Cash Call
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# Partner Ownership Table #}
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-users" style="color:#1a56db; margin-right:6px;"></i> Partner Ownership
+        </h4>
+      </div>
+      <table class="partner-table">
+        <thead>
+          <tr>
+            <th>Entity</th>
+            <th>Role</th>
+            <th>Method</th>
+            <th>Ownership %</th>
+            <th style="min-width:120px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if selected_jv.partners %}
+            {% for p in selected_jv.partners %}
+            <tr>
+              <td style="font-weight:600;">{{ p.entity_name or p.entity_id }}</td>
+              <td>
+                {% if p.is_operator %}
+                  <span class="badge-operator"><i class="fa fa-star"></i> Operator</span>
+                {% else %}
+                  <span class="badge-non-op">Non-Operator</span>
+                {% endif %}
+              </td>
+              <td style="font-size:12px; color:#6b7280;">{{ p.method or 'Proportionate' }}</td>
+              <td style="font-weight:700; font-variant-numeric:tabular-nums;">{{ "{:.2f}".format(p.ownership_pct) }}%</td>
+              <td>
+                <div class="own-bar-wrap">
+                  <div class="own-bar">
+                    <div class="own-bar-inner" style="width:{{ p.ownership_pct }}%;"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+            <tr style="background:#f9fafb; font-weight:700; font-size:12px;">
+              <td colspan="3" style="padding:9px 12px; color:#374151;">Total</td>
+              <td style="padding:9px 12px; font-variant-numeric:tabular-nums;">
+                {{ "{:.2f}".format(selected_jv.partners | sum(attribute='ownership_pct')) }}%
+              </td>
+              <td></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" style="text-align:center; padding:24px; color:#9ca3af;">No partners configured.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Recent Billings #}
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-list" style="color:#1a56db; margin-right:6px;"></i> Recent Billings
+        </h4>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="billing-table">
+          <thead>
+            <tr>
+              <th>Journal</th>
+              <th>Period</th>
+              <th class="nums">Total Amount</th>
+              <th class="nums">Distributions</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if billings %}
+              {% for b in billings %}
+              <tr>
+                <td style="font-family:monospace; font-size:11px; color:#1a56db; font-weight:600;">{{ b.journal_id }}</td>
+                <td>{{ b.period }}</td>
+                <td class="nums">{{ "{:,.2f}".format(b.total_cents / 100) }}</td>
+                <td class="nums">{{ b.distribution_count or '—' }}</td>
+                <td>
+                  {% if b.status == 'POSTED' %}
+                    <span style="background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600;">Posted</span>
+                  {% elif b.status == 'DRAFT' %}
+                    <span style="background:#fef3c7; color:#92400e; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600;">Draft</span>
+                  {% else %}
+                    <span style="font-size:11px; color:#6b7280;">{{ b.status }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="5" style="text-align:center; padding:24px; color:#9ca3af;">No billings recorded.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="erp-card" style="padding:60px; text-align:center; color:#9ca3af;">
+      <i class="fa fa-hand-o-left" style="font-size:36px; display:block; margin-bottom:12px; opacity:.4;"></i>
+      <p style="margin:0; font-size:14px;">Select a joint venture from the list to view details.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Distribute Expense Modal ─────────────────────────────────────────────── #}
+{% if selected_jv %}
+<div class="modal fade" id="modal-distribute" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-share-alt" style="color:#1a56db;"></i>&nbsp; Distribute Expense
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Period (YYYY-MM)</label>
+          <input type="month" id="dist-period" class="form-control" style="font-size:13px;">
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Expense Amount</label>
+          <div class="input-group">
+            <span class="input-group-addon" style="font-size:13px;">{{ selected_jv.currency }}</span>
+            <input type="number" id="dist-amount" class="form-control" step="0.01" min="0" placeholder="0.00" style="font-size:13px;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Cost Category</label>
+          <select id="dist-category" class="form-control" style="font-size:13px;">
+            <option value="OPEX">Operating Expenses</option>
+            <option value="CAPEX">Capital Expenditure</option>
+            <option value="ABANDONMENT">Abandonment</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Description</label>
+          <input type="text" id="dist-desc" class="form-control" placeholder="e.g. Q2 drilling costs" style="font-size:13px;">
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-dist-confirm" class="btn btn-primary" style="font-weight:600;">
+          <i class="fa fa-share-alt"></i>&nbsp; Distribute
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Cash Call Modal ──────────────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-cash-call" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-money" style="color:#1a56db;"></i>&nbsp; Issue Cash Call
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Period (YYYY-MM)</label>
+          <input type="month" id="cc-period" class="form-control" style="font-size:13px;">
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Cash Call Amount</label>
+          <div class="input-group">
+            <span class="input-group-addon" style="font-size:13px;">{{ selected_jv.currency }}</span>
+            <input type="number" id="cc-amount" class="form-control" step="0.01" min="0" placeholder="0.00" style="font-size:13px;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Due Date</label>
+          <input type="date" id="cc-due-date" class="form-control" style="font-size:13px;">
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Purpose</label>
+          <textarea id="cc-purpose" class="form-control" rows="2" placeholder="Purpose of cash call…" style="font-size:13px;"></textarea>
+        </div>
+        <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:10px 14px; font-size:12px; color:#0369a1;">
+          <i class="fa fa-info-circle"></i>
+          Cash calls will be apportioned to each partner per their ownership percentage and billing notices generated.
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-cc-confirm" class="btn btn-primary" style="font-weight:600;">
+          <i class="fa fa-paper-plane"></i>&nbsp; Issue Call
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  {% if selected_jv %}
+  var JV_ID = '{{ selected_jv.id }}';
+
+  /* ── Distribute Expense ──────────────────────────────────────────────── */
+  document.getElementById('btn-distribute').addEventListener('click', function () {
+    $('#modal-distribute').modal('show');
+  });
+
+  document.getElementById('btn-dist-confirm').addEventListener('click', function () {
+    var period   = document.getElementById('dist-period').value;
+    var amount   = parseFloat(document.getElementById('dist-amount').value);
+    var category = document.getElementById('dist-category').value;
+    var desc     = document.getElementById('dist-desc').value;
+    if (!period)          { toast('Select a period.', 'error'); return; }
+    if (!amount || amount <= 0) { toast('Enter a valid amount.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/jv/' + encodeURIComponent(JV_ID) + '/distribute', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: period, amount_cents: Math.round(amount * 100), category: category, description: desc })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-distribute').modal('hide');
+      if (res.ok) {
+        toast('Expense distributed. Journal: ' + (res.data.journal_ref || '—'), 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Distribution failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-share-alt"></i>&nbsp; Distribute';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-share-alt"></i>&nbsp; Distribute';
+    });
+  });
+
+  /* ── Cash Call ───────────────────────────────────────────────────────── */
+  document.getElementById('btn-cash-call').addEventListener('click', function () {
+    $('#modal-cash-call').modal('show');
+  });
+
+  document.getElementById('btn-cc-confirm').addEventListener('click', function () {
+    var period  = document.getElementById('cc-period').value;
+    var amount  = parseFloat(document.getElementById('cc-amount').value);
+    var dueDate = document.getElementById('cc-due-date').value;
+    var purpose = document.getElementById('cc-purpose').value;
+    if (!period)          { toast('Select a period.', 'error'); return; }
+    if (!amount || amount <= 0) { toast('Enter a valid amount.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/jv/' + encodeURIComponent(JV_ID) + '/cash_call', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: period, amount_cents: Math.round(amount * 100), due_date: dueDate, purpose: purpose })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-cash-call').modal('hide');
+      if (res.ok) {
+        toast('Cash call issued. ' + (res.data.notices_sent || 0) + ' partner notice(s) generated.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Cash call failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-paper-plane"></i>&nbsp; Issue Call';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-paper-plane"></i>&nbsp; Issue Call';
+    });
+  });
+  {% endif %}
+
+}());
+</script>
+{% endblock %}

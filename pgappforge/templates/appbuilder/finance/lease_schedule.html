@@ -1,0 +1,317 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Lease Schedule — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .lease-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; margin-bottom:24px; }
+  .lease-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:20px 24px; position:relative; overflow:hidden; }
+  .lease-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .lease-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; font-weight:600; }
+  .lease-kpi-value { font-size:24px; font-weight:700; color:#111827; margin:0 0 2px; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .lease-kpi-sub   { font-size:12px; color:#9ca3af; margin:0; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* lease list */
+  .lease-list { padding:0; margin:0; list-style:none; }
+  .lease-item { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #f3f4f6; cursor:pointer; transition:background .12s; }
+  .lease-item:last-child { border-bottom:none; }
+  .lease-item:hover, .lease-item.active { background:#eff6ff; }
+  .lease-item.active { border-left:3px solid #1a56db; }
+  .lease-item-icon { width:34px; height:34px; border-radius:6px; background:#e0e7ff; display:flex; align-items:center; justify-content:center; color:#3730a3; font-size:14px; flex-shrink:0; }
+  .lease-item-body { flex:1; min-width:0; }
+  .lease-item-name { font-size:13px; font-weight:600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0 0 2px; }
+  .lease-item-meta { font-size:11px; color:#6b7280; margin:0; }
+  /* status badges */
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-modified { background:#fef3c7; color:#92400e; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-expired  { background:#f3f4f6; color:#6b7280;  font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-pending  { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* amortisation table */
+  .amort-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .amort-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:9px 10px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .amort-table td { padding:8px 10px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .amort-table tr:last-child td { border-bottom:none; }
+  .amort-table tr:hover td { background:#f9fafb; }
+  .amort-table .current-period td { background:#fffbeb; font-weight:600; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; }
+  /* progress bar */
+  .lease-progress-wrap { background:#e5e7eb; border-radius:6px; height:8px; overflow:hidden; flex:1; }
+  .lease-progress-fill { height:100%; border-radius:6px; transition:width .4s; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Lease Accounting</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">IFRS 16 lease liability &amp; ROU asset amortisation schedules</p>
+  </div>
+  <button id="btn-process-period" class="btn btn-primary" style="height:38px; padding:0 18px; font-weight:600; font-size:13px;"
+          {% if not selected_lease %}disabled title="Select a lease first"{% endif %}>
+    <i class="fa fa-cogs"></i>&nbsp; Process Period
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Tiles ────────────────────────────────────────────────────────────── #}
+<div class="lease-kpi-grid">
+  <div class="lease-kpi-card" style="--accent:#1a56db;">
+    <p class="lease-kpi-label">Total Lease Liability</p>
+    <p class="lease-kpi-value">
+      {% if selected_lease %}{{ "{:,.2f}".format(selected_lease.total_liability_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    <p class="lease-kpi-sub">present value of future payments</p>
+  </div>
+  <div class="lease-kpi-card" style="--accent:#8b5cf6;">
+    <p class="lease-kpi-label">ROU Asset</p>
+    <p class="lease-kpi-value">
+      {% if selected_lease %}{{ "{:,.2f}".format(selected_lease.total_rou_asset_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    <p class="lease-kpi-sub">right-of-use asset carrying value</p>
+  </div>
+  <div class="lease-kpi-card" style="--accent:#f59e0b;">
+    <p class="lease-kpi-label">Next Payment Date</p>
+    <p class="lease-kpi-value" style="font-size:18px; padding-top:4px;">
+      {% if selected_lease %}{{ selected_lease.next_payment_date or '—' }}{% else %}—{% endif %}
+    </p>
+    <p class="lease-kpi-sub">
+      {% if selected_lease and selected_lease.next_payment_cents %}
+        Amount: {{ "{:,.2f}".format(selected_lease.next_payment_cents / 100) }}
+      {% else %}—{% endif %}
+    </p>
+  </div>
+  <div class="lease-kpi-card" style="--accent:#10b981;">
+    <p class="lease-kpi-label">Lease Progress</p>
+    {% if selected_lease and selected_lease.total_months %}
+      {% set prog_pct = ((selected_lease.months_elapsed / selected_lease.total_months) * 100) | int %}
+      <p class="lease-kpi-value" style="margin-bottom:8px;">
+        {{ selected_lease.months_elapsed }} / {{ selected_lease.total_months }}
+        <span style="font-size:13px; font-weight:400; color:#6b7280;"> months</span>
+      </p>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="lease-progress-wrap">
+          <div class="lease-progress-fill"
+               style="width:{{ prog_pct }}%;
+                      background:{% if prog_pct < 50 %}#10b981{% elif prog_pct < 80 %}#f59e0b{% else %}#ef4444{% endif %}">
+          </div>
+        </div>
+        <span style="font-size:12px; font-weight:700; color:#374151; white-space:nowrap;">{{ prog_pct }}%</span>
+      </div>
+    {% else %}
+      <p class="lease-kpi-value">—</p>
+      <p class="lease-kpi-sub">select a lease</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Left: Lease List ─────────────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:14px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-list-alt" style="color:#1a56db; margin-right:6px;"></i> Leases
+        </h4>
+      </div>
+      <ul class="lease-list">
+        {% if leases %}
+          {% for lease in leases %}
+          <li class="lease-item {% if selected_lease and selected_lease.id == lease.id %}active{% endif %}"
+              onclick="window.location.href='?lease_id={{ lease.id }}'">
+            <div class="lease-item-icon">
+              {% if lease.asset_class == 'PROPERTY' %}<i class="fa fa-building-o"></i>
+              {% elif lease.asset_class == 'VEHICLE' %}<i class="fa fa-car"></i>
+              {% elif lease.asset_class == 'EQUIPMENT' %}<i class="fa fa-wrench"></i>
+              {% else %}<i class="fa fa-file-text-o"></i>{% endif %}
+            </div>
+            <div class="lease-item-body">
+              <p class="lease-item-name">{{ lease.description or lease.lease_ref }}</p>
+              <p class="lease-item-meta">
+                {{ lease.lessor }} &mdash; {{ lease.currency }}
+                &mdash; {{ lease.commencement_date }}
+              </p>
+            </div>
+            <div>
+              {% if lease.status == 'ACTIVE' %}<span class="badge-active">Active</span>
+              {% elif lease.status == 'MODIFIED' %}<span class="badge-modified">Modified</span>
+              {% elif lease.status == 'EXPIRED' %}<span class="badge-expired">Expired</span>
+              {% else %}<span class="badge-pending">{{ lease.status }}</span>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        {% else %}
+          <li style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+            No leases found.
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  {# ── Right: Amortisation Schedule ────────────────────────────────────── #}
+  <div class="col-md-8">
+    {% if selected_lease %}
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:14px 18px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-table" style="color:#1a56db; margin-right:6px;"></i>
+          Amortisation Schedule —
+          <span style="color:#6b7280; font-weight:400;">{{ selected_lease.description or selected_lease.lease_ref }}</span>
+        </h4>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span style="font-size:12px; color:#9ca3af;">
+            Rate: {{ "{:.4f}".format(selected_lease.discount_rate) }}
+            &mdash; {{ selected_lease.payment_frequency }}
+          </span>
+        </div>
+      </div>
+      <div style="overflow-x:auto; max-height:520px; overflow-y:auto;">
+        <table class="amort-table">
+          <thead style="position:sticky; top:0; z-index:1;">
+            <tr>
+              <th>#</th>
+              <th>Period</th>
+              <th class="nums">Opening Balance</th>
+              <th class="nums">Interest</th>
+              <th class="nums">Principal</th>
+              <th class="nums">Payment</th>
+              <th class="nums">Closing Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if schedule %}
+              {% for row in schedule %}
+              <tr class="{% if row.is_current_period %}current-period{% endif %}">
+                <td style="color:#9ca3af; font-size:11px;">{{ row.period_number }}</td>
+                <td style="font-weight:{% if row.is_current_period %}700{% else %}400{% endif %}; white-space:nowrap;">
+                  {{ row.period_label }}
+                  {% if row.is_current_period %}
+                    <i class="fa fa-circle" style="color:#f59e0b; font-size:8px; vertical-align:middle; margin-left:4px;"></i>
+                  {% endif %}
+                </td>
+                <td class="nums">{{ "{:,.2f}".format(row.opening_balance_cents / 100) }}</td>
+                <td class="nums" style="color:#ef4444;">{{ "{:,.2f}".format(row.interest_cents / 100) }}</td>
+                <td class="nums" style="color:#1a56db;">{{ "{:,.2f}".format(row.principal_cents / 100) }}</td>
+                <td class="nums" style="font-weight:600;">{{ "{:,.2f}".format(row.payment_cents / 100) }}</td>
+                <td class="nums">{{ "{:,.2f}".format(row.closing_balance_cents / 100) }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="7" style="text-align:center; padding:28px; color:#9ca3af;">
+                No schedule generated yet.
+              </td></tr>
+            {% endif %}
+          </tbody>
+          {% if schedule %}
+          <tfoot style="border-top:2px solid #e5e7eb; position:sticky; bottom:0; background:#f9fafb;">
+            <tr style="font-weight:700; font-size:12px;">
+              <td colspan="2" style="padding:9px 10px; color:#374151;">Totals</td>
+              <td class="nums" style="padding:9px 10px;">—</td>
+              <td class="nums" style="padding:9px 10px; color:#ef4444;">
+                {{ "{:,.2f}".format(schedule | sum(attribute='interest_cents') / 100) }}
+              </td>
+              <td class="nums" style="padding:9px 10px; color:#1a56db;">
+                {{ "{:,.2f}".format(schedule | sum(attribute='principal_cents') / 100) }}
+              </td>
+              <td class="nums" style="padding:9px 10px;">
+                {{ "{:,.2f}".format(schedule | sum(attribute='payment_cents') / 100) }}
+              </td>
+              <td class="nums" style="padding:9px 10px;">—</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="erp-card" style="padding:60px; text-align:center; color:#9ca3af;">
+      <i class="fa fa-hand-o-left" style="font-size:36px; display:block; margin-bottom:12px; opacity:.4;"></i>
+      <p style="margin:0; font-size:14px;">Select a lease from the list to view its amortisation schedule.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Process Period button ───────────────────────────────────────────── */
+  var btn = document.getElementById('btn-process-period');
+  if (btn && !btn.disabled) {
+    btn.addEventListener('click', function () {
+      {% if selected_lease %}
+      var leaseId = '{{ selected_lease.id }}';
+      {% else %}
+      var leaseId = null;
+      {% endif %}
+      if (!leaseId) { toast('No lease selected.', 'error'); return; }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing…';
+
+      fetch('/api/leases/' + encodeURIComponent(leaseId) + '/process_period', {
+        method:      'POST',
+        headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        credentials: 'same-origin'
+      })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (res.ok) {
+          toast('Period processed. Journal ' + (res.data.journal_ref || '') + ' created.', 'success');
+          setTimeout(function () { window.location.reload(); }, 1800);
+        } else {
+          toast(res.data.message || 'Processing failed.', 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa fa-cogs"></i>&nbsp; Process Period';
+        }
+      })
+      .catch(function (err) {
+        toast('Network error: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-cogs"></i>&nbsp; Process Period';
+      });
+    });
+  }
+
+  /* ── Scroll current period row into view ─────────────────────────────── */
+  var currentRow = document.querySelector('.amort-table .current-period');
+  if (currentRow) {
+    currentRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+}());
+</script>
+{% endblock %}

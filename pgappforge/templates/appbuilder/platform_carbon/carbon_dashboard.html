@@ -1,0 +1,295 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Carbon &amp; GHG Tracking — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .scope-badge-1 { background:#fef3c7;color:#92400e; }
+  .scope-badge-2 { background:#dbeafe;color:#1e40af; }
+  .scope-badge-3 { background:#f3e8ff;color:#6b21a8; }
+  .scope-badge { display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase; }
+  .ghg-offset-bar { height:12px; background:var(--erp-border); border-radius:6px; overflow:hidden; position:relative; }
+  .ghg-offset-gross { height:100%; background:var(--erp-danger); border-radius:6px; transition:width .5s ease; }
+  .ghg-offset-net { position:absolute; top:0; left:0; height:100%; background:var(--erp-success); border-radius:6px; transition:width .5s ease; }
+  .ghg-net-kpi { font-size:32px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .ghg-modal-unit { font-size:11px; color:var(--erp-text-muted); margin-left:4px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-leaf"></i> Carbon &amp; GHG Tracking</h1>
+    <p class="erp-page-subtitle">Scope 1, 2, and 3 emissions tracking, offset management, and GHG reporting.</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#record-emission-modal">
+      <i class="fa fa-plus"></i> Record Emission
+    </button>
+    <form method="POST" action="/api/platform/carbon/seed-factors" style="display:inline;">
+      <button type="submit" class="btn btn-default btn-sm" title="Seed Kenya default emission factors">
+        <i class="fa fa-database"></i> Seed Default Factors
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% set rpt = ghg_report | default({}) %}
+
+{# ── Scope KPI tiles ────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <div class="erp-card-icon"><i class="fa fa-fire"></i></div>
+    <p class="erp-card-title">Scope 1 (Direct)</p>
+    <p class="erp-card-value">{{ '{:,.1f}'.format(rpt.scope1_co2e_kg | default(0)) }}</p>
+    <p class="erp-card-sub">kg CO<sub>2</sub>e · Combustion, fleet</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-info"></div>
+    <div class="erp-card-icon"><i class="fa fa-bolt"></i></div>
+    <p class="erp-card-title">Scope 2 (Indirect Energy)</p>
+    <p class="erp-card-value">{{ '{:,.1f}'.format(rpt.scope2_co2e_kg | default(0)) }}</p>
+    <p class="erp-card-sub">kg CO<sub>2</sub>e · Purchased electricity</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent" style="background:#7c3aed;"></div>
+    <div class="erp-card-icon"><i class="fa fa-link"></i></div>
+    <p class="erp-card-title">Scope 3 (Value Chain)</p>
+    <p class="erp-card-value">{{ '{:,.1f}'.format(rpt.scope3_co2e_kg | default(0)) }}</p>
+    <p class="erp-card-sub">kg CO<sub>2</sub>e · Supply chain, travel</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon"><i class="fa fa-leaf"></i></div>
+    <p class="erp-card-title">Net Emissions</p>
+    {% set gross = (rpt.scope1_co2e_kg | default(0)) + (rpt.scope2_co2e_kg | default(0)) + (rpt.scope3_co2e_kg | default(0)) %}
+    {% set offsets_applied = offsets.applied_co2e_kg | default(0) if offsets else 0 %}
+    {% set net = gross - offsets_applied %}
+    <p class="ghg-net-kpi" style="color:{{ 'var(--erp-success)' if net <= 0 else 'var(--erp-danger)' }};">
+      {{ '{:,.1f}'.format(net) }}
+    </p>
+    <p class="erp-card-sub">kg CO<sub>2</sub>e net after offsets</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Monthly GHG bar chart ────────────────────────────────────────── #}
+  <div class="col-md-7">
+    <div class="erp-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title"><i class="fa fa-bar-chart"></i> GHG Emissions by Month — Scope Breakdown</h4>
+      <canvas id="ghg-bar-chart" height="120" aria-label="GHG emissions chart" role="img"></canvas>
+    </div>
+  </div>
+
+  {# ── Offsets section ─────────────────────────────────────────────── #}
+  <div class="col-md-5">
+    <div class="erp-card erp-mb-24">
+      <p class="erp-section-title"><i class="fa fa-recycle"></i> Carbon Offsets</p>
+      {% set gross_total = (rpt.scope1_co2e_kg | default(0)) + (rpt.scope2_co2e_kg | default(0)) + (rpt.scope3_co2e_kg | default(0)) %}
+      {% set off_pct = [(offsets_applied / gross_total * 100), 100] | min | int if gross_total > 0 else 0 %}
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">
+          <span style="color:var(--erp-text-muted);">Gross: <strong>{{ '{:,.1f}'.format(gross_total) }} kg</strong></span>
+          <span style="color:var(--erp-success);">Offset: <strong>{{ '{:,.1f}'.format(offsets_applied) }} kg</strong></span>
+        </div>
+        <div class="ghg-offset-bar">
+          <div class="ghg-offset-gross" style="width:100%;"></div>
+          <div class="ghg-offset-net" style="width:{{ off_pct }}%;"></div>
+        </div>
+        <div style="font-size:11px;color:var(--erp-text-muted);margin-top:4px;">{{ off_pct }}% offset</div>
+      </div>
+      {% if offsets and offsets.items %}
+      <table class="erp-table" style="font-size:12px;">
+        <thead>
+          <tr><th>Project</th><th>CO<sub>2</sub>e kg</th><th>Period</th></tr>
+        </thead>
+        <tbody>
+          {% for o in offsets.items %}
+          <tr>
+            <td>{{ o.project_name | default('—') }}</td>
+            <td>{{ '{:,.1f}'.format(o.co2e_kg | default(0)) }}</td>
+            <td>{{ o.period | default('—') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--erp-text-muted);font-size:13px;text-align:center;padding:16px 0;margin:0;">
+        No offsets recorded yet.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Emissions table ────────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-table"></i> Emission Records</h4>
+    <span style="font-size:12px;color:var(--erp-text-muted);">{{ emission_records | length if emission_records else 0 }} records</span>
+  </div>
+  <table class="erp-table">
+    <thead>
+      <tr>
+        <th>Source Type</th>
+        <th>Scope</th>
+        <th>Activity Data</th>
+        <th>Unit</th>
+        <th>CO<sub>2</sub>e kg</th>
+        <th>Period</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if emission_records %}
+        {% for rec in emission_records %}
+        {% set sc = rec.scope | default(1) | int %}
+        <tr>
+          <td style="font-weight:600;">{{ rec.source_type | default('—') }}</td>
+          <td>
+            <span class="scope-badge scope-badge-{{ sc }}">Scope {{ sc }}</span>
+          </td>
+          <td style="font-variant-numeric:tabular-nums;">{{ rec.activity_data | default('—') }}</td>
+          <td style="color:var(--erp-text-muted);font-size:12px;">{{ rec.unit | default('—') }}</td>
+          <td style="font-weight:700;font-variant-numeric:tabular-nums;">
+            {{ '{:,.2f}'.format(rec.co2e_kg | default(0)) }}
+          </td>
+          <td style="font-size:12px;">{{ rec.period | default('—') }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+      <tr>
+        <td colspan="6" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+          No emission records. <button class="btn btn-link btn-sm" style="padding:0;" data-toggle="modal" data-target="#record-emission-modal">Record the first emission</button>.
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Record Emission Modal ───────────────────────────────────────────── #}
+<div class="modal fade" id="record-emission-modal" tabindex="-1" role="dialog" aria-labelledby="rec-em-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/api/platform/carbon/record">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="rec-em-label"><i class="fa fa-leaf"></i> Record Emission</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">Source Type <span class="text-danger">*</span></label>
+            <input type="text" name="source_type" class="form-control" required placeholder="e.g. Diesel Generator, Grid Electricity, Air Travel">
+          </div>
+          <div class="row">
+            <div class="col-sm-8">
+              <div class="form-group">
+                <label class="control-label">Activity Data <span class="text-danger">*</span></label>
+                <input type="number" name="activity_data" class="form-control" required step="any" min="0" placeholder="e.g. 150">
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <div class="form-group">
+                <label class="control-label">Unit <span class="text-danger">*</span></label>
+                <input type="text" name="unit" class="form-control" required placeholder="kWh, litres, km">
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">Scope <span class="text-danger">*</span></label>
+                <select name="scope" class="form-control" required>
+                  <option value="1">Scope 1 — Direct</option>
+                  <option value="2">Scope 2 — Indirect Energy</option>
+                  <option value="3">Scope 3 — Value Chain</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">Period <span class="text-danger">*</span></label>
+                <input type="month" name="period" class="form-control" required>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Record</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('ghg-bar-chart');
+  if (!canvas || !window.Chart) return;
+
+  var rpt = {{ ghg_report | tojson if ghg_report else 'null' }};
+  if (!rpt || !rpt.monthly) {
+    canvas.parentElement.style.display = 'none';
+    return;
+  }
+
+  new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: rpt.monthly.map(function (m) { return m.period; }),
+      datasets: [
+        {
+          label: 'Scope 1',
+          data: rpt.monthly.map(function (m) { return m.scope1 || 0; }),
+          backgroundColor: 'rgba(245,158,11,.8)',
+          borderRadius: 2
+        },
+        {
+          label: 'Scope 2',
+          data: rpt.monthly.map(function (m) { return m.scope2 || 0; }),
+          backgroundColor: 'rgba(37,99,235,.8)',
+          borderRadius: 2
+        },
+        {
+          label: 'Scope 3',
+          data: rpt.monthly.map(function (m) { return m.scope3 || 0; }),
+          backgroundColor: 'rgba(124,58,237,.8)',
+          borderRadius: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + ' kg CO₂e';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' },
+             ticks: { callback: function (v) { return v.toLocaleString(); } }
+           }
+      }
+    }
+  });
+}());
+</script>
+{% endblock %}

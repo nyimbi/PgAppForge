@@ -1,0 +1,336 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Material Ledger — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ml-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+  .ml-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:20px 24px; position:relative; overflow:hidden; }
+  .ml-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .ml-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; font-weight:600; }
+  .ml-kpi-value { font-size:26px; font-weight:700; color:#111827; margin:0 0 2px; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .ml-kpi-sub   { font-size:12px; color:#9ca3af; margin:0; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* material ledger table */
+  .ml-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .ml-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .ml-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .ml-table tr:last-child td { border-bottom:none; }
+  .ml-table tr:hover td { background:#fafafa; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* variance coloring */
+  .var-fav  { color:#10b981; font-weight:700; }
+  .var-adv  { color:#ef4444; font-weight:700; }
+  .var-zero { color:#9ca3af; }
+  /* variance bar in cell */
+  .var-bar-wrap { display:inline-flex; align-items:center; gap:8px; }
+  .var-bar { width:60px; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; }
+  .var-bar-inner { height:100%; border-radius:3px; }
+  /* filter bar */
+  .filter-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:0; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Material Ledger</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Actual costing — standard vs actual cost variances by product &amp; period</p>
+  </div>
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button id="btn-compute" class="btn btn-primary" style="height:38px; padding:0 18px; font-weight:600; font-size:13px;">
+      <i class="fa fa-calculator"></i>&nbsp; Compute Actual Costs
+    </button>
+    <button id="btn-revaluation" class="btn btn-default" style="height:38px; padding:0 18px; font-weight:600; font-size:13px;">
+      <i class="fa fa-exchange"></i>&nbsp; Post Revaluation
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Period Selector + KPIs ───────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:14px 20px; margin-bottom:20px;">
+  <div class="filter-bar">
+    <label for="sel-period">Period:</label>
+    <select id="sel-period" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+      {% if period_summary and period_summary.available_periods %}
+        {% for p in period_summary.available_periods %}
+        <option value="{{ p }}" {% if period_summary.current_period == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      {% else %}
+        <option value="{{ period_summary.current_period if period_summary else '' }}">
+          {{ period_summary.current_period if period_summary else '—' }}
+        </option>
+      {% endif %}
+    </select>
+    <button id="btn-period-apply" class="btn btn-default btn-sm" style="height:32px;">
+      <i class="fa fa-filter"></i> Load
+    </button>
+    <label style="margin-left:8px;">Search:</label>
+    <input id="search-product" type="text" class="form-control" placeholder="Material / product…"
+           style="width:200px; height:32px; padding:2px 10px; font-size:13px;">
+    <button id="btn-search-clear" class="btn btn-link btn-sm" style="height:32px; padding:0 8px;">Clear</button>
+    <span id="row-count" style="margin-left:auto; font-size:12px; color:#6b7280;"></span>
+  </div>
+</div>
+
+{# ── KPI Tiles ────────────────────────────────────────────────────────────── #}
+<div class="ml-kpi-grid">
+  <div class="ml-kpi-card" style="--accent:#1a56db;">
+    <p class="ml-kpi-label">Total Standard Cost</p>
+    <p class="ml-kpi-value">
+      {% if period_summary %}{{ "{:,.2f}".format(period_summary.total_standard_cost_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    <p class="ml-kpi-sub">current period</p>
+  </div>
+  <div class="ml-kpi-card" style="--accent:#10b981;">
+    <p class="ml-kpi-label">Total Actual Cost</p>
+    <p class="ml-kpi-value">
+      {% if period_summary %}{{ "{:,.2f}".format(period_summary.total_actual_cost_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    <p class="ml-kpi-sub">current period</p>
+  </div>
+  <div class="ml-kpi-card" style="--accent:{% if period_summary and period_summary.total_variance_cents < 0 %}#ef4444{% else %}#f59e0b{% endif %};">
+    <p class="ml-kpi-label">Total Variance</p>
+    <p class="ml-kpi-value {% if period_summary and period_summary.total_variance_cents < 0 %}var-adv{% elif period_summary and period_summary.total_variance_cents > 0 %}var-fav{% endif %}">
+      {% if period_summary %}
+        {{ "{:+,.2f}".format(period_summary.total_variance_cents / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="ml-kpi-sub">
+      {% if period_summary and period_summary.total_variance_cents < 0 %}Adverse — investigate{% elif period_summary and period_summary.total_variance_cents > 0 %}Favourable{% else %}On standard{% endif %}
+    </p>
+  </div>
+  <div class="ml-kpi-card" style="--accent:#8b5cf6;">
+    <p class="ml-kpi-label">Products Costed</p>
+    <p class="ml-kpi-value">{{ entries | length if entries else '—' }}</p>
+    <p class="ml-kpi-sub">in this period</p>
+  </div>
+</div>
+
+{# ── Material Ledger Table ─────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div style="padding:14px 20px; border-bottom:1px solid #e5e7eb;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-table" style="color:#1a56db; margin-right:6px;"></i>
+      Cost Comparison by Material
+    </h4>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="ml-table" id="ml-table">
+      <thead>
+        <tr>
+          <th>Material</th>
+          <th>Description</th>
+          <th>Plant</th>
+          <th class="nums">Qty</th>
+          <th class="nums">Std Cost / Unit</th>
+          <th class="nums">Act Cost / Unit</th>
+          <th class="nums">Total Std Cost</th>
+          <th class="nums">Total Act Cost</th>
+          <th class="nums">Variance</th>
+          <th>Var %</th>
+        </tr>
+      </thead>
+      <tbody id="ml-tbody">
+        {% if entries %}
+          {% for e in entries %}
+          {% set var_cents = e.actual_cost_cents - e.standard_cost_cents %}
+          {% set var_pct   = ((var_cents / e.standard_cost_cents) * 100) | round(1) if e.standard_cost_cents else 0 %}
+          <tr data-material="{{ e.material_number | lower }}" data-desc="{{ (e.description or '') | lower }}">
+            <td style="font-weight:600; font-family:monospace; font-size:12px;">{{ e.material_number }}</td>
+            <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ e.description or '—' }}
+            </td>
+            <td style="font-size:12px; color:#6b7280;">{{ e.plant or '—' }}</td>
+            <td class="nums">{{ "{:,.0f}".format(e.quantity) }}</td>
+            <td class="nums">{{ "{:,.4f}".format(e.std_unit_cost_cents / 100) }}</td>
+            <td class="nums">{{ "{:,.4f}".format(e.act_unit_cost_cents / 100) }}</td>
+            <td class="nums">{{ "{:,.2f}".format(e.standard_cost_cents / 100) }}</td>
+            <td class="nums">{{ "{:,.2f}".format(e.actual_cost_cents / 100) }}</td>
+            <td class="nums {% if var_cents < 0 %}var-adv{% elif var_cents > 0 %}var-fav{% else %}var-zero{% endif %}">
+              {{ "{:+,.2f}".format(var_cents / 100) }}
+            </td>
+            <td style="min-width:100px;">
+              <div class="var-bar-wrap">
+                <div class="var-bar">
+                  <div class="var-bar-inner"
+                       style="width:{{ [var_pct | abs, 100] | min }}%;
+                              background:{% if var_cents < 0 %}#ef4444{% elif var_cents > 0 %}#10b981{% else %}#e5e7eb{% endif %};">
+                  </div>
+                </div>
+                <span style="font-size:11px;
+                             color:{% if var_cents < 0 %}#ef4444{% elif var_cents > 0 %}#10b981{% else %}#9ca3af{% endif %};
+                             font-weight:600; min-width:36px;">
+                  {{ "{:+.1f}".format(var_pct) }}%
+                </span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="no-data-row"><td colspan="10" style="text-align:center; padding:32px; color:#9ca3af;">
+            <i class="fa fa-inbox" style="font-size:28px; display:block; margin-bottom:8px; opacity:.4;"></i>
+            No material ledger entries for this period. Run Compute Actual Costs first.
+          </td></tr>
+        {% endif %}
+      </tbody>
+      {% if entries and period_summary %}
+      <tfoot style="border-top:2px solid #e5e7eb; background:#f9fafb;">
+        <tr style="font-weight:700; font-size:12px;">
+          <td colspan="6" style="padding:10px 12px; color:#374151;">Period Total</td>
+          <td class="nums" style="padding:10px 12px;">{{ "{:,.2f}".format(period_summary.total_standard_cost_cents / 100) }}</td>
+          <td class="nums" style="padding:10px 12px;">{{ "{:,.2f}".format(period_summary.total_actual_cost_cents / 100) }}</td>
+          <td class="nums {% if period_summary.total_variance_cents < 0 %}var-adv{% elif period_summary.total_variance_cents > 0 %}var-fav{% else %}var-zero{% endif %}"
+              style="padding:10px 12px;">
+            {{ "{:+,.2f}".format(period_summary.total_variance_cents / 100) }}
+          </td>
+          <td style="padding:10px 12px;"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function currentPeriod() {
+    return document.getElementById('sel-period').value;
+  }
+
+  /* ── Period nav ──────────────────────────────────────────────────────── */
+  document.getElementById('btn-period-apply').addEventListener('click', function () {
+    window.location.href = window.location.pathname + '?period=' + encodeURIComponent(currentPeriod());
+  });
+
+  /* ── Search filter ───────────────────────────────────────────────────── */
+  function applySearch() {
+    var term  = document.getElementById('search-product').value.toLowerCase().trim();
+    var rows  = document.querySelectorAll('#ml-tbody tr[data-material]');
+    var shown = 0;
+    rows.forEach(function (row) {
+      var mat  = row.getAttribute('data-material') || '';
+      var desc = row.getAttribute('data-desc') || '';
+      var show = !term || mat.indexOf(term) !== -1 || desc.indexOf(term) !== -1;
+      row.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+    var countEl = document.getElementById('row-count');
+    if (rows.length) countEl.textContent = 'Showing ' + shown + ' of ' + rows.length + ' materials';
+  }
+
+  document.getElementById('search-product').addEventListener('input', applySearch);
+  document.getElementById('search-product').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') applySearch();
+  });
+  document.getElementById('btn-search-clear').addEventListener('click', function () {
+    document.getElementById('search-product').value = '';
+    applySearch();
+  });
+
+  /* ── Initial row count ───────────────────────────────────────────────── */
+  (function () {
+    var rows = document.querySelectorAll('#ml-tbody tr[data-material]');
+    if (rows.length) document.getElementById('row-count').textContent = 'Showing ' + rows.length + ' materials';
+  }());
+
+  /* ── Compute Actual Costs ─────────────────────────────────────────────── */
+  document.getElementById('btn-compute').addEventListener('click', function () {
+    var period = currentPeriod();
+    if (!period) { toast('Select a period first.', 'error'); return; }
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Computing…';
+
+    fetch('/api/material_ledger/compute?period=' + encodeURIComponent(period), {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin'
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('Actual costs computed for ' + period + '. ' + (res.data.entries_updated || 0) + ' materials updated.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Computation failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-calculator"></i>&nbsp; Compute Actual Costs';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-calculator"></i>&nbsp; Compute Actual Costs';
+    });
+  });
+
+  /* ── Post Revaluation ────────────────────────────────────────────────── */
+  document.getElementById('btn-revaluation').addEventListener('click', function () {
+    var period = currentPeriod();
+    if (!period) { toast('Select a period first.', 'error'); return; }
+    if (!confirm('Post revaluation entries for period ' + period + '? This will create GL journal entries.')) return;
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Posting…';
+
+    fetch('/api/material_ledger/post_revaluation?period=' + encodeURIComponent(period), {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin'
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('Revaluation posted. Journal: ' + (res.data.journal_ref || '—'), 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Revaluation failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-exchange"></i>&nbsp; Post Revaluation';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-exchange"></i>&nbsp; Post Revaluation';
+    });
+  });
+
+}());
+</script>
+{% endblock %}

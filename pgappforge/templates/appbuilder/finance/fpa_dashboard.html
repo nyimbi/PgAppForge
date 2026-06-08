@@ -1,0 +1,559 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}FP&amp;A Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .fpa-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+  .fpa-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:20px 24px; position:relative; overflow:hidden; }
+  .fpa-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .fpa-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; font-weight:600; }
+  .fpa-kpi-value { font-size:26px; font-weight:700; color:#111827; margin:0 0 2px; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .fpa-kpi-sub   { font-size:12px; color:#9ca3af; margin:0; }
+  .fpa-kpi-var-pos { color:#10b981; font-size:12px; font-weight:600; }
+  .fpa-kpi-var-neg { color:#ef4444; font-size:12px; font-weight:600; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* scenario table */
+  .scenario-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .scenario-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .scenario-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .scenario-table tr:last-child td { border-bottom:none; }
+  .scenario-table tr:hover td { background:#f9fafb; }
+  .amounts-col { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  .badge-base       { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 9px; border-radius:10px; font-weight:600; }
+  .badge-optimistic { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 9px; border-radius:10px; font-weight:600; }
+  .badge-pessimistic { background:#fee2e2; color:#991b1b; font-size:11px; padding:2px 9px; border-radius:10px; font-weight:600; }
+  .badge-active { background:#fef3c7; color:#92400e; font-size:11px; padding:2px 9px; border-radius:10px; font-weight:600; }
+  /* accuracy meter */
+  .accuracy-ring-wrap { display:flex; align-items:center; gap:16px; }
+  .accuracy-ring { position:relative; width:72px; height:72px; flex-shrink:0; }
+  .accuracy-ring canvas { display:block; }
+  .accuracy-ring-label { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+  .accuracy-ring-label .val { font-size:16px; font-weight:700; color:#111827; line-height:1; }
+  .accuracy-ring-label .sub { font-size:9px; color:#9ca3af; display:block; }
+  .accuracy-desc { font-size:12px; color:#374151; }
+  .accuracy-desc strong { display:block; font-size:14px; color:#111827; margin-bottom:2px; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .filter-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">FP&amp;A Dashboard</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">
+      Budgeting, forecasting &amp; scenario planning
+      {% if cycle %}&mdash; Cycle: <strong>{{ cycle.name }}</strong> ({{ cycle.period }}){% endif %}
+    </p>
+  </div>
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button id="btn-run-forecast" class="btn btn-primary" style="height:38px; padding:0 18px; font-weight:600; font-size:13px;">
+      <i class="fa fa-refresh"></i>&nbsp; Run Forecast
+    </button>
+    <button id="btn-export" class="btn btn-default" style="height:38px; padding:0 18px; font-weight:600; font-size:13px;">
+      <i class="fa fa-file-pdf-o"></i>&nbsp; Export Board Pack
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Period / Entity selectors ────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:14px 20px; margin-bottom:20px;">
+  <div class="filter-bar">
+    <label for="sel-period">Period:</label>
+    <select id="sel-period" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+      {% if cycle and cycle.periods %}
+        {% for p in cycle.periods %}
+        <option value="{{ p }}" {% if cycle.current_period == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      {% else %}
+        <option value="{{ cycle.period if cycle else '' }}">{{ cycle.period if cycle else '—' }}</option>
+      {% endif %}
+    </select>
+    <label for="sel-entity" style="margin-left:8px;">Entity:</label>
+    <select id="sel-entity" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+      <option value="">All Entities</option>
+      {% if cycle and cycle.entities %}
+        {% for ent in cycle.entities %}
+        <option value="{{ ent.id }}">{{ ent.name }}</option>
+        {% endfor %}
+      {% endif %}
+    </select>
+    <button id="btn-apply-filters" class="btn btn-default btn-sm" style="height:32px;">
+      <i class="fa fa-filter"></i> Apply
+    </button>
+    {% if cycle %}
+    <span style="margin-left:auto; font-size:12px; color:#6b7280;">
+      <i class="fa fa-calendar-o" style="margin-right:4px;"></i>
+      Cycle: <strong>{{ cycle.name }}</strong> &mdash; Status:
+      <span class="{% if cycle.status == 'OPEN' %}badge-active{% elif cycle.status == 'LOCKED' %}badge-base{% else %}badge-base{% endif %}">
+        {{ cycle.status }}
+      </span>
+    </span>
+    {% endif %}
+  </div>
+</div>
+
+{# ── KPI Tiles: Budget vs Actual ─────────────────────────────────────────── #}
+<div class="fpa-kpi-grid">
+  {# Revenue #}
+  <div class="fpa-kpi-card" style="--accent:#1a56db;">
+    <p class="fpa-kpi-label">Revenue — Budget vs Actual</p>
+    <p class="fpa-kpi-value">
+      {% if budget_summary %}{{ "{:,.0f}".format(budget_summary.revenue_actual_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    <p class="fpa-kpi-sub">
+      Budget:
+      {% if budget_summary %}{{ "{:,.0f}".format(budget_summary.revenue_budget_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    {% if budget_summary %}
+      {% set rv = budget_summary.revenue_actual_cents - budget_summary.revenue_budget_cents %}
+      <span class="{% if rv >= 0 %}fpa-kpi-var-pos{% else %}fpa-kpi-var-neg{% endif %}">
+        {% if rv >= 0 %}<i class="fa fa-arrow-up"></i>{% else %}<i class="fa fa-arrow-down"></i>{% endif %}
+        {{ "{:+,.0f}".format(rv / 100) }} variance
+      </span>
+    {% endif %}
+  </div>
+  {# Expenses #}
+  <div class="fpa-kpi-card" style="--accent:#ef4444;">
+    <p class="fpa-kpi-label">Expenses — Budget vs Actual</p>
+    <p class="fpa-kpi-value">
+      {% if budget_summary %}{{ "{:,.0f}".format(budget_summary.expenses_actual_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    <p class="fpa-kpi-sub">
+      Budget:
+      {% if budget_summary %}{{ "{:,.0f}".format(budget_summary.expenses_budget_cents / 100) }}{% else %}—{% endif %}
+    </p>
+    {% if budget_summary %}
+      {% set ev = budget_summary.expenses_budget_cents - budget_summary.expenses_actual_cents %}
+      <span class="{% if ev >= 0 %}fpa-kpi-var-pos{% else %}fpa-kpi-var-neg{% endif %}">
+        {% if ev >= 0 %}<i class="fa fa-arrow-up"></i>{% else %}<i class="fa fa-arrow-down"></i>{% endif %}
+        {{ "{:+,.0f}".format(ev / 100) }} savings
+      </span>
+    {% endif %}
+  </div>
+  {# Headcount #}
+  <div class="fpa-kpi-card" style="--accent:#8b5cf6;">
+    <p class="fpa-kpi-label">Headcount — Budget vs Actual</p>
+    <p class="fpa-kpi-value">
+      {% if budget_summary %}{{ budget_summary.headcount_actual }}{% else %}—{% endif %}
+    </p>
+    <p class="fpa-kpi-sub">
+      Budget:
+      {% if budget_summary %}{{ budget_summary.headcount_budget }}{% else %}—{% endif %}
+    </p>
+    {% if budget_summary %}
+      {% set hv = budget_summary.headcount_actual - budget_summary.headcount_budget %}
+      <span class="{% if hv <= 0 %}fpa-kpi-var-pos{% else %}fpa-kpi-var-neg{% endif %}">
+        {{ "{:+d}".format(hv) }} vs budget
+      </span>
+    {% endif %}
+  </div>
+  {# Forecast Accuracy #}
+  <div class="fpa-kpi-card" style="--accent:#10b981;">
+    <p class="fpa-kpi-label">Forecast Accuracy</p>
+    <div class="accuracy-ring-wrap" style="margin-top:6px;">
+      <div class="accuracy-ring">
+        <canvas id="accuracy-donut" width="72" height="72"
+                aria-label="Forecast accuracy donut chart" role="img"></canvas>
+        <div class="accuracy-ring-label">
+          <span class="val" id="accuracy-pct-label">
+            {{ budget_summary.forecast_accuracy_pct | int if budget_summary else '—' }}{% if budget_summary %}%{% endif %}
+          </span>
+          <span class="sub">acc.</span>
+        </div>
+      </div>
+      <div class="accuracy-desc">
+        <strong>
+          {% if budget_summary %}
+            {% if budget_summary.forecast_accuracy_pct >= 90 %}Excellent{% elif budget_summary.forecast_accuracy_pct >= 75 %}Good{% else %}Needs Work{% endif %}
+          {% else %}N/A{% endif %}
+        </strong>
+        vs prior period:
+        {% if budget_summary and budget_summary.forecast_accuracy_prior_pct %}
+          {{ "{:.1f}".format(budget_summary.forecast_accuracy_prior_pct) }}%
+        {% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Left column: Waterfall Chart ─────────────────────────────────────── #}
+  <div class="col-md-7">
+    <div class="erp-card" style="padding:16px 20px; margin-bottom:20px;">
+      <h4 class="erp-section-title">
+        <i class="fa fa-bar-chart" style="color:#1a56db; margin-right:6px;"></i>
+        Budget → Actuals → Variance
+      </h4>
+      <div data-island="erpFpaWaterfall" class="erp-island">
+        <canvas id="waterfall-chart" height="110"
+                aria-label="FP&A waterfall chart" role="img"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# ── Right column: Forecast Accuracy trend ────────────────────────────── #}
+  <div class="col-md-5">
+    <div class="erp-card" style="padding:16px 20px; margin-bottom:20px;">
+      <h4 class="erp-section-title">
+        <i class="fa fa-line-chart" style="color:#10b981; margin-right:6px;"></i>
+        Accuracy Trend
+      </h4>
+      <div data-island="erpFpaAccuracyTrend" class="erp-island">
+        <canvas id="accuracy-trend-chart" height="130"
+                aria-label="Forecast accuracy trend" role="img"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Scenario Comparison Table ────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+  <div style="padding:14px 20px; border-bottom:1px solid #e5e7eb;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-sliders" style="color:#1a56db; margin-right:6px;"></i>
+      Scenario Comparison
+    </h4>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="scenario-table">
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Description</th>
+          <th class="amounts-col">Revenue</th>
+          <th class="amounts-col">Expenses</th>
+          <th class="amounts-col">Net Income</th>
+          <th class="amounts-col">Headcount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if scenarios %}
+          {% for s in scenarios %}
+          <tr>
+            <td>
+              <strong>
+                {% if s.scenario_type == 'BASE' %}<span class="badge-base">BASE</span>
+                {% elif s.scenario_type == 'OPTIMISTIC' %}<span class="badge-optimistic">OPTIMISTIC</span>
+                {% elif s.scenario_type == 'PESSIMISTIC' %}<span class="badge-pessimistic">PESSIMISTIC</span>
+                {% else %}<span class="badge-base">{{ s.scenario_type }}</span>{% endif %}
+              </strong>
+            </td>
+            <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#6b7280; font-size:12px;">
+              {{ s.description or '—' }}
+            </td>
+            <td class="amounts-col">{{ "{:,.0f}".format(s.revenue_cents / 100) }}</td>
+            <td class="amounts-col">{{ "{:,.0f}".format(s.expenses_cents / 100) }}</td>
+            <td class="amounts-col {% if s.revenue_cents - s.expenses_cents >= 0 %}diff-positive{% else %}diff-negative{% endif %}">
+              {{ "{:+,.0f}".format((s.revenue_cents - s.expenses_cents) / 100) }}
+            </td>
+            <td class="amounts-col">{{ s.headcount }}</td>
+            <td>
+              {% if s.is_active %}<span class="badge-active">Active</span>
+              {% else %}<span style="font-size:11px; color:#9ca3af;">Draft</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="7" style="text-align:center; padding:32px; color:#9ca3af;">
+            <i class="fa fa-inbox" style="font-size:28px; display:block; margin-bottom:8px; opacity:.4;"></i>
+            No scenarios configured. Run a forecast to generate scenarios.
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Run Forecast Modal ───────────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-run-forecast" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-refresh" style="color:#1a56db;"></i>&nbsp; Run Forecast
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Forecast Period</label>
+          <input type="month" id="forecast-period" class="form-control"
+                 value="{{ cycle.current_period if cycle else '' }}" style="font-size:13px;">
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Scenarios to Generate</label>
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+            <label class="checkbox" style="font-size:13px; font-weight:400; margin:0;">
+              <input type="checkbox" name="scenarios" value="BASE" checked> BASE
+            </label>
+            <label class="checkbox" style="font-size:13px; font-weight:400; margin:0;">
+              <input type="checkbox" name="scenarios" value="OPTIMISTIC" checked> OPTIMISTIC
+            </label>
+            <label class="checkbox" style="font-size:13px; font-weight:400; margin:0;">
+              <input type="checkbox" name="scenarios" value="PESSIMISTIC" checked> PESSIMISTIC
+            </label>
+          </div>
+        </div>
+        <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:10px 14px; font-size:12px; color:#0369a1;">
+          <i class="fa fa-info-circle"></i>
+          Forecast uses the rolling average of the last 3 actuals periods as a base and applies growth assumptions from cycle configuration.
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-forecast-confirm" class="btn btn-primary" style="font-weight:600;">
+          <i class="fa fa-play"></i>&nbsp; Run
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function fmtK(v) {
+    var abs = Math.abs(v);
+    if (abs >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+    if (abs >= 1000)    return (v / 1000).toFixed(0) + 'k';
+    return String(v);
+  }
+
+  /* ── Forecast accuracy donut ─────────────────────────────────────────── */
+  (function () {
+    var canvas = document.getElementById('accuracy-donut');
+    if (!canvas) return;
+    var label = canvas.closest('.fpa-kpi-card').querySelector('#accuracy-pct-label');
+    var pctText = label ? label.textContent.replace('%','').trim() : '';
+    var pct = parseFloat(pctText) || 0;
+    new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [pct, 100 - pct],
+          backgroundColor: [pct >= 90 ? '#10b981' : pct >= 75 ? '#f59e0b' : '#ef4444', '#f3f4f6'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: false,
+        cutout: '72%',
+        plugins: { legend: { display: false }, tooltip: { enabled: false } }
+      }
+    });
+  }());
+
+  /* ── Waterfall chart island ──────────────────────────────────────────── */
+  (function () {
+    var canvas = document.getElementById('waterfall-chart');
+    if (!canvas) return;
+
+    var url = '/api/fpa/waterfall?period=' + encodeURIComponent(document.getElementById('sel-period').value || '')
+            + '&entity='  + encodeURIComponent(document.getElementById('sel-entity').value || '');
+
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.statusText); })
+      .then(function (data) {
+        /* waterfall: Budget (blue), Actuals (green), Variance (amber/red) */
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: data.labels || ['Revenue', 'Cost of Sales', 'Gross Profit', 'Opex', 'EBITDA'],
+            datasets: [
+              {
+                label: 'Budget',
+                data: data.budget || [],
+                backgroundColor: 'rgba(26,86,219,.65)',
+                borderRadius: 3
+              },
+              {
+                label: 'Actual',
+                data: data.actual || [],
+                backgroundColor: 'rgba(16,185,129,.7)',
+                borderRadius: 3
+              },
+              {
+                label: 'Variance',
+                data: data.variance || [],
+                backgroundColor: (data.variance || []).map(function (v) {
+                  return v >= 0 ? 'rgba(245,158,11,.8)' : 'rgba(239,68,68,.7)';
+                }),
+                borderRadius: 3
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'top', labels: { font: { size: 11 } } },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' ' + (data.currency || '') + fmtK(ctx.parsed.y);
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: { callback: function (v) { return fmtK(v); } }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function (err) {
+        canvas.parentNode.innerHTML = '<div class="alert alert-warning" style="margin:0;">Waterfall data unavailable: ' + _esc(String(err)) + '</div>';
+      });
+  }());
+
+  /* ── Accuracy trend island ───────────────────────────────────────────── */
+  (function () {
+    var canvas = document.getElementById('accuracy-trend-chart');
+    if (!canvas) return;
+
+    fetch('/api/fpa/accuracy_trend', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.statusText); })
+      .then(function (data) {
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: data.labels || [],
+            datasets: [{
+              label: 'Accuracy %',
+              data: data.values || [],
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16,185,129,.08)',
+              borderWidth: 2,
+              pointRadius: 3,
+              fill: true,
+              tension: 0.35
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: {
+                min: 0, max: 100,
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: { callback: function (v) { return v + '%'; } }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function () {
+        /* silent — accuracy trend is non-critical */
+      });
+  }());
+
+  /* ── Run Forecast button ─────────────────────────────────────────────── */
+  document.getElementById('btn-run-forecast').addEventListener('click', function () {
+    $('#modal-run-forecast').modal('show');
+  });
+
+  document.getElementById('btn-forecast-confirm').addEventListener('click', function () {
+    var period = document.getElementById('forecast-period').value;
+    if (!period) { toast('Select a period.', 'error'); return; }
+    var scenariosChecked = Array.from(document.querySelectorAll('input[name="scenarios"]:checked'))
+                               .map(function (cb) { return cb.value; });
+    if (!scenariosChecked.length) { toast('Select at least one scenario type.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Running…';
+
+    fetch('/api/fpa/run_forecast', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: period, scenarios: scenariosChecked })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-run-forecast').modal('hide');
+      if (res.ok) {
+        toast('Forecast run complete for ' + period + '.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Forecast failed.', 'error');
+      }
+    })
+    .catch(function (err) { toast('Network error: ' + err.message, 'error'); })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-play"></i>&nbsp; Run';
+    });
+  });
+
+  /* ── Export Board Pack ───────────────────────────────────────────────── */
+  document.getElementById('btn-export').addEventListener('click', function () {
+    var period = document.getElementById('sel-period').value;
+    var entity = document.getElementById('sel-entity').value;
+    var url    = '/api/fpa/export_board_pack?period=' + encodeURIComponent(period)
+               + '&entity=' + encodeURIComponent(entity);
+    toast('Generating board pack…', 'info');
+    window.location.href = url;
+  });
+
+  /* ── Period / entity filter navigation ──────────────────────────────── */
+  document.getElementById('btn-apply-filters').addEventListener('click', function () {
+    var period = document.getElementById('sel-period').value;
+    var entity = document.getElementById('sel-entity').value;
+    var url    = window.location.pathname
+               + '?period=' + encodeURIComponent(period)
+               + '&entity=' + encodeURIComponent(entity);
+    window.location.href = url;
+  });
+
+  /* ── CSS helper not in existing stylesheet ───────────────────────────── */
+  var s = document.createElement('style');
+  s.textContent = '.diff-positive{color:#10b981;font-weight:600}.diff-negative{color:#ef4444;font-weight:600}';
+  document.head.appendChild(s);
+
+}());
+</script>
+{% endblock %}

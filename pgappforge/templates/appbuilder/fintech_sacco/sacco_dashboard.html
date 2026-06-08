@@ -1,0 +1,249 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}SACCO Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sacco-txn-DEPOSIT            { background:#d1fae5;color:#065f46; }
+  .sacco-txn-WITHDRAWAL         { background:#fee2e2;color:#991b1b; }
+  .sacco-txn-LOAN_DISBURSEMENT  { background:#dbeafe;color:#1e40af; }
+  .sacco-txn-LOAN_REPAYMENT     { background:#ede9fe;color:#5b21b6; }
+  .sacco-txn-DIVIDEND           { background:#fef3c7;color:#92400e; }
+  .sacco-txn-badge { display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;text-transform:uppercase; }
+  .portfolio-bar-wrap { height:16px; background:var(--erp-border); border-radius:8px; overflow:hidden; position:relative; margin:6px 0; }
+  .portfolio-bar-performing    { position:absolute; left:0; top:0; height:100%; background:var(--erp-success); border-radius:8px; transition:width .6s ease; }
+  .portfolio-bar-nonperforming { position:absolute; right:0; top:0; height:100%; background:var(--erp-danger); border-radius:8px; transition:width .6s ease; }
+  .dividend-card { background:var(--erp-neutral-lt); border-radius:var(--erp-radius); padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+  .dividend-period { font-weight:700; font-size:13px; flex:1; }
+  .dividend-amount { font-size:14px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--erp-success); }
+  .sacco-member-stat { text-align:center; }
+  .sacco-member-stat-value { font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+  .sacco-member-stat-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--erp-text-muted); margin-top:4px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-university"></i> SACCO Dashboard</h1>
+    <p class="erp-page-subtitle">Member overview, loan portfolio quality, transaction history, and dividend management.</p>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px;">
+    <a href="/sacco/members/add" class="btn btn-default btn-sm"><i class="fa fa-user-plus"></i> Add Member</a>
+    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#process-dividend-modal">
+      <i class="fa fa-money"></i> Process Dividend
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% set ps = portfolio_summary | default({}) %}
+
+{# ── Member summary KPIs ────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <div class="erp-card-icon"><i class="fa fa-users"></i></div>
+    <p class="erp-card-title">Total Members</p>
+    <p class="erp-card-value">{{ ps.total_members | default('—') }}</p>
+    <p class="erp-card-sub">
+      <span style="color:var(--erp-success);">{{ ps.active_members | default(0) }} active</span>
+    </p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon"><i class="fa fa-piggy-bank"></i></div>
+    <p class="erp-card-title">Total Deposits</p>
+    <p class="erp-card-value">
+      KES {{ '{:,.0f}'.format(ps.total_deposits_cents / 100) if ps.total_deposits_cents is defined else '—' }}
+    </p>
+    <p class="erp-card-sub">Member savings balance</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <div class="erp-card-icon"><i class="fa fa-money"></i></div>
+    <p class="erp-card-title">Loans Outstanding</p>
+    <p class="erp-card-value">
+      KES {{ '{:,.0f}'.format(ps.total_loans_outstanding_cents / 100) if ps.total_loans_outstanding_cents is defined else '—' }}
+    </p>
+    <p class="erp-card-sub">Disbursed &amp; unpaid</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent {{ 'erp-card-accent-danger' if ps.par30_pct | default(0) > 5 else 'erp-card-accent-success' }}"></div>
+    <div class="erp-card-icon"><i class="fa fa-exclamation-triangle"></i></div>
+    <p class="erp-card-title">PAR 30</p>
+    <p class="erp-card-value" style="color:{{ 'var(--erp-danger)' if ps.par30_pct | default(0) > 5 else 'var(--erp-success)' }};">
+      {{ '{:.1f}'.format(ps.par30_pct | default(0)) }}%
+    </p>
+    <p class="erp-card-sub">Portfolio at risk &gt;30 days</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Loan portfolio quality ──────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-card erp-mb-24">
+      <p class="erp-section-title"><i class="fa fa-pie-chart"></i> Portfolio Quality</p>
+      {% set total_loans = ps.total_loans_outstanding_cents | default(0) %}
+      {% set non_perf    = ps.non_performing_cents | default(0) %}
+      {% set performing  = total_loans - non_perf %}
+      {% set perf_pct    = [(performing / total_loans * 100), 100] | min | int if total_loans > 0 else 100 %}
+      {% set nperf_pct   = 100 - perf_pct %}
+
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+        <span style="color:var(--erp-success);">Performing <strong>{{ perf_pct }}%</strong></span>
+        <span style="color:var(--erp-danger);">Non-performing <strong>{{ nperf_pct }}%</strong></span>
+      </div>
+      <div class="portfolio-bar-wrap">
+        <div class="portfolio-bar-performing" style="width:{{ perf_pct }}%;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--erp-text-muted);margin-top:4px;">
+        <span>KES {{ '{:,.0f}'.format(performing / 100) if total_loans else '0' }}</span>
+        <span>KES {{ '{:,.0f}'.format(non_perf / 100) }}</span>
+      </div>
+
+      <div style="margin-top:20px;">
+        <p class="erp-section-title"><i class="fa fa-calendar-check-o"></i> Dividends</p>
+        {% if dividends %}
+          {% for div in dividends | sort(attribute='period', reverse=True) | list[:4] %}
+          <div class="dividend-card">
+            <i class="fa fa-money" style="color:var(--erp-success);"></i>
+            <div class="dividend-period">{{ div.period | default('—') }}</div>
+            <div class="dividend-amount">
+              KES {{ '{:,.0f}'.format(div.amount_cents / 100) if div.amount_cents is defined else '—' }}
+            </div>
+            <span class="erp-badge {{ 'erp-badge-green' if div.status == 'PAID' else 'erp-badge-yellow' }}">
+              {{ div.status | default('PENDING') }}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+        <p style="color:var(--erp-text-muted);font-size:13px;text-align:center;padding:12px 0;margin:0;">
+          No dividends declared yet.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Recent transactions ─────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-exchange"></i> Recent Transactions</h4>
+        <select id="txn-type-filter" class="form-control input-sm" style="width:auto;">
+          <option value="">All Types</option>
+          <option value="DEPOSIT">Deposit</option>
+          <option value="WITHDRAWAL">Withdrawal</option>
+          <option value="LOAN_DISBURSEMENT">Loan Disbursement</option>
+          <option value="LOAN_REPAYMENT">Loan Repayment</option>
+          <option value="DIVIDEND">Dividend</option>
+        </select>
+      </div>
+      <table class="erp-table" id="txn-table">
+        <thead>
+          <tr>
+            <th>Member #</th>
+            <th>Member Name</th>
+            <th>Type</th>
+            <th>Amount (KES)</th>
+            <th>Date</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if recent_transactions %}
+            {% for txn in recent_transactions %}
+            {% set tt = txn.transaction_type | default('DEPOSIT') %}
+            <tr data-type="{{ tt }}">
+              <td style="font-family:monospace;font-size:12px;">{{ txn.member_number | default('—') }}</td>
+              <td style="font-weight:600;">{{ txn.member_name | default('—') }}</td>
+              <td>
+                <span class="sacco-txn-badge sacco-txn-{{ tt }}">{{ tt | replace('_',' ') }}</span>
+              </td>
+              <td style="font-variant-numeric:tabular-nums;font-weight:700;
+                         color:{{ 'var(--erp-danger)' if tt == 'WITHDRAWAL' else ('var(--erp-success)' if tt in ['DEPOSIT','LOAN_REPAYMENT'] else 'var(--erp-text)') }};">
+                {% if tt == 'WITHDRAWAL' %}-{% elif tt in ['DEPOSIT','LOAN_REPAYMENT','DIVIDEND'] %}+{% endif %}
+                KES {{ '{:,.0f}'.format(txn.amount_cents / 100) if txn.amount_cents is defined else '—' }}
+              </td>
+              <td style="font-size:12px;white-space:nowrap;">{{ txn.date | default('—') }}</td>
+              <td style="font-size:11px;font-family:monospace;color:var(--erp-text-muted);">{{ txn.reference | default('') }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="6" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+              No transactions recorded.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{# ── Process Dividend Modal ──────────────────────────────────────────── #}
+<div class="modal fade" id="process-dividend-modal" tabindex="-1" role="dialog" aria-labelledby="pd-label">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/sacco/dividends/process">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="pd-label"><i class="fa fa-money"></i> Process Dividend</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">Period <span class="text-danger">*</span></label>
+            <input type="month" name="period" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Total Dividend Pool (KES) <span class="text-danger">*</span></label>
+            <input type="number" name="total_amount" class="form-control" required min="0" step="0.01" placeholder="e.g. 500000">
+          </div>
+          <div class="form-group">
+            <label class="control-label">Distribution Basis</label>
+            <select name="basis" class="form-control">
+              <option value="PROPORTIONAL">Proportional to deposits</option>
+              <option value="EQUAL">Equal share per member</option>
+            </select>
+          </div>
+          <div class="alert alert-warning" style="font-size:12px;margin-bottom:0;">
+            <i class="fa fa-exclamation-triangle"></i>
+            This will create individual dividend credit entries for all <strong>active</strong> members.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"
+                  onclick="return confirm('Process dividends for all active members?');">
+            <i class="fa fa-check"></i> Process
+          </button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var filter = document.getElementById('txn-type-filter');
+  if (filter) {
+    filter.addEventListener('change', function () {
+      var val = this.value;
+      document.querySelectorAll('#txn-table tbody tr[data-type]').forEach(function (tr) {
+        tr.style.display = (!val || tr.getAttribute('data-type') === val) ? '' : 'none';
+      });
+    });
+  }
+}());
+</script>
+{% endblock %}

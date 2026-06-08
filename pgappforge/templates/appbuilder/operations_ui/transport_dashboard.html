@@ -1,0 +1,453 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Transport Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .map-placeholder {
+    background: linear-gradient(135deg, #e8f0fe 0%, #f0fdf4 100%);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    padding: 20px;
+  }
+  .map-placeholder::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(26,86,219,.06) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(26,86,219,.06) 40px);
+  }
+  .map-route-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    padding: 10px 16px;
+    margin: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    box-shadow: var(--erp-shadow-sm);
+    position: relative;
+    z-index: 1;
+    max-width: 260px;
+  }
+  .map-route-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .map-route-line {
+    width: 28px; height: 2px; border-top: 2px dashed var(--erp-border); flex-shrink: 0;
+  }
+
+  .pipeline-stages {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-bottom: 20px;
+  }
+  .pipeline-stage {
+    display: flex;
+    align-items: center;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  .pipeline-stage-dot {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #fff; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .pipeline-stage-label {
+    padding: 0 6px; color: var(--erp-text-muted);
+  }
+  .pipeline-stage-arrow {
+    width: 20px; height: 2px;
+    background: var(--erp-border); position: relative; flex-shrink: 0;
+  }
+  .pipeline-stage-arrow::after {
+    content: '';
+    position: absolute; right: -1px; top: -3px;
+    border: 4px solid transparent;
+    border-left: 6px solid var(--erp-border);
+  }
+
+  .carrier-perf-table th { font-size: 11px; }
+  .on-time-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+  .on-time-bar { flex: 1; height: 6px; background: var(--erp-border); border-radius: 3px; overflow: hidden; }
+  .on-time-bar-fill { height: 100%; border-radius: 3px; background: var(--erp-success); transition: width .5s ease; }
+
+  .status-PLANNED     { background: var(--erp-neutral-lt); color: var(--erp-neutral); }
+  .status-BOOKED      { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .status-DISPATCHED  { background: #fef3c7; color: #92400e; }
+  .status-IN_TRANSIT  { background: var(--erp-warning-lt); color: var(--erp-warning); }
+  .status-DELIVERED   { background: var(--erp-success-lt); color: var(--erp-success); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-truck" style="color:var(--erp-primary);margin-right:8px;"></i>Transport Management
+      </h1>
+      <p class="erp-page-subtitle">Active shipments, carrier performance, and proof-of-delivery tracking.</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      <span class="erp-badge erp-badge-blue">
+        <i class="fa fa-truck" style="margin-right:3px;"></i>
+        {{ shipments | selectattr('status', 'in', ['BOOKED','DISPATCHED','IN_TRANSIT']) | list | length }} active
+      </span>
+      <a href="{{ url_for('TransportView.add') if 'TransportView' in dir() else '#' }}"
+         class="btn btn-primary btn-sm">
+        <i class="fa fa-plus"></i> New Shipment
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Status pipeline legend ──────────────────────────────────────────────── #}
+<div style="background:var(--erp-surface);border:1px solid var(--erp-border);border-radius:var(--erp-radius-lg);padding:14px 20px;margin-bottom:20px;box-shadow:var(--erp-shadow-sm);">
+  <div class="pipeline-stages">
+    {% set stages = [
+      ('PLANNED',    '#6b7280', '1'),
+      ('BOOKED',     '#1c64f2', '2'),
+      ('DISPATCHED', '#d97706', '3'),
+      ('IN TRANSIT', '#ff5a1f', '4'),
+      ('DELIVERED',  '#0e9f6e', '5')
+    ] %}
+    {% for label, color, num in stages %}
+    <div class="pipeline-stage">
+      <div class="pipeline-stage-dot" style="background:{{ color }};">{{ num }}</div>
+      <span class="pipeline-stage-label">{{ label }}</span>
+      {% if not loop.last %}
+      <div class="pipeline-stage-arrow"></div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {# KPI tiles for status counts #}
+  <div class="row" style="margin-top:4px;">
+    {% set status_counts = {} %}
+    {% for s in shipments %}
+      {% if s.status not in status_counts %}{% set _ = status_counts.update({s.status: 0}) %}{% endif %}
+      {% set _ = status_counts.update({s.status: status_counts[s.status] + 1}) %}
+    {% endfor %}
+    {% for st, color in [('PLANNED','#6b7280'),('BOOKED','#1c64f2'),('DISPATCHED','#d97706'),('IN_TRANSIT','#ff5a1f'),('DELIVERED','#0e9f6e')] %}
+    <div class="col-xs-4 col-sm-2" style="margin-bottom:8px;">
+      <div style="text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:{{ color }};font-variant-numeric:tabular-nums;">
+          {{ status_counts.get(st, 0) }}
+        </div>
+        <div style="font-size:10px;color:var(--erp-text-muted);text-transform:uppercase;letter-spacing:.05em;">
+          {{ st.replace('_',' ') }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Active shipments map placeholder + table ────────────────────────────── #}
+<div class="row erp-mb-24">
+  <div class="col-md-5">
+    <div class="map-placeholder erp-mb-24">
+      <div style="z-index:1;text-align:center;margin-bottom:16px;">
+        <i class="fa fa-map-marker" style="font-size:28px;color:var(--erp-primary);"></i>
+        <div style="font-size:13px;font-weight:700;color:var(--erp-text);margin-top:6px;">Active Shipments</div>
+        <div style="font-size:11px;color:var(--erp-text-muted);">Live map requires integration</div>
+      </div>
+      {% for s in shipments | selectattr('status', 'in', ['DISPATCHED', 'IN_TRANSIT']) | list %}
+      <div class="map-route-card">
+        <div class="map-route-dot" style="background:{% if s.status == 'IN_TRANSIT' %}var(--erp-warning){% else %}#d97706{% endif %};"></div>
+        <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;" title="{{ s.origin }}">{{ s.origin }}</span>
+        <div class="map-route-line"></div>
+        <span style="color:var(--erp-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;" title="{{ s.destination }}">{{ s.destination }}</span>
+        <span class="erp-badge erp-badge-gray" style="font-size:10px;padding:1px 5px;margin-left:auto;">{{ s.carrier }}</span>
+      </div>
+      {% else %}
+      <div style="z-index:1;font-size:12px;color:var(--erp-text-muted);">No shipments in transit</div>
+      {% endfor %}
+    </div>
+
+    {# Carrier performance mini-table #}
+    {% if carriers %}
+    <div class="erp-table-wrap">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0">Carrier Performance</h4>
+      </div>
+      <table class="erp-table carrier-perf-table">
+        <thead>
+          <tr>
+            <th>Carrier</th>
+            <th>On-Time %</th>
+            <th>Damage Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in carriers %}
+          <tr>
+            <td style="font-weight:600;">{{ c.name }}</td>
+            <td>
+              <div class="on-time-bar-wrap">
+                <div class="on-time-bar">
+                  <div class="on-time-bar-fill"
+                       style="width:{{ c.on_time_rate_pct|default(0) }}%;
+                              background:{% if c.on_time_rate_pct|default(0) >= 90 %}var(--erp-success){% elif c.on_time_rate_pct|default(0) >= 75 %}var(--erp-warning){% else %}var(--erp-danger){% endif %};">
+                  </div>
+                </div>
+                <span style="font-size:11px;font-weight:700;color:var(--erp-text);width:34px;text-align:right;">
+                  {{ c.on_time_rate_pct|default(0) }}%
+                </span>
+              </div>
+            </td>
+            <td>
+              <span style="font-size:12px;color:{% if c.avg_damage_rate|default(0) < 1 %}var(--erp-success){% elif c.avg_damage_rate|default(0) < 3 %}var(--erp-warning){% else %}var(--erp-danger){% endif %};">
+                {{ '%.2f'|format(c.avg_damage_rate|default(0)) }}%
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Shipments table ────────────────────────────────────────────────────── #}
+  <div class="col-md-7">
+    <div class="erp-table-wrap">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0">Shipments</h4>
+        <div class="erp-flex erp-gap-8">
+          <input type="text" id="shipment-search" class="form-control input-sm"
+                 placeholder="Search ref, origin, dest…" style="width:180px;">
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="erp-table" id="shipments-table">
+          <thead>
+            <tr>
+              <th>Ref</th>
+              <th>Origin → Dest</th>
+              <th>Carrier</th>
+              <th>Status</th>
+              <th>Planned Delivery</th>
+              <th>POD Ref</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in shipments %}
+            <tr id="ship-row-{{ s.id }}">
+              <td>
+                <a href="{{ url_for('TransportView.show', pk=s.id) if 'TransportView' in dir() else '#' }}"
+                   style="font-weight:600;color:var(--erp-primary);">{{ s.ref }}</a>
+              </td>
+              <td>
+                <span title="{{ s.origin }}">{{ s.origin | truncate(14) }}</span>
+                <i class="fa fa-long-arrow-right" style="color:var(--erp-border);margin:0 4px;"></i>
+                <span title="{{ s.destination }}" style="color:var(--erp-text-muted);">{{ s.destination | truncate(14) }}</span>
+              </td>
+              <td style="font-size:12px;">{{ s.carrier }}</td>
+              <td>
+                <span class="erp-badge status-{{ s.status }}">
+                  {{ s.status.replace('_',' ') }}
+                </span>
+              </td>
+              <td style="font-size:12px;">{{ s.planned_delivery }}</td>
+              <td style="font-size:12px;color:var(--erp-text-muted);">
+                {{ s.pod_ref or '—' }}
+              </td>
+              <td style="text-align:right;white-space:nowrap;">
+                {% if s.status == 'BOOKED' %}
+                <button class="btn btn-xs btn-warning dispatch-btn" data-id="{{ s.id }}" data-ref="{{ s.ref }}">
+                  <i class="fa fa-truck"></i> Dispatch
+                </button>
+                {% elif s.status == 'IN_TRANSIT' %}
+                <button class="btn btn-xs btn-success record-delivery-btn" data-id="{{ s.id }}" data-ref="{{ s.ref }}">
+                  <i class="fa fa-check"></i> Record Delivery
+                </button>
+                {% else %}
+                <span style="font-size:11px;color:var(--erp-text-muted);">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" style="text-align:center;padding:40px 20px;color:var(--erp-text-muted);">
+                <i class="fa fa-truck" style="font-size:32px;opacity:.3;display:block;margin-bottom:10px;"></i>
+                No shipments found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Record Delivery Modal ─────────────────────────────────────────────── #}
+<div class="modal fade" id="record-delivery-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title">
+          <i class="fa fa-check-circle" style="color:var(--erp-success);margin-right:6px;"></i>Record Delivery
+        </h4>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rd-shipment-id">
+        <p style="color:var(--erp-text-muted);font-size:13px;" id="rd-shipment-ref"></p>
+        <div class="form-group">
+          <label>Proof of Delivery Reference</label>
+          <input type="text" id="rd-pod-ref" class="form-control" placeholder="POD-XXXXXX">
+        </div>
+        <div class="form-group">
+          <label>Delivery Date</label>
+          <input type="text" id="rd-delivery-date" class="form-control" placeholder="YYYY-MM-DD">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="rd-notes" class="form-control" rows="2" placeholder="Any damage, exceptions…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="rd-confirm-btn">
+          <i class="fa fa-check"></i> Confirm Delivery
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* ── Search filter ─────────────────────────────────────────────────── */
+  var searchInput = document.getElementById('shipment-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('#shipments-table tbody tr[id^="ship-row-"]').forEach(function (row) {
+        row.style.display = row.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+      });
+    });
+  }
+
+  /* ── Dispatch ──────────────────────────────────────────────────────── */
+  document.querySelectorAll('.dispatch-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (!confirm('Mark shipment ' + btn.dataset.ref + ' as Dispatched?')) return;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+      _post('/api/transport/' + btn.dataset.id + '/dispatch', {})
+        .then(function () {
+          var row = document.getElementById('ship-row-' + btn.dataset.id);
+          if (row) {
+            var badge = row.querySelector('.erp-badge');
+            if (badge) {
+              badge.className = 'erp-badge status-DISPATCHED';
+              badge.textContent = 'DISPATCHED';
+            }
+            var cell = btn.closest('td');
+            if (cell) {
+              cell.innerHTML = '<button class="btn btn-xs btn-success record-delivery-btn" data-id="' + _esc(btn.dataset.id) + '" data-ref="' + _esc(btn.dataset.ref) + '">' +
+                '<i class="fa fa-check"></i> Record Delivery</button>';
+              cell.querySelector('.record-delivery-btn').addEventListener('click', openDeliveryModal);
+            }
+          }
+        })
+        .catch(function (err) {
+          alert('Dispatch failed: ' + err.message);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa fa-truck"></i> Dispatch';
+        });
+    });
+  });
+
+  /* ── Record Delivery modal ─────────────────────────────────────────── */
+  function openDeliveryModal() {
+    var btn = this;
+    document.getElementById('rd-shipment-id').value  = btn.dataset.id;
+    document.getElementById('rd-shipment-ref').textContent = 'Shipment: ' + btn.dataset.ref;
+    document.getElementById('rd-pod-ref').value       = '';
+    document.getElementById('rd-delivery-date').value = '';
+    document.getElementById('rd-notes').value         = '';
+    $('#record-delivery-modal').modal('show');
+  }
+
+  document.querySelectorAll('.record-delivery-btn').forEach(function (btn) {
+    btn.addEventListener('click', openDeliveryModal);
+  });
+
+  document.getElementById('rd-confirm-btn').addEventListener('click', function () {
+    var id       = document.getElementById('rd-shipment-id').value;
+    var podRef   = document.getElementById('rd-pod-ref').value.trim();
+    var delDate  = document.getElementById('rd-delivery-date').value.trim();
+    var notes    = document.getElementById('rd-notes').value.trim();
+    if (!podRef || !delDate) { alert('POD ref and delivery date are required.'); return; }
+
+    var self = this;
+    self.disabled = true;
+    self.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving…';
+
+    _post('/api/transport/' + id + '/deliver', { pod_ref: podRef, delivery_date: delDate, notes: notes })
+      .then(function () {
+        $('#record-delivery-modal').modal('hide');
+        var row = document.getElementById('ship-row-' + id);
+        if (row) {
+          var badge = row.querySelector('.erp-badge');
+          if (badge) { badge.className = 'erp-badge status-DELIVERED'; badge.textContent = 'DELIVERED'; }
+          var podCell = row.cells[5];
+          if (podCell) { podCell.textContent = podRef; podCell.style.color = 'var(--erp-text)'; }
+          var actionCell = row.cells[6];
+          if (actionCell) { actionCell.innerHTML = '<span style="font-size:11px;color:var(--erp-success);"><i class="fa fa-check"></i> Delivered</span>'; }
+        }
+        self.disabled = false;
+        self.innerHTML = '<i class="fa fa-check"></i> Confirm Delivery';
+      })
+      .catch(function (err) {
+        alert('Record failed: ' + err.message);
+        self.disabled = false;
+        self.innerHTML = '<i class="fa fa-check"></i> Confirm Delivery';
+      });
+  });
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,254 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}WhatsApp Business — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wa-convo-list { list-style:none; margin:0; padding:0; }
+  .wa-convo-item { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border-bottom:1px solid var(--erp-border); cursor:pointer; transition:background var(--erp-transition); }
+  .wa-convo-item:hover { background:#fafafa; }
+  .wa-convo-item.active { background:var(--erp-primary-lt); }
+  .wa-convo-avatar { width:36px; height:36px; border-radius:50%; background:#25d366; color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .wa-convo-body { flex:1; min-width:0; }
+  .wa-convo-name { font-weight:600; font-size:13px; color:var(--erp-text); }
+  .wa-convo-preview { font-size:12px; color:var(--erp-text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wa-convo-time { font-size:11px; color:var(--erp-text-muted); white-space:nowrap; }
+  .wa-status-DELIVERED { color:var(--erp-success); }
+  .wa-status-READ      { color:var(--erp-primary); }
+  .wa-status-SENT      { color:var(--erp-text-muted); }
+  .wa-status-FAILED    { color:var(--erp-danger); }
+  .wa-template-card { background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--erp-radius); padding:12px 14px; margin-bottom:8px; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .wa-template-name { font-weight:600; font-size:13px; margin-bottom:3px; }
+  .wa-template-body { font-size:12px; color:var(--erp-text-muted); }
+  .webhook-log-row td { font-size:11px; font-family:monospace; }
+  .wa-green { color:#25d366; }
+  .rate-bar { height:6px; background:var(--erp-border); border-radius:3px; overflow:hidden; display:inline-block; width:60px; vertical-align:middle; margin-left:6px; }
+  .rate-bar-fill { height:100%; border-radius:3px; background:var(--erp-success); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title">
+      <i class="fa fa-whatsapp wa-green"></i> WhatsApp Business
+    </h1>
+    <p class="erp-page-subtitle">Conversation management, template dispatch, and webhook monitoring.</p>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px;">
+    <form method="POST" action="/api/whatsapp/dispatch" style="display:inline;">
+      <button type="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-paper-plane"></i> Dispatch Pending
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% set st = stats | default({}) %}
+
+{# ── KPI tiles ──────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card">
+    <div class="erp-card-accent" style="background:#25d366;"></div>
+    <div class="erp-card-icon wa-green"><i class="fa fa-paper-plane"></i></div>
+    <p class="erp-card-title">Messages Sent Today</p>
+    <p class="erp-card-value">{{ st.messages_sent | default('—') }}</p>
+    <p class="erp-card-sub">Outbound today</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon"><i class="fa fa-check-double"></i></div>
+    <p class="erp-card-title">Delivered Rate</p>
+    <p class="erp-card-value">{{ st.delivered_rate_pct | default('—') }}%</p>
+    <div class="rate-bar"><div class="rate-bar-fill" style="width:{{ st.delivered_rate_pct | default(0) }}%;"></div></div>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-info"></div>
+    <div class="erp-card-icon"><i class="fa fa-eye"></i></div>
+    <p class="erp-card-title">Read Rate</p>
+    <p class="erp-card-value">{{ st.read_rate_pct | default('—') }}%</p>
+    <div class="rate-bar"><div class="rate-bar-fill" style="width:{{ st.read_rate_pct | default(0) }}%;background:var(--erp-info);"></div></div>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <div class="erp-card-icon"><i class="fa fa-comments"></i></div>
+    <p class="erp-card-title">Active Conversations</p>
+    <p class="erp-card-value">{{ st.active_conversations | default('—') }}</p>
+    <p class="erp-card-sub">Open threads</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Conversations ────────────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-card" style="padding:0;overflow:hidden;" id="conversations-panel">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-comments-o"></i> Conversations</h4>
+        <input type="text" id="convo-search" class="form-control input-sm" placeholder="Search…" style="width:120px;">
+      </div>
+      <ul class="wa-convo-list" id="convo-list">
+        {% if conversations %}
+          {% for c in conversations %}
+          {% set initials = (c.contact_name or c.phone_number or '?')[:2] | upper %}
+          <li class="wa-convo-item" data-phone="{{ c.phone_number }}" data-name="{{ c.contact_name | default('') | lower }}">
+            <div class="wa-convo-avatar">{{ initials }}</div>
+            <div class="wa-convo-body">
+              <div class="wa-convo-name">{{ c.contact_name | default(c.phone_number) }}</div>
+              <div class="wa-convo-preview">{{ c.last_message | default('No messages yet') | truncate(40) }}</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="wa-convo-time">{{ c.last_message_at | default('') }}</div>
+              {% set cs = c.status | default('SENT') %}
+              <span class="erp-badge {{ 'erp-badge-green' if cs == 'DELIVERED' else ('erp-badge-blue' if cs == 'READ' else ('erp-badge-red' if cs == 'FAILED' else 'erp-badge-gray')) }}" style="margin-top:3px;">
+                {{ cs }}
+              </span>
+            </div>
+          </li>
+          {% endfor %}
+        {% else %}
+        <li style="padding:32px;text-align:center;color:var(--erp-text-muted);font-size:13px;">
+          <i class="fa fa-comments-o" style="font-size:24px;display:block;margin-bottom:8px;opacity:.3;"></i>
+          No active conversations.
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  {# ── Templates + Webhook log ─────────────────────────────────────── #}
+  <div class="col-md-8">
+
+    {# Template library #}
+    <div class="erp-card erp-mb-16">
+      <p class="erp-section-title"><i class="fa fa-file-text-o"></i> Approved Templates</p>
+      {% if templates %}
+        {% for tmpl in templates %}
+        <div class="wa-template-card">
+          <div style="flex:1;">
+            <div class="wa-template-name">{{ tmpl.name }}</div>
+            {% if tmpl.category %}
+            <span class="erp-badge erp-badge-gray" style="margin-bottom:4px;">{{ tmpl.category }}</span>
+            {% endif %}
+            <div class="wa-template-body">{{ tmpl.body | default('') | truncate(120) }}</div>
+          </div>
+          <button class="btn btn-xs btn-primary" data-toggle="modal" data-target="#send-template-modal"
+                  onclick="prefillTemplate('{{ tmpl.name }}', '{{ tmpl.id }}')"
+                  style="flex-shrink:0;margin-top:2px;">
+            <i class="fa fa-paper-plane-o"></i> Send
+          </button>
+        </div>
+        {% endfor %}
+      {% else %}
+      <p style="color:var(--erp-text-muted);font-size:13px;text-align:center;padding:16px 0;margin:0;">
+        No approved templates. Create them in the WhatsApp Business Manager.
+      </p>
+      {% endif %}
+    </div>
+
+    {# Webhook log #}
+    <div class="erp-table-wrap erp-mb-16">
+      <div style="padding:10px 16px;border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-exchange"></i> Recent Webhook Events</h4>
+      </div>
+      <div style="max-height:220px;overflow-y:auto;">
+        <table class="erp-table" id="webhook-log-table">
+          <thead style="position:sticky;top:0;z-index:5;">
+            <tr>
+              <th>Event</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Received</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if st.webhook_log %}
+              {% for wh in st.webhook_log %}
+              <tr class="webhook-log-row">
+                <td>{{ wh.event_type | default('—') }}</td>
+                <td>{{ wh.phone_number | default('—') }}</td>
+                <td>
+                  {% set ws = wh.status | default('') %}
+                  <span class="erp-badge {{ 'erp-badge-green' if ws in ['delivered','read'] else ('erp-badge-red' if ws == 'failed' else 'erp-badge-gray') }}">
+                    {{ ws or '—' }}
+                  </span>
+                </td>
+                <td>{{ wh.received_at | default('—') }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+            <tr>
+              <td colspan="4" style="padding:20px;text-align:center;color:var(--erp-text-muted);">No webhook events.</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+{# ── Send Template Modal ─────────────────────────────────────────────── #}
+<div class="modal fade" id="send-template-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/api/whatsapp/send-template">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title"><i class="fa fa-paper-plane-o"></i> Send Template</h4>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="template_id" id="modal-template-id">
+          <div class="form-group">
+            <label class="control-label">Template</label>
+            <input type="text" id="modal-template-name" class="form-control" readonly>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Recipient Phone <span class="text-danger">*</span></label>
+            <input type="tel" name="phone_number" class="form-control" required placeholder="+254700000000">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="fa fa-paper-plane"></i> Send</button>
+          <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Conversation search ───────────────────────────────────────────── */
+  var searchInput = document.getElementById('convo-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('.wa-convo-item').forEach(function (li) {
+        var phone = (li.getAttribute('data-phone') || '').toLowerCase();
+        var name  = (li.getAttribute('data-name')  || '').toLowerCase();
+        li.style.display = (!q || phone.includes(q) || name.includes(q)) ? '' : 'none';
+      });
+    });
+  }
+
+  /* ── Template modal prefill ────────────────────────────────────────── */
+  window.prefillTemplate = function (name, id) {
+    var nameEl = document.getElementById('modal-template-name');
+    var idEl   = document.getElementById('modal-template-id');
+    if (nameEl) nameEl.value = name;
+    if (idEl)   idEl.value   = id;
+  };
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,447 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Rental Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Availability calendar ─────────────────────────────────────────── */
+  .avail-calendar-wrap {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    box-shadow: var(--erp-shadow-sm);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .avail-cal-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--erp-border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .avail-cal-grid {
+    overflow-x: auto;
+  }
+  .avail-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+    font-size: 12px;
+  }
+  .avail-table th {
+    padding: 8px 10px;
+    text-align: center;
+    font-size: 11px; font-weight: 700;
+    color: var(--erp-text-muted);
+    background: var(--erp-neutral-lt);
+    border-bottom: 2px solid var(--erp-border);
+    border-right: 1px solid var(--erp-border);
+    white-space: nowrap;
+  }
+  .avail-table th.today-col {
+    background: var(--erp-primary-lt);
+    color: var(--erp-primary);
+  }
+  .avail-table th.asset-col {
+    text-align: left; min-width: 160px; position: sticky; left: 0; z-index: 5;
+    background: var(--erp-neutral-lt);
+  }
+  .avail-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--erp-border);
+    border-right: 1px solid var(--erp-border);
+    text-align: center;
+    vertical-align: middle;
+  }
+  .avail-table td.asset-name-cell {
+    text-align: left; font-weight: 600; font-size: 12px;
+    position: sticky; left: 0; background: var(--erp-surface); z-index: 3;
+    padding: 8px 12px;
+  }
+  .avail-table tbody tr:hover td { background: #fafafa; }
+  .avail-table tbody tr:hover td.asset-name-cell { background: #fafafa; }
+
+  .avail-cell {
+    display: inline-block;
+    width: 28px; height: 22px;
+    border-radius: 4px;
+    font-size: 10px; font-weight: 700;
+    line-height: 22px;
+  }
+  .avail-cell-available    { background: var(--erp-success-lt); color: var(--erp-success); }
+  .avail-cell-rented       { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+  .avail-cell-maintenance  { background: var(--erp-neutral-lt); color: var(--erp-neutral); }
+
+  .avail-legend {
+    display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--erp-text-muted);
+  }
+  .avail-legend-dot {
+    width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+  }
+
+  /* ── Create rental panel ───────────────────────────────────────────── */
+  .create-rental-panel {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--erp-shadow-sm);
+    margin-bottom: 24px;
+  }
+  .create-rental-panel label {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--erp-text-muted); margin-bottom: 5px; display: block;
+  }
+  .create-rental-panel .form-control {
+    height: 34px; font-size: 13px; border-color: var(--erp-border); border-radius: var(--erp-radius);
+  }
+  .create-rental-panel .form-control:focus {
+    border-color: var(--erp-primary); box-shadow: 0 0 0 3px rgba(26,86,219,.12); outline: none;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-calendar" style="color:var(--erp-primary);margin-right:8px;"></i>Rental Management
+      </h1>
+      <p class="erp-page-subtitle">
+        Asset availability calendar &mdash;
+        {% if from_date and to_date %}{{ from_date }} to {{ to_date }}{% endif %}
+      </p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      <span class="erp-badge erp-badge-blue">{{ active_rentals | length }} active rentals</span>
+      <button class="btn btn-primary btn-sm" data-toggle="collapse" data-target="#create-rental-panel" aria-expanded="false">
+        <i class="fa fa-plus"></i> Create Rental
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Create rental (collapsible) ──────────────────────────────────────────── #}
+<div id="create-rental-panel" class="collapse erp-mb-0" style="margin-bottom:0;">
+  <div class="create-rental-panel">
+    <h4 class="erp-chart-title" style="margin-bottom:16px;">
+      <i class="fa fa-plus-circle" style="color:var(--erp-primary);margin-right:6px;"></i>New Rental
+    </h4>
+    <form id="rental-create-form">
+      <div class="row">
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label for="rc-asset">Asset</label>
+            <select id="rc-asset" name="asset_id" class="form-control" required>
+              <option value="">— select asset —</option>
+              {% for a in assets %}
+              <option value="{{ a.id }}">{{ a.name }} {% if a.asset_number %}({{ a.asset_number }}){% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label for="rc-customer">Customer</label>
+            <input type="text" id="rc-customer" name="customer" class="form-control" placeholder="Customer name" required>
+          </div>
+        </div>
+        <div class="col-sm-2">
+          <div class="form-group">
+            <label for="rc-start">Start Date</label>
+            <input type="text" id="rc-start" name="start_date" class="form-control" placeholder="YYYY-MM-DD" required>
+          </div>
+        </div>
+        <div class="col-sm-2">
+          <div class="form-group">
+            <label for="rc-end">End Date</label>
+            <input type="text" id="rc-end" name="end_date" class="form-control" placeholder="YYYY-MM-DD" required>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" id="rc-submit-btn" class="btn btn-primary">
+          <i class="fa fa-calendar-plus-o"></i> Create Rental
+        </button>
+        <button type="button" class="btn btn-default" data-toggle="collapse" data-target="#create-rental-panel">
+          Cancel
+        </button>
+        <span id="rc-result" style="line-height:32px;font-size:13px;margin-left:8px;"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Availability Calendar ─────────────────────────────────────────────────── #}
+<div class="avail-calendar-wrap">
+  <div class="avail-cal-header">
+    <div>
+      <h4 class="erp-chart-title erp-mb-0">Asset Availability Calendar</h4>
+      {% if from_date and to_date %}
+      <p class="erp-page-subtitle erp-mb-0" style="margin-top:2px;">{{ from_date }} — {{ to_date }}</p>
+      {% endif %}
+    </div>
+    <div class="avail-legend">
+      <span style="display:flex;align-items:center;gap:5px;">
+        <span class="avail-legend-dot" style="background:var(--erp-success-lt);border:1px solid var(--erp-success);"></span> Available
+      </span>
+      <span style="display:flex;align-items:center;gap:5px;">
+        <span class="avail-legend-dot" style="background:var(--erp-danger-lt);border:1px solid var(--erp-danger);"></span> Rented
+      </span>
+      <span style="display:flex;align-items:center;gap:5px;">
+        <span class="avail-legend-dot" style="background:var(--erp-neutral-lt);border:1px solid var(--erp-border);"></span> Maintenance
+      </span>
+    </div>
+  </div>
+
+  {% if availability_grid %}
+  <div class="avail-cal-grid">
+    <table class="avail-table">
+      <thead>
+        <tr>
+          <th class="asset-col">Asset</th>
+          {% for col in availability_grid.columns %}
+          <th {% if col.is_today %}class="today-col"{% endif %}>
+            {{ col.label }}
+            {% if col.is_today %}<br><span style="font-size:9px;">TODAY</span>{% endif %}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in availability_grid.rows %}
+        <tr>
+          <td class="asset-name-cell">
+            <div>{{ row.asset_name }}</div>
+            {% if row.asset_number %}
+            <div style="font-size:10px;color:var(--erp-text-muted);">{{ row.asset_number }}</div>
+            {% endif %}
+          </td>
+          {% for cell in row.cells %}
+          <td>
+            <span class="avail-cell avail-cell-{{ cell.status | lower }}"
+                  title="{{ cell.label }}">
+              {{ cell.abbrev }}
+            </span>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px 24px;text-align:center;color:var(--erp-text-muted);">
+    <i class="fa fa-calendar" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px;"></i>
+    No availability data. Add assets to see the calendar.
+  </div>
+  {% endif %}
+</div>
+
+{# ── Active Rentals Table ─────────────────────────────────────────────────── #}
+<div class="erp-table-wrap">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0">Active Rentals</h4>
+    <span class="erp-badge erp-badge-blue">{{ active_rentals | length }}</span>
+  </div>
+  {% if active_rentals %}
+  <div style="overflow-x:auto;">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Ref</th>
+          <th>Asset</th>
+          <th>Customer</th>
+          <th>Start Date</th>
+          <th>Return Date</th>
+          <th>Days Remaining</th>
+          <th style="text-align:right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in active_rentals %}
+        <tr id="rental-row-{{ r.id }}">
+          <td style="font-weight:600;color:var(--erp-primary);">{{ r.ref }}</td>
+          <td>
+            <div style="font-weight:600;">{{ r.asset_name }}</div>
+            {% if r.asset_number %}
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ r.asset_number }}</div>
+            {% endif %}
+          </td>
+          <td>{{ r.customer }}</td>
+          <td style="font-size:12px;">{{ r.start_date }}</td>
+          <td style="font-size:12px;">
+            <span style="font-weight:600;color:{% if r.days_remaining is defined and r.days_remaining <= 2 %}var(--erp-danger){% elif r.days_remaining is defined and r.days_remaining <= 7 %}var(--erp-warning){% else %}var(--erp-text){% endif %};">
+              {{ r.end_date }}
+            </span>
+          </td>
+          <td>
+            {% if r.days_remaining is defined %}
+            <span class="erp-badge {% if r.days_remaining <= 2 %}erp-badge-red{% elif r.days_remaining <= 7 %}erp-badge-yellow{% else %}erp-badge-green{% endif %}">
+              {{ r.days_remaining }}d
+            </span>
+            {% else %}
+            <span class="erp-badge erp-badge-gray">—</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;">
+            <button class="btn btn-xs btn-warning return-asset-btn"
+                    data-rental-id="{{ r.id }}"
+                    data-ref="{{ r.ref }}"
+                    data-asset="{{ r.asset_name }}">
+              <i class="fa fa-undo"></i> Return Asset
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px 24px;text-align:center;color:var(--erp-text-muted);">
+    <i class="fa fa-calendar-check-o" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px;"></i>
+    No active rentals.
+  </div>
+  {% endif %}
+</div>
+
+{# ── Return Asset Modal ──────────────────────────────────────────────────── #}
+<div class="modal fade" id="return-asset-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title">
+          <i class="fa fa-undo" style="color:var(--erp-warning);margin-right:6px;"></i>Return Asset
+        </h4>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ra-rental-id">
+        <p style="font-size:13px;color:var(--erp-text-muted);" id="ra-description"></p>
+        <div class="form-group">
+          <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;display:block;">
+            Return Date
+          </label>
+          <input type="text" id="ra-return-date" class="form-control" placeholder="YYYY-MM-DD">
+        </div>
+        <div class="form-group">
+          <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;display:block;">
+            Asset Condition
+          </label>
+          <select id="ra-condition" class="form-control">
+            <option value="GOOD">Good — no damage</option>
+            <option value="MINOR_DAMAGE">Minor damage</option>
+            <option value="MAJOR_DAMAGE">Major damage</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;display:block;">
+            Notes
+          </label>
+          <textarea id="ra-notes" class="form-control" rows="2" placeholder="Any remarks…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning" id="ra-confirm-btn">
+          <i class="fa fa-check"></i> Confirm Return
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* ── Create rental ─────────────────────────────────────────────────── */
+  var createForm = document.getElementById('rental-create-form');
+  var rcResult   = document.getElementById('rc-result');
+
+  createForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('rc-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Creating…';
+    rcResult.innerHTML = '';
+
+    _post('/api/rental/create', {
+      asset_id:   document.getElementById('rc-asset').value,
+      customer:   document.getElementById('rc-customer').value.trim(),
+      start_date: document.getElementById('rc-start').value.trim(),
+      end_date:   document.getElementById('rc-end').value.trim()
+    })
+      .then(function (data) {
+        rcResult.innerHTML = '<span style="color:var(--erp-success);"><i class="fa fa-check"></i> Created: ' + _esc(data.ref || '') + '</span>';
+        createForm.reset();
+        setTimeout(function () { window.location.reload(); }, 1000);
+      })
+      .catch(function (err) {
+        rcResult.innerHTML = '<span style="color:var(--erp-danger);">Failed: ' + _esc(err.message) + '</span>';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-calendar-plus-o"></i> Create Rental';
+      });
+  });
+
+  /* ── Return asset modal ────────────────────────────────────────────── */
+  document.querySelectorAll('.return-asset-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('ra-rental-id').value    = btn.dataset.rentalId;
+      document.getElementById('ra-description').textContent =
+        'Rental: ' + btn.dataset.ref + '  ·  Asset: ' + btn.dataset.asset;
+      document.getElementById('ra-return-date').value  = '';
+      document.getElementById('ra-condition').value    = 'GOOD';
+      document.getElementById('ra-notes').value        = '';
+      $('#return-asset-modal').modal('show');
+    });
+  });
+
+  document.getElementById('ra-confirm-btn').addEventListener('click', function () {
+    var id          = document.getElementById('ra-rental-id').value;
+    var returnDate  = document.getElementById('ra-return-date').value.trim();
+    var condition   = document.getElementById('ra-condition').value;
+    var notes       = document.getElementById('ra-notes').value.trim();
+    if (!returnDate) { alert('Return date is required.'); return; }
+
+    var self = this;
+    self.disabled = true;
+    self.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving…';
+
+    _post('/api/rental/' + id + '/return', { return_date: returnDate, condition: condition, notes: notes })
+      .then(function () {
+        $('#return-asset-modal').modal('hide');
+        var row = document.getElementById('rental-row-' + id);
+        if (row) { row.style.opacity = '.4'; row.style.pointerEvents = 'none'; }
+        setTimeout(function () { window.location.reload(); }, 800);
+      })
+      .catch(function (err) {
+        alert('Return failed: ' + err.message);
+        self.disabled = false;
+        self.innerHTML = '<i class="fa fa-check"></i> Confirm Return';
+      });
+  });
+}());
+</script>
+{% endblock %}

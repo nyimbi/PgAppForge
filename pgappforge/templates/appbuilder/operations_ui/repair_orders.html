@@ -1,0 +1,424 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Repair Orders — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── New repair form ───────────────────────────────────────────────── */
+  .repair-form-panel {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--erp-shadow-sm);
+    margin-bottom: 24px;
+  }
+  .repair-form-panel label {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .05em;
+    color: var(--erp-text-muted); margin-bottom: 5px; display: block;
+  }
+  .repair-form-panel .form-control {
+    height: 34px; font-size: 13px;
+    border-color: var(--erp-border); border-radius: var(--erp-radius);
+  }
+  .repair-form-panel textarea.form-control { height: auto; }
+  .repair-form-panel .form-control:focus {
+    border-color: var(--erp-primary);
+    box-shadow: 0 0 0 3px rgba(26,86,219,.12); outline: none;
+  }
+
+  /* ── Kanban board (repair queue) ───────────────────────────────────── */
+  .repair-board {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    align-items: flex-start;
+  }
+  .repair-board::-webkit-scrollbar { height: 6px; }
+  .repair-board::-webkit-scrollbar-track { background: var(--erp-neutral-lt); border-radius: 3px; }
+  .repair-board::-webkit-scrollbar-thumb { background: var(--erp-border); border-radius: 3px; }
+
+  .repair-col {
+    flex: 0 0 220px;
+    background: var(--erp-neutral-lt);
+    border-radius: var(--erp-radius-lg);
+    border: 1px solid var(--erp-border);
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+  }
+  .repair-col-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--erp-border);
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    background: var(--erp-surface);
+    border-radius: var(--erp-radius-lg) var(--erp-radius-lg) 0 0;
+  }
+  .repair-col-count {
+    font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 999px;
+    background: var(--erp-neutral-lt); color: var(--erp-neutral);
+    border: 1px solid var(--erp-border);
+  }
+  .repair-col-body { padding: 10px; flex: 1; }
+
+  .repair-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    padding: 12px;
+    margin-bottom: 8px;
+    box-shadow: var(--erp-shadow-sm);
+    cursor: pointer;
+    transition: box-shadow var(--erp-transition), transform var(--erp-transition);
+  }
+  .repair-card:hover { box-shadow: var(--erp-shadow); transform: translateY(-1px); }
+  .repair-card-ref { font-size: 10px; font-weight: 700; color: var(--erp-primary); letter-spacing: .04em; margin-bottom: 4px; }
+  .repair-card-product { font-size: 13px; font-weight: 600; color: var(--erp-text); margin-bottom: 2px; }
+  .repair-card-customer { font-size: 11px; color: var(--erp-text-muted); margin-bottom: 6px; }
+  .repair-card-footer { display: flex; align-items: center; justify-content: space-between; }
+
+  .warranty-badge-yes { background: var(--erp-success-lt); color: var(--erp-success); }
+  .warranty-badge-no  { background: var(--erp-neutral-lt); color: var(--erp-neutral); }
+
+  /* Column accent colors */
+  .col-accent-received   { border-top: 3px solid #6b7280; }
+  .col-accent-diagnosing { border-top: 3px solid #1c64f2; }
+  .col-accent-in-repair  { border-top: 3px solid #d97706; }
+  .col-accent-qc         { border-top: 3px solid #7c3aed; }
+  .col-accent-ready      { border-top: 3px solid #0e9f6e; }
+  .col-accent-returned   { border-top: 3px solid #374151; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-wrench" style="color:var(--erp-primary);margin-right:8px;"></i>Repair Orders / RMA
+      </h1>
+      <p class="erp-page-subtitle">Track repairs from receipt through return. Assign technicians and record costs.</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      {% set total = namespace(n=0) %}
+      {% for status, orders in orders_by_status.items() %}{% set total.n = total.n + orders|length %}{% endfor %}
+      <span class="erp-badge erp-badge-blue">{{ total.n }} orders</span>
+      <button class="btn btn-primary btn-sm" data-toggle="collapse" data-target="#new-repair-form" aria-expanded="false">
+        <i class="fa fa-plus"></i> New Repair
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── New repair request form (collapsible) ────────────────────────────────── #}
+<div id="new-repair-form" class="collapse erp-mb-24">
+  <div class="repair-form-panel">
+    <h4 class="erp-chart-title" style="margin-bottom:16px;">
+      <i class="fa fa-plus-circle" style="color:var(--erp-primary);margin-right:6px;"></i>New Repair Request
+    </h4>
+    <form id="repair-request-form">
+      <div class="row">
+        <div class="col-sm-6">
+          <div class="form-group">
+            <label for="rr-customer">Customer Name</label>
+            <input type="text" id="rr-customer" name="customer_name" class="form-control" placeholder="Full name or company" required>
+          </div>
+        </div>
+        <div class="col-sm-6">
+          <div class="form-group">
+            <label for="rr-product">Product / Model</label>
+            <input type="text" id="rr-product" name="product_name" class="form-control" placeholder="e.g. Samsung Galaxy S24" required>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label for="rr-serial">Serial Number</label>
+            <input type="text" id="rr-serial" name="serial_number" class="form-control" placeholder="SN-XXXXXXXX">
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label for="rr-technician">Assign Technician</label>
+            <select id="rr-technician" name="technician_id" class="form-control">
+              <option value="">— unassigned —</option>
+              {% for tech in technicians %}
+              <option value="{{ tech.id }}">{{ tech.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label for="rr-warranty">Warranty Applicable</label>
+            <select id="rr-warranty" name="warranty_applicable" class="form-control">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="rr-problem">Problem Description</label>
+        <textarea id="rr-problem" name="problem_description" class="form-control" rows="3"
+                  placeholder="Describe the issue in detail…" required></textarea>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" id="rr-submit-btn" class="btn btn-primary">
+          <i class="fa fa-save"></i> Create Repair Order
+        </button>
+        <button type="button" class="btn btn-default" data-toggle="collapse" data-target="#new-repair-form">
+          Cancel
+        </button>
+        <span id="rr-result" style="line-height:32px; font-size:13px; margin-left:8px;"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Repair Queue Board ───────────────────────────────────────────────────── #}
+<div class="repair-board">
+
+  {% set stages = [
+    ('RECEIVED',   'received',   'fa-inbox',        'Received'),
+    ('DIAGNOSING', 'diagnosing', 'fa-search',       'Diagnosing'),
+    ('IN_REPAIR',  'in-repair',  'fa-wrench',       'In Repair'),
+    ('QC',         'qc',         'fa-check-square', 'QC'),
+    ('READY',      'ready',      'fa-thumbs-up',    'Ready'),
+    ('RETURNED',   'returned',   'fa-undo',         'Returned'),
+  ] %}
+
+  {% for status_key, css_key, icon, label in stages %}
+  {% set orders = orders_by_status.get(status_key, []) %}
+  <div class="repair-col col-accent-{{ css_key }}">
+    <div class="repair-col-header">
+      <span><i class="fa {{ icon }}" style="margin-right:5px;opacity:.7;"></i>{{ label }}</span>
+      <span class="repair-col-count">{{ orders | length }}</span>
+    </div>
+    <div class="repair-col-body">
+      {% for order in orders %}
+      <div class="repair-card" data-order-id="{{ order.id }}"
+           onclick="openRepairDetail('{{ order.id }}')">
+        <div class="repair-card-ref">{{ order.order_ref }}</div>
+        <div class="repair-card-product">{{ order.product_name }}</div>
+        <div class="repair-card-customer">
+          <i class="fa fa-user" style="margin-right:3px;"></i>{{ order.customer_name }}
+        </div>
+        <div class="repair-card-footer">
+          <span class="erp-badge {% if order.warranty_applicable %}warranty-badge-yes{% else %}warranty-badge-no{% endif %}" style="font-size:10px;padding:2px 6px;">
+            {% if order.warranty_applicable %}Warranty{% else %}No Warranty{% endif %}
+          </span>
+          {% if order.technician_name %}
+          <span style="font-size:10px;color:var(--erp-text-muted);">
+            <i class="fa fa-user-circle-o"></i> {{ order.technician_name | truncate(12) }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p style="font-size:11px;color:var(--erp-text-muted);padding:6px;margin:0;">Empty</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+
+{# ── Repair Detail / Complete modal ──────────────────────────────────────── #}
+<div class="modal fade" id="repair-detail-modal" tabindex="-1" role="dialog" aria-labelledby="repair-modal-title">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" id="repair-modal-title">Repair Order</h4>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rd-order-id">
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;">Order Ref</label>
+              <p id="rd-order-ref" style="font-weight:700;margin:0;"></p>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;">Status</label>
+              <p id="rd-status" style="margin:0;"></p>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;display:block;">Assign Technician</label>
+          <select id="rd-technician" class="form-control input-sm">
+            <option value="">— unassigned —</option>
+            {% for tech in technicians %}
+            <option value="{{ tech.id }}">{{ tech.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <hr style="margin:12px 0;">
+        <h5 style="font-size:13px;font-weight:700;margin-bottom:10px;">Complete Repair</h5>
+        <div class="form-group">
+          <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;display:block;">Actual Cost (cents)</label>
+          <input type="number" id="rd-actual-cost" class="form-control input-sm" min="0" placeholder="e.g. 4500 = $45.00">
+        </div>
+        <div class="form-group">
+          <label style="font-size:11px;color:var(--erp-text-muted);font-weight:700;text-transform:uppercase;display:block;">Resolution Notes</label>
+          <textarea id="rd-resolution" class="form-control" rows="2" placeholder="What was done…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-info" id="rd-assign-btn">
+          <i class="fa fa-user-plus"></i> Assign
+        </button>
+        <button type="button" class="btn btn-success" id="rd-complete-btn">
+          <i class="fa fa-check-circle"></i> Complete Repair
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Server-provided order data for modal population */
+var REPAIR_ORDERS = {{ orders_by_status | tojson }};
+</script>
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+  function _patch(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* Flatten orders for lookup */
+  var orderIndex = {};
+  Object.keys(REPAIR_ORDERS).forEach(function (status) {
+    REPAIR_ORDERS[status].forEach(function (o) { orderIndex[String(o.id)] = o; });
+  });
+
+  /* ── New repair request form ───────────────────────────────────────── */
+  var rrForm   = document.getElementById('repair-request-form');
+  var rrResult = document.getElementById('rr-result');
+
+  rrForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('rr-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Creating…';
+    rrResult.innerHTML = '';
+
+    var data = {
+      customer_name:        document.getElementById('rr-customer').value.trim(),
+      product_name:         document.getElementById('rr-product').value.trim(),
+      serial_number:        document.getElementById('rr-serial').value.trim(),
+      technician_id:        document.getElementById('rr-technician').value || null,
+      warranty_applicable:  document.getElementById('rr-warranty').value === 'true',
+      problem_description:  document.getElementById('rr-problem').value.trim()
+    };
+
+    _post('/api/repair/orders', data)
+      .then(function (order) {
+        rrResult.innerHTML = '<span style="color:var(--erp-success);"><i class="fa fa-check"></i> Created: ' + _esc(order.order_ref) + '</span>';
+        rrForm.reset();
+        setTimeout(function () { window.location.reload(); }, 1000);
+      })
+      .catch(function (err) {
+        rrResult.innerHTML = '<span style="color:var(--erp-danger);">Failed: ' + _esc(err.message) + '</span>';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-save"></i> Create Repair Order';
+      });
+  });
+
+  /* ── Repair detail modal ───────────────────────────────────────────── */
+  window.openRepairDetail = function (id) {
+    var order = orderIndex[String(id)];
+    if (!order) return;
+
+    document.getElementById('rd-order-id').value       = id;
+    document.getElementById('rd-order-ref').textContent = order.order_ref || id;
+    document.getElementById('rd-status').innerHTML =
+      '<span class="erp-badge erp-badge-blue">' + _esc(order.status || '') + '</span>';
+    document.getElementById('rd-technician').value      = order.technician_id || '';
+    document.getElementById('rd-actual-cost').value     = '';
+    document.getElementById('rd-resolution').value      = '';
+
+    $('#repair-detail-modal').modal('show');
+  };
+
+  /* ── Assign technician ─────────────────────────────────────────────── */
+  document.getElementById('rd-assign-btn').addEventListener('click', function () {
+    var id    = document.getElementById('rd-order-id').value;
+    var techId = document.getElementById('rd-technician').value;
+    var self  = this;
+    self.disabled = true;
+    self.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    _patch('/api/repair/orders/' + id, { technician_id: techId || null })
+      .then(function () {
+        $('#repair-detail-modal').modal('hide');
+        window.location.reload();
+      })
+      .catch(function (err) {
+        alert('Assign failed: ' + err.message);
+        self.disabled = false;
+        self.innerHTML = '<i class="fa fa-user-plus"></i> Assign';
+      });
+  });
+
+  /* ── Complete repair ───────────────────────────────────────────────── */
+  document.getElementById('rd-complete-btn').addEventListener('click', function () {
+    var id         = document.getElementById('rd-order-id').value;
+    var actualCost = parseInt(document.getElementById('rd-actual-cost').value, 10) || 0;
+    var resolution = document.getElementById('rd-resolution').value.trim();
+    var self       = this;
+    self.disabled  = true;
+    self.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Completing…';
+
+    _post('/api/repair/orders/' + id + '/complete', {
+      actual_cost_cents: actualCost,
+      resolution_notes:  resolution
+    })
+      .then(function () {
+        $('#repair-detail-modal').modal('hide');
+        window.location.reload();
+      })
+      .catch(function (err) {
+        alert('Complete failed: ' + err.message);
+        self.disabled = false;
+        self.innerHTML = '<i class="fa fa-check-circle"></i> Complete Repair';
+      });
+  });
+}());
+</script>
+{% endblock %}

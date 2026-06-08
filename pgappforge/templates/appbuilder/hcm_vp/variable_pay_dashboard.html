@@ -1,0 +1,589 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Variable Pay — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Summary strip ── */
+  .vp-strip {
+    background:linear-gradient(135deg,#064e3b 0%,#059669 100%);
+    color:#fff; border-radius:10px; padding:20px 24px; margin-bottom:24px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+  }
+  .vp-strip h2 { margin:0 0 2px; font-size:16px; font-weight:700; }
+  .vp-strip .sub { font-size:12px; opacity:.75; margin:0 0 16px; }
+  .vp-strip-kpis { display:flex; gap:32px; flex-wrap:wrap; }
+  .vp-strip-kpi .lbl { font-size:10px; opacity:.7; text-transform:uppercase; letter-spacing:.5px; margin:0 0 2px; }
+  .vp-strip-kpi .val { font-size:22px; font-weight:800; margin:0; font-variant-numeric:tabular-nums; }
+  .vp-strip-kpi .sub2 { font-size:10px; opacity:.6; margin:0; }
+
+  /* ── Attainment gauge (circular SVG) ── */
+  .attainment-card {
+    background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:16px;
+    text-align:center; transition:box-shadow .12s;
+  }
+  .attainment-card:hover { box-shadow:0 4px 14px rgba(0,0,0,.07); }
+  .att-ring { position:relative; width:80px; height:80px; margin:0 auto 10px; }
+  .att-ring svg { position:absolute; top:0; left:0; }
+  .att-ring-label { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:800; }
+  .att-name { font-size:13px; font-weight:600; color:#111827; margin:0 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .att-meta { font-size:11px; color:#9ca3af; margin:0 0 8px; }
+  .att-quota { font-size:12px; color:#374151; margin:0 0 4px; }
+  .att-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:24px; }
+
+  /* ── Payout status badges ── */
+  .pay-status { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap; }
+  .pay-PENDING   { background:#fef3c7; color:#92400e; }
+  .pay-APPROVED  { background:#d1fae5; color:#065f46; }
+  .pay-PAID      { background:#dbeafe; color:#1e40af; }
+  .pay-REJECTED  { background:#fee2e2; color:#991b1b; }
+  .pay-CLAWBACK  { background:#fce7f3; color:#9d174d; }
+
+  /* ── Clawback severity ── */
+  .claw-reason { font-size:11px; color:#374151; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── KPI tiles ── */
+  .vp-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .vp-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; position:relative; overflow:hidden; }
+  .vp-kpi::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:8px 0 0 8px; background:var(--ta,#10b981); }
+  .vp-kpi .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 3px; }
+  .vp-kpi .val { font-size:20px; font-weight:800; color:#111827; margin:0; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .vp-kpi .sub { font-size:11px; color:#9ca3af; margin:2px 0 0; }
+
+  /* ── Tab nav ── */
+  .vp-tabs { display:flex; border-bottom:2px solid #e5e7eb; background:#fafafa; }
+  .vp-tab { padding:10px 18px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .12s, border-color .12s; white-space:nowrap; }
+  .vp-tab:hover { color:#374151; }
+  .vp-tab.active { color:#059669; border-bottom-color:#059669; }
+  .vp-panel { display:none; padding:20px; }
+  .vp-panel.active { display:block; }
+
+  /* ── Toast ── */
+  .vp-toasts { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .vp-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .vp-toast.success { border-left:4px solid #10b981; }
+  .vp-toast.error   { border-left:4px solid #ef4444; }
+  .vp-toast.info    { border-left:4px solid #059669; }
+
+  .tabnum { font-family:monospace; font-variant-numeric:tabular-nums; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-trophy"></i> Variable Pay &amp; Commissions
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Quota attainment · Payout approval · Clawback management</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-default btn-sm" onclick="window.location='/hcm/vp/export'">
+      <i class="fa fa-download"></i> Export
+    </button>
+    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal-calc">
+      <i class="fa fa-calculator"></i> Calculate Commissions
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary strip ── #}
+<div class="vp-strip">
+  <div>
+    <h2><i class="fa fa-dollar"></i> Commission Summary</h2>
+    <p class="sub">Current period</p>
+  </div>
+  <div class="vp-strip-kpis">
+    <div class="vp-strip-kpi">
+      <p class="lbl">Total Earned</p>
+      <p class="val">
+        {% if commission_summary and commission_summary.total_earned_cents %}
+          {{ "{:,.0f}".format(commission_summary.total_earned_cents / 100) }}
+        {% else %}—{% endif %}
+      </p>
+      <p class="sub2">commissions earned</p>
+    </div>
+    <div class="vp-strip-kpi">
+      <p class="lbl">Total Paid</p>
+      <p class="val">
+        {% if commission_summary and commission_summary.total_paid_cents %}
+          {{ "{:,.0f}".format(commission_summary.total_paid_cents / 100) }}
+        {% else %}—{% endif %}
+      </p>
+      <p class="sub2">disbursed to date</p>
+    </div>
+    <div class="vp-strip-kpi">
+      <p class="lbl">Pending Approval</p>
+      <p class="val" style="color:#fef3c7;">
+        {% if commission_summary and commission_summary.pending_approval_cents %}
+          {{ "{:,.0f}".format(commission_summary.pending_approval_cents / 100) }}
+        {% else %}—{% endif %}
+      </p>
+      <p class="sub2">awaiting sign-off</p>
+    </div>
+    <div class="vp-strip-kpi">
+      <p class="lbl">Clawback Risk</p>
+      <p class="val" style="color:#fca5a5;">
+        {% if commission_summary and commission_summary.clawback_risk_cents %}
+          {{ "{:,.0f}".format(commission_summary.clawback_risk_cents / 100) }}
+        {% else %}—{% endif %}
+      </p>
+      <p class="sub2">outstanding clawbacks</p>
+    </div>
+  </div>
+</div>
+
+{# ── Attainment gauges ── #}
+<h5 style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 12px;">
+  <i class="fa fa-tachometer"></i> Quota Attainment
+</h5>
+<div class="att-grid" id="att-grid">
+  {% if quotas %}
+    {% for q in quotas %}
+    {% set pct = ((q.attained_cents / q.quota_cents) * 100) | round(1) if q.quota_cents else 0 %}
+    {% set color = '#10b981' if pct >= 100 else '#f59e0b' if pct >= 75 else '#ef4444' %}
+    {% set r = 32 %}
+    {% set circ = 2 * 3.14159 * r %}
+    {% set dash = (pct / 100) * circ %}
+    <div class="attainment-card">
+      <div class="att-ring">
+        <svg width="80" height="80" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="{{ r }}" fill="none" stroke="#e5e7eb" stroke-width="6"/>
+          <circle cx="40" cy="40" r="{{ r }}" fill="none" stroke="{{ color }}" stroke-width="6"
+                  stroke-dasharray="{{ "{:.1f}".format(dash) }} {{ "{:.1f}".format(circ) }}"
+                  stroke-linecap="round" transform="rotate(-90 40 40)"/>
+        </svg>
+        <div class="att-ring-label" style="color:{{ color }};">{{ pct | int }}%</div>
+      </div>
+      <p class="att-name" title="{{ q.employee_name }}">{{ q.employee_name }}</p>
+      <p class="att-meta">{{ q.period | default('') }} &bull; {{ q.plan_name | default('') }}</p>
+      <p class="att-quota tabnum" style="font-size:12px;">
+        <strong style="color:{{ color }};">{{ "{:,.0f}".format(q.attained_cents / 100) if q.attained_cents else '0' }}</strong>
+        <span style="color:#9ca3af;"> / {{ "{:,.0f}".format(q.quota_cents / 100) if q.quota_cents else '—' }}</span>
+      </p>
+      <button class="btn btn-xs btn-default" onclick="calculateCommission('{{ q.id }}', '{{ q.employee_name | replace("'","") }}')">
+        <i class="fa fa-calculator"></i> Calculate
+      </button>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="grid-column:1/-1; text-align:center; padding:32px; color:#9ca3af;">
+      <i class="fa fa-trophy fa-2x" style="margin-bottom:8px; display:block;"></i>
+      No quota records found.
+    </div>
+  {% endif %}
+</div>
+
+{# ── Tabbed section: Payouts + Clawbacks ── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div class="vp-tabs">
+    <div class="vp-tab active" data-tab="payouts" onclick="vpTab(this)">
+      <i class="fa fa-money"></i> Pending Payouts
+      {% if pending_payouts and pending_payouts|length %}
+        <span style="background:#f59e0b; color:#fff; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:5px; font-weight:700;">{{ pending_payouts|length }}</span>
+      {% endif %}
+    </div>
+    <div class="vp-tab" data-tab="all-payouts" onclick="vpTab(this)"><i class="fa fa-list"></i> All Payouts</div>
+    <div class="vp-tab" data-tab="clawbacks" onclick="vpTab(this)">
+      <i class="fa fa-undo"></i> Clawbacks
+      {% if clawbacks and clawbacks|length %}
+        <span style="background:#ef4444; color:#fff; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:5px; font-weight:700;">{{ clawbacks|length }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Pending payouts ── #}
+  <div id="panel-payouts" class="vp-panel active">
+    {% if pending_payouts %}
+      <div style="margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <span style="font-size:13px; color:#374151; font-weight:600;">
+          <i class="fa fa-clock-o" style="color:#f59e0b;"></i>
+          {{ pending_payouts | length }} payout(s) awaiting approval
+        </span>
+        <button class="btn btn-sm btn-success" onclick="approveAllPayouts()">
+          <i class="fa fa-check-double"></i> Approve All
+        </button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="erp-table" id="payouts-table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Period</th>
+              <th>Plan</th>
+              <th style="text-align:right;">Commission</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pending_payouts %}
+            <tr id="payout-row-{{ p.id }}">
+              <td>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="width:28px;height:28px;border-radius:50%;background:#d1fae5;color:#065f46;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    {{ p.employee_name[:2]|upper if p.employee_name else '??' }}
+                  </div>
+                  <strong>{{ p.employee_name }}</strong>
+                </div>
+              </td>
+              <td style="font-size:12px; color:#6b7280;">{{ p.period | default('—') }}</td>
+              <td style="font-size:12px; color:#374151;">{{ p.plan_name | default('—') }}</td>
+              <td style="text-align:right; font-weight:700; font-size:14px;" class="tabnum">
+                {{ "{:,.2f}".format(p.commission_cents / 100) if p.commission_cents else '—' }}
+              </td>
+              <td><span class="pay-status pay-{{ p.status | default('PENDING') }}">{{ p.status | default('PENDING') }}</span></td>
+              <td>
+                <div style="display:flex; gap:5px;">
+                  <button class="btn btn-sm btn-success btn-approve-payout" data-payout-id="{{ p.id }}" title="Approve">
+                    <i class="fa fa-check"></i> Approve
+                  </button>
+                  <button class="btn btn-sm btn-danger btn-reject-payout" data-payout-id="{{ p.id }}" title="Reject">
+                    <i class="fa fa-times"></i>
+                  </button>
+                  <a href="/hcm/vp/payouts/{{ p.id }}" class="btn btn-sm btn-default"><i class="fa fa-eye"></i></a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div style="text-align:center; padding:40px; color:#9ca3af;">
+        <i class="fa fa-check-circle fa-2x" style="color:#10b981; margin-bottom:10px; display:block;"></i>
+        <strong style="color:#111827;">No pending payouts</strong> — all commissions have been processed.
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── All payouts ── #}
+  <div id="panel-all-payouts" class="vp-panel">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+      <input type="text" id="ap-search" class="form-control input-sm" placeholder="Search employee…" style="width:180px;" oninput="filterAllPayouts()">
+      <select id="ap-status" class="form-control input-sm" style="width:120px;" onchange="filterAllPayouts()">
+        <option value="">All Statuses</option>
+        <option value="PENDING">Pending</option>
+        <option value="APPROVED">Approved</option>
+        <option value="PAID">Paid</option>
+        <option value="REJECTED">Rejected</option>
+      </select>
+      <span id="ap-count" style="font-size:12px; color:#9ca3af; margin-left:auto;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="erp-table">
+        <thead>
+          <tr><th>Employee</th><th>Period</th><th>Plan</th><th style="text-align:right;">Commission</th><th>Attainment</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody id="all-payouts-tbody">
+          {% set all_payouts = (pending_payouts | default([])) + (historical_payouts | default([])) %}
+          {% if all_payouts %}
+            {% for p in all_payouts %}
+            <tr data-apname="{{ p.employee_name | default('') | lower }}" data-apstatus="{{ p.status | default('PENDING') }}">
+              <td><strong>{{ p.employee_name | default('—') }}</strong></td>
+              <td style="font-size:12px; color:#6b7280;">{{ p.period | default('—') }}</td>
+              <td style="font-size:12px;">{{ p.plan_name | default('—') }}</td>
+              <td class="tabnum" style="text-align:right; font-weight:700;">{{ "{:,.2f}".format(p.commission_cents / 100) if p.commission_cents else '—' }}</td>
+              <td>
+                {% if p.attainment_pct is defined %}
+                  <span style="font-weight:700; color:{% if p.attainment_pct >= 100 %}#10b981{% elif p.attainment_pct >= 75 %}#f59e0b{% else %}#ef4444{% endif %};">
+                    {{ p.attainment_pct | round(1) }}%
+                  </span>
+                {% else %}—{% endif %}
+              </td>
+              <td><span class="pay-status pay-{{ p.status | default('PENDING') }}">{{ p.status | default('PENDING') }}</span></td>
+              <td><a href="/hcm/vp/payouts/{{ p.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a></td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="7" style="text-align:center; padding:32px; color:#9ca3af;">No payout records found.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Clawbacks ── #}
+  <div id="panel-clawbacks" class="vp-panel">
+    {% if clawbacks %}
+      <div style="overflow-x:auto;">
+        <table class="erp-table">
+          <thead>
+            <tr><th>Employee</th><th>Original Period</th><th style="text-align:right;">Clawback Amount</th><th>Reason</th><th>Initiated</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for cb in clawbacks %}
+            <tr id="cb-row-{{ cb.id }}">
+              <td>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="width:26px;height:26px;border-radius:50%;background:#fce7f3;color:#9d174d;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    {{ cb.employee_name[:2]|upper if cb.employee_name else '??' }}
+                  </div>
+                  <strong>{{ cb.employee_name | default('—') }}</strong>
+                </div>
+              </td>
+              <td style="font-size:12px; color:#6b7280;">{{ cb.original_period | default('—') }}</td>
+              <td class="tabnum" style="text-align:right; font-weight:700; color:#9d174d;">
+                ({{ "{:,.2f}".format(cb.amount_cents / 100) if cb.amount_cents else '—' }})
+              </td>
+              <td class="claw-reason" title="{{ cb.reason | default('') }}">{{ cb.reason | default('—') }}</td>
+              <td style="font-size:12px; color:#6b7280;">{{ cb.initiated_date | default('—') }}</td>
+              <td><span class="pay-status pay-{{ cb.status | default('PENDING') }}">{{ cb.status | default('PENDING') }}</span></td>
+              <td>
+                {% if cb.status == 'PENDING' %}
+                  <button class="btn btn-xs btn-success btn-resolve-cb" data-cb-id="{{ cb.id }}" title="Mark Resolved">
+                    <i class="fa fa-check"></i> Resolve
+                  </button>
+                {% else %}
+                  <a href="/hcm/vp/clawbacks/{{ cb.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div style="text-align:center; padding:40px; color:#9ca3af;">
+        <i class="fa fa-undo fa-2x" style="margin-bottom:10px; display:block;"></i>
+        No clawback records.
+      </div>
+    {% endif %}
+  </div>
+
+</div>{# /erp-card #}
+
+{# ── Calculate Commission Modal ── #}
+<div class="modal fade" id="modal-calc" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;"><i class="fa fa-calculator" style="color:#059669;"></i> Calculate Commission</h4>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Employee / Quota</label>
+              <select id="calc-quota" class="form-control">
+                <option value="">— select quota —</option>
+                {% for q in quotas | default([]) %}
+                <option value="{{ q.id }}">{{ q.employee_name }} — {{ q.period | default('') }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Period</label>
+              <input type="text" id="calc-period" class="form-control" placeholder="e.g. Q3-2026">
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Attained Revenue</label>
+              <input type="number" id="calc-attained" class="form-control" placeholder="0.00" min="0" step="0.01">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Quota Target</label>
+              <input type="number" id="calc-quota-val" class="form-control" placeholder="0.00" min="0" step="0.01">
+            </div>
+          </div>
+        </div>
+        <div id="calc-result" style="display:none; margin-top:10px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">Close</button>
+        <button class="btn btn-default" id="btn-preview-calc" style="font-weight:600;"><i class="fa fa-eye"></i> Preview</button>
+        <button class="btn btn-success" id="btn-run-calc" style="font-weight:600;"><i class="fa fa-calculator"></i> Calculate &amp; Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="vp-toasts" id="vp-toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('vp-toasts');
+    var el = document.createElement('div');
+    el.className = 'vp-toast ' + (type||'info');
+    var icon = type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function fmtMoney(cents) {
+    return (cents/100).toLocaleString('en', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+
+  /* ── tab switching ── */
+  window.vpTab = function(tab) {
+    document.querySelectorAll('.vp-tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.vp-panel').forEach(function(p){ p.classList.remove('active'); });
+    tab.classList.add('active');
+    var panel = document.getElementById('panel-' + tab.getAttribute('data-tab'));
+    if (panel) panel.classList.add('active');
+  };
+
+  /* ── approve payout ── */
+  function payoutAction(payoutId, action) {
+    fetch('/api/hcm/vp/payouts/' + payoutId + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ payout_id: payoutId })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        var row = document.getElementById('payout-row-' + payoutId);
+        if (row) { row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(function(){ if(row.parentNode) row.parentNode.removeChild(row); }, 320); }
+        toast('Payout ' + (action === 'approve' ? 'approved' : 'rejected') + '.', 'success');
+      } else {
+        toast(res.data.message || 'Action failed.', 'error');
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); });
+  }
+
+  document.addEventListener('click', function(e) {
+    var appBtn = e.target.closest('.btn-approve-payout');
+    var rejBtn = e.target.closest('.btn-reject-payout');
+    var resBtn = e.target.closest('.btn-resolve-cb');
+    if (appBtn) { appBtn.disabled=true; payoutAction(appBtn.getAttribute('data-payout-id'), 'approve'); }
+    if (rejBtn) { rejBtn.disabled=true; payoutAction(rejBtn.getAttribute('data-payout-id'), 'reject'); }
+    if (resBtn) { resolveClawback(resBtn.getAttribute('data-cb-id'), resBtn); }
+  });
+
+  window.approveAllPayouts = function() {
+    document.querySelectorAll('.btn-approve-payout').forEach(function(b){ b.disabled=true; payoutAction(b.getAttribute('data-payout-id'), 'approve'); });
+  };
+
+  /* ── clawback resolve ── */
+  function resolveClawback(cbId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+    fetch('/api/hcm/vp/clawbacks/' + cbId + '/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ clawback_id: cbId })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        toast('Clawback resolved.', 'success');
+        var row = document.getElementById('cb-row-' + cbId);
+        if (row) { var s = row.querySelector('.pay-status'); if(s){ s.className='pay-status pay-APPROVED'; s.textContent='RESOLVED'; } }
+        btn.remove();
+      } else {
+        toast(res.data.message||'Failed to resolve.','error');
+        btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Resolve';
+      }
+    })
+    .catch(function(err){ toast('Network error: '+err.message,'error'); btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Resolve'; });
+  }
+
+  /* ── all payouts filter ── */
+  window.filterAllPayouts = function() {
+    var q  = (document.getElementById('ap-search').value||'').toLowerCase();
+    var st = (document.getElementById('ap-status').value||'').toUpperCase();
+    var rows = document.querySelectorAll('#all-payouts-tbody tr[data-apname]');
+    var count = 0;
+    rows.forEach(function(row) {
+      var show = (!q||row.getAttribute('data-apname').indexOf(q)!==-1) &&
+                 (!st||row.getAttribute('data-apstatus')===st);
+      row.style.display = show ? '' : 'none';
+      if(show) count++;
+    });
+    var el = document.getElementById('ap-count');
+    if(el) el.textContent = count + ' of ' + rows.length + ' payouts';
+  };
+
+  /* ── commission calculator ── */
+  window.calculateCommission = function(quotaId, empName) {
+    document.getElementById('calc-quota').value = quotaId;
+    $('#modal-calc').modal('show');
+  };
+
+  document.getElementById('btn-preview-calc').addEventListener('click', function() {
+    var attained  = parseFloat(document.getElementById('calc-attained').value)||0;
+    var quotaVal  = parseFloat(document.getElementById('calc-quota-val').value)||0;
+    var resultEl  = document.getElementById('calc-result');
+    if (!attained || !quotaVal) { resultEl.style.display='none'; return; }
+    var attPct     = (attained / quotaVal) * 100;
+    /* Tiered: 0-75%=0%, 75-100%=8%, 100-125%=10%, 125%+=12% */
+    var rate;
+    if (attPct < 75)       rate = 0.00;
+    else if (attPct < 100) rate = 0.08;
+    else if (attPct < 125) rate = 0.10;
+    else                   rate = 0.12;
+    var commission = attained * rate;
+    var color = attPct >= 100 ? '#10b981' : attPct >= 75 ? '#f59e0b' : '#ef4444';
+    resultEl.style.display = '';
+    resultEl.innerHTML =
+      '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:12px 16px;font-size:13px;">' +
+        '<table style="width:100%;font-size:13px;">' +
+          '<tr><td>Attainment</td><td style="text-align:right;font-weight:700;color:'+color+';">' + attPct.toFixed(1) + '%</td></tr>' +
+          '<tr><td>Commission Rate</td><td style="text-align:right;font-weight:700;">' + (rate*100).toFixed(0) + '%</td></tr>' +
+          '<tr><td style="padding-top:8px;font-size:14px;font-weight:700;">Commission</td>' +
+               '<td style="text-align:right;font-size:16px;font-weight:800;color:#065f46;padding-top:8px;">' + fmtMoney(commission*100) + '</td></tr>' +
+        '</table>' +
+      '</div>';
+  });
+
+  document.getElementById('btn-run-calc').addEventListener('click', function() {
+    var quotaId = document.getElementById('calc-quota').value;
+    var period  = document.getElementById('calc-period').value.trim();
+    var attained = parseFloat(document.getElementById('calc-attained').value)||0;
+    var quotaVal = parseFloat(document.getElementById('calc-quota-val').value)||0;
+    if (!quotaId) { toast('Select a quota.','error'); return; }
+    if (!attained||!quotaVal) { toast('Enter attained revenue and quota target.','error'); return; }
+
+    var btn = this; btn.disabled=true; btn.innerHTML='<i class="fa fa-spinner fa-spin"></i> Saving…';
+
+    fetch('/api/hcm/vp/commissions/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ quota_id: quotaId, period, attained_cents: Math.round(attained*100), quota_cents: Math.round(quotaVal*100) })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        $('#modal-calc').modal('hide');
+        toast('Commission calculated and payout record created.', 'success');
+        setTimeout(function(){ window.location.reload(); }, 1500);
+      } else {
+        toast(res.data.message||'Calculation failed.','error');
+      }
+    })
+    .catch(function(err){ toast('Network error: '+err.message,'error'); })
+    .finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fa fa-calculator"></i> Calculate & Save'; });
+  });
+
+}());
+</script>
+{% endblock %}

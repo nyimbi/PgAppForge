@@ -1,0 +1,463 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Credit Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* summary KPI row */
+  .cm-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .cm-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:18px 20px; position:relative; overflow:hidden; }
+  .cm-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .cm-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .cm-kpi-value { font-size:24px; font-weight:700; color:#111827; margin:0 0 2px; font-variant-numeric:tabular-nums; }
+  .cm-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* credit profile table */
+  .cm-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .cm-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .cm-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .cm-table tr:last-child td { border-bottom:none; }
+  .cm-table tr:hover td { background:#fafafa; }
+  .cm-table tr.on-hold td { background:#fff5f5; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* traffic light */
+  .tl-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .tl-green  { background:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.18); }
+  .tl-amber  { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.18); }
+  .tl-red    { background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.18); }
+  /* utilisation bar */
+  .util-bar-wrap { display:flex; align-items:center; gap:8px; min-width:120px; }
+  .util-bar { flex:1; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; }
+  .util-bar-inner { height:100%; border-radius:3px; transition:width .3s; }
+  .util-pct { font-size:11px; font-weight:700; min-width:34px; text-align:right; }
+  /* hold badges */
+  .badge-on-hold    { background:#fee2e2; color:#991b1b; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-clear      { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* overdue table */
+  .overdue-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .overdue-table th { background:#fef2f2; color:#991b1b; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:8px 12px; border-bottom:2px solid #fecaca; text-align:left; white-space:nowrap; }
+  .overdue-table td { padding:8px 12px; border-bottom:1px solid #fee2e2; vertical-align:middle; }
+  .overdue-table tr:last-child td { border-bottom:none; }
+  /* filter */
+  .filter-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .erp-toast.warning { border-left:4px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Credit Management</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Customer credit limits, exposure monitoring &amp; hold management</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPIs ─────────────────────────────────────────────────────────── #}
+{% set on_hold_count   = profiles | selectattr('is_on_hold', 'equalto', true)  | list | length if profiles else 0 %}
+{% set over_limit_count = profiles | selectattr('is_over_limit', 'equalto', true) | list | length if profiles else 0 %}
+<div class="cm-kpi-grid">
+  <div class="cm-kpi-card" style="--accent:#1a56db;">
+    <p class="cm-kpi-label">Total Customers</p>
+    <p class="cm-kpi-value">{{ profiles | length if profiles else '—' }}</p>
+    <p class="cm-kpi-sub">with credit profiles</p>
+  </div>
+  <div class="cm-kpi-card" style="--accent:#ef4444;">
+    <p class="cm-kpi-label">On Credit Hold</p>
+    <p class="cm-kpi-value" style="color:{% if on_hold_count > 0 %}#ef4444{% else %}#111827{% endif %};">
+      {{ on_hold_count }}
+    </p>
+    <p class="cm-kpi-sub">accounts blocked</p>
+  </div>
+  <div class="cm-kpi-card" style="--accent:#f59e0b;">
+    <p class="cm-kpi-label">Over Limit</p>
+    <p class="cm-kpi-value" style="color:{% if over_limit_count > 0 %}#f59e0b{% else %}#111827{% endif %};">
+      {{ over_limit_count }}
+    </p>
+    <p class="cm-kpi-sub">exceed credit limit</p>
+  </div>
+  <div class="cm-kpi-card" style="--accent:#8b5cf6;">
+    <p class="cm-kpi-label">Total Exposure</p>
+    <p class="cm-kpi-value" style="font-size:20px;">
+      {% if profiles %}
+        {{ "{:,.0f}".format(profiles | sum(attribute='current_exposure_cents') / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="cm-kpi-sub">current AR balance</p>
+  </div>
+  <div class="cm-kpi-card" style="--accent:#10b981;">
+    <p class="cm-kpi-label">Overdue Customers</p>
+    <p class="cm-kpi-value" style="color:{% if overdue_customers %}#ef4444{% else %}#10b981{% endif %};">
+      {{ overdue_customers | length if overdue_customers else 0 }}
+    </p>
+    <p class="cm-kpi-sub">with past-due invoices</p>
+  </div>
+</div>
+
+{# ── Filter bar ───────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:14px 20px; margin-bottom:20px;">
+  <div class="filter-bar">
+    <label for="filter-status">Status:</label>
+    <select id="filter-status" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+      <option value="">All</option>
+      <option value="hold">On Hold</option>
+      <option value="clear">Clear</option>
+      <option value="overlimit">Over Limit</option>
+    </select>
+    <label style="margin-left:8px;">Customer:</label>
+    <input id="filter-customer" type="text" class="form-control" placeholder="Search name…"
+           style="width:200px; height:32px; font-size:13px; padding:2px 10px;">
+    <button id="btn-filter-apply" class="btn btn-default btn-sm" style="height:32px;">
+      <i class="fa fa-filter"></i> Apply
+    </button>
+    <button id="btn-filter-clear" class="btn btn-link btn-sm" style="height:32px; padding:0 8px;">Clear</button>
+    <span id="row-count" style="margin-left:auto; font-size:12px; color:#6b7280;"></span>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Credit Profiles Table ────────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:14px 20px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-credit-card" style="color:#1a56db; margin-right:6px;"></i> Customer Credit Profiles
+        </h4>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cm-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Customer</th>
+              <th class="nums">Credit Limit</th>
+              <th class="nums">Exposure</th>
+              <th class="nums">Available</th>
+              <th>Utilisation</th>
+              <th>Status</th>
+              <th style="text-align:center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="cm-tbody">
+            {% if profiles %}
+              {% for p in profiles %}
+              {% set util_pct = ((p.current_exposure_cents / p.credit_limit_cents) * 100) | round(1) if p.credit_limit_cents else 0 %}
+              <tr class="{% if p.is_on_hold %}on-hold{% endif %}"
+                  data-customer="{{ p.customer_name | lower }}"
+                  data-on-hold="{{ 'hold' if p.is_on_hold else 'clear' }}"
+                  data-over-limit="{{ 'overlimit' if util_pct > 100 else '' }}">
+                <td style="width:20px; padding-right:4px;">
+                  <span class="tl-dot {% if p.is_on_hold or util_pct > 100 %}tl-red{% elif util_pct > 90 %}tl-amber{% elif util_pct > 70 %}tl-amber{% else %}tl-green{% endif %}"></span>
+                </td>
+                <td>
+                  <strong>{{ p.customer_name }}</strong>
+                  {% if p.customer_code %}
+                  <span style="font-size:11px; color:#9ca3af; display:block; font-family:monospace;">{{ p.customer_code }}</span>
+                  {% endif %}
+                </td>
+                <td class="nums">{{ "{:,.0f}".format(p.credit_limit_cents / 100) }}</td>
+                <td class="nums" style="color:{% if util_pct > 90 %}#ef4444{% else %}#374151{% endif %}; font-weight:{% if util_pct > 90 %}700{% else %}400{% endif %};">
+                  {{ "{:,.0f}".format(p.current_exposure_cents / 100) }}
+                </td>
+                <td class="nums" style="color:{% if p.available_credit_cents < 0 %}#ef4444{% else %}#10b981{% endif %}; font-weight:600;">
+                  {{ "{:,.0f}".format(p.available_credit_cents / 100) }}
+                </td>
+                <td style="min-width:130px;">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar">
+                      <div class="util-bar-inner"
+                           style="width:{{ [util_pct, 100] | min }}%;
+                                  background:{% if util_pct > 100 or p.is_on_hold %}#ef4444{% elif util_pct > 90 %}#f59e0b{% elif util_pct > 70 %}#f59e0b{% else %}#10b981{% endif %};">
+                      </div>
+                    </div>
+                    <span class="util-pct" style="color:{% if util_pct > 90 %}#ef4444{% elif util_pct > 70 %}#f59e0b{% else %}#374151{% endif %};">
+                      {{ "{:.0f}".format(util_pct) }}%
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  {% if p.is_on_hold %}
+                    <span class="badge-on-hold"><i class="fa fa-ban"></i> On Hold</span>
+                  {% else %}
+                    <span class="badge-clear"><i class="fa fa-check"></i> Clear</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:center; white-space:nowrap;">
+                  {% if p.is_on_hold %}
+                  <button class="btn btn-success btn-xs btn-toggle-hold"
+                          data-customer-id="{{ p.customer_id }}"
+                          data-action="release"
+                          style="font-size:11px; padding:2px 10px; font-weight:600;">
+                    <i class="fa fa-unlock"></i> Release
+                  </button>
+                  {% else %}
+                  <button class="btn btn-danger btn-xs btn-toggle-hold"
+                          data-customer-id="{{ p.customer_id }}"
+                          data-action="hold"
+                          style="font-size:11px; padding:2px 10px; font-weight:600;">
+                    <i class="fa fa-ban"></i> Place Hold
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr id="no-data-row">
+                <td colspan="8" style="text-align:center; padding:32px; color:#9ca3af;">
+                  <i class="fa fa-users" style="font-size:28px; display:block; margin-bottom:8px; opacity:.4;"></i>
+                  No credit profiles found.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Overdue Customers ──────────────────────────────────────────────────── #}
+    {% if overdue_customers %}
+    <div class="erp-card" style="padding:0; overflow:hidden; border-color:#fecaca;">
+      <div style="padding:12px 18px; border-bottom:1px solid #fecaca; background:#fff5f5;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0; color:#991b1b;">
+          <i class="fa fa-exclamation-triangle" style="color:#ef4444; margin-right:6px;"></i>
+          Overdue Customers ({{ overdue_customers | length }})
+        </h4>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="overdue-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th class="nums">Overdue Amount</th>
+              <th>Days Overdue</th>
+              <th>Oldest Invoice</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for oc in overdue_customers %}
+            <tr>
+              <td style="font-weight:600;">{{ oc.customer_name }}</td>
+              <td class="nums" style="color:#ef4444; font-weight:700;">{{ "{:,.0f}".format(oc.amount_cents / 100) }}</td>
+              <td>
+                <span style="color:{% if oc.days_overdue > 90 %}#991b1b{% elif oc.days_overdue > 60 %}#ef4444{% else %}#f59e0b{% endif %};
+                             font-weight:700; font-size:13px;">
+                  {{ oc.days_overdue }} days
+                </span>
+              </td>
+              <td style="font-size:12px; color:#6b7280;">{{ oc.oldest_invoice_date or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Right: Exposure Chart ────────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="erp-card" style="padding:16px 20px;">
+      <h4 class="erp-section-title">
+        <i class="fa fa-bar-chart" style="color:#1a56db; margin-right:6px;"></i>
+        Top 10 Exposure
+      </h4>
+      <div data-island="erpCreditExposureChart" class="erp-island">
+        <canvas id="exposure-chart" height="260"
+                aria-label="Credit exposure by customer" role="img"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle'
+             : type === 'error'   ? 'fa-exclamation-circle'
+             : type === 'warning' ? 'fa-exclamation-triangle'
+             : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Filter logic ────────────────────────────────────────────────────── */
+  function applyFilter() {
+    var status   = document.getElementById('filter-status').value;
+    var customer = document.getElementById('filter-customer').value.toLowerCase().trim();
+    var rows     = document.querySelectorAll('#cm-tbody tr[data-customer]');
+    var shown    = 0;
+    rows.forEach(function (row) {
+      var name    = row.getAttribute('data-customer') || '';
+      var onHold  = row.getAttribute('data-on-hold') || '';
+      var overLim = row.getAttribute('data-over-limit') || '';
+      var matchStatus = !status
+        || (status === 'hold' && onHold === 'hold')
+        || (status === 'clear' && onHold === 'clear')
+        || (status === 'overlimit' && overLim === 'overlimit');
+      var matchName = !customer || name.indexOf(customer) !== -1;
+      var show = matchStatus && matchName;
+      row.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+    var countEl = document.getElementById('row-count');
+    if (rows.length) countEl.textContent = 'Showing ' + shown + ' of ' + rows.length + ' customers';
+  }
+
+  document.getElementById('btn-filter-apply').addEventListener('click', applyFilter);
+  document.getElementById('btn-filter-clear').addEventListener('click', function () {
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-customer').value = '';
+    applyFilter();
+  });
+  document.getElementById('filter-customer').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') applyFilter();
+  });
+
+  /* initial count */
+  (function () {
+    var rows = document.querySelectorAll('#cm-tbody tr[data-customer]');
+    if (rows.length) document.getElementById('row-count').textContent = 'Showing ' + rows.length + ' customers';
+  }());
+
+  /* ── Place Hold / Release Hold ───────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-toggle-hold');
+    if (!btn) return;
+    e.preventDefault();
+    var customerId = btn.getAttribute('data-customer-id');
+    var action     = btn.getAttribute('data-action'); /* 'hold' or 'release' */
+    if (!customerId) return;
+
+    btn.disabled = true;
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/credit/' + encodeURIComponent(customerId) + '/hold', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ action: action })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        var msg = action === 'hold' ? 'Credit hold placed.' : 'Credit hold released.';
+        toast(msg, action === 'hold' ? 'warning' : 'success');
+        setTimeout(function () { window.location.reload(); }, 1500);
+      } else {
+        toast(res.data.message || 'Action failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    });
+  });
+
+  /* ── Top 10 exposure bar chart ───────────────────────────────────────── */
+  (function () {
+    var canvas = document.getElementById('exposure-chart');
+    if (!canvas) return;
+
+    /* Build chart from inline profile data if available */
+    var profileRows = document.querySelectorAll('#cm-tbody tr[data-customer]');
+    if (!profileRows.length) return;
+
+    var items = [];
+    profileRows.forEach(function (row) {
+      var nameTd  = row.querySelectorAll('td')[1];
+      var expTd   = row.querySelectorAll('td')[3];
+      if (!nameTd || !expTd) return;
+      var nameStr = nameTd.querySelector('strong') ? nameTd.querySelector('strong').textContent.trim() : nameTd.textContent.trim();
+      var expStr  = expTd.textContent.trim().replace(/,/g, '');
+      var exp     = parseFloat(expStr) || 0;
+      items.push({ name: nameStr, exposure: exp });
+    });
+
+    items.sort(function (a, b) { return b.exposure - a.exposure; });
+    var top10 = items.slice(0, 10);
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: top10.map(function (i) {
+          return i.name.length > 16 ? i.name.substring(0, 14) + '…' : i.name;
+        }),
+        datasets: [{
+          label: 'Exposure',
+          data: top10.map(function (i) { return i.exposure; }),
+          backgroundColor: top10.map(function (i) {
+            /* colour by rank — top 3 red, next 4 amber, rest blue */
+            var idx = top10.indexOf(i);
+            return idx < 3 ? 'rgba(239,68,68,.75)' : idx < 7 ? 'rgba(245,158,11,.75)' : 'rgba(26,86,219,.65)';
+          }),
+          borderRadius: 3
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                return ' ' + ctx.parsed.x.toLocaleString(undefined, { maximumFractionDigits: 0 });
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(0,0,0,.04)' },
+            ticks: {
+              callback: function (v) {
+                return v >= 1000000 ? (v / 1000000).toFixed(1) + 'M'
+                     : v >= 1000   ? (v / 1000).toFixed(0) + 'k'
+                     : v;
+              }
+            }
+          },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  }());
+
+}());
+</script>
+{% endblock %}

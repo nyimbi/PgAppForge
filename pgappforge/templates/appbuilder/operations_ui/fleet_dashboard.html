@@ -1,0 +1,426 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Fleet Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Fleet KPI strip ───────────────────────────────────────────────── */
+  .fleet-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .fleet-kpi-tile {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 16px 20px;
+    box-shadow: var(--erp-shadow-sm);
+    position: relative;
+    overflow: hidden;
+  }
+  .fleet-kpi-tile-accent {
+    position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+    border-radius: var(--erp-radius-lg) 0 0 var(--erp-radius-lg);
+  }
+  .fleet-kpi-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--erp-text-muted); margin-bottom: 8px; }
+  .fleet-kpi-value { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--erp-text); line-height: 1; margin-bottom: 4px; }
+  .fleet-kpi-sub   { font-size: 11px; color: var(--erp-text-muted); }
+  .fleet-kpi-icon  { position: absolute; top: 14px; right: 16px; font-size: 22px; opacity: .1; color: var(--erp-text); }
+
+  /* ── Vehicle cards grid ────────────────────────────────────────────── */
+  .vehicle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .vehicle-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 16px;
+    box-shadow: var(--erp-shadow-sm);
+    transition: box-shadow var(--erp-transition);
+    position: relative;
+  }
+  .vehicle-card:hover { box-shadow: var(--erp-shadow); }
+  .vehicle-card-num {
+    font-size: 11px; font-weight: 700; color: var(--erp-primary);
+    letter-spacing: .05em; margin-bottom: 4px;
+  }
+  .vehicle-card-model {
+    font-size: 15px; font-weight: 800; color: var(--erp-text); margin-bottom: 8px;
+  }
+  .vehicle-card-meta {
+    font-size: 12px; color: var(--erp-text-muted);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .vehicle-card-meta span { display: flex; align-items: center; gap: 6px; }
+  .vehicle-card-status {
+    position: absolute; top: 14px; right: 14px;
+  }
+  .vehicle-card-footer {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--erp-border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px;
+  }
+  .service-alert-strip {
+    background: var(--erp-danger-lt);
+    border: 1px solid var(--erp-danger);
+    border-radius: 0 0 var(--erp-radius-lg) var(--erp-radius-lg);
+    padding: 5px 14px;
+    font-size: 11px; font-weight: 600;
+    color: var(--erp-danger);
+    display: flex; align-items: center; gap: 5px;
+    margin: -2px -1px -1px;
+  }
+
+  /* ── Vehicle status badges ─────────────────────────────────────────── */
+  .vstatus-ACTIVE      { background: var(--erp-success-lt); color: var(--erp-success); }
+  .vstatus-IDLE        { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .vstatus-MAINTENANCE { background: #fef3c7;               color: #92400e; }
+  .vstatus-OFF_ROAD    { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+
+  /* ── Odometer progress bar ─────────────────────────────────────────── */
+  .odo-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .odo-bar { flex: 1; height: 5px; background: var(--erp-border); border-radius: 3px; overflow: hidden; }
+  .odo-bar-fill { height: 100%; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-car" style="color:var(--erp-primary);margin-right:8px;"></i>Fleet Management
+      </h1>
+      <p class="erp-page-subtitle">Vehicle status, service alerts, trip history, and fuel consumption.</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      {% if service_alerts %}
+      <span class="erp-badge erp-badge-red">
+        <i class="fa fa-exclamation-triangle" style="margin-right:3px;"></i>
+        {{ service_alerts | length }} service due
+      </span>
+      {% endif %}
+      <a href="{{ url_for('VehicleView.add') if 'VehicleView' in dir() else '#' }}"
+         class="btn btn-primary btn-sm">
+        <i class="fa fa-plus"></i> Add Vehicle
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Fleet KPI strip ──────────────────────────────────────────────────── #}
+{% set total     = vehicles | length %}
+{% set active    = vehicles | selectattr('status','eq','ACTIVE')      | list | length %}
+{% set in_maint  = vehicles | selectattr('status','eq','MAINTENANCE') | list | length %}
+{% set util_pct  = ((active / total * 100) | int) if total else 0 %}
+
+<div class="fleet-kpi-strip">
+  <div class="fleet-kpi-tile">
+    <div class="fleet-kpi-tile-accent" style="background:var(--erp-primary);"></div>
+    <i class="fa fa-car fleet-kpi-icon"></i>
+    <div class="fleet-kpi-label">Total Fleet</div>
+    <div class="fleet-kpi-value">{{ total }}</div>
+    <div class="fleet-kpi-sub">registered vehicles</div>
+  </div>
+  <div class="fleet-kpi-tile">
+    <div class="fleet-kpi-tile-accent" style="background:var(--erp-success);"></div>
+    <i class="fa fa-road fleet-kpi-icon"></i>
+    <div class="fleet-kpi-label">Active On Road</div>
+    <div class="fleet-kpi-value" style="color:var(--erp-success);">{{ active }}</div>
+    <div class="fleet-kpi-sub">currently dispatched</div>
+  </div>
+  <div class="fleet-kpi-tile">
+    <div class="fleet-kpi-tile-accent" style="background:{% if in_maint > 0 %}var(--erp-warning){% else %}var(--erp-success){% endif %};"></div>
+    <i class="fa fa-wrench fleet-kpi-icon"></i>
+    <div class="fleet-kpi-label">In Maintenance</div>
+    <div class="fleet-kpi-value" style="color:{% if in_maint > 0 %}var(--erp-warning){% else %}var(--erp-success){% endif %};">{{ in_maint }}</div>
+    <div class="fleet-kpi-sub">under service / repair</div>
+  </div>
+  <div class="fleet-kpi-tile">
+    <div class="fleet-kpi-tile-accent" style="background:{% if util_pct >= 80 %}var(--erp-success){% elif util_pct >= 60 %}var(--erp-warning){% else %}var(--erp-danger){% endif %};"></div>
+    <i class="fa fa-tachometer fleet-kpi-icon"></i>
+    <div class="fleet-kpi-label">Utilisation</div>
+    <div class="fleet-kpi-value">{{ util_pct }}<span style="font-size:16px;font-weight:400;">%</span></div>
+    <div class="fleet-kpi-sub">active / total fleet</div>
+  </div>
+</div>
+
+{# ── Service Alerts ────────────────────────────────────────────────────── #}
+{% if service_alerts %}
+<div class="erp-card erp-mb-24" style="border-color:var(--erp-danger);border-left:4px solid var(--erp-danger);">
+  <div class="erp-flex" style="gap:8px;margin-bottom:10px;">
+    <i class="fa fa-exclamation-circle" style="color:var(--erp-danger);font-size:16px;"></i>
+    <h4 class="erp-chart-title erp-mb-0" style="color:var(--erp-danger);">Service Due Alerts</h4>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Vehicle</th>
+          <th>Model</th>
+          <th style="text-align:right;">Odometer (km)</th>
+          <th style="text-align:right;">Next Service (km)</th>
+          <th style="text-align:right;">Km Remaining</th>
+          <th style="text-align:right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in service_alerts %}
+        <tr>
+          <td style="font-weight:700;color:var(--erp-danger);">{{ v.vehicle_number }}</td>
+          <td>{{ v.make_model }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ '{:,.0f}'.format(v.odometer_km) }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ '{:,.0f}'.format(v.next_service_km) }}</td>
+          <td style="text-align:right;">
+            <span style="font-weight:800;color:var(--erp-danger);">
+              {{ '{:,.0f}'.format(v.next_service_km - v.odometer_km) }} km
+            </span>
+          </td>
+          <td style="text-align:right;">
+            <a href="{{ url_for('VehicleView.show', pk=v.id) if 'VehicleView' in dir() else '#' }}"
+               class="btn btn-xs btn-danger">
+              <i class="fa fa-wrench"></i> Schedule Service
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Vehicle Cards Grid ──────────────────────────────────────────────────── #}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+  <h4 class="erp-chart-title erp-mb-0">Fleet</h4>
+  <div class="erp-flex erp-gap-8">
+    <input type="text" id="vehicle-search" class="form-control input-sm"
+           placeholder="Search vehicle…" style="width:170px;">
+    <select id="vstatus-filter" class="form-control input-sm" style="width:130px;">
+      <option value="">All statuses</option>
+      <option value="ACTIVE">Active</option>
+      <option value="IDLE">Idle</option>
+      <option value="MAINTENANCE">Maintenance</option>
+      <option value="OFF_ROAD">Off Road</option>
+    </select>
+  </div>
+</div>
+
+<div class="vehicle-grid" id="vehicle-grid">
+  {% for v in vehicles %}
+  {% set km_to_service = (v.next_service_km - v.odometer_km) if v.next_service_km else None %}
+  {% set service_pct = ([v.odometer_km / v.next_service_km * 100, 100]|min | int) if v.next_service_km else 0 %}
+  <div class="vehicle-card" data-status="{{ v.status }}" data-search="{{ v.vehicle_number }} {{ v.make_model }} {{ v.driver or '' }}">
+    <div class="vehicle-card-status">
+      <span class="erp-badge vstatus-{{ v.status }}">{{ v.status.replace('_',' ') }}</span>
+    </div>
+    <div class="vehicle-card-num">{{ v.vehicle_number }}</div>
+    <div class="vehicle-card-model">{{ v.make_model }}</div>
+    <div class="vehicle-card-meta">
+      {% if v.driver %}
+      <span><i class="fa fa-user" style="width:14px;text-align:center;"></i> {{ v.driver }}</span>
+      {% endif %}
+      <span><i class="fa fa-tachometer" style="width:14px;text-align:center;"></i>
+        {{ '{:,.0f}'.format(v.odometer_km) }} km
+      </span>
+      {% if v.fuel_type %}
+      <span><i class="fa fa-fire" style="width:14px;text-align:center;"></i> {{ v.fuel_type }}</span>
+      {% endif %}
+    </div>
+    <div class="vehicle-card-footer">
+      <div>
+        <div style="font-size:10px;color:var(--erp-text-muted);margin-bottom:3px;">
+          Next service:
+          {% if v.next_service_km %}
+          <strong style="color:{% if km_to_service <= 1000 %}var(--erp-danger){% elif km_to_service <= 3000 %}var(--erp-warning){% else %}var(--erp-text){% endif %};">
+            {{ '{:,.0f}'.format(v.next_service_km) }} km
+          </strong>
+          {% else %}Not set{% endif %}
+        </div>
+        {% if v.next_service_km %}
+        <div class="odo-bar-wrap">
+          <div class="odo-bar">
+            <div class="odo-bar-fill"
+                 style="width:{{ service_pct }}%;
+                        background:{% if service_pct >= 95 %}var(--erp-danger){% elif service_pct >= 85 %}var(--erp-warning){% else %}var(--erp-success){% endif %};">
+            </div>
+          </div>
+          <span style="font-size:10px;color:var(--erp-text-muted);white-space:nowrap;">
+            {% if km_to_service %}{{ '{:,.0f}'.format(km_to_service) }}km{% endif %}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+      <a href="{{ url_for('VehicleView.show', pk=v.id) if 'VehicleView' in dir() else '#' }}"
+         class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+    </div>
+    {% if km_to_service is not none and km_to_service <= 1000 %}
+    <div class="service-alert-strip">
+      <i class="fa fa-exclamation-triangle"></i> Service in {{ '{:,.0f}'.format(km_to_service) }} km
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--erp-text-muted);">
+    <i class="fa fa-car" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px;"></i>
+    No vehicles registered.
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Fuel consumption chart ────────────────────────────────────────────── #}
+<div class="erp-chart-wrap erp-mb-24">
+  <h4 class="erp-chart-title erp-mb-16">Fuel Consumption — Last 12 Months</h4>
+  <div data-island="fleetFuelChart" class="erp-island">
+    <canvas id="fuel-chart" height="70" aria-label="Fleet fuel consumption chart" role="img"></canvas>
+  </div>
+</div>
+
+{# ── Trip History Table ────────────────────────────────────────────────── #}
+{% if recent_trips %}
+<div class="erp-table-wrap">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0">Recent Trips</h4>
+    <span class="erp-badge erp-badge-gray">{{ recent_trips | length }}</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Trip Ref</th>
+          <th>Vehicle</th>
+          <th>Driver</th>
+          <th>Origin</th>
+          <th>Destination</th>
+          <th style="text-align:right;">Distance (km)</th>
+          <th style="text-align:right;">Fuel (L)</th>
+          <th>Date</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in recent_trips %}
+        <tr>
+          <td style="font-weight:600;font-size:12px;color:var(--erp-primary);">{{ t.ref }}</td>
+          <td style="font-weight:600;">{{ t.vehicle_number }}</td>
+          <td style="font-size:12px;">{{ t.driver or '—' }}</td>
+          <td style="font-size:12px;">{{ t.origin | truncate(18) }}</td>
+          <td style="font-size:12px;">{{ t.destination | truncate(18) }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ t.distance_km }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ t.fuel_litres or '—' }}</td>
+          <td style="font-size:12px;color:var(--erp-text-muted);">{{ t.trip_date }}</td>
+          <td style="font-size:12px;color:var(--erp-text-muted);">{{ t.purpose or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  /* ── Vehicle search / filter ───────────────────────────────────────── */
+  function applyVehicleFilters() {
+    var q      = (document.getElementById('vehicle-search').value || '').toLowerCase();
+    var status = (document.getElementById('vstatus-filter').value || '');
+    document.querySelectorAll('.vehicle-card').forEach(function (card) {
+      var matchText   = !q      || (card.dataset.search || '').toLowerCase().indexOf(q) > -1;
+      var matchStatus = !status || card.dataset.status === status;
+      card.style.display = (matchText && matchStatus) ? '' : 'none';
+    });
+  }
+  document.getElementById('vehicle-search').addEventListener('input', applyVehicleFilters);
+  document.getElementById('vstatus-filter').addEventListener('change', applyVehicleFilters);
+
+  /* ── Fuel chart island ─────────────────────────────────────────────── */
+  ERPIslands.register('fleetFuelChart', ['chartjs'], function (el) {
+    var canvas = el.querySelector('#fuel-chart');
+    if (!canvas) return;
+
+    ERPIslands.fetchJSON('/api/fleet/fuel_chart')
+      .then(function (data) {
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                label:           'Fuel Consumed (L)',
+                data:            data.fuel_litres,
+                borderColor:     '#ff5a1f',
+                backgroundColor: 'rgba(255,90,31,.08)',
+                borderWidth:     2,
+                pointRadius:     4,
+                fill:            true,
+                tension:         0.35,
+                yAxisID:         'yFuel'
+              },
+              {
+                label:           'Avg L/100km',
+                data:            data.efficiency,
+                borderColor:     '#1a56db',
+                backgroundColor: 'transparent',
+                borderWidth:     2,
+                borderDash:      [5,3],
+                pointRadius:     3,
+                fill:            false,
+                tension:         0.35,
+                yAxisID:         'yEff'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    if (ctx.dataset.yAxisID === 'yFuel')
+                      return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + ' L';
+                    return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1);
+                  }
+                }
+              }
+            },
+            scales: {
+              yFuel: {
+                type: 'linear', position: 'left',
+                beginAtZero: true,
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: { callback: function (v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } }
+              },
+              yEff: {
+                type: 'linear', position: 'right',
+                beginAtZero: false,
+                grid: { drawOnChartArea: false },
+                ticks: { callback: function (v) { return v.toFixed(1); } }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function (err) {
+        el.innerHTML = '<div class="alert alert-warning" style="font-size:13px;">Fuel chart unavailable: ' +
+          String(err.message || '').replace(/</g,'&lt;') + '</div>';
+      });
+  });
+}());
+</script>
+{% endblock %}

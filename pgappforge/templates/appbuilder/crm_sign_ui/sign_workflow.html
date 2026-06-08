@@ -1,0 +1,250 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}E-Sign Workflow — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sign-req-row { cursor:pointer; transition:background var(--erp-transition); }
+  .sign-req-row:hover { background:#fafafa; }
+  .sign-req-row.active { background:var(--erp-primary-lt); }
+  .signatory-list { list-style:none; margin:0; padding:0; }
+  .signatory-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--erp-border); font-size:13px; }
+  .signatory-item:last-child { border-bottom:none; }
+  .signatory-avatar { width:30px; height:30px; border-radius:50%; background:var(--erp-primary-lt); color:var(--erp-primary); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .signatory-name { flex:1; font-weight:500; }
+  .signatory-order { font-size:10px; background:var(--erp-neutral-lt); color:var(--erp-neutral); border-radius:3px; padding:1px 5px; font-weight:700; }
+  .audit-log { list-style:none; margin:0; padding:0; position:relative; }
+  .audit-log::before { content:''; position:absolute; left:11px; top:0; bottom:0; width:2px; background:var(--erp-border); }
+  .audit-log-item { display:flex; gap:12px; padding:6px 0; position:relative; font-size:12px; }
+  .audit-dot { width:10px; height:10px; border-radius:50%; border:2px solid var(--erp-surface); background:var(--erp-primary); flex-shrink:0; margin-top:3px; position:relative; z-index:1; }
+  .audit-dot.signed { background:var(--erp-success); }
+  .audit-dot.declined { background:var(--erp-danger); }
+  .audit-dot.sent { background:var(--erp-info); }
+  .audit-body { flex:1; }
+  .audit-time { font-size:11px; color:var(--erp-text-muted); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-pencil-square-o"></i> E-Sign Workflow</h1>
+    <p class="erp-page-subtitle">Manage signature requests, track signatory progress, and audit signing activity.</p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#new-request-modal" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> Send Request
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+
+  {# ── Left: Requests list ────────────────────────────────────────────── #}
+  <div class="col-md-5">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-file-text-o"></i> Signature Requests</h4>
+      </div>
+      <table class="erp-table">
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Initiator</th>
+            <th>Order</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if requests %}
+            {% for req in requests %}
+            <tr class="sign-req-row {{ 'active' if selected_request and selected_request.id == req.id else '' }}"
+                onclick="window.location.href='?selected_id={{ req.id }}'">
+              <td>
+                <div style="font-weight:600;font-size:13px;">{{ req.document_title }}</div>
+                <div style="font-size:11px;color:var(--erp-text-muted);">{{ req.created_at | default('—') }}</div>
+              </td>
+              <td style="font-size:12px;">{{ req.initiator | default('—') }}</td>
+              <td>
+                <span class="erp-badge {{ 'erp-badge-blue' if req.signing_order == 'SEQUENTIAL' else 'erp-badge-gray' }}">
+                  {{ req.signing_order | default('SEQUENTIAL') }}
+                </span>
+              </td>
+              <td>
+                {% set rs = req.status | default('PENDING') %}
+                <span class="erp-badge {{ 'erp-badge-green' if rs == 'COMPLETED' else ('erp-badge-red' if rs == 'DECLINED' else 'erp-badge-yellow') }}">
+                  {{ rs }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="4" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+              No signature requests. <button class="btn btn-link btn-sm" style="padding:0;" data-toggle="modal" data-target="#new-request-modal">Send the first one</button>.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Right: Selected request detail ────────────────────────────────── #}
+  <div class="col-md-7">
+    {% set sr = selected_request %}
+    {% if sr %}
+
+    {# Request header #}
+    <div class="erp-card erp-mb-16">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h3 style="margin:0 0 4px;font-size:17px;font-weight:700;">{{ sr.document_title }}</h3>
+          <div style="font-size:12px;color:var(--erp-text-muted);">
+            Initiated by <strong>{{ sr.initiator | default('—') }}</strong> &bull; {{ sr.created_at | default('—') }}
+          </div>
+        </div>
+        <span class="erp-badge {{ 'erp-badge-green' if sr.status == 'COMPLETED' else ('erp-badge-red' if sr.status == 'DECLINED' else 'erp-badge-yellow') }}" style="font-size:12px;padding:4px 12px;">
+          {{ sr.status | default('PENDING') }}
+        </span>
+      </div>
+    </div>
+
+    {# Signatory progress #}
+    <div class="erp-card erp-mb-16">
+      <p class="erp-section-title"><i class="fa fa-users"></i> Signatory Progress</p>
+      <ul class="signatory-list">
+        {% if sr.signatories %}
+          {% for sig in sr.signatories %}
+          {% set initials = (sig.name or '?')[:2] | upper %}
+          <li class="signatory-item">
+            <div class="signatory-avatar">{{ initials }}</div>
+            <div class="signatory-name">
+              {{ sig.name }}
+              {% if sig.email %}<div style="font-size:11px;color:var(--erp-text-muted);">{{ sig.email }}</div>{% endif %}
+            </div>
+            {% if sig.order is defined %}
+            <span class="signatory-order">#{{ sig.order }}</span>
+            {% endif %}
+            {% set ss = sig.status | default('PENDING') %}
+            <span class="erp-badge {{ 'erp-badge-green' if ss == 'SIGNED' else ('erp-badge-red' if ss == 'DECLINED' else 'erp-badge-yellow') }}">
+              {{ ss }}
+            </span>
+            {% if ss == 'PENDING' %}
+            <form method="POST" action="/crm/sign/resend/{{ sr.id }}/{{ sig.id }}" style="display:inline;" title="Resend to this signatory">
+              <button type="submit" class="btn btn-xs btn-default" title="Resend">
+                <i class="fa fa-paper-plane-o"></i> Resend
+              </button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        {% else %}
+        <li style="padding:16px 0;color:var(--erp-text-muted);font-size:13px;">No signatories listed.</li>
+        {% endif %}
+      </ul>
+    </div>
+
+    {# Audit log #}
+    {% if sr.audit_log %}
+    <div class="erp-card erp-mb-16">
+      <p class="erp-section-title"><i class="fa fa-history"></i> Audit Trail</p>
+      <ul class="audit-log">
+        {% for entry in sr.audit_log %}
+        {% set dtype = entry.action | default('') | lower %}
+        <li class="audit-log-item">
+          <div class="audit-dot {{ 'signed' if 'sign' in dtype else ('declined' if 'declin' in dtype else ('sent' if 'sent' in dtype else '')) }}"></div>
+          <div class="audit-body">
+            <div style="color:var(--erp-text);font-weight:500;">{{ entry.action }}</div>
+            {% if entry.actor %}<div style="color:var(--erp-text-muted);font-size:11px;">{{ entry.actor }}</div>{% endif %}
+            <div class="audit-time">{{ entry.timestamp | default('—') }}</div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="erp-card" style="padding:40px;text-align:center;color:var(--erp-text-muted);">
+      <i class="fa fa-file-signature" style="font-size:40px;opacity:.2;display:block;margin-bottom:12px;"></i>
+      <p style="margin:0;">Select a signature request to view signatory progress and audit trail.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── New Request Modal ───────────────────────────────────────────────── #}
+<div class="modal fade" id="new-request-modal" tabindex="-1" role="dialog" aria-labelledby="new-request-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/crm/sign/create">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="new-request-label"><i class="fa fa-pencil-square-o"></i> Send Signature Request</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">Document Title <span class="text-danger">*</span></label>
+            <input type="text" name="document_title" class="form-control" required placeholder="e.g. Employment Contract — John Doe">
+          </div>
+          <div class="form-group">
+            <label class="control-label">Signing Order</label>
+            <select name="signing_order" class="form-control">
+              <option value="SEQUENTIAL">Sequential (one at a time)</option>
+              <option value="PARALLEL">Parallel (all at once)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Signatories</label>
+            <div id="signatories-list">
+              <div class="input-group" style="margin-bottom:8px;">
+                <input type="text" name="signatory_name[]" class="form-control" placeholder="Full name">
+                <span class="input-group-addon" style="padding:0;">
+                  <input type="email" name="signatory_email[]" class="form-control" placeholder="email@example.com" style="border:none;border-radius:0;">
+                </span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-xs btn-default" onclick="addSignatory()">
+              <i class="fa fa-plus"></i> Add Signatory
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane-o"></i> Send Request</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  window.addSignatory = function () {
+    var list = document.getElementById('signatories-list');
+    var row  = document.createElement('div');
+    row.className = 'input-group';
+    row.style.marginBottom = '8px';
+    row.innerHTML =
+      '<input type="text" name="signatory_name[]" class="form-control" placeholder="Full name">' +
+      '<span class="input-group-addon" style="padding:0;">' +
+        '<input type="email" name="signatory_email[]" class="form-control" placeholder="email@example.com" style="border:none;border-radius:0;">' +
+      '</span>' +
+      '<span class="input-group-btn">' +
+        '<button type="button" class="btn btn-default" onclick="this.closest(\'.input-group\').remove()">' +
+          '<i class="fa fa-times"></i>' +
+        '</button>' +
+      '</span>';
+    list.appendChild(row);
+  };
+}());
+</script>
+{% endblock %}

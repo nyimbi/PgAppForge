@@ -1,0 +1,561 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Recruiting Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Header strip ── */
+  .rec-strip {
+    background:linear-gradient(135deg,#1e1b4b 0%,#4f46e5 100%);
+    color:#fff; border-radius:10px; padding:20px 24px; margin-bottom:24px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+  }
+  .rec-strip h2 { margin:0 0 2px; font-size:16px; font-weight:700; }
+  .rec-strip .sub { font-size:12px; opacity:.75; margin:0 0 14px; }
+  .rec-strip-kpis { display:flex; gap:28px; flex-wrap:wrap; }
+  .rec-strip-kpi .lbl { font-size:10px; opacity:.7; text-transform:uppercase; letter-spacing:.5px; margin:0 0 2px; }
+  .rec-strip-kpi .val { font-size:22px; font-weight:800; margin:0; }
+  .rec-strip-kpi .sub2 { font-size:10px; opacity:.6; margin:0; }
+
+  /* ── Requisition status summary ── */
+  .req-status-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:24px; }
+  .req-status-tile { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; text-align:center; cursor:pointer; transition:box-shadow .12s, border-color .12s; }
+  .req-status-tile:hover { box-shadow:0 2px 8px rgba(0,0,0,.07); border-color:#c7d2fe; }
+  .req-status-tile.active-tile { border-color:#4f46e5; box-shadow:0 0 0 2px rgba(79,70,229,.12); }
+  .req-status-tile .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; margin:0 0 4px; }
+  .req-status-tile .val { font-size:26px; font-weight:800; margin:0 0 2px; line-height:1; }
+  .req-status-tile .sub { font-size:10px; color:#9ca3af; margin:0; }
+
+  /* ── Requisition status colors ── */
+  .rq-status { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap; }
+  .rq-OPEN     { background:#dbeafe; color:#1e40af; }
+  .rq-ON_HOLD  { background:#fef3c7; color:#92400e; }
+  .rq-FILLED   { background:#d1fae5; color:#065f46; }
+  .rq-APPROVED { background:#e9d5ff; color:#6b21a8; }
+  .rq-DRAFT    { background:#f3f4f6; color:#6b7280; }
+  .rq-CANCELLED{ background:#fee2e2; color:#991b1b; }
+
+  /* ── Priority pills ── */
+  .rq-priority { font-size:10px; font-weight:700; padding:1px 6px; border-radius:6px; }
+  .rq-p-CRITICAL{ background:#fee2e2; color:#991b1b; }
+  .rq-p-HIGH   { background:#fef3c7; color:#92400e; }
+  .rq-p-NORMAL { background:#f3f4f6; color:#6b7280; }
+  .rq-p-LOW    { background:#d1fae5; color:#065f46; }
+
+  /* ── Source badge ── */
+  .src-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap; }
+  .src-REFERRAL  { background:#e9d5ff; color:#6b21a8; }
+  .src-JOB_BOARD { background:#dbeafe; color:#1e40af; }
+  .src-DIRECT    { background:#d1fae5; color:#065f46; }
+  .src-AGENCY    { background:#fef3c7; color:#92400e; }
+  .src-INTERNAL  { background:#fce7f3; color:#9d174d; }
+
+  /* ── TTF metrics ── */
+  .ttf-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .ttf-card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; text-align:center; }
+  .ttf-card .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 4px; }
+  .ttf-card .val { font-size:26px; font-weight:800; color:#111827; margin:0 0 2px; }
+  .ttf-card .sub { font-size:11px; color:#9ca3af; margin:0; }
+
+  /* ── KPI chip ── */
+  .rec-kpi-chip { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; display:flex; align-items:center; gap:12px; }
+  .rec-kpi-chip .icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .rec-kpi-chip .body .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 2px; }
+  .rec-kpi-chip .body .val { font-size:20px; font-weight:800; color:#111827; margin:0; }
+
+  /* ── Interviews table ── */
+  .int-status { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap; }
+  .int-SCHEDULED  { background:#dbeafe; color:#1e40af; }
+  .int-COMPLETED  { background:#d1fae5; color:#065f46; }
+  .int-CANCELLED  { background:#fee2e2; color:#991b1b; }
+  .int-NO_SHOW    { background:#fef3c7; color:#92400e; }
+
+  /* ── Chart wrap ── */
+  .rec-chart-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .rec-chart-title { font-size:14px; font-weight:700; color:#111827; margin:0 0 14px; }
+
+  /* ── Toast ── */
+  .rec-toasts { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .rec-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .rec-toast.success { border-left:4px solid #10b981; }
+  .rec-toast.error   { border-left:4px solid #ef4444; }
+  .rec-toast.info    { border-left:4px solid #4f46e5; }
+
+  /* ── Tab nav ── */
+  .rec-tabs { display:flex; border-bottom:2px solid #e5e7eb; background:#fafafa; overflow-x:auto; }
+  .rec-tab { padding:10px 18px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .12s, border-color .12s; white-space:nowrap; flex-shrink:0; }
+  .rec-tab:hover { color:#374151; }
+  .rec-tab.active { color:#4f46e5; border-bottom-color:#4f46e5; }
+  .rec-panel { display:none; padding:20px; }
+  .rec-panel.active { display:block; }
+
+  .tabnum { font-family:monospace; font-variant-numeric:tabular-nums; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-search"></i> Recruiting Dashboard
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Requisitions · Pipeline · Time-to-Fill · Source Effectiveness · Interviews</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-default btn-sm" onclick="window.location='/hcm/recruiting/export'">
+      <i class="fa fa-download"></i> Export
+    </button>
+    <a href="/hcm/recruiting/requisitions/new" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> New Requisition
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary strip ── #}
+<div class="rec-strip">
+  <div>
+    <h2><i class="fa fa-bullseye"></i> Recruiting Overview</h2>
+    <p class="sub">All active requisitions and pipeline metrics</p>
+  </div>
+  <div class="rec-strip-kpis">
+    <div class="rec-strip-kpi">
+      <p class="lbl">Open Reqs</p>
+      <p class="val">{{ requisitions | selectattr('status','equalto','OPEN') | list | length if requisitions else '—' }}</p>
+      <p class="sub2">active openings</p>
+    </div>
+    <div class="rec-strip-kpi">
+      <p class="lbl">Offer Acceptance</p>
+      <p class="val">{{ "{:.0f}%".format(metrics.offer_acceptance_rate) if metrics and metrics.offer_acceptance_rate is defined else '—' }}</p>
+      <p class="sub2">acceptance rate</p>
+    </div>
+    <div class="rec-strip-kpi">
+      <p class="lbl">Avg Time-to-Fill</p>
+      <p class="val">{{ metrics.avg_days_to_fill | default('—') }}{% if metrics and metrics.avg_days_to_fill is defined %}<span style="font-size:13px;font-weight:400;opacity:.75;">d</span>{% endif %}</p>
+      <p class="sub2">calendar days</p>
+    </div>
+    <div class="rec-strip-kpi">
+      <p class="lbl">Total Applicants</p>
+      <p class="val">{{ metrics.total_applicants | default('—') }}</p>
+      <p class="sub2">across all reqs</p>
+    </div>
+  </div>
+</div>
+
+{# ── Status summary tiles ── #}
+{% set open_count   = requisitions | selectattr('status','equalto','OPEN')    | list | length if requisitions else 0 %}
+{% set hold_count   = requisitions | selectattr('status','equalto','ON_HOLD') | list | length if requisitions else 0 %}
+{% set filled_count = requisitions | selectattr('status','equalto','FILLED')  | list | length if requisitions else 0 %}
+{% set draft_count  = requisitions | selectattr('status','equalto','DRAFT')   | list | length if requisitions else 0 %}
+{% set total_reqs   = requisitions | length if requisitions else 0 %}
+<div class="req-status-row">
+  <div class="req-status-tile active-tile" onclick="filterReqs('', this)">
+    <p class="lbl" style="color:#6b7280;">All</p>
+    <p class="val">{{ total_reqs }}</p>
+    <p class="sub">requisitions</p>
+  </div>
+  <div class="req-status-tile" onclick="filterReqs('OPEN', this)">
+    <p class="lbl" style="color:#1e40af;">Open</p>
+    <p class="val" style="color:#1e40af;">{{ open_count }}</p>
+    <p class="sub">active hiring</p>
+  </div>
+  <div class="req-status-tile" onclick="filterReqs('ON_HOLD', this)">
+    <p class="lbl" style="color:#92400e;">On Hold</p>
+    <p class="val" style="color:#d97706;">{{ hold_count }}</p>
+    <p class="sub">paused reqs</p>
+  </div>
+  <div class="req-status-tile" onclick="filterReqs('FILLED', this)">
+    <p class="lbl" style="color:#065f46;">Filled</p>
+    <p class="val" style="color:#10b981;">{{ filled_count }}</p>
+    <p class="sub">closed this period</p>
+  </div>
+  <div class="req-status-tile" onclick="filterReqs('DRAFT', this)">
+    <p class="lbl" style="color:#6b7280;">Draft</p>
+    <p class="val" style="color:#6b7280;">{{ draft_count }}</p>
+    <p class="sub">pending approval</p>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-8">
+
+    {# ── Main tabbed card ── #}
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div class="rec-tabs">
+        <div class="rec-tab active" data-tab="reqs" onclick="recTab(this)"><i class="fa fa-file-text-o"></i> Requisitions</div>
+        <div class="rec-tab" data-tab="interviews" onclick="recTab(this)">
+          <i class="fa fa-calendar"></i> Upcoming Interviews
+          {% if upcoming_interviews and upcoming_interviews|length %}
+            <span style="background:#4f46e5;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:5px;font-weight:700;">{{ upcoming_interviews|length }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      {# ── Requisitions panel ── #}
+      <div id="panel-reqs" class="rec-panel active">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+          <input type="text" id="req-search" class="form-control input-sm" placeholder="Search title, dept…" style="width:190px;" oninput="applyReqFilters()">
+          <select id="req-priority-filter" class="form-control input-sm" style="width:120px;" onchange="applyReqFilters()">
+            <option value="">All Priorities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="NORMAL">Normal</option>
+            <option value="LOW">Low</option>
+          </select>
+          <span id="req-count" style="font-size:12px; color:#9ca3af; margin-left:auto;"></span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="erp-table" id="reqs-table">
+            <thead>
+              <tr>
+                <th>Requisition</th>
+                <th>Department</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th style="text-align:center;">Applicants</th>
+                <th style="text-align:center;">Days Open</th>
+                <th>Target Date</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="reqs-tbody">
+              {% if requisitions %}
+                {% for req in requisitions %}
+                <tr id="req-row-{{ req.id }}"
+                    data-rstatus="{{ req.status | default('OPEN') }}"
+                    data-rpriority="{{ req.priority | default('NORMAL') }}"
+                    data-rtitle="{{ req.title | default('') | lower ~ ' ' ~ (req.department | default('') | lower) }}">
+                  <td>
+                    <div style="font-weight:600; font-size:13px; color:#111827;">{{ req.title | default('—') }}</div>
+                    <div style="font-size:11px; color:#9ca3af; font-family:monospace;">{{ req.req_number | default('') }}</div>
+                  </td>
+                  <td style="font-size:12px; color:#374151;">{{ req.department | default('—') }}</td>
+                  <td><span class="rq-status rq-{{ req.status | default('OPEN') }}">{{ req.status | default('OPEN') | replace('_',' ') }}</span></td>
+                  <td><span class="rq-priority rq-p-{{ req.priority | default('NORMAL') }}">{{ req.priority | default('NORMAL') }}</span></td>
+                  <td style="text-align:center; font-weight:700; font-size:14px; color:#4f46e5;">{{ req.applicant_count | default(0) }}</td>
+                  <td style="text-align:center; font-size:13px;">
+                    {% if req.days_open is defined %}
+                      <span style="font-weight:700; color:{% if req.days_open > 60 %}#ef4444{% elif req.days_open > 30 %}#f59e0b{% else %}#374151{% endif %};">
+                        {{ req.days_open }}d
+                      </span>
+                    {% else %}—{% endif %}
+                  </td>
+                  <td style="font-size:12px; color:#6b7280;">{{ req.target_fill_date | default('—') }}</td>
+                  <td>
+                    <a href="/hcm/recruiting/requisitions/{{ req.id }}" class="btn btn-xs btn-primary">
+                      <i class="fa fa-columns"></i> Pipeline
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="8" style="text-align:center; padding:40px; color:#9ca3af;">
+                  <i class="fa fa-search fa-2x" style="margin-bottom:8px; display:block;"></i>
+                  No requisitions found.
+                </td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# ── Interviews panel ── #}
+      <div id="panel-interviews" class="rec-panel">
+        <div style="overflow-x:auto;">
+          <table class="erp-table">
+            <thead>
+              <tr>
+                <th>Candidate</th>
+                <th>Position</th>
+                <th>Interviewer(s)</th>
+                <th>Scheduled</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if upcoming_interviews %}
+                {% for iv in upcoming_interviews %}
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <div style="width:26px;height:26px;border-radius:50%;background:#e9d5ff;color:#6b21a8;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        {{ iv.candidate_name[:2]|upper if iv.candidate_name else '??' }}
+                      </div>
+                      <div>
+                        <div style="font-weight:600; font-size:13px;">{{ iv.candidate_name | default('—') }}</div>
+                        <div style="font-size:11px; color:#9ca3af;">{{ iv.candidate_email | default('') }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="font-size:12px; color:#374151;">{{ iv.position_title | default('—') }}</td>
+                  <td style="font-size:12px;">
+                    {% if iv.interviewers %}
+                      {% for inter in iv.interviewers[:2] %}
+                        <span style="display:inline-block; background:#f3f4f6; padding:1px 7px; border-radius:10px; font-size:10px; margin:1px;">{{ inter }}</span>
+                      {% endfor %}
+                      {% if iv.interviewers|length > 2 %}
+                        <span style="font-size:10px; color:#9ca3af;">+{{ iv.interviewers|length - 2 }}</span>
+                      {% endif %}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td style="font-size:12px; font-weight:600;">{{ iv.scheduled_at | default('—') }}</td>
+                  <td style="font-size:12px; color:#374151;">{{ iv.interview_type | default('') | replace('_',' ') }}</td>
+                  <td><span class="int-status int-{{ iv.status | default('SCHEDULED') }}">{{ iv.status | default('SCHEDULED') | replace('_',' ') }}</span></td>
+                  <td>
+                    <a href="/hcm/recruiting/interviews/{{ iv.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="7" style="text-align:center; padding:40px; color:#9ca3af;">
+                  <i class="fa fa-calendar fa-2x" style="margin-bottom:8px; display:block;"></i>
+                  No upcoming interviews scheduled.
+                </td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>{# /erp-card #}
+
+    {# ── Time-to-fill metrics ── #}
+    <h5 style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 10px;">Time-to-Fill</h5>
+    <div class="ttf-row erp-mb-24">
+      <div class="ttf-card">
+        <p class="lbl">Average</p>
+        <p class="val">{{ metrics.avg_days_to_fill | default('—') }}{% if metrics and metrics.avg_days_to_fill is defined %}<span style="font-size:14px;font-weight:400;">d</span>{% endif %}</p>
+        <p class="sub">calendar days</p>
+      </div>
+      <div class="ttf-card">
+        <p class="lbl">Fastest Fill</p>
+        <p class="val" style="color:#10b981;">{{ metrics.fastest_days | default('—') }}{% if metrics and metrics.fastest_days is defined %}<span style="font-size:14px;font-weight:400;">d</span>{% endif %}</p>
+        <p class="sub">{{ metrics.fastest_role | default('') }}</p>
+      </div>
+      <div class="ttf-card">
+        <p class="lbl">Slowest Fill</p>
+        <p class="val" style="color:#ef4444;">{{ metrics.slowest_days | default('—') }}{% if metrics and metrics.slowest_days is defined %}<span style="font-size:14px;font-weight:400;">d</span>{% endif %}</p>
+        <p class="sub">{{ metrics.slowest_role | default('') }}</p>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Right: source chart + offer acceptance + ttf trend ── #}
+  <div class="col-md-4">
+
+    {# Source effectiveness doughnut #}
+    <div class="rec-chart-wrap erp-mb-16">
+      <p class="rec-chart-title"><i class="fa fa-pie-chart"></i> Source Effectiveness</p>
+      <canvas id="source-chart" height="200"></canvas>
+      <div id="source-legend" style="margin-top:12px; display:flex; flex-direction:column; gap:5px;"></div>
+    </div>
+
+    {# Offer acceptance KPI ── #}
+    <div class="erp-card" style="padding:16px 18px; margin-bottom:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h6 style="margin:0; font-size:13px; font-weight:700; color:#111827;"><i class="fa fa-handshake-o"></i> Offer Acceptance</h6>
+        {% if metrics and metrics.offer_acceptance_rate is defined %}
+          <span style="font-size:22px; font-weight:800; color:{% if metrics.offer_acceptance_rate >= 85 %}#10b981{% elif metrics.offer_acceptance_rate >= 70 %}#f59e0b{% else %}#ef4444{% endif %};">
+            {{ "{:.0f}%".format(metrics.offer_acceptance_rate) }}
+          </span>
+        {% else %}
+          <span style="font-size:22px; font-weight:800; color:#9ca3af;">—</span>
+        {% endif %}
+      </div>
+      <div style="height:10px; background:#e5e7eb; border-radius:5px; overflow:hidden;">
+        {% if metrics and metrics.offer_acceptance_rate is defined %}
+          {% set oar = metrics.offer_acceptance_rate %}
+          <div style="height:100%; width:{{ oar | int }}%; background:{% if oar >= 85 %}#10b981{% elif oar >= 70 %}#f59e0b{% else %}#ef4444{% endif %}; border-radius:5px; transition:width .5s;"></div>
+        {% endif %}
+      </div>
+      {% if metrics %}
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#9ca3af; margin-top:6px;">
+        <span>Offers extended: <strong style="color:#374151;">{{ metrics.offers_extended | default('—') }}</strong></span>
+        <span>Accepted: <strong style="color:#10b981;">{{ metrics.offers_accepted | default('—') }}</strong></span>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Pipeline funnel ── #}
+    {% if metrics and metrics.pipeline_funnel %}
+    <div class="rec-chart-wrap erp-mb-16">
+      <p class="rec-chart-title"><i class="fa fa-filter"></i> Pipeline Funnel</p>
+      {% set funnel_max = metrics.pipeline_funnel | map(attribute='count') | max | default(1) %}
+      {% for stage in metrics.pipeline_funnel %}
+      {% set pct = ((stage.count / funnel_max) * 100) | round(1) %}
+      <div style="margin-bottom:7px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b7280; margin-bottom:3px;">
+          <span>{{ stage.name }}</span>
+          <span style="font-weight:700; color:#111827;">{{ stage.count }}</span>
+        </div>
+        <div style="height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden;">
+          <div style="height:100%; width:{{ pct | int }}%; background:#4f46e5; border-radius:3px;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Time-to-fill trend chart ── #}
+    {% if metrics and metrics.ttf_trend %}
+    <div class="rec-chart-wrap">
+      <p class="rec-chart-title"><i class="fa fa-line-chart"></i> Time-to-Fill Trend</p>
+      <canvas id="ttf-trend-chart" height="160"></canvas>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+<div class="rec-toasts" id="rec-toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var REQS      = {{ requisitions | tojson if requisitions else '[]' }};
+  var METRICS   = {{ metrics | tojson if metrics else '{}' }};
+  var INTERVIEWS= {{ upcoming_interviews | tojson if upcoming_interviews else '[]' }};
+
+  function _esc(s) {
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('rec-toasts');
+    var el = document.createElement('div');
+    el.className = 'rec-toast ' + (type||'info');
+    var icon = type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle';
+    el.innerHTML = '<i class="fa '+icon+'"></i> '+_esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+
+  /* ── tab switching ── */
+  window.recTab = function(tab) {
+    document.querySelectorAll('.rec-tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.rec-panel').forEach(function(p){ p.classList.remove('active'); });
+    tab.classList.add('active');
+    var panel = document.getElementById('panel-' + tab.getAttribute('data-tab'));
+    if (panel) panel.classList.add('active');
+  };
+
+  /* ── req status tile filter ── */
+  var _statusFilter = '';
+  window.filterReqs = function(status, tile) {
+    document.querySelectorAll('.req-status-tile').forEach(function(t){ t.classList.remove('active-tile'); });
+    if (tile) tile.classList.add('active-tile');
+    _statusFilter = status;
+    applyReqFilters();
+  };
+
+  window.applyReqFilters = function() {
+    var q   = (document.getElementById('req-search').value||'').toLowerCase();
+    var pri = (document.getElementById('req-priority-filter').value||'').toUpperCase();
+    var rows = document.querySelectorAll('#reqs-tbody tr[data-rstatus]');
+    var count = 0;
+    rows.forEach(function(row) {
+      var show =
+        (!_statusFilter || row.getAttribute('data-rstatus') === _statusFilter) &&
+        (!q   || (row.getAttribute('data-rtitle')||'').indexOf(q) !== -1) &&
+        (!pri || row.getAttribute('data-rpriority') === pri);
+      row.style.display = show ? '' : 'none';
+      if (show) count++;
+    });
+    var el = document.getElementById('req-count');
+    if (el) el.textContent = count + ' of ' + rows.length + ' requisitions';
+  };
+  applyReqFilters();
+
+  /* ── Source effectiveness doughnut ── */
+  var sourceCtx = document.getElementById('source-chart');
+  if (sourceCtx && METRICS.source_breakdown) {
+    var srcData    = METRICS.source_breakdown;
+    var srcLabels  = srcData.map(function(s){ return s.source; });
+    var srcValues  = srcData.map(function(s){ return s.count; });
+    var srcColors  = ['#4f46e5','#10b981','#f59e0b','#ef4444','#ec4899','#06b6d4'];
+    var total = srcValues.reduce(function(a,b){ return a+b; }, 0);
+
+    new Chart(sourceCtx.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: srcLabels,
+        datasets:[{ data:srcValues, backgroundColor:srcColors.slice(0,srcLabels.length), borderWidth:2, borderColor:'#fff' }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:true,
+        plugins:{ legend:{ display:false } },
+        cutout:'68%'
+      }
+    });
+
+    /* manual legend with source labels */
+    var legend = document.getElementById('source-legend');
+    if (legend) {
+      legend.innerHTML = srcData.map(function(s, i) {
+        var pct = total ? Math.round((s.count/total)*100) : 0;
+        return '<div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;">' +
+          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + srcColors[i%srcColors.length] + ';margin-right:6px;vertical-align:middle;"></span>' + _esc(s.source) + '</span>' +
+          '<span style="font-weight:700;color:#374151;">' + s.count + ' <span style="color:#9ca3af;font-weight:400;">(' + pct + '%)</span></span>' +
+        '</div>';
+      }).join('');
+    }
+  } else if (sourceCtx) {
+    /* build from REQS if no breakdown in metrics */
+    var srcCount = {};
+    REQS.forEach(function(r){ var s = r.source || 'Unknown'; srcCount[s] = (srcCount[s]||0) + (r.applicant_count||1); });
+    var srcLabels2 = Object.keys(srcCount);
+    if (srcLabels2.length) {
+      var srcColors2 = ['#4f46e5','#10b981','#f59e0b','#ef4444','#ec4899'];
+      new Chart(sourceCtx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: srcLabels2,
+          datasets:[{ data:srcLabels2.map(function(k){ return srcCount[k]; }), backgroundColor:srcColors2.slice(0,srcLabels2.length), borderWidth:2, borderColor:'#fff' }]
+        },
+        options: { responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } }, cutout:'65%' }
+      });
+    }
+  }
+
+  /* ── TTF trend line chart ── */
+  var ttfCtx = document.getElementById('ttf-trend-chart');
+  if (ttfCtx && METRICS.ttf_trend && METRICS.ttf_trend.length) {
+    var trend = METRICS.ttf_trend;
+    new Chart(ttfCtx.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: trend.map(function(t){ return t.period; }),
+        datasets:[{
+          label: 'Avg Days to Fill',
+          data: trend.map(function(t){ return t.avg_days; }),
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79,70,229,.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointBackgroundColor: '#4f46e5',
+        }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:true,
+        plugins:{ legend:{ display:false } },
+        scales: {
+          y: { beginAtZero:true, ticks:{ font:{size:11}, callback:function(v){ return v+'d'; } } },
+          x: { ticks:{ font:{size:11} } }
+        }
+      }
+    });
+  }
+
+}());
+</script>
+{% endblock %}

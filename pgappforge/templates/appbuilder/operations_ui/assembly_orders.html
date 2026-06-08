@@ -1,0 +1,350 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Assembly Orders — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .assembly-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 991px) {
+    .assembly-layout { grid-template-columns: 1fr; }
+  }
+
+  /* ── Assembly order card ───────────────────────────────────────────── */
+  .assy-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: box-shadow var(--erp-transition), border-color var(--erp-transition);
+  }
+  .assy-card:hover { box-shadow: var(--erp-shadow); }
+  .assy-card.selected {
+    border-color: var(--erp-primary);
+    box-shadow: 0 0 0 3px var(--erp-primary-lt);
+  }
+  .assy-card-ref { font-size: 10px; font-weight: 700; color: var(--erp-primary); margin-bottom: 4px; letter-spacing: .04em; }
+  .assy-card-product { font-size: 14px; font-weight: 700; color: var(--erp-text); margin-bottom: 4px; }
+  .assy-card-meta { font-size: 11px; color: var(--erp-text-muted); display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* ── Status badges ─────────────────────────────────────────────────── */
+  .status-DRAFT      { background: var(--erp-neutral-lt); color: var(--erp-neutral); }
+  .status-CONFIRMED  { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .status-IN_PROGRESS{ background: #fef3c7;               color: #92400e; }
+  .status-DONE       { background: var(--erp-success-lt); color: var(--erp-success); }
+  .status-POSTED     { background: #f3e8ff;               color: #7c3aed; }
+  .status-CANCELLED  { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+
+  /* ── Component checklist ───────────────────────────────────────────── */
+  .component-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--erp-border);
+    font-size: 13px;
+  }
+  .component-row:last-child { border-bottom: none; }
+  .component-row-header {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--erp-text-muted);
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--erp-border);
+    margin-bottom: 4px;
+  }
+  .qty-ok   { color: var(--erp-success); font-weight: 700; }
+  .qty-warn { color: var(--erp-warning); font-weight: 700; }
+  .qty-bad  { color: var(--erp-danger);  font-weight: 700; }
+
+  /* ── Variance display ──────────────────────────────────────────────── */
+  .variance-panel {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    padding: 12px 16px;
+    margin-top: 12px;
+    display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+  }
+  .variance-item { text-align: center; }
+  .variance-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--erp-text-muted); margin-bottom: 4px; }
+  .variance-value { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .variance-positive { color: var(--erp-danger); }
+  .variance-negative { color: var(--erp-success); }
+  .variance-zero     { color: var(--erp-text-muted); }
+
+  /* ── Action bar ────────────────────────────────────────────────────── */
+  .assembly-action-bar {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 12px 16px;
+    border-top: 1px solid var(--erp-border);
+    background: var(--erp-neutral-lt);
+    border-radius: 0 0 var(--erp-radius-lg) var(--erp-radius-lg);
+    margin-top: 0;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-puzzle-piece" style="color:var(--erp-primary);margin-right:8px;"></i>Assembly / Kitting Orders
+      </h1>
+      <p class="erp-page-subtitle">Manage assembly orders, component consumption, and cost posting.</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      {% set in_prog = orders | selectattr('status','eq','IN_PROGRESS') | list | length %}
+      <span class="erp-badge erp-badge-yellow">{{ in_prog }} in progress</span>
+      <span class="erp-badge erp-badge-blue">{{ orders | length }} total</span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="assembly-layout">
+
+  {# ── Left: Order list ──────────────────────────────────────────────────── #}
+  <div>
+    <div class="erp-table-wrap erp-mb-0" style="padding:16px;">
+      <div class="erp-flex" style="justify-content:space-between; margin-bottom:12px;">
+        <h4 class="erp-chart-title erp-mb-0">Assembly Orders</h4>
+        <input type="text" id="assy-search" class="form-control input-sm"
+               placeholder="Search…" style="width:110px;">
+      </div>
+      <div id="assy-order-list">
+        {% for order in orders %}
+        <div class="assy-card {% if selected_order and selected_order.id == order.id %}selected{% endif %}"
+             data-order-id="{{ order.id }}"
+             onclick="selectAssemblyOrder('{{ order.id }}')">
+          <div class="erp-flex" style="justify-content:space-between; margin-bottom:6px;">
+            <div class="assy-card-ref">{{ order.ref }}</div>
+            <span class="erp-badge status-{{ order.status }}">{{ order.status.replace('_',' ') }}</span>
+          </div>
+          <div class="assy-card-product">{{ order.output_product }}</div>
+          <div class="assy-card-meta">
+            <span><i class="fa fa-cubes"></i> Qty: <strong>{{ order.output_qty }}</strong></span>
+            <span><i class="fa fa-building"></i> {{ order.warehouse }}</span>
+            {% if order.scheduled_date %}
+            <span><i class="fa fa-calendar"></i> {{ order.scheduled_date }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <p style="color:var(--erp-text-muted);font-size:13px;text-align:center;padding:24px 0;">
+          No assembly orders found.
+        </p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Right: Order detail + component checklist ────────────────────────── #}
+  <div>
+    {% if selected_order %}
+    <div class="erp-table-wrap" style="padding:0;">
+      <div style="padding:16px 18px; border-bottom:1px solid var(--erp-border);">
+        <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <div>
+            <h4 style="font-size:15px;font-weight:800;margin:0 0 4px;">
+              {{ selected_order.ref }}
+              &mdash; {{ selected_order.output_product }}
+            </h4>
+            <div style="font-size:12px;color:var(--erp-text-muted);">
+              Qty: <strong>{{ selected_order.output_qty }}</strong>
+              &nbsp;·&nbsp; Warehouse: {{ selected_order.warehouse }}
+              {% if selected_order.scheduled_date %}
+              &nbsp;·&nbsp; Scheduled: {{ selected_order.scheduled_date }}
+              {% endif %}
+            </div>
+          </div>
+          <span class="erp-badge status-{{ selected_order.status }}" style="align-self:center;">
+            {{ selected_order.status.replace('_',' ') }}
+          </span>
+        </div>
+      </div>
+
+      {# Component checklist #}
+      <div style="padding:16px 18px;">
+        <h5 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--erp-text-muted);margin-bottom:10px;">
+          Components
+        </h5>
+        {% if components %}
+        <div class="component-row component-row-header">
+          <div>Component</div>
+          <div>Planned Qty</div>
+          <div>Actual Qty</div>
+          <div>Available</div>
+        </div>
+        {% for c in components %}
+        {% set available_ok = c.qty_available >= c.planned_qty %}
+        {% set actual_matches = (c.actual_qty is not none) and (c.actual_qty >= c.planned_qty) %}
+        <div class="component-row">
+          <div>
+            <div style="font-weight:600;">{{ c.product_name }}</div>
+            {% if c.product_code %}
+            <div style="font-size:10px;color:var(--erp-text-muted);">{{ c.product_code }}</div>
+            {% endif %}
+          </div>
+          <div style="font-variant-numeric:tabular-nums;">{{ c.planned_qty }} {{ c.uom or '' }}</div>
+          <div>
+            {% if c.actual_qty is not none %}
+            <span class="{% if actual_matches %}qty-ok{% else %}qty-bad{% endif %}">
+              {{ c.actual_qty }} {{ c.uom or '' }}
+            </span>
+            {% else %}
+            <span style="color:var(--erp-text-muted);">—</span>
+            {% endif %}
+          </div>
+          <div>
+            {% if available_ok %}
+            <span class="qty-ok"><i class="fa fa-check-circle"></i> {{ c.qty_available }}</span>
+            {% else %}
+            <span class="qty-bad"><i class="fa fa-exclamation-circle"></i> {{ c.qty_available }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p style="color:var(--erp-text-muted);font-size:13px;">No components defined.</p>
+        {% endif %}
+
+        {# ── Cost variance ─────────────────────────────────────────────── #}
+        {% if selected_order.actual_cost_cents is not none and selected_order.standard_cost_cents is not none %}
+        {% set variance = selected_order.actual_cost_cents - selected_order.standard_cost_cents %}
+        <div class="variance-panel" style="margin-top:16px;">
+          <div class="variance-item">
+            <div class="variance-label">Standard Cost</div>
+            <div class="variance-value">{{ '$%.2f'|format(selected_order.standard_cost_cents / 100) }}</div>
+          </div>
+          <div style="font-size:20px;color:var(--erp-border);">/</div>
+          <div class="variance-item">
+            <div class="variance-label">Actual Cost</div>
+            <div class="variance-value">{{ '$%.2f'|format(selected_order.actual_cost_cents / 100) }}</div>
+          </div>
+          <div style="font-size:20px;color:var(--erp-border);">=</div>
+          <div class="variance-item">
+            <div class="variance-label">Variance</div>
+            <div class="variance-value {% if variance > 0 %}variance-positive{% elif variance < 0 %}variance-negative{% else %}variance-zero{% endif %}">
+              {{ '%+.2f'|format(variance / 100) }}
+              <span style="font-size:14px;">
+                {% if variance > 0 %}
+                <i class="fa fa-arrow-up" title="Over standard"></i>
+                {% elif variance < 0 %}
+                <i class="fa fa-arrow-down" title="Under standard"></i>
+                {% endif %}
+              </span>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      {# Action bar #}
+      <div class="assembly-action-bar">
+        {% if selected_order.status in ['DRAFT', 'CONFIRMED'] %}
+        <button class="btn btn-warning btn-sm" id="assy-start-btn"
+                data-order-id="{{ selected_order.id }}">
+          <i class="fa fa-play"></i> Start Assembly
+        </button>
+        {% endif %}
+        {% if selected_order.status == 'IN_PROGRESS' %}
+        <button class="btn btn-success btn-sm" id="assy-complete-btn"
+                data-order-id="{{ selected_order.id }}">
+          <i class="fa fa-check"></i> Complete Assembly
+        </button>
+        {% endif %}
+        {% if selected_order.status == 'DONE' %}
+        <button class="btn btn-primary btn-sm" id="assy-post-btn"
+                data-order-id="{{ selected_order.id }}">
+          <i class="fa fa-book"></i> Post Assembly
+        </button>
+        {% endif %}
+        <a href="{{ url_for('AssemblyView.show', pk=selected_order.id) if 'AssemblyView' in dir() else '#' }}"
+           class="btn btn-default btn-sm">
+          <i class="fa fa-eye"></i> Full Detail
+        </a>
+        <span id="assy-action-result" style="line-height:30px;font-size:12px;margin-left:8px;"></span>
+      </div>
+    </div>
+    {% else %}
+    <div class="erp-card" style="text-align:center;padding:48px 24px;">
+      <i class="fa fa-puzzle-piece" style="font-size:40px;color:var(--erp-border);display:block;margin-bottom:12px;"></i>
+      <h5 style="font-weight:700;margin-bottom:6px;">No order selected</h5>
+      <p style="color:var(--erp-text-muted);margin:0;">Click an assembly order on the left to view its components and actions.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _csrf() { var m = document.cookie.match(/csrf_token=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+  function _esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  /* ── Search filter ─────────────────────────────────────────────────── */
+  var search = document.getElementById('assy-search');
+  if (search) {
+    search.addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('.assy-card').forEach(function (c) {
+        c.style.display = c.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+      });
+    });
+  }
+
+  /* ── Select order (reload with ?order_id=) ─────────────────────────── */
+  window.selectAssemblyOrder = function (id) {
+    window.location.href = window.location.pathname + '?order_id=' + encodeURIComponent(id);
+  };
+
+  /* ── Action helpers ────────────────────────────────────────────────── */
+  function bindAction(btnId, url, label, confirmMsg) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (confirmMsg && !confirm(confirmMsg)) return;
+      var result = document.getElementById('assy-action-result');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+      _post(url, {})
+        .then(function () { window.location.reload(); })
+        .catch(function (err) {
+          if (result) result.innerHTML = '<span style="color:var(--erp-danger);">' + _esc(err.message) + '</span>';
+          btn.disabled = false;
+          btn.innerHTML = label;
+        });
+    });
+  }
+
+  {% if selected_order %}
+  var oid = '{{ selected_order.id }}';
+  bindAction('assy-start-btn',    '/api/assembly/' + oid + '/start',    '<i class="fa fa-play"></i> Start Assembly', null);
+  bindAction('assy-complete-btn', '/api/assembly/' + oid + '/complete', '<i class="fa fa-check"></i> Complete Assembly', null);
+  bindAction('assy-post-btn',     '/api/assembly/' + oid + '/post',     '<i class="fa fa-book"></i> Post Assembly',
+             'Post this assembly order? This will update inventory and create accounting entries.');
+  {% endif %}
+}());
+</script>
+{% endblock %}

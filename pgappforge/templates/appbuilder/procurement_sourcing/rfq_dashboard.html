@@ -1,0 +1,264 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Strategic Sourcing — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .rfq-row { cursor:pointer; transition:background var(--erp-transition); }
+  .rfq-row:hover { background:#fafafa; }
+  .rfq-row.active { background:var(--erp-primary-lt); }
+  .bid-score-bar { height:8px; background:var(--erp-border); border-radius:4px; overflow:hidden; width:80px; display:inline-block; vertical-align:middle; }
+  .bid-score-fill { height:100%; border-radius:4px; transition:width .5s ease; }
+  .bid-winner-row { background:rgba(14,159,110,.07) !important; }
+  .bid-winner-row td:first-child { border-left:3px solid var(--erp-success); }
+  .bid-winner-badge { display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:3px; }
+  .rfq-deadline-warn { color:var(--erp-warning);font-weight:600; }
+  .rfq-deadline-overdue { color:var(--erp-danger);font-weight:600; }
+  .rfq-type-OPEN        { background:#dbeafe;color:#1e40af; }
+  .rfq-type-SEALED      { background:#f3e8ff;color:#6b21a8; }
+  .rfq-type-RESTRICTED  { background:#fef3c7;color:#92400e; }
+  .rfq-type-badge { display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;text-transform:uppercase; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-gavel"></i> Strategic Sourcing</h1>
+    <p class="erp-page-subtitle">Manage RFQs, compare supplier bids, and award contracts.</p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#create-rfq-modal" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> Create RFQ
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+
+  {# ── Left: RFQ list ──────────────────────────────────────────────── #}
+  <div class="col-md-5">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-list"></i> RFQs</h4>
+        <select id="rfq-status-filter" class="form-control input-sm" style="width:auto;">
+          <option value="">All Statuses</option>
+          <option value="DRAFT">Draft</option>
+          <option value="PUBLISHED">Published</option>
+          <option value="EVALUATION">Evaluation</option>
+          <option value="AWARDED">Awarded</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+      </div>
+      <table class="erp-table">
+        <thead>
+          <tr>
+            <th>RFQ</th>
+            <th>Type</th>
+            <th>Deadline</th>
+            <th>Bids</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if rfqs %}
+            {% for rfq in rfqs %}
+            {% set rs = rfq.status | default('DRAFT') %}
+            <tr class="rfq-row {{ 'active' if selected_rfq and selected_rfq.id == rfq.id else '' }}"
+                data-status="{{ rs }}"
+                onclick="window.location.href='?selected_id={{ rfq.id }}'">
+              <td>
+                <div style="font-weight:600;font-size:13px;">{{ rfq.title }}</div>
+                <div style="font-size:11px;color:var(--erp-text-muted);font-family:monospace;">{{ rfq.ref | default('') }}</div>
+              </td>
+              <td>
+                {% set rt = rfq.rfq_type | default('OPEN') %}
+                <span class="rfq-type-badge rfq-type-{{ rt }}">{{ rt }}</span>
+              </td>
+              <td style="font-size:12px;white-space:nowrap;">
+                {{ rfq.submission_deadline | default('—') }}
+              </td>
+              <td style="text-align:center;font-weight:700;">{{ rfq.bid_count | default(0) }}</td>
+              <td>
+                <span class="erp-badge {{ 'erp-badge-green' if rs == 'AWARDED' else ('erp-badge-blue' if rs == 'PUBLISHED' else ('erp-badge-yellow' if rs == 'EVALUATION' else ('erp-badge-red' if rs == 'CANCELLED' else 'erp-badge-gray'))) }}">
+                  {{ rs }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="5" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+              No RFQs. <button class="btn btn-link btn-sm" style="padding:0;" data-toggle="modal" data-target="#create-rfq-modal">Create one</button>.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Right: RFQ detail + bid comparison ─────────────────────────── #}
+  <div class="col-md-7">
+    {% set rfq = selected_rfq %}
+    {% if rfq %}
+
+    {# RFQ header card #}
+    <div class="erp-card erp-mb-16">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h3 style="margin:0 0 4px;font-size:17px;font-weight:700;">{{ rfq.title }}</h3>
+          <div style="font-size:12px;color:var(--erp-text-muted);">
+            {% set rt = rfq.rfq_type | default('OPEN') %}
+            <span class="rfq-type-badge rfq-type-{{ rt }}">{{ rt }}</span>
+            &nbsp;Deadline: <strong>{{ rfq.submission_deadline | default('—') }}</strong>
+            &nbsp;&bull;&nbsp;{{ rfq.bid_count | default(0) }} bid(s) received
+          </div>
+        </div>
+        {% if rfq.status == 'EVALUATION' and bids %}
+        <form method="POST" action="/procurement/rfq/{{ rfq.id }}/award"
+              onsubmit="return confirm('Award this RFQ to the highest-scoring bid and create a PO?');">
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="fa fa-trophy"></i> Award RFQ
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Bid comparison table #}
+    {% if bids %}
+    {% set top_score = bids | map(attribute='composite_score') | select | max | default(0) %}
+    <div class="erp-table-wrap erp-mb-16">
+      <div style="padding:10px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-balance-scale"></i> Bid Comparison</h4>
+        <span class="erp-badge erp-badge-blue">{{ bids | length }} bids</span>
+      </div>
+      <table class="erp-table">
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th>Total (KES)</th>
+            <th>Delivery</th>
+            <th>Score</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bid in bids | sort(attribute='composite_score', reverse=True) %}
+          {% set is_winner = bid.composite_score is defined and bid.composite_score == top_score %}
+          <tr class="{{ 'bid-winner-row' if is_winner else '' }}">
+            <td>
+              <div style="font-weight:600;">{{ bid.supplier_name | default('—') }}</div>
+              {% if is_winner %}
+              <span class="bid-winner-badge"><i class="fa fa-star"></i> Best Bid</span>
+              {% endif %}
+            </td>
+            <td style="font-variant-numeric:tabular-nums;font-weight:700;">
+              {{ '{:,.0f}'.format(bid.total_cents / 100) if bid.total_cents is defined else '—' }}
+            </td>
+            <td style="font-size:12px;">
+              {{ bid.delivery_days | default('—') }}{% if bid.delivery_days is defined %} days{% endif %}
+            </td>
+            <td>
+              {% set sc = bid.composite_score | default(0) | float %}
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="bid-score-bar">
+                  <div class="bid-score-fill" style="width:{{ (sc / 100 * 100) | int }}%;background:{{ 'var(--erp-success)' if is_winner else 'var(--erp-primary)' }};"></div>
+                </div>
+                <span style="font-size:12px;font-weight:700;color:{{ 'var(--erp-success)' if is_winner else 'var(--erp-text)' }};">
+                  {{ '{:.1f}'.format(sc) }}
+                </span>
+              </div>
+            </td>
+            <td>
+              <a href="/procurement/bids/{{ bid.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="erp-card" style="padding:24px;text-align:center;color:var(--erp-text-muted);">
+      <i class="fa fa-inbox" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3;"></i>
+      <p style="margin:0;font-size:13px;">No bids submitted yet for this RFQ.</p>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="erp-card" style="padding:40px;text-align:center;color:var(--erp-text-muted);">
+      <i class="fa fa-gavel" style="font-size:40px;opacity:.2;display:block;margin-bottom:12px;"></i>
+      <p style="margin:0;">Select an RFQ from the list to view bid comparison and award.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Create RFQ Modal ────────────────────────────────────────────────── #}
+<div class="modal fade" id="create-rfq-modal" tabindex="-1" role="dialog" aria-labelledby="crfq-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/procurement/rfq/create">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="crfq-label"><i class="fa fa-plus"></i> Create RFQ</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">RFQ Title <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control" required placeholder="e.g. Office Supplies Q3 2026">
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">RFQ Type</label>
+                <select name="rfq_type" class="form-control">
+                  <option value="OPEN">Open</option>
+                  <option value="SEALED">Sealed</option>
+                  <option value="RESTRICTED">Restricted</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">Submission Deadline <span class="text-danger">*</span></label>
+                <input type="datetime-local" name="submission_deadline" class="form-control" required>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Description</label>
+            <textarea name="description" class="form-control" rows="3" placeholder="Scope, requirements, evaluation criteria…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Create RFQ</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var filter = document.getElementById('rfq-status-filter');
+  if (filter) {
+    filter.addEventListener('change', function () {
+      var val = this.value;
+      document.querySelectorAll('.rfq-row').forEach(function (tr) {
+        tr.style.display = (!val || tr.getAttribute('data-status') === val) ? '' : 'none';
+      });
+    });
+  }
+}());
+</script>
+{% endblock %}

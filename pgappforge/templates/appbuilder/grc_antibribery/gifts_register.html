@@ -1,0 +1,288 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Anti-Bribery &amp; Gifts Register — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .gift-PENDING      { background:#fef3c7;color:#92400e; }
+  .gift-APPROVED     { background:#d1fae5;color:#065f46; }
+  .gift-REJECTED     { background:#fee2e2;color:#991b1b; }
+  .gift-AUTO_APPROVED{ background:#dbeafe;color:#1e40af; }
+  .gift-status-badge { display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px; }
+  .govt-official-badge { display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:3px; }
+  .coi-PENDING  { background:#fef3c7;color:#92400e; }
+  .coi-APPROVED { background:#d1fae5;color:#065f46; }
+  .coi-DECLINED { background:#fee2e2;color:#991b1b; }
+  .risk-exposure-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:12px; margin-bottom:24px; }
+  .risk-tile { background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:var(--erp-radius-lg); padding:16px; text-align:center; }
+  .risk-tile-value { font-size:32px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; margin:8px 0 4px; }
+  .risk-tile-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--erp-text-muted); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-gift"></i> Anti-Bribery &amp; Gifts Register</h1>
+    <p class="erp-page-subtitle">Track gifts, entertainment, and conflicts of interest. Enforce FCPA / UK Bribery Act controls.</p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#log-gift-modal" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> Log Gift / Entertainment
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Risk exposure summary ──────────────────────────────────────────── #}
+{% set rx = risk_exposure | default({}) %}
+<div class="risk-exposure-grid erp-mb-8">
+  <div class="risk-tile">
+    <div class="risk-tile-label">Pending Approvals</div>
+    <div class="risk-tile-value" style="color:{{ 'var(--erp-warning)' if rx.pending_approvals else 'var(--erp-success)' }};">
+      {{ rx.pending_approvals | default(0) }}
+    </div>
+    <div style="font-size:11px;color:var(--erp-text-muted);">Gifts awaiting review</div>
+  </div>
+  <div class="risk-tile">
+    <div class="risk-tile-label">Govt Official Gifts</div>
+    <div class="risk-tile-value" style="color:{{ 'var(--erp-danger)' if rx.govt_official_gifts else 'var(--erp-success)' }};">
+      {{ rx.govt_official_gifts | default(0) }}
+    </div>
+    <div style="font-size:11px;color:var(--erp-text-muted);">High-risk category</div>
+  </div>
+  <div class="risk-tile">
+    <div class="risk-tile-label">COI Declarations</div>
+    <div class="risk-tile-value" style="color:var(--erp-primary);">
+      {{ coi_declarations | length if coi_declarations else 0 }}
+    </div>
+    <div style="font-size:11px;color:var(--erp-text-muted);">Total active</div>
+  </div>
+  <div class="risk-tile">
+    <div class="risk-tile-label">This Month Total</div>
+    <div class="risk-tile-value" style="color:var(--erp-text);">
+      KES {{ '{:,.0f}'.format(rx.month_total_cents / 100) if rx.month_total_cents is defined else '—' }}
+    </div>
+    <div style="font-size:11px;color:var(--erp-text-muted);">Gifts &amp; entertainment</div>
+  </div>
+</div>
+
+{# ── Gifts & entertainment log ──────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-book"></i> Gifts &amp; Entertainment Register</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <select id="gift-status-filter" class="form-control input-sm" style="width:auto;">
+        <option value="">All Statuses</option>
+        <option value="PENDING">Pending</option>
+        <option value="APPROVED">Approved</option>
+        <option value="REJECTED">Rejected</option>
+        <option value="AUTO_APPROVED">Auto-Approved</option>
+      </select>
+      <select id="govt-filter" class="form-control input-sm" style="width:auto;">
+        <option value="">All Recipients</option>
+        <option value="1">Govt Officials Only</option>
+      </select>
+    </div>
+  </div>
+  <table class="erp-table" id="gifts-table">
+    <thead>
+      <tr>
+        <th>Given To</th>
+        <th>Type</th>
+        <th>Value (KES)</th>
+        <th>Date</th>
+        <th>Govt Official</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if gifts %}
+        {% for g in gifts %}
+        {% set gs = g.status | default('PENDING') %}
+        <tr data-status="{{ gs }}" data-govt="{{ '1' if g.is_government_official else '0' }}">
+          <td style="font-weight:600;">{{ g.given_to_name | default('—') }}</td>
+          <td>
+            <span class="erp-badge erp-badge-blue">{{ g.type | default('GIFT') }}</span>
+          </td>
+          <td style="font-variant-numeric:tabular-nums;font-weight:700;">
+            {{ '{:,.0f}'.format(g.value_cents / 100) if g.value_cents is defined else '—' }}
+          </td>
+          <td style="font-size:12px;">{{ g.date | default('—') }}</td>
+          <td>
+            {% if g.is_government_official %}
+            <span class="govt-official-badge"><i class="fa fa-exclamation-circle"></i> Yes</span>
+            {% else %}
+            <span style="color:var(--erp-text-muted);font-size:12px;">No</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="gift-status-badge gift-{{ gs }}">{{ gs | replace('_',' ') }}</span>
+          </td>
+          <td>
+            {% if gs == 'PENDING' %}
+            <form method="POST" action="/grc/gifts/{{ g.id }}/approve" style="display:inline;">
+              <button type="submit" class="btn btn-xs btn-success" title="Approve">
+                <i class="fa fa-check"></i> Approve
+              </button>
+            </form>
+            <form method="POST" action="/grc/gifts/{{ g.id }}/reject" style="display:inline;"
+                  onsubmit="return confirm('Reject this gift entry?');">
+              <button type="submit" class="btn btn-xs btn-danger" title="Reject">
+                <i class="fa fa-times"></i> Reject
+              </button>
+            </form>
+            {% else %}
+            <span style="color:var(--erp-text-muted);font-size:12px;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+      <tr>
+        <td colspan="7" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+          No gift entries. <button class="btn btn-link btn-sm" style="padding:0;" data-toggle="modal" data-target="#log-gift-modal">Log the first one</button>.
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# ── COI Declarations ───────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-balance-scale"></i> Conflict of Interest Declarations</h4>
+  </div>
+  <table class="erp-table">
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Category</th>
+        <th>Description</th>
+        <th>Declared</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if coi_declarations %}
+        {% for coi in coi_declarations %}
+        {% set cs = coi.status | default('PENDING') %}
+        <tr>
+          <td style="font-weight:600;">{{ coi.employee | default('—') }}</td>
+          <td>
+            <span class="erp-badge erp-badge-blue">{{ coi.category | default('—') }}</span>
+          </td>
+          <td style="font-size:12px;max-width:200px;" class="erp-truncate">{{ coi.description | default('—') }}</td>
+          <td style="font-size:12px;">{{ coi.declared_at | default('—') }}</td>
+          <td>
+            <span class="erp-badge {{ 'coi-' + cs }} {{ 'erp-badge-green' if cs == 'APPROVED' else ('erp-badge-red' if cs == 'DECLINED' else 'erp-badge-yellow') }}">
+              {{ cs }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+      <tr>
+        <td colspan="5" class="erp-text-center" style="padding:24px;color:var(--erp-text-muted);">
+          No COI declarations on record.
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Log Gift Modal ──────────────────────────────────────────────────── #}
+<div class="modal fade" id="log-gift-modal" tabindex="-1" role="dialog" aria-labelledby="log-gift-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="/grc/gifts/log">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+          <h4 class="modal-title" id="log-gift-label"><i class="fa fa-gift"></i> Log Gift / Entertainment</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="control-label">Given To <span class="text-danger">*</span></label>
+            <input type="text" name="given_to_name" class="form-control" required placeholder="Full name or company">
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">Type <span class="text-danger">*</span></label>
+                <select name="type" class="form-control" required>
+                  <option value="GIFT">Gift</option>
+                  <option value="ENTERTAINMENT">Entertainment</option>
+                  <option value="HOSPITALITY">Hospitality</option>
+                  <option value="DONATION">Donation</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">Value (KES) <span class="text-danger">*</span></label>
+                <input type="number" name="value_cents" class="form-control" required min="0" step="1" placeholder="e.g. 5000">
+                <p class="help-block" style="font-size:11px;">Enter full KES amount (not cents).</p>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">Date <span class="text-danger">*</span></label>
+                <input type="date" name="date" class="form-control" required>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label class="control-label">&nbsp;</label>
+                <div class="checkbox" style="margin-top:8px;">
+                  <label>
+                    <input type="checkbox" name="is_government_official" value="1">
+                    <strong>Government Official</strong>
+                    <span style="color:var(--erp-danger);margin-left:4px;font-size:11px;">(high risk)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="control-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Business purpose, occasion…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Log Entry</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function applyFilters() {
+    var statusVal = document.getElementById('gift-status-filter').value;
+    var govtVal   = document.getElementById('govt-filter').value;
+    document.querySelectorAll('#gifts-table tbody tr[data-status]').forEach(function (tr) {
+      var matchStatus = !statusVal || tr.getAttribute('data-status') === statusVal;
+      var matchGovt   = !govtVal   || tr.getAttribute('data-govt')   === govtVal;
+      tr.style.display = (matchStatus && matchGovt) ? '' : 'none';
+    });
+  }
+
+  ['gift-status-filter','govt-filter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+}());
+</script>
+{% endblock %}

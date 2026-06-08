@@ -1,0 +1,810 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Skills Explorer — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Skills taxonomy browser ── */
+  .sk-layout { display:grid; grid-template-columns:280px 1fr; gap:20px; align-items:start; }
+  @media(max-width:900px){ .sk-layout { grid-template-columns:1fr; } }
+
+  .sk-tree-panel {
+    background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+    overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06);
+    position:sticky; top:72px;
+  }
+  .sk-tree-header {
+    padding:12px 16px; background:#f9fafb; border-bottom:1px solid #e5e7eb;
+    font-size:12px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:#6b7280; display:flex; align-items:center; gap:8px;
+  }
+  .sk-search { padding:10px 12px; border-bottom:1px solid #e5e7eb; }
+  .sk-search input {
+    width:100%; height:32px; border:1px solid #d1d5db; border-radius:6px;
+    padding:0 10px; font-size:13px; outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .sk-search input:focus { border-color:#1a56db; box-shadow:0 0 0 3px rgba(26,86,219,.12); }
+
+  /* tier 1 — domain */
+  .sk-domain { border-bottom:1px solid #f3f4f6; }
+  .sk-domain-btn {
+    width:100%; text-align:left; padding:10px 14px; background:none; border:none;
+    font-size:13px; font-weight:700; color:#111827; cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between;
+    transition:background .1s;
+  }
+  .sk-domain-btn:hover { background:#f9fafb; }
+  .sk-domain-btn .sk-chevron { font-size:10px; color:#9ca3af; transition:transform .2s; }
+  .sk-domain-btn.open .sk-chevron { transform:rotate(90deg); }
+  .sk-domain-badge {
+    font-size:10px; font-weight:700; background:#e0e7ff; color:#3730a3;
+    border-radius:10px; padding:1px 7px; margin-left:6px;
+  }
+
+  /* tier 2 — category */
+  .sk-cat-list { display:none; padding:4px 0; background:#fafafa; border-top:1px solid #f3f4f6; }
+  .sk-cat-list.open { display:block; }
+  .sk-cat-btn {
+    width:100%; text-align:left; padding:7px 14px 7px 28px; background:none; border:none;
+    font-size:12px; color:#374151; cursor:pointer; display:flex; align-items:center;
+    justify-content:space-between; transition:background .1s;
+  }
+  .sk-cat-btn:hover { background:#f3f4f6; }
+  .sk-cat-btn.active { color:#1a56db; font-weight:700; background:#eef2ff; }
+
+  /* tier 3 — skill chips */
+  .sk-chip-list { display:none; padding:4px 10px 8px 36px; background:#fafafa; }
+  .sk-chip-list.open { display:flex; flex-direction:column; gap:4px; }
+  .sk-chip {
+    font-size:11px; padding:4px 10px; border-radius:16px; cursor:pointer;
+    background:#f3f4f6; color:#374151; border:1px solid transparent;
+    transition:all .12s; display:flex; align-items:center; justify-content:space-between;
+  }
+  .sk-chip:hover { background:#e0e7ff; color:#3730a3; }
+  .sk-chip.selected { background:#1a56db; color:#fff; border-color:#1a56db; }
+  .sk-chip-demand { font-size:10px; opacity:.7; }
+
+  /* ── Right panel tabs ── */
+  .sk-right { display:flex; flex-direction:column; gap:20px; }
+  .sk-tab-bar {
+    display:flex; border-bottom:2px solid #e5e7eb; margin-bottom:0; gap:0;
+  }
+  .sk-tab {
+    padding:10px 18px; font-size:13px; font-weight:600; color:#6b7280;
+    cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px;
+    transition:color .15s, border-color .15s; white-space:nowrap;
+  }
+  .sk-tab:hover { color:#374151; }
+  .sk-tab.active { color:#1a56db; border-bottom-color:#1a56db; }
+  .sk-panel { display:none; }
+  .sk-panel.active { display:block; }
+
+  /* ── Star rating ── */
+  .star-rating { display:inline-flex; gap:2px; cursor:pointer; }
+  .star-rating .star { font-size:18px; color:#d1d5db; transition:color .1s; }
+  .star-rating .star.lit { color:#f59e0b; }
+  .star-rating .star:hover ~ .star { color:#d1d5db !important; }
+  .star-rating:hover .star { color:#f59e0b; }
+
+  /* ── Gap table ── */
+  .gap-bar-wrap { width:80px; height:6px; background:#e5e7eb; border-radius:3px; display:inline-block; vertical-align:middle; }
+  .gap-bar-fill { height:100%; border-radius:3px; }
+
+  /* ── Match score ── */
+  .match-ring {
+    width:40px; height:40px; position:relative;
+    display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .match-ring svg { position:absolute; top:0; left:0; }
+  .match-ring-label { font-size:10px; font-weight:800; color:#111827; position:relative; z-index:1; }
+
+  /* ── Endorse form ── */
+  .endorse-card { background:#f0f4ff; border:1px solid #c7d2fe; border-radius:10px; padding:18px 20px; }
+  .endorse-card h5 { font-size:13px; font-weight:700; color:#1e3a8a; margin:0 0 14px; }
+
+  /* KPI row */
+  .sk-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+  .sk-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; }
+  .sk-kpi .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; font-weight:600; margin:0 0 3px; }
+  .sk-kpi .val { font-size:22px; font-weight:800; color:#111827; margin:0; line-height:1.1; }
+  .sk-kpi .sub { font-size:11px; color:#9ca3af; margin:2px 0 0; }
+
+  /* LMS course cards */
+  .lms-card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+  .lms-icon { width:36px; height:36px; border-radius:8px; background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+  .lms-body { flex:1; min-width:0; }
+  .lms-title { font-size:13px; font-weight:600; color:#111827; margin:0 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lms-meta { font-size:11px; color:#9ca3af; }
+
+  /* toast */
+  .sk-toast-wrap { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .sk-toast { background:#1f2937; color:#fff; padding:11px 18px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:9px; min-width:240px; }
+  .sk-toast.success { border-left:4px solid #10b981; }
+  .sk-toast.error   { border-left:4px solid #ef4444; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      <i class="fa fa-sitemap"></i> Skills Explorer
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Taxonomy browser · Employee endorsements · Gap analysis · Internal matching</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-default btn-sm" onclick="window.location='/hcm/skills/export'">
+      <i class="fa fa-download"></i> Export Skills
+    </button>
+    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal-add-skill">
+      <i class="fa fa-plus"></i> Add Skill
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI strip ── #}
+<div class="sk-kpi-row erp-mb-24">
+  <div class="sk-kpi">
+    <p class="lbl">Total Skills</p>
+    <p class="val">{{ domains | sum(attribute='skill_count') if domains else '—' }}</p>
+    <p class="sub">across all domains</p>
+  </div>
+  <div class="sk-kpi">
+    <p class="lbl">Endorsed This Month</p>
+    <p class="val">{{ endorsed_this_month | default('—') }}</p>
+    <p class="sub">employee endorsements</p>
+  </div>
+  <div class="sk-kpi">
+    <p class="lbl">Skill Gaps (Org)</p>
+    <p class="val" style="color:#ef4444;">{{ total_gaps | default('—') }}</p>
+    <p class="sub">vs target positions</p>
+  </div>
+  <div class="sk-kpi">
+    <p class="lbl">High-demand Skills</p>
+    <p class="val" style="color:#1a56db;">{{ high_demand_count | default('—') }}</p>
+    <p class="sub">growing faster than supply</p>
+  </div>
+</div>
+
+<div class="sk-layout">
+
+  {# ── Left: taxonomy tree ── #}
+  <div class="sk-tree-panel">
+    <div class="sk-tree-header"><i class="fa fa-th-list"></i> Skill Domains</div>
+    <div class="sk-search">
+      <input type="text" id="skill-search-input" placeholder="Search skills…" autocomplete="off">
+    </div>
+    <div id="sk-tree-body">
+      {% if domains %}
+        {% for domain in domains %}
+        <div class="sk-domain" data-domain-id="{{ domain.id }}">
+          <button class="sk-domain-btn" onclick="toggleDomain(this)">
+            <span>
+              <i class="fa fa-circle" style="font-size:8px; color:{{ domain.color | default('#1a56db') }}; margin-right:6px;"></i>
+              {{ domain.name }}
+              <span class="sk-domain-badge">{{ domain.skill_count | default(0) }}</span>
+            </span>
+            <i class="fa fa-chevron-right sk-chevron"></i>
+          </button>
+          <div class="sk-cat-list">
+            {% for cat in domain.categories | default([]) %}
+            <div>
+              <button class="sk-cat-btn" onclick="selectCategory(this, '{{ domain.id }}', '{{ cat.id }}')" data-cat-id="{{ cat.id }}">
+                <span><i class="fa fa-folder-o" style="margin-right:5px; font-size:11px;"></i>{{ cat.name }}</span>
+                <span style="font-size:10px; color:#9ca3af;">{{ cat.skills | length }}</span>
+              </button>
+              <div class="sk-chip-list" data-cat="{{ cat.id }}">
+                {% for skill in cat.skills | default([]) %}
+                <span class="sk-chip" data-skill-id="{{ skill.id }}" data-skill-name="{{ skill.name }}" onclick="selectSkill(this, {{ skill | tojson }})">
+                  <span>{{ skill.name }}</span>
+                  {% if skill.demand_trend == 'RISING' %}
+                    <span class="sk-chip-demand"><i class="fa fa-arrow-up" style="color:#10b981;"></i></span>
+                  {% elif skill.demand_trend == 'FALLING' %}
+                    <span class="sk-chip-demand"><i class="fa fa-arrow-down" style="color:#ef4444;"></i></span>
+                  {% endif %}
+                </span>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="padding:24px; text-align:center; color:#9ca3af; font-size:13px;">
+          <i class="fa fa-sitemap fa-2x" style="margin-bottom:8px; display:block;"></i>
+          No domains configured.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Right: tabbed panels ── #}
+  <div class="sk-right">
+
+    {# Tab bar #}
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div class="sk-tab-bar" style="padding:0 4px; background:#fafafa; border-bottom:1px solid #e5e7eb;">
+        <div class="sk-tab active" data-tab="endorse" onclick="switchTab(this)"><i class="fa fa-star-o"></i> Endorse Skill</div>
+        <div class="sk-tab" data-tab="gap" onclick="switchTab(this)"><i class="fa fa-bar-chart"></i> Gap Analysis</div>
+        <div class="sk-tab" data-tab="match" onclick="switchTab(this)"><i class="fa fa-users"></i> Internal Candidates</div>
+        <div class="sk-tab" data-tab="lms" onclick="switchTab(this)"><i class="fa fa-graduation-cap"></i> Learning</div>
+      </div>
+
+      {# Tab: Endorse #}
+      <div id="panel-endorse" class="sk-panel active" style="padding:20px;">
+        <div class="endorse-card">
+          <h5><i class="fa fa-star" style="color:#f59e0b;"></i> Endorse an Employee Skill</h5>
+          <div class="row">
+            <div class="col-sm-5">
+              <div class="form-group">
+                <label style="font-size:12px; font-weight:600; color:#374151;">Employee</label>
+                <select id="endorse-employee" class="form-control input-sm">
+                  <option value="">— select employee —</option>
+                  {% for emp in employee_skills | default([]) %}
+                  <option value="{{ emp.id }}">{{ emp.name }} · {{ emp.job_title | default('') }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <div class="form-group">
+                <label style="font-size:12px; font-weight:600; color:#374151;">Skill</label>
+                <select id="endorse-skill" class="form-control input-sm">
+                  <option value="">— select skill —</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-sm-3">
+              <div class="form-group">
+                <label style="font-size:12px; font-weight:600; color:#374151;">Proficiency</label>
+                <div style="margin-top:6px;">
+                  <div class="star-rating" id="endorse-stars">
+                    <span class="star" data-v="1">&#9733;</span>
+                    <span class="star" data-v="2">&#9733;</span>
+                    <span class="star" data-v="3">&#9733;</span>
+                    <span class="star" data-v="4">&#9733;</span>
+                    <span class="star" data-v="5">&#9733;</span>
+                  </div>
+                  <input type="hidden" id="endorse-prof" value="0">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+            <div style="flex:1;">
+              <textarea id="endorse-note" class="form-control" rows="2" placeholder="Endorsement note (optional)…" style="font-size:12px; resize:none;"></textarea>
+            </div>
+            <button class="btn btn-primary" id="btn-endorse" style="height:58px; padding:0 20px; font-weight:600;">
+              <i class="fa fa-check"></i> Endorse
+            </button>
+          </div>
+        </div>
+
+        {# Employee skill matrix — shown after selecting employee #}
+        <div id="emp-skill-matrix" style="margin-top:16px; display:none;">
+          <h5 style="font-size:13px; font-weight:700; color:#111827; margin:0 0 10px;">
+            <i class="fa fa-th"></i> Skill Profile
+          </h5>
+          <table class="erp-table">
+            <thead>
+              <tr>
+                <th>Skill</th>
+                <th>Domain</th>
+                <th>Proficiency</th>
+                <th>Last Updated</th>
+                <th>Endorsed By</th>
+              </tr>
+            </thead>
+            <tbody id="emp-skill-tbody">
+              <tr><td colspan="5" style="text-align:center; color:#9ca3af; padding:20px;">Select an employee to view skills.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# Tab: Gap Analysis #}
+      <div id="panel-gap" class="sk-panel" style="padding:20px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:180px;">
+            <label style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Target Position</label>
+            <select id="gap-position" class="form-control input-sm" onchange="loadGapAnalysis()">
+              <option value="">— select position —</option>
+              {% for pos in position_codes | default([]) %}
+              <option value="{{ pos.code }}">{{ pos.code }} — {{ pos.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Employee</label>
+            <select id="gap-employee" class="form-control input-sm" onchange="loadGapAnalysis()">
+              <option value="">— select employee —</option>
+              {% for emp in employee_skills | default([]) %}
+              <option value="{{ emp.id }}">{{ emp.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div id="gap-results">
+          <div style="text-align:center; padding:40px; color:#9ca3af;">
+            <i class="fa fa-bar-chart fa-2x" style="margin-bottom:10px; display:block;"></i>
+            Select a position and employee to see skill gaps.
+          </div>
+        </div>
+      </div>
+
+      {# Tab: Internal Candidates #}
+      <div id="panel-match" class="sk-panel" style="padding:20px;">
+        <div style="margin-bottom:16px;">
+          <label style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Find candidates for position</label>
+          <div style="display:flex; gap:10px;">
+            <select id="match-position" class="form-control input-sm" style="flex:1;" onchange="loadMatches()">
+              <option value="">— select position —</option>
+              {% for pos in position_codes | default([]) %}
+              <option value="{{ pos.code }}">{{ pos.code }} — {{ pos.title }}</option>
+              {% endfor %}
+            </select>
+            <select id="match-min-score" class="form-control input-sm" style="width:120px;" onchange="loadMatches()">
+              <option value="50">Min 50%</option>
+              <option value="60">Min 60%</option>
+              <option value="70" selected>Min 70%</option>
+              <option value="80">Min 80%</option>
+              <option value="90">Min 90%</option>
+            </select>
+          </div>
+        </div>
+        <div id="match-results">
+          <div style="text-align:center; padding:40px; color:#9ca3af;">
+            <i class="fa fa-users fa-2x" style="margin-bottom:10px; display:block;"></i>
+            Select a position to find internal candidates.
+          </div>
+        </div>
+      </div>
+
+      {# Tab: Learning #}
+      <div id="panel-lms" class="sk-panel" style="padding:20px;">
+        <p style="font-size:13px; color:#6b7280; margin:0 0 14px;">
+          <i class="fa fa-info-circle"></i>
+          Select a skill from the taxonomy to see recommended courses.
+        </p>
+        <div id="lms-results">
+          <div style="text-align:center; padding:40px; color:#9ca3af;">
+            <i class="fa fa-graduation-cap fa-2x" style="margin-bottom:10px; display:block;"></i>
+            No skill selected yet.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /sk-right #}
+
+</div>{# /sk-layout #}
+
+{# ── Add Skill Modal ── #}
+<div class="modal fade" id="modal-add-skill" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;"><i class="fa fa-plus-circle" style="color:#1a56db;"></i> Add Skill to Taxonomy</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-size:12px; font-weight:600;">Skill Name</label>
+          <input type="text" id="new-skill-name" class="form-control" placeholder="e.g. Apache Kafka">
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Domain</label>
+              <select id="new-skill-domain" class="form-control">
+                {% for domain in domains | default([]) %}
+                <option value="{{ domain.id }}">{{ domain.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label style="font-size:12px; font-weight:600;">Category</label>
+              <select id="new-skill-category" class="form-control">
+                <option value="">— select domain first —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px; font-weight:600;">Description</label>
+          <textarea class="form-control" id="new-skill-desc" rows="2" style="resize:none;"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px; font-weight:600;">Demand Trend</label>
+          <select id="new-skill-demand" class="form-control">
+            <option value="STABLE">Stable</option>
+            <option value="RISING">Rising</option>
+            <option value="FALLING">Falling</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-skill" style="font-weight:600;">
+          <i class="fa fa-save"></i> Save Skill
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sk-toast-wrap" id="sk-toast-wrap"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var DOMAINS   = {{ domains | tojson if domains else '[]' }};
+  var EMP_SKILLS = {{ employee_skills | tojson if employee_skills else '[]' }};
+  var POS_CODES  = {{ position_codes | tojson if position_codes else '[]' }};
+
+  /* ── utilities ── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var w = document.getElementById('sk-toast-wrap');
+    var el = document.createElement('div');
+    el.className = 'sk-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    w.appendChild(el);
+    setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 4200);
+  }
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function profToStars(p) {
+    var labels = ['','Novice','Basic','Proficient','Advanced','Expert'];
+    return labels[p] || '';
+  }
+
+  /* ── taxonomy tree interactions ── */
+  window.toggleDomain = function(btn) {
+    var list = btn.nextElementSibling;
+    var open = list.classList.toggle('open');
+    btn.classList.toggle('open', open);
+  };
+
+  window.selectCategory = function(btn, domainId, catId) {
+    document.querySelectorAll('.sk-cat-btn').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.sk-chip-list').forEach(function(l){ l.classList.remove('open'); });
+    btn.classList.add('active');
+    var chipList = document.querySelector('.sk-chip-list[data-cat="' + catId + '"]');
+    if (chipList) chipList.classList.add('open');
+  };
+
+  var _selectedSkill = null;
+  window.selectSkill = function(chip, skill) {
+    document.querySelectorAll('.sk-chip').forEach(function(c){ c.classList.remove('selected'); });
+    chip.classList.add('selected');
+    _selectedSkill = skill;
+
+    /* auto-fill skill select in endorse panel */
+    var sel = document.getElementById('endorse-skill');
+    var found = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === String(skill.id)) { sel.selectedIndex = i; found = true; break; }
+    }
+    if (!found) {
+      var opt = document.createElement('option');
+      opt.value = skill.id; opt.textContent = skill.name; opt.selected = true;
+      sel.appendChild(opt);
+    }
+
+    /* switch to LMS tab and load courses */
+    var lmsTab = document.querySelector('.sk-tab[data-tab="lms"]');
+    if (lmsTab) { /* don't auto-switch, just load */  }
+    loadLMSCourses(skill);
+  };
+
+  /* ── tab switching ── */
+  window.switchTab = function(tab) {
+    document.querySelectorAll('.sk-tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.sk-panel').forEach(function(p){ p.classList.remove('active'); });
+    tab.classList.add('active');
+    var panel = document.getElementById('panel-' + tab.getAttribute('data-tab'));
+    if (panel) panel.classList.add('active');
+  };
+
+  /* ── star rating ── */
+  var _prof = 0;
+  document.querySelectorAll('#endorse-stars .star').forEach(function(star, idx) {
+    star.addEventListener('mouseover', function() {
+      document.querySelectorAll('#endorse-stars .star').forEach(function(s, i){
+        s.classList.toggle('lit', i <= idx);
+      });
+    });
+    star.addEventListener('mouseout', function() {
+      document.querySelectorAll('#endorse-stars .star').forEach(function(s, i){
+        s.classList.toggle('lit', i < _prof);
+      });
+    });
+    star.addEventListener('click', function() {
+      _prof = idx + 1;
+      document.getElementById('endorse-prof').value = _prof;
+      document.querySelectorAll('#endorse-stars .star').forEach(function(s, i){
+        s.classList.toggle('lit', i < _prof);
+      });
+    });
+  });
+
+  /* ── endorse submit ── */
+  document.getElementById('btn-endorse').addEventListener('click', function() {
+    var empId  = document.getElementById('endorse-employee').value;
+    var skillId = document.getElementById('endorse-skill').value;
+    var prof   = parseInt(document.getElementById('endorse-prof').value) || 0;
+    var note   = document.getElementById('endorse-note').value.trim();
+
+    if (!empId)   { toast('Select an employee.', 'error'); return; }
+    if (!skillId) { toast('Select a skill.', 'error'); return; }
+    if (!prof)    { toast('Set a proficiency level (1–5 stars).', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/hcm/skills/endorse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ employee_id: empId, skill_id: skillId, proficiency: prof, note: note })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+    .then(function(res){
+      if (res.ok) {
+        toast('Skill endorsed — ' + profToStars(prof) + ' (' + prof + '/5)', 'success');
+        loadEmpSkills(empId);
+      } else {
+        toast(res.data.message || 'Endorsement failed.', 'error');
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); })
+    .finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fa fa-check"></i> Endorse'; });
+  });
+
+  /* ── load employee skills ── */
+  document.getElementById('endorse-employee').addEventListener('change', function() {
+    if (this.value) loadEmpSkills(this.value);
+  });
+
+  function loadEmpSkills(empId) {
+    var tbody = document.getElementById('emp-skill-tbody');
+    var matrix = document.getElementById('emp-skill-matrix');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;"><i class="fa fa-spinner fa-spin"></i></td></tr>';
+    matrix.style.display = '';
+
+    fetch('/api/hcm/skills/employee/' + empId, { credentials: 'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(skills){
+      if (!skills.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:16px;">No skills endorsed yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = skills.map(function(s){
+        var stars = '';
+        for (var i=1; i<=5; i++) stars += '<span style="color:' + (i<=s.proficiency ? '#f59e0b' : '#d1d5db') + ';">&#9733;</span>';
+        return '<tr><td><strong>' + _esc(s.skill_name) + '</strong></td>' +
+               '<td style="font-size:12px;color:#6b7280;">' + _esc(s.domain_name||'') + '</td>' +
+               '<td>' + stars + ' <span style="font-size:11px;color:#6b7280;">(' + _esc(profToStars(s.proficiency)) + ')</span></td>' +
+               '<td style="font-size:12px;color:#9ca3af;">' + _esc(s.last_updated||'') + '</td>' +
+               '<td style="font-size:12px;">' + _esc(s.endorsed_by||'Self') + '</td></tr>';
+      }).join('');
+    })
+    .catch(function(){ tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;padding:12px;">Failed to load.</td></tr>'; });
+  }
+
+  /* ── gap analysis ── */
+  window.loadGapAnalysis = function() {
+    var pos = document.getElementById('gap-position').value;
+    var emp = document.getElementById('gap-employee').value;
+    var el  = document.getElementById('gap-results');
+    if (!pos || !emp) return;
+
+    el.innerHTML = '<div style="text-align:center;padding:24px;"><i class="fa fa-spinner fa-spin fa-2x"></i></div>';
+
+    fetch('/api/hcm/skills/gap?position_code=' + encodeURIComponent(pos) + '&employee_id=' + encodeURIComponent(emp), { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(gaps){
+      if (!gaps.length) {
+        el.innerHTML = '<div style="text-align:center;padding:32px;color:#10b981;"><i class="fa fa-check-circle fa-2x" style="margin-bottom:8px;display:block;"></i><strong>No skill gaps!</strong> Employee meets all requirements.</div>';
+        return;
+      }
+      var rows = gaps.map(function(g){
+        var gap = (g.required_level||0) - (g.current_level||0);
+        var pct = Math.min(100, Math.round(((g.current_level||0)/(g.required_level||1))*100));
+        var color = gap <= 0 ? '#10b981' : gap === 1 ? '#f59e0b' : '#ef4444';
+        return '<tr>' +
+          '<td><strong>' + _esc(g.skill_name) + '</strong></td>' +
+          '<td style="text-align:center;">' + (g.required_level||0) + '/5</td>' +
+          '<td style="text-align:center;">' + (g.current_level||0) + '/5</td>' +
+          '<td style="text-align:center; font-weight:700; color:' + color + ';">' + (gap > 0 ? '+'+gap : gap) + '</td>' +
+          '<td><div class="gap-bar-wrap"><div class="gap-bar-fill" style="width:' + pct + '%;background:' + color + ';"></div></div></td>' +
+          '<td><button class="btn btn-xs btn-default" onclick="showLMSForSkill(\'' + _esc(g.skill_id) + '\',\'' + _esc(g.skill_name) + '\')"><i class="fa fa-graduation-cap"></i> Learn</button></td>' +
+        '</tr>';
+      });
+      el.innerHTML =
+        '<div style="overflow-x:auto;">' +
+        '<table class="erp-table">' +
+          '<thead><tr><th>Skill</th><th style="text-align:center;">Required</th><th style="text-align:center;">Current</th><th style="text-align:center;">Gap</th><th>Coverage</th><th></th></tr></thead>' +
+          '<tbody>' + rows.join('') + '</tbody>' +
+        '</table></div>' +
+        '<p style="font-size:11px;color:#9ca3af;margin:8px 0 0;"><i class="fa fa-info-circle"></i> Gap = required − current proficiency level</p>';
+    })
+    .catch(function(){ el.innerHTML = '<div style="color:#ef4444;padding:12px;">Failed to load gap data.</div>'; });
+  };
+
+  /* ── internal candidate matching ── */
+  window.loadMatches = function() {
+    var pos = document.getElementById('match-position').value;
+    var min = document.getElementById('match-min-score').value;
+    var el  = document.getElementById('match-results');
+    if (!pos) return;
+
+    el.innerHTML = '<div style="text-align:center;padding:24px;"><i class="fa fa-spinner fa-spin fa-2x"></i></div>';
+
+    fetch('/api/hcm/skills/match?position_code=' + encodeURIComponent(pos) + '&min_score=' + encodeURIComponent(min), { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(candidates){
+      if (!candidates.length) {
+        el.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;"><i class="fa fa-search fa-2x" style="margin-bottom:8px;display:block;"></i>No internal candidates above ' + min + '% match.</div>';
+        return;
+      }
+      candidates.sort(function(a,b){ return (b.match_score||0) - (a.match_score||0); });
+      var rows = candidates.map(function(c){
+        var pct = Math.round(c.match_score||0);
+        var color = pct >= 85 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444';
+        var r   = 18;
+        var circ = 2 * Math.PI * r;
+        var dash = (pct / 100) * circ;
+        var ring =
+          '<div class="match-ring">' +
+          '<svg width="40" height="40" viewBox="0 0 40 40">' +
+          '<circle cx="20" cy="20" r="' + r + '" fill="none" stroke="#e5e7eb" stroke-width="3"/>' +
+          '<circle cx="20" cy="20" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="3"' +
+          ' stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '"' +
+          ' stroke-linecap="round" transform="rotate(-90 20 20)"/>' +
+          '</svg>' +
+          '<span class="match-ring-label" style="color:' + color + ';">' + pct + '%</span>' +
+          '</div>';
+        return '<tr>' +
+          '<td>' + ring + '</td>' +
+          '<td><strong>' + _esc(c.name) + '</strong><br><span style="font-size:11px;color:#9ca3af;">' + _esc(c.job_title||'') + ' · ' + _esc(c.department||'') + '</span></td>' +
+          '<td style="font-size:12px;color:#374151;">' + (c.matching_skills||0) + ' / ' + (c.required_skills||0) + ' skills</td>' +
+          '<td>' + (c.missing_skills||[]).slice(0,3).map(function(s){ return '<span style="font-size:10px;background:#fee2e2;color:#991b1b;border-radius:10px;padding:1px 6px;margin-right:3px;">' + _esc(s) + '</span>'; }).join('') + '</td>' +
+          '<td><a href="/hcm/employees/' + _esc(c.id) + '" class="btn btn-xs btn-default">Profile</a></td>' +
+        '</tr>';
+      });
+      el.innerHTML =
+        '<div style="overflow-x:auto;">' +
+        '<table class="erp-table">' +
+          '<thead><tr><th>Match</th><th>Employee</th><th>Skills Met</th><th>Missing</th><th></th></tr></thead>' +
+          '<tbody>' + rows.join('') + '</tbody>' +
+        '</table></div>';
+    })
+    .catch(function(){ el.innerHTML = '<div style="color:#ef4444;padding:12px;">Failed to load candidates.</div>'; });
+  };
+
+  /* ── LMS courses ── */
+  function loadLMSCourses(skill) {
+    var el = document.getElementById('lms-results');
+    el.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fa fa-spinner fa-spin"></i></div>';
+
+    fetch('/api/hcm/skills/' + encodeURIComponent(skill.id) + '/courses', { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(courses){
+      if (!courses.length) {
+        el.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;"><i class="fa fa-book fa-2x" style="margin-bottom:8px;display:block;"></i>No courses found for <strong>' + _esc(skill.name) + '</strong>.</div>';
+        return;
+      }
+      el.innerHTML =
+        '<p style="font-size:13px;font-weight:600;color:#111827;margin:0 0 12px;">Courses for <strong>' + _esc(skill.name) + '</strong></p>' +
+        courses.map(function(c){
+          var levelColor = { BEGINNER:'#10b981', INTERMEDIATE:'#f59e0b', ADVANCED:'#3b82f6' }[c.level] || '#9ca3af';
+          return '<div class="lms-card">' +
+            '<div class="lms-icon"><i class="fa fa-play-circle"></i></div>' +
+            '<div class="lms-body">' +
+              '<p class="lms-title">' + _esc(c.title) + '</p>' +
+              '<p class="lms-meta">' + _esc(c.provider||'') + ' &bull; ' +
+                '<span style="color:' + levelColor + ';font-weight:600;">' + _esc(c.level||'') + '</span>' +
+                (c.duration_hours ? ' &bull; ' + c.duration_hours + 'h' : '') +
+              '</p>' +
+            '</div>' +
+            '<a href="' + _esc(c.url||'#') + '" target="_blank" class="btn btn-xs btn-primary">Enroll</a>' +
+          '</div>';
+        }).join('');
+    })
+    .catch(function(){ el.innerHTML = '<div style="color:#ef4444;padding:12px;">Failed to load courses.</div>'; });
+  }
+
+  window.showLMSForSkill = function(skillId, skillName) {
+    var lmsTab = document.querySelector('.sk-tab[data-tab="lms"]');
+    switchTab(lmsTab);
+    loadLMSCourses({ id: skillId, name: skillName });
+  };
+
+  /* ── skill search filter ── */
+  document.getElementById('skill-search-input').addEventListener('input', function() {
+    var q = this.value.toLowerCase().trim();
+    document.querySelectorAll('.sk-chip').forEach(function(chip) {
+      var name = (chip.getAttribute('data-skill-name') || '').toLowerCase();
+      chip.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+    });
+    /* Auto-expand domains with matches */
+    if (q) {
+      document.querySelectorAll('.sk-domain').forEach(function(domain) {
+        var hasMatch = domain.querySelectorAll('.sk-chip:not([style*="none"])').length > 0;
+        var list = domain.querySelector('.sk-cat-list');
+        var btn  = domain.querySelector('.sk-domain-btn');
+        if (hasMatch) { list.classList.add('open'); btn.classList.add('open'); }
+      });
+    }
+  });
+
+  /* ── save new skill ── */
+  document.getElementById('btn-save-skill').addEventListener('click', function() {
+    var name   = document.getElementById('new-skill-name').value.trim();
+    var domain = document.getElementById('new-skill-domain').value;
+    var cat    = document.getElementById('new-skill-category').value;
+    var desc   = document.getElementById('new-skill-desc').value.trim();
+    var demand = document.getElementById('new-skill-demand').value;
+    if (!name) { toast('Skill name is required.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/hcm/skills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name, domain_id: domain, category_id: cat, description: desc, demand_trend: demand })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
+    .then(function(res){
+      if (res.ok) {
+        $('#modal-add-skill').modal('hide');
+        toast('Skill "' + name + '" added to taxonomy.', 'success');
+        setTimeout(function(){ window.location.reload(); }, 1500);
+      } else {
+        toast(res.data.message || 'Failed to add skill.', 'error');
+      }
+    })
+    .catch(function(err){ toast('Network error: ' + err.message, 'error'); })
+    .finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fa fa-save"></i> Save Skill'; });
+  });
+
+  /* ── populate endorse skill select from all domains ── */
+  (function populateSkillSelect() {
+    var sel = document.getElementById('endorse-skill');
+    DOMAINS.forEach(function(domain) {
+      (domain.categories || []).forEach(function(cat) {
+        (cat.skills || []).forEach(function(skill) {
+          var opt = document.createElement('option');
+          opt.value = skill.id; opt.textContent = skill.name;
+          sel.appendChild(opt);
+        });
+      });
+    });
+  })();
+
+}());
+</script>
+{% endblock %}

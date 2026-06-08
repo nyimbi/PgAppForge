@@ -1,0 +1,342 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Events Manager — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .evt-capacity-bar { height:6px; background:var(--erp-border); border-radius:3px; overflow:hidden; width:100px; display:inline-block; vertical-align:middle; }
+  .evt-capacity-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+  .evt-checkin-box { background:var(--erp-surface); border:2px dashed var(--erp-border); border-radius:var(--erp-radius-lg); padding:20px 24px; }
+  .evt-checkin-box:focus-within { border-color:var(--erp-primary); }
+  .evt-revenue-row { display:flex; gap:24px; flex-wrap:wrap; }
+  .evt-revenue-item { flex:1; min-width:160px; background:var(--erp-neutral-lt); border-radius:var(--erp-radius); padding:12px 16px; }
+  .evt-revenue-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--erp-text-muted); margin-bottom:4px; }
+  .evt-revenue-value { font-size:22px; font-weight:800; color:var(--erp-text); font-variant-numeric:tabular-nums; }
+  .evt-ticket-row td { vertical-align:middle; }
+  .evt-sidebar { position:sticky; top:72px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-calendar"></i> Events Management</h1>
+    <p class="erp-page-subtitle">Manage events, ticket sales, check-ins, and revenue tracking.</p>
+  </div>
+  <a href="/crm/events/add" class="btn btn-primary btn-sm" style="margin-top:4px;">
+    <i class="fa fa-plus"></i> Create Event
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+
+  {# ── Left: Events list ──────────────────────────────────────────────── #}
+  <div class="col-md-5">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);display:flex;align-items:center;justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-list"></i> All Events</h4>
+        <select id="evt-status-filter" class="form-control input-sm" style="width:auto;">
+          <option value="">All Statuses</option>
+          <option value="DRAFT">Draft</option>
+          <option value="PUBLISHED">Published</option>
+          <option value="CANCELLED">Cancelled</option>
+          <option value="COMPLETED">Completed</option>
+        </select>
+      </div>
+      <table class="erp-table" id="events-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Date</th>
+            <th>Capacity</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if events %}
+            {% for evt in events %}
+            {% set sold = evt.tickets_sold | default(0) %}
+            {% set cap  = evt.max_capacity | default(1) %}
+            {% set pct  = [(sold / cap * 100), 100] | min | int %}
+            {% set fill = '#e02424' if pct >= 90 else ('#ff5a1f' if pct >= 70 else '#0e9f6e') %}
+            <tr data-status="{{ evt.status }}" data-id="{{ evt.id }}"
+                style="cursor:pointer;" onclick="selectEvent({{ evt.id }})">
+              <td>
+                <div style="font-weight:600;font-size:13px;">{{ evt.title }}</div>
+                <div style="font-size:11px;color:var(--erp-text-muted);">
+                  <span class="erp-badge erp-badge-blue" style="font-size:10px;">{{ evt.event_type | default('EVENT') }}</span>
+                  {% if evt.venue %}&nbsp;{{ evt.venue }}{% endif %}
+                </div>
+              </td>
+              <td style="white-space:nowrap;font-size:12px;">
+                {{ evt.start_datetime | default('—') }}
+              </td>
+              <td>
+                <div style="font-size:11px;margin-bottom:3px;color:var(--erp-text-muted);">{{ sold }}/{{ cap }}</div>
+                <div class="evt-capacity-bar">
+                  <div class="evt-capacity-fill" style="width:{{ pct }}%;background:{{ fill }};"></div>
+                </div>
+              </td>
+              <td>
+                {% set s = evt.status | default('DRAFT') %}
+                <span class="erp-badge {{ 'erp-badge-green' if s == 'PUBLISHED' else ('erp-badge-red' if s == 'CANCELLED' else ('erp-badge-gray' if s == 'COMPLETED' else 'erp-badge-yellow')) }}">
+                  {{ s }}
+                </span>
+              </td>
+              <td>
+                <button class="btn btn-xs btn-default" onclick="event.stopPropagation();selectEvent({{ evt.id }})">
+                  <i class="fa fa-eye"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="5" class="erp-text-center" style="padding:32px;color:var(--erp-text-muted);">
+              No events yet. <a href="/crm/events/add">Create the first event</a>.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Right: Selected event detail ───────────────────────────────────── #}
+  <div class="col-md-7">
+    {% set ev = selected_event %}
+    {% if ev %}
+    <div class="evt-sidebar">
+
+      {# Event header card #}
+      <div class="erp-card erp-mb-16">
+        <div class="erp-card-accent erp-card-accent-primary"></div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div>
+            <h3 style="margin:0 0 4px;font-size:18px;font-weight:700;">{{ ev.title }}</h3>
+            <div style="font-size:12px;color:var(--erp-text-muted);">
+              <i class="fa fa-calendar-o"></i> {{ ev.start_datetime | default('TBD') }}
+              {% if ev.venue %}&nbsp;&bull;&nbsp;<i class="fa fa-map-marker"></i> {{ ev.venue }}{% endif %}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            {% if ev.status == 'DRAFT' %}
+            <form method="POST" action="/crm/events/{{ ev.id }}/publish" style="display:inline;">
+              <button type="submit" class="btn btn-sm btn-success">
+                <i class="fa fa-globe"></i> Publish Event
+              </button>
+            </form>
+            {% endif %}
+            {% if ev.status in ['PUBLISHED', 'DRAFT'] %}
+            <form method="POST" action="/crm/events/{{ ev.id }}/cancel" style="display:inline;"
+                  onsubmit="return confirm('Cancel this event?');">
+              <button type="submit" class="btn btn-sm btn-danger">
+                <i class="fa fa-ban"></i> Cancel Event
+              </button>
+            </form>
+            {% endif %}
+            <a href="/crm/events/edit/{{ ev.id }}" class="btn btn-sm btn-default">
+              <i class="fa fa-pencil"></i> Edit
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {# Revenue summary #}
+      <div class="erp-card erp-mb-16">
+        <p class="erp-section-title"><i class="fa fa-money"></i> Revenue Summary</p>
+        <div class="evt-revenue-row">
+          <div class="evt-revenue-item">
+            <div class="evt-revenue-label">Ticket Revenue</div>
+            <div class="evt-revenue-value">
+              {% if ev.total_ticket_revenue is defined %}
+                KES {{ '{:,.0f}'.format(ev.total_ticket_revenue / 100) }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="evt-revenue-item">
+            <div class="evt-revenue-label">Sponsor Revenue</div>
+            <div class="evt-revenue-value">
+              {% if ev.sponsor_revenue is defined %}
+                KES {{ '{:,.0f}'.format(ev.sponsor_revenue / 100) }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="evt-revenue-item" style="background:var(--erp-primary-lt);">
+            <div class="evt-revenue-label" style="color:var(--erp-primary);">Total Revenue</div>
+            <div class="evt-revenue-value" style="color:var(--erp-primary);">
+              {% if ev.total_ticket_revenue is defined and ev.sponsor_revenue is defined %}
+                KES {{ '{:,.0f}'.format((ev.total_ticket_revenue + ev.sponsor_revenue) / 100) }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Ticket types #}
+      {% if ticket_types %}
+      <div class="erp-table-wrap erp-mb-16">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--erp-border);">
+          <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-ticket"></i> Ticket Types</h4>
+        </div>
+        <table class="erp-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Price</th>
+              <th>Sold / Qty</th>
+              <th>Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tt in ticket_types %}
+            {% set tpct = [(tt.sold_count / tt.quantity * 100), 100] | min | int if tt.quantity else 0 %}
+            <tr class="evt-ticket-row">
+              <td style="font-weight:600;">{{ tt.name }}</td>
+              <td>KES {{ '{:,.0f}'.format(tt.price_cents / 100) if tt.price_cents is defined else '—' }}</td>
+              <td>{{ tt.sold_count | default(0) }} / {{ tt.quantity | default(0) }}</td>
+              <td>
+                <div class="evt-capacity-bar" style="width:80px;">
+                  <div class="evt-capacity-fill" style="width:{{ tpct }}%;background:{{ '#e02424' if tpct >= 90 else ('#ff5a1f' if tpct >= 70 else '#1a56db') }};"></div>
+                </div>
+                <span style="font-size:11px;color:var(--erp-text-muted);margin-left:6px;">{{ tpct }}%</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {# Check-in interface #}
+      {% if ev.status == 'PUBLISHED' %}
+      <div class="erp-card erp-mb-16">
+        <p class="erp-section-title"><i class="fa fa-qrcode"></i> Check-In</p>
+        <div class="evt-checkin-box">
+          <form id="checkin-form" onsubmit="doCheckIn(event)">
+            <div class="input-group">
+              <input type="text" id="ticket-ref-input" class="form-control"
+                     placeholder="Scan or enter ticket reference…"
+                     autocomplete="off" autofocus>
+              <span class="input-group-btn">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fa fa-check"></i> Check In
+                </button>
+              </span>
+            </div>
+          </form>
+          <div id="checkin-result" style="margin-top:10px;min-height:24px;font-size:13px;"></div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+    {% else %}
+    <div class="erp-card" style="padding:40px;text-align:center;color:var(--erp-text-muted);">
+      <i class="fa fa-calendar-o" style="font-size:40px;opacity:.25;display:block;margin-bottom:12px;"></i>
+      <p style="margin:0;">Select an event from the list to view details and manage check-ins.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>{# /row #}
+
+{# ── Check-in confirmation modal ────────────────────────────────────── #}
+<div class="modal fade" id="checkin-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header" id="checkin-modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" id="checkin-modal-title">Check-In Result</h4>
+      </div>
+      <div class="modal-body" id="checkin-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-default btn-sm" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Status filter ─────────────────────────────────────────────────── */
+  var filterSel = document.getElementById('evt-status-filter');
+  if (filterSel) {
+    filterSel.addEventListener('change', function () {
+      var val = this.value;
+      var rows = document.querySelectorAll('#events-table tbody tr[data-status]');
+      rows.forEach(function (tr) {
+        tr.style.display = (!val || tr.getAttribute('data-status') === val) ? '' : 'none';
+      });
+    });
+  }
+
+  /* ── Row selection highlight ───────────────────────────────────────── */
+  window.selectEvent = function (id) {
+    document.querySelectorAll('#events-table tbody tr').forEach(function (tr) {
+      tr.style.background = tr.getAttribute('data-id') == String(id) ? 'var(--erp-primary-lt)' : '';
+    });
+    /* navigate to same page with selected_id param */
+    var url = new URL(window.location.href);
+    url.searchParams.set('selected_id', id);
+    window.location.href = url.toString();
+  };
+
+  /* Highlight current selection on load */
+  {% if selected_event %}
+  (function () {
+    var row = document.querySelector('#events-table tbody tr[data-id="{{ selected_event.id }}"]');
+    if (row) row.style.background = 'var(--erp-primary-lt)';
+  }());
+  {% endif %}
+
+  /* ── Check-in submit ───────────────────────────────────────────────── */
+  window.doCheckIn = function (e) {
+    e.preventDefault();
+    var inp = document.getElementById('ticket-ref-input');
+    var ref = inp ? inp.value.trim() : '';
+    if (!ref) return;
+    var result = document.getElementById('checkin-result');
+    if (result) result.innerHTML = '<span style="color:var(--erp-text-muted);"><i class="fa fa-spinner fa-spin"></i> Checking in…</span>';
+
+    fetch('/api/crm/events/checkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({ ticket_ref: ref, event_id: {{ selected_event.id if selected_event else 'null' }} })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var ok = data.status === 'ok' || data.success;
+      var msg = data.message || (ok ? 'Checked in successfully.' : 'Check-in failed.');
+      if (result) {
+        result.innerHTML = '<span style="color:' + (ok ? 'var(--erp-success)' : 'var(--erp-danger)') + ';">' +
+          '<i class="fa ' + (ok ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + _esc(msg) + '</span>';
+      }
+      if (inp) { inp.value = ''; inp.focus(); }
+    })
+    .catch(function () {
+      if (result) result.innerHTML = '<span style="color:var(--erp-danger);"><i class="fa fa-times-circle"></i> Network error.</span>';
+    });
+  };
+
+  function getCsrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? m[1] : '';
+  }
+}());
+</script>
+{% endblock %}

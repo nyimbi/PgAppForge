@@ -1,0 +1,349 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Hedge Relationships — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hedge-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; margin-bottom:24px; }
+  .hedge-card { background:#fff; border:1px solid #dde1e7; border-radius:8px; padding:20px; position:relative; overflow:hidden; transition:box-shadow .15s; }
+  .hedge-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.08); }
+  .hedge-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  .hedge-card-title { font-size:14px; font-weight:700; color:#111827; margin:0 0 4px; }
+  .hedge-card-ref   { font-size:11px; color:#9ca3af; margin:0; }
+  .hedge-eff-badge { display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:700; flex-shrink:0; }
+  .hedge-eff-badge.effective   { background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
+  .hedge-eff-badge.ineffective { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+  .hedge-eff-badge.pending     { background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; }
+  .hedge-meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .hedge-meta-item { }
+  .hedge-meta-label { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; font-weight:600; margin:0 0 2px; }
+  .hedge-meta-value { font-size:12px; color:#374151; margin:0; font-weight:600; }
+  .hedge-card-actions { display:flex; gap:8px; border-top:1px solid #f3f4f6; padding-top:12px; margin-top:4px; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* type badges */
+  .badge-cashflow  { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-fairvalue { background:#e0e7ff; color:#3730a3; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-netinvest { background:#fce7f3; color:#9d174d; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-active    { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-designated { background:#fef3c7; color:#92400e; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-dedesignated { background:#fee2e2; color:#991b1b; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* effectiveness table */
+  .eff-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .eff-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:9px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .eff-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  .eff-table tr:last-child td { border-bottom:none; }
+  .eff-table tr:hover td { background:#f9fafb; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .erp-toast.warning { border-left:4px solid #f59e0b; }
+  /* summary bar */
+  .hedge-summary-bar { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:24px; }
+  .hedge-summary-item { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:14px 20px; flex:1; min-width:120px; text-align:center; }
+  .hedge-summary-num  { font-size:28px; font-weight:700; color:#111827; line-height:1; margin-bottom:4px; }
+  .hedge-summary-lbl  { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Hedge Relationships</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">
+      IAS 39 / IFRS 9 hedge accounting — effectiveness testing &amp; OCI recognition
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary Bar ──────────────────────────────────────────────────────────── #}
+{% set effective_count   = hedges | selectattr('is_effective', 'equalto', true)  | list | length if hedges else 0 %}
+{% set ineffective_count = hedges | selectattr('is_effective', 'equalto', false) | list | length if hedges else 0 %}
+{% set total_count       = hedges | length if hedges else 0 %}
+<div class="hedge-summary-bar">
+  <div class="hedge-summary-item">
+    <div class="hedge-summary-num">{{ total_count }}</div>
+    <div class="hedge-summary-lbl">Total Relationships</div>
+  </div>
+  <div class="hedge-summary-item" style="border-color:#6ee7b7;">
+    <div class="hedge-summary-num" style="color:#10b981;">{{ effective_count }}</div>
+    <div class="hedge-summary-lbl">Effective (80–125%)</div>
+  </div>
+  <div class="hedge-summary-item" style="border-color:#fca5a5;">
+    <div class="hedge-summary-num" style="color:#ef4444;">{{ ineffective_count }}</div>
+    <div class="hedge-summary-lbl">Ineffective / Untested</div>
+  </div>
+  <div class="hedge-summary-item" style="border-color:#93c5fd;">
+    <div class="hedge-summary-num" style="color:#1a56db;">
+      {{ total_count - effective_count - ineffective_count }}
+    </div>
+    <div class="hedge-summary-lbl">Pending Test</div>
+  </div>
+</div>
+
+{# ── Hedge Relationship Cards ─────────────────────────────────────────────── #}
+{% if hedges %}
+<div class="hedge-grid">
+  {% for hedge in hedges %}
+    {# determine effectiveness from results lookup #}
+    {% set eff_result = None %}
+    {% if effectiveness_results %}
+      {% for r in effectiveness_results %}
+        {% if r.hedge_id == hedge.id %}{% set eff_result = r %}{% endif %}
+      {% endfor %}
+    {% endif %}
+
+    {% set is_eff = (eff_result and eff_result.ratio >= 0.80 and eff_result.ratio <= 1.25) %}
+    {% set has_tested = eff_result is not none %}
+
+  <div class="hedge-card" id="hedge-card-{{ hedge.id }}">
+    <div class="hedge-card-top">
+      <div>
+        <p class="hedge-card-title">{{ hedge.description or hedge.hedge_ref }}</p>
+        <p class="hedge-card-ref">
+          Ref: {{ hedge.hedge_ref }}
+          &mdash;
+          {% if hedge.hedged_item_type == 'CASH_FLOW' %}<span class="badge-cashflow">Cash Flow</span>
+          {% elif hedge.hedged_item_type == 'FAIR_VALUE' %}<span class="badge-fairvalue">Fair Value</span>
+          {% elif hedge.hedged_item_type == 'NET_INVESTMENT' %}<span class="badge-netinvest">Net Investment</span>
+          {% else %}<span class="badge-cashflow">{{ hedge.hedged_item_type }}</span>{% endif %}
+        </p>
+      </div>
+      <div>
+        {% if has_tested %}
+          {% if is_eff %}
+          <div class="hedge-eff-badge effective">
+            <i class="fa fa-check-circle"></i>
+            {{ "{:.0f}".format(eff_result.ratio * 100) }}%
+          </div>
+          {% else %}
+          <div class="hedge-eff-badge ineffective">
+            <i class="fa fa-times-circle"></i>
+            {{ "{:.0f}".format(eff_result.ratio * 100) }}%
+          </div>
+          {% endif %}
+        {% else %}
+          <div class="hedge-eff-badge pending">
+            <i class="fa fa-question-circle"></i>
+            Untested
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="hedge-meta-grid">
+      <div class="hedge-meta-item">
+        <p class="hedge-meta-label">Instrument</p>
+        <p class="hedge-meta-value">{{ hedge.instrument_type }}</p>
+      </div>
+      <div class="hedge-meta-item">
+        <p class="hedge-meta-label">Status</p>
+        <p class="hedge-meta-value">
+          {% if hedge.status == 'ACTIVE' %}<span class="badge-active">Active</span>
+          {% elif hedge.status == 'DESIGNATED' %}<span class="badge-designated">Designated</span>
+          {% elif hedge.status == 'DE_DESIGNATED' %}<span class="badge-dedesignated">De-designated</span>
+          {% else %}<span style="font-size:11px; color:#6b7280;">{{ hedge.status }}</span>{% endif %}
+        </p>
+      </div>
+      <div class="hedge-meta-item">
+        <p class="hedge-meta-label">Notional</p>
+        <p class="hedge-meta-value">
+          {% if hedge.notional_cents %}{{ "{:,.0f}".format(hedge.notional_cents / 100) }} {{ hedge.currency }}{% else %}—{% endif %}
+        </p>
+      </div>
+      <div class="hedge-meta-item">
+        <p class="hedge-meta-label">Last Tested</p>
+        <p class="hedge-meta-value" style="font-size:11px;">
+          {% if eff_result %}{{ eff_result.test_date }}{% else %}Never{% endif %}
+        </p>
+      </div>
+    </div>
+
+    <div class="hedge-card-actions">
+      <button class="btn btn-default btn-sm btn-test-eff"
+              data-hedge-id="{{ hedge.id }}"
+              style="font-size:12px; padding:4px 12px; font-weight:600;">
+        <i class="fa fa-flask"></i> Test Effectiveness
+      </button>
+      <button class="btn btn-primary btn-sm btn-recognize"
+              data-hedge-id="{{ hedge.id }}"
+              {% if not is_eff %}disabled title="Only effective hedges can be recognised"{% endif %}
+              style="font-size:12px; padding:4px 12px; font-weight:600;">
+        <i class="fa fa-check"></i> Recognize
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="erp-card" style="padding:60px; text-align:center; color:#9ca3af;">
+  <i class="fa fa-shield" style="font-size:40px; display:block; margin-bottom:12px; opacity:.3;"></i>
+  <p style="margin:0; font-size:14px;">No hedge relationships configured.</p>
+</div>
+{% endif %}
+
+{# ── Effectiveness Results Table ──────────────────────────────────────────── #}
+{% if effectiveness_results %}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div style="padding:14px 20px; border-bottom:1px solid #e5e7eb;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-bar-chart" style="color:#1a56db; margin-right:6px;"></i>
+      Effectiveness Test Results
+    </h4>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="eff-table">
+      <thead>
+        <tr>
+          <th>Hedge Ref</th>
+          <th>Test Date</th>
+          <th>Method</th>
+          <th class="nums">Ratio</th>
+          <th>Result</th>
+          <th class="nums">Ineffective Portion</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in effectiveness_results %}
+        <tr>
+          <td><strong>{{ r.hedge_ref }}</strong></td>
+          <td style="font-size:12px; color:#6b7280;">{{ r.test_date }}</td>
+          <td style="font-size:12px; color:#6b7280;">{{ r.method or 'Dollar Offset' }}</td>
+          <td class="nums" style="font-weight:700;
+              color:{% if r.ratio >= 0.80 and r.ratio <= 1.25 %}#10b981{% else %}#ef4444{% endif %};">
+            {{ "{:.1f}".format(r.ratio * 100) }}%
+          </td>
+          <td>
+            {% if r.ratio >= 0.80 and r.ratio <= 1.25 %}
+              <span class="badge-active">Effective</span>
+            {% else %}
+              <span style="background:#fee2e2; color:#991b1b; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600;">Ineffective</span>
+            {% endif %}
+          </td>
+          <td class="nums" style="color:#ef4444;">
+            {% if r.ineffective_amount_cents %}{{ "{:,.2f}".format(r.ineffective_amount_cents / 100) }}{% else %}—{% endif %}
+          </td>
+          <td style="font-size:11px; color:#9ca3af; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            {{ r.notes or '—' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle'
+             : type === 'error'   ? 'fa-exclamation-circle'
+             : type === 'warning' ? 'fa-exclamation-triangle'
+             : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Test Effectiveness buttons ─────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-test-eff');
+    if (!btn) return;
+    e.preventDefault();
+    var hedgeId = btn.getAttribute('data-hedge-id');
+    if (!hedgeId) return;
+
+    btn.disabled = true;
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/hedge/' + encodeURIComponent(hedgeId) + '/test', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin'
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        var ratio = res.data.ratio || 0;
+        var pct   = (ratio * 100).toFixed(1);
+        var isEff = ratio >= 0.80 && ratio <= 1.25;
+        var msg   = 'Effectiveness test complete. Ratio: ' + pct + '% — ' + (isEff ? 'EFFECTIVE' : 'INEFFECTIVE');
+        toast(msg, isEff ? 'success' : 'warning');
+        setTimeout(function () { window.location.reload(); }, 2000);
+      } else {
+        toast(res.data.message || 'Test failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    });
+  });
+
+  /* ── Recognize buttons ───────────────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-recognize');
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    var hedgeId = btn.getAttribute('data-hedge-id');
+    if (!hedgeId) return;
+
+    btn.disabled = true;
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/hedge/' + encodeURIComponent(hedgeId) + '/recognize', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin'
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('OCI recognition complete. Journal: ' + (res.data.journal_ref || '—'), 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Recognition failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    });
+  });
+
+}());
+</script>
+{% endblock %}
