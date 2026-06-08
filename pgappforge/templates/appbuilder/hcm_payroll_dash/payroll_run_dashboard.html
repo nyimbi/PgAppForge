@@ -101,6 +101,9 @@
 {% endif %}
 
 {# ── KPI strip ───────────────────────────────────────────────────────── #}
+{% if kpi_html %}
+{{ kpi_html | safe }}
+{% else %}
 <div class="payrun-kpi-strip erp-mb-0">
   <div class="payrun-kpi-card">
     <p class="payrun-kpi-label">Employees</p>
@@ -135,6 +138,14 @@
     <p class="payrun-kpi-sub">Employee take-home</p>
   </div>
 </div>
+{% endif %}
+
+{# ── BPM approval buttons (widget-rendered) ──────────────────────────── #}
+{% if approval_html %}
+<div style="margin-top:14px;margin-bottom:8px;">
+{{ approval_html | safe }}
+</div>
+{% endif %}
 
 {# ── Action buttons bar ──────────────────────────────────────────────── #}
 {% if payrun %}

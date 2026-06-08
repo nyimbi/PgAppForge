@@ -12,6 +12,9 @@
 {% block content %}
 
 {# ── Summary KPI row ─────────────────────────────────────────────────── #}
+{% if kpi_html %}
+{{ kpi_html | safe }}
+{% else %}
 <div class="erp-kpi-grid erp-mb-24" id="sod-kpis">
   <div class="erp-card">
     <div class="erp-card-accent erp-card-accent-danger"></div>
@@ -38,6 +41,7 @@
     <p class="erp-card-sub">Across all violations</p>
   </div>
 </div>
+{% endif %}
 
 <div class="row">
 
@@ -86,9 +90,13 @@
     {# Risk distribution doughnut #}
     <div class="erp-chart-wrap erp-mb-24">
       <h4 class="erp-chart-title">Risk Distribution</h4>
+      {% if chart_html %}
+      {{ chart_html | safe }}
+      {% else %}
       <div data-island="sodRiskChart" class="erp-island">
         <canvas id="sod-risk-chart" height="160" aria-label="Risk distribution chart" role="img"></canvas>
       </div>
+      {% endif %}
     </div>
 
     {# Simulate role grant form #}

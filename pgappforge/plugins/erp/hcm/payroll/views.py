@@ -24,7 +24,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge import expose
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ def _page_html(title: str, body: str) -> str:
 # PayrollCalendarView
 # ---------------------------------------------------------------------------
 
-class PayrollCalendarView(BaseView):
+class PayrollCalendarView(BaseERPView):
 	"""Payroll calendar CRUD.
 
 	GET  /payroll/calendars/          — list
@@ -188,11 +189,12 @@ class PayrollCalendarView(BaseView):
 # PayrollRunView
 # ---------------------------------------------------------------------------
 
-class PayrollRunView(BaseView):
+class PayrollRunView(BaseERPView):
 	"""Payroll run CRUD + lifecycle actions.
 
 	GET  /payroll/runs/                        — list
 	GET  /payroll/runs/<id>                    — detail
+	GET  /payroll/runs/<id>/dashboard          — KPI dashboard (HTML)
 	POST /payroll/runs/                        — create (DRAFT)
 	POST /payroll/runs/<id>/calculate          — run calculate_payrun()
 	POST /payroll/runs/<id>/approve            — CALCULATED → APPROVED
@@ -284,6 +286,83 @@ class PayrollRunView(BaseView):
 			"paid_at": run.paid_at.isoformat() if run.paid_at else None,
 			"gl_journal_id": run.gl_journal_id,
 		})
+
+	@expose("/<string:run_id>/dashboard")
+	@has_access
+	def dashboard(self, run_id: str):
+		"""KPI dashboard for a single payroll run."""
+		from flask import render_template
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip
+
+		session = _get_session()
+		run = session.get(PayrollRun, run_id)
+		if run is None:
+			abort(404)
+
+		# Load payslips for this run
+		payslips = session.execute(
+			sa.select(Payslip)
+			.where(Payslip.payrun_id == run_id)
+			.where(Payslip.status != "REVERSED")
+			.order_by(Payslip.employee_id)
+		).scalars().all()
+
+		# ── KPI cards ───────────────────────────────────────────────────
+		emp_count = run.employee_count or len(payslips)
+		gross = (run.total_gross_cents or 0) / 100
+		tax = (run.total_employee_tax_cents or 0) / 100
+		net = (run.total_net_cents or 0) / 100
+
+		kpi_html = self.kpi_cards([
+			{
+				"value": emp_count,
+				"label": "Employees",
+				"format": "integer",
+				"icon": "fa-users",
+				"color": "#1a56db",
+			},
+			{
+				"value": gross,
+				"label": "Gross Pay",
+				"format": "currency",
+				"icon": "fa-dollar",
+				"color": "#0e9f6e",
+			},
+			{
+				"value": tax,
+				"label": "Total Tax",
+				"format": "currency",
+				"icon": "fa-bank",
+				"color": "#e02424",
+			},
+			{
+				"value": net,
+				"label": "Net Pay",
+				"format": "currency",
+				"icon": "fa-money",
+				"color": "#1a56db",
+			},
+		])
+
+		# ── Approval buttons (BPM) ──────────────────────────────────────
+		approval_html = None
+		if getattr(run, "process_instance_id", None):
+			approval_html = self.approval_buttons(
+				run,
+				advance_url="/workflow/advance",
+				reject_url="/workflow/reject",
+				instance_id_col="process_instance_id",
+				step_col="current_step",
+			)
+
+		return render_template(
+			"hcm_payroll_dash/payroll_run_dashboard.html",
+			payrun=run,
+			payslips=payslips,
+			statutory_totals=None,
+			kpi_html=kpi_html,
+			approval_html=approval_html,
+		)
 
 	@expose("/", methods=["POST"])
 	@has_access
@@ -407,7 +486,7 @@ class PayrollRunView(BaseView):
 # PayslipView
 # ---------------------------------------------------------------------------
 
-class PayslipView(BaseView):
+class PayslipView(BaseERPView):
 	"""Payslip list/detail + reversal.
 
 	GET  /payroll/payslips/                   — list (filter by payrun_id / employee_id)
@@ -529,7 +608,7 @@ class PayslipView(BaseView):
 # TaxWithholdingView
 # ---------------------------------------------------------------------------
 
-class TaxWithholdingView(BaseView):
+class TaxWithholdingView(BaseERPView):
 	"""Tax withholding configuration CRUD.
 
 	GET  /payroll/tax-withholding/             — list (filter by employee_id)
@@ -633,7 +712,7 @@ class TaxWithholdingView(BaseView):
 # PayrollReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class PayrollReportView(BaseView):
+class PayrollReportView(BaseERPView):
 	"""Payroll canned reports.
 
 	GET /payroll/reports/summary         — Payroll Run Summary (per run)

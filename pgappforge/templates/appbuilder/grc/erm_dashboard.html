@@ -96,6 +96,9 @@
 {% block content %}
 
 {# ── KPI summary ─────────────────────────────────────────────────────── #}
+{% if kpi_html %}
+{{ kpi_html | safe }}
+{% else %}
 <div class="erp-kpi-grid erp-mb-24">
   <div class="erp-card">
     <div class="erp-card-accent erp-card-accent-danger"></div>
@@ -124,6 +127,15 @@
     <p class="erp-card-sub">Key risk indicators in breach</p>
   </div>
 </div>
+{% endif %}
+
+{# ── Risk by category chart (widget-rendered) ─────────────────────────── #}
+{% if chart_html %}
+<div class="erp-chart-wrap erp-mb-24">
+  <h4 class="erp-chart-title"><i class="fa fa-bar-chart"></i> Risks by Category</h4>
+  {{ chart_html | safe }}
+</div>
+{% endif %}
 
 {# ── Interactive 5×5 Heat Map ─────────────────────────────────────────── #}
 <div class="erm-heatmap-wrap erp-mb-24">

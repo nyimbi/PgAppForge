@@ -11,9 +11,10 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
-from flask import current_app, make_response
+from flask import current_app
 
-from pgappforge import BaseView, expose
+from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge import expose
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def _tenant_id() -> str:
 # ErmDashboardView
 # ---------------------------------------------------------------------------
 
-class ErmDashboardView(BaseView):
+class ErmDashboardView(BaseERPView):
 	"""ERM risk register dashboard.
 
 	GET /grc/erm/  — renders risk register with associated KRIs
@@ -85,7 +86,80 @@ class ErmDashboardView(BaseView):
 			log.exception("ErmDashboardView.dashboard: failed to load KRIs")
 			kris = []
 
-		return render_template("grc/erm_dashboard.html", risks=risks, kris=kris)
+		# ── KPI summary ──────────────────────────────────────────────────
+		total_risks = len(risks)
+		critical_count = sum(
+			1 for r in risks if (getattr(r, "residual_score", 0) or 0) >= 20
+		)
+		high_count = sum(
+			1 for r in risks
+			if 10 <= (getattr(r, "residual_score", 0) or 0) < 20
+		)
+		kri_breach_count = sum(
+			1 for k in kris
+			if (getattr(k, "threshold", None) is not None
+				and (getattr(k, "current_value", 0) or 0) > k.threshold)
+		)
+
+		kpi_html = self.kpi_cards([
+			{
+				"value": critical_count,
+				"label": "Critical Risks",
+				"format": "integer",
+				"icon": "fa-exclamation-circle",
+				"color": "#dc2626",
+			},
+			{
+				"value": high_count,
+				"label": "High Risks",
+				"format": "integer",
+				"icon": "fa-fire",
+				"color": "#ea580c",
+			},
+			{
+				"value": total_risks,
+				"label": "Total Risks",
+				"format": "integer",
+				"icon": "fa-shield",
+				"color": "#1c64f2",
+			},
+			{
+				"value": kri_breach_count,
+				"label": "KRI Breaches",
+				"format": "integer",
+				"icon": "fa-tachometer",
+				"color": "#dc2626" if kri_breach_count else "#0e9f6e",
+			},
+		])
+
+		# ── Risk by category bar chart ────────────────────────────────────
+		category_counts: dict[str, int] = {}
+		for r in risks:
+			cat = getattr(r, "category", "Unknown") or "Unknown"
+			category_counts[cat] = category_counts.get(cat, 0) + 1
+
+		chart_data = [
+			{"category": cat, "count": count}
+			for cat, count in sorted(category_counts.items(), key=lambda x: -x[1])
+		]
+		chart_html = self.chart(
+			chart_data,
+			chart_type="bar",
+			x_col="category",
+			y_col="count",
+			title="Risks by Category",
+			height=240,
+		)
+
+		return render_template(
+			"grc/erm_dashboard.html",
+			risks=risks,
+			kris=kris,
+			kri_breach_count=kri_breach_count,
+			heatmap_data={},
+			kpi_html=kpi_html,
+			chart_html=chart_html,
+		)
 
 
 __all__ = ["ErmDashboardView"]

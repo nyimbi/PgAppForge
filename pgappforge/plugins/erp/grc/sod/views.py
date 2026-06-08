@@ -11,9 +11,10 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
-from flask import current_app, jsonify, make_response
+from flask import current_app, jsonify
 
-from pgappforge import BaseView, expose
+from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge import expose
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def _tenant_id() -> str:
 # SodAnalyzerView
 # ---------------------------------------------------------------------------
 
-class SodAnalyzerView(BaseView):
+class SodAnalyzerView(BaseERPView):
 	"""SoD conflict analyzer — dashboard and bulk scan.
 
 	GET  /grc/sod/            — conflict dashboard (HTML)
@@ -69,7 +70,67 @@ class SodAnalyzerView(BaseView):
 			log.exception("SodAnalyzerView.dashboard: failed to load conflicts")
 			conflicts = []
 
-		return render_template("grc/sod_dashboard.html", conflicts=conflicts)
+		# ── Compute violation summary stats ─────────────────────────────
+		total_violations = len(conflicts)
+		critical_count = sum(1 for c in conflicts if getattr(c, "severity", "").lower() == "critical")
+		high_count = sum(1 for c in conflicts if getattr(c, "severity", "").lower() == "high")
+		resolved = sum(1 for c in conflicts if getattr(c, "status", "").lower() in ("resolved", "closed"))
+
+		kpi_html = self.kpi_cards([
+			{
+				"value": total_violations,
+				"label": "Total Violations",
+				"format": "integer",
+				"icon": "fa-exclamation-triangle",
+				"color": "#e02424",
+			},
+			{
+				"value": critical_count,
+				"label": "Critical",
+				"format": "integer",
+				"icon": "fa-ban",
+				"color": "#7f1d1d",
+			},
+			{
+				"value": high_count,
+				"label": "High Risk",
+				"format": "integer",
+				"icon": "fa-fire",
+				"color": "#ff5a1f",
+			},
+			{
+				"value": resolved,
+				"label": "Resolved",
+				"format": "integer",
+				"icon": "fa-check-circle",
+				"color": "#0e9f6e",
+			},
+		])
+
+		# ── Risk distribution doughnut ───────────────────────────────────
+		medium_count = sum(1 for c in conflicts if getattr(c, "severity", "").lower() == "medium")
+		low_count = max(0, total_violations - critical_count - high_count - medium_count)
+		risk_data = [
+			{"risk_level": "Critical", "count": critical_count},
+			{"risk_level": "High",     "count": high_count},
+			{"risk_level": "Medium",   "count": medium_count},
+			{"risk_level": "Low",      "count": low_count},
+		]
+		chart_html = self.chart(
+			risk_data,
+			chart_type="doughnut",
+			x_col="risk_level",
+			y_col="count",
+			title="Risk Distribution",
+			height=200,
+		)
+
+		return render_template(
+			"grc/sod_dashboard.html",
+			conflicts=conflicts,
+			kpi_html=kpi_html,
+			chart_html=chart_html,
+		)
 
 	@expose("/bulk_scan", methods=["POST"])
 	@has_access

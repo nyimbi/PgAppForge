@@ -20,7 +20,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge import expose
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -67,11 +68,12 @@ def _page_html(title: str, body: str) -> str:
 # EmployeeView
 # ---------------------------------------------------------------------------
 
-class EmployeeView(BaseView):
+class EmployeeView(BaseERPView):
 	"""Employee master CRUD + lifecycle actions.
 
 	GET  /hcm/personnel/employees/                    — list
 	GET  /hcm/personnel/employees/<id>                — detail
+	GET  /hcm/personnel/employees/dashboard           — headcount KPI + inline editor
 	POST /hcm/personnel/employees/                    — hire
 	PUT  /hcm/personnel/employees/<id>                — update non-sensitive fields
 	POST /hcm/personnel/employees/<id>/terminate      — terminate
@@ -128,6 +130,110 @@ class EmployeeView(BaseView):
 			f'<tbody>{rows}</tbody></table>'
 		)
 		return make_response(_page_html("Employees", body), 200)
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Headcount KPI dashboard with inline DataGrid bulk editor."""
+		from flask import render_template
+		from pgappforge.plugins.erp.hcm.personnel.models import Employee
+
+		session = _get_session()
+		q = sa.select(Employee).order_by(Employee.employee_number).limit(500)
+		employees = session.execute(q).scalars().all()
+
+		# ── Headcount KPIs ───────────────────────────────────────────────
+		total = len(employees)
+		active = sum(1 for e in employees if getattr(e, "employment_status", "") == "ACTIVE")
+		probation = sum(
+			1 for e in employees
+			if getattr(e, "probation_end_date", None) is not None
+			and getattr(e, "employment_status", "") == "ACTIVE"
+		)
+		terminated_ytd = sum(
+			1 for e in employees
+			if getattr(e, "employment_status", "") == "TERMINATED"
+			and getattr(e, "termination_date", None) is not None
+			and getattr(e, "termination_date").year == datetime.now().year
+		)
+
+		kpi_html = self.kpi_cards([
+			{
+				"value": total,
+				"label": "Total Headcount",
+				"format": "integer",
+				"icon": "fa-users",
+				"color": "#1a56db",
+			},
+			{
+				"value": active,
+				"label": "Active Employees",
+				"format": "integer",
+				"icon": "fa-user-check",
+				"color": "#0e9f6e",
+			},
+			{
+				"value": probation,
+				"label": "On Probation",
+				"format": "integer",
+				"icon": "fa-clock-o",
+				"color": "#ff5a1f",
+			},
+			{
+				"value": terminated_ytd,
+				"label": "Terminated YTD",
+				"format": "integer",
+				"icon": "fa-user-times",
+				"color": "#e02424",
+			},
+		])
+
+		# ── DataGrid for bulk employee editing ───────────────────────────
+		employee_rows = [
+			{
+				"id": e.id,
+				"employee_number": e.employee_number,
+				"employment_type": getattr(e, "employment_type", ""),
+				"employment_status": getattr(e, "employment_status", ""),
+				"org_unit_id": getattr(e, "org_unit_id", "") or "",
+				"cost_center_code": getattr(e, "cost_center_code", "") or "",
+			}
+			for e in employees
+		]
+
+		grid_columns = [
+			{"name": "id",                "label": "ID",          "type": "text",   "editable": False},
+			{"name": "employee_number",   "label": "Emp #",       "type": "text",   "editable": False},
+			{"name": "employment_type",   "label": "Type",        "type": "select", "editable": True,
+			 "options": [
+				 {"value": "FULL_TIME",   "label": "Full Time"},
+				 {"value": "PART_TIME",   "label": "Part Time"},
+				 {"value": "CONTRACT",    "label": "Contract"},
+				 {"value": "INTERN",      "label": "Intern"},
+			 ]},
+			{"name": "employment_status", "label": "Status",      "type": "select", "editable": True,
+			 "options": [
+				 {"value": "ACTIVE",      "label": "Active"},
+				 {"value": "INACTIVE",    "label": "Inactive"},
+				 {"value": "TERMINATED",  "label": "Terminated"},
+			 ]},
+			{"name": "org_unit_id",       "label": "Org Unit",    "type": "text",   "editable": True},
+			{"name": "cost_center_code",  "label": "Cost Centre", "type": "text",   "editable": True},
+		]
+
+		grid_html = self.data_grid(
+			rows=employee_rows,
+			columns=grid_columns,
+			save_url="/hcm/personnel/employees/bulk-save",
+			rows_per_page=25,
+		)
+
+		return render_template(
+			"hcm_admin/employee_list.html",
+			employees=employees,
+			kpi_html=kpi_html,
+			grid_html=grid_html,
+		)
 
 	@expose("/<string:employee_id>")
 	@has_access
@@ -225,7 +331,7 @@ class EmployeeView(BaseView):
 # EmployeeCompensationView
 # ---------------------------------------------------------------------------
 
-class EmployeeCompensationView(BaseView):
+class EmployeeCompensationView(BaseERPView):
 	"""Compensation history — read + record change (immutable ledger).
 
 	GET  /hcm/personnel/compensation/<employee_id>         — compensation history
@@ -296,7 +402,7 @@ class EmployeeCompensationView(BaseView):
 # EmployeeDocumentView
 # ---------------------------------------------------------------------------
 
-class EmployeeDocumentView(BaseView):
+class EmployeeDocumentView(BaseERPView):
 	"""Employee document management.
 
 	GET  /hcm/personnel/documents/<employee_id>        — list documents for employee
@@ -358,7 +464,7 @@ class EmployeeDocumentView(BaseView):
 # PersonnelReportView
 # ---------------------------------------------------------------------------
 
-class PersonnelReportView(BaseView):
+class PersonnelReportView(BaseERPView):
 	"""Personnel canned reports.
 
 	GET /hcm/personnel/reports/roster            — employee roster
