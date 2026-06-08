@@ -1,0 +1,292 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Capacity Gantt — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .gantt-wrap { overflow-x: auto; }
+  .gantt-grid {
+    display: grid;
+    /* label col + one col per day */
+    grid-template-columns: 180px repeat({{ day_count | default(30) }}, 36px);
+    min-width: max-content;
+  }
+  .gantt-grid-header { position: sticky; top: 0; z-index: 10; background: var(--erp-neutral-lt); }
+  .gantt-grid-label-cell {
+    padding: 8px 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--erp-text-muted);
+    border-right: 1px solid var(--erp-border);
+    border-bottom: 2px solid var(--erp-border);
+    background: var(--erp-neutral-lt);
+    position: sticky; left: 0; z-index: 11;
+  }
+  .gantt-grid-day {
+    padding: 8px 0; text-align: center;
+    font-size: 10px; font-weight: 600; color: var(--erp-text-muted);
+    border-right: 1px solid var(--erp-border);
+    border-bottom: 2px solid var(--erp-border);
+    background: var(--erp-neutral-lt);
+    white-space: nowrap;
+  }
+  .gantt-grid-day.today-col {
+    background: var(--erp-primary-lt);
+    color: var(--erp-primary);
+  }
+  .gantt-grid-day.weekend { background: #fafafa; color: #d1d5db; }
+  .gantt-row-label {
+    padding: 0 12px;
+    font-size: 13px; font-weight: 600; color: var(--erp-text);
+    display: flex; align-items: center;
+    border-right: 1px solid var(--erp-border);
+    border-bottom: 1px solid var(--erp-border);
+    background: var(--erp-surface);
+    position: sticky; left: 0; z-index: 5;
+    min-height: 40px;
+  }
+  .gantt-row-label:hover { background: #fafafa; }
+  .gantt-cell {
+    border-right: 1px solid var(--erp-border);
+    border-bottom: 1px solid var(--erp-border);
+    position: relative;
+    min-height: 40px;
+  }
+  .gantt-cell.weekend-cell { background: #fafafa; }
+  .gantt-cell.today-cell   { background: var(--erp-primary-lt); opacity: .35; }
+  .gantt-bar-seg {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    height: 22px; border-radius: 4px;
+    left: 2px; right: 2px;
+    display: flex; align-items: center; padding: 0 6px;
+    font-size: 11px; font-weight: 600; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; transition: filter var(--erp-transition);
+  }
+  .gantt-bar-seg:hover { filter: brightness(1.1); }
+  .gantt-bar-seg.status-on-track { background: var(--erp-primary); }
+  .gantt-bar-seg.status-at-risk  { background: var(--erp-warning); }
+  .gantt-bar-seg.status-delayed  { background: var(--erp-danger); }
+  .gantt-bar-seg.status-done     { background: var(--erp-success); }
+  .gantt-today-marker {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: var(--erp-danger); opacity: .7; z-index: 4;
+    pointer-events: none;
+  }
+  .gantt-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; margin-top: 10px; }
+  .gantt-legend-item { display: flex; align-items: center; gap: 6px; }
+  .gantt-legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+  .gantt-resource-badge {
+    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+    background: var(--erp-neutral-lt); color: var(--erp-text-muted);
+    margin-left: 6px; flex-shrink: 0;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">Capacity Gantt</h1>
+      <p class="erp-page-subtitle">
+        {{ from_date }} — {{ to_date }}
+        {% if project_name %}&mdash; {{ project_name }}{% endif %}
+      </p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      {% if prev_url %}
+      <a href="{{ prev_url }}" class="btn btn-default btn-sm">
+        <i class="fa fa-chevron-left"></i> Previous
+      </a>
+      {% endif %}
+      {% if next_url %}
+      <a href="{{ next_url }}" class="btn btn-default btn-sm">
+        Next <i class="fa fa-chevron-right"></i>
+      </a>
+      {% endif %}
+      <a href="{{ today_url or request.path }}" class="btn btn-primary btn-sm">Today</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPIs ────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-20">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <p class="erp-card-title">Total Tasks</p>
+    <p class="erp-card-value">{{ tasks | length }}</p>
+    <p class="erp-card-sub">In this period</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <p class="erp-card-title">Completed</p>
+    <p class="erp-card-value">{{ tasks | selectattr('status','equalto','done') | list | length }}</p>
+    <p class="erp-card-sub">Done</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title">At Risk</p>
+    <p class="erp-card-value">{{ tasks | selectattr('status','equalto','at_risk') | list | length }}</p>
+    <p class="erp-card-sub">Need attention</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <p class="erp-card-title">Delayed</p>
+    <p class="erp-card-value">{{ tasks | selectattr('status','equalto','delayed') | list | length }}</p>
+    <p class="erp-card-sub">Past due date</p>
+  </div>
+</div>
+
+{# ── Gantt grid ──────────────────────────────────────────────────────── #}
+{#
+  Server provides:
+    dates_json   — JSON array of {iso:"2026-06-01", label:"1", weekend:true/false, today:true/false}
+    tasks        — list of {id, title, resource, start_offset, duration, status, pct_done}
+    from_date    — display string
+    to_date      — display string
+    day_count    — integer
+#}
+
+<div class="erp-mb-16">
+  <div class="gantt-wrap erp-table-wrap">
+    <div class="gantt-grid" id="gantt-grid">
+
+      {# ── Header row ─────────────────────────────────────────────── #}
+      <div class="gantt-grid-label-cell">Resource / Task</div>
+      {% set dates = dates_json | default('[]') | tojson %}
+      {# Render day headers from server-provided date array #}
+      {% for day in dates_json | default([]) %}
+      <div class="gantt-grid-day{% if day.today %} today-col{% elif day.weekend %} weekend{% endif %}">
+        {{ day.label }}
+        {% if day.month_start %}<br><span style="font-size:9px;">{{ day.month }}</span>{% endif %}
+      </div>
+      {% endfor %}
+
+      {# ── Task rows ──────────────────────────────────────────────── #}
+      {% for task in tasks | default([]) %}
+      <div class="gantt-row-label"
+           title="{{ task.title }}{% if task.assignee %} ({{ task.assignee }}){% endif %}">
+        <span class="erp-truncate" style="max-width:120px;">{{ task.title }}</span>
+        {% if task.assignee %}
+        <span class="gantt-resource-badge">{{ task.assignee[:8] }}</span>
+        {% endif %}
+      </div>
+      {% for day in dates_json | default([]) %}
+      <div class="gantt-cell{% if day.weekend %} weekend-cell{% endif %}{% if day.today %} today-cell{% endif %}"
+           data-day-offset="{{ loop.index0 }}" data-task="{{ task.id }}">
+        {# Bar segment: rendered if this day falls within the task span #}
+        {% if loop.index0 >= task.start_offset and loop.index0 < task.start_offset + task.duration %}
+          {% if loop.index0 == task.start_offset %}
+          <div class="gantt-bar-seg status-{{ task.status | default('on-track') }}"
+               style="left:2px; right:{{ (task.duration == 1) and '2px' or '-1px' }}; z-index:3;"
+               title="{{ task.title }} — {{ task.pct_done | default(0) }}% complete"
+               onclick="ganttShowDetail({{ task.id | tojson }})">
+            {% if task.duration >= 3 %}{{ task.title | truncate(20) }}{% endif %}
+          </div>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+
+{# ── Legend ──────────────────────────────────────────────────────────── #}
+<div class="gantt-legend erp-mb-16">
+  <span class="gantt-legend-item">
+    <span class="gantt-legend-swatch" style="background:var(--erp-primary);"></span> On Track
+  </span>
+  <span class="gantt-legend-item">
+    <span class="gantt-legend-swatch" style="background:var(--erp-warning);"></span> At Risk
+  </span>
+  <span class="gantt-legend-item">
+    <span class="gantt-legend-swatch" style="background:var(--erp-danger);"></span> Delayed
+  </span>
+  <span class="gantt-legend-item">
+    <span class="gantt-legend-swatch" style="background:var(--erp-success);"></span> Done
+  </span>
+</div>
+
+{# ── Task detail modal ────────────────────────────────────────────────── #}
+<div class="modal fade" id="gantt-detail-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" id="gantt-modal-title">Task Detail</h4>
+      </div>
+      <div class="modal-body" id="gantt-modal-body">
+        <p style="color:var(--erp-text-muted);">Loading…</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Task data embedded from server for JS lookup ────────────────────── #}
+<script>
+  window._ganttTasks = {{ tasks | default([]) | tojson }};
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* Build a lookup from server-embedded task array */
+  var taskMap = {};
+  (window._ganttTasks || []).forEach(function (t) { taskMap[t.id] = t; });
+
+  /* Global handler attached to bar segments via onclick attribute */
+  window.ganttShowDetail = function (taskId) {
+    var t = taskMap[taskId];
+    if (!t) return;
+
+    document.getElementById('gantt-modal-title').textContent = t.title || 'Task';
+
+    var statusColors = { on_track: 'green', at_risk: 'yellow', delayed: 'red', done: 'green' };
+    var badgeCls = 'erp-badge-' + (statusColors[t.status] || 'gray');
+
+    document.getElementById('gantt-modal-body').innerHTML =
+      '<table class="table table-condensed" style="font-size:13px;">' +
+        '<tr><th style="width:130px;">Title</th><td>' + _esc(t.title) + '</td></tr>' +
+        (t.assignee ? '<tr><th>Assignee</th><td>' + _esc(t.assignee) + '</td></tr>' : '') +
+        (t.start_date ? '<tr><th>Start</th><td>' + _esc(t.start_date) + '</td></tr>' : '') +
+        (t.end_date   ? '<tr><th>End</th><td>'   + _esc(t.end_date)   + '</td></tr>' : '') +
+        '<tr><th>Status</th><td><span class="erp-badge ' + badgeCls + '">' + _esc((t.status||'').replace('_',' ')) + '</span></td></tr>' +
+        '<tr><th>Progress</th><td>' +
+          '<div class="okr-progress" style="margin-top:4px;">' +
+            '<div class="okr-progress-bar ' + (t.status === 'delayed' ? 'off-track' : (t.status === 'at_risk' ? 'at-risk' : 'on-track')) + '" style="width:' + (t.pct_done || 0) + '%;"></div>' +
+          '</div>' +
+          '<small>' + (t.pct_done || 0) + '%</small>' +
+        '</td></tr>' +
+        (t.description ? '<tr><th>Notes</th><td>' + _esc(t.description) + '</td></tr>' : '') +
+      '</table>';
+
+    $('#gantt-detail-modal').modal('show');
+  };
+
+  /* Extend bar segments visually across multiple cells using absolute CSS.
+     The Jinja grid already places segments; this script widens them. */
+  document.querySelectorAll('.gantt-bar-seg').forEach(function (bar) {
+    /* bar is inside the first cell — calculate full pixel width */
+    var row   = bar.closest('.gantt-row-label') ? bar.closest('.gantt-row-label').parentNode : null;
+    /* Width already handled by CSS right:-1px spanning into sibling cells */
+  });
+}());
+</script>
+{% endblock %}

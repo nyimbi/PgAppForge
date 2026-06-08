@@ -1,0 +1,381 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Analytics — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .analytics-filter-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); padding: 12px 18px;
+    margin-bottom: 20px; box-shadow: var(--erp-shadow-sm);
+  }
+  .analytics-filter-bar label { font-size: 12px; font-weight: 600; color: var(--erp-text-muted); margin: 0; }
+  .analytics-filter-bar select,
+  .analytics-filter-bar input[type=date] {
+    font-size: 12px; border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius); padding: 5px 10px; color: var(--erp-text);
+    background: var(--erp-surface);
+  }
+  .analytics-filter-bar select:focus,
+  .analytics-filter-bar input[type=date]:focus { outline: none; border-color: var(--erp-primary); }
+  .chart-card { background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); padding: 20px; box-shadow: var(--erp-shadow-sm);
+    margin-bottom: 20px; }
+  .chart-card-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+  }
+  .chart-card-title { font-size: 14px; font-weight: 700; color: var(--erp-text); margin: 0; }
+  .chart-card-sub   { font-size: 12px; color: var(--erp-text-muted); margin: 2px 0 0; }
+  .analytics-table  { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .analytics-table th {
+    text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--erp-text-muted);
+    background: var(--erp-neutral-lt); border-bottom: 2px solid var(--erp-border);
+  }
+  .analytics-table td { padding: 9px 12px; border-bottom: 1px solid var(--erp-border); }
+  .analytics-table tbody tr:hover { background: #fafafa; }
+  .analytics-table tbody tr:last-child td { border-bottom: none; }
+  .sparkline-bar {
+    display: inline-block; height: 14px; background: var(--erp-primary);
+    border-radius: 2px; vertical-align: middle; min-width: 4px;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title">Analytics Dashboard</h1>
+  <p class="erp-page-subtitle">Cross-module insights — revenue, operations, and workforce.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Filter bar ──────────────────────────────────────────────────────── #}
+<form class="analytics-filter-bar" id="analytics-filter-form" method="get">
+  <label for="af-period">Period</label>
+  <select name="period" id="af-period">
+    <option value="7"  {% if period == '7'  %}selected{% endif %}>Last 7 days</option>
+    <option value="30" {% if period == '30' or not period %}selected{% endif %}>Last 30 days</option>
+    <option value="90" {% if period == '90' %}selected{% endif %}>Last 90 days</option>
+    <option value="ytd"{% if period == 'ytd'%}selected{% endif %}>Year to date</option>
+    <option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom range</option>
+  </select>
+  <span id="af-custom-range" style="display:{% if period == 'custom' %}flex{% else %}none{% endif %}; gap:6px; align-items:center;">
+    <input type="date" name="from_date" id="af-from" value="{{ from_date or '' }}">
+    <span style="color:var(--erp-text-muted);">to</span>
+    <input type="date" name="to_date" id="af-to" value="{{ to_date or '' }}">
+  </span>
+  <label for="af-segment" style="margin-left:8px;">Segment</label>
+  <select name="segment" id="af-segment">
+    <option value="">All</option>
+    {% for seg in segments | default([]) %}
+    <option value="{{ seg.id }}" {% if segment == seg.id|string %}selected{% endif %}>{{ seg.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;">
+    <i class="fa fa-refresh"></i> Apply
+  </button>
+</form>
+
+{# ── KPI summary row ─────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24" id="analytics-kpis">
+  {% for kpi in kpis | default([]) %}
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-{{ kpi.accent | default('primary') }}"></div>
+    <p class="erp-card-title">{{ kpi.label }}</p>
+    <p class="erp-card-value">{{ kpi.value }}</p>
+    <p class="erp-card-sub">{{ kpi.sub | default('') }}</p>
+    {% if kpi.change_pct is defined %}
+    <span class="erp-card-trend {% if kpi.change_pct >= 0 %}erp-card-trend-up{% else %}erp-card-trend-down{% endif %}">
+      <i class="fa fa-arrow-{% if kpi.change_pct >= 0 %}up{% else %}down{% endif %}"></i>
+      {{ kpi.change_pct | abs }}%
+    </span>
+    {% endif %}
+  </div>
+  {% else %}
+  {# Skeletons if kpis not yet populated #}
+  {% for _ in range(4) %}
+  <div class="erp-card">
+    <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:12px;"></div>
+    <div class="erp-skeleton erp-skeleton-text wide" style="height:26px; margin-bottom:8px;"></div>
+    <div class="erp-skeleton erp-skeleton-text mid"></div>
+  </div>
+  {% endfor %}
+  {% endfor %}
+</div>
+
+<div class="row">
+
+  {# ── Revenue bar chart ────────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <h4 class="chart-card-title">Revenue by Period</h4>
+          <p class="chart-card-sub" id="rev-bar-sub">Loading…</p>
+        </div>
+        <select id="rev-chart-type" class="form-control input-sm" style="width:auto;">
+          <option value="bar">Bar</option>
+          <option value="line">Line</option>
+        </select>
+      </div>
+      <div data-island="analyticsRevenueBar" class="erp-island">
+        <canvas id="analytics-revenue-canvas" height="90"
+                aria-label="Revenue bar chart" role="img"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# ── Module breakdown doughnut ────────────────────────────────────── #}
+  <div class="col-md-4">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <h4 class="chart-card-title">Revenue by Module</h4>
+          <p class="chart-card-sub">Contribution breakdown</p>
+        </div>
+      </div>
+      <div data-island="analyticsModuleDoughnut" class="erp-island">
+        <canvas id="analytics-module-canvas" height="160"
+                aria-label="Module doughnut chart" role="img"></canvas>
+      </div>
+      <div id="module-legend" style="margin-top:14px; font-size:12px;"></div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+<div class="row">
+
+  {# ── Top products / SKUs table ────────────────────────────────────── #}
+  <div class="col-md-6">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h4 class="chart-card-title">Top Products</h4>
+      </div>
+      <div data-island="analyticsTopProducts" class="erp-island">
+        <div id="top-products-wrap">
+          <div class="erp-skeleton erp-skeleton-card"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Funnel / conversion chart ────────────────────────────────────── #}
+  <div class="col-md-6">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h4 class="chart-card-title">Conversion Funnel</h4>
+        <p class="chart-card-sub">Pipeline stage throughput</p>
+      </div>
+      <div data-island="analyticsConversionFunnel" class="erp-island">
+        <canvas id="analytics-funnel-canvas" height="120"
+                aria-label="Conversion funnel" role="img"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* Collect query params for island fetches */
+  function _qp() { return window.location.search || ''; }
+
+  /* Palette */
+  var PALETTE = ['#1a56db','#0e9f6e','#ff5a1f','#8b5cf6','#e02424','#1c64f2','#d97706'];
+
+  /* ── Revenue bar/line chart ─────────────────────────────────────── */
+  ERPIslands.register('analyticsRevenueBar', ['chartjs'], function (el) {
+    var canvas  = document.getElementById('analytics-revenue-canvas');
+    var typeSel = document.getElementById('rev-chart-type');
+    var subEl   = document.getElementById('rev-bar-sub');
+    var chartInst;
+
+    function buildChart(data, type) {
+      if (chartInst) { chartInst.destroy(); }
+      chartInst = new Chart(canvas, {
+        type: type || 'bar',
+        data: {
+          labels: data.labels,
+          datasets: [{
+            label:           'Revenue',
+            data:            data.values,
+            backgroundColor: type === 'line' ? 'rgba(26,86,219,.08)' : PALETTE[0],
+            borderColor:     PALETTE[0],
+            borderWidth:     type === 'line' ? 2 : 0,
+            borderRadius:    type === 'bar' ? 4 : 0,
+            fill:            type === 'line',
+            tension:         0.35,
+            pointRadius:     type === 'line' ? 3 : 0
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  return ' ' + (data.currency || '') + ctx.parsed.y.toLocaleString();
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,.04)' },
+              ticks: { callback: function (v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } }
+            },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    ERPIslands.fetchJSON('/api/analytics/revenue' + _qp())
+      .then(function (data) {
+        if (subEl) subEl.textContent = 'Total: ' + (data.currency || '') + (data.total || '—');
+        buildChart(data, typeSel ? typeSel.value : 'bar');
+        if (typeSel) {
+          typeSel.addEventListener('change', function () { buildChart(data, typeSel.value); });
+        }
+      })
+      .catch(function (err) {
+        el.innerHTML = '<div class="alert alert-warning">Chart unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Module doughnut ────────────────────────────────────────────── */
+  ERPIslands.register('analyticsModuleDoughnut', ['chartjs'], function (el) {
+    var canvas = document.getElementById('analytics-module-canvas');
+    var legend = document.getElementById('module-legend');
+
+    ERPIslands.fetchJSON('/api/analytics/by-module' + _qp())
+      .then(function (data) {
+        new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels:   data.labels,
+            datasets: [{
+              data:            data.values,
+              backgroundColor: data.labels.map(function (_, i) { return PALETTE[i % PALETTE.length]; }),
+              borderWidth:     2, borderColor: '#fff'
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: true,
+            cutout: '60%',
+            plugins: { legend: { display: false } }
+          }
+        });
+
+        if (legend) {
+          legend.innerHTML = data.labels.map(function (lbl, i) {
+            return '<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">' +
+              '<span style="width:10px;height:10px;border-radius:2px;background:' + PALETTE[i % PALETTE.length] + ';flex-shrink:0;"></span>' +
+              '<span style="flex:1;">' + _esc(lbl) + '</span>' +
+              '<strong>' + (data.pcts ? data.pcts[i] + '%' : '') + '</strong>' +
+            '</div>';
+          }).join('');
+        }
+      })
+      .catch(function () { /* doughnut is supplementary; fail silently */ });
+  });
+
+  /* ── Top products table ─────────────────────────────────────────── */
+  ERPIslands.register('analyticsTopProducts', [], function (el) {
+    var wrap = document.getElementById('top-products-wrap');
+
+    ERPIslands.fetchJSON('/api/analytics/top-products' + _qp())
+      .then(function (rows) {
+        var maxRev = rows.reduce(function (m, r) { return Math.max(m, r.revenue || 0); }, 1);
+        wrap.innerHTML =
+          '<table class="analytics-table">' +
+            '<thead><tr><th>#</th><th>Product</th><th>Revenue</th><th>Units</th><th style="width:80px;">Share</th></tr></thead>' +
+            '<tbody>' +
+            rows.map(function (r, i) {
+              var pct = Math.round((r.revenue / maxRev) * 100);
+              return '<tr>' +
+                '<td style="color:var(--erp-text-muted);font-weight:700;">' + (i+1) + '</td>' +
+                '<td style="font-weight:600;">' + _esc(r.name) + '</td>' +
+                '<td>' + (r.currency || '') + (r.revenue || 0).toLocaleString() + '</td>' +
+                '<td>' + (r.units || 0).toLocaleString() + '</td>' +
+                '<td><span class="sparkline-bar" style="width:' + pct + '%;"></span></td>' +
+              '</tr>';
+            }).join('') +
+            '</tbody></table>';
+      })
+      .catch(function (err) {
+        wrap.innerHTML = '<div class="alert alert-warning">Table unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Conversion funnel horizontal bar ──────────────────────────── */
+  ERPIslands.register('analyticsConversionFunnel', ['chartjs'], function (el) {
+    var canvas = document.getElementById('analytics-funnel-canvas');
+
+    ERPIslands.fetchJSON('/api/analytics/funnel' + _qp())
+      .then(function (data) {
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: data.stages,
+            datasets: [{
+              label:           'Count',
+              data:            data.counts,
+              backgroundColor: data.stages.map(function (_, i) {
+                var opacity = 1 - (i * 0.12);
+                return 'rgba(26,86,219,' + opacity + ')';
+              }),
+              borderRadius:    4,
+              borderWidth:     0
+            }]
+          },
+          options: {
+            indexAxis:  'y',
+            responsive: true, maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var pct = data.pcts ? ' (' + data.pcts[ctx.dataIndex] + '%)' : '';
+                    return ' ' + ctx.parsed.x.toLocaleString() + pct;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' } },
+              y: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function () { /* funnel is supplementary */ });
+  });
+
+  /* ── Custom date range toggle ────────────────────────────────────── */
+  var periodSel   = document.getElementById('af-period');
+  var customRange = document.getElementById('af-custom-range');
+  if (periodSel && customRange) {
+    periodSel.addEventListener('change', function () {
+      customRange.style.display = periodSel.value === 'custom' ? 'flex' : 'none';
+    });
+  }
+}());
+</script>
+{% endblock %}

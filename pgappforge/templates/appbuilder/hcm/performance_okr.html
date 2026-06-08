@@ -1,0 +1,381 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}OKR Goals — {{ cycle.name or 'Performance' }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .okr-cycle-selector { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .okr-cycle-btn {
+    padding:5px 14px; border-radius:999px; font-size:12px; font-weight:600;
+    border:1px solid var(--erp-border); background:var(--erp-surface);
+    color:var(--erp-text-muted); cursor:pointer; transition:all var(--erp-transition);
+  }
+  .okr-cycle-btn.active {
+    background:var(--erp-primary); color:#fff; border-color:var(--erp-primary);
+  }
+  .okr-objective-owner {
+    font-size:11px; color:var(--erp-text-muted);
+    display:flex; align-items:center; gap:5px; margin-bottom:10px;
+  }
+  .okr-owner-avatar {
+    width:22px; height:22px; border-radius:50%;
+    background:var(--erp-primary-lt); color:var(--erp-primary);
+    font-size:9px; font-weight:700;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  .okr-add-kr-btn {
+    background:none; border:1px dashed var(--erp-border); border-radius:var(--erp-radius);
+    width:100%; padding:6px; font-size:12px; color:var(--erp-text-muted);
+    cursor:pointer; margin-top:8px; transition:all var(--erp-transition);
+  }
+  .okr-add-kr-btn:hover { border-color:var(--erp-primary); color:var(--erp-primary); background:var(--erp-primary-lt); }
+  .okr-inline-edit { font-size:13px; width:100%; border:1px solid var(--erp-primary); border-radius:4px; padding:4px 8px; }
+  .okr-summary-bar {
+    display:flex; align-items:center; gap:10px;
+    background:var(--erp-surface); border:1px solid var(--erp-border);
+    border-radius:var(--erp-radius-lg); padding:14px 20px; margin-bottom:24px;
+    box-shadow:var(--erp-shadow-sm);
+  }
+  .okr-summary-label { font-size:12px; color:var(--erp-text-muted); margin-right:4px; }
+  .okr-summary-pct   { font-size:22px; font-weight:800; color:var(--erp-primary); font-variant-numeric:tabular-nums; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">OKR Goals</h1>
+      <p class="erp-page-subtitle">
+        {{ cycle.name or 'Current cycle' }}
+        {% if cycle.start_date and cycle.end_date %}
+          &mdash; {{ cycle.start_date }} to {{ cycle.end_date }}
+        {% endif %}
+      </p>
+    </div>
+    {% if appbuilder.sm.has_access('can_add', 'OKRObjectiveView') %}
+    <button class="btn btn-primary btn-sm" id="add-objective-btn" style="align-self:center;">
+      <i class="fa fa-plus"></i> Add Objective
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Cycle selector ──────────────────────────────────────────────────── #}
+{% if cycles %}
+<div class="okr-cycle-selector">
+  {% for c in cycles %}
+  <a href="{{ url_for('OKRView.index', cycle_id=c.id) }}"
+     class="okr-cycle-btn {% if c.id == cycle.id %}active{% endif %}">
+    {{ c.name }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Overall progress summary ────────────────────────────────────────── #}
+<div class="okr-summary-bar" id="okr-summary">
+  <span class="okr-summary-pct" id="summary-pct">—</span>
+  <div style="flex:1;">
+    <div class="okr-progress" style="height:10px;">
+      <div class="okr-progress-bar on-track" id="summary-bar" style="width:0%;"></div>
+    </div>
+    <div style="margin-top:5px; font-size:11px; color:var(--erp-text-muted);">
+      Overall cycle progress &mdash;
+      <span id="summary-on-track" class="erp-badge erp-badge-green">0 on track</span>
+      <span id="summary-at-risk"  class="erp-badge erp-badge-yellow" style="margin-left:4px;">0 at risk</span>
+      <span id="summary-off-track" class="erp-badge erp-badge-red"   style="margin-left:4px;">0 off track</span>
+    </div>
+  </div>
+</div>
+
+{# ── Objectives list ─────────────────────────────────────────────────── #}
+<div id="okr-objectives-list">
+  {% if objectives %}
+    {% for obj in objectives %}
+    <div class="okr-card" id="obj-{{ obj.id }}" data-obj-id="{{ obj.id }}">
+
+      <div class="okr-objective-owner">
+        <span class="okr-owner-avatar">{{ (obj.owner_name or '?')[:2] | upper }}</span>
+        <span>{{ obj.owner_name or 'Unassigned' }}</span>
+        {% if obj.team %}<span style="margin-left:4px; color:var(--erp-border);">|</span>
+        <span>{{ obj.team }}</span>{% endif %}
+        <span style="margin-left:auto;" class="erp-badge erp-badge-{{ 'green' if obj.status == 'on_track' else ('yellow' if obj.status == 'at_risk' else 'red') }}">
+          {{ obj.status | replace('_',' ') | title }}
+        </span>
+      </div>
+
+      <div class="okr-objective">
+        <span class="obj-title" data-id="{{ obj.id }}">{{ obj.title }}</span>
+        {% if appbuilder.sm.has_access('can_edit', 'OKRObjectiveView') %}
+        <button class="btn btn-link btn-xs obj-edit-btn" data-id="{{ obj.id }}" style="padding:0 4px; color:var(--erp-text-muted);">
+          <i class="fa fa-pencil"></i>
+        </button>
+        {% endif %}
+      </div>
+
+      {# Key Results #}
+      {% for kr in obj.key_results %}
+      <div class="okr-kr" id="kr-{{ kr.id }}" data-kr-id="{{ kr.id }}">
+        <div class="okr-kr-title">
+          <span class="kr-title">{{ kr.title }}</span>
+          <span class="okr-kr-pct">{{ kr.progress }}%</span>
+        </div>
+        <div class="okr-progress">
+          <div class="okr-progress-bar {{ kr.status }}"
+               style="width:{{ kr.progress }}%;"
+               data-progress="{{ kr.progress }}"></div>
+        </div>
+        {% if appbuilder.sm.has_access('can_edit', 'OKRObjectiveView') %}
+        <div style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+          <input type="range" class="kr-slider" data-kr="{{ kr.id }}"
+                 min="0" max="100" value="{{ kr.progress }}"
+                 style="flex:1; cursor:pointer;">
+          <span class="kr-pct-display" style="font-size:11px; font-weight:700; width:30px; text-align:right;">{{ kr.progress }}%</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      {% if appbuilder.sm.has_access('can_add', 'OKRObjectiveView') %}
+      <button class="okr-add-kr-btn" data-obj="{{ obj.id }}">
+        <i class="fa fa-plus"></i> Add Key Result
+      </button>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="erp-card erp-text-center" style="padding:40px 24px;">
+    <i class="fa fa-bullseye" style="font-size:40px; color:var(--erp-border); margin-bottom:14px; display:block;"></i>
+    <h4 style="font-weight:700; margin-bottom:8px;">No objectives yet</h4>
+    <p style="color:var(--erp-text-muted); margin-bottom:18px;">
+      Set your first objective to begin tracking team progress.
+    </p>
+    {% if appbuilder.sm.has_access('can_add', 'OKRObjectiveView') %}
+    <button class="btn btn-primary" id="add-objective-btn-empty">
+      <i class="fa fa-plus"></i> Add Objective
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{# ── Add Objective modal ──────────────────────────────────────────────── #}
+<div class="modal fade" id="add-obj-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title">New Objective</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Objective Title <span class="text-danger">*</span></label>
+          <input type="text" id="new-obj-title" class="form-control" placeholder="e.g. Grow monthly recurring revenue by 30%">
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Owner</label>
+              <input type="text" id="new-obj-owner" class="form-control" placeholder="username">
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Team</label>
+              <input type="text" id="new-obj-team" class="form-control" placeholder="e.g. Sales">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="save-new-obj-btn">Create Objective</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Add KR modal ──────────────────────────────────────────────────────── #}
+<div class="modal fade" id="add-kr-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title">Add Key Result</h4>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="kr-obj-id">
+        <div class="form-group">
+          <label>Key Result Title <span class="text-danger">*</span></label>
+          <input type="text" id="new-kr-title" class="form-control"
+                 placeholder="e.g. Increase conversion rate from 2% to 4%">
+        </div>
+        <div class="form-group">
+          <label>Initial Progress (%)</label>
+          <input type="number" id="new-kr-progress" class="form-control" value="0" min="0" max="100">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="save-new-kr-btn">Add Key Result</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},
+      body:JSON.stringify(body)
+    });
+  }
+  function _patch(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},
+      body:JSON.stringify(body)
+    });
+  }
+
+  /* ── Compute summary from current DOM state ──────────────────────── */
+  function recomputeSummary() {
+    var bars  = document.querySelectorAll('.okr-progress-bar');
+    var total = 0;
+    bars.forEach(function (b) { total += parseInt(b.dataset.progress || 0, 10); });
+    var avg   = bars.length ? Math.round(total / bars.length) : 0;
+
+    document.getElementById('summary-pct').textContent = avg + '%';
+    var bar = document.getElementById('summary-bar');
+    bar.style.width = avg + '%';
+    bar.className   = 'okr-progress-bar ' + (avg >= 70 ? 'on-track' : (avg >= 40 ? 'at-risk' : 'off-track'));
+
+    var onTrack = 0, atRisk = 0, offTrack = 0;
+    document.querySelectorAll('[data-obj-id]').forEach(function (obj) {
+      var krs    = obj.querySelectorAll('.okr-progress-bar');
+      var objAvg = 0;
+      krs.forEach(function (b) { objAvg += parseInt(b.dataset.progress || 0, 10); });
+      objAvg = krs.length ? Math.round(objAvg / krs.length) : 0;
+      if (objAvg >= 70) onTrack++;
+      else if (objAvg >= 40) atRisk++;
+      else offTrack++;
+    });
+    document.getElementById('summary-on-track').innerHTML  = onTrack  + ' on track';
+    document.getElementById('summary-at-risk').innerHTML   = atRisk   + ' at risk';
+    document.getElementById('summary-off-track').innerHTML = offTrack + ' off track';
+  }
+
+  /* ── KR sliders ──────────────────────────────────────────────────── */
+  function initSlider(slider) {
+    slider.addEventListener('input', function () {
+      var pct    = parseInt(slider.value, 10);
+      var krId   = slider.dataset.kr;
+      var bar    = document.querySelector('#kr-' + krId + ' .okr-progress-bar');
+      var disp   = slider.closest('.okr-kr').querySelector('.kr-pct-display');
+      var pctSpan= slider.closest('.okr-kr').querySelector('.okr-kr-pct');
+
+      if (bar) {
+        bar.style.width       = pct + '%';
+        bar.dataset.progress  = pct;
+        bar.className         = 'okr-progress-bar ' + (pct >= 70 ? 'on-track' : (pct >= 40 ? 'at-risk' : 'off-track'));
+      }
+      if (disp)    disp.textContent   = pct + '%';
+      if (pctSpan) pctSpan.textContent = pct + '%';
+      recomputeSummary();
+    });
+
+    slider.addEventListener('change', function () {
+      _patch('/api/okr/key-results/' + slider.dataset.kr, { progress: parseInt(slider.value, 10) })
+        .catch(function () { alert('Failed to save progress — please refresh.'); });
+    });
+  }
+
+  document.querySelectorAll('.kr-slider').forEach(initSlider);
+  recomputeSummary();
+
+  /* ── Add KR buttons ──────────────────────────────────────────────── */
+  document.querySelectorAll('.okr-add-kr-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('kr-obj-id').value = btn.dataset.obj;
+      document.getElementById('new-kr-title').value    = '';
+      document.getElementById('new-kr-progress').value = '0';
+      $('#add-kr-modal').modal('show');
+    });
+  });
+
+  document.getElementById('save-new-kr-btn').addEventListener('click', function () {
+    var objId = document.getElementById('kr-obj-id').value;
+    var title = document.getElementById('new-kr-title').value.trim();
+    var pct   = parseInt(document.getElementById('new-kr-progress').value, 10) || 0;
+    if (!title) { alert('Please enter a key result title.'); return; }
+
+    _post('/api/okr/objectives/' + objId + '/key-results', { title: title, progress: pct })
+      .then(function (kr) {
+        var objEl   = document.getElementById('obj-' + objId);
+        var addBtn  = objEl.querySelector('.okr-add-kr-btn');
+        var krDiv   = document.createElement('div');
+        krDiv.className    = 'okr-kr';
+        krDiv.id           = 'kr-' + kr.id;
+        krDiv.dataset.krId = kr.id;
+        var statusCls = pct >= 70 ? 'on-track' : (pct >= 40 ? 'at-risk' : 'off-track');
+        krDiv.innerHTML =
+          '<div class="okr-kr-title"><span class="kr-title">' + _esc(kr.title) + '</span><span class="okr-kr-pct">' + pct + '%</span></div>' +
+          '<div class="okr-progress"><div class="okr-progress-bar ' + statusCls + '" style="width:' + pct + '%;" data-progress="' + pct + '"></div></div>' +
+          '<div style="margin-top:6px; display:flex; align-items:center; gap:8px;">' +
+            '<input type="range" class="kr-slider" data-kr="' + kr.id + '" min="0" max="100" value="' + pct + '" style="flex:1; cursor:pointer;">' +
+            '<span class="kr-pct-display" style="font-size:11px; font-weight:700; width:30px; text-align:right;">' + pct + '%</span>' +
+          '</div>';
+        objEl.insertBefore(krDiv, addBtn);
+        initSlider(krDiv.querySelector('.kr-slider'));
+        recomputeSummary();
+        $('#add-kr-modal').modal('hide');
+      })
+      .catch(function (err) { alert('Failed to add key result: ' + err.message); });
+  });
+
+  /* ── Add Objective ───────────────────────────────────────────────── */
+  function openAddObjectiveModal() {
+    document.getElementById('new-obj-title').value = '';
+    document.getElementById('new-obj-owner').value = '';
+    document.getElementById('new-obj-team').value  = '';
+    $('#add-obj-modal').modal('show');
+  }
+
+  var addObjBtn = document.getElementById('add-objective-btn');
+  var addObjBtnEmpty = document.getElementById('add-objective-btn-empty');
+  if (addObjBtn)      addObjBtn.addEventListener('click', openAddObjectiveModal);
+  if (addObjBtnEmpty) addObjBtnEmpty.addEventListener('click', openAddObjectiveModal);
+
+  document.getElementById('save-new-obj-btn').addEventListener('click', function () {
+    var title = document.getElementById('new-obj-title').value.trim();
+    if (!title) { alert('Please enter an objective title.'); return; }
+    _post('/api/okr/objectives', {
+      title:      title,
+      owner_name: document.getElementById('new-obj-owner').value,
+      team:       document.getElementById('new-obj-team').value,
+      cycle_id:   '{{ cycle.id }}'
+    }).then(function () {
+      location.reload();
+    }).catch(function (err) { alert('Failed: ' + err.message); });
+  });
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,214 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title">
+    Welcome back, {{ g.user.first_name or g.user.username }}
+  </h1>
+  <p class="erp-page-subtitle">Here is what is happening across your organisation today.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Island ──────────────────────────────────────────────────────── #}
+<div data-island="erpKpiDashboard" id="kpi-island" class="erp-island erp-mb-24">
+  {# Skeleton shown while island loads #}
+  <div id="kpi-skeleton" class="erp-kpi-grid">
+    {% for _ in range(4) %}
+    <div class="erp-card">
+      <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:12px;"></div>
+      <div class="erp-skeleton erp-skeleton-text wide" style="height:28px;margin-bottom:8px;"></div>
+      <div class="erp-skeleton erp-skeleton-text mid"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div id="kpi-grid" class="erp-kpi-grid" style="display:none;"></div>
+</div>
+
+{# ── Charts + Activity row ────────────────────────────────────────────── #}
+<div class="row">
+
+  {# Revenue chart island #}
+  <div class="col-md-8">
+    <div class="erp-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title">Revenue — Last 12 Months</h4>
+      <div data-island="erpRevenueChart" class="erp-island">
+        <canvas id="revenue-chart" height="90" aria-label="Revenue chart" role="img"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# Activity feed island #}
+  <div class="col-md-4">
+    <div class="erp-card erp-mb-24" style="height:100%; padding:0;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0">Recent Activity</h4>
+      </div>
+      <div data-island="erpActivityFeed" id="activity-island" class="erp-island" style="padding:8px 20px;">
+        <ul id="activity-list" class="erp-feed">
+          {% for _ in range(5) %}
+          <li class="erp-feed-item">
+            <div class="erp-skeleton" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;"></div>
+            <div style="flex:1;">
+              <div class="erp-skeleton erp-skeleton-text wide"></div>
+              <div class="erp-skeleton erp-skeleton-text short"></div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  /* ── KPI Dashboard island ─────────────────────────────────────────── */
+  ERPIslands.register('erpKpiDashboard', [], function (el) {
+    var skeleton = document.getElementById('kpi-skeleton');
+    var grid     = document.getElementById('kpi-grid');
+
+    var icons = {
+      revenue:    { icon: 'fa-usd',           accent: 'success' },
+      orders:     { icon: 'fa-shopping-cart',  accent: 'primary' },
+      customers:  { icon: 'fa-users',          accent: 'info'    },
+      overdue:    { icon: 'fa-exclamation',    accent: 'danger'  }
+    };
+
+    function trendClass(v) {
+      if (v > 0)  return 'erp-card-trend-up';
+      if (v < 0)  return 'erp-card-trend-down';
+      return 'erp-card-trend-neutral';
+    }
+
+    function trendIcon(v) {
+      if (v > 0) return '<i class="fa fa-arrow-up"></i>';
+      if (v < 0) return '<i class="fa fa-arrow-down"></i>';
+      return '<i class="fa fa-minus"></i>';
+    }
+
+    ERPIslands.fetchJSON('/api/dashboard/kpis')
+      .then(function (kpis) {
+        grid.innerHTML = '';
+        kpis.forEach(function (kpi) {
+          var meta   = icons[kpi.key] || { icon: 'fa-circle', accent: 'primary' };
+          var absChg = Math.abs(kpi.change_pct || 0).toFixed(1);
+          var card   = document.createElement('div');
+          card.className = 'erp-card';
+          card.innerHTML =
+            '<div class="erp-card-accent erp-card-accent-' + meta.accent + '"></div>' +
+            '<div class="erp-card-icon"><i class="fa ' + meta.icon + '"></i></div>' +
+            '<p class="erp-card-title">' + _esc(kpi.label) + '</p>' +
+            '<p class="erp-card-value">' + _esc(kpi.value) + '</p>' +
+            '<p class="erp-card-sub">' + _esc(kpi.sub || '') + '</p>' +
+            '<span class="erp-card-trend ' + trendClass(kpi.change_pct) + '">' +
+              trendIcon(kpi.change_pct) + ' ' + absChg + '%' +
+            '</span>';
+          grid.appendChild(card);
+        });
+        skeleton.style.display = 'none';
+        grid.style.display     = '';
+      })
+      .catch(function (err) {
+        skeleton.innerHTML =
+          '<div class="alert alert-warning">KPIs unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Revenue chart island ─────────────────────────────────────────── */
+  ERPIslands.register('erpRevenueChart', ['chartjs'], function (el) {
+    var canvas = el.querySelector('#revenue-chart');
+    if (!canvas) return;
+
+    ERPIslands.fetchJSON('/api/dashboard/revenue')
+      .then(function (data) {
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels:   data.labels,
+            datasets: [{
+              label:           'Revenue',
+              data:            data.values,
+              borderColor:     '#1a56db',
+              backgroundColor: 'rgba(26,86,219,.08)',
+              borderWidth:     2,
+              pointRadius:     3,
+              fill:            true,
+              tension:         0.35
+            }]
+          },
+          options: {
+            responsive:          true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' ' + (data.currency || '') + ctx.parsed.y.toLocaleString();
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: false,
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: {
+                  callback: function (v) {
+                    return (data.currency || '') + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+                  }
+                }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function (err) {
+        el.innerHTML = '<div class="alert alert-warning">Chart unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Activity feed island ─────────────────────────────────────────── */
+  ERPIslands.register('erpActivityFeed', [], function (el) {
+    var list = el.querySelector('#activity-list');
+    if (!list) return;
+
+    ERPIslands.fetchJSON('/api/dashboard/activity')
+      .then(function (items) {
+        list.innerHTML = '';
+        items.forEach(function (item) {
+          var initials = (item.user || '?').substring(0, 2).toUpperCase();
+          var li = document.createElement('li');
+          li.className = 'erp-feed-item';
+          li.innerHTML =
+            '<div class="erp-feed-avatar">' + _esc(initials) + '</div>' +
+            '<div class="erp-feed-body">' +
+              '<p class="erp-feed-text">' + _esc(item.text) + '</p>' +
+              '<span class="erp-feed-time">' + _esc(item.time_ago) + '</span>' +
+            '</div>';
+          list.appendChild(li);
+        });
+      })
+      .catch(function (err) {
+        list.innerHTML = '<li class="erp-feed-item"><span style="color:var(--erp-text-muted)">Activity unavailable.</span></li>';
+      });
+  });
+
+  /* ── Shared escape helper (local scope) ──────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+}());
+</script>
+{% endblock %}

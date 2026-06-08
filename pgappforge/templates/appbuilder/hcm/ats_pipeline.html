@@ -1,0 +1,385 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}ATS Pipeline — {{ job.title or 'Recruiting' }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ats-quick-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .ats-score-bar { height:4px; background:var(--erp-border); border-radius:2px; margin-top:5px; overflow:hidden; }
+  .ats-score-fill { height:100%; border-radius:2px; background:var(--erp-primary); }
+  .ats-candidate-drawer {
+    position:fixed; right:0; top:0; bottom:0; width:380px;
+    background:var(--erp-surface); border-left:1px solid var(--erp-border);
+    box-shadow:var(--erp-shadow-lg); z-index:1050;
+    transform:translateX(100%); transition:transform .25s ease;
+    display:flex; flex-direction:column;
+  }
+  .ats-candidate-drawer.open { transform:translateX(0); }
+  .ats-drawer-header {
+    padding:16px 20px; border-bottom:1px solid var(--erp-border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .ats-drawer-body { flex:1; overflow-y:auto; padding:20px; }
+  .ats-drawer-footer {
+    padding:14px 20px; border-top:1px solid var(--erp-border);
+    display:flex; gap:8px;
+  }
+  .ats-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.3); z-index:1049;
+  }
+  .ats-overlay.show { display:block; }
+  .ats-stage-header.stage-offer     { border-bottom-color:var(--erp-success); }
+  .ats-stage-header.stage-screen    { border-bottom-color:var(--erp-info); }
+  .ats-stage-header.stage-interview { border-bottom-color:var(--erp-warning); }
+  .ats-stage-header.stage-rejected  { border-bottom-color:var(--erp-danger); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <nav style="font-size:12px; color:var(--erp-text-muted); margin-bottom:4px;">
+        <a href="{{ url_for('ATSJobView.list') }}" style="color:var(--erp-primary);">Open Positions</a>
+        <span style="margin:0 6px;">/</span>
+        <span>{{ job.title or 'Pipeline' }}</span>
+      </nav>
+      <h1 class="erp-page-title">{{ job.title or 'Recruiting Pipeline' }}</h1>
+      <p class="erp-page-subtitle">
+        {{ job.department or '' }}{% if job.location %} &mdash; {{ job.location }}{% endif %}
+        {% if job.headcount %} &mdash; {{ job.headcount }} open seat(s){% endif %}
+      </p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center; flex-wrap:wrap;">
+      <span class="erp-badge erp-badge-blue" id="ats-total-badge">
+        <span id="ats-total-count">0</span> candidates
+      </span>
+      {% if appbuilder.sm.has_access('can_add', 'ATSCandidateView') %}
+      <button class="btn btn-primary btn-sm" id="add-candidate-btn">
+        <i class="fa fa-user-plus"></i> Add Candidate
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Stage summary bar ───────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24" id="ats-kpi-row">
+  {% for stage in stages %}
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-{{ loop.cycle('primary','info','warning','success','danger') }}"></div>
+    <p class="erp-card-title erp-mb-0">{{ stage.name }}</p>
+    <p class="erp-card-value" id="stage-count-{{ stage.id }}">0</p>
+    {% if stage.avg_days %}
+    <p class="erp-card-sub">avg {{ stage.avg_days }}d in stage</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── ATS Pipeline board ──────────────────────────────────────────────── #}
+<div data-island="atsPipelineBoard"
+     data-job-id="{{ job.id }}"
+     data-can-edit="{{ 'true' if appbuilder.sm.has_access('can_edit', 'ATSCandidateView') else 'false' }}"
+     class="erp-island">
+  <div class="ats-pipeline" id="ats-pipeline">
+    {% for stage in stages %}
+    <div class="ats-stage" id="stage-{{ stage.id }}" data-stage-id="{{ stage.id }}">
+      <div class="ats-stage-header stage-{{ stage.slug or stage.name | lower | replace(' ','-') }}">
+        <span class="ats-stage-name">{{ stage.name }}</span>
+        <span class="ats-stage-count" id="ats-badge-{{ stage.id }}">0</span>
+      </div>
+      <div class="ats-stage-body" id="stage-body-{{ stage.id }}">
+        {# Skeleton #}
+        {% for _ in range(2) %}
+        <div class="erp-skeleton" style="height:78px;border-radius:var(--erp-radius);margin-bottom:8px;"></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Candidate detail drawer ─────────────────────────────────────────── #}
+<div class="ats-overlay" id="ats-overlay"></div>
+<div class="ats-candidate-drawer" id="candidate-drawer">
+  <div class="ats-drawer-header">
+    <h4 style="margin:0; font-size:16px; font-weight:700;" id="drawer-name">Candidate</h4>
+    <button class="btn btn-default btn-xs" id="drawer-close"><i class="fa fa-times"></i></button>
+  </div>
+  <div class="ats-drawer-body" id="drawer-body">
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="d-name" class="form-control">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="d-email" class="form-control">
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="text" id="d-phone" class="form-control">
+    </div>
+    <div class="form-group">
+      <label>Current Stage</label>
+      <select id="d-stage" class="form-control">
+        {% for stage in stages %}
+        <option value="{{ stage.id }}">{{ stage.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Match Score (0–100)</label>
+      <input type="number" id="d-score" class="form-control" min="0" max="100">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="d-notes" class="form-control" rows="4"></textarea>
+    </div>
+    <input type="hidden" id="d-id">
+  </div>
+  <div class="ats-drawer-footer">
+    <button class="btn btn-danger btn-sm" id="d-reject-btn" style="margin-right:auto;">
+      <i class="fa fa-ban"></i> Reject
+    </button>
+    <button class="btn btn-default btn-sm" id="d-cancel-btn">Cancel</button>
+    <button class="btn btn-success btn-sm" id="d-advance-btn">
+      Advance <i class="fa fa-arrow-right"></i>
+    </button>
+    <button class="btn btn-primary btn-sm" id="d-save-btn">
+      <i class="fa fa-save"></i> Save
+    </button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _post(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},
+      body: JSON.stringify(body)
+    });
+  }
+  function _patch(url, body) {
+    return ERPIslands.fetchJSON(url, {
+      method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},
+      body: JSON.stringify(body)
+    });
+  }
+
+  var jobId    = document.querySelector('[data-job-id]').dataset.jobId;
+  var canEdit  = document.querySelector('[data-can-edit]').dataset.canEdit === 'true';
+  var cData    = {};
+  var stages   = {};  /* id → { name, order } */
+
+  /* Collect stage order from DOM */
+  document.querySelectorAll('.ats-stage').forEach(function (el, i) {
+    stages[el.dataset.stageId] = { order: i };
+  });
+
+  /* ── Build candidate card ─────────────────────────────────────────── */
+  function buildCandidate(c) {
+    cData[c.id] = c;
+    var score   = parseInt(c.match_score || 0, 10);
+    var el      = document.createElement('div');
+    el.className  = 'ats-candidate';
+    el.dataset.id = c.id;
+    el.innerHTML  =
+      '<div class="ats-candidate-name">' + _esc(c.full_name) + '</div>' +
+      '<div class="ats-candidate-role">' + _esc(c.current_title || c.email || '') + '</div>' +
+      (score ? '<span class="ats-candidate-score">' + score + '% match</span>' +
+        '<div class="ats-score-bar"><div class="ats-score-fill" style="width:' + score + '%;"></div></div>' : '');
+    el.addEventListener('click', function () { openDrawer(c.id); });
+    return el;
+  }
+
+  /* ── Update stage badge and kpi count ────────────────────────────── */
+  function updateStageCounts() {
+    var total = 0;
+    document.querySelectorAll('.ats-stage').forEach(function (stage) {
+      var sid   = stage.dataset.stageId;
+      var count = stage.querySelectorAll('.ats-candidate').length;
+      total    += count;
+      var badge = document.getElementById('ats-badge-' + sid);
+      var kpi   = document.getElementById('stage-count-' + sid);
+      if (badge) badge.textContent = count;
+      if (kpi)   kpi.textContent   = count;
+    });
+    var tc = document.getElementById('ats-total-count');
+    if (tc) tc.textContent = total;
+  }
+
+  /* ── Load pipeline ────────────────────────────────────────────────── */
+  function loadPipeline() {
+    ERPIslands.fetchJSON('/api/ats/jobs/' + jobId + '/candidates')
+      .then(function (candidates) {
+        document.querySelectorAll('.ats-stage-body').forEach(function (b) {
+          b.querySelectorAll('.erp-skeleton').forEach(function (s) { s.remove(); });
+        });
+        candidates.forEach(function (c) {
+          var body = document.getElementById('stage-body-' + c.stage_id);
+          if (body) body.appendChild(buildCandidate(c));
+        });
+        updateStageCounts();
+      })
+      .catch(function () {
+        document.querySelectorAll('.ats-stage-body').forEach(function (b) {
+          b.querySelectorAll('.erp-skeleton').forEach(function (s) { s.remove(); });
+        });
+      });
+  }
+
+  /* ── Drawer ───────────────────────────────────────────────────────── */
+  function openDrawer(id) {
+    var c = cData[id];
+    if (!c) return;
+    document.getElementById('d-id').value    = id;
+    document.getElementById('d-name').value  = c.full_name || '';
+    document.getElementById('d-email').value = c.email || '';
+    document.getElementById('d-phone').value = c.phone || '';
+    document.getElementById('d-stage').value = c.stage_id || '';
+    document.getElementById('d-score').value = c.match_score || '';
+    document.getElementById('d-notes').value = c.notes || '';
+    document.getElementById('drawer-name').textContent = c.full_name || 'Candidate';
+
+    var editable = ['d-name','d-email','d-phone','d-stage','d-score','d-notes'];
+    editable.forEach(function (fid) { document.getElementById(fid).disabled = !canEdit; });
+    document.getElementById('d-save-btn').style.display    = canEdit ? '' : 'none';
+    document.getElementById('d-advance-btn').style.display = canEdit ? '' : 'none';
+    document.getElementById('d-reject-btn').style.display  = canEdit ? '' : 'none';
+
+    document.getElementById('candidate-drawer').classList.add('open');
+    document.getElementById('ats-overlay').classList.add('show');
+  }
+
+  function closeDrawer() {
+    document.getElementById('candidate-drawer').classList.remove('open');
+    document.getElementById('ats-overlay').classList.remove('show');
+  }
+
+  document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+  document.getElementById('d-cancel-btn').addEventListener('click', closeDrawer);
+  document.getElementById('ats-overlay').addEventListener('click', closeDrawer);
+
+  document.getElementById('d-save-btn').addEventListener('click', function () {
+    var id = document.getElementById('d-id').value;
+    _patch('/api/ats/candidates/' + id, {
+      full_name:   document.getElementById('d-name').value,
+      email:       document.getElementById('d-email').value,
+      phone:       document.getElementById('d-phone').value,
+      stage_id:    document.getElementById('d-stage').value,
+      match_score: document.getElementById('d-score').value,
+      notes:       document.getElementById('d-notes').value
+    }).then(function (c) {
+      cData[id] = c;
+      var old = document.querySelector('.ats-candidate[data-id="' + id + '"]');
+      if (old) {
+        var body = document.getElementById('stage-body-' + c.stage_id);
+        if (body && old.closest('.ats-stage-body') !== body) {
+          old.remove();
+          body.appendChild(buildCandidate(c));
+        } else {
+          old.parentNode.replaceChild(buildCandidate(c), old);
+        }
+        updateStageCounts();
+      }
+      closeDrawer();
+    }).catch(function (err) { alert('Save failed: ' + err.message); });
+  });
+
+  document.getElementById('d-advance-btn').addEventListener('click', function () {
+    var id      = document.getElementById('d-id').value;
+    var current = document.getElementById('d-stage').value;
+    var stageIds = Array.from(document.querySelectorAll('.ats-stage')).map(function (s) { return s.dataset.stageId; });
+    var idx      = stageIds.indexOf(current);
+    if (idx === -1 || idx >= stageIds.length - 1) { alert('Already at final stage.'); return; }
+    var nextId   = stageIds[idx + 1];
+    document.getElementById('d-stage').value = nextId;
+    document.getElementById('d-save-btn').click();
+  });
+
+  document.getElementById('d-reject-btn').addEventListener('click', function () {
+    if (!confirm('Reject this candidate?')) return;
+    var id = document.getElementById('d-id').value;
+    _patch('/api/ats/candidates/' + id, { status: 'rejected' })
+      .then(function () {
+        var el = document.querySelector('.ats-candidate[data-id="' + id + '"]');
+        if (el) { el.remove(); updateStageCounts(); }
+        delete cData[id];
+        closeDrawer();
+      }).catch(function (err) { alert('Reject failed: ' + err.message); });
+  });
+
+  /* ── Add candidate button ─────────────────────────────────────────── */
+  var addBtn = document.getElementById('add-candidate-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', function () {
+      var firstStageId = (document.querySelector('.ats-stage') || {dataset:{}}).dataset.stageId || '';
+      var stub = { id: 'new', full_name: '', email: '', phone: '', stage_id: firstStageId, match_score: '', notes: '' };
+      cData['new'] = stub;
+      openDrawer('new');
+      document.getElementById('d-save-btn').textContent = ' Create';
+      document.getElementById('d-save-btn').onclick = function () {
+        _post('/api/ats/jobs/' + jobId + '/candidates', {
+          full_name:   document.getElementById('d-name').value,
+          email:       document.getElementById('d-email').value,
+          phone:       document.getElementById('d-phone').value,
+          stage_id:    document.getElementById('d-stage').value,
+          match_score: document.getElementById('d-score').value,
+          notes:       document.getElementById('d-notes').value
+        }).then(function (c) {
+          var body = document.getElementById('stage-body-' + c.stage_id);
+          if (body) body.appendChild(buildCandidate(c));
+          updateStageCounts();
+          closeDrawer();
+          /* Reset save button */
+          document.getElementById('d-save-btn').textContent = ' Save';
+          document.getElementById('d-save-btn').onclick = null;
+        }).catch(function (err) { alert('Create failed: ' + err.message); });
+      };
+    });
+  }
+
+  /* ── SortableJS drag between stages ──────────────────────────────── */
+  ERPIslands.register('atsPipelineBoard', ['sortable'], function (el) {
+    loadPipeline();
+
+    document.querySelectorAll('.ats-stage-body').forEach(function (body) {
+      Sortable.create(body, {
+        group:      'ats-' + jobId,
+        animation:  150,
+        disabled:   !canEdit,
+        onEnd: function (evt) {
+          var candId  = evt.item.dataset.id;
+          var newStage = evt.to.id.replace('stage-body-', '');
+          updateStageCounts();
+          _patch('/api/ats/candidates/' + candId, { stage_id: newStage, position: evt.newIndex })
+            .then(function (c) { if (cData[candId]) cData[candId].stage_id = c.stage_id; })
+            .catch(function () {
+              evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
+              updateStageCounts();
+              alert('Move failed — please refresh.');
+            });
+        }
+      });
+    });
+  });
+}());
+</script>
+{% endblock %}

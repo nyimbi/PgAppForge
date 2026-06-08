@@ -1,0 +1,81 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Lean Boards — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between;">
+    <div>
+      <h1 class="erp-page-title">Lean Boards</h1>
+      <p class="erp-page-subtitle">Manage Kanban boards across teams and value streams.</p>
+    </div>
+    {% if appbuilder.sm.has_access('can_add', 'LeanBoardView') %}
+    <a href="{{ url_for('LeanBoardView.add') }}" class="btn btn-primary" style="align-self:center;">
+      <i class="fa fa-plus"></i> New Board
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if boards %}
+<div class="row">
+  {% for board in boards %}
+  <div class="col-md-4 col-sm-6" style="margin-bottom:20px;">
+    <div class="erp-card" style="cursor:pointer;" onclick="window.location='{{ url_for('LeanBoardView.board', board_id=board.id) }}'">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <div class="erp-flex" style="justify-content:space-between; margin-bottom:10px;">
+        <p class="erp-card-title erp-mb-0">{{ board.team or 'General' }}</p>
+        <span class="erp-badge {% if board.active %}erp-badge-green{% else %}erp-badge-gray{% endif %}">
+          {{ 'Active' if board.active else 'Archived' }}
+        </span>
+      </div>
+      <h4 style="font-size:16px; font-weight:700; margin:0 0 8px; color:var(--erp-text);">
+        {{ board.name }}
+      </h4>
+      {% if board.description %}
+      <p style="font-size:12px; color:var(--erp-text-muted); margin:0 0 14px;">
+        {{ board.description | truncate(90) }}
+      </p>
+      {% endif %}
+      <div class="erp-flex erp-gap-16" style="font-size:12px; color:var(--erp-text-muted);">
+        <span><i class="fa fa-columns"></i> {{ board.column_count or 0 }} columns</span>
+        <span><i class="fa fa-tasks"></i> {{ board.card_count or 0 }} cards</span>
+        {% if board.wip_limit %}
+        <span><i class="fa fa-tachometer"></i> WIP {{ board.wip_limit }}</span>
+        {% endif %}
+      </div>
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--erp-border); display:flex; gap:8px;">
+        <a href="{{ url_for('LeanBoardView.board', board_id=board.id) }}"
+           class="btn btn-primary btn-xs" onclick="event.stopPropagation();">
+          <i class="fa fa-eye"></i> Open Board
+        </a>
+        {% if appbuilder.sm.has_access('can_edit', 'LeanBoardView') %}
+        <a href="{{ url_for('LeanBoardView.edit', pk=board.id) }}"
+           class="btn btn-default btn-xs" onclick="event.stopPropagation();">
+          <i class="fa fa-pencil"></i> Edit
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="erp-card erp-text-center" style="padding:48px 24px;">
+  <i class="fa fa-columns" style="font-size:48px; color:var(--erp-border); margin-bottom:16px; display:block;"></i>
+  <h4 style="font-weight:700; margin-bottom:8px;">No boards yet</h4>
+  <p style="color:var(--erp-text-muted); margin-bottom:20px;">
+    Create your first Lean board to start tracking work in progress.
+  </p>
+  {% if appbuilder.sm.has_access('can_add', 'LeanBoardView') %}
+  <a href="{{ url_for('LeanBoardView.add') }}" class="btn btn-primary">
+    <i class="fa fa-plus"></i> Create First Board
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

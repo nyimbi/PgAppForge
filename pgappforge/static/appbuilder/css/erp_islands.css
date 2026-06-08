@@ -1,0 +1,838 @@
+/* ==========================================================================
+   ERP Islands — Component Stylesheet
+   PgAppForge v4.8 · Bootstrap 3.4.1 compatible
+   ========================================================================== */
+
+/* ── Design tokens ─────────────────────────────────────────────────────── */
+:root {
+  --erp-primary:      #1a56db;
+  --erp-primary-lt:   #e8f0fe;
+  --erp-success:      #0e9f6e;
+  --erp-success-lt:   #def7ec;
+  --erp-warning:      #ff5a1f;
+  --erp-warning-lt:   #fff3cd;
+  --erp-danger:       #e02424;
+  --erp-danger-lt:    #fde8e8;
+  --erp-info:         #1c64f2;
+  --erp-info-lt:      #e1effe;
+  --erp-neutral:      #6b7280;
+  --erp-neutral-lt:   #f3f4f6;
+  --erp-surface:      #ffffff;
+  --erp-border:       #e5e7eb;
+  --erp-text:         #111827;
+  --erp-text-muted:   #6b7280;
+  --erp-radius:       6px;
+  --erp-radius-lg:    10px;
+  --erp-shadow-sm:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --erp-shadow:       0 4px 6px -1px rgba(0,0,0,.10), 0 2px 4px -1px rgba(0,0,0,.06);
+  --erp-shadow-lg:    0 10px 15px -3px rgba(0,0,0,.10), 0 4px 6px -2px rgba(0,0,0,.05);
+  --erp-transition:   150ms ease;
+  --erp-font:         -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ── Reset helpers ─────────────────────────────────────────────────────── */
+.erp-island *,
+.erp-island *::before,
+.erp-island *::after {
+  box-sizing: border-box;
+}
+
+.erp-island {
+  font-family: var(--erp-font);
+  color: var(--erp-text);
+}
+
+/* ── Page scaffold ─────────────────────────────────────────────────────── */
+.erp-page-header {
+  padding: 20px 0 16px;
+  border-bottom: 1px solid var(--erp-border);
+  margin-bottom: 24px;
+}
+
+.erp-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--erp-text);
+  margin: 0 0 4px;
+}
+
+.erp-page-subtitle {
+  font-size: 13px;
+  color: var(--erp-text-muted);
+  margin: 0;
+}
+
+/* ── Section title ─────────────────────────────────────────────────────── */
+.erp-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--erp-text-muted);
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--erp-border);
+}
+
+/* ── ERP Card ──────────────────────────────────────────────────────────── */
+.erp-card {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--erp-shadow-sm);
+  transition: box-shadow var(--erp-transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.erp-card:hover {
+  box-shadow: var(--erp-shadow);
+}
+
+.erp-card-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  border-radius: var(--erp-radius-lg) 0 0 var(--erp-radius-lg);
+}
+
+.erp-card-accent-primary { background: var(--erp-primary); }
+.erp-card-accent-success  { background: var(--erp-success); }
+.erp-card-accent-warning  { background: var(--erp-warning); }
+.erp-card-accent-danger   { background: var(--erp-danger); }
+.erp-card-accent-info     { background: var(--erp-info); }
+
+.erp-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--erp-text-muted);
+  margin: 0 0 8px;
+}
+
+.erp-card-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--erp-text);
+  line-height: 1;
+  margin: 0 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.erp-card-sub {
+  font-size: 12px;
+  color: var(--erp-text-muted);
+  margin: 0;
+}
+
+.erp-card-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 8px;
+}
+
+.erp-card-trend-up {
+  background: var(--erp-success-lt);
+  color: var(--erp-success);
+}
+
+.erp-card-trend-down {
+  background: var(--erp-danger-lt);
+  color: var(--erp-danger);
+}
+
+.erp-card-trend-neutral {
+  background: var(--erp-neutral-lt);
+  color: var(--erp-neutral);
+}
+
+.erp-card-icon {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  opacity: .15;
+}
+
+/* ── KPI Grid ──────────────────────────────────────────────────────────── */
+.erp-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* ── Status Badges ─────────────────────────────────────────────────────── */
+.erp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.erp-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.erp-badge-green  { background: var(--erp-success-lt); color: var(--erp-success); }
+.erp-badge-yellow { background: var(--erp-warning-lt); color: #92400e; }
+.erp-badge-red    { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+.erp-badge-blue   { background: var(--erp-info-lt);    color: var(--erp-info); }
+.erp-badge-gray   { background: var(--erp-neutral-lt); color: var(--erp-neutral); }
+
+/* ── Kanban Board ──────────────────────────────────────────────────────── */
+.kanban-board {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  align-items: flex-start;
+}
+
+.kanban-board::-webkit-scrollbar { height: 6px; }
+.kanban-board::-webkit-scrollbar-track { background: var(--erp-neutral-lt); border-radius: 3px; }
+.kanban-board::-webkit-scrollbar-thumb { background: var(--erp-border); border-radius: 3px; }
+
+.kanban-column {
+  flex: 0 0 260px;
+  background: var(--erp-neutral-lt);
+  border-radius: var(--erp-radius-lg);
+  border: 1px solid var(--erp-border);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--erp-border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--erp-text);
+  background: var(--erp-surface);
+  border-radius: var(--erp-radius-lg) var(--erp-radius-lg) 0 0;
+}
+
+.kanban-column-body {
+  padding: 10px;
+  flex: 1;
+  min-height: 80px;
+}
+
+.kanban-wip-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--erp-neutral-lt);
+  color: var(--erp-neutral);
+  border: 1px solid var(--erp-border);
+}
+
+.kanban-wip-breach {
+  background: var(--erp-danger-lt);
+  color: var(--erp-danger);
+  border-color: transparent;
+}
+
+.kanban-card {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  box-shadow: var(--erp-shadow-sm);
+  cursor: grab;
+  transition: box-shadow var(--erp-transition), transform var(--erp-transition);
+  user-select: none;
+}
+
+.kanban-card:active  { cursor: grabbing; }
+.kanban-card:hover   { box-shadow: var(--erp-shadow); transform: translateY(-1px); }
+
+.kanban-card.sortable-ghost {
+  opacity: .4;
+  background: var(--erp-primary-lt);
+}
+
+.kanban-card.sortable-chosen {
+  box-shadow: var(--erp-shadow-lg);
+  transform: rotate(1deg);
+}
+
+.kanban-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--erp-text);
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.kanban-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--erp-text-muted);
+}
+
+.kanban-card-priority {
+  width: 3px;
+  border-radius: 2px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.kanban-card-priority-high   { background: var(--erp-danger); }
+.kanban-card-priority-medium { background: var(--erp-warning); }
+.kanban-card-priority-low    { background: var(--erp-success); }
+
+/* Drag-over highlight */
+.kanban-column-body.drag-over {
+  background: var(--erp-primary-lt);
+  border-radius: 0 0 var(--erp-radius-lg) var(--erp-radius-lg);
+}
+
+/* ── ATS Pipeline ──────────────────────────────────────────────────────── */
+.ats-pipeline {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  align-items: flex-start;
+}
+
+.ats-stage {
+  flex: 0 0 220px;
+  background: var(--erp-neutral-lt);
+  border-radius: var(--erp-radius-lg);
+  border: 1px solid var(--erp-border);
+}
+
+.ats-stage-header {
+  padding: 10px 14px;
+  background: var(--erp-surface);
+  border-radius: var(--erp-radius-lg) var(--erp-radius-lg) 0 0;
+  border-bottom: 3px solid var(--erp-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ats-stage-name {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--erp-text);
+}
+
+.ats-stage-count {
+  font-size: 11px;
+  background: var(--erp-primary);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-weight: 700;
+}
+
+.ats-stage-body {
+  padding: 10px;
+  min-height: 80px;
+}
+
+.ats-candidate {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius);
+  padding: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: box-shadow var(--erp-transition);
+}
+
+.ats-candidate:hover { box-shadow: var(--erp-shadow); }
+
+.ats-candidate-name {
+  font-weight: 600;
+  color: var(--erp-text);
+  margin-bottom: 3px;
+}
+
+.ats-candidate-role {
+  font-size: 11px;
+  color: var(--erp-text-muted);
+}
+
+.ats-candidate-score {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--erp-primary);
+  margin-top: 4px;
+}
+
+/* ── OKR Progress ──────────────────────────────────────────────────────── */
+.okr-card {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  box-shadow: var(--erp-shadow-sm);
+}
+
+.okr-objective {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--erp-text);
+  margin-bottom: 12px;
+}
+
+.okr-kr {
+  margin-bottom: 12px;
+}
+
+.okr-kr-title {
+  font-size: 13px;
+  color: var(--erp-text-muted);
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.okr-kr-pct {
+  font-weight: 700;
+  color: var(--erp-text);
+}
+
+.okr-progress {
+  height: 8px;
+  background: var(--erp-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.okr-progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .6s ease;
+}
+
+.okr-progress-bar.on-track  { background: var(--erp-success); }
+.okr-progress-bar.at-risk   { background: var(--erp-warning); }
+.okr-progress-bar.off-track { background: var(--erp-danger); }
+
+/* ── Process Mining Graph ──────────────────────────────────────────────── */
+.pm-graph {
+  width: 100%;
+  min-height: 440px;
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.pm-graph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pm-node {
+  cursor: pointer;
+}
+
+.pm-node rect {
+  fill: var(--erp-primary-lt);
+  stroke: var(--erp-primary);
+  stroke-width: 1.5;
+  rx: 6;
+}
+
+.pm-node text {
+  font-family: var(--erp-font);
+  font-size: 12px;
+  fill: var(--erp-primary);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.pm-link {
+  fill: none;
+  stroke: var(--erp-border);
+  stroke-width: 2;
+  marker-end: url(#arrowhead);
+}
+
+.pm-link.hot {
+  stroke: var(--erp-warning);
+  stroke-width: 3;
+}
+
+.pm-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pm-btn {
+  width: 28px;
+  height: 28px;
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--erp-text-muted);
+  transition: background var(--erp-transition);
+}
+
+.pm-btn:hover { background: var(--erp-neutral-lt); }
+
+/* ── Gantt Chart ───────────────────────────────────────────────────────── */
+.gantt-container {
+  width: 100%;
+  overflow-x: auto;
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg);
+  box-shadow: var(--erp-shadow-sm);
+}
+
+.gantt-header {
+  display: flex;
+  background: var(--erp-neutral-lt);
+  border-bottom: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg) var(--erp-radius-lg) 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.gantt-label-header {
+  flex: 0 0 200px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--erp-text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-right: 1px solid var(--erp-border);
+}
+
+.gantt-timeline-header {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.gantt-day-header {
+  flex: 0 0 40px;
+  text-align: center;
+  padding: 10px 0;
+  font-size: 11px;
+  color: var(--erp-text-muted);
+  font-weight: 600;
+  border-right: 1px solid var(--erp-border);
+}
+
+.gantt-day-header.today {
+  background: var(--erp-primary-lt);
+  color: var(--erp-primary);
+}
+
+.gantt-row {
+  display: flex;
+  border-bottom: 1px solid var(--erp-border);
+  min-height: 44px;
+}
+
+.gantt-row:last-child { border-bottom: none; }
+.gantt-row:hover { background: #fafafa; }
+
+.gantt-label {
+  flex: 0 0 200px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--erp-text);
+  border-right: 1px solid var(--erp-border);
+  display: flex;
+  align-items: center;
+  background: var(--erp-surface);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.gantt-timeline {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.gantt-bar {
+  position: absolute;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--erp-primary);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: filter var(--erp-transition);
+}
+
+.gantt-bar:hover { filter: brightness(1.1); }
+.gantt-bar.completed { background: var(--erp-success); }
+.gantt-bar.at-risk   { background: var(--erp-warning); }
+.gantt-bar.delayed   { background: var(--erp-danger); }
+
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--erp-danger);
+  opacity: .6;
+  z-index: 4;
+}
+
+/* ── Skeleton Loading ──────────────────────────────────────────────────── */
+@keyframes erp-skeleton-pulse {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.erp-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--erp-border) 25%,
+    #ebebeb 50%,
+    var(--erp-border) 75%
+  );
+  background-size: 800px 100%;
+  animation: erp-skeleton-pulse 1.6s ease-in-out infinite;
+  border-radius: var(--erp-radius);
+}
+
+.erp-skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.erp-skeleton-text.wide  { width: 100%; }
+.erp-skeleton-text.mid   { width: 66%; }
+.erp-skeleton-text.short { width: 40%; }
+
+.erp-skeleton-card {
+  height: 120px;
+  border-radius: var(--erp-radius-lg);
+  margin-bottom: 16px;
+}
+
+/* ── Activity Feed ─────────────────────────────────────────────────────── */
+.erp-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.erp-feed-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--erp-border);
+  font-size: 13px;
+}
+
+.erp-feed-item:last-child { border-bottom: none; }
+
+.erp-feed-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--erp-primary-lt);
+  color: var(--erp-primary);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.erp-feed-body { flex: 1; }
+
+.erp-feed-text {
+  color: var(--erp-text);
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.erp-feed-time {
+  font-size: 11px;
+  color: var(--erp-text-muted);
+}
+
+/* ── Data Tables ───────────────────────────────────────────────────────── */
+.erp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.erp-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--erp-text-muted);
+  background: var(--erp-neutral-lt);
+  border-bottom: 2px solid var(--erp-border);
+}
+
+.erp-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--erp-border);
+  color: var(--erp-text);
+  vertical-align: middle;
+}
+
+.erp-table tbody tr:hover { background: #fafafa; }
+.erp-table tbody tr:last-child td { border-bottom: none; }
+
+.erp-table-wrap {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg);
+  box-shadow: var(--erp-shadow-sm);
+  overflow: hidden;
+}
+
+/* ── Chart container ───────────────────────────────────────────────────── */
+.erp-chart-wrap {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-lg);
+  padding: 20px;
+  box-shadow: var(--erp-shadow-sm);
+}
+
+.erp-chart-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--erp-text);
+  margin-bottom: 16px;
+}
+
+/* ── Violations severity bar ───────────────────────────────────────────── */
+.sod-severity-critical { border-left: 4px solid var(--erp-danger);  padding-left: 8px; }
+.sod-severity-high     { border-left: 4px solid var(--erp-warning); padding-left: 8px; }
+.sod-severity-medium   { border-left: 4px solid var(--erp-info);    padding-left: 8px; }
+.sod-severity-low      { border-left: 4px solid var(--erp-success); padding-left: 8px; }
+
+/* ── Risk score pill ───────────────────────────────────────────────────── */
+.risk-score {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  width: 38px;
+  text-align: center;
+  padding: 2px 0;
+  border-radius: var(--erp-radius);
+}
+
+.risk-score-critical { background: var(--erp-danger-lt);  color: var(--erp-danger); }
+.risk-score-high     { background: var(--erp-warning-lt); color: #92400e; }
+.risk-score-medium   { background: var(--erp-info-lt);    color: var(--erp-info); }
+.risk-score-low      { background: var(--erp-success-lt); color: var(--erp-success); }
+
+/* ── Utility classes ───────────────────────────────────────────────────── */
+.erp-mt-0  { margin-top: 0 !important; }
+.erp-mb-0  { margin-bottom: 0 !important; }
+.erp-mb-8  { margin-bottom: 8px !important; }
+.erp-mb-16 { margin-bottom: 16px !important; }
+.erp-mb-24 { margin-bottom: 24px !important; }
+.erp-text-right { text-align: right !important; }
+.erp-text-center { text-align: center !important; }
+.erp-flex  { display: flex; align-items: center; }
+.erp-gap-8 { gap: 8px; }
+.erp-gap-16{ gap: 16px; }
+.erp-w-full{ width: 100%; }
+.erp-truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .erp-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .kanban-board,
+  .ats-pipeline {
+    flex-direction: column;
+  }
+  .kanban-column,
+  .ats-stage {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+  .gantt-label { flex: 0 0 140px; }
+}
+
+@media (max-width: 480px) {
+  .erp-kpi-grid { grid-template-columns: 1fr; }
+  .erp-card-value { font-size: 22px; }
+}

@@ -1,0 +1,342 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Process Mining — {{ process.name or 'Process Analysis' }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pm-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .pm-filter-pill {
+    padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--erp-border); background: var(--erp-surface);
+    color: var(--erp-text-muted); cursor: pointer; transition: all var(--erp-transition);
+  }
+  .pm-filter-pill.active { background: var(--erp-primary); color: #fff; border-color: var(--erp-primary); }
+  .pm-stats {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .pm-stat-card {
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius); padding: 12px 16px;
+  }
+  .pm-stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing:.05em; color: var(--erp-text-muted); margin-bottom: 4px; }
+  .pm-stat-value { font-size: 20px; font-weight: 800; color: var(--erp-text); font-variant-numeric: tabular-nums; }
+  .pm-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; margin-top: 10px; }
+  .pm-legend-item { display: flex; align-items: center; gap: 5px; }
+  .pm-legend-line { width: 24px; height: 3px; border-radius: 2px; }
+  .pm-tooltip {
+    position: absolute; background: rgba(17,24,39,.88); color: #fff;
+    padding: 7px 12px; border-radius: 6px; font-size: 12px; pointer-events: none;
+    white-space: nowrap; z-index: 20; display: none;
+  }
+  .pm-sidebar {
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); padding: 16px 18px;
+  }
+  .pm-sidebar h5 { font-size: 13px; font-weight: 700; margin: 0 0 12px; }
+  .pm-variant-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 0;
+    border-bottom: 1px solid var(--erp-border); font-size: 12px;
+  }
+  .pm-variant-row:last-child { border-bottom: none; }
+  .pm-variant-count { font-weight: 700; color: var(--erp-primary); min-width: 28px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title">Process Mining</h1>
+  <p class="erp-page-subtitle">
+    {{ process.name or 'Event log analysis' }}
+    {% if process.case_count %} &mdash; {{ process.case_count }} cases{% endif %}
+  </p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Stats row ───────────────────────────────────────────────────────── #}
+<div class="pm-stats erp-mb-16">
+  <div class="pm-stat-card">
+    <div class="pm-stat-label">Total Cases</div>
+    <div class="pm-stat-value" id="stat-cases">{{ process.case_count or '—' }}</div>
+  </div>
+  <div class="pm-stat-card">
+    <div class="pm-stat-label">Avg Duration</div>
+    <div class="pm-stat-value" id="stat-duration">{{ process.avg_duration or '—' }}</div>
+  </div>
+  <div class="pm-stat-card">
+    <div class="pm-stat-label">Variants</div>
+    <div class="pm-stat-value" id="stat-variants">{{ process.variant_count or '—' }}</div>
+  </div>
+  <div class="pm-stat-card">
+    <div class="pm-stat-label">Happy Path %</div>
+    <div class="pm-stat-value" id="stat-happy">{{ process.happy_path_pct or '—' }}</div>
+  </div>
+</div>
+
+{# ── Toolbar ──────────────────────────────────────────────────────────── #}
+<div class="pm-toolbar erp-mb-16">
+  <strong style="font-size:12px; color:var(--erp-text-muted);">Show edges:</strong>
+  <button class="pm-filter-pill active" data-filter="all">All</button>
+  <button class="pm-filter-pill" data-filter="happy">Happy path</button>
+  <button class="pm-filter-pill" data-filter="hot">Bottlenecks</button>
+  <div style="margin-left:auto; display:flex; gap:6px;">
+    <button class="btn btn-default btn-xs" id="pm-zoom-in"  title="Zoom in">+</button>
+    <button class="btn btn-default btn-xs" id="pm-zoom-out" title="Zoom out">−</button>
+    <button class="btn btn-default btn-xs" id="pm-reset"    title="Reset view">⟳</button>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-9">
+    {# ── Process graph ─────────────────────────────────────────────── #}
+    <div class="pm-graph" id="pm-graph-container" style="min-height:480px; position:relative;">
+      <div class="erp-skeleton" style="position:absolute;inset:0;border-radius:var(--erp-radius-lg);" id="pm-skeleton"></div>
+      <div data-island="processMiningGraph"
+           data-process-id="{{ process.id }}"
+           class="erp-island"
+           style="width:100%;height:480px;">
+      </div>
+      <div class="pm-tooltip" id="pm-tooltip"></div>
+    </div>
+
+    <div class="pm-legend erp-mb-16" style="margin-top:10px;">
+      <span class="pm-legend-item">
+        <span class="pm-legend-line" style="background:var(--erp-border);"></span> Normal flow
+      </span>
+      <span class="pm-legend-item">
+        <span class="pm-legend-line" style="background:var(--erp-warning); height:4px;"></span> Bottleneck
+      </span>
+      <span class="pm-legend-item">
+        <span class="pm-legend-line" style="background:var(--erp-primary);"></span> Happy path
+      </span>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="pm-sidebar">
+      <h5>Top Variants</h5>
+      <div id="pm-variants">
+        {% if process.variants %}
+          {% for v in process.variants[:8] %}
+          <div class="pm-variant-row">
+            <span class="pm-variant-count">{{ v.case_count }}</span>
+            <span style="flex:1; color:var(--erp-text-muted);">{{ v.path | truncate(40) }}</span>
+            <span class="erp-badge erp-badge-{{ 'green' if loop.first else 'gray' }}" style="font-size:10px;">
+              {{ v.pct }}%
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div id="pm-variants-skeleton">
+            {% for _ in range(5) %}
+            <div class="erp-skeleton erp-skeleton-text wide" style="margin-bottom:10px;"></div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="pm-sidebar" style="margin-top:16px;">
+      <h5>Selected Activity</h5>
+      <div id="pm-node-detail" style="font-size:12px; color:var(--erp-text-muted);">
+        Click a node in the graph to see details.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var processId  = (document.querySelector('[data-process-id]') || {}).dataset.processId;
+  var activeFilter = 'all';
+
+  /* ── Process mining graph island (D3) ────────────────────────────── */
+  ERPIslands.register('processMiningGraph', ['d3'], function (el) {
+    var skeleton = document.getElementById('pm-skeleton');
+    var tooltip  = document.getElementById('pm-tooltip');
+
+    ERPIslands.fetchJSON('/api/process-mining/' + processId + '/graph')
+      .then(function (data) {
+        if (skeleton) skeleton.remove();
+        drawGraph(el, data);
+
+        /* Populate variants sidebar if not server-rendered */
+        var variantsSkel = document.getElementById('pm-variants-skeleton');
+        if (variantsSkel && data.variants && data.variants.length) {
+          var container = document.getElementById('pm-variants');
+          container.innerHTML = '';
+          data.variants.slice(0, 8).forEach(function (v, i) {
+            var row = document.createElement('div');
+            row.className = 'pm-variant-row';
+            row.innerHTML =
+              '<span class="pm-variant-count">' + (v.case_count || 0) + '</span>' +
+              '<span style="flex:1; color:var(--erp-text-muted);">' + _esc((v.path || '').substring(0, 40)) + '</span>' +
+              '<span class="erp-badge erp-badge-' + (i === 0 ? 'green' : 'gray') + '" style="font-size:10px;">' +
+                (v.pct || 0) + '%' +
+              '</span>';
+            container.appendChild(row);
+          });
+        }
+
+        /* Update stat cards */
+        if (data.stats) {
+          if (data.stats.case_count)      document.getElementById('stat-cases').textContent    = data.stats.case_count;
+          if (data.stats.avg_duration)    document.getElementById('stat-duration').textContent = data.stats.avg_duration;
+          if (data.stats.variant_count)   document.getElementById('stat-variants').textContent = data.stats.variant_count;
+          if (data.stats.happy_path_pct)  document.getElementById('stat-happy').textContent    = data.stats.happy_path_pct + '%';
+        }
+      })
+      .catch(function (err) {
+        if (skeleton) skeleton.remove();
+        el.innerHTML =
+          '<div class="alert alert-warning" style="margin:20px;">Graph unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── D3 rendering ────────────────────────────────────────────────── */
+  function drawGraph(container, data) {
+    var nodes  = data.nodes || [];
+    var links  = data.links || [];
+    var W      = container.offsetWidth  || 700;
+    var H      = container.offsetHeight || 480;
+    var tooltip = document.getElementById('pm-tooltip');
+
+    var svg = d3.select(container)
+      .append('svg')
+      .attr('width', W).attr('height', H)
+      .call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', function (event) {
+        gMain.attr('transform', event.transform);
+      }));
+
+    /* Arrow marker */
+    svg.append('defs').append('marker')
+      .attr('id', 'arrowhead').attr('viewBox', '0 -5 10 10')
+      .attr('refX', 22).attr('refY', 0)
+      .attr('markerWidth', 6).attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#9ca3af');
+
+    var gMain = svg.append('g');
+
+    var sim = d3.forceSimulation(nodes)
+      .force('link',   d3.forceLink(links).id(function (d) { return d.id; }).distance(120))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .force('collision', d3.forceCollide(50));
+
+    var link = gMain.append('g').selectAll('line')
+      .data(links).enter().append('line')
+      .attr('class', function (d) { return 'pm-link' + (d.hot ? ' hot' : ''); })
+      .attr('marker-end', 'url(#arrowhead)');
+
+    /* Edge frequency label */
+    var edgeLabel = gMain.append('g').selectAll('text')
+      .data(links).enter().append('text')
+      .attr('font-size', 10).attr('fill', '#9ca3af').attr('text-anchor', 'middle')
+      .text(function (d) { return d.count ? d.count : ''; });
+
+    var nodeG = gMain.append('g').selectAll('g')
+      .data(nodes).enter().append('g')
+      .attr('class', 'pm-node')
+      .call(d3.drag()
+        .on('start', function (event, d) {
+          if (!event.active) sim.alphaTarget(0.3).restart();
+          d.fx = d.x; d.fy = d.y;
+        })
+        .on('drag', function (event, d) { d.fx = event.x; d.fy = event.y; })
+        .on('end',  function (event, d) {
+          if (!event.active) sim.alphaTarget(0);
+          d.fx = null; d.fy = null;
+        })
+      );
+
+    nodeG.append('rect')
+      .attr('x', -52).attr('y', -18).attr('width', 104).attr('height', 36).attr('rx', 6)
+      .style('fill', function (d) { return d.start || d.end ? 'var(--erp-primary-lt)' : '#fff'; })
+      .style('stroke', function (d) { return d.start || d.end ? 'var(--erp-primary)' : 'var(--erp-border)'; })
+      .style('stroke-width', function (d) { return d.start || d.end ? 2 : 1.5; });
+
+    nodeG.append('text')
+      .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
+      .attr('font-size', 11).attr('fill', 'var(--erp-text)')
+      .text(function (d) {
+        var lbl = d.label || d.id || '';
+        return lbl.length > 14 ? lbl.substring(0, 13) + '…' : lbl;
+      });
+
+    /* Node hover tooltip */
+    nodeG
+      .on('mouseover', function (event, d) {
+        tooltip.style.display = 'block';
+        tooltip.textContent   = (d.label || d.id) + (d.avg_time ? ' · avg ' + d.avg_time : '') + (d.count ? ' · ' + d.count + ' cases' : '');
+      })
+      .on('mousemove', function (event) {
+        var rect = container.getBoundingClientRect();
+        tooltip.style.left = (event.clientX - rect.left + 12) + 'px';
+        tooltip.style.top  = (event.clientY - rect.top  - 30) + 'px';
+      })
+      .on('mouseout', function () { tooltip.style.display = 'none'; })
+      .on('click', function (event, d) {
+        var detail = document.getElementById('pm-node-detail');
+        if (detail) {
+          detail.innerHTML =
+            '<strong>' + _esc(d.label || d.id) + '</strong><br>' +
+            (d.count     ? '<span style="color:var(--erp-text);">Cases: <strong>' + d.count + '</strong></span><br>' : '') +
+            (d.avg_time  ? '<span style="color:var(--erp-text);">Avg time: <strong>' + _esc(d.avg_time) + '</strong></span><br>' : '') +
+            (d.rework_pct? '<span style="color:var(--erp-warning);">Rework: ' + d.rework_pct + '%</span>' : '');
+        }
+      });
+
+    sim.on('tick', function () {
+      link
+        .attr('x1', function (d) { return d.source.x; }).attr('y1', function (d) { return d.source.y; })
+        .attr('x2', function (d) { return d.target.x; }).attr('y2', function (d) { return d.target.y; });
+
+      edgeLabel
+        .attr('x', function (d) { return (d.source.x + d.target.x) / 2; })
+        .attr('y', function (d) { return (d.source.y + d.target.y) / 2; });
+
+      nodeG.attr('transform', function (d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+    });
+
+    /* Zoom controls */
+    var zoom = d3.zoom().scaleExtent([0.3, 3]).on('zoom', function (event) {
+      gMain.attr('transform', event.transform);
+    });
+    svg.call(zoom);
+    document.getElementById('pm-zoom-in').addEventListener('click',  function () { svg.transition().call(zoom.scaleBy, 1.3); });
+    document.getElementById('pm-zoom-out').addEventListener('click', function () { svg.transition().call(zoom.scaleBy, 0.77); });
+    document.getElementById('pm-reset').addEventListener('click',    function () { svg.transition().call(zoom.transform, d3.zoomIdentity); });
+
+    /* Filter pills */
+    document.querySelectorAll('.pm-filter-pill').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        document.querySelectorAll('.pm-filter-pill').forEach(function (p) { p.classList.remove('active'); });
+        pill.classList.add('active');
+        var f = pill.dataset.filter;
+        link.style('display', function (d) {
+          if (f === 'all')     return null;
+          if (f === 'hot')     return d.hot     ? null : 'none';
+          if (f === 'happy')   return d.happy   ? null : 'none';
+          return null;
+        });
+      });
+    });
+  }
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ appbuilder.app_name }}{% endblock %}</title>
+
+  <!-- Bootstrap 3.4.1 (FAB bundled) -->
+  <link rel="stylesheet" href="{{ url_for('appbuilder.static', filename='css/bootstrap.min.css') }}">
+  <!-- Font Awesome (FAB bundled) -->
+  <link rel="stylesheet" href="{{ url_for('appbuilder.static', filename='css/font-awesome.min.css') }}">
+  <!-- ERP Islands component styles -->
+  <link rel="stylesheet" href="{{ url_for('appbuilder.static', filename='css/erp_islands.css') }}">
+
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  {# ── Navigation bar (FAB standard) ──────────────────────────────── #}
+  {% include 'appbuilder/navbar.html' %}
+
+  {# ── Main container ──────────────────────────────────────────────── #}
+  <div class="container-fluid" style="padding-top:16px; padding-bottom:40px;">
+
+    {# Flash messages #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible" role="alert">
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {# Page header block — override to set page title / breadcrumb #}
+    {% block page_header %}{% endblock %}
+
+    {# Primary content #}
+    {% block content %}{% endblock %}
+
+  </div>{# /container-fluid #}
+
+  {# ── jQuery (FAB bundled) ────────────────────────────────────────── #}
+  <script src="{{ url_for('appbuilder.static', filename='js/jquery-latest.js') }}"></script>
+  {# Bootstrap JS (FAB bundled) #}
+  <script src="{{ url_for('appbuilder.static', filename='js/bootstrap.min.js') }}"></script>
+  {# ERP Islands runtime #}
+  <script src="{{ url_for('appbuilder.static', filename='js/erp_islands.js') }}"></script>
+
+  {% block extra_js %}{% endblock %}
+
+</body>
+</html>

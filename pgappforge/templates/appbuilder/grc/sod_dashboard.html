@@ -1,0 +1,308 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}SoD Analyzer — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title">Segregation of Duties Analyzer</h1>
+  <p class="erp-page-subtitle">Detect conflicting access rights, simulate role grants, and manage remediation.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPI row ─────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24" id="sod-kpis">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <p class="erp-card-title">Critical Violations</p>
+    <p class="erp-card-value" id="kpi-critical">—</p>
+    <p class="erp-card-sub">Requires immediate remediation</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title">High Risk</p>
+    <p class="erp-card-value" id="kpi-high">—</p>
+    <p class="erp-card-sub">Review within 5 business days</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-info"></div>
+    <p class="erp-card-title">Medium Risk</p>
+    <p class="erp-card-value" id="kpi-medium">—</p>
+    <p class="erp-card-sub">Mitigating controls required</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <p class="erp-card-title">Users Affected</p>
+    <p class="erp-card-value" id="kpi-users">—</p>
+    <p class="erp-card-sub">Across all violations</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Violations table ──────────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:14px 18px; border-bottom:1px solid var(--erp-border); display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0">Active Violations</h4>
+        <div>
+          <select id="sod-severity-filter" class="form-control input-sm" style="display:inline-block;width:auto;">
+            <option value="">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+      <div data-island="sodViolationsTable" class="erp-island">
+        <table class="erp-table" id="violations-table">
+          <thead>
+            <tr>
+              <th>Risk Score</th>
+              <th>User</th>
+              <th>Conflict</th>
+              <th>Roles</th>
+              <th>Severity</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="violations-body">
+            <tr>
+              <td colspan="6" class="erp-text-center" style="padding:24px;color:var(--erp-text-muted);">
+                <i class="fa fa-spinner fa-spin"></i> Loading violations…
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Right column: chart + simulate form ──────────────────────────── #}
+  <div class="col-md-4">
+
+    {# Risk distribution doughnut #}
+    <div class="erp-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title">Risk Distribution</h4>
+      <div data-island="sodRiskChart" class="erp-island">
+        <canvas id="sod-risk-chart" height="160" aria-label="Risk distribution chart" role="img"></canvas>
+      </div>
+    </div>
+
+    {# Simulate role grant form #}
+    <div class="erp-card erp-mb-24">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <h4 class="erp-chart-title">Simulate Role Grant</h4>
+      <p style="font-size:12px;color:var(--erp-text-muted);margin-bottom:14px;">
+        Check whether assigning a role to a user would create new SoD conflicts before committing.
+      </p>
+      <form id="sod-simulate-form">
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="control-label" style="font-size:12px;">Username</label>
+          <input type="text" name="username" id="sim-username" class="form-control input-sm" placeholder="e.g. jdoe" required>
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="control-label" style="font-size:12px;">Role to Grant</label>
+          <input type="text" name="role" id="sim-role" class="form-control input-sm" placeholder="e.g. AP_Approver" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm btn-block">
+          <i class="fa fa-search"></i> Run Simulation
+        </button>
+      </form>
+      <div id="sim-result" style="margin-top:12px; display:none;"></div>
+    </div>
+
+  </div>
+</div>
+
+{# ── Conflict Catalogue ──────────────────────────────────────────────── #}
+{% if conflicts %}
+<h4 class="erp-section-title">Conflict Catalogue</h4>
+<div class="row">
+  {% for conflict in conflicts %}
+  <div class="col-md-6 col-lg-4" style="margin-bottom:16px;">
+    <div class="erp-card sod-severity-{{ conflict.severity | lower }}">
+      <p class="erp-card-title">{{ conflict.code }}</p>
+      <p style="font-size:13px; font-weight:600; margin:0 0 6px;">{{ conflict.name }}</p>
+      <p style="font-size:12px; color:var(--erp-text-muted); margin:0 0 10px;">{{ conflict.description }}</p>
+      <div class="erp-flex erp-gap-8">
+        {% for role in conflict.conflicting_roles %}
+          <span class="erp-badge erp-badge-blue">{{ role }}</span>
+        {% endfor %}
+        <span class="erp-badge erp-badge-{{ 'red' if conflict.severity == 'critical' else ('yellow' if conflict.severity == 'high' else 'blue') }}" style="margin-left:auto;">
+          {{ conflict.severity | title }}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function severityBadge(s) {
+    var map = { critical: 'red', high: 'yellow', medium: 'blue', low: 'green' };
+    var cls = map[(s || '').toLowerCase()] || 'gray';
+    return '<span class="erp-badge erp-badge-' + cls + '">' + _esc(s) + '</span>';
+  }
+
+  function riskPill(score) {
+    var n   = parseFloat(score) || 0;
+    var cls = n >= 80 ? 'critical' : (n >= 60 ? 'high' : (n >= 40 ? 'medium' : 'low'));
+    return '<span class="risk-score risk-score-' + cls + '">' + n + '</span>';
+  }
+
+  /* ── Violations table island ──────────────────────────────────────── */
+  ERPIslands.register('sodViolationsTable', [], function (el) {
+    var tbody  = document.getElementById('violations-body');
+    var filter = document.getElementById('sod-severity-filter');
+    var allRows = [];
+
+    function renderRows(rows) {
+      tbody.innerHTML = '';
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="erp-text-center" style="padding:24px;color:var(--erp-text-muted);">No violations found.</td></tr>';
+        return;
+      }
+      rows.forEach(function (v) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + riskPill(v.risk_score) + '</td>' +
+          '<td style="font-weight:600;">' + _esc(v.username) + '</td>' +
+          '<td>' + _esc(v.conflict_name) + '</td>' +
+          '<td>' + (v.roles || []).map(function (r) {
+            return '<span class="erp-badge erp-badge-blue" style="margin-right:3px;">' + _esc(r) + '</span>';
+          }).join('') + '</td>' +
+          '<td>' + severityBadge(v.severity) + '</td>' +
+          '<td>' +
+            '<button class="btn btn-xs btn-default" onclick="alert(\'Remediation workflow for ' + _esc(v.username) + '\')">Remediate</button>' +
+          '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    ERPIslands.fetchJSON('/api/grc/sod/violations')
+      .then(function (data) {
+        allRows = data.violations || data;
+        /* Update KPI cards */
+        var counts = { critical: 0, high: 0, medium: 0 };
+        var userSet = new Set();
+        allRows.forEach(function (v) {
+          var s = (v.severity || '').toLowerCase();
+          if (counts[s] !== undefined) counts[s]++;
+          if (v.username) userSet.add(v.username);
+        });
+        document.getElementById('kpi-critical').textContent = counts.critical;
+        document.getElementById('kpi-high').textContent     = counts.high;
+        document.getElementById('kpi-medium').textContent   = counts.medium;
+        document.getElementById('kpi-users').textContent    = userSet.size;
+        renderRows(allRows);
+      })
+      .catch(function (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="erp-text-center" style="color:var(--erp-danger);">Failed to load violations: ' + _esc(err.message) + '</td></tr>';
+      });
+
+    if (filter) {
+      filter.addEventListener('change', function () {
+        var val = filter.value.toLowerCase();
+        renderRows(val ? allRows.filter(function (v) { return (v.severity || '').toLowerCase() === val; }) : allRows);
+      });
+    }
+  });
+
+  /* ── Risk distribution chart island ──────────────────────────────── */
+  ERPIslands.register('sodRiskChart', ['chartjs'], function (el) {
+    var canvas = document.getElementById('sod-risk-chart');
+    if (!canvas) return;
+
+    ERPIslands.fetchJSON('/api/grc/sod/violations')
+      .then(function (data) {
+        var rows   = data.violations || data;
+        var counts = { critical: 0, high: 0, medium: 0, low: 0 };
+        rows.forEach(function (v) {
+          var s = (v.severity || 'low').toLowerCase();
+          if (counts[s] !== undefined) counts[s]++;
+        });
+        new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels:   ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+              data:            [counts.critical, counts.high, counts.medium, counts.low],
+              backgroundColor: ['#e02424', '#ff5a1f', '#1c64f2', '#0e9f6e'],
+              borderWidth:     2,
+              borderColor:     '#fff'
+            }]
+          },
+          options: {
+            responsive:          true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'bottom', labels: { font: { size: 11 } } }
+            },
+            cutout: '62%'
+          }
+        });
+      })
+      .catch(function () { /* chart is optional; violations table shows error */ });
+  });
+
+  /* ── Simulate form ────────────────────────────────────────────────── */
+  var simForm   = document.getElementById('sod-simulate-form');
+  var simResult = document.getElementById('sim-result');
+
+  if (simForm) {
+    simForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var username = document.getElementById('sim-username').value.trim();
+      var role     = document.getElementById('sim-role').value.trim();
+      if (!username || !role) return;
+
+      simResult.style.display = '';
+      simResult.innerHTML = '<div style="color:var(--erp-text-muted);font-size:12px;"><i class="fa fa-spinner fa-spin"></i> Running simulation…</div>';
+
+      ERPIslands.fetchJSON('/api/grc/sod/simulate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrfToken() },
+        body:    JSON.stringify({ username: username, role: role })
+      })
+        .then(function (res) {
+          if (res.conflicts && res.conflicts.length) {
+            simResult.innerHTML =
+              '<div class="alert alert-danger" style="font-size:12px;padding:10px;">' +
+              '<strong><i class="fa fa-ban"></i> ' + res.conflicts.length + ' conflict(s) detected:</strong>' +
+              '<ul style="margin:6px 0 0 0;padding-left:18px;">' +
+              res.conflicts.map(function (c) { return '<li>' + _esc(c.name) + ' — <em>' + _esc(c.severity) + '</em></li>'; }).join('') +
+              '</ul></div>';
+          } else {
+            simResult.innerHTML =
+              '<div class="alert alert-success" style="font-size:12px;padding:10px;">' +
+              '<i class="fa fa-check"></i> No SoD conflicts detected. Role grant is safe to proceed.' +
+              '</div>';
+          }
+        })
+        .catch(function (err) {
+          simResult.innerHTML = '<div class="alert alert-warning" style="font-size:12px;padding:10px;">Simulation error: ' + _esc(err.message) + '</div>';
+        });
+    });
+  }
+
+  function _csrfToken() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+}());
+</script>
+{% endblock %}
