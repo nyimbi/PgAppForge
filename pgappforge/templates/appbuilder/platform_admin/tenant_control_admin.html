@@ -1,0 +1,346 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Tenant Control Plane — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-building" style="color:var(--erp-primary);margin-right:8px;"></i>Tenant Control Plane</h1>
+      <p class="erp-page-subtitle">Multi-tenant provisioning, plan management, and usage monitoring</p>
+    </div>
+    <div>
+      <button class="btn btn-primary" data-toggle="modal" data-target="#provisionTenantModal">
+        <i class="fa fa-plus"></i> Provision Tenant
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── KPI Summary ──────────────────────────────────────────────────── #}
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <p class="erp-card-title">Total Tenants</p>
+      <p class="erp-card-value">{{ tenants | length }}</p>
+      <p class="erp-card-sub">All plans</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <p class="erp-card-title">Active</p>
+      <p class="erp-card-value">{{ tenants | selectattr('status', 'equalto', 'ACTIVE') | list | length }}</p>
+      <p class="erp-card-sub">Healthy tenants</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <p class="erp-card-title">Trial</p>
+      <p class="erp-card-value">{{ tenants | selectattr('status', 'equalto', 'TRIAL') | list | length }}</p>
+      <p class="erp-card-sub">Evaluating</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-danger"></div>
+      <p class="erp-card-title">Suspended</p>
+      <p class="erp-card-value">{{ tenants | selectattr('status', 'equalto', 'SUSPENDED') | list | length }}</p>
+      <p class="erp-card-sub">Access blocked</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <p class="erp-card-title">Total Users</p>
+      <p class="erp-card-value">{{ "{:,.0f}".format(tenants | sum(attribute='user_count') | default(0)) }}</p>
+      <p class="erp-card-sub">Across all tenants</p>
+    </div>
+  </div>
+
+  {# ── Plan Distribution Doughnut ─────────────────────────────────── #}
+  <div class="row erp-mb-24">
+    <div class="col-md-4">
+      <div class="erp-chart-wrap" style="height:240px;display:flex;flex-direction:column;">
+        <p class="erp-chart-title">Plan Distribution</p>
+        <div style="flex:1;position:relative;">
+          <canvas id="planDoughnutChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="erp-card" style="height:240px;overflow-y:auto;">
+        <p class="erp-section-title erp-mt-0">Plan Limits</p>
+        <table class="erp-table">
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th>Max Users</th>
+              <th>API Calls/Mo</th>
+              <th>Storage (GB)</th>
+              <th>Price/Mo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for plan_name, limits in plan_limits.items() %}
+            <tr>
+              <td>
+                {% set pt = plan_name | upper %}
+                {% if pt == 'ENTERPRISE' %}
+                  <span class="erp-badge erp-badge-blue">Enterprise</span>
+                {% elif pt == 'PROFESSIONAL' or pt == 'PRO' %}
+                  <span class="erp-badge erp-badge-green">Professional</span>
+                {% elif pt == 'STARTER' %}
+                  <span class="erp-badge erp-badge-yellow">Starter</span>
+                {% elif pt == 'TRIAL' %}
+                  <span class="erp-badge erp-badge-gray">Trial</span>
+                {% else %}
+                  <span class="erp-badge erp-badge-gray">{{ plan_name }}</span>
+                {% endif %}
+              </td>
+              <td style="font-size:12px;">{{ limits.max_users | default('∞') }}</td>
+              <td style="font-size:12px;font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(limits.api_calls_limit | default(0)) }}</td>
+              <td style="font-size:12px;">{{ limits.storage_gb | default('—') }}</td>
+              <td style="font-size:12px;font-variant-numeric:tabular-nums;">
+                {% if limits.price_cents %}KES {{ "{:,.0f}".format(limits.price_cents / 100) }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="erp-text-center" style="color:var(--erp-text-muted);padding:12px;">No plan limits configured.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Tenants Table ─────────────────────────────────────────────────── #}
+  <p class="erp-section-title">Tenants</p>
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="tenantsTable">
+      <thead>
+        <tr>
+          <th>Tenant</th>
+          <th>Plan</th>
+          <th>Status</th>
+          <th>Users</th>
+          <th style="min-width:160px;">API Usage (this month)</th>
+          <th>Created</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tenants %}
+        {% set ts = t.status | default('ACTIVE') | upper %}
+        {% set plan_key = t.plan_tier | default('STARTER') | upper %}
+        {% set api_limit = plan_limits.get(t.plan_tier | lower, {}).get('api_calls_limit', 0) | int %}
+        {% set api_used = t.api_calls_this_month | default(0) | int %}
+        {% set api_pct = (api_used / api_limit * 100) if api_limit > 0 else 0 %}
+        {% set api_color = 'var(--erp-danger)' if api_pct > 90 else ('var(--erp-warning)' if api_pct > 70 else 'var(--erp-success)') %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ t.name | default('—') }}</div>
+            <div style="font-size:11px;color:var(--erp-text-muted);font-family:monospace;">{{ t.slug | default(t.id | default('')) }}</div>
+          </td>
+          <td>
+            {% if plan_key == 'ENTERPRISE' %}
+              <span class="erp-badge erp-badge-blue">Enterprise</span>
+            {% elif plan_key in ('PROFESSIONAL', 'PRO') %}
+              <span class="erp-badge erp-badge-green">Professional</span>
+            {% elif plan_key == 'STARTER' %}
+              <span class="erp-badge erp-badge-yellow">Starter</span>
+            {% elif plan_key == 'TRIAL' %}
+              <span class="erp-badge erp-badge-gray">Trial</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ t.plan_tier }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if ts == 'ACTIVE' %}
+              <span class="erp-badge erp-badge-green">Active</span>
+            {% elif ts == 'SUSPENDED' %}
+              <span class="erp-badge erp-badge-red">Suspended</span>
+            {% elif ts == 'TRIAL' %}
+              <span class="erp-badge erp-badge-yellow">Trial</span>
+            {% elif ts == 'CANCELLED' %}
+              <span class="erp-badge erp-badge-gray">Cancelled</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ t.status }}</span>
+            {% endif %}
+          </td>
+          <td style="font-variant-numeric:tabular-nums;">{{ t.user_count | default(0) }}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:8px;background:var(--erp-border);border-radius:4px;overflow:hidden;">
+                <div style="width:{{ [api_pct, 100] | min }}%;height:100%;background:{{ api_color }};border-radius:4px;transition:width .4s;"></div>
+              </div>
+              <span style="font-size:11px;white-space:nowrap;color:{{ api_color }};font-weight:700;min-width:80px;">
+                {{ "{:,.0f}".format(api_used) }}{% if api_limit %} / {{ "{:,.0f}".format(api_limit) }}{% endif %}
+              </span>
+            </div>
+          </td>
+          <td style="font-size:12px;color:var(--erp-text-muted);white-space:nowrap;">{{ t.created_at | default('—') }}</td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            {% if ts == 'ACTIVE' or ts == 'TRIAL' %}
+            <form method="post"
+                  action="{{ url_for('TenantControlAdminView.suspend_tenant', tenant_id=t.id) }}"
+                  style="display:inline;"
+                  onsubmit="return confirm('Suspend tenant \'{{ t.name | default('') }}\'? This will block all access.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-warning">
+                <i class="fa fa-pause"></i> Suspend
+              </button>
+            </form>
+            {% else %}
+            <form method="post"
+                  action="{{ url_for('TenantControlAdminView.activate_tenant', tenant_id=t.id) }}"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-success">
+                <i class="fa fa-play"></i> Activate
+              </button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('TenantControlAdminView.tenant_detail', tenant_id=t.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-building" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No tenants provisioned.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>{# /erp-island #}
+
+{# ── Provision Tenant Modal ────────────────────────────────────────────── #}
+<div class="modal fade" id="provisionTenantModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-building"></i> Provision New Tenant</h4>
+      </div>
+      <form method="post" action="{{ url_for('TenantControlAdminView.provision_tenant') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Tenant Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="Acme Corporation">
+          </div>
+          <div class="form-group">
+            <label>Slug / Subdomain <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="text" name="slug" class="form-control" required
+                     placeholder="acme" pattern="[a-z0-9\-]+"
+                     title="Lowercase letters, numbers, and hyphens only">
+              <span class="input-group-addon">.{{ appbuilder.app_name | lower | replace(' ', '') }}.co.ke</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Plan Tier <span class="text-danger">*</span></label>
+            <select name="plan_tier" class="form-control" required>
+              <option value="TRIAL">Trial (30 days)</option>
+              <option value="STARTER">Starter</option>
+              <option value="PROFESSIONAL">Professional</option>
+              <option value="ENTERPRISE">Enterprise</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Admin Email <span class="text-danger">*</span></label>
+            <input type="email" name="admin_email" class="form-control" required placeholder="admin@acme.com">
+          </div>
+          <div class="form-group">
+            <label>Admin Name</label>
+            <input type="text" name="admin_name" class="form-control" placeholder="John Doe">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Provision</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var canvas = document.getElementById('planDoughnutChart');
+  if (!canvas) return;
+
+  // Build plan counts from tenant data rendered server-side
+  var planCounts = {};
+  {% for t in tenants %}
+  var p = "{{ t.plan_tier | default('TRIAL') }}";
+  planCounts[p] = (planCounts[p] || 0) + 1;
+  {% endfor %}
+
+  var labels = Object.keys(planCounts);
+  var data   = labels.map(function(k) { return planCounts[k]; });
+  var colors = {
+    'ENTERPRISE':   '#1c64f2',
+    'PROFESSIONAL': '#0e9f6e',
+    'PRO':          '#0e9f6e',
+    'STARTER':      '#ff5a1f',
+    'TRIAL':        '#6b7280'
+  };
+  var bgColors = labels.map(function(k) { return colors[k.toUpperCase()] || '#6b7280'; });
+
+  // Minimal canvas doughnut — no Chart.js dependency required
+  var ctx = canvas.getContext('2d');
+  var w = canvas.parentElement.clientWidth || 280;
+  var h = canvas.parentElement.clientHeight || 180;
+  canvas.width  = w;
+  canvas.height = h;
+
+  var total = data.reduce(function(a, b) { return a + b; }, 0);
+  if (total === 0) {
+    ctx.fillStyle = '#e5e7eb';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data', w / 2, h / 2);
+    return;
+  }
+
+  var cx = w / 2, cy = h / 2;
+  var r  = Math.min(cx, cy) - 12;
+  var ir = r * 0.55;
+  var start = -Math.PI / 2;
+
+  data.forEach(function(val, i) {
+    var slice = (val / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + slice);
+    ctx.closePath();
+    ctx.fillStyle = bgColors[i];
+    ctx.fill();
+    start += slice;
+  });
+
+  // Punch hole
+  ctx.beginPath();
+  ctx.arc(cx, cy, ir, 0, 2 * Math.PI);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // Centre label
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(total, cx, cy - 8);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#6b7280';
+  ctx.fillText('tenants', cx, cy + 10);
+}());
+</script>
+{% endblock %}

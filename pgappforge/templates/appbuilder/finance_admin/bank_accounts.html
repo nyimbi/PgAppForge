@@ -1,0 +1,341 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Bank Accounts & Treasury — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* KPI tiles */
+  .bank-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:24px; }
+  .bank-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:14px 16px; position:relative; overflow:hidden; }
+  .bank-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .bank-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .bank-kpi-value { font-size:18px; font-weight:700; color:#111827; margin:0 0 2px; font-variant-numeric:tabular-nums; }
+  .bank-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* bank account table */
+  .bank-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .bank-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .bank-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .bank-table tr:last-child td { border-bottom:none; }
+  .bank-table tr:hover td { background:#fafafa; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* account type badges */
+  .badge-current { background:#dbeafe; color:#1d4ed8; }
+  .badge-savings  { background:#d1fae5; color:#065f46; }
+  .badge-nostro   { background:#ede9fe; color:#5b21b6; }
+  .badge-escrow   { background:#fef9c3; color:#713f12; }
+  .acct-type-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:.04em; }
+  /* feed provider badges */
+  .provider-equity { background:#1a56db; color:#fff; }
+  .provider-kcb    { background:#15803d; color:#fff; }
+  .provider-mpesa  { background:#10b981; color:#fff; }
+  .provider-manual { background:#6b7280; color:#fff; }
+  .provider-badge  { font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:.04em; }
+  /* feed status */
+  .feed-ok   { color:#10b981; font-size:12px; }
+  .feed-warn { color:#f59e0b; font-size:12px; }
+  .feed-err  { color:#ef4444; font-size:12px; }
+  /* import log */
+  .import-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .import-table th { background:#f9fafb; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:#374151; padding:8px 12px; border-bottom:2px solid #e5e7eb; }
+  .import-table td { padding:8px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  .import-table tr:last-child td { border-bottom:none; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .erp-toast.warning { border-left:4px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Bank Accounts &amp; Treasury</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Bank account master, feed connections, balance positions and statement imports</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="/finance/bank_account/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Add Bank Account
+    </a>
+    <a href="/finance/bank_statement/import" class="btn btn-default btn-sm">
+      <i class="fa fa-upload"></i> Import Statement
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Balance KPI tiles ───────────────────────────────────────────────────── #}
+<div class="bank-kpi-grid">
+  {% if bank_accounts %}
+    {% for acct in bank_accounts[:4] %}
+    <div class="bank-kpi-card" style="--accent:{% if loop.index == 1 %}#1a56db{% elif loop.index == 2 %}#10b981{% elif loop.index == 3 %}#8b5cf6{% else %}#f59e0b{% endif %};">
+      <p class="bank-kpi-label">{{ acct.account_name | truncate(22, true, '…') }}</p>
+      <p class="bank-kpi-value">
+        {{ acct.currency_code }} {{ "{:,.2f}".format(acct.balance_cents / 100) if acct.balance_cents is defined else '—' }}
+      </p>
+      <p class="bank-kpi-sub">{{ acct.bank_name }}</p>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="bank-kpi-card" style="--accent:#e5e7eb;">
+      <p class="bank-kpi-label">No accounts</p>
+      <p class="bank-kpi-value" style="color:#9ca3af;">—</p>
+      <p class="bank-kpi-sub">Add accounts to see balances</p>
+    </div>
+  {% endif %}
+</div>
+
+<div class="row">
+  <div class="col-md-8">
+
+    {# ── Bank Accounts Table ──────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:24px;">
+      <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-university" style="color:#1a56db; margin-right:6px;"></i> Bank Accounts
+        </h4>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="bank-table">
+          <thead>
+            <tr>
+              <th>Account Name</th>
+              <th>Bank</th>
+              <th style="width:60px;">CCY</th>
+              <th style="text-align:center;">Type</th>
+              <th class="nums">Balance</th>
+              <th style="text-align:center; width:80px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if bank_accounts %}
+              {% for acct in bank_accounts %}
+              <tr>
+                <td>
+                  <strong>{{ acct.account_name }}</strong>
+                  {% if acct.account_number %}
+                  <span style="font-size:11px; font-family:monospace; color:#9ca3af; display:block;">
+                    ···{{ acct.account_number[-4:] if acct.account_number | length >= 4 else acct.account_number }}
+                  </span>
+                  {% endif %}
+                </td>
+                <td style="font-size:12px; color:#374151;">{{ acct.bank_name }}</td>
+                <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ acct.currency_code }}</td>
+                <td style="text-align:center;">
+                  {% set at = acct.account_type | upper %}
+                  <span class="acct-type-badge badge-{{ at | lower }}">{{ at }}</span>
+                </td>
+                <td class="nums" style="font-weight:600; color:{% if acct.balance_cents is defined and acct.balance_cents < 0 %}#ef4444{% else %}#111827{% endif %};">
+                  {{ "{:,.2f}".format(acct.balance_cents / 100) if acct.balance_cents is defined else '—' }}
+                </td>
+                <td style="text-align:center; white-space:nowrap;">
+                  <a href="/finance/bank_account/edit/{{ acct.id }}" class="btn btn-xs btn-default" title="Edit">
+                    <i class="fa fa-pencil"></i>
+                  </a>
+                  <a href="/finance/bank_account/{{ acct.id }}" class="btn btn-xs btn-default" title="Transactions">
+                    <i class="fa fa-list"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" style="text-align:center; padding:40px; color:#9ca3af;">
+                  <i class="fa fa-university" style="font-size:28px; display:block; margin-bottom:10px; opacity:.35;"></i>
+                  No bank accounts configured. <a href="/finance/bank_account/add">Add one</a>.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# ── Statement Import Log ─────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-history" style="color:#6b7280; margin-right:6px;"></i> Recent Statement Imports
+        </h4>
+        <a href="/finance/bank_statement/import" class="btn btn-default btn-xs" style="font-size:11px;">
+          <i class="fa fa-upload"></i> Import New
+        </a>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="import-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Period</th>
+              <th class="nums">Transactions</th>
+              <th>Imported</th>
+              <th style="text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if bank_accounts %}
+              {% for acct in bank_accounts %}
+                {% if acct.recent_imports %}
+                  {% for imp in acct.recent_imports[:2] %}
+                  <tr>
+                    <td style="font-weight:600; font-size:12px;">{{ acct.account_name | truncate(20) }}</td>
+                    <td style="font-family:monospace; font-size:12px;">{{ imp.period }}</td>
+                    <td class="nums">{{ imp.transaction_count or '—' }}</td>
+                    <td style="font-size:12px; color:#6b7280;">{{ imp.imported_at or '—' }}</td>
+                    <td style="text-align:center;">
+                      <span style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px;
+                        background:{{ '#d1fae5' if imp.status == 'COMPLETE' else ('#fee2e2' if imp.status == 'FAILED' else '#fef9c3') }};
+                        color:{{ '#065f46' if imp.status == 'COMPLETE' else ('#991b1b' if imp.status == 'FAILED' else '#713f12') }};">
+                        {{ imp.status }}
+                      </span>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" style="text-align:center; padding:24px; color:#9ca3af; font-size:12px;">
+                  No statement imports on record.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-md-4">
+
+    {# ── Bank Feed Connections ─────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden;">
+      <div style="padding:12px 16px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-plug" style="color:#10b981; margin-right:6px;"></i> Bank Feed Connections
+        </h4>
+      </div>
+      {% if feed_connections %}
+        {% for feed in feed_connections %}
+        <div style="padding:14px 16px; border-bottom:1px solid #f3f4f6; {% if loop.last %}border-bottom:none;{% endif %}">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+                <span class="provider-badge provider-{{ feed.provider | lower | replace('_','-') }}">
+                  {{ feed.provider }}
+                </span>
+                <strong style="font-size:13px; color:#111827; truncate;">{{ feed.account_name | truncate(20) }}</strong>
+              </div>
+              <div style="font-size:11px; color:#9ca3af;">
+                Last sync: {{ feed.last_sync_at or 'Never' }}
+              </div>
+              {% if feed.last_error %}
+              <div style="font-size:11px; color:#ef4444; margin-top:3px;">
+                <i class="fa fa-exclamation-circle"></i> {{ feed.last_error | truncate(40) }}
+              </div>
+              {% endif %}
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
+              {% set fs = feed.status | upper %}
+              {% if fs == 'OK' or fs == 'ACTIVE' %}
+                <span class="feed-ok"><i class="fa fa-check-circle"></i> Live</span>
+              {% elif fs == 'WARNING' %}
+                <span class="feed-warn"><i class="fa fa-exclamation-triangle"></i> Warning</span>
+              {% else %}
+                <span class="feed-err"><i class="fa fa-times-circle"></i> Error</span>
+              {% endif %}
+              <button class="btn btn-default btn-xs btn-sync-feed"
+                      data-feed-id="{{ feed.id }}"
+                      style="font-size:11px; padding:2px 10px; font-weight:600;">
+                <i class="fa fa-refresh"></i> Sync Now
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+          <i class="fa fa-plug" style="font-size:24px; display:block; margin-bottom:8px; opacity:.35;"></i>
+          No feed connections configured.
+        </div>
+      {% endif %}
+      <div style="padding:10px 16px; border-top:1px solid #f3f4f6;">
+        <a href="/finance/bank_feed/add" class="btn btn-default btn-xs btn-block" style="font-size:11px;">
+          <i class="fa fa-plus"></i> Connect Bank Feed
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle'
+             : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Sync feed ───────────────────────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-sync-feed');
+    if (!btn) return;
+    e.preventDefault();
+    var feedId = btn.getAttribute('data-feed-id');
+    if (!feedId) return;
+
+    btn.disabled = true;
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/finance/bank_feeds/' + encodeURIComponent(feedId) + '/sync', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin'
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('Bank feed synced. ' + (res.data.transactions_imported || 0) + ' new transactions.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1500);
+      } else {
+        toast(res.data.message || 'Sync failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    });
+  });
+
+}());
+</script>
+{% endblock %}

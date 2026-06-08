@@ -1,0 +1,324 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Time &amp; Attendance — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Absence calendar ────────────────────────────────────────── */
+  .abs-calendar {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 4px; margin-top: 12px;
+  }
+  .abs-day-header {
+    text-align: center; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--erp-text-muted); padding: 6px 0;
+  }
+  .abs-day {
+    aspect-ratio: 1; border-radius: var(--erp-radius);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; cursor: default;
+    background: var(--erp-neutral-lt); color: var(--erp-text-muted);
+    position: relative; transition: transform var(--erp-transition);
+  }
+  .abs-day.empty     { background: transparent; }
+  .abs-day.today     { background: var(--erp-primary); color: #fff; }
+  .abs-day.absent    { background: var(--erp-danger-lt); color: var(--erp-danger); border: 1.5px solid var(--erp-danger); }
+  .abs-day.sick      { background: var(--erp-warning-lt); color: #92400e; border: 1.5px solid #f59e0b; }
+  .abs-day.leave     { background: var(--erp-info-lt); color: var(--erp-info); border: 1.5px solid var(--erp-info); }
+  .abs-day.holiday   { background: var(--erp-success-lt); color: var(--erp-success); }
+  .abs-day:hover:not(.empty) { transform: scale(1.1); z-index: 2; }
+
+  .abs-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 11px; }
+  .abs-legend-item { display: flex; align-items: center; gap: 5px; }
+  .abs-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ── Pending queue ───────────────────────────────────────────── */
+  .timesheet-row { transition: background var(--erp-transition); }
+  .timesheet-row:hover { background: #fafafa; }
+  .hours-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--erp-primary-lt); color: var(--erp-primary);
+  }
+
+  /* ── Attendance issues ───────────────────────────────────────── */
+  .issue-row { border-left: 3px solid var(--erp-danger); }
+  .late-row  { border-left: 3px solid var(--erp-warning); }
+
+  .kpi-hours {
+    font-size: 28px; font-weight: 800;
+    font-variant-numeric: tabular-nums; color: var(--erp-text);
+    line-height: 1;
+  }
+  .period-selector {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); padding: 12px 18px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-clock-o" style="margin-right:8px; color:var(--erp-primary);"></i>Time &amp; Attendance</h1>
+      <p class="erp-page-subtitle">Timesheet approval, absence tracking, and attendance issue management</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      <button class="btn btn-success btn-sm" id="btn-approve-all">
+        <i class="fa fa-check-circle"></i> Approve All Pending
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Period selector ───────────────────────────────────────────────────── #}
+<div class="period-selector">
+  <label style="font-size:12px; font-weight:600; color:var(--erp-text); margin:0;">Pay Period:</label>
+  <select id="period-select" class="form-control" style="width:auto; height:32px; font-size:13px;">
+    {% if period %}
+    <option selected>{{ period }}</option>
+    {% endif %}
+    <option>2026-05</option>
+    <option>2026-04</option>
+    <option>2026-03</option>
+  </select>
+  <button class="btn btn-default btn-sm" onclick="window.location.href = window.location.pathname + '?period=' + encodeURIComponent(document.getElementById('period-select').value)">
+    <i class="fa fa-refresh"></i> Load
+  </button>
+</div>
+
+{# ── KPI Tiles ─────────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  {% set ts_all = timesheets | default([]) %}
+  {% set pending_ts = ts_all | selectattr('status', 'equalto', 'PENDING') | list %}
+  {% set approved_ts = ts_all | selectattr('status', 'equalto', 'APPROVED') | list %}
+
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <p class="erp-card-title erp-mb-0">Total Hours</p>
+    <p class="kpi-hours">{{ ts_all | sum(attribute='hours') | default(0) | round(1) }}</p>
+    <p class="erp-card-sub erp-mb-0">This period</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <p class="erp-card-title erp-mb-0">Approved Hours</p>
+    <p class="kpi-hours" style="color:var(--erp-success);">{{ approved_ts | sum(attribute='hours') | default(0) | round(1) }}</p>
+    <p class="erp-card-sub erp-mb-0">{{ approved_ts | length }} timesheets</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title erp-mb-0">Pending Hours</p>
+    <p class="kpi-hours" style="color:#d97706;">{{ pending_ts | sum(attribute='hours') | default(0) | round(1) }}</p>
+    <p class="erp-card-sub erp-mb-0">{{ pending_ts | length }} awaiting approval</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <p class="erp-card-title erp-mb-0">Attendance Issues</p>
+    <p class="kpi-hours" style="color:var(--erp-danger);">{{ attendance_issues | default([]) | length }}</p>
+    <p class="erp-card-sub erp-mb-0">Requiring review</p>
+  </div>
+</div>
+
+{# ── Pending Timesheets Queue ──────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    <p class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-list-alt" style="margin-right:6px;"></i>Pending Timesheets
+      {% if pending_ts | length %}
+      <span class="erp-badge erp-badge-yellow" style="margin-left:8px;">{{ pending_ts | length }}</span>
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="ts-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Period</th>
+          <th>Hours</th>
+          <th>Submitted</th>
+          <th>Status</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if timesheets %}
+          {% for ts in timesheets %}
+          <tr class="timesheet-row" id="ts-row-{{ ts.id }}"
+              data-status="{{ ts.status }}">
+            <td>
+              <div class="erp-flex erp-gap-8">
+                <span style="width:28px; height:28px; border-radius:50%; background:var(--erp-primary-lt); color:var(--erp-primary); font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;">{{ (ts.employee_name or '?')[:2] | upper }}</span>
+                <span style="font-weight:600;">{{ ts.employee_name }}</span>
+              </div>
+            </td>
+            <td style="font-size:12px; color:var(--erp-text-muted);">{{ ts.period }}</td>
+            <td><span class="hours-badge"><i class="fa fa-clock-o"></i> {{ ts.hours | round(1) }}h</span></td>
+            <td style="font-size:12px; color:var(--erp-text-muted);">{{ ts.submitted_at or '—' }}</td>
+            <td>
+              {% if ts.status == 'PENDING' %}
+                <span class="erp-badge erp-badge-yellow">Pending</span>
+              {% elif ts.status == 'APPROVED' %}
+                <span class="erp-badge erp-badge-green">Approved</span>
+              {% elif ts.status == 'REJECTED' %}
+                <span class="erp-badge erp-badge-red">Rejected</span>
+              {% else %}
+                <span class="erp-badge erp-badge-gray">{{ ts.status }}</span>
+              {% endif %}
+            </td>
+            <td style="text-align:right;">
+              {% if ts.status == 'PENDING' %}
+              <button class="btn btn-success btn-xs btn-ts-action" data-id="{{ ts.id }}" data-action="APPROVED">
+                <i class="fa fa-check"></i> Approve
+              </button>
+              <button class="btn btn-danger btn-xs btn-ts-action" data-id="{{ ts.id }}" data-action="REJECTED" style="margin-left:4px;">
+                <i class="fa fa-times"></i> Reject
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="6" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No timesheets for this period.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Absence Calendar ──────────────────────────────────────────────────── #}
+<div class="row">
+  <div class="col-md-7">
+    <div class="erp-card erp-mb-24">
+      <p class="erp-section-title"><i class="fa fa-calendar" style="margin-right:6px;"></i>Absence Calendar — {{ period or 'Current Month' }}</p>
+
+      <div class="abs-calendar">
+        {% for day_name in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+        <div class="abs-day-header">{{ day_name }}</div>
+        {% endfor %}
+
+        {# Render up to 35 day cells — blank for padding, typed for absences #}
+        {% set cal_data = attendance_issues | default([]) %}
+        {# Offset for first day — default to 0 if not provided #}
+        {% for i in range(0, 35) %}
+          {% set day_num = i + 1 %}
+          {% if day_num > 30 %}
+            <div class="abs-day empty"></div>
+          {% else %}
+            {# Check if this day has an absence event #}
+            {% set events = cal_data | selectattr('day', 'equalto', day_num) | list %}
+            {% if events %}
+              {% set ev = events[0] %}
+              <div class="abs-day {{ ev.absence_type | lower | default('absent') }}"
+                   title="{{ ev.employee_name }}: {{ ev.absence_type }}">{{ day_num }}</div>
+            {% else %}
+              <div class="abs-day">{{ day_num }}</div>
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="abs-legend">
+        <div class="abs-legend-item"><div class="abs-legend-dot" style="background:var(--erp-danger);"></div> Absent</div>
+        <div class="abs-legend-item"><div class="abs-legend-dot" style="background:#f59e0b;"></div> Sick</div>
+        <div class="abs-legend-item"><div class="abs-legend-dot" style="background:var(--erp-info);"></div> Leave</div>
+        <div class="abs-legend-item"><div class="abs-legend-dot" style="background:var(--erp-success);"></div> Holiday</div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Attendance Issues ─────────────────────────────────────────── #}
+  <div class="col-md-5">
+    <div class="erp-card erp-mb-24">
+      <p class="erp-section-title"><i class="fa fa-exclamation-triangle" style="margin-right:6px; color:var(--erp-danger);"></i>Attendance Issues</p>
+
+      {% if attendance_issues %}
+        <ul class="erp-feed">
+          {% for issue in attendance_issues %}
+          <li class="erp-feed-item {{ 'late-row' if issue.issue_type == 'LATE' else 'issue-row' }}">
+            <div class="erp-feed-avatar">{{ (issue.employee_name or '?')[:2] | upper }}</div>
+            <div class="erp-feed-body">
+              <div class="erp-feed-text">
+                <strong>{{ issue.employee_name }}</strong>
+                {% if issue.issue_type == 'LATE' %}
+                  <span class="erp-badge erp-badge-yellow" style="margin-left:4px;">Late</span>
+                {% else %}
+                  <span class="erp-badge erp-badge-red" style="margin-left:4px;">{{ issue.issue_type | title }}</span>
+                {% endif %}
+              </div>
+              <div class="erp-feed-time">{{ issue.date or '' }} {% if issue.minutes_late %}&mdash; {{ issue.minutes_late }} min late{% endif %}</div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div style="text-align:center; padding:32px; color:var(--erp-text-muted);">
+          <i class="fa fa-check-circle" style="font-size:28px; opacity:.3; display:block; margin-bottom:8px;"></i>
+          No attendance issues this period.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function patchTs(id, action) {
+    return fetch('/api/hcm/timesheets/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ status: action })
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (d) { throw new Error(d.message || r.status); });
+    });
+  }
+
+  /* Per-row approve/reject */
+  document.querySelectorAll('.btn-ts-action').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id     = btn.getAttribute('data-id');
+      var action = btn.getAttribute('data-action');
+      btn.disabled = true;
+      patchTs(id, action)
+        .then(function () { location.reload(); })
+        .catch(function (e) { alert('Failed: ' + e.message); btn.disabled = false; });
+    });
+  });
+
+  /* Approve all */
+  document.getElementById('btn-approve-all').addEventListener('click', function () {
+    var btn   = this;
+    var ids   = [];
+    document.querySelectorAll('.btn-ts-action[data-action="APPROVED"]').forEach(function (b) {
+      ids.push(b.getAttribute('data-id'));
+    });
+    if (!ids.length) { alert('No pending timesheets to approve.'); return; }
+    if (!confirm('Approve all ' + ids.length + ' pending timesheets?')) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Approving…';
+
+    Promise.all(ids.map(function (id) { return patchTs(id, 'APPROVED'); }))
+      .then(function () { location.reload(); })
+      .catch(function (e) { alert('Some approvals failed: ' + e.message); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check-circle"></i> Approve All Pending'; });
+  });
+}());
+</script>
+{% endblock %}

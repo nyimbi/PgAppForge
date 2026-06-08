@@ -1,0 +1,253 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Sales Pipeline — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Funnel ──────────────────────────────────────────────────── */
+  .funnel-wrap {
+    display: flex; align-items: flex-end; gap: 4px;
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); padding: 20px 24px 16px;
+    box-shadow: var(--erp-shadow-sm); margin-bottom: 24px;
+    overflow-x: auto;
+  }
+  .funnel-stage {
+    flex: 1; min-width: 90px; display: flex; flex-direction: column;
+    align-items: center; gap: 6px;
+  }
+  .funnel-bar-wrap {
+    width: 100%; display: flex; align-items: flex-end; justify-content: center;
+    height: 140px;
+  }
+  .funnel-bar {
+    width: 80%; border-radius: 4px 4px 0 0;
+    background: var(--erp-primary);
+    transition: filter var(--erp-transition);
+    cursor: pointer; position: relative;
+  }
+  .funnel-bar:hover { filter: brightness(1.12); }
+  .funnel-bar.s0 { background: #1a56db; }
+  .funnel-bar.s1 { background: #2563eb; }
+  .funnel-bar.s2 { background: #3b82f6; }
+  .funnel-bar.s3 { background: #60a5fa; }
+  .funnel-bar.s4 { background: #93c5fd; }
+  .funnel-bar.s5 { background: #bfdbfe; }
+  .funnel-stage-name {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--erp-text-muted);
+    text-align: center; white-space: nowrap;
+  }
+  .funnel-stage-val {
+    font-size: 13px; font-weight: 800; color: var(--erp-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .funnel-stage-count {
+    font-size: 11px; color: var(--erp-text-muted);
+  }
+
+  /* ── Stage badges ────────────────────────────────────────────── */
+  .stage-PROSPECTING  { background:#eff6ff; color:#1d4ed8; }
+  .stage-QUALIFICATION{ background:#f0fdf4; color:#15803d; }
+  .stage-PROPOSAL     { background:#fffbeb; color:#92400e; }
+  .stage-NEGOTIATION  { background:#fef3c7; color:#b45309; }
+  .stage-CLOSED_WON   { background:#d1fae5; color:#065f46; }
+  .stage-CLOSED_LOST  { background:#fee2e2; color:#991b1b; }
+
+  .activity-overdue { border-left: 3px solid var(--erp-danger); }
+
+  /* amount formatting */
+  .amount-cell { font-variant-numeric: tabular-nums; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-filter" style="margin-right:8px; color:var(--erp-primary);"></i>Sales Pipeline</h1>
+      <p class="erp-page-subtitle">Track opportunities through stages — value at risk and win/loss analysis</p>
+    </div>
+    {% if appbuilder.sm.has_access('can_add', 'OpportunityView') %}
+    <a href="{{ url_for('OpportunityView.add') }}" class="btn btn-primary btn-sm" style="align-self:center;">
+      <i class="fa fa-plus"></i> New Opportunity
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Won/Lost KPIs ─────────────────────────────────────────────────────── #}
+{% if won_lost_summary %}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <p class="erp-card-title erp-mb-0">Won This Month</p>
+    <p class="erp-card-value" style="color:var(--erp-success);">{{ won_lost_summary.won_count | default(0) }}</p>
+    <p class="erp-card-sub">{{ (won_lost_summary.won_value | default(0) / 100) | round(0) | int | format_currency }}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <p class="erp-card-title erp-mb-0">Lost This Month</p>
+    <p class="erp-card-value" style="color:var(--erp-danger);">{{ won_lost_summary.lost_count | default(0) }}</p>
+    <p class="erp-card-sub">{{ (won_lost_summary.lost_value | default(0) / 100) | round(0) | int | format_currency }}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <p class="erp-card-title erp-mb-0">Win Rate</p>
+    <p class="erp-card-value">
+      {% if won_lost_summary.won_count or won_lost_summary.lost_count %}
+        {{ ((won_lost_summary.won_count | default(0)) / ((won_lost_summary.won_count | default(0)) + (won_lost_summary.lost_count | default(0))) * 100) | round(1) }}%
+      {% else %}—{% endif %}
+    </p>
+    <p class="erp-card-sub erp-mb-0">Closed opportunities</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-info"></div>
+    <p class="erp-card-title erp-mb-0">Pipeline Value</p>
+    <p class="erp-card-value" style="font-size:22px;">
+      {{ (opportunities | default([]) | sum(attribute='amount_cents') / 100) | round(0) | int | format_currency }}
+    </p>
+    <p class="erp-card-sub">{{ opportunities | default([]) | length }} open opportunities</p>
+  </div>
+</div>
+{% endif %}
+
+{# ── Funnel ────────────────────────────────────────────────────────────── #}
+{% if pipeline_stages %}
+{% set max_val = pipeline_stages | map(attribute='total_value') | max | default(1) %}
+<div class="erp-card erp-mb-24" style="padding:20px 24px;">
+  <p class="erp-section-title"><i class="fa fa-filter" style="margin-right:6px;"></i>Pipeline Funnel</p>
+  <div class="funnel-wrap" style="border:none; padding:0; margin:0; box-shadow:none;">
+    {% for stage in pipeline_stages %}
+    {% set bar_pct = [(stage.total_value | default(0) / max_val * 100) | int, 10] | max %}
+    <div class="funnel-stage">
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar s{{ loop.index0 }}" style="height:{{ bar_pct }}%;"
+             title="{{ stage.name }}: {{ stage.count }} deals"></div>
+      </div>
+      <div class="funnel-stage-name">{{ stage.name }}</div>
+      <div class="funnel-stage-val">{{ stage.count | default(0) }}</div>
+      <div class="funnel-stage-count">${{ (stage.total_value | default(0) / 100) | round(0) | int | format_currency }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Overdue Activity Alerts ───────────────────────────────────────────── #}
+{% set overdue = opportunities | default([]) | selectattr('days_since_activity', 'defined') | selectattr('days_since_activity', 'ge', 14) | list %}
+{% if overdue %}
+<div class="erp-card erp-mb-24" style="border-color:var(--erp-danger-lt);">
+  <p class="erp-section-title" style="color:var(--erp-danger);">
+    <i class="fa fa-exclamation-triangle" style="margin-right:6px;"></i>No Activity in 14+ Days
+    <span class="erp-badge erp-badge-red" style="margin-left:8px;">{{ overdue | length }}</span>
+  </p>
+  <div class="erp-table-wrap">
+    <table class="erp-table">
+      <thead><tr><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value</th><th>Days Silent</th><th>Owner</th></tr></thead>
+      <tbody>
+        {% for opp in overdue %}
+        <tr class="activity-overdue">
+          <td style="font-weight:600;">{{ opp.name }}</td>
+          <td>{{ opp.customer }}</td>
+          <td><span class="erp-badge stage-{{ opp.stage | replace(' ','_') | upper }}">{{ opp.stage }}</span></td>
+          <td class="amount-cell">${{ (opp.amount_cents | default(0) / 100) | round(0) | int | format_currency }}</td>
+          <td><span class="erp-badge erp-badge-red">{{ opp.days_since_activity }}d</span></td>
+          <td>{{ opp.owner }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Opportunities Table ───────────────────────────────────────────────── #}
+<div class="erp-card">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    <p class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-briefcase" style="margin-right:6px;"></i>All Opportunities
+    </p>
+    <div class="erp-flex erp-gap-8">
+      <input type="text" id="opp-search" class="form-control input-sm"
+             placeholder="Search name or customer…" style="width:220px;">
+      <select id="stage-filter" class="form-control input-sm" style="width:160px;">
+        <option value="">All Stages</option>
+        {% for stage in pipeline_stages | default([]) %}
+        <option value="{{ stage.name }}">{{ stage.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="opp-table">
+      <thead>
+        <tr>
+          <th>Opportunity</th>
+          <th>Customer</th>
+          <th>Stage</th>
+          <th>Value</th>
+          <th>Close Date</th>
+          <th>Owner</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if opportunities %}
+          {% for opp in opportunities %}
+          <tr data-name="{{ (opp.name ~ ' ' ~ opp.customer) | lower }}"
+              data-stage="{{ opp.stage }}">
+            <td style="font-weight:600; max-width:200px;" class="erp-truncate">{{ opp.name }}</td>
+            <td>{{ opp.customer }}</td>
+            <td>
+              <span class="erp-badge stage-{{ opp.stage | replace(' ','_') | upper }}">
+                {{ opp.stage }}
+              </span>
+            </td>
+            <td class="amount-cell">${{ (opp.amount_cents | default(0) / 100) | round(0) | int | format_currency }}</td>
+            <td style="font-size:12px; color:var(--erp-text-muted);">{{ opp.close_date or '—' }}</td>
+            <td style="font-size:12px;">{{ opp.owner or '—' }}</td>
+            <td style="text-align:right;">
+              <a href="{{ url_for('OpportunityView.show', pk=opp.id) }}" class="btn btn-default btn-xs">
+                <i class="fa fa-eye"></i>
+              </a>
+              {% if appbuilder.sm.has_access('can_edit', 'OpportunityView') %}
+              <a href="{{ url_for('OpportunityView.edit', pk=opp.id) }}" class="btn btn-default btn-xs" style="margin-left:2px;">
+                <i class="fa fa-pencil"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="7" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No opportunities found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  function filter() {
+    var q  = (document.getElementById('opp-search').value || '').toLowerCase();
+    var st = document.getElementById('stage-filter').value;
+    document.querySelectorAll('#opp-table tbody tr').forEach(function (tr) {
+      var name  = tr.getAttribute('data-name') || '';
+      var stage = tr.getAttribute('data-stage') || '';
+      tr.style.display = ((!q || name.indexOf(q) !== -1) && (!st || stage === st)) ? '' : 'none';
+    });
+  }
+  document.getElementById('opp-search').addEventListener('input', filter);
+  document.getElementById('stage-filter').addEventListener('change', filter);
+}());
+</script>
+{% endblock %}

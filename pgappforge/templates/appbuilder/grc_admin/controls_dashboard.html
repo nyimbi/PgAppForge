@@ -1,0 +1,352 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Internal Controls — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* framework cards */
+  .fw-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; margin-bottom:24px; }
+  .fw-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:16px; position:relative; overflow:hidden; }
+  .fw-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .fw-name    { font-size:14px; font-weight:700; color:#111827; margin:0 0 3px; }
+  .fw-std     { font-size:11px; color:#6b7280; margin:0 0 12px; }
+  .fw-stats   { display:flex; gap:16px; font-size:12px; margin-bottom:12px; }
+  .fw-stat    { text-align:center; }
+  .fw-stat-v  { font-size:20px; font-weight:700; color:#111827; display:block; }
+  .fw-stat-l  { color:#6b7280; font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .test-bar-wrap { margin-top:6px; }
+  .test-bar-track { background:#e5e7eb; border-radius:3px; height:6px; overflow:hidden; margin-bottom:3px; }
+  .test-bar-fill  { height:100%; border-radius:3px; }
+  .test-bar-label { font-size:11px; color:#6b7280; text-align:right; }
+  /* controls table */
+  .ctrl-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .ctrl-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .ctrl-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .ctrl-table tr:last-child td { border-bottom:none; }
+  .ctrl-table tr:hover td { background:#fafafa; }
+  /* test status badges */
+  .ts-pass    { background:#d1fae5; color:#065f46; }
+  .ts-fail    { background:#fee2e2; color:#991b1b; }
+  .ts-pending { background:#f3f4f6; color:#374151; }
+  .ts-na      { background:#f9fafb; color:#9ca3af; }
+  .ts-overdue { background:#ffedd5; color:#9a3412; }
+  .test-status-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:.04em; }
+  /* queue overdue */
+  .queue-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .queue-table th { background:#fffbeb; color:#92400e; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:8px 12px; border-bottom:2px solid #fde68a; }
+  .queue-table td { padding:8px 12px; border-bottom:1px solid #fef9c3; vertical-align:middle; }
+  .queue-table tr:last-child td { border-bottom:none; }
+  .days-overdue-pill { background:#fee2e2; color:#991b1b; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; }
+  /* toolbar */
+  .ctrl-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid #e5e7eb; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Internal Controls</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Control frameworks, test status tracking and overdue testing queue</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-success btn-sm" id="btn-run-tests">
+      <i class="fa fa-play-circle"></i> Run Tests
+    </button>
+    <a href="/grc/control/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Add Control
+    </a>
+    <button class="btn btn-default btn-sm" id="btn-export">
+      <i class="fa fa-download"></i> Export
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Control framework cards ─────────────────────────────────────────────── #}
+{% if frameworks %}
+<div class="fw-grid">
+  {% set accent_cycle = ['#1a56db','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4'] %}
+  {% for fw in frameworks %}
+  <div class="fw-card" style="--accent:{{ accent_cycle[loop.index0 % 6] }};">
+    <p class="fw-name">{{ fw.name }}</p>
+    <p class="fw-std">
+      <span style="font-family:monospace; font-size:11px; background:#f3f4f6; padding:1px 6px; border-radius:3px;">
+        {{ fw.standard }}
+      </span>
+    </p>
+    <div class="fw-stats">
+      <div class="fw-stat">
+        <span class="fw-stat-v">{{ fw.total_controls or 0 }}</span>
+        <span class="fw-stat-l">Controls</span>
+      </div>
+      <div class="fw-stat">
+        <span class="fw-stat-v" style="color:{% if (fw.tested_pct or 0) >= 80 %}#10b981{% elif (fw.tested_pct or 0) >= 50 %}#f59e0b{% else %}#ef4444{% endif %};">
+          {{ "{:.0f}".format(fw.tested_pct or 0) }}%
+        </span>
+        <span class="fw-stat-l">Tested</span>
+      </div>
+      {% if fw.passing_pct is defined %}
+      <div class="fw-stat">
+        <span class="fw-stat-v" style="color:#10b981;">{{ "{:.0f}".format(fw.passing_pct or 0) }}%</span>
+        <span class="fw-stat-l">Passing</span>
+      </div>
+      {% endif %}
+    </div>
+    <div class="test-bar-wrap">
+      <div class="test-bar-track">
+        <div class="test-bar-fill" style="width:{{ fw.tested_pct or 0 }}%;
+          background:{% if (fw.tested_pct or 0) >= 80 %}#10b981{% elif (fw.tested_pct or 0) >= 50 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+      </div>
+      <div class="test-bar-label">{{ "{:.0f}".format(fw.tested_pct or 0) }}% tested</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-md-8">
+
+    {# ── Controls table ───────────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:24px;">
+      <div class="ctrl-toolbar">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0; flex:1;">
+          <i class="fa fa-list-alt" style="color:#1a56db; margin-right:6px;"></i> Controls Register
+        </h4>
+        <input type="text" id="ctrl-search" class="form-control" placeholder="Search control…"
+               style="width:200px; height:30px; font-size:12px; padding:2px 10px;">
+        <select id="cat-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+          <option value="">All Categories</option>
+          {% if controls %}
+            {% for cat in controls | map(attribute='category') | unique | sort %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+        <select id="status-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+          <option value="">All Status</option>
+          <option value="PASS">Pass</option>
+          <option value="FAIL">Fail</option>
+          <option value="PENDING">Pending</option>
+          <option value="OVERDUE">Overdue</option>
+        </select>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="ctrl-table" id="ctrl-table">
+          <thead>
+            <tr>
+              <th style="width:90px;">Control ID</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th style="text-align:center;">Test Status</th>
+              <th>Last Tested</th>
+              <th>Owner</th>
+              <th style="text-align:center; width:80px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ctrl-tbody">
+            {% if controls %}
+              {% for ctrl in controls %}
+              <tr data-id="{{ ctrl.control_id }}"
+                  data-name="{{ ctrl.name | lower }}"
+                  data-cat="{{ ctrl.category }}"
+                  data-status="{{ ctrl.test_status | upper }}">
+                <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ ctrl.control_id }}</td>
+                <td style="font-weight:600;">{{ ctrl.name }}</td>
+                <td style="font-size:12px;">{{ ctrl.category }}</td>
+                <td style="text-align:center;">
+                  {% set ts = ctrl.test_status | upper %}
+                  {% if ts == 'PASS' %}
+                    <span class="test-status-badge ts-pass"><i class="fa fa-check"></i> Pass</span>
+                  {% elif ts == 'FAIL' %}
+                    <span class="test-status-badge ts-fail"><i class="fa fa-times"></i> Fail</span>
+                  {% elif ts == 'OVERDUE' %}
+                    <span class="test-status-badge ts-overdue"><i class="fa fa-clock-o"></i> Overdue</span>
+                  {% elif ts == 'N/A' %}
+                    <span class="test-status-badge ts-na">N/A</span>
+                  {% else %}
+                    <span class="test-status-badge ts-pending">Pending</span>
+                  {% endif %}
+                </td>
+                <td style="font-size:12px; color:#6b7280;">{{ ctrl.last_tested_at or '—' }}</td>
+                <td style="font-size:12px;">{{ ctrl.owner or '—' }}</td>
+                <td style="text-align:center; white-space:nowrap;">
+                  <a href="/grc/control/edit/{{ ctrl.id }}" class="btn btn-xs btn-default" title="Edit">
+                    <i class="fa fa-pencil"></i>
+                  </a>
+                  <a href="/grc/control/{{ ctrl.id }}/test" class="btn btn-xs btn-default" title="Record test">
+                    <i class="fa fa-check-square-o"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr id="ctrl-empty">
+                <td colspan="7" style="text-align:center; padding:40px; color:#9ca3af;">
+                  <i class="fa fa-list-alt" style="font-size:28px; display:block; margin-bottom:10px; opacity:.35;"></i>
+                  No controls defined. <a href="/grc/control/add">Add the first control</a>.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-md-4">
+
+    {# ── Testing Queue ─────────────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden; {% if testing_queue %}border-color:#fde68a;{% endif %}">
+      <div style="padding:12px 16px; border-bottom:1px solid #e5e7eb;
+        {% if testing_queue %}background:#fffbeb; border-bottom-color:#fde68a;{% endif %}">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;
+          {% if testing_queue %}color:#92400e;{% endif %}">
+          <i class="fa fa-clock-o" style="color:{% if testing_queue %}#d97706{% else %}#9ca3af{% endif %}; margin-right:6px;"></i>
+          Testing Queue
+          {% if testing_queue %}
+            <span style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; margin-left:6px;">
+              {{ testing_queue | length }} overdue
+            </span>
+          {% endif %}
+        </h4>
+      </div>
+      {% if testing_queue %}
+      <div style="overflow-x:auto;">
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th>Control</th>
+              <th>Last Tested</th>
+              <th>Overdue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in testing_queue %}
+            <tr>
+              <td>
+                <span style="font-size:11px; font-family:monospace; color:#6b7280;">{{ item.control_id }}</span>
+                <div style="font-weight:600; font-size:12px; color:#374151;">{{ item.name | truncate(28) }}</div>
+              </td>
+              <td style="font-size:11px; color:#9ca3af;">{{ item.last_tested_at or 'Never' }}</td>
+              <td>
+                <span class="days-overdue-pill">{{ item.days_overdue }} days</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+        <i class="fa fa-check-circle" style="font-size:24px; display:block; margin-bottom:8px; color:#10b981; opacity:.7;"></i>
+        No overdue tests.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Filter controls ─────────────────────────────────────────────────── */
+  function applyFilters() {
+    var search = (document.getElementById('ctrl-search').value || '').toLowerCase().trim();
+    var cat    = document.getElementById('cat-filter').value;
+    var status = document.getElementById('status-filter').value;
+    var rows   = document.querySelectorAll('#ctrl-tbody tr[data-id]');
+    var shown  = 0;
+    rows.forEach(function (tr) {
+      var name = tr.getAttribute('data-name') || '';
+      var id   = tr.getAttribute('data-id') || '';
+      var c    = tr.getAttribute('data-cat') || '';
+      var st   = tr.getAttribute('data-status') || '';
+      var show =
+        (!search || name.indexOf(search) !== -1 || id.toLowerCase().indexOf(search) !== -1) &&
+        (!cat    || c === cat) &&
+        (!status || st === status);
+      tr.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+  }
+
+  ['ctrl-search'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', applyFilters);
+  });
+  ['cat-filter','status-filter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+
+  /* ── Run Tests ───────────────────────────────────────────────────────── */
+  document.getElementById('btn-run-tests').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Running…';
+
+    fetch('/api/grc/controls/run_tests', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin'
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('Test run complete. ' + (res.data.tests_run || 0) + ' tests executed.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Test run failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-play-circle"></i> Run Tests';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-play-circle"></i> Run Tests';
+    });
+  });
+
+  document.getElementById('btn-export').addEventListener('click', function () {
+    window.location.href = '/api/grc/controls/export?format=csv';
+  });
+
+}());
+</script>
+{% endblock %}

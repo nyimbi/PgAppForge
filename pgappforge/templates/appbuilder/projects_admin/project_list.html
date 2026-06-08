@@ -1,0 +1,181 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Project Portfolio — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-briefcase" style="color:var(--erp-primary);margin-right:8px;"></i>Project Portfolio</h1>
+      <p class="erp-page-subtitle">All projects, budgets, and delivery status</p>
+    </div>
+    <div class="erp-flex erp-gap-8">
+      <select class="form-control input-sm" id="statusFilter" style="width:auto;" onchange="filterByStatus(this.value)">
+        <option value="">All Statuses</option>
+        <option value="PLANNING">Planning</option>
+        <option value="ACTIVE">Active</option>
+        <option value="ON_HOLD">On Hold</option>
+        <option value="COMPLETED">Completed</option>
+        <option value="CANCELLED">Cancelled</option>
+      </select>
+      <a href="{{ url_for('ProjectsAdminView.create_project') }}" class="btn btn-primary">
+        <i class="fa fa-plus"></i> New Project
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── Portfolio KPI Tiles ───────────────────────────────────────────── #}
+  <p class="erp-section-title">Portfolio Overview</p>
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <div class="erp-card-icon" style="background:var(--erp-primary-lt);color:var(--erp-primary);opacity:.25;"><i class="fa fa-briefcase"></i></div>
+      <p class="erp-card-title">Total Projects</p>
+      <p class="erp-card-value">{{ portfolio_kpis.total_projects | default(0) }}</p>
+      <p class="erp-card-sub">Across all statuses</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <div class="erp-card-icon" style="background:var(--erp-success-lt);color:var(--erp-success);opacity:.25;"><i class="fa fa-play-circle"></i></div>
+      <p class="erp-card-title">Active Projects</p>
+      <p class="erp-card-value">{{ portfolio_kpis.active_count | default(0) }}</p>
+      <p class="erp-card-sub">Currently in flight</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <div class="erp-card-icon" style="background:var(--erp-info-lt);color:var(--erp-info);opacity:.25;"><i class="fa fa-usd"></i></div>
+      <p class="erp-card-title">Total Budget</p>
+      <p class="erp-card-value">{{ "{:,.0f}".format((portfolio_kpis.total_budget_cents | default(0)) / 100) }}</p>
+      <p class="erp-card-sub">KES (all projects)</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <div class="erp-card-icon" style="background:var(--erp-warning-lt);color:var(--erp-warning);opacity:.25;"><i class="fa fa-percent"></i></div>
+      <p class="erp-card-title">Avg. Completion</p>
+      <p class="erp-card-value">{{ "{:.0f}".format(portfolio_kpis.avg_completion_pct | default(0)) }}%</p>
+      <p class="erp-card-sub">Weighted average progress</p>
+    </div>
+  </div>
+
+  {# ── Overdue Milestones Alert ──────────────────────────────────────── #}
+  {% if overdue_milestones %}
+  <div class="alert alert-danger" style="border-radius:var(--erp-radius-lg);margin-bottom:24px;">
+    <strong><i class="fa fa-exclamation-triangle"></i> {{ overdue_milestones | length }} overdue milestone{{ 's' if overdue_milestones | length != 1 else '' }}:</strong>
+    <ul style="margin:8px 0 0;padding-left:20px;">
+      {% for m in overdue_milestones %}
+      <li>
+        <strong>{{ m.project_name | default('—') }}</strong> — {{ m.milestone_name | default('—') }}
+        <span style="color:var(--erp-danger);margin-left:6px;">due {{ m.due_date | default('?') }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {# ── Projects Table ────────────────────────────────────────────────── #}
+  <p class="erp-section-title">Projects</p>
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="projectsTable">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Project Name</th>
+          <th>Status</th>
+          <th>Budget (KES)</th>
+          <th style="min-width:120px;">Spent %</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Manager</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        {% set spent_pct = p.spent_pct | default(0) | float %}
+        {% set bar_color = 'var(--erp-danger)' if spent_pct > 90 else ('var(--erp-warning)' if spent_pct > 70 else 'var(--erp-success)') %}
+        <tr data-status="{{ p.status | default('') | upper }}">
+          <td>
+            <code style="font-size:12px;background:var(--erp-neutral-lt);padding:2px 6px;border-radius:4px;">
+              {{ p.project_code | default('—') }}
+            </code>
+          </td>
+          <td>
+            <a href="{{ url_for('ProjectsAdminView.project_detail', project_id=p.id) }}"
+               style="font-weight:600;color:var(--erp-primary);">
+              {{ p.name | default('—') }}
+            </a>
+            {% if p.description %}
+            <div style="font-size:11px;color:var(--erp-text-muted);margin-top:2px;" class="erp-truncate" style="max-width:220px;">
+              {{ p.description }}
+            </div>
+            {% endif %}
+          </td>
+          <td>
+            {% set s = p.status | default('PLANNING') | upper %}
+            {% if s == 'ACTIVE' %}
+              <span class="erp-badge erp-badge-green">Active</span>
+            {% elif s == 'PLANNING' %}
+              <span class="erp-badge erp-badge-blue">Planning</span>
+            {% elif s == 'ON_HOLD' %}
+              <span class="erp-badge erp-badge-yellow">On Hold</span>
+            {% elif s == 'COMPLETED' %}
+              <span class="erp-badge erp-badge-gray">Completed</span>
+            {% elif s == 'CANCELLED' %}
+              <span class="erp-badge erp-badge-red">Cancelled</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ p.status }}</span>
+            {% endif %}
+          </td>
+          <td style="font-variant-numeric:tabular-nums;white-space:nowrap;">
+            {{ "{:,.0f}".format((p.budget_cents | default(0)) / 100) }}
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:8px;background:var(--erp-border);border-radius:4px;overflow:hidden;">
+                <div style="width:{{ [spent_pct, 100] | min }}%;height:100%;background:{{ bar_color }};border-radius:4px;transition:width .4s;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;min-width:36px;color:{{ bar_color }};">
+                {{ "{:.0f}".format(spent_pct) }}%
+              </span>
+            </div>
+          </td>
+          <td style="font-size:12px;white-space:nowrap;">{{ p.start_date | default('—') }}</td>
+          <td style="font-size:12px;white-space:nowrap;">{{ p.end_date | default('—') }}</td>
+          <td style="font-size:13px;">{{ p.project_manager | default('—') }}</td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            <a href="{{ url_for('ProjectsAdminView.project_detail', project_id=p.id) }}"
+               class="btn btn-xs btn-primary"><i class="fa fa-eye"></i></a>
+            <a href="{{ url_for('ProjectsAdminView.edit_project', project_id=p.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-pencil"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-briefcase" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No projects found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>{# /erp-island #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterByStatus(status) {
+  var rows = document.querySelectorAll('#projectsTable tbody tr[data-status]');
+  rows.forEach(function(row) {
+    row.style.display = (!status || row.dataset.status === status) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

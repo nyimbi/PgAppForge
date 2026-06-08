@@ -1,0 +1,319 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}AP Suppliers — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* KPI tiles */
+  .ap-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+  .ap-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:16px 18px; position:relative; overflow:hidden; }
+  .ap-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .ap-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .ap-kpi-value { font-size:24px; font-weight:700; color:#111827; margin:0 0 2px; font-variant-numeric:tabular-nums; }
+  .ap-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* table */
+  .ap-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .ap-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .ap-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .ap-table tr:last-child td { border-bottom:none; }
+  .ap-table tr:hover td { background:#fafafa; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-inactive { background:#f3f4f6; color:#6b7280; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* toolbar */
+  .ap-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid #e5e7eb; }
+  .ap-toolbar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  /* bulk actions */
+  .bulk-bar { display:none; align-items:center; gap:10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:5px; padding:8px 14px; margin-bottom:14px; font-size:13px; }
+  .bulk-bar.visible { display:flex; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .erp-toast.warning { border-left:4px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">AP Supplier Management</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Supplier master, payment terms, currency preferences and status management</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="/finance/ap_supplier/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> New Supplier
+    </a>
+    <button class="btn btn-default btn-sm" id="btn-export">
+      <i class="fa fa-download"></i> Export
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ───────────────────────────────────────────────────────────── #}
+<div class="ap-kpi-grid">
+  <div class="ap-kpi-card" style="--accent:#1a56db;">
+    <p class="ap-kpi-label">Total Suppliers</p>
+    <p class="ap-kpi-value">{{ stats.total_suppliers if stats else (suppliers | length if suppliers else '—') }}</p>
+    <p class="ap-kpi-sub">registered in master</p>
+  </div>
+  <div class="ap-kpi-card" style="--accent:#10b981;">
+    <p class="ap-kpi-label">Active Suppliers</p>
+    <p class="ap-kpi-value" style="color:#10b981;">{{ stats.active_suppliers if stats else '—' }}</p>
+    <p class="ap-kpi-sub">currently enabled</p>
+  </div>
+  <div class="ap-kpi-card" style="--accent:#f59e0b;">
+    <p class="ap-kpi-label">Avg Payment Days</p>
+    <p class="ap-kpi-value">{{ stats.avg_payment_days if stats else '—' }}</p>
+    <p class="ap-kpi-sub">weighted average net days</p>
+  </div>
+  <div class="ap-kpi-card" style="--accent:#8b5cf6;">
+    <p class="ap-kpi-label">Currencies Used</p>
+    <p class="ap-kpi-value">{{ stats.currency_count if stats else '—' }}</p>
+    <p class="ap-kpi-sub">distinct currencies</p>
+  </div>
+</div>
+
+{# ── Bulk action bar ─────────────────────────────────────────────────────── #}
+<div class="bulk-bar" id="bulk-bar">
+  <strong id="bulk-count">0</strong> suppliers selected
+  <button class="btn btn-success btn-xs" id="btn-bulk-activate" style="font-size:11px; font-weight:600;">
+    <i class="fa fa-check"></i> Activate Selected
+  </button>
+  <button class="btn btn-warning btn-xs" id="btn-bulk-deactivate" style="font-size:11px; font-weight:600;">
+    <i class="fa fa-ban"></i> Deactivate Selected
+  </button>
+  <button class="btn btn-link btn-xs" id="btn-bulk-clear" style="font-size:11px; padding:0 8px;">
+    Clear selection
+  </button>
+</div>
+
+{# ── Supplier table ──────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div class="ap-toolbar">
+    <input type="text" id="supplier-search" class="form-control" placeholder="Search supplier name or ref…"
+           style="width:240px; height:30px; font-size:12px; padding:2px 10px;">
+    <select id="status-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+    </select>
+    <select id="currency-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+      <option value="">All Currencies</option>
+      {% if suppliers %}
+        {% for cur in suppliers | map(attribute='preferred_currency') | unique | sort %}
+        <option value="{{ cur }}">{{ cur }}</option>
+        {% endfor %}
+      {% endif %}
+    </select>
+    <button class="btn btn-default btn-xs" id="btn-filter-clear" style="font-size:11px; height:30px;">
+      <i class="fa fa-times"></i> Clear
+    </button>
+    <span id="row-count" style="margin-left:auto; font-size:11px; color:#9ca3af;"></span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="ap-table" id="supplier-table">
+      <thead>
+        <tr>
+          <th style="width:32px; padding-right:4px;">
+            <input type="checkbox" id="select-all" title="Select all visible">
+          </th>
+          <th style="width:110px;">Ref</th>
+          <th>Supplier Name</th>
+          <th class="nums">Payment Terms</th>
+          <th>Currency</th>
+          <th>Last Invoice</th>
+          <th style="text-align:center;">Status</th>
+          <th style="text-align:center; width:90px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="supplier-tbody">
+        {% if suppliers %}
+          {% for s in suppliers %}
+          <tr data-id="{{ s.id }}"
+              data-active="{{ 'active' if s.is_active else 'inactive' }}"
+              data-name="{{ s.name | lower }}"
+              data-ref="{{ s.supplier_ref | lower }}"
+              data-currency="{{ s.preferred_currency }}">
+            <td style="padding-right:4px;">
+              <input type="checkbox" class="row-select" data-id="{{ s.id }}">
+            </td>
+            <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ s.supplier_ref }}</td>
+            <td>
+              <strong>{{ s.name }}</strong>
+              {% if s.country_code %}
+              <span style="font-size:11px; color:#9ca3af; margin-left:5px;">{{ s.country_code }}</span>
+              {% endif %}
+            </td>
+            <td class="nums">
+              Net {{ s.payment_terms_days or 0 }} days
+            </td>
+            <td>
+              <span style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ s.preferred_currency or '—' }}</span>
+            </td>
+            <td style="font-size:12px; color:#6b7280;">{{ s.last_invoice_date or '—' }}</td>
+            <td style="text-align:center;">
+              {% if s.is_active %}
+                <span class="badge-active"><i class="fa fa-check"></i> Active</span>
+              {% else %}
+                <span class="badge-inactive">Inactive</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center; white-space:nowrap;">
+              <a href="/finance/ap_supplier/edit/{{ s.id }}" class="btn btn-xs btn-default" title="Edit">
+                <i class="fa fa-pencil"></i>
+              </a>
+              <a href="/finance/ap_supplier/{{ s.id }}" class="btn btn-xs btn-default" title="View">
+                <i class="fa fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="supplier-empty">
+            <td colspan="8" style="text-align:center; padding:40px; color:#9ca3af;">
+              <i class="fa fa-building-o" style="font-size:30px; display:block; margin-bottom:10px; opacity:.35;"></i>
+              No suppliers found. <a href="/finance/ap_supplier/add">Add the first supplier</a>.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle'
+             : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Filter ─────────────────────────────────────────────────────────── */
+  function applyFilters() {
+    var search   = (document.getElementById('supplier-search').value || '').toLowerCase().trim();
+    var status   = document.getElementById('status-filter').value;
+    var currency = document.getElementById('currency-filter').value;
+    var rows     = document.querySelectorAll('#supplier-tbody tr[data-id]');
+    var shown    = 0;
+    rows.forEach(function (tr) {
+      var name   = tr.getAttribute('data-name') || '';
+      var ref    = tr.getAttribute('data-ref') || '';
+      var active = tr.getAttribute('data-active') || '';
+      var cur    = tr.getAttribute('data-currency') || '';
+      var show =
+        (!search   || name.indexOf(search) !== -1 || ref.indexOf(search) !== -1) &&
+        (!status   || active === status) &&
+        (!currency || cur === currency);
+      tr.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+    var el = document.getElementById('row-count');
+    if (rows.length) el.textContent = 'Showing ' + shown + ' of ' + rows.length;
+  }
+
+  ['supplier-search', 'status-filter', 'currency-filter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', applyFilters);
+  });
+  document.getElementById('btn-filter-clear').addEventListener('click', function () {
+    document.getElementById('supplier-search').value = '';
+    document.getElementById('status-filter').value = '';
+    document.getElementById('currency-filter').value = '';
+    applyFilters();
+  });
+
+  /* initial count */
+  (function () {
+    var rows = document.querySelectorAll('#supplier-tbody tr[data-id]');
+    if (rows.length) document.getElementById('row-count').textContent = rows.length + ' suppliers';
+  }());
+
+  /* ── Row selection ──────────────────────────────────────────────────── */
+  function updateBulkBar() {
+    var checked = document.querySelectorAll('.row-select:checked');
+    var bar = document.getElementById('bulk-bar');
+    var countEl = document.getElementById('bulk-count');
+    countEl.textContent = checked.length;
+    checked.length > 0 ? bar.classList.add('visible') : bar.classList.remove('visible');
+  }
+
+  document.getElementById('select-all').addEventListener('change', function () {
+    var visibleRows = Array.prototype.slice.call(
+      document.querySelectorAll('#supplier-tbody tr[data-id]')
+    ).filter(function (tr) { return tr.style.display !== 'none'; });
+    visibleRows.forEach(function (tr) {
+      var cb = tr.querySelector('.row-select');
+      if (cb) cb.checked = this.checked;
+    }, this);
+    updateBulkBar();
+  });
+
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('row-select')) updateBulkBar();
+  });
+
+  document.getElementById('btn-bulk-clear').addEventListener('click', function () {
+    document.querySelectorAll('.row-select').forEach(function (cb) { cb.checked = false; });
+    document.getElementById('select-all').checked = false;
+    updateBulkBar();
+  });
+
+  function bulkAction(action) {
+    var ids = Array.prototype.slice.call(document.querySelectorAll('.row-select:checked'))
+                   .map(function (cb) { return cb.getAttribute('data-id'); });
+    if (!ids.length) return;
+    fetch('/api/finance/ap_suppliers/bulk', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ ids: ids, action: action })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast(ids.length + ' suppliers ' + (action === 'activate' ? 'activated' : 'deactivated') + '.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1400);
+      } else {
+        toast(res.data.message || 'Bulk action failed.', 'error');
+      }
+    })
+    .catch(function (err) { toast('Network error: ' + err.message, 'error'); });
+  }
+
+  document.getElementById('btn-bulk-activate').addEventListener('click', function () { bulkAction('activate'); });
+  document.getElementById('btn-bulk-deactivate').addEventListener('click', function () { bulkAction('deactivate'); });
+
+  document.getElementById('btn-export').addEventListener('click', function () {
+    window.location.href = '/api/finance/ap_suppliers/export?format=csv';
+  });
+
+}());
+</script>
+{% endblock %}

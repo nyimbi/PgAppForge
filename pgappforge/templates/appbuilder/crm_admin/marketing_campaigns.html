@@ -1,0 +1,326 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Marketing Campaigns — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .campaign-type-EMAIL  { background:#eff6ff; color:#1d4ed8; }
+  .campaign-type-SMS    { background:#f0fdf4; color:#15803d; }
+  .campaign-type-PUSH   { background:#fdf4ff; color:#7c3aed; }
+  .campaign-type-SOCIAL { background:#fff7ed; color:#c2410c; }
+  .campaign-type-EVENT  { background:#fffbeb; color:#92400e; }
+
+  .status-DRAFT     { background:var(--erp-neutral-lt); color:var(--erp-neutral); }
+  .status-ACTIVE    { background:var(--erp-success-lt); color:var(--erp-success); }
+  .status-PAUSED    { background:var(--erp-warning-lt); color:#92400e; }
+  .status-COMPLETED { background:var(--erp-info-lt);    color:var(--erp-info); }
+  .status-CANCELLED { background:var(--erp-danger-lt);  color:var(--erp-danger); }
+
+  /* conversion bar */
+  .conv-bar { height: 6px; background: var(--erp-border); border-radius: 3px; overflow: hidden; width: 80px; }
+  .conv-fill { height: 100%; border-radius: 3px; background: var(--erp-success); }
+
+  /* channel breakdown mini bars */
+  .channel-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .channel-card {
+    background: var(--erp-neutral-lt); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius); padding: 12px 14px; text-align: center;
+  }
+  .channel-val { font-size: 22px; font-weight: 800; color: var(--erp-text); }
+  .channel-label { font-size: 11px; color: var(--erp-text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-top: 3px; }
+
+  /* lead score distribution */
+  .score-dist { display: flex; gap: 3px; align-items: flex-end; height: 60px; }
+  .score-bar  { flex: 1; border-radius: 2px 2px 0 0; background: var(--erp-primary); opacity: .7; cursor: pointer; transition: opacity var(--erp-transition); }
+  .score-bar:hover { opacity: 1; }
+
+  /* toggle switch */
+  .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0; cursor: pointer;
+    background: var(--erp-border); border-radius: 999px;
+    transition: background .2s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; top: 3px; left: 3px;
+    transition: transform .2s;
+    box-shadow: var(--erp-shadow-sm);
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--erp-success); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-bullhorn" style="margin-right:8px; color:var(--erp-primary);"></i>Marketing Campaigns</h1>
+      <p class="erp-page-subtitle">Create, activate, and measure multi-channel marketing campaigns</p>
+    </div>
+    <button class="btn btn-primary btn-sm" style="align-self:center;" data-toggle="modal" data-target="#modal-create-campaign">
+      <i class="fa fa-plus"></i> Create Campaign
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Channel Summary ───────────────────────────────────────────────────── #}
+{% if channel_stats %}
+<div class="erp-card erp-mb-24" style="padding:20px 24px;">
+  <p class="erp-section-title"><i class="fa fa-bar-chart" style="margin-right:6px;"></i>Channel Breakdown</p>
+  <div class="channel-grid">
+    <div class="channel-card">
+      <div class="channel-val" style="color:var(--erp-primary);">{{ channel_stats.email | default(0) }}</div>
+      <div class="channel-label"><i class="fa fa-envelope"></i> Email</div>
+    </div>
+    <div class="channel-card">
+      <div class="channel-val" style="color:var(--erp-success);">{{ channel_stats.sms | default(0) }}</div>
+      <div class="channel-label"><i class="fa fa-mobile"></i> SMS</div>
+    </div>
+    <div class="channel-card">
+      <div class="channel-val" style="color:#7c3aed;">{{ channel_stats.push | default(0) }}</div>
+      <div class="channel-label"><i class="fa fa-bell"></i> Push</div>
+    </div>
+  </div>
+
+  {% if channel_stats.lead_score_dist %}
+  <div style="margin-top:20px;">
+    <p style="font-size:12px; font-weight:700; color:var(--erp-text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em;">Lead Score Distribution</p>
+    <div class="score-dist">
+      {% set max_score = channel_stats.lead_score_dist | max | default(1) %}
+      {% for score in channel_stats.lead_score_dist %}
+      <div class="score-bar" style="height:{{ [(score / max_score * 100) | int, 8] | max }}%;"
+           title="{{ score }} leads"></div>
+      {% endfor %}
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--erp-text-muted); margin-top:3px;">
+      <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── KPI tiles ─────────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  {% set active_camps = campaigns | default([]) | selectattr('status', 'equalto', 'ACTIVE') | list %}
+  {% set draft_camps  = campaigns | default([]) | selectattr('status', 'equalto', 'DRAFT') | list %}
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <p class="erp-card-title erp-mb-0">Active Campaigns</p>
+    <p class="erp-card-value">{{ active_camps | length }}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-info"></div>
+    <p class="erp-card-title erp-mb-0">Total Enrolled</p>
+    <p class="erp-card-value">{{ campaigns | default([]) | sum(attribute='enrolled_count') | default(0) }}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <p class="erp-card-title erp-mb-0">Avg Conversion</p>
+    {% set conv_list = campaigns | default([]) | map(attribute='conversion_rate_pct') | select | list %}
+    <p class="erp-card-value">{{ (conv_list | sum / conv_list | length | default(1)) | round(1) if conv_list else '—' }}{% if conv_list %}%{% endif %}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title erp-mb-0">Drafts</p>
+    <p class="erp-card-value">{{ draft_camps | length }}</p>
+  </div>
+</div>
+
+{# ── Campaigns Table ───────────────────────────────────────────────────── #}
+<div class="erp-card">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    <p class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-list" style="margin-right:6px;"></i>All Campaigns
+    </p>
+    <div class="erp-flex erp-gap-8">
+      <input type="text" id="camp-search" class="form-control input-sm"
+             placeholder="Search campaign…" style="width:200px;">
+      <select id="status-filter" class="form-control input-sm" style="width:140px;">
+        <option value="">All Status</option>
+        <option value="DRAFT">Draft</option>
+        <option value="ACTIVE">Active</option>
+        <option value="PAUSED">Paused</option>
+        <option value="COMPLETED">Completed</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="camp-table">
+      <thead>
+        <tr>
+          <th>Campaign Name</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Start Date</th>
+          <th>Enrolled</th>
+          <th>Conversion</th>
+          <th style="text-align:center;">Active</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if campaigns %}
+          {% for camp in campaigns %}
+          <tr data-name="{{ camp.name | lower }}"
+              data-status="{{ camp.status }}">
+            <td style="font-weight:600;">{{ camp.name }}</td>
+            <td>
+              <span class="erp-badge campaign-type-{{ camp.campaign_type | upper }}">
+                <i class="fa {% if camp.campaign_type == 'EMAIL' %}fa-envelope{% elif camp.campaign_type == 'SMS' %}fa-mobile{% elif camp.campaign_type == 'PUSH' %}fa-bell{% else %}fa-bullhorn{% endif %}"></i>
+                {{ camp.campaign_type | title }}
+              </span>
+            </td>
+            <td>
+              <span class="erp-badge status-{{ camp.status | upper }}">{{ camp.status | title }}</span>
+            </td>
+            <td style="font-size:12px; color:var(--erp-text-muted);">{{ camp.start_date or '—' }}</td>
+            <td style="font-variant-numeric:tabular-nums; font-weight:600;">{{ camp.enrolled_count | default(0) | format_number }}</td>
+            <td>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <div class="conv-bar">
+                  <div class="conv-fill" style="width:{{ [camp.conversion_rate_pct | default(0), 100] | min }}%;"></div>
+                </div>
+                <span style="font-size:12px; font-weight:700;">{{ camp.conversion_rate_pct | default(0) | round(1) }}%</span>
+              </div>
+            </td>
+            <td style="text-align:center;">
+              <label class="toggle-switch" title="{{ 'Pause' if camp.status == 'ACTIVE' else 'Activate' }} campaign">
+                <input type="checkbox" class="camp-toggle"
+                       data-id="{{ camp.id }}"
+                       data-status="{{ camp.status }}"
+                       {% if camp.status == 'ACTIVE' %}checked{% endif %}>
+                <span class="toggle-slider"></span>
+              </label>
+            </td>
+            <td style="text-align:right;">
+              <a href="{{ url_for('CampaignView.show', pk=camp.id) }}" class="btn btn-default btn-xs">
+                <i class="fa fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="8" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No campaigns found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Create Campaign Modal ─────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-create-campaign" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-plus" style="color:var(--erp-primary); margin-right:6px;"></i>Create Campaign</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Campaign Name <span class="text-danger">*</span></label>
+          <input type="text" id="new-camp-name" class="form-control" placeholder="e.g. Q3 Re-engagement">
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Type</label>
+              <select id="new-camp-type" class="form-control">
+                <option value="EMAIL">Email</option>
+                <option value="SMS">SMS</option>
+                <option value="PUSH">Push</option>
+                <option value="SOCIAL">Social</option>
+                <option value="EVENT">Event</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Start Date</label>
+              <input type="date" id="new-camp-start" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="new-camp-desc" class="form-control" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-create-campaign">
+          <i class="fa fa-save"></i> Create
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  function _csrf() { var m = document.cookie.match(/csrf_token=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+
+  /* Table filter */
+  function filter() {
+    var q  = (document.getElementById('camp-search').value || '').toLowerCase();
+    var st = document.getElementById('status-filter').value;
+    document.querySelectorAll('#camp-table tbody tr').forEach(function (tr) {
+      var show = (!q || (tr.getAttribute('data-name') || '').indexOf(q) !== -1)
+              && (!st || tr.getAttribute('data-status') === st);
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+  document.getElementById('camp-search').addEventListener('input', filter);
+  document.getElementById('status-filter').addEventListener('change', filter);
+
+  /* Toggle active/paused */
+  document.querySelectorAll('.camp-toggle').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      var id     = cb.getAttribute('data-id');
+      var action = cb.checked ? 'ACTIVE' : 'PAUSED';
+      fetch('/api/crm/campaigns/' + id + '/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status: action })
+      }).then(function (r) {
+        if (!r.ok) { cb.checked = !cb.checked; alert('Failed to update status.'); }
+      }).catch(function () { cb.checked = !cb.checked; });
+    });
+  });
+
+  /* Create campaign */
+  document.getElementById('btn-create-campaign').addEventListener('click', function () {
+    var name  = document.getElementById('new-camp-name').value.trim();
+    var type  = document.getElementById('new-camp-type').value;
+    var start = document.getElementById('new-camp-start').value;
+    var desc  = document.getElementById('new-camp-desc').value;
+    if (!name) { alert('Campaign name is required.'); return; }
+
+    fetch('/api/crm/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name: name, campaign_type: type, start_date: start, description: desc })
+    }).then(function (r) {
+      if (r.ok) { location.reload(); }
+      else { return r.json().then(function (d) { alert('Failed: ' + (d.message || r.status)); }); }
+    }).catch(function (e) { alert('Network error: ' + e.message); });
+  });
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,371 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Fixed Asset Register — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* KPI tiles */
+  .fa-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+  .fa-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:16px 18px; position:relative; overflow:hidden; }
+  .fa-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .fa-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .fa-kpi-value { font-size:20px; font-weight:700; color:#111827; margin:0 0 2px; font-variant-numeric:tabular-nums; }
+  .fa-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* table */
+  .asset-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .asset-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .asset-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .asset-table tr:last-child td { border-bottom:none; }
+  .asset-table tr:hover td { background:#fafafa; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* status badges */
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-disposed { background:#f3f4f6; color:#6b7280; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-impaired { background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* depreciation method badges */
+  .dep-sl  { background:#dbeafe; color:#1d4ed8; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .dep-db  { background:#f0fdf4; color:#166534; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .dep-uop { background:#fef9c3; color:#713f12; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .dep-sum { background:#ede9fe; color:#5b21b6; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  /* toolbar */
+  .asset-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid #e5e7eb; }
+  /* confirmation modal warning */
+  .dep-confirm-warn { background:#fffbeb; border:1px solid #fde68a; border-radius:4px; padding:12px 16px; margin-bottom:14px; font-size:13px; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .erp-toast.warning { border-left:4px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Fixed Asset Register</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Asset master, depreciation schedules, disposals and capitalization</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-success btn-sm" id="btn-run-dep">
+      <i class="fa fa-calculator"></i> Run Depreciation
+    </button>
+    <a href="/finance/asset/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Capitalize Asset
+    </a>
+    <button class="btn btn-default btn-sm" id="btn-export">
+      <i class="fa fa-download"></i> Export
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPIs ────────────────────────────────────────────────────────── #}
+<div class="fa-kpi-grid">
+  <div class="fa-kpi-card" style="--accent:#1a56db;">
+    <p class="fa-kpi-label">Total Assets</p>
+    <p class="fa-kpi-value">{{ assets | length if assets else (summary.total_assets if summary else '—') }}</p>
+    <p class="fa-kpi-sub">in register</p>
+  </div>
+  <div class="fa-kpi-card" style="--accent:#10b981;">
+    <p class="fa-kpi-label">Gross Book Value</p>
+    <p class="fa-kpi-value" style="font-size:17px;">
+      {% if summary and summary.total_acquisition_cents %}
+        {{ "{:,.0f}".format(summary.total_acquisition_cents / 100) }}
+      {% elif assets %}
+        {{ "{:,.0f}".format(assets | sum(attribute='acquisition_cost_cents') / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="fa-kpi-sub">acquisition cost</p>
+  </div>
+  <div class="fa-kpi-card" style="--accent:#8b5cf6;">
+    <p class="fa-kpi-label">Net Book Value</p>
+    <p class="fa-kpi-value" style="font-size:17px;">
+      {% if summary and summary.total_nbv_cents %}
+        {{ "{:,.0f}".format(summary.total_nbv_cents / 100) }}
+      {% elif assets %}
+        {{ "{:,.0f}".format(assets | sum(attribute='current_book_value_cents') / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="fa-kpi-sub">carrying amount</p>
+  </div>
+  <div class="fa-kpi-card" style="--accent:#f59e0b;">
+    <p class="fa-kpi-label">Accum. Depreciation</p>
+    <p class="fa-kpi-value" style="font-size:17px; color:#f59e0b;">
+      {% if summary and summary.total_accumulated_dep_cents %}
+        {{ "{:,.0f}".format(summary.total_accumulated_dep_cents / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="fa-kpi-sub">total depreciated</p>
+  </div>
+  <div class="fa-kpi-card" style="--accent:#ef4444;">
+    <p class="fa-kpi-label">Disposed</p>
+    <p class="fa-kpi-value" style="color:#6b7280;">
+      {% if assets %}
+        {{ assets | selectattr('status','equalto','DISPOSED') | list | length }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="fa-kpi-sub">assets retired</p>
+  </div>
+</div>
+
+{# ── Asset table ─────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div class="asset-toolbar">
+    <input type="text" id="asset-search" class="form-control" placeholder="Search asset number or name…"
+           style="width:220px; height:30px; font-size:12px; padding:2px 10px;">
+    <select id="class-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+      <option value="">All Classes</option>
+      {% if assets %}
+        {% for cls in assets | map(attribute='asset_class') | unique | sort %}
+        <option value="{{ cls }}">{{ cls }}</option>
+        {% endfor %}
+      {% endif %}
+    </select>
+    <select id="status-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+      <option value="">All Status</option>
+      <option value="ACTIVE">Active</option>
+      <option value="DISPOSED">Disposed</option>
+      <option value="IMPAIRED">Impaired</option>
+    </select>
+    <button class="btn btn-default btn-xs" id="btn-filter-clear" style="height:30px; font-size:11px;">
+      <i class="fa fa-times"></i> Clear
+    </button>
+    <span id="row-count" style="margin-left:auto; font-size:11px; color:#9ca3af;"></span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="asset-table" id="asset-table">
+      <thead>
+        <tr>
+          <th style="width:110px;">Asset No.</th>
+          <th>Name</th>
+          <th>Class</th>
+          <th class="nums">Acquisition Cost</th>
+          <th class="nums">Net Book Value</th>
+          <th style="text-align:center;">Dep. Method</th>
+          <th style="text-align:center;">Status</th>
+          <th style="text-align:center; width:80px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="asset-tbody">
+        {% if assets %}
+          {% for a in assets %}
+          <tr data-number="{{ a.asset_number | lower }}"
+              data-name="{{ a.name | lower }}"
+              data-class="{{ a.asset_class }}"
+              data-status="{{ a.status | upper }}">
+            <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ a.asset_number }}</td>
+            <td>
+              <strong>{{ a.name }}</strong>
+              {% if a.location %}
+              <span style="font-size:11px; color:#9ca3af; display:block;">{{ a.location }}</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;">{{ a.asset_class }}</td>
+            <td class="nums">{{ "{:,.0f}".format(a.acquisition_cost_cents / 100) if a.acquisition_cost_cents else '—' }}</td>
+            <td class="nums" style="font-weight:600; color:{% if a.current_book_value_cents == 0 %}#9ca3af{% else %}#111827{% endif %};">
+              {{ "{:,.0f}".format(a.current_book_value_cents / 100) if a.current_book_value_cents is defined else '—' }}
+            </td>
+            <td style="text-align:center;">
+              {% set mth = a.depreciation_method | upper %}
+              {% if mth == 'SL' or mth == 'STRAIGHT_LINE' %}
+                <span class="dep-sl">Straight-Line</span>
+              {% elif mth in ['DB','DECLINING','DOUBLE_DECLINING'] %}
+                <span class="dep-db">Declining Bal.</span>
+              {% elif mth in ['UOP','UNITS_OF_PRODUCTION'] %}
+                <span class="dep-uop">Units of Prod.</span>
+              {% elif mth in ['SYD','SUM_OF_YEARS'] %}
+                <span class="dep-sum">Sum of Years</span>
+              {% else %}
+                <span style="font-size:11px; color:#6b7280;">{{ a.depreciation_method or '—' }}</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% set st = a.status | upper %}
+              {% if st == 'ACTIVE' %}
+                <span class="badge-active"><i class="fa fa-check"></i> Active</span>
+              {% elif st == 'DISPOSED' %}
+                <span class="badge-disposed">Disposed</span>
+              {% elif st == 'IMPAIRED' %}
+                <span class="badge-impaired"><i class="fa fa-exclamation-triangle"></i> Impaired</span>
+              {% else %}
+                <span class="badge-disposed">{{ st }}</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center; white-space:nowrap;">
+              <a href="/finance/asset/edit/{{ a.id }}" class="btn btn-xs btn-default" title="Edit">
+                <i class="fa fa-pencil"></i>
+              </a>
+              <a href="/finance/asset/{{ a.id }}" class="btn btn-xs btn-default" title="View schedule">
+                <i class="fa fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="asset-empty">
+            <td colspan="8" style="text-align:center; padding:40px; color:#9ca3af;">
+              <i class="fa fa-building" style="font-size:30px; display:block; margin-bottom:10px; opacity:.35;"></i>
+              No assets in register. <a href="/finance/asset/add">Capitalize the first asset</a>.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Run Depreciation confirmation modal ────────────────────────────────── #}
+<div class="modal fade" id="modal-run-dep" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-calculator" style="color:#10b981;"></i>&nbsp; Run Depreciation
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="dep-confirm-warn">
+          <i class="fa fa-exclamation-triangle" style="color:#d97706; margin-right:6px;"></i>
+          <strong>This will post depreciation journal entries for all active assets.</strong>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:5px;">
+            Depreciation Period
+          </label>
+          <input type="month" id="dep-period" class="form-control" style="width:180px; font-size:13px;">
+        </div>
+        <p style="font-size:13px; color:#374151; margin:0;">
+          Depreciation entries will be calculated and posted. Verify the period before confirming.
+        </p>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-dep-confirm" class="btn btn-success" style="font-weight:600;">
+          <i class="fa fa-calculator"></i>&nbsp; Run Depreciation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle'
+             : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Filter ─────────────────────────────────────────────────────────── */
+  function applyFilters() {
+    var search = (document.getElementById('asset-search').value || '').toLowerCase().trim();
+    var cls    = document.getElementById('class-filter').value;
+    var status = document.getElementById('status-filter').value;
+    var rows   = document.querySelectorAll('#asset-tbody tr[data-status]');
+    var shown  = 0;
+    rows.forEach(function (tr) {
+      var num  = tr.getAttribute('data-number') || '';
+      var name = tr.getAttribute('data-name') || '';
+      var c    = tr.getAttribute('data-class') || '';
+      var st   = tr.getAttribute('data-status') || '';
+      var show =
+        (!search || num.indexOf(search) !== -1 || name.indexOf(search) !== -1) &&
+        (!cls    || c === cls) &&
+        (!status || st === status);
+      tr.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+    var el = document.getElementById('row-count');
+    if (rows.length) el.textContent = 'Showing ' + shown + ' of ' + rows.length;
+  }
+
+  document.getElementById('asset-search').addEventListener('input', applyFilters);
+  document.getElementById('class-filter').addEventListener('change', applyFilters);
+  document.getElementById('status-filter').addEventListener('change', applyFilters);
+  document.getElementById('btn-filter-clear').addEventListener('click', function () {
+    document.getElementById('asset-search').value = '';
+    document.getElementById('class-filter').value = '';
+    document.getElementById('status-filter').value = '';
+    applyFilters();
+  });
+
+  (function () {
+    var rows = document.querySelectorAll('#asset-tbody tr[data-status]');
+    if (rows.length) document.getElementById('row-count').textContent = rows.length + ' assets';
+  }());
+
+  /* ── Run Depreciation ───────────────────────────────────────────────── */
+  document.getElementById('btn-run-dep').addEventListener('click', function () {
+    /* Set default period to current month */
+    var today = new Date();
+    var yyyy  = today.getFullYear();
+    var mm    = String(today.getMonth() + 1).padStart(2, '0');
+    document.getElementById('dep-period').value = yyyy + '-' + mm;
+    $('#modal-run-dep').modal('show');
+  });
+
+  document.getElementById('btn-dep-confirm').addEventListener('click', function () {
+    var btn    = this;
+    var period = document.getElementById('dep-period').value;
+    if (!period) { toast('Please select a depreciation period.', 'warning'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Running…';
+
+    fetch('/api/assets/run_depreciation', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: period })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-run-dep').modal('hide');
+      if (res.ok) {
+        toast('Depreciation posted for ' + _esc(period) + '. ' + (res.data.entries_posted || 0) + ' entries created.', 'success');
+        setTimeout(function () { window.location.reload(); }, 2000);
+      } else {
+        toast(res.data.message || 'Depreciation run failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-calculator"></i>&nbsp; Run Depreciation';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-calculator"></i>&nbsp; Run Depreciation';
+    });
+  });
+
+  document.getElementById('btn-export').addEventListener('click', function () {
+    window.location.href = '/api/finance/assets/export?format=csv';
+  });
+
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,327 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Tax Configuration — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* main table */
+  .tax-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .tax-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .tax-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .tax-table tr:last-child td { border-bottom:none; }
+  .tax-table tr:hover td { background:#fafafa; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* type badges */
+  .badge-vat  { background:#dbeafe; color:#1d4ed8; }
+  .badge-wht  { background:#fce7f3; color:#9d174d; }
+  .badge-gst  { background:#d1fae5; color:#065f46; }
+  .badge-excise { background:#fef3c7; color:#92400e; }
+  .tax-type-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-inactive { background:#f3f4f6; color:#6b7280; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* expandable tax codes sub-row */
+  .tax-codes-row { background:#fafbfc; }
+  .tax-codes-row td { padding:0; }
+  .tax-codes-inner { padding:10px 16px 10px 48px; }
+  .tax-code-chip { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #e5e7eb; border-radius:5px; padding:4px 10px; font-size:12px; margin:3px; }
+  .tax-code-chip .chip-code { font-family:monospace; font-weight:700; color:#374151; }
+  .tax-code-chip .chip-rate { font-size:11px; color:#6b7280; }
+  /* VAT returns section */
+  .vat-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .vat-table th { background:#fef2f2; color:#991b1b; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:8px 12px; border-bottom:2px solid #fecaca; text-align:left; white-space:nowrap; }
+  .vat-table td { padding:8px 12px; border-bottom:1px solid #fee2e2; vertical-align:middle; }
+  .vat-table tr:last-child td { border-bottom:none; }
+  .due-overdue { color:#dc2626; font-weight:600; }
+  .due-soon    { color:#d97706; font-weight:600; }
+  /* expand toggle */
+  .btn-expand-jur { background:none; border:none; color:#6b7280; cursor:pointer; padding:0 4px; font-size:13px; transition:transform .2s; }
+  .btn-expand-jur.expanded { transform:rotate(90deg); }
+  /* toolbar */
+  .tax-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid #e5e7eb; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Tax Configuration</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Tax jurisdictions, rates, codes and VAT return calendar</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="/finance/tax_jurisdiction/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Add Jurisdiction
+    </a>
+    <a href="/finance/tax_code/add" class="btn btn-default btn-sm">
+      <i class="fa fa-plus"></i> Add Tax Code
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+  <div class="col-md-8">
+
+    {# ── Tax Jurisdictions Table ──────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:24px;">
+      <div class="tax-toolbar">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0; flex:1;">
+          <i class="fa fa-globe" style="color:#1a56db; margin-right:6px;"></i> Tax Jurisdictions
+        </h4>
+        <input type="text" id="jur-search" class="form-control" placeholder="Search jurisdiction…"
+               style="width:200px; height:30px; font-size:12px; padding:2px 10px;">
+        <select id="type-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+          <option value="">All Types</option>
+          <option value="VAT">VAT</option>
+          <option value="WHT">WHT</option>
+          <option value="GST">GST</option>
+          <option value="EXCISE">Excise</option>
+        </select>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="tax-table" id="jur-table">
+          <thead>
+            <tr>
+              <th style="width:32px;"></th>
+              <th style="width:80px;">Code</th>
+              <th>Name</th>
+              <th style="width:60px;">Country</th>
+              <th style="text-align:center;">Type</th>
+              <th class="nums">Standard Rate</th>
+              <th style="text-align:center;">Active</th>
+              <th style="text-align:center; width:80px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="jur-tbody">
+            {% if jurisdictions %}
+              {% for j in jurisdictions %}
+              <tr class="jur-row"
+                  data-id="{{ j.id }}"
+                  data-name="{{ j.name | lower }}"
+                  data-code="{{ j.code | lower }}"
+                  data-type="{{ j.tax_type | upper }}"
+                  data-active="{{ j.is_active | lower }}">
+                <td style="padding-right:0; text-align:center;">
+                  {% if j.tax_codes %}
+                  <button class="btn-expand-jur" data-jur-id="{{ j.id }}" title="Show tax codes">
+                    <i class="fa fa-chevron-right"></i>
+                  </button>
+                  {% endif %}
+                </td>
+                <td style="font-family:monospace; font-size:12px; font-weight:700; color:#374151;">{{ j.code }}</td>
+                <td><strong>{{ j.name }}</strong></td>
+                <td style="font-family:monospace; font-size:12px; color:#6b7280;">{{ j.country_code }}</td>
+                <td style="text-align:center;">
+                  {% set tt = j.tax_type | upper %}
+                  <span class="tax-type-badge badge-{{ tt | lower }}">{{ tt }}</span>
+                </td>
+                <td class="nums" style="font-weight:600;">{{ "{:.1f}".format(j.standard_rate_pct) }}%</td>
+                <td style="text-align:center;">
+                  {% if j.is_active %}
+                    <span class="badge-active"><i class="fa fa-check"></i> Active</span>
+                  {% else %}
+                    <span class="badge-inactive">Inactive</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:center; white-space:nowrap;">
+                  <a href="/finance/tax_jurisdiction/edit/{{ j.id }}" class="btn btn-xs btn-default" title="Edit">
+                    <i class="fa fa-pencil"></i>
+                  </a>
+                </td>
+              </tr>
+              {# Expandable tax codes sub-row #}
+              <tr class="tax-codes-row" id="codes-row-{{ j.id }}" style="display:none;">
+                <td colspan="8">
+                  <div class="tax-codes-inner">
+                    <span style="font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin-right:8px;">
+                      Tax Codes:
+                    </span>
+                    {% if j.tax_codes %}
+                      {% for tc in j.tax_codes %}
+                      <span class="tax-code-chip">
+                        <span class="chip-code">{{ tc.code }}</span>
+                        <span class="chip-rate">{{ "{:.1f}".format(tc.rate_pct) }}%</span>
+                        {% if not tc.is_active %}
+                          <span style="font-size:10px; color:#9ca3af;">(inactive)</span>
+                        {% endif %}
+                      </span>
+                      {% endfor %}
+                    {% else %}
+                      <span style="font-size:12px; color:#9ca3af;">No tax codes defined.</span>
+                    {% endif %}
+                    <a href="/finance/tax_code/add?jurisdiction={{ j.id }}"
+                       style="font-size:11px; margin-left:8px; color:#1a56db;">
+                      <i class="fa fa-plus"></i> Add code
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr id="jur-empty">
+                <td colspan="8" style="text-align:center; padding:40px; color:#9ca3af;">
+                  <i class="fa fa-globe" style="font-size:30px; display:block; margin-bottom:10px; opacity:.35;"></i>
+                  No tax jurisdictions configured. <a href="/finance/tax_jurisdiction/add">Add the first</a>.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-md-4">
+
+    {# ── VAT Return Calendar ───────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:12px 16px; border-bottom:1px solid #e5e7eb; background:#fef2f2;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0; color:#991b1b;">
+          <i class="fa fa-calendar" style="color:#ef4444; margin-right:6px;"></i> Pending VAT Returns
+        </h4>
+      </div>
+      {% if pending_returns %}
+      <div style="overflow-x:auto;">
+        <table class="vat-table">
+          <thead>
+            <tr>
+              <th>Jurisdiction</th>
+              <th>Period</th>
+              <th>Due Date</th>
+              <th style="text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ret in pending_returns %}
+            <tr>
+              <td style="font-weight:600; font-size:12px;">{{ ret.jurisdiction_code or ret.jurisdiction }}</td>
+              <td style="font-size:12px; font-family:monospace;">{{ ret.period }}</td>
+              <td class="{{ 'due-overdue' if ret.is_overdue else ('due-soon' if ret.is_due_soon else '') }}" style="font-size:12px;">
+                {{ ret.due_date }}
+                {% if ret.is_overdue %}
+                  <i class="fa fa-exclamation-triangle" style="margin-left:3px;"></i>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">
+                <span style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px;
+                  background:{{ '#fee2e2' if ret.is_overdue else ('#fef3c7' if ret.is_due_soon else '#f3f4f6') }};
+                  color:{{ '#991b1b' if ret.is_overdue else ('#92400e' if ret.is_due_soon else '#374151') }};">
+                  {{ ret.status }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+        <i class="fa fa-check-circle" style="font-size:24px; display:block; margin-bottom:8px; color:#10b981; opacity:.7;"></i>
+        No pending VAT returns.
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── Quick stats ─────────────────────────────────────────────────────── #}
+    <div class="erp-card" style="padding:14px 16px;">
+      <h4 class="erp-section-title">
+        <i class="fa fa-bar-chart" style="color:#7c3aed; margin-right:6px;"></i> Summary
+      </h4>
+      <table style="width:100%; font-size:13px; border-collapse:collapse;">
+        <tr>
+          <td style="padding:6px 0; color:#6b7280; border-bottom:1px solid #f3f4f6;">Total Jurisdictions</td>
+          <td style="padding:6px 0; text-align:right; font-weight:700; border-bottom:1px solid #f3f4f6;">
+            {{ jurisdictions | length if jurisdictions else 0 }}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0; color:#6b7280; border-bottom:1px solid #f3f4f6;">Active</td>
+          <td style="padding:6px 0; text-align:right; font-weight:700; color:#10b981; border-bottom:1px solid #f3f4f6;">
+            {{ jurisdictions | selectattr('is_active','equalto',true) | list | length if jurisdictions else 0 }}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0; color:#6b7280; border-bottom:1px solid #f3f4f6;">VAT Jurisdictions</td>
+          <td style="padding:6px 0; text-align:right; font-weight:700; border-bottom:1px solid #f3f4f6;">
+            {{ jurisdictions | selectattr('tax_type','equalto','VAT') | list | length if jurisdictions else 0 }}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0; color:#6b7280;">Pending Returns</td>
+          <td style="padding:6px 0; text-align:right; font-weight:700; color:{{ '#ef4444' if pending_returns else '#10b981' }};">
+            {{ pending_returns | length if pending_returns else 0 }}
+          </td>
+        </tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+
+  /* ── Filter jurisdictions ──────────────────────────────────────────── */
+  function applyFilters() {
+    var search = (document.getElementById('jur-search').value || '').toLowerCase().trim();
+    var type   = document.getElementById('type-filter').value;
+    var rows   = document.querySelectorAll('#jur-tbody tr.jur-row');
+    rows.forEach(function (tr) {
+      var name = tr.getAttribute('data-name') || '';
+      var code = tr.getAttribute('data-code') || '';
+      var tt   = tr.getAttribute('data-type') || '';
+      var show = (!search || name.indexOf(search) !== -1 || code.indexOf(search) !== -1) && (!type || tt === type);
+      tr.style.display = show ? '' : 'none';
+      /* hide codes row too if parent hidden */
+      var jurId    = tr.getAttribute('data-id');
+      var codesRow = document.getElementById('codes-row-' + jurId);
+      if (codesRow && !show) codesRow.style.display = 'none';
+    });
+  }
+
+  document.getElementById('jur-search').addEventListener('input', applyFilters);
+  document.getElementById('type-filter').addEventListener('change', applyFilters);
+
+  /* ── Expand/collapse tax codes ─────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-expand-jur');
+    if (!btn) return;
+    var jurId   = btn.getAttribute('data-jur-id');
+    var codeRow = document.getElementById('codes-row-' + jurId);
+    if (!codeRow) return;
+    var isOpen = codeRow.style.display !== 'none';
+    codeRow.style.display = isOpen ? 'none' : '';
+    btn.classList.toggle('expanded', !isOpen);
+  });
+
+}());
+</script>
+{% endblock %}

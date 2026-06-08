@@ -1,0 +1,285 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ project.project_code | default('Project') }} — {{ project.name | default('Detail') }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-8 erp-mb-8" style="font-size:13px;color:var(--erp-text-muted);">
+    <a href="{{ url_for('ProjectsAdminView.project_list') }}" style="color:var(--erp-text-muted);">
+      <i class="fa fa-chevron-left"></i> Portfolio
+    </a>
+    <span>/</span>
+    <span>{{ project.project_code | default('—') }}</span>
+  </div>
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <div class="erp-flex erp-gap-8 erp-mb-8" style="align-items:center;">
+        <h1 class="erp-page-title" style="margin:0;">{{ project.name | default('Unnamed Project') }}</h1>
+        {% set s = project.status | default('ACTIVE') | upper %}
+        {% if s == 'ACTIVE' %}<span class="erp-badge erp-badge-green">Active</span>
+        {% elif s == 'PLANNING' %}<span class="erp-badge erp-badge-blue">Planning</span>
+        {% elif s == 'ON_HOLD' %}<span class="erp-badge erp-badge-yellow">On Hold</span>
+        {% elif s == 'COMPLETED' %}<span class="erp-badge erp-badge-gray">Completed</span>
+        {% elif s == 'CANCELLED' %}<span class="erp-badge erp-badge-red">Cancelled</span>
+        {% else %}<span class="erp-badge erp-badge-gray">{{ project.status }}</span>{% endif %}
+      </div>
+      <p class="erp-page-subtitle">
+        <code style="font-size:12px;">{{ project.project_code | default('—') }}</code>
+        &nbsp;·&nbsp; Manager: <strong>{{ project.project_manager | default('—') }}</strong>
+        &nbsp;·&nbsp; {{ project.start_date | default('?') }} → {{ project.end_date | default('?') }}
+      </p>
+    </div>
+    <div class="erp-flex erp-gap-8">
+      <a href="{{ url_for('ProjectsAdminView.edit_project', project_id=project.id) }}" class="btn btn-default">
+        <i class="fa fa-pencil"></i> Edit
+      </a>
+    </div>
+  </div>
+
+  {# Budget utilization bar #}
+  {% set spent_pct = project.spent_pct | default(0) | float %}
+  {% set bar_color = 'var(--erp-danger)' if spent_pct > 90 else ('var(--erp-warning)' if spent_pct > 70 else 'var(--erp-success)') %}
+  <div style="margin-top:16px;">
+    <div class="erp-flex erp-gap-8 erp-mb-8" style="justify-content:space-between;font-size:12px;">
+      <span style="color:var(--erp-text-muted);">Budget utilization</span>
+      <span style="font-weight:700;color:{{ bar_color }};">
+        KES {{ "{:,.0f}".format((project.spent_cents | default(0)) / 100) }}
+        of {{ "{:,.0f}".format((project.budget_cents | default(0)) / 100) }}
+        ({{ "{:.1f}".format(spent_pct) }}%)
+      </span>
+    </div>
+    <div style="height:10px;background:var(--erp-border);border-radius:5px;overflow:hidden;">
+      <div style="width:{{ [spent_pct, 100] | min }}%;height:100%;background:{{ bar_color }};border-radius:5px;transition:width .6s;"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── EVM Metrics ──────────────────────────────────────────────────── #}
+  <p class="erp-section-title">Earned Value Metrics (EVM)</p>
+  <div class="erp-kpi-grid erp-mb-24">
+    {% set spi = evm.spi | default(1.0) | float %}
+    {% set cpi = evm.cpi | default(1.0) | float %}
+    <div class="erp-card">
+      <div class="erp-card-accent {{ 'erp-card-accent-success' if spi >= 1.0 else 'erp-card-accent-danger' }}"></div>
+      <p class="erp-card-title">SPI — Schedule Performance</p>
+      <p class="erp-card-value" style="color:{{ 'var(--erp-success)' if spi >= 1.0 else 'var(--erp-danger)' }};">
+        {{ "{:.2f}".format(spi) }}
+      </p>
+      <p class="erp-card-sub">{{ 'Ahead of schedule' if spi > 1.0 else ('On schedule' if spi == 1.0 else 'Behind schedule') }}</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent {{ 'erp-card-accent-success' if cpi >= 1.0 else 'erp-card-accent-danger' }}"></div>
+      <p class="erp-card-title">CPI — Cost Performance</p>
+      <p class="erp-card-value" style="color:{{ 'var(--erp-success)' if cpi >= 1.0 else 'var(--erp-danger)' }};">
+        {{ "{:.2f}".format(cpi) }}
+      </p>
+      <p class="erp-card-sub">{{ 'Under budget' if cpi > 1.0 else ('On budget' if cpi == 1.0 else 'Over budget') }}</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <p class="erp-card-title">EV — Earned Value (KES)</p>
+      <p class="erp-card-value">{{ "{:,.0f}".format((evm.ev | default(0)) / 100) }}</p>
+      <p class="erp-card-sub">Work actually completed</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <p class="erp-card-title">AC — Actual Cost (KES)</p>
+      <p class="erp-card-value">{{ "{:,.0f}".format((evm.ac | default(0)) / 100) }}</p>
+      <p class="erp-card-sub">Real spend to date</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <p class="erp-card-title">PV — Planned Value (KES)</p>
+      <p class="erp-card-value">{{ "{:,.0f}".format((evm.pv | default(0)) / 100) }}</p>
+      <p class="erp-card-sub">Budget for work planned</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-7">
+
+      {# ── Milestones Timeline ──────────────────────────────────────── #}
+      <p class="erp-section-title">Milestones</p>
+      <div class="erp-table-wrap erp-mb-24">
+        <table class="erp-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Milestone</th>
+              <th>Due Date</th>
+              <th>Status</th>
+              <th>Deliverable</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in milestones | sort(attribute='due_date') %}
+            {% set ms = m.status | default('PENDING') | upper %}
+            <tr>
+              <td style="font-size:12px;color:var(--erp-text-muted);">{{ loop.index }}</td>
+              <td style="font-weight:600;">{{ m.name | default('—') }}</td>
+              <td style="white-space:nowrap;font-size:12px;
+                {{ 'color:var(--erp-danger);font-weight:700;' if ms not in ('COMPLETED','CLOSED') and m.is_overdue | default(false) else '' }}">
+                {{ m.due_date | default('—') }}
+                {% if ms not in ('COMPLETED','CLOSED') and m.is_overdue | default(false) %}
+                  <i class="fa fa-exclamation-triangle" style="margin-left:4px;"></i>
+                {% endif %}
+              </td>
+              <td>
+                {% if ms == 'COMPLETED' or ms == 'DONE' %}
+                  <span class="erp-badge erp-badge-green">Completed</span>
+                {% elif ms == 'IN_PROGRESS' %}
+                  <span class="erp-badge erp-badge-blue">In Progress</span>
+                {% elif ms == 'AT_RISK' %}
+                  <span class="erp-badge erp-badge-yellow">At Risk</span>
+                {% elif ms == 'DELAYED' %}
+                  <span class="erp-badge erp-badge-red">Delayed</span>
+                {% else %}
+                  <span class="erp-badge erp-badge-gray">Pending</span>
+                {% endif %}
+              </td>
+              <td style="font-size:12px;color:var(--erp-text-muted);">{{ m.deliverable | default('—') }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="erp-text-center" style="color:var(--erp-text-muted);padding:24px;">No milestones defined.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# ── WBS Elements ────────────────────────────────────────────── #}
+      <p class="erp-section-title">Work Breakdown Structure</p>
+      <div class="erp-table-wrap erp-mb-24">
+        <table class="erp-table">
+          <thead>
+            <tr>
+              <th>WBS Code</th>
+              <th>Element</th>
+              <th>Type</th>
+              <th>Budget (KES)</th>
+              <th>% Complete</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for w in wbs_elements | sort(attribute='wbs_code') %}
+            {% set indent = (w.level | default(1) | int - 1) * 20 %}
+            <tr>
+              <td style="font-size:12px;font-family:monospace;padding-left:{{ 14 + indent }}px;">
+                {{ w.wbs_code | default('—') }}
+              </td>
+              <td style="padding-left:{{ 14 + indent }}px;font-weight:{{ '700' if w.level | default(1) | int == 1 else '400' }};">
+                {{ w.name | default('—') }}
+              </td>
+              <td>
+                {% set wtype = w.element_type | default('TASK') | upper %}
+                {% if wtype == 'SUMMARY' %}
+                  <span class="erp-badge erp-badge-blue">Summary</span>
+                {% elif wtype == 'WORK_PACKAGE' %}
+                  <span class="erp-badge erp-badge-green">Work Package</span>
+                {% else %}
+                  <span class="erp-badge erp-badge-gray">Task</span>
+                {% endif %}
+              </td>
+              <td style="font-variant-numeric:tabular-nums;font-size:12px;">
+                {{ "{:,.0f}".format((w.budget_cents | default(0)) / 100) }}
+              </td>
+              <td>
+                {% set pct = w.completion_pct | default(0) | float %}
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <div style="flex:1;height:6px;background:var(--erp-border);border-radius:3px;overflow:hidden;">
+                    <div style="width:{{ pct }}%;height:100%;background:var(--erp-primary);border-radius:3px;"></div>
+                  </div>
+                  <span style="font-size:11px;min-width:30px;">{{ "{:.0f}".format(pct) }}%</span>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="erp-text-center" style="color:var(--erp-text-muted);padding:24px;">No WBS elements defined.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+    <div class="col-md-5">
+
+      {# ── Resources Table ─────────────────────────────────────────── #}
+      <p class="erp-section-title">Resources</p>
+      <div class="erp-table-wrap erp-mb-24">
+        <table class="erp-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Alloc h</th>
+              <th>Actual h</th>
+              <th style="min-width:80px;">Util %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in resources %}
+            {% set util = r.utilization_pct | default(0) | float %}
+            {% set util_color = 'var(--erp-danger)' if util > 100 else ('var(--erp-warning)' if util > 85 else 'var(--erp-success)') %}
+            <tr>
+              <td>
+                <div style="font-weight:600;font-size:13px;">{{ r.name | default('—') }}</div>
+                <div style="font-size:11px;color:var(--erp-text-muted);">{{ r.email | default('') }}</div>
+              </td>
+              <td style="font-size:12px;">{{ r.role | default('—') }}</td>
+              <td style="font-variant-numeric:tabular-nums;font-size:12px;">{{ r.allocated_hours | default(0) }}</td>
+              <td style="font-variant-numeric:tabular-nums;font-size:12px;">{{ r.actual_hours | default(0) }}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <div style="flex:1;height:6px;background:var(--erp-border);border-radius:3px;overflow:hidden;">
+                    <div style="width:{{ [util, 100] | min }}%;height:100%;background:{{ util_color }};border-radius:3px;"></div>
+                  </div>
+                  <span style="font-size:11px;min-width:34px;color:{{ util_color }};font-weight:700;">
+                    {{ "{:.0f}".format(util) }}%
+                  </span>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="erp-text-center" style="color:var(--erp-text-muted);padding:24px;">No resources assigned.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# ── Project Info Card ────────────────────────────────────────── #}
+      <div class="erp-card">
+        <p class="erp-section-title erp-mt-0">Project Info</p>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+          {% macro info_row(label, value) %}
+          <tr>
+            <td style="color:var(--erp-text-muted);padding:6px 0;width:40%;">{{ label }}</td>
+            <td style="font-weight:600;padding:6px 0;">{{ value or '—' }}</td>
+          </tr>
+          {% endmacro %}
+          {{ info_row('Client', project.client | default('')) }}
+          {{ info_row('Category', project.category | default('')) }}
+          {{ info_row('Priority', project.priority | default('')) }}
+          {{ info_row('Contract', project.contract_number | default('')) }}
+          {{ info_row('Sponsor', project.sponsor | default('')) }}
+        </table>
+        {% if project.description %}
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--erp-border);font-size:13px;color:var(--erp-text-muted);">
+          {{ project.description }}
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+</div>{# /erp-island #}
+{% endblock %}

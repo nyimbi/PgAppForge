@@ -1,0 +1,315 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Employee Master Data — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .emp-filter-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+  .emp-filter-pill {
+    padding: 4px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--erp-border); background: var(--erp-surface);
+    color: var(--erp-text-muted); cursor: pointer; transition: all var(--erp-transition);
+    text-decoration: none; display: inline-block;
+  }
+  .emp-filter-pill:hover, .emp-filter-pill.active {
+    background: var(--erp-primary); color: #fff; border-color: var(--erp-primary);
+    text-decoration: none;
+  }
+  .emp-filter-pill.pill-probation.active { background: #d97706; border-color: #d97706; }
+  .emp-filter-pill.pill-terminated.active { background: var(--erp-danger); border-color: var(--erp-danger); }
+
+  .emp-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--erp-primary-lt); color: var(--erp-primary);
+    font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .new-hire-row td:first-child { border-left: 3px solid var(--erp-success); }
+  .termination-row td:first-child { border-left: 3px solid var(--erp-danger); }
+
+  .alert-queue {
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); overflow: hidden; margin-bottom: 24px;
+  }
+  .alert-queue-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; background: var(--erp-neutral-lt);
+    border-bottom: 1px solid var(--erp-border); cursor: pointer;
+    font-size: 13px; font-weight: 700; color: var(--erp-text);
+  }
+  .alert-queue-body { padding: 0; }
+
+  .search-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-id-card-o" style="margin-right:8px; color:var(--erp-primary);"></i>Employee Master Data</h1>
+      <p class="erp-page-subtitle">Central employee registry — status, position, and onboarding tracking</p>
+    </div>
+    {% if appbuilder.sm.has_access('can_add', 'EmployeeView') %}
+    <a href="{{ url_for('EmployeeView.add') }}" class="btn btn-primary btn-sm" style="align-self:center;">
+      <i class="fa fa-user-plus"></i> New Employee
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ────────────────────────────────────────────────────────── #}
+{% if kpis %}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <div class="erp-card-icon" style="background:var(--erp-primary-lt); color:var(--erp-primary); opacity:1;">
+      <i class="fa fa-users"></i>
+    </div>
+    <p class="erp-card-title erp-mb-0">Active Employees</p>
+    <p class="erp-card-value">{{ kpis.total_active | default(0) }}</p>
+    <p class="erp-card-sub">Currently employed</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon" style="background:var(--erp-success-lt); color:var(--erp-success); opacity:1;">
+      <i class="fa fa-user-plus"></i>
+    </div>
+    <p class="erp-card-title erp-mb-0">New Hires This Month</p>
+    <p class="erp-card-value">{{ kpis.new_hires_this_month | default(0) }}</p>
+    <span class="erp-card-trend erp-card-trend-up"><i class="fa fa-arrow-up"></i> This month</span>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <div class="erp-card-icon" style="background:var(--erp-danger-lt); color:var(--erp-danger); opacity:1;">
+      <i class="fa fa-user-times"></i>
+    </div>
+    <p class="erp-card-title erp-mb-0">Terminations This Month</p>
+    <p class="erp-card-value">{{ kpis.terminations_this_month | default(0) }}</p>
+    <p class="erp-card-sub">Voluntary &amp; involuntary</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <div class="erp-card-icon" style="background:var(--erp-warning-lt); color:#92400e; opacity:1;">
+      <i class="fa fa-clock-o"></i>
+    </div>
+    <p class="erp-card-title erp-mb-0">On Probation</p>
+    <p class="erp-card-value">{{ employees | selectattr('employment_status', 'equalto', 'PROBATION') | list | length }}</p>
+    <p class="erp-card-sub">Under review period</p>
+  </div>
+</div>
+{% endif %}
+
+{# ── New Hire Alerts ──────────────────────────────────────────────────── #}
+{% set new_hires = employees | selectattr('is_new_hire', 'defined') | selectattr('is_new_hire') | list %}
+{% if new_hires %}
+<div class="alert-queue erp-mb-24">
+  <div class="alert-queue-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none';">
+    <i class="fa fa-star" style="color:var(--erp-success);"></i>
+    New Hire Alerts — First 30 Days
+    <span class="erp-badge erp-badge-green" style="margin-left:4px;">{{ new_hires | length }}</span>
+    <i class="fa fa-chevron-down" style="margin-left:auto; color:var(--erp-text-muted); font-size:11px;"></i>
+  </div>
+  <div class="alert-queue-body">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Position</th>
+          <th>Department</th>
+          <th>Start Date</th>
+          <th>Day #</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in new_hires %}
+        <tr class="new-hire-row">
+          <td>
+            <div class="erp-flex erp-gap-8">
+              <span class="emp-avatar">{{ (emp.full_name or '??')[:2] | upper }}</span>
+              <div>
+                <div style="font-weight:600;">{{ emp.full_name }}</div>
+                <div style="font-size:11px; color:var(--erp-text-muted);">{{ emp.employee_number }}</div>
+              </div>
+            </div>
+          </td>
+          <td>{{ emp.position_code or '—' }}</td>
+          <td>{{ emp.department or '—' }}</td>
+          <td>{{ emp.start_date or '—' }}</td>
+          <td>
+            <span class="erp-badge erp-badge-green">Day {{ emp.days_employed | default('?') }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Termination Queue ────────────────────────────────────────────────── #}
+{% set upcoming_terms = employees | selectattr('termination_date', 'defined') | selectattr('termination_date') | list %}
+{% if upcoming_terms %}
+<div class="alert-queue erp-mb-24">
+  <div class="alert-queue-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none';">
+    <i class="fa fa-exclamation-triangle" style="color:var(--erp-danger);"></i>
+    Upcoming Terminations
+    <span class="erp-badge erp-badge-red" style="margin-left:4px;">{{ upcoming_terms | length }}</span>
+    <i class="fa fa-chevron-down" style="margin-left:auto; color:var(--erp-text-muted); font-size:11px;"></i>
+  </div>
+  <div class="alert-queue-body">
+    <table class="erp-table">
+      <thead>
+        <tr><th>Employee</th><th>Department</th><th>Termination Date</th><th>Type</th></tr>
+      </thead>
+      <tbody>
+        {% for emp in upcoming_terms %}
+        <tr class="termination-row">
+          <td>
+            <div class="erp-flex erp-gap-8">
+              <span class="emp-avatar" style="background:var(--erp-danger-lt); color:var(--erp-danger);">{{ (emp.full_name or '??')[:2] | upper }}</span>
+              <div>
+                <div style="font-weight:600;">{{ emp.full_name }}</div>
+                <div style="font-size:11px; color:var(--erp-text-muted);">{{ emp.employee_number }}</div>
+              </div>
+            </div>
+          </td>
+          <td>{{ emp.department or '—' }}</td>
+          <td style="font-weight:600; color:var(--erp-danger);">{{ emp.termination_date }}</td>
+          <td>{{ emp.termination_type | default('—') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Employee Table ────────────────────────────────────────────────────── #}
+<div class="erp-card">
+  <div style="margin-bottom:14px;">
+    <div class="search-bar">
+      <div class="input-group" style="width:280px;">
+        <span class="input-group-addon"><i class="fa fa-search"></i></span>
+        <input type="text" id="emp-search" class="form-control input-sm" placeholder="Search name or employee number…">
+      </div>
+      <select id="dept-filter" class="form-control input-sm" style="width:160px;">
+        <option value="">All Departments</option>
+        {% for dept in employees | map(attribute='department') | unique | list %}
+        {% if dept %}<option value="{{ dept }}">{{ dept }}</option>{% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="emp-filter-pills">
+      <span class="emp-filter-pill active" data-status="">All</span>
+      <span class="emp-filter-pill" data-status="ACTIVE">Active</span>
+      <span class="emp-filter-pill pill-probation" data-status="PROBATION">Probation</span>
+      <span class="emp-filter-pill pill-terminated" data-status="TERMINATED">Terminated</span>
+    </div>
+  </div>
+
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="emp-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Position</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th>Start Date</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if employees %}
+          {% for emp in employees %}
+          {% set s = emp.employment_status | default('ACTIVE') %}
+          <tr data-name="{{ (emp.full_name ~ ' ' ~ emp.employee_number) | lower }}"
+              data-status="{{ s }}"
+              data-dept="{{ emp.department | lower | default('') }}">
+            <td>
+              <div class="erp-flex erp-gap-8">
+                <span class="emp-avatar
+                  {% if s == 'TERMINATED' %}style="background:var(--erp-danger-lt);color:var(--erp-danger);"{% endif %}
+                ">{{ (emp.full_name or '??')[:2] | upper }}</span>
+                <div>
+                  <div style="font-weight:600;">{{ emp.full_name }}</div>
+                  <div style="font-size:11px; color:var(--erp-text-muted);">{{ emp.employee_number }}</div>
+                </div>
+              </div>
+            </td>
+            <td><code style="font-size:11px; background:var(--erp-neutral-lt); padding:2px 5px; border-radius:3px;">{{ emp.position_code or '—' }}</code></td>
+            <td>{{ emp.department or '—' }}</td>
+            <td>
+              {% if s == 'ACTIVE' %}
+                <span class="erp-badge erp-badge-green">Active</span>
+              {% elif s == 'PROBATION' %}
+                <span class="erp-badge erp-badge-yellow">Probation</span>
+              {% elif s == 'TERMINATED' %}
+                <span class="erp-badge erp-badge-red">Terminated</span>
+              {% else %}
+                <span class="erp-badge erp-badge-gray">{{ s | title }}</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--erp-text-muted); font-size:12px;">{{ emp.start_date or '—' }}</td>
+            <td style="text-align:right;">
+              <a href="{{ url_for('EmployeeView.show', pk=emp.id) }}" class="btn btn-default btn-xs">
+                <i class="fa fa-eye"></i>
+              </a>
+              {% if appbuilder.sm.has_access('can_edit', 'EmployeeView') %}
+              <a href="{{ url_for('EmployeeView.edit', pk=emp.id) }}" class="btn btn-default btn-xs">
+                <i class="fa fa-pencil"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="6" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No employees found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var activeStatus = '';
+
+  function filterRows() {
+    var q    = (document.getElementById('emp-search').value || '').toLowerCase();
+    var dept = (document.getElementById('dept-filter').value || '').toLowerCase();
+    document.querySelectorAll('#emp-table tbody tr').forEach(function (tr) {
+      var name = tr.getAttribute('data-name') || '';
+      var st   = tr.getAttribute('data-status') || '';
+      var d    = (tr.getAttribute('data-dept') || '').toLowerCase();
+      var show = (!q || name.indexOf(q) !== -1)
+              && (!activeStatus || st === activeStatus)
+              && (!dept || d === dept);
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+
+  document.getElementById('emp-search').addEventListener('input', filterRows);
+  document.getElementById('dept-filter').addEventListener('change', filterRows);
+
+  document.querySelectorAll('.emp-filter-pill').forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      document.querySelectorAll('.emp-filter-pill').forEach(function (p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+      activeStatus = pill.getAttribute('data-status') || '';
+      filterRows();
+    });
+  });
+}());
+</script>
+{% endblock %}

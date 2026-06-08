@@ -1,0 +1,215 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Analytics Hub — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-bar-chart" style="color:var(--erp-primary);margin-right:8px;"></i>Analytics Hub</h1>
+      <p class="erp-page-subtitle">OLAP cube registry and saved report catalogue</p>
+    </div>
+    <div class="erp-flex erp-gap-8">
+      <form method="post" action="{{ url_for('AnalyticsAdminView.refresh_all_cubes') }}" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-default"
+                onclick="return confirm('Refresh all cubes? This may take several minutes.')">
+          <i class="fa fa-refresh"></i> Refresh All
+        </button>
+      </form>
+      <a href="{{ url_for('AnalyticsAdminView.create_report') }}" class="btn btn-primary">
+        <i class="fa fa-plus"></i> New Report
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── KPI Summary ──────────────────────────────────────────────────── #}
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <div class="erp-card-icon" style="background:var(--erp-primary-lt);color:var(--erp-primary);opacity:.2;"><i class="fa fa-cube"></i></div>
+      <p class="erp-card-title">Total Cubes</p>
+      <p class="erp-card-value">{{ cubes | length }}</p>
+      <p class="erp-card-sub">OLAP cubes registered</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <div class="erp-card-icon" style="background:var(--erp-success-lt);color:var(--erp-success);opacity:.2;"><i class="fa fa-file-text"></i></div>
+      <p class="erp-card-title">Saved Reports</p>
+      <p class="erp-card-value">{{ reports | length }}</p>
+      <p class="erp-card-sub">Published report definitions</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <div class="erp-card-icon" style="background:var(--erp-info-lt);color:var(--erp-info);opacity:.2;"><i class="fa fa-refresh"></i></div>
+      <p class="erp-card-title">Scheduled Refreshes</p>
+      <p class="erp-card-value">{{ cubes | selectattr('refresh_schedule') | list | length }}</p>
+      <p class="erp-card-sub">Cubes with auto-refresh</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <div class="erp-card-icon" style="background:var(--erp-warning-lt);color:var(--erp-warning);opacity:.2;"><i class="fa fa-exclamation-triangle"></i></div>
+      <p class="erp-card-title">Stale Cubes</p>
+      <p class="erp-card-value">{{ cubes | selectattr('is_stale', 'defined') | selectattr('is_stale') | list | length }}</p>
+      <p class="erp-card-sub">Need refresh</p>
+    </div>
+  </div>
+
+  {# ── Cube Registry ────────────────────────────────────────────────── #}
+  <p class="erp-section-title">OLAP Cube Registry</p>
+  <div class="erp-table-wrap erp-mb-24">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Cube Name</th>
+          <th>Schema</th>
+          <th>Row Count</th>
+          <th>Last Refreshed</th>
+          <th>Refresh Schedule</th>
+          <th>Status</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cubes %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ c.name | default('—') }}</div>
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ c.description | default('') }}</div>
+          </td>
+          <td style="font-size:12px;font-family:monospace;">{{ c.schema_name | default('public') }}.{{ c.table_name | default('—') }}</td>
+          <td style="font-variant-numeric:tabular-nums;font-size:12px;">
+            {{ "{:,.0f}".format(c.row_count | default(0)) }}
+          </td>
+          <td style="font-size:12px;white-space:nowrap;{{ 'color:var(--erp-danger);' if c.is_stale | default(false) else '' }}">
+            {{ c.last_refreshed | default('Never') }}
+            {% if c.is_stale | default(false) %}
+              <span class="erp-badge erp-badge-yellow" style="margin-left:4px;">Stale</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;font-family:monospace;">{{ c.refresh_schedule | default('Manual') }}</td>
+          <td>
+            {% set cs = c.status | default('READY') | upper %}
+            {% if cs == 'READY' %}
+              <span class="erp-badge erp-badge-green">Ready</span>
+            {% elif cs == 'REFRESHING' %}
+              <span class="erp-badge erp-badge-blue">Refreshing</span>
+            {% elif cs == 'ERROR' %}
+              <span class="erp-badge erp-badge-red">Error</span>
+            {% elif cs == 'BUILDING' %}
+              <span class="erp-badge erp-badge-yellow">Building</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ c.status }}</span>
+            {% endif %}
+          </td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            <form method="post"
+                  action="{{ url_for('AnalyticsAdminView.refresh_cube', cube_id=c.id) }}"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-primary"
+                      title="Refresh cube"
+                      {{ 'disabled' if (c.status | default('') | upper) == 'REFRESHING' else '' }}>
+                <i class="fa fa-refresh"></i> Refresh
+              </button>
+            </form>
+            <a href="{{ url_for('AnalyticsAdminView.cube_detail', cube_id=c.id) }}"
+               class="btn btn-xs btn-default" title="View cube details">
+              <i class="fa fa-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-cube" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No cubes registered.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Saved Reports ─────────────────────────────────────────────────── #}
+  <p class="erp-section-title">Saved Reports</p>
+  <div class="erp-table-wrap">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Report Name</th>
+          <th>Cube / Source</th>
+          <th>Visualization</th>
+          <th>Owner</th>
+          <th>Last Run</th>
+          <th>Scheduled</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ r.name | default('—') }}</div>
+            {% if r.description %}
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ r.description }}</div>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;color:var(--erp-text-muted);">{{ r.cube_name | default(r.source | default('—')) }}</td>
+          <td>
+            {% set vt = r.visualization_type | default('TABLE') | upper %}
+            {% if vt == 'TABLE' %}
+              <span class="erp-badge erp-badge-gray"><i class="fa fa-table"></i> Table</span>
+            {% elif vt == 'BAR' %}
+              <span class="erp-badge erp-badge-blue"><i class="fa fa-bar-chart"></i> Bar</span>
+            {% elif vt == 'LINE' %}
+              <span class="erp-badge erp-badge-blue"><i class="fa fa-line-chart"></i> Line</span>
+            {% elif vt == 'PIE' %}
+              <span class="erp-badge erp-badge-green"><i class="fa fa-pie-chart"></i> Pie</span>
+            {% elif vt == 'DOUGHNUT' %}
+              <span class="erp-badge erp-badge-green"><i class="fa fa-circle-o"></i> Doughnut</span>
+            {% elif vt == 'SCATTER' %}
+              <span class="erp-badge erp-badge-yellow"><i class="fa fa-dot-circle-o"></i> Scatter</span>
+            {% elif vt == 'HEATMAP' %}
+              <span class="erp-badge erp-badge-red"><i class="fa fa-th"></i> Heatmap</span>
+            {% elif vt == 'KPI' %}
+              <span class="erp-badge erp-badge-blue"><i class="fa fa-tachometer"></i> KPI</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ r.visualization_type }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:13px;">{{ r.owner | default('—') }}</td>
+          <td style="font-size:12px;white-space:nowrap;color:var(--erp-text-muted);">{{ r.last_run_at | default('Never') }}</td>
+          <td>
+            {% if r.schedule %}
+              <span class="erp-badge erp-badge-green"><i class="fa fa-clock-o"></i> {{ r.schedule }}</span>
+            {% else %}
+              <span style="font-size:12px;color:var(--erp-text-muted);">Manual</span>
+            {% endif %}
+          </td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            <a href="{{ url_for('AnalyticsAdminView.run_report', report_id=r.id) }}"
+               class="btn btn-xs btn-primary"><i class="fa fa-play"></i> Run</a>
+            <a href="{{ url_for('AnalyticsAdminView.edit_report', report_id=r.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-pencil"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-file-text" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No reports saved yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>{# /erp-island #}
+{% endblock %}

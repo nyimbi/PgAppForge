@@ -1,0 +1,362 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Chart of Accounts — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* account tree */
+  .acct-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .acct-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .acct-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  .acct-table tr:last-child td { border-bottom:none; }
+  .acct-table tr:hover td { background:#fafafa; }
+  .acct-code { font-family:"Menlo","Consolas",monospace; font-size:12px; color:#374151; font-weight:600; }
+  .acct-indent-0 .acct-name-cell { padding-left:12px; font-weight:700; color:#111827; }
+  .acct-indent-1 .acct-name-cell { padding-left:28px; font-weight:600; color:#374151; }
+  .acct-indent-2 .acct-name-cell { padding-left:44px; color:#4b5563; }
+  .acct-indent-3 .acct-name-cell { padding-left:60px; color:#6b7280; font-size:12px; }
+  .acct-indent-4 .acct-name-cell { padding-left:76px; color:#9ca3af; font-size:12px; }
+  /* type badges */
+  .badge-asset     { background:#dbeafe; color:#1d4ed8; }
+  .badge-liability { background:#fce7f3; color:#9d174d; }
+  .badge-equity    { background:#d1fae5; color:#065f46; }
+  .badge-revenue   { background:#dcfce7; color:#166534; }
+  .badge-expense   { background:#fef3c7; color:#92400e; }
+  .type-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .badge-inactive { background:#f3f4f6; color:#6b7280; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .badge-stat     { background:#ede9fe; color:#5b21b6; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .badge-nostat   { background:#f9fafb; color:#9ca3af; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  /* filter bar */
+  .filter-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  /* dim table */
+  .dim-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .dim-table th { background:#f9fafb; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:#374151; padding:8px 12px; border-bottom:2px solid #e5e7eb; }
+  .dim-table td { padding:8px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  .dim-table tr:last-child td { border-bottom:none; }
+  .badge-req  { background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .badge-opt  { background:#f3f4f6; color:#6b7280; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Chart of Accounts</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Hierarchical GL account structure, type classification and dimension configuration</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="/finance/gl_account/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Add Account
+    </a>
+    <button class="btn btn-default btn-sm" id="btn-export-coa">
+      <i class="fa fa-download"></i> Export
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Filter bar ──────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:12px 18px; margin-bottom:18px;">
+  <div class="filter-bar">
+    <label>Type:</label>
+    <div id="type-filters" style="display:flex; gap:6px; flex-wrap:wrap;">
+      {% for atype in ['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE'] %}
+      <button class="btn btn-xs btn-default btn-type-filter" data-type="{{ atype }}" style="font-size:11px; font-weight:600;">
+        {{ atype }}
+      </button>
+      {% endfor %}
+      <button class="btn btn-xs btn-primary btn-type-filter active" data-type="" style="font-size:11px;">All</button>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px;">
+      <input type="text" id="acct-search" class="form-control" placeholder="Search code or name…"
+             style="width:200px; height:30px; font-size:12px; padding:2px 10px;">
+      <select id="status-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+        <option value="">All Status</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </div>
+    <span id="acct-count" style="font-size:11px; color:#9ca3af;"></span>
+  </div>
+</div>
+
+{# ── Account Tree ────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:24px;">
+  <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-sitemap" style="color:#1a56db; margin-right:6px;"></i> Account Hierarchy
+    </h4>
+    <button id="btn-expand-all" class="btn btn-default btn-xs" style="font-size:11px;">
+      <i class="fa fa-expand"></i> Expand All
+    </button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="acct-table" id="acct-table">
+      <thead>
+        <tr>
+          <th style="width:130px;">Code</th>
+          <th>Account Name</th>
+          <th>Type</th>
+          <th style="text-align:center;">Statistical</th>
+          <th style="text-align:center;">Active</th>
+          <th style="text-align:center; width:100px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="acct-tbody">
+        {% if accounts %}
+          {% for acct in accounts %}
+          {% set depth = acct.depth | default(0) | int %}
+          <tr class="acct-row acct-indent-{{ [depth, 4] | min }}"
+              data-type="{{ acct.account_type | upper }}"
+              data-active="{{ 'active' if acct.is_active else 'inactive' }}"
+              data-code="{{ acct.account_code | lower }}"
+              data-name="{{ acct.name | lower }}">
+            <td><span class="acct-code">{{ acct.account_code }}</span></td>
+            <td class="acct-name-cell">
+              {% if depth == 0 %}
+                <i class="fa fa-folder" style="color:#6b7280; margin-right:5px; font-size:11px;"></i>
+              {% elif depth == 1 %}
+                <i class="fa fa-folder-open" style="color:#9ca3af; margin-right:5px; font-size:11px;"></i>
+              {% else %}
+                <i class="fa fa-file-text-o" style="color:#d1d5db; margin-right:5px; font-size:11px;"></i>
+              {% endif %}
+              {{ acct.name }}
+            </td>
+            <td>
+              {% set t = acct.account_type | upper %}
+              <span class="type-badge badge-{{ t | lower }}">{{ t }}</span>
+            </td>
+            <td style="text-align:center;">
+              {% if acct.is_statistical %}
+                <span class="badge-stat">Stat</span>
+              {% else %}
+                <span class="badge-nostat">—</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              <button class="btn-toggle-active"
+                      data-account-id="{{ acct.id }}"
+                      data-active="{{ acct.is_active | lower }}"
+                      style="background:none; border:none; padding:2px; cursor:pointer;"
+                      title="Toggle active">
+                {% if acct.is_active %}
+                  <span class="badge-active"><i class="fa fa-check"></i> Active</span>
+                {% else %}
+                  <span class="badge-inactive">Inactive</span>
+                {% endif %}
+              </button>
+            </td>
+            <td style="text-align:center; white-space:nowrap;">
+              <a href="/finance/gl_account/edit/{{ acct.id }}" class="btn btn-xs btn-default" title="Edit">
+                <i class="fa fa-pencil"></i>
+              </a>
+              <a href="/finance/gl_account/{{ acct.id }}" class="btn btn-xs btn-default" title="View">
+                <i class="fa fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="acct-empty">
+            <td colspan="6" style="text-align:center; padding:40px; color:#9ca3af;">
+              <i class="fa fa-sitemap" style="font-size:30px; display:block; margin-bottom:10px; opacity:.35;"></i>
+              No accounts defined. <a href="/finance/gl_account/add">Add the first account</a>.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── GL Dimensions ───────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-tags" style="color:#7c3aed; margin-right:6px;"></i> GL Dimensions
+    </h4>
+    <a href="/finance/gl_dimension/add" class="btn btn-default btn-xs" style="font-size:11px;">
+      <i class="fa fa-plus"></i> Add Dimension
+    </a>
+  </div>
+  {% if dimensions %}
+  <div style="overflow-x:auto;">
+    <table class="dim-table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Dimension Name</th>
+          <th>Description</th>
+          <th style="text-align:center;">Required</th>
+          <th style="text-align:center;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dim in dimensions %}
+        <tr>
+          <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ dim.code }}</td>
+          <td style="font-weight:600;">{{ dim.name }}</td>
+          <td style="color:#6b7280;">{{ dim.description or '—' }}</td>
+          <td style="text-align:center;">
+            {% if dim.is_required %}
+              <span class="badge-req"><i class="fa fa-asterisk"></i> Required</span>
+            {% else %}
+              <span class="badge-opt">Optional</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center; white-space:nowrap;">
+            <a href="/finance/gl_dimension/edit/{{ dim.id }}" class="btn btn-xs btn-default"><i class="fa fa-pencil"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:28px; text-align:center; color:#9ca3af; font-size:13px;">
+    <i class="fa fa-tags" style="font-size:24px; display:block; margin-bottom:8px; opacity:.35;"></i>
+    No dimensions configured. <a href="/finance/gl_dimension/add">Add a dimension</a>.
+  </div>
+  {% endif %}
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Filter logic ───────────────────────────────────────────────────── */
+  var activeType   = '';
+  var activeStatus = '';
+  var searchTerm   = '';
+
+  function applyFilters() {
+    var rows = document.querySelectorAll('#acct-tbody tr.acct-row');
+    var shown = 0;
+    rows.forEach(function (tr) {
+      var type   = tr.getAttribute('data-type') || '';
+      var status = tr.getAttribute('data-active') || '';
+      var code   = tr.getAttribute('data-code') || '';
+      var name   = tr.getAttribute('data-name') || '';
+      var matchType   = !activeType   || type === activeType;
+      var matchStatus = !activeStatus || status === activeStatus;
+      var matchSearch = !searchTerm   || code.indexOf(searchTerm) !== -1 || name.indexOf(searchTerm) !== -1;
+      var show = matchType && matchStatus && matchSearch;
+      tr.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+    var countEl = document.getElementById('acct-count');
+    if (rows.length) countEl.textContent = shown + ' of ' + rows.length + ' accounts';
+  }
+
+  /* type filter buttons */
+  document.getElementById('type-filters').addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-type-filter');
+    if (!btn) return;
+    activeType = btn.getAttribute('data-type') || '';
+    document.querySelectorAll('.btn-type-filter').forEach(function (b) {
+      b.classList.remove('btn-primary', 'active');
+      b.classList.add('btn-default');
+    });
+    btn.classList.remove('btn-default');
+    btn.classList.add('btn-primary', 'active');
+    applyFilters();
+  });
+
+  document.getElementById('status-filter').addEventListener('change', function () {
+    activeStatus = this.value;
+    applyFilters();
+  });
+
+  document.getElementById('acct-search').addEventListener('input', function () {
+    searchTerm = this.value.toLowerCase().trim();
+    applyFilters();
+  });
+
+  /* initial count */
+  (function () {
+    var rows = document.querySelectorAll('#acct-tbody tr.acct-row');
+    if (rows.length) document.getElementById('acct-count').textContent = rows.length + ' accounts';
+  }());
+
+  /* ── Expand / collapse all ──────────────────────────────────────────── */
+  document.getElementById('btn-expand-all').addEventListener('click', function () {
+    /* all rows are always visible; this cycles between showing depth ≥1 or not */
+    var allRows = document.querySelectorAll('#acct-tbody tr.acct-row');
+    var isCollapsed = this.getAttribute('data-collapsed') === 'true';
+    allRows.forEach(function (tr) {
+      var depth = parseInt(tr.className.match(/acct-indent-(\d)/)?.[1] || '0');
+      if (depth >= 2) tr.style.display = isCollapsed ? '' : 'none';
+    });
+    this.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
+    this.innerHTML = isCollapsed
+      ? '<i class="fa fa-compress"></i> Collapse Detail'
+      : '<i class="fa fa-expand"></i> Expand All';
+  });
+
+  /* ── Toggle active/inactive ─────────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-toggle-active');
+    if (!btn) return;
+    e.preventDefault();
+    var accountId = btn.getAttribute('data-account-id');
+    var current   = btn.getAttribute('data-active') === 'true';
+    if (!accountId) return;
+
+    fetch('/api/finance/gl_accounts/' + encodeURIComponent(accountId) + '/toggle_active', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ is_active: !current })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast(current ? 'Account deactivated.' : 'Account activated.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1200);
+      } else {
+        toast(res.data.message || 'Update failed.', 'error');
+      }
+    })
+    .catch(function (err) { toast('Network error: ' + err.message, 'error'); });
+  });
+
+  /* ── Export ─────────────────────────────────────────────────────────── */
+  document.getElementById('btn-export-coa').addEventListener('click', function () {
+    window.location.href = '/api/finance/gl_accounts/export?format=csv';
+  });
+
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,280 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Privacy & GDPR Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-shield" style="color:var(--erp-primary);margin-right:8px;"></i>Privacy &amp; GDPR Management</h1>
+      <p class="erp-page-subtitle">Data subject requests, consent tracking, and processing records</p>
+    </div>
+    <div>
+      <button class="btn btn-primary" data-toggle="modal" data-target="#newDsarModal">
+        <i class="fa fa-plus"></i> New DSAR
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── Consent Summary KPI Tiles ─────────────────────────────────────── #}
+  <p class="erp-section-title">Consent Summary</p>
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <div class="erp-card-icon" style="background:var(--erp-success-lt);color:var(--erp-success);"><i class="fa fa-check-circle"></i></div>
+      <p class="erp-card-title">Active Consents</p>
+      <p class="erp-card-value">{{ consent_summary.active_consents | default(0) }}</p>
+      <p class="erp-card-sub">Currently valid</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <div class="erp-card-icon" style="background:var(--erp-warning-lt);color:var(--erp-warning);"><i class="fa fa-ban"></i></div>
+      <p class="erp-card-title">Withdrawn</p>
+      <p class="erp-card-value">{{ consent_summary.withdrawn | default(0) }}</p>
+      <p class="erp-card-sub">Subject withdrew consent</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-danger"></div>
+      <div class="erp-card-icon" style="background:var(--erp-danger-lt);color:var(--erp-danger);"><i class="fa fa-clock-o"></i></div>
+      <p class="erp-card-title">Expired</p>
+      <p class="erp-card-value">{{ consent_summary.expired | default(0) }}</p>
+      <p class="erp-card-sub">Past retention period</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <div class="erp-card-icon" style="background:var(--erp-info-lt);color:var(--erp-info);"><i class="fa fa-inbox"></i></div>
+      <p class="erp-card-title">Open DSARs</p>
+      <p class="erp-card-value">{{ dsars | selectattr('status', 'ne', 'CLOSED') | list | length }}</p>
+      <p class="erp-card-sub">Awaiting processing</p>
+    </div>
+  </div>
+
+  {# ── DSAR Queue ────────────────────────────────────────────────────── #}
+  <div class="erp-flex erp-gap-8 erp-mb-16" style="justify-content:space-between;align-items:center;">
+    <p class="erp-section-title erp-mb-0">Data Subject Access Request Queue</p>
+    <div class="erp-flex erp-gap-8">
+      <select class="form-control input-sm" id="dsarStatusFilter" style="width:auto;" onchange="filterDsarTable(this.value)">
+        <option value="">All Statuses</option>
+        <option value="PENDING">Pending</option>
+        <option value="IN_PROGRESS">In Progress</option>
+        <option value="COMPLETED">Completed</option>
+        <option value="CLOSED">Closed</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="erp-table-wrap erp-mb-24">
+    <table class="erp-table" id="dsarTable">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Request Type</th>
+          <th>Status</th>
+          <th>Submitted</th>
+          <th>Due Date</th>
+          <th>Days Left</th>
+          <th class="erp-text-right">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in dsars %}
+        {% set overdue = d.days_left is defined and d.days_left < 0 %}
+        <tr style="{{ 'background:var(--erp-danger-lt);' if overdue else '' }}">
+          <td>
+            <div style="font-weight:600;">{{ d.subject_name | default('—') }}</div>
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ d.subject_email | default('') }}</div>
+          </td>
+          <td>
+            {% set rt = d.request_type | default('ACCESS') | upper %}
+            {% if rt == 'ACCESS' %}
+              <span class="erp-badge erp-badge-blue">Access</span>
+            {% elif rt == 'ERASURE' %}
+              <span class="erp-badge erp-badge-red">Erasure</span>
+            {% elif rt == 'PORTABILITY' %}
+              <span class="erp-badge erp-badge-blue">Portability</span>
+            {% elif rt == 'RECTIFICATION' %}
+              <span class="erp-badge erp-badge-yellow">Rectification</span>
+            {% elif rt == 'RESTRICTION' %}
+              <span class="erp-badge erp-badge-gray">Restriction</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ d.request_type }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set s = d.status | default('PENDING') | upper %}
+            {% if s == 'PENDING' %}
+              <span class="erp-badge erp-badge-yellow">Pending</span>
+            {% elif s == 'IN_PROGRESS' %}
+              <span class="erp-badge erp-badge-blue">In Progress</span>
+            {% elif s == 'COMPLETED' %}
+              <span class="erp-badge erp-badge-green">Completed</span>
+            {% elif s == 'CLOSED' %}
+              <span class="erp-badge erp-badge-gray">Closed</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ d.status }}</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">{{ d.submitted_at | default('—') }}</td>
+          <td style="white-space:nowrap;{{ 'color:var(--erp-danger);font-weight:700;' if overdue else '' }}">
+            {{ d.due_date | default('—') }}
+            {% if overdue %}<i class="fa fa-exclamation-triangle" style="margin-left:4px;"></i>{% endif %}
+          </td>
+          <td style="font-variant-numeric:tabular-nums;{{ 'color:var(--erp-danger);font-weight:700;' if overdue else '' }}">
+            {% if d.days_left is defined %}
+              {% if overdue %}{{ d.days_left }} days{% else %}{{ d.days_left }} days{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="erp-text-right">
+            <a href="{{ url_for(d.process_endpoint | default('GrcPrivacyView.process_dsar'), dsar_id=d.id) }}"
+               class="btn btn-xs btn-primary">
+              <i class="fa fa-arrow-right"></i> Process
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-inbox" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No DSARs found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Data Processing Records ───────────────────────────────────────── #}
+  <p class="erp-section-title">Data Processing Records (Art. 30 GDPR)</p>
+  <div class="erp-table-wrap erp-mb-24">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Purpose</th>
+          <th>Legal Basis</th>
+          <th>Data Categories</th>
+          <th>Retention Period</th>
+          <th>Third Party Transfers</th>
+          <th>Last Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in processing_records %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ rec.purpose | default('—') }}</div>
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ rec.controller | default('') }}</div>
+          </td>
+          <td>
+            {% set lb = rec.legal_basis | default('CONSENT') | upper %}
+            {% if lb == 'CONSENT' %}
+              <span class="erp-badge erp-badge-blue">Consent</span>
+            {% elif lb == 'CONTRACT' %}
+              <span class="erp-badge erp-badge-green">Contract</span>
+            {% elif lb == 'LEGAL_OBLIGATION' %}
+              <span class="erp-badge erp-badge-yellow">Legal Obligation</span>
+            {% elif lb == 'LEGITIMATE_INTERESTS' %}
+              <span class="erp-badge erp-badge-gray">Legitimate Interests</span>
+            {% elif lb == 'VITAL_INTERESTS' %}
+              <span class="erp-badge erp-badge-red">Vital Interests</span>
+            {% elif lb == 'PUBLIC_TASK' %}
+              <span class="erp-badge erp-badge-blue">Public Task</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ rec.legal_basis }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;">{{ rec.data_categories | default('—') }}</td>
+          <td style="white-space:nowrap;">{{ rec.retention_period | default('—') }}</td>
+          <td>
+            {% if rec.third_party_transfers %}
+              <span class="erp-badge erp-badge-yellow"><i class="fa fa-exclamation"></i> Yes</span>
+            {% else %}
+              <span class="erp-badge erp-badge-green">None</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;color:var(--erp-text-muted);">{{ rec.updated_at | default('—') }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="erp-text-center" style="color:var(--erp-text-muted);padding:24px;">
+            No processing records configured.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>{# /erp-island #}
+
+{# ── New DSAR Modal ────────────────────────────────────────────────────── #}
+<div class="modal fade" id="newDsarModal" tabindex="-1" role="dialog" aria-labelledby="newDsarModalLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="newDsarModalLabel"><i class="fa fa-shield"></i> New Data Subject Access Request</h4>
+      </div>
+      <form method="post" action="{{ url_for('GrcPrivacyView.create_dsar') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Subject Name <span class="text-danger">*</span></label>
+            <input type="text" name="subject_name" class="form-control" required placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label>Subject Email <span class="text-danger">*</span></label>
+            <input type="email" name="subject_email" class="form-control" required placeholder="email@example.com">
+          </div>
+          <div class="form-group">
+            <label>Request Type <span class="text-danger">*</span></label>
+            <select name="request_type" class="form-control" required>
+              <option value="">— Select type —</option>
+              <option value="ACCESS">Access (Art. 15)</option>
+              <option value="ERASURE">Erasure / Right to be Forgotten (Art. 17)</option>
+              <option value="PORTABILITY">Data Portability (Art. 20)</option>
+              <option value="RECTIFICATION">Rectification (Art. 16)</option>
+              <option value="RESTRICTION">Restriction of Processing (Art. 18)</option>
+              <option value="OBJECTION">Right to Object (Art. 21)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Description / Details</label>
+            <textarea name="description" class="form-control" rows="3" placeholder="Subject's request details..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Identity Verification Method</label>
+            <select name="verification_method" class="form-control">
+              <option value="EMAIL">Email Confirmation</option>
+              <option value="DOCUMENT">ID Document</option>
+              <option value="PORTAL">Authenticated Portal</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Create DSAR</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterDsarTable(status) {
+  var rows = document.querySelectorAll('#dsarTable tbody tr');
+  rows.forEach(function(row) {
+    if (!status) { row.style.display = ''; return; }
+    var badge = row.querySelector('.erp-badge');
+    var text = badge ? badge.textContent.trim().toUpperCase().replace(/\s+/g, '_') : '';
+    row.style.display = (text === status) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

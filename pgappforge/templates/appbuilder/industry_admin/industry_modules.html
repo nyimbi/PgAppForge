@@ -1,0 +1,244 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Industry Module Registry — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-puzzle-piece" style="color:var(--erp-primary);margin-right:8px;"></i>Industry Module Registry</h1>
+      <p class="erp-page-subtitle">Enable, configure, and manage domain-specific ERP plugins</p>
+    </div>
+    <div class="erp-flex erp-gap-8">
+      <select class="form-control input-sm" id="domainFilter" style="width:auto;" onchange="filterPlugins(this.value)">
+        <option value="">All Domains</option>
+        {% set seen_domains = [] %}
+        {% for plugin in industry_plugins %}
+          {% if plugin.domain not in seen_domains %}
+            <option value="{{ plugin.domain }}">{{ plugin.domain | title }}</option>
+            {% if seen_domains.append(plugin.domain) %}{% endif %}
+          {% endif %}
+        {% endfor %}
+      </select>
+      <select class="form-control input-sm" id="statusFilter2" style="width:auto;" onchange="filterPlugins2(this.value)">
+        <option value="">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+      </select>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── KPI Summary ──────────────────────────────────────────────────── #}
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <p class="erp-card-title">Total Plugins</p>
+      <p class="erp-card-value">{{ industry_plugins | length }}</p>
+      <p class="erp-card-sub">Registered industry plugins</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <p class="erp-card-title">Active</p>
+      <p class="erp-card-value">{{ industry_plugins | selectattr('status', 'equalto', 'ACTIVE') | list | length }}</p>
+      <p class="erp-card-sub">Currently enabled</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-gray"></div>
+      <p class="erp-card-title">Inactive</p>
+      <p class="erp-card-value">{{ industry_plugins | selectattr('status', 'equalto', 'INACTIVE') | list | length }}</p>
+      <p class="erp-card-sub">Disabled plugins</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <p class="erp-card-title">Total Modules</p>
+      <p class="erp-card-value">{{ industry_plugins | sum(attribute='module_count') | default(0) }}</p>
+      <p class="erp-card-sub">Sub-modules across all plugins</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <p class="erp-card-title">Domains</p>
+      <p class="erp-card-value">{{ industry_plugins | map(attribute='domain') | unique | list | length }}</p>
+      <p class="erp-card-sub">Industry verticals covered</p>
+    </div>
+  </div>
+
+  {# ── Plugin Cards Grid ─────────────────────────────────────────────── #}
+  <p class="erp-section-title">Industry Plugins</p>
+
+  <div id="pluginsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;margin-bottom:24px;">
+
+    {% for plugin in industry_plugins %}
+    {% set is_active = plugin.status | default('INACTIVE') | upper == 'ACTIVE' %}
+    {% set plugin_domain = plugin.domain | default('general') | lower %}
+
+    <div class="erp-card plugin-card"
+         data-domain="{{ plugin.domain | default('') }}"
+         data-status="{{ plugin.status | default('INACTIVE') | upper }}"
+         style="padding:20px;">
+
+      {# Accent bar colour by domain #}
+      <div class="erp-card-accent {{ 'erp-card-accent-success' if is_active else 'erp-card-accent-gray' }}"></div>
+
+      {# Card header #}
+      <div class="erp-flex erp-gap-8" style="justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+        <div style="flex:1;">
+          <div class="erp-flex erp-gap-8" style="align-items:center;flex-wrap:wrap;margin-bottom:4px;">
+            <span style="font-size:15px;font-weight:700;color:var(--erp-text);">{{ plugin.name | default('—') }}</span>
+            <span style="font-size:11px;color:var(--erp-text-muted);font-family:monospace;background:var(--erp-neutral-lt);padding:1px 6px;border-radius:4px;">
+              v{{ plugin.version | default('0.1.0') }}
+            </span>
+            {% if is_active %}
+              <span class="erp-badge erp-badge-green">Active</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">Inactive</span>
+            {% endif %}
+          </div>
+          <div>
+            <span class="erp-badge erp-badge-blue" style="font-size:10px;">
+              {{ plugin.domain | default('general') | title }}
+            </span>
+            {% if plugin.package_name %}
+            <span style="font-size:11px;color:var(--erp-text-muted);margin-left:6px;font-family:monospace;">{{ plugin.package_name }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {# Enable / Disable toggle #}
+        <div>
+          {% if is_active %}
+          <form method="post"
+                action="{{ url_for('IndustryModulesAdminView.disable_plugin', plugin_id=plugin.id) }}"
+                style="display:inline;"
+                onsubmit="return confirm('Disable {{ plugin.name | default('') }}? This will deactivate all its modules.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning">
+              <i class="fa fa-toggle-on"></i> Disable
+            </button>
+          </form>
+          {% else %}
+          <form method="post"
+                action="{{ url_for('IndustryModulesAdminView.enable_plugin', plugin_id=plugin.id) }}"
+                style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-success">
+              <i class="fa fa-toggle-off"></i> Enable
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Description #}
+      {% if plugin.description %}
+      <p style="font-size:13px;color:var(--erp-text-muted);margin:0 0 12px;line-height:1.5;">
+        {{ plugin.description }}
+      </p>
+      {% endif %}
+
+      {# Module count + quick links #}
+      <div style="border-top:1px solid var(--erp-border);padding-top:12px;margin-top:auto;">
+        <div class="erp-flex erp-gap-8" style="justify-content:space-between;align-items:center;flex-wrap:wrap;">
+          <div>
+            <span style="font-size:12px;color:var(--erp-text-muted);">
+              <i class="fa fa-cubes" style="margin-right:4px;"></i>
+              <strong>{{ plugin.module_count | default(0) }}</strong> module{{ 's' if plugin.module_count | default(0) != 1 else '' }}
+            </span>
+            {% if plugin.author %}
+            <span style="font-size:11px;color:var(--erp-text-muted);margin-left:10px;">
+              by {{ plugin.author }}
+            </span>
+            {% endif %}
+          </div>
+
+          {# Quick-link buttons for each module #}
+          <div class="erp-flex erp-gap-4" style="flex-wrap:wrap;">
+            {% if plugin.modules %}
+              {% for mod in plugin.modules %}
+              <a href="{{ url_for(mod.config_endpoint | default('IndustryModulesAdminView.module_config'), module_id=mod.id) }}"
+                 class="btn btn-xs btn-default"
+                 title="{{ mod.name | default('Module') }} configuration"
+                 {{ 'disabled' if not is_active else '' }}
+                 style="{{ 'opacity:.5;pointer-events:none;' if not is_active else '' }}">
+                <i class="fa fa-cog"></i> {{ mod.name | default('Module') }}
+              </a>
+              {% endfor %}
+            {% elif is_active %}
+              <a href="{{ url_for('IndustryModulesAdminView.plugin_config', plugin_id=plugin.id) }}"
+                 class="btn btn-xs btn-default">
+                <i class="fa fa-cog"></i> Configure
+              </a>
+            {% endif %}
+            <a href="{{ url_for('IndustryModulesAdminView.plugin_detail', plugin_id=plugin.id) }}"
+               class="btn btn-xs btn-default">
+              <i class="fa fa-info-circle"></i> Details
+            </a>
+          </div>
+        </div>
+
+        {# Dependencies warning #}
+        {% if plugin.missing_dependencies %}
+        <div style="margin-top:10px;padding:8px 10px;background:var(--erp-warning-lt);border-radius:var(--erp-radius);border:1px solid #f59e0b;">
+          <span style="font-size:12px;color:#92400e;">
+            <i class="fa fa-exclamation-triangle"></i>
+            Missing: {{ plugin.missing_dependencies | join(', ') }}
+          </span>
+        </div>
+        {% endif %}
+
+        {# Last updated #}
+        {% if plugin.updated_at %}
+        <div style="margin-top:8px;">
+          <span style="font-size:11px;color:var(--erp-text-muted);">
+            <i class="fa fa-clock-o" style="margin-right:3px;"></i>Updated {{ plugin.updated_at }}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+
+    {# Empty state #}
+    <div style="grid-column:1/-1;" class="erp-text-center" style="padding:48px 0;">
+      <i class="fa fa-puzzle-piece" style="font-size:40px;opacity:.25;display:block;margin-bottom:16px;"></i>
+      <p style="color:var(--erp-text-muted);font-size:15px;">No industry plugins registered.</p>
+      <p style="font-size:13px;color:var(--erp-text-muted);">
+        Install plugins via <code>pip install pgappforge-[domain]</code> and restart the server.
+      </p>
+    </div>
+
+    {% endfor %}
+  </div>
+
+</div>{# /erp-island #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var _domainFilter = '';
+var _statusFilter = '';
+
+function filterPlugins(domain) {
+  _domainFilter = domain;
+  applyFilters();
+}
+
+function filterPlugins2(status) {
+  _statusFilter = status;
+  applyFilters();
+}
+
+function applyFilters() {
+  var cards = document.querySelectorAll('.plugin-card');
+  cards.forEach(function(card) {
+    var matchDomain = !_domainFilter || card.dataset.domain === _domainFilter;
+    var matchStatus = !_statusFilter || card.dataset.status === _statusFilter;
+    card.style.display = (matchDomain && matchStatus) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

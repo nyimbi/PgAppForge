@@ -1,0 +1,262 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}iPaaS Integration Flows — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-exchange" style="color:var(--erp-primary);margin-right:8px;"></i>iPaaS Integration Flows</h1>
+      <p class="erp-page-subtitle">Connectors, integration pipelines, and execution logs</p>
+    </div>
+    <div class="erp-flex erp-gap-8">
+      <a href="{{ url_for('IPaaSAdminView.create_connector') }}" class="btn btn-default">
+        <i class="fa fa-plug"></i> New Connector
+      </a>
+      <a href="{{ url_for('IPaaSAdminView.create_flow') }}" class="btn btn-primary">
+        <i class="fa fa-plus"></i> New Flow
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── KPI Summary ──────────────────────────────────────────────────── #}
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <p class="erp-card-title">Total Connectors</p>
+      <p class="erp-card-value">{{ connectors | length }}</p>
+      <p class="erp-card-sub">{{ connectors | selectattr('status', 'equalto', 'ACTIVE') | list | length }} active</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <p class="erp-card-title">Integration Flows</p>
+      <p class="erp-card-value">{{ flows | length }}</p>
+      <p class="erp-card-sub">{{ flows | selectattr('status', 'equalto', 'ENABLED') | list | length }} enabled</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <p class="erp-card-title">Records Processed</p>
+      <p class="erp-card-value">{{ "{:,.0f}".format(flows | sum(attribute='records_processed') | default(0)) }}</p>
+      <p class="erp-card-sub">Total across all flows</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-danger"></div>
+      <p class="erp-card-title">Recent Errors</p>
+      <p class="erp-card-value">{{ error_log | length }}</p>
+      <p class="erp-card-sub">Last 24 hours</p>
+    </div>
+  </div>
+
+  {# ── Connectors ───────────────────────────────────────────────────── #}
+  <p class="erp-section-title">Connectors</p>
+  <div class="erp-table-wrap erp-mb-24">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Protocol</th>
+          <th>Host / Endpoint</th>
+          <th>Status</th>
+          <th>Last Sync</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in connectors %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ c.name | default('—') }}</div>
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ c.description | default('') }}</div>
+          </td>
+          <td>
+            {% set proto = c.protocol | default('REST') | upper %}
+            {% if proto == 'REST' %}
+              <span class="erp-badge erp-badge-blue">REST</span>
+            {% elif proto == 'DB' or proto == 'DATABASE' %}
+              <span class="erp-badge erp-badge-yellow">DB</span>
+            {% elif proto == 'EMAIL' or proto == 'SMTP' %}
+              <span class="erp-badge erp-badge-gray">Email</span>
+            {% elif proto == 'FILE' or proto == 'SFTP' %}
+              <span class="erp-badge erp-badge-green">File</span>
+            {% elif proto == 'KAFKA' or proto == 'MQ' %}
+              <span class="erp-badge erp-badge-red">MQ</span>
+            {% elif proto == 'GRPC' %}
+              <span class="erp-badge erp-badge-blue">gRPC</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ c.protocol }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;font-family:monospace;max-width:200px;" class="erp-truncate">
+            {{ c.host | default(c.endpoint | default('—')) }}
+          </td>
+          <td>
+            {% set cs = c.status | default('ACTIVE') | upper %}
+            {% if cs == 'ACTIVE' %}
+              <span class="erp-badge erp-badge-green">Active</span>
+            {% elif cs == 'INACTIVE' or cs == 'DISABLED' %}
+              <span class="erp-badge erp-badge-gray">Inactive</span>
+            {% elif cs == 'ERROR' %}
+              <span class="erp-badge erp-badge-red">Error</span>
+            {% elif cs == 'TESTING' %}
+              <span class="erp-badge erp-badge-blue">Testing</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ c.status }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;white-space:nowrap;color:var(--erp-text-muted);">{{ c.last_sync_at | default('Never') }}</td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            <form method="post"
+                  action="{{ url_for('IPaaSAdminView.test_connector', connector_id=c.id) }}"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-default" title="Test connection">
+                <i class="fa fa-plug"></i> Test
+              </button>
+            </form>
+            <a href="{{ url_for('IPaaSAdminView.edit_connector', connector_id=c.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-pencil"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="erp-text-center" style="color:var(--erp-text-muted);padding:24px;">
+            No connectors configured.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Integration Flows ─────────────────────────────────────────────── #}
+  <p class="erp-section-title">Integration Flows</p>
+  <div class="erp-table-wrap erp-mb-24">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Flow Name</th>
+          <th>Trigger</th>
+          <th>Source → Target</th>
+          <th>Records Processed</th>
+          <th>Last Run</th>
+          <th>Status</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in flows %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ f.name | default('—') }}</div>
+            <div style="font-size:11px;color:var(--erp-text-muted);">{{ f.description | default('') }}</div>
+          </td>
+          <td>
+            {% set tt = f.trigger_type | default('MANUAL') | upper %}
+            {% if tt == 'SCHEDULE' or tt == 'CRON' %}
+              <span class="erp-badge erp-badge-blue"><i class="fa fa-clock-o"></i> Schedule</span>
+            {% elif tt == 'WEBHOOK' or tt == 'EVENT' %}
+              <span class="erp-badge erp-badge-green"><i class="fa fa-bolt"></i> Event</span>
+            {% elif tt == 'MANUAL' %}
+              <span class="erp-badge erp-badge-gray"><i class="fa fa-hand-pointer-o"></i> Manual</span>
+            {% elif tt == 'REALTIME' %}
+              <span class="erp-badge erp-badge-red"><i class="fa fa-circle"></i> Real-time</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ f.trigger_type }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:13px;">
+            <span style="font-weight:600;color:var(--erp-text);">{{ f.source_connector | default('—') }}</span>
+            <span style="color:var(--erp-text-muted);margin:0 6px;">→</span>
+            <span style="font-weight:600;color:var(--erp-primary);">{{ f.target_connector | default('—') }}</span>
+          </td>
+          <td style="font-variant-numeric:tabular-nums;font-size:12px;">
+            {{ "{:,.0f}".format(f.records_processed | default(0)) }}
+          </td>
+          <td style="font-size:12px;white-space:nowrap;color:var(--erp-text-muted);">{{ f.last_run | default('Never') }}</td>
+          <td>
+            {% set fs = f.status | default('ENABLED') | upper %}
+            {% if fs == 'ENABLED' %}
+              <span class="erp-badge erp-badge-green">Enabled</span>
+            {% elif fs == 'DISABLED' %}
+              <span class="erp-badge erp-badge-gray">Disabled</span>
+            {% elif fs == 'RUNNING' %}
+              <span class="erp-badge erp-badge-blue">Running</span>
+            {% elif fs == 'ERROR' %}
+              <span class="erp-badge erp-badge-red">Error</span>
+            {% else %}
+              <span class="erp-badge erp-badge-gray">{{ f.status }}</span>
+            {% endif %}
+          </td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            <form method="post"
+                  action="{{ url_for('IPaaSAdminView.execute_flow', flow_id=f.id) }}"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-primary"
+                      title="Execute flow now"
+                      onclick="return confirm('Execute flow \'{{ f.name | default('') }}\'?')"
+                      {{ 'disabled' if (f.status | default('') | upper) == 'RUNNING' else '' }}>
+                <i class="fa fa-play"></i> Execute
+              </button>
+            </form>
+            <a href="{{ url_for('IPaaSAdminView.edit_flow', flow_id=f.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-pencil"></i></a>
+            <a href="{{ url_for('IPaaSAdminView.flow_logs', flow_id=f.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-list-alt"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-exchange" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No integration flows configured.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Error Log ─────────────────────────────────────────────────────── #}
+  {% if error_log %}
+  <p class="erp-section-title">Recent Errors (Last 24h)</p>
+  <div class="erp-table-wrap">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Flow</th>
+          <th>Error Type</th>
+          <th>Message</th>
+          <th>Records Failed</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in error_log %}
+        <tr style="background:var(--erp-danger-lt);">
+          <td style="font-size:12px;white-space:nowrap;color:var(--erp-danger);">{{ e.occurred_at | default('—') }}</td>
+          <td style="font-weight:600;font-size:13px;">{{ e.flow_name | default('—') }}</td>
+          <td>
+            <span class="erp-badge erp-badge-red">{{ e.error_type | default('ERROR') }}</span>
+          </td>
+          <td style="font-size:12px;max-width:300px;" class="erp-truncate">{{ e.message | default('—') }}</td>
+          <td style="font-variant-numeric:tabular-nums;font-size:12px;">{{ e.records_failed | default(0) }}</td>
+          <td class="erp-text-right">
+            <a href="{{ url_for('IPaaSAdminView.error_detail', error_id=e.id) }}"
+               class="btn btn-xs btn-default"><i class="fa fa-search"></i> Detail</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>{# /erp-island #}
+{% endblock %}

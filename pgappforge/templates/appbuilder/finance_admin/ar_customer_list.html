@@ -1,0 +1,302 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}AR Customers — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* KPI tiles */
+  .ar-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:16px; margin-bottom:24px; }
+  .ar-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:16px 18px; position:relative; overflow:hidden; }
+  .ar-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .ar-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .ar-kpi-value { font-size:22px; font-weight:700; color:#111827; margin:0 0 2px; font-variant-numeric:tabular-nums; }
+  .ar-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* table */
+  .ar-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .ar-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .ar-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .ar-table tr:last-child td { border-bottom:none; }
+  .ar-table tr:hover td { background:#fafafa; }
+  .ar-table tr.on-hold td { background:#fff5f5; }
+  .nums { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  /* dunning badges */
+  .dunning-0 { background:#d1fae5; color:#065f46; }
+  .dunning-1 { background:#fef9c3; color:#713f12; }
+  .dunning-2 { background:#ffedd5; color:#9a3412; }
+  .dunning-3 { background:#fee2e2; color:#991b1b; }
+  .dunning-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px; }
+  .badge-active   { background:#d1fae5; color:#065f46; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-inactive { background:#f3f4f6; color:#6b7280; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-on-hold  { background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* util bar */
+  .util-bar-wrap { display:flex; align-items:center; gap:7px; min-width:100px; }
+  .util-bar { flex:1; height:5px; background:#e5e7eb; border-radius:3px; overflow:hidden; }
+  .util-bar-inner { height:100%; border-radius:3px; }
+  .util-pct { font-size:11px; font-weight:700; min-width:32px; text-align:right; }
+  /* toolbar */
+  .ar-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid #e5e7eb; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .erp-toast.warning { border-left:4px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">AR Customer Management</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Credit limits, outstanding balances, dunning levels and hold status</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="/finance/ar_customer/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> New Customer
+    </a>
+    <button class="btn btn-default btn-sm" id="btn-export">
+      <i class="fa fa-download"></i> Export
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Credit exposure KPI tiles ───────────────────────────────────────────── #}
+<div class="ar-kpi-grid">
+  <div class="ar-kpi-card" style="--accent:#1a56db;">
+    <p class="ar-kpi-label">Total Customers</p>
+    <p class="ar-kpi-value">{{ customers | length if customers else '—' }}</p>
+    <p class="ar-kpi-sub">in AR master</p>
+  </div>
+  <div class="ar-kpi-card" style="--accent:#8b5cf6;">
+    <p class="ar-kpi-label">Total Credit Granted</p>
+    <p class="ar-kpi-value" style="font-size:18px;">
+      {% if credit_summary and credit_summary.total_credit_cents %}
+        {{ "{:,.0f}".format(credit_summary.total_credit_cents / 100) }}
+      {% elif customers %}
+        {{ "{:,.0f}".format(customers | sum(attribute='credit_limit_cents') / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="ar-kpi-sub">aggregate limit</p>
+  </div>
+  <div class="ar-kpi-card" style="--accent:#f59e0b;">
+    <p class="ar-kpi-label">Total Outstanding</p>
+    <p class="ar-kpi-value" style="font-size:18px;">
+      {% if credit_summary and credit_summary.total_outstanding_cents %}
+        {{ "{:,.0f}".format(credit_summary.total_outstanding_cents / 100) }}
+      {% elif customers %}
+        {{ "{:,.0f}".format(customers | sum(attribute='outstanding_cents') / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="ar-kpi-sub">current AR balance</p>
+  </div>
+  <div class="ar-kpi-card" style="--accent:#ef4444;">
+    <p class="ar-kpi-label">On Hold</p>
+    <p class="ar-kpi-value" style="color:{% if customers and (customers | selectattr('is_active','equalto',false) | list | length) > 0 %}#ef4444{% else %}#10b981{% endif %};">
+      {% if customers %}
+        {{ customers | selectattr('is_active','equalto',false) | list | length }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="ar-kpi-sub">accounts blocked</p>
+  </div>
+  <div class="ar-kpi-card" style="--accent:#dc2626;">
+    <p class="ar-kpi-label">Dunning Level 3+</p>
+    <p class="ar-kpi-value" style="color:#dc2626;">
+      {% if customers %}
+        {{ customers | selectattr('dunning_level','ge',3) | list | length }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="ar-kpi-sub">severely overdue</p>
+  </div>
+</div>
+
+{# ── Customer table ──────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div class="ar-toolbar">
+    <input type="text" id="cust-search" class="form-control" placeholder="Search customer name or ref…"
+           style="width:240px; height:30px; font-size:12px; padding:2px 10px;">
+    <select id="status-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="hold">On Hold</option>
+    </select>
+    <select id="dunning-filter" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+      <option value="">All Dunning</option>
+      <option value="0">Level 0 (Clear)</option>
+      <option value="1">Level 1</option>
+      <option value="2">Level 2</option>
+      <option value="3">Level 3+</option>
+    </select>
+    <button class="btn btn-default btn-xs" id="btn-filter-clear" style="height:30px; font-size:11px;">
+      <i class="fa fa-times"></i> Clear
+    </button>
+    <span id="row-count" style="margin-left:auto; font-size:11px; color:#9ca3af;"></span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="ar-table" id="customer-table">
+      <thead>
+        <tr>
+          <th style="width:110px;">Ref</th>
+          <th>Customer Name</th>
+          <th class="nums">Credit Limit</th>
+          <th class="nums">Outstanding</th>
+          <th>Utilisation</th>
+          <th style="text-align:center;">Dunning</th>
+          <th style="text-align:center;">Status</th>
+          <th style="text-align:center; width:90px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="customer-tbody">
+        {% if customers %}
+          {% for c in customers %}
+          {% set util_pct = ((c.outstanding_cents / c.credit_limit_cents) * 100) | round(0) | int if c.credit_limit_cents else 0 %}
+          {% set is_hold = not c.is_active %}
+          <tr class="{{ 'on-hold' if is_hold else '' }}"
+              data-id="{{ c.id }}"
+              data-name="{{ c.name | lower }}"
+              data-ref="{{ c.customer_ref | lower }}"
+              data-status="{{ 'hold' if is_hold else 'active' }}"
+              data-dunning="{{ c.dunning_level | default(0) }}">
+            <td style="font-family:monospace; font-size:12px; font-weight:600; color:#374151;">{{ c.customer_ref }}</td>
+            <td>
+              <strong>{{ c.name }}</strong>
+              {% if is_hold %}
+                <i class="fa fa-ban" style="color:#ef4444; font-size:11px; margin-left:5px;" title="Account on hold"></i>
+              {% endif %}
+            </td>
+            <td class="nums">{{ "{:,.0f}".format(c.credit_limit_cents / 100) if c.credit_limit_cents else '—' }}</td>
+            <td class="nums" style="color:{% if util_pct > 90 %}#ef4444{% elif util_pct > 70 %}#f59e0b{% else %}#374151{% endif %};
+                                    font-weight:{% if util_pct > 90 %}700{% else %}400{% endif %};">
+              {{ "{:,.0f}".format(c.outstanding_cents / 100) if c.outstanding_cents is defined else '—' }}
+            </td>
+            <td>
+              {% if c.credit_limit_cents %}
+              <div class="util-bar-wrap">
+                <div class="util-bar">
+                  <div class="util-bar-inner" style="width:{{ [util_pct, 100] | min }}%;
+                    background:{% if util_pct > 100 or is_hold %}#ef4444{% elif util_pct > 90 %}#f59e0b{% elif util_pct > 70 %}#f59e0b{% else %}#10b981{% endif %};"></div>
+                </div>
+                <span class="util-pct" style="color:{% if util_pct > 90 %}#ef4444{% elif util_pct > 70 %}#f59e0b{% else %}#6b7280{% endif %};">
+                  {{ util_pct }}%
+                </span>
+              </div>
+              {% else %}
+              <span style="font-size:11px; color:#9ca3af;">No limit</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% set dl = c.dunning_level | default(0) | int %}
+              <span class="dunning-badge dunning-{{ [dl, 3] | min }}">
+                L{{ dl }}
+                {% if dl == 0 %}— Clear
+                {% elif dl == 1 %}— 1st Notice
+                {% elif dl == 2 %}— Final Notice
+                {% else %}— Legal
+                {% endif %}
+              </span>
+            </td>
+            <td style="text-align:center;">
+              {% if is_hold %}
+                <span class="badge-on-hold"><i class="fa fa-ban"></i> On Hold</span>
+              {% else %}
+                <span class="badge-active"><i class="fa fa-check"></i> Active</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center; white-space:nowrap;">
+              <a href="/finance/ar_customer/edit/{{ c.id }}" class="btn btn-xs btn-default" title="Edit">
+                <i class="fa fa-pencil"></i>
+              </a>
+              <a href="/finance/ar_customer/{{ c.id }}" class="btn btn-xs btn-default" title="View">
+                <i class="fa fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="customer-empty">
+            <td colspan="8" style="text-align:center; padding:40px; color:#9ca3af;">
+              <i class="fa fa-users" style="font-size:30px; display:block; margin-bottom:10px; opacity:.35;"></i>
+              No customers found. <a href="/finance/ar_customer/add">Add the first customer</a>.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+
+  function applyFilters() {
+    var search   = (document.getElementById('cust-search').value || '').toLowerCase().trim();
+    var status   = document.getElementById('status-filter').value;
+    var dunning  = document.getElementById('dunning-filter').value;
+    var rows     = document.querySelectorAll('#customer-tbody tr[data-id]');
+    var shown    = 0;
+    rows.forEach(function (tr) {
+      var name    = tr.getAttribute('data-name') || '';
+      var ref     = tr.getAttribute('data-ref') || '';
+      var st      = tr.getAttribute('data-status') || '';
+      var dl      = parseInt(tr.getAttribute('data-dunning')) || 0;
+      var matchSearch  = !search  || name.indexOf(search) !== -1 || ref.indexOf(search) !== -1;
+      var matchStatus  = !status  || st === status;
+      var matchDunning = !dunning || (dunning === '3' ? dl >= 3 : dl === parseInt(dunning));
+      var show = matchSearch && matchStatus && matchDunning;
+      tr.style.display = show ? '' : 'none';
+      if (show) shown++;
+    });
+    var el = document.getElementById('row-count');
+    if (rows.length) el.textContent = 'Showing ' + shown + ' of ' + rows.length;
+  }
+
+  ['cust-search'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', applyFilters);
+  });
+  ['status-filter','dunning-filter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+  document.getElementById('btn-filter-clear').addEventListener('click', function () {
+    document.getElementById('cust-search').value = '';
+    document.getElementById('status-filter').value = '';
+    document.getElementById('dunning-filter').value = '';
+    applyFilters();
+  });
+
+  (function () {
+    var rows = document.querySelectorAll('#customer-tbody tr[data-id]');
+    if (rows.length) document.getElementById('row-count').textContent = rows.length + ' customers';
+  }());
+
+  document.getElementById('btn-export').addEventListener('click', function () {
+    window.location.href = '/api/finance/ar_customers/export?format=csv';
+  });
+
+}());
+</script>
+{% endblock %}

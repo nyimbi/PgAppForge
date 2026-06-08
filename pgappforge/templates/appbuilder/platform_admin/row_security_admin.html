@@ -1,0 +1,345 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Row-Level Security Config — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-island erp-page-header">
+  <div class="erp-flex erp-gap-16" style="justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-lock" style="color:var(--erp-primary);margin-right:8px;"></i>Row-Level Security Configuration</h1>
+      <p class="erp-page-subtitle">Define and test data access policies per role and entity type</p>
+    </div>
+    <div>
+      <button class="btn btn-primary" data-toggle="modal" data-target="#addPolicyModal">
+        <i class="fa fa-plus"></i> Add Policy
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="erp-island">
+
+  {# ── KPI Summary ──────────────────────────────────────────────────── #}
+  <div class="erp-kpi-grid erp-mb-24">
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <p class="erp-card-title">Total Policies</p>
+      <p class="erp-card-value">{{ policies | length }}</p>
+      <p class="erp-card-sub">Defined RLS rules</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-success"></div>
+      <p class="erp-card-title">Active Policies</p>
+      <p class="erp-card-value">{{ policies | selectattr('is_active') | list | length }}</p>
+      <p class="erp-card-sub">Currently enforced</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-warning"></div>
+      <p class="erp-card-title">Inactive Policies</p>
+      <p class="erp-card-value">{{ policies | rejectattr('is_active') | list | length }}</p>
+      <p class="erp-card-sub">Disabled / draft</p>
+    </div>
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <p class="erp-card-title">Entity Types</p>
+      <p class="erp-card-value">{{ policies | map(attribute='entity_type') | unique | list | length }}</p>
+      <p class="erp-card-sub">Distinct secured types</p>
+    </div>
+  </div>
+
+  {# ── Policies Table ────────────────────────────────────────────────── #}
+  <p class="erp-section-title">RLS Policies</p>
+  <div class="erp-table-wrap erp-mb-24">
+    <table class="erp-table" id="policiesTable">
+      <thead>
+        <tr>
+          <th>Policy Name</th>
+          <th>Entity Type</th>
+          <th>Scope Field</th>
+          <th>Role</th>
+          <th>Allowed Values</th>
+          <th>Active</th>
+          <th class="erp-text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pol in policies %}
+        <tr>
+          <td style="font-weight:600;">{{ pol.name | default('—') }}</td>
+          <td>
+            <span class="erp-badge erp-badge-blue">{{ pol.entity_type | default('—') }}</span>
+          </td>
+          <td style="font-family:monospace;font-size:12px;">{{ pol.scope_field | default('—') }}</td>
+          <td>
+            <span class="erp-badge erp-badge-yellow">{{ pol.role_name | default(pol.role_id | default('—')) }}</span>
+          </td>
+          <td style="font-size:12px;max-width:200px;" class="erp-truncate">
+            {% if pol.allowed_values %}
+              <code style="font-size:11px;background:var(--erp-neutral-lt);padding:2px 6px;border-radius:4px;">
+                {{ pol.allowed_values | join(', ') if pol.allowed_values is iterable and pol.allowed_values is not string else pol.allowed_values }}
+              </code>
+            {% else %}
+              <span style="color:var(--erp-text-muted);">All (no restriction)</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post"
+                  action="{{ url_for('RowSecurityAdminView.toggle_policy', policy_id=pol.id) }}"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-xs {{ 'btn-success' if pol.is_active else 'btn-default' }}"
+                      title="{{ 'Disable policy' if pol.is_active else 'Enable policy' }}">
+                {% if pol.is_active %}
+                  <i class="fa fa-toggle-on"></i> On
+                {% else %}
+                  <i class="fa fa-toggle-off"></i> Off
+                {% endif %}
+              </button>
+            </form>
+          </td>
+          <td class="erp-text-right" style="white-space:nowrap;">
+            <button class="btn btn-xs btn-default"
+                    onclick="loadEditPolicy('{{ pol.id }}', '{{ pol.name | e }}', '{{ pol.entity_type | e }}', '{{ pol.scope_field | e }}', '{{ pol.role_id | e }}', '{{ pol.allowed_values | join(',') if pol.allowed_values else '' }}')"
+                    data-toggle="modal" data-target="#editPolicyModal">
+              <i class="fa fa-pencil"></i>
+            </button>
+            <form method="post"
+                  action="{{ url_for('RowSecurityAdminView.delete_policy', policy_id=pol.id) }}"
+                  style="display:inline;"
+                  onsubmit="return confirm('Delete policy \'{{ pol.name | default('') }}\'?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-danger"><i class="fa fa-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="erp-text-center" style="color:var(--erp-text-muted);padding:32px;">
+            <i class="fa fa-lock" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No RLS policies defined. All rows are accessible to all roles.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Policy Test Section ───────────────────────────────────────────── #}
+  <p class="erp-section-title">Policy Test Sandbox</p>
+  <div class="erp-card erp-mb-24">
+    <p style="font-size:13px;color:var(--erp-text-muted);margin-bottom:16px;">
+      Simulate what records a given user would see under the active RLS policies.
+    </p>
+    <form method="post" action="{{ url_for('RowSecurityAdminView.test_policy') }}" id="policyTestForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row">
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label>User ID or Email <span class="text-danger">*</span></label>
+            <input type="text" name="user_id" class="form-control"
+                   required placeholder="user@example.com or UUID"
+                   id="testUserId">
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="form-group">
+            <label>Entity Type <span class="text-danger">*</span></label>
+            <select name="entity_type" class="form-control" required id="testEntityType">
+              <option value="">— Select entity —</option>
+              {% set seen_types = [] %}
+              {% for pol in policies %}
+                {% if pol.entity_type not in seen_types %}
+                  <option value="{{ pol.entity_type }}">{{ pol.entity_type }}</option>
+                  {% if seen_types.append(pol.entity_type) %}{% endif %}
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="col-sm-4" style="display:flex;align-items:flex-end;">
+          <div class="form-group" style="width:100%;">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary btn-block">
+              <i class="fa fa-search"></i> Test Policy
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    {# Test results (rendered if test was just run) #}
+    {% if test_result is defined %}
+    <div style="margin-top:16px;padding:16px;background:var(--erp-neutral-lt);border-radius:var(--erp-radius);border:1px solid var(--erp-border);">
+      <div class="erp-flex erp-gap-8 erp-mb-8">
+        <strong style="font-size:14px;">Test Result</strong>
+        {% if test_result.is_unrestricted | default(false) %}
+          <span class="erp-badge erp-badge-yellow"><i class="fa fa-exclamation-triangle"></i> Unrestricted — no matching policies</span>
+        {% else %}
+          <span class="erp-badge erp-badge-green"><i class="fa fa-lock"></i> {{ test_result.matching_policies | default(0) }} policies applied</span>
+        {% endif %}
+      </div>
+      <p style="font-size:13px;margin-bottom:8px;">
+        User: <strong>{{ test_result.user | default('—') }}</strong> ·
+        Entity: <strong>{{ test_result.entity_type | default('—') }}</strong> ·
+        Visible rows: <strong>{{ test_result.visible_row_count | default('All') }}</strong>
+      </p>
+      {% if test_result.filter_clause %}
+      <div style="background:var(--erp-surface);padding:10px 14px;border-radius:var(--erp-radius);border:1px solid var(--erp-border);">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--erp-text-muted);margin:0 0 6px;">Effective WHERE clause</p>
+        <code style="font-size:12px;color:var(--erp-primary);">{{ test_result.filter_clause }}</code>
+      </div>
+      {% endif %}
+      {% if test_result.sample_records %}
+      <div style="margin-top:12px;">
+        <p style="font-size:12px;font-weight:600;margin-bottom:6px;">Sample visible records:</p>
+        <div class="erp-table-wrap">
+          <table class="erp-table">
+            <thead>
+              <tr>
+                {% for col in test_result.sample_records[0].keys() %}
+                <th>{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in test_result.sample_records[:10] %}
+              <tr>
+                {% for v in row.values() %}
+                <td style="font-size:12px;">{{ v | default('—') }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>{# /erp-island #}
+
+{# ── Add Policy Modal ──────────────────────────────────────────────────── #}
+<div class="modal fade" id="addPolicyModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-lock"></i> Add RLS Policy</h4>
+      </div>
+      <form method="post" action="{{ url_for('RowSecurityAdminView.create_policy') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Policy Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="e.g. branch_isolation">
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label>Entity Type <span class="text-danger">*</span></label>
+                <input type="text" name="entity_type" class="form-control" required
+                       placeholder="e.g. Transaction, Account">
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label>Scope Field <span class="text-danger">*</span></label>
+                <input type="text" name="scope_field" class="form-control" required
+                       placeholder="e.g. branch_id, region_code">
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Role ID <span class="text-danger">*</span></label>
+            <input type="text" name="role_id" class="form-control" required
+                   placeholder="Role UUID or name">
+          </div>
+          <div class="form-group">
+            <label>Allowed Values</label>
+            <input type="text" name="allowed_values" class="form-control"
+                   placeholder="Comma-separated: KE-NRB, KE-MSA">
+            <p class="help-block" style="font-size:11px;">Leave blank to deny all. Use * to allow all.</p>
+          </div>
+          <div class="checkbox">
+            <label>
+              <input type="checkbox" name="is_active" value="1" checked>
+              Activate immediately
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Create Policy</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ── Edit Policy Modal ─────────────────────────────────────────────────── #}
+<div class="modal fade" id="editPolicyModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-pencil"></i> Edit RLS Policy</h4>
+      </div>
+      <form method="post" action="{{ url_for('RowSecurityAdminView.update_policy') }}" id="editPolicyForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="policy_id" id="editPolicyId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Policy Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="editPolicyName" class="form-control" required>
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label>Entity Type <span class="text-danger">*</span></label>
+                <input type="text" name="entity_type" id="editEntityType" class="form-control" required>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label>Scope Field <span class="text-danger">*</span></label>
+                <input type="text" name="scope_field" id="editScopeField" class="form-control" required>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Role ID <span class="text-danger">*</span></label>
+            <input type="text" name="role_id" id="editRoleId" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>Allowed Values</label>
+            <input type="text" name="allowed_values" id="editAllowedValues" class="form-control"
+                   placeholder="Comma-separated values">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Update Policy</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadEditPolicy(id, name, entityType, scopeField, roleId, allowedValues) {
+  document.getElementById('editPolicyId').value      = id;
+  document.getElementById('editPolicyName').value    = name;
+  document.getElementById('editEntityType').value    = entityType;
+  document.getElementById('editScopeField').value    = scopeField;
+  document.getElementById('editRoleId').value        = roleId;
+  document.getElementById('editAllowedValues').value = allowedValues;
+}
+</script>
+{% endblock %}

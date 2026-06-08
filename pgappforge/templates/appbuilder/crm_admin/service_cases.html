@@ -1,0 +1,289 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Service Cases — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Priority indicators ─────────────────────────────────────── */
+  .priority-P1 { background:#fee2e2; color:#991b1b; font-weight:800; }
+  .priority-P2 { background:#fff7ed; color:#c2410c; font-weight:700; }
+  .priority-P3 { background:#fffbeb; color:#92400e; }
+  .priority-P4 { background:var(--erp-neutral-lt); color:var(--erp-neutral); }
+
+  .case-status-OPEN        { background:var(--erp-primary-lt);  color:var(--erp-primary); }
+  .case-status-IN_PROGRESS { background:#fffbeb; color:#92400e; }
+  .case-status-PENDING     { background:var(--erp-neutral-lt);  color:var(--erp-neutral); }
+  .case-status-RESOLVED    { background:var(--erp-success-lt);  color:var(--erp-success); }
+  .case-status-CLOSED      { background:var(--erp-neutral-lt);  color:var(--erp-neutral); }
+
+  /* SLA breach countdown */
+  .sla-breach {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--erp-danger); color: #fff;
+    font-size: 10px; font-weight: 800; padding: 2px 7px;
+    border-radius: 999px; white-space: nowrap;
+  }
+  .sla-warn {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
+    font-size: 10px; font-weight: 700; padding: 2px 7px;
+    border-radius: 999px; white-space: nowrap;
+  }
+  .sla-ok {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--erp-success-lt); color: var(--erp-success);
+    font-size: 10px; font-weight: 600; padding: 2px 7px;
+    border-radius: 999px; white-space: nowrap;
+  }
+
+  /* P1/P2 row highlight */
+  .p1-row { background: #fff8f8; }
+  .p1-row:hover { background: #fee2e2 !important; }
+
+  /* SLA compliance bar */
+  .sla-bar { height: 16px; background: var(--erp-border); border-radius: 4px; overflow: hidden; }
+  .sla-bar-fill { height: 100%; border-radius: 4px; background: var(--erp-success); transition: width .6s; }
+  .sla-bar-fill.warn  { background: var(--erp-warning); }
+  .sla-bar-fill.low   { background: var(--erp-danger); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-life-ring" style="margin-right:8px; color:var(--erp-primary);"></i>Service &amp; Support Cases</h1>
+      <p class="erp-page-subtitle">Case queue with SLA tracking, priority escalation, and resolution workflow</p>
+    </div>
+    <button class="btn btn-default btn-sm" style="align-self:center;" onclick="location.reload()">
+      <i class="fa fa-refresh"></i> Refresh
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── SLA KPI strip ─────────────────────────────────────────────────────── #}
+{% if sla_stats %}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <p class="erp-card-title erp-mb-0">Open Cases</p>
+    <p class="erp-card-value">{{ sla_stats.open_count | default(0) }}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <p class="erp-card-title erp-mb-0">P1 / P2 Critical</p>
+    <p class="erp-card-value" style="color:var(--erp-danger);">{{ sla_stats.critical_count | default(0) }}</p>
+    <p class="erp-card-sub">Requiring immediate action</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title erp-mb-0">SLA Breaches</p>
+    <p class="erp-card-value" style="color:var(--erp-danger);">{{ sla_stats.breach_count | default(0) }}</p>
+  </div>
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <p class="erp-card-title erp-mb-0">SLA Compliance</p>
+    {% set sla_pct = sla_stats.within_sla_pct | default(0) %}
+    <p class="erp-card-value" style="color:{% if sla_pct >= 90 %}var(--erp-success){% elif sla_pct >= 75 %}#d97706{% else %}var(--erp-danger){% endif %};">{{ sla_pct }}%</p>
+    <div class="sla-bar" style="margin-top:6px;">
+      <div class="sla-bar-fill {% if sla_pct < 75 %}low{% elif sla_pct < 90 %}warn{% endif %}"
+           style="width:{{ sla_pct }}%;"></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Filter bar ────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:12px 16px; margin-bottom:16px;">
+  <div class="erp-flex erp-gap-8" style="flex-wrap:wrap;">
+    <div class="input-group" style="width:260px;">
+      <span class="input-group-addon"><i class="fa fa-search"></i></span>
+      <input type="text" id="case-search" class="form-control input-sm" placeholder="Search case # or customer…">
+    </div>
+    <select id="priority-filter" class="form-control input-sm" style="width:120px;">
+      <option value="">All Priorities</option>
+      <option value="P1">P1 — Critical</option>
+      <option value="P2">P2 — High</option>
+      <option value="P3">P3 — Medium</option>
+      <option value="P4">P4 — Low</option>
+    </select>
+    <select id="status-filter" class="form-control input-sm" style="width:140px;">
+      <option value="">All Status</option>
+      <option value="OPEN">Open</option>
+      <option value="IN_PROGRESS">In Progress</option>
+      <option value="RESOLVED">Resolved</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; margin:0; cursor:pointer;">
+      <input type="checkbox" id="breach-only"> SLA breach only
+    </label>
+  </div>
+</div>
+
+{# ── Case Queue ────────────────────────────────────────────────────────── #}
+<div class="erp-table-wrap">
+  <table class="erp-table" id="cases-table">
+    <thead>
+      <tr>
+        <th>Case #</th>
+        <th>Customer</th>
+        <th>Subject</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th>SLA</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if cases %}
+        {% for case in cases %}
+        {% set pri = case.priority | default('P4') %}
+        <tr id="case-row-{{ case.id }}"
+            class="{% if pri in ('P1','P2') %}p1-row{% endif %}"
+            data-search="{{ (case.case_number ~ ' ' ~ case.customer_name ~ ' ' ~ case.subject) | lower }}"
+            data-priority="{{ pri }}"
+            data-status="{{ case.status }}"
+            data-breach="{{ 'true' if case.sla_breach else 'false' }}">
+          <td>
+            <code style="font-size:12px; background:var(--erp-neutral-lt); padding:2px 6px; border-radius:3px; font-weight:700;">{{ case.case_number }}</code>
+          </td>
+          <td style="font-weight:600;">{{ case.customer_name }}</td>
+          <td style="max-width:220px;" class="erp-truncate">{{ case.subject }}</td>
+          <td>
+            <span class="erp-badge priority-{{ pri }}">{{ pri }}</span>
+          </td>
+          <td>
+            <span class="erp-badge case-status-{{ case.status | replace(' ','_') | upper }}">{{ case.status | replace('_',' ') | title }}</span>
+          </td>
+          <td>
+            {% if case.sla_breach %}
+              <span class="sla-breach"><i class="fa fa-exclamation-circle"></i>
+                {% if case.sla_minutes_remaining is defined %}
+                  BREACH
+                {% else %}
+                  BREACH
+                {% endif %}
+              </span>
+            {% elif case.sla_minutes_remaining is defined and case.sla_minutes_remaining <= 60 %}
+              <span class="sla-warn"><i class="fa fa-clock-o"></i> {{ case.sla_minutes_remaining }}m left</span>
+            {% else %}
+              <span class="sla-ok"><i class="fa fa-check"></i> Within SLA</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right; white-space:nowrap;">
+            <button class="btn btn-primary btn-xs btn-assign-case" data-id="{{ case.id }}"
+                    data-toggle="modal" data-target="#modal-assign-case"
+                    onclick="document.getElementById('assign-case-id').value='{{ case.id }}'">
+              <i class="fa fa-user-plus"></i> Assign
+            </button>
+            {% if case.status not in ('RESOLVED', 'CLOSED') %}
+            <button class="btn btn-success btn-xs btn-resolve-case" data-id="{{ case.id }}" style="margin-left:3px;">
+              <i class="fa fa-check"></i> Resolve
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="7" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No cases found.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Assign Case Modal ─────────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-assign-case" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title">Assign Case</h4>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="assign-case-id">
+        <div class="form-group">
+          <label>Assign To <span class="text-danger">*</span></label>
+          <input type="text" id="assign-agent" class="form-control" placeholder="Agent name or username">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="assign-notes" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-do-assign">Assign</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  function _csrf() { var m = document.cookie.match(/csrf_token=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+
+  /* ── Table filtering ─────────────────────────────────────────── */
+  function filter() {
+    var q       = (document.getElementById('case-search').value || '').toLowerCase();
+    var pri     = document.getElementById('priority-filter').value;
+    var st      = document.getElementById('status-filter').value;
+    var breach  = document.getElementById('breach-only').checked;
+
+    document.querySelectorAll('#cases-table tbody tr').forEach(function (tr) {
+      var search = tr.getAttribute('data-search') || '';
+      var show = (!q      || search.indexOf(q) !== -1)
+              && (!pri    || tr.getAttribute('data-priority') === pri)
+              && (!st     || tr.getAttribute('data-status') === st)
+              && (!breach || tr.getAttribute('data-breach') === 'true');
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+  ['case-search','priority-filter','status-filter','breach-only'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', filter);
+    document.getElementById(id).addEventListener('input', filter);
+  });
+
+  /* ── Resolve ─────────────────────────────────────────────────── */
+  document.querySelectorAll('.btn-resolve-case').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-id');
+      if (!confirm('Mark case as Resolved?')) return;
+      btn.disabled = true;
+      fetch('/api/crm/cases/' + id + '/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+        credentials: 'same-origin',
+        body: JSON.stringify({})
+      }).then(function (r) {
+        if (r.ok) { location.reload(); }
+        else { btn.disabled = false; alert('Failed to resolve.'); }
+      }).catch(function (e) { btn.disabled = false; alert(e.message); });
+    });
+  });
+
+  /* ── Assign ──────────────────────────────────────────────────── */
+  document.getElementById('btn-do-assign').addEventListener('click', function () {
+    var id    = document.getElementById('assign-case-id').value;
+    var agent = document.getElementById('assign-agent').value.trim();
+    var notes = document.getElementById('assign-notes').value;
+    if (!agent) { alert('Please enter agent name.'); return; }
+
+    fetch('/api/crm/cases/' + id + '/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ agent: agent, notes: notes })
+    }).then(function (r) {
+      if (r.ok) { $('#modal-assign-case').modal('hide'); location.reload(); }
+      else { alert('Assignment failed.'); }
+    }).catch(function (e) { alert(e.message); });
+  });
+}());
+</script>
+{% endblock %}

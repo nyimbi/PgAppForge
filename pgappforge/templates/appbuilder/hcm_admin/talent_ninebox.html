@@ -1,0 +1,382 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Talent 9-Box — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── 9-Box Grid ──────────────────────────────────────────────── */
+  .ninebox-wrap {
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); overflow: hidden;
+    box-shadow: var(--erp-shadow-sm); margin-bottom: 24px;
+  }
+  .ninebox-axis-y {
+    display: flex; align-items: stretch;
+  }
+  .ninebox-y-label {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--erp-text-muted);
+    padding: 12px 8px; background: var(--erp-neutral-lt);
+    border-right: 1px solid var(--erp-border);
+    display: flex; align-items: center; justify-content: center;
+    min-width: 32px;
+  }
+  .ninebox-grid-wrap { flex: 1; }
+  .ninebox-x-labels {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--erp-border); background: var(--erp-neutral-lt);
+  }
+  .ninebox-x-label {
+    padding: 8px 12px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--erp-text-muted); text-align: center;
+    border-right: 1px solid var(--erp-border);
+  }
+  .ninebox-x-label:last-child { border-right: none; }
+  .ninebox-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, minmax(120px, 1fr));
+  }
+  .nb-cell {
+    border-right: 1px solid var(--erp-border);
+    border-bottom: 1px solid var(--erp-border);
+    padding: 10px 12px; cursor: pointer;
+    transition: background var(--erp-transition);
+    position: relative;
+  }
+  .nb-cell:nth-child(3n)  { border-right: none; }
+  .nb-cell:nth-child(n+7) { border-bottom: none; }
+  .nb-cell:hover { background: var(--erp-primary-lt); }
+  .nb-cell.selected { background: var(--erp-primary-lt); box-shadow: inset 0 0 0 2px var(--erp-primary); }
+
+  /* color intensity by desirability */
+  .nb-cell[data-perf="HIGH"][data-pot="HIGH"]   { background: #d1fae5; }
+  .nb-cell[data-perf="HIGH"][data-pot="MEDIUM"] { background: #dbeafe; }
+  .nb-cell[data-perf="MEDIUM"][data-pot="HIGH"] { background: #dbeafe; }
+  .nb-cell[data-perf="LOW"][data-pot="LOW"]     { background: #fde8e8; }
+
+  .nb-cell-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--erp-text-muted);
+    margin-bottom: 8px;
+  }
+  .nb-avatars { display: flex; flex-wrap: wrap; gap: 4px; }
+  .nb-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--erp-primary); color: #fff;
+    font-size: 9px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; border: 1.5px solid #fff;
+    transition: transform var(--erp-transition);
+    position: relative;
+  }
+  .nb-avatar:hover { transform: scale(1.15); z-index: 2; }
+  .nb-avatar[data-perf="HIGH"][data-pot="HIGH"] { background: #065f46; }
+  .nb-avatar[data-perf="LOW"][data-pot="LOW"]   { background: var(--erp-danger); }
+  .nb-count {
+    font-size: 18px; font-weight: 800; color: var(--erp-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Cell detail panel ───────────────────────────────────────── */
+  .nb-detail-panel {
+    background: var(--erp-surface); border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg); padding: 20px 24px;
+    margin-bottom: 24px; min-height: 120px;
+    display: none;
+  }
+  .nb-detail-panel.show { display: block; }
+
+  /* ── Succession table ────────────────────────────────────────── */
+  .readiness-READY_NOW { background: var(--erp-success-lt); color: var(--erp-success); }
+  .readiness-1_2YRS    { background: var(--erp-info-lt);    color: var(--erp-info); }
+  .readiness-2_5YRS    { background: var(--erp-warning-lt); color: #92400e; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-th" style="margin-right:8px; color:var(--erp-primary);"></i>Talent 9-Box &amp; Succession</h1>
+      <p class="erp-page-subtitle">Map employee performance versus potential — identify future leaders and succession risks</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center;">
+      <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal-update-ninebox">
+        <i class="fa fa-pencil-square-o"></i> Update 9-Box Position
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── 9-Box Grid ───────────────────────────────────────────────────────── #}
+<div class="row">
+  <div class="col-md-8">
+    <p class="erp-section-title">Performance × Potential Matrix</p>
+    <div class="ninebox-wrap">
+      <div class="ninebox-axis-y">
+        <div class="ninebox-y-label">Potential</div>
+        <div class="ninebox-grid-wrap">
+          <div style="display:flex; background:var(--erp-neutral-lt); border-bottom:1px solid var(--erp-border);">
+            <div style="width:32px; border-right:1px solid var(--erp-border); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--erp-text-muted); padding:8px 4px; text-align:center;">↑ HIGH</div>
+            <div class="ninebox-x-labels" style="flex:1;">
+              <div class="ninebox-x-label">Low Performance</div>
+              <div class="ninebox-x-label">Medium Performance</div>
+              <div class="ninebox-x-label">High Performance</div>
+            </div>
+          </div>
+
+          <div style="display:flex;">
+            <!-- Y-axis row labels -->
+            <div style="width:32px; display:flex; flex-direction:column; border-right:1px solid var(--erp-border);">
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; border-bottom:1px solid var(--erp-border); font-size:9px; font-weight:700; color:var(--erp-text-muted); writing-mode:vertical-rl; transform:rotate(180deg); letter-spacing:.04em;">HIGH</div>
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; border-bottom:1px solid var(--erp-border); font-size:9px; font-weight:700; color:var(--erp-text-muted); writing-mode:vertical-rl; transform:rotate(180deg); letter-spacing:.04em;">MED</div>
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:var(--erp-text-muted); writing-mode:vertical-rl; transform:rotate(180deg); letter-spacing:.04em;">LOW</div>
+            </div>
+
+            <div class="ninebox-grid" style="flex:1;">
+              {% set perf_levels = ['LOW', 'MEDIUM', 'HIGH'] %}
+              {% set pot_levels  = ['HIGH', 'MEDIUM', 'LOW'] %}
+              {% for pot in pot_levels %}
+                {% for perf in perf_levels %}
+                  {% set cell_key = perf ~ '_' ~ pot %}
+                  {% set cell_employees = (ninebox_data or {}).get(cell_key, []) if ninebox_data else [] %}
+                  <div class="nb-cell"
+                       data-perf="{{ perf }}" data-pot="{{ pot }}"
+                       data-key="{{ cell_key }}"
+                       onclick="selectCell(this)">
+                    <div class="nb-cell-label">{{ perf[:1] }}P / {{ pot[:1] }}P</div>
+                    {% if cell_employees %}
+                      <div class="nb-count" style="margin-bottom:6px;">{{ cell_employees | length }}</div>
+                      <div class="nb-avatars">
+                        {% for emp in cell_employees[:8] %}
+                        <div class="nb-avatar"
+                             data-perf="{{ perf }}" data-pot="{{ pot }}"
+                             title="{{ emp.full_name }}"
+                             data-id="{{ emp.id }}">{{ (emp.full_name or '?')[:2] | upper }}</div>
+                        {% endfor %}
+                        {% if cell_employees | length > 8 %}
+                        <div class="nb-avatar" style="background:var(--erp-neutral); font-size:8px;">+{{ cell_employees | length - 8 }}</div>
+                        {% endif %}
+                      </div>
+                    {% else %}
+                      <div style="color:var(--erp-text-muted); font-size:12px; margin-top:8px;">—</div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Cell detail panel #}
+    <div class="nb-detail-panel" id="nb-detail-panel">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h4 style="margin:0; font-size:14px; font-weight:700;" id="nb-detail-title">Select a cell</h4>
+        <button class="btn btn-default btn-xs" onclick="document.getElementById('nb-detail-panel').classList.remove('show');">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div id="nb-detail-list"></div>
+    </div>
+  </div>
+
+  {# ── Legend ──────────────────────────────────────────────────── #}
+  <div class="col-md-4">
+    <p class="erp-section-title">Quadrant Guide</p>
+    <div class="erp-card" style="padding:16px;">
+      {% set quadrants = [
+        ('HIGH_HIGH',   'Star / Future Leader', 'success', 'High performer, high potential — accelerated development track.'),
+        ('HIGH_MEDIUM', 'High Performer',        'info',    'Reliable deliverer, moderate growth ceiling.'),
+        ('MEDIUM_HIGH', 'High Potential',        'blue',    'Strong upside, needs performance coaching.'),
+        ('MEDIUM_MEDIUM','Core Employee',        'gray',    'Solid contributor, steady state.'),
+        ('LOW_LOW',     'Underperformer',        'red',     'Performance management intervention required.'),
+      ] %}
+      {% for key, label, color, desc in quadrants %}
+      <div style="display:flex; gap:10px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--erp-border);">
+        <span class="erp-badge erp-badge-{{ color }}" style="align-self:flex-start; white-space:nowrap;">{{ label }}</span>
+        <p style="font-size:12px; color:var(--erp-text-muted); margin:0; line-height:1.4;">{{ desc }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ── Succession Plan ───────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24">
+  <div class="section-toolbar" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+    <p class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-shield" style="margin-right:6px;"></i>Succession Plan — Critical Positions
+    </p>
+    <button class="btn btn-default btn-sm" data-toggle="modal" data-target="#modal-add-succession">
+      <i class="fa fa-plus"></i> Add Succession
+    </button>
+  </div>
+
+  <div class="erp-table-wrap">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Critical Position</th>
+          <th>Current Holder</th>
+          <th>Successor</th>
+          <th>Readiness</th>
+          <th>Development Plan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if succession_plans %}
+          {% for plan in succession_plans %}
+          <tr>
+            <td style="font-weight:600;">{{ plan.critical_position }}</td>
+            <td>{{ plan.current_holder or '—' }}</td>
+            <td>
+              <div class="erp-flex erp-gap-8">
+                <span style="width:24px; height:24px; border-radius:50%; background:var(--erp-primary-lt); color:var(--erp-primary); font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;">{{ (plan.successor_name or '?')[:2] | upper }}</span>
+                {{ plan.successor_name or '—' }}
+              </div>
+            </td>
+            <td>
+              <span class="erp-badge readiness-{{ plan.readiness | replace('-', '_') | replace(' ', '_') }}">
+                {{ plan.readiness | replace('_', ' ') }}
+              </span>
+            </td>
+            <td style="color:var(--erp-text-muted); font-size:12px;">{{ plan.development_plan | default('—') }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="5" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No succession plans defined.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Update 9-Box Modal ────────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-update-ninebox" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title">Update 9-Box Position</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Employee <span class="text-danger">*</span></label>
+          <select id="nb-employee" class="form-control">
+            <option value="">Select employee…</option>
+            {% for emp in employees %}
+            <option value="{{ emp.id }}">{{ emp.full_name }} ({{ emp.employee_number }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Performance</label>
+              <select id="nb-perf" class="form-control">
+                <option value="LOW">Low</option>
+                <option value="MEDIUM" selected>Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Potential</label>
+              <select id="nb-pot" class="form-control">
+                <option value="LOW">Low</option>
+                <option value="MEDIUM" selected>Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="nb-notes" class="form-control" rows="3" placeholder="Calibration notes…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-save-ninebox">
+          <i class="fa fa-save"></i> Save Position
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Cell selection ──────────────────────────────────────────── */
+  window.selectCell = function (cell) {
+    document.querySelectorAll('.nb-cell').forEach(function (c) { c.classList.remove('selected'); });
+    cell.classList.add('selected');
+
+    var perf  = cell.getAttribute('data-perf');
+    var pot   = cell.getAttribute('data-pot');
+    var panel = document.getElementById('nb-detail-panel');
+    var title = document.getElementById('nb-detail-title');
+    var list  = document.getElementById('nb-detail-list');
+
+    title.textContent = 'Performance: ' + perf + ' / Potential: ' + pot;
+
+    var avatars = cell.querySelectorAll('.nb-avatar[data-id]');
+    if (avatars.length === 0) {
+      list.innerHTML = '<p style="color:var(--erp-text-muted); font-size:13px;">No employees in this quadrant.</p>';
+    } else {
+      var html = '<div class="erp-flex erp-gap-8" style="flex-wrap:wrap;">';
+      avatars.forEach(function (av) {
+        html += '<div style="display:flex; align-items:center; gap:6px; background:var(--erp-neutral-lt); border-radius:999px; padding:4px 10px 4px 4px;">' +
+          '<span style="width:24px; height:24px; border-radius:50%; background:var(--erp-primary); color:#fff; font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;">' + av.textContent.trim() + '</span>' +
+          '<span style="font-size:12px; font-weight:600;">' + _esc(av.getAttribute('title') || '') + '</span>' +
+          '</div>';
+      });
+      html += '</div>';
+      list.innerHTML = html;
+    }
+    panel.classList.add('show');
+  };
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  /* ── Save 9-box position ─────────────────────────────────────── */
+  document.getElementById('btn-save-ninebox').addEventListener('click', function () {
+    var empId = document.getElementById('nb-employee').value;
+    var perf  = document.getElementById('nb-perf').value;
+    var pot   = document.getElementById('nb-pot').value;
+    var notes = document.getElementById('nb-notes').value;
+    if (!empId) { alert('Please select an employee.'); return; }
+
+    fetch('/api/hcm/talent/ninebox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ employee_id: empId, performance: perf, potential: pot, notes: notes })
+    }).then(function (r) {
+      if (r.ok) { location.reload(); }
+      else { return r.json().then(function (d) { alert('Failed: ' + (d.message || r.status)); }); }
+    }).catch(function (e) { alert('Network error: ' + e.message); });
+  });
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,366 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Organization Structure — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Org chart ─────────────────────────────────────────────── */
+  .org-tree { overflow-x: auto; padding-bottom: 12px; }
+  .org-level { display: flex; gap: 12px; justify-content: center; margin-bottom: 0; }
+  .org-node-wrap { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .org-node-wrap + .org-node-wrap::before { display: none; }
+
+  .org-connector-row { display: flex; justify-content: center; height: 20px; }
+  .org-connector-down { width: 2px; background: var(--erp-border); height: 100%; }
+  .org-connector-h { border-top: 2px solid var(--erp-border); flex: 1; margin-top: 10px; }
+  .org-connector-h.first { border-top: none; border-right: 2px solid var(--erp-border); }
+  .org-connector-h.last  { border-top: none; border-left:  2px solid var(--erp-border); }
+  .org-connector-h.mid   { border-top: 2px solid var(--erp-border); }
+
+  .org-node {
+    background: var(--erp-surface);
+    border: 1.5px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 12px 16px;
+    min-width: 160px;
+    max-width: 200px;
+    text-align: center;
+    box-shadow: var(--erp-shadow-sm);
+    cursor: pointer;
+    transition: box-shadow var(--erp-transition), border-color var(--erp-transition);
+    position: relative;
+  }
+  .org-node:hover { box-shadow: var(--erp-shadow); border-color: var(--erp-primary); }
+  .org-node.type-DIVISION { border-top: 3px solid var(--erp-primary); }
+  .org-node.type-DEPARTMENT { border-top: 3px solid var(--erp-info); }
+  .org-node.type-TEAM { border-top: 3px solid var(--erp-success); }
+
+  .org-node-name { font-size: 13px; font-weight: 700; color: var(--erp-text); margin-bottom: 4px; }
+  .org-node-meta { font-size: 11px; color: var(--erp-text-muted); }
+  .org-node-hc {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 700;
+    background: var(--erp-primary-lt); color: var(--erp-primary);
+    border-radius: 999px; padding: 2px 7px; margin-top: 5px;
+  }
+
+  /* type badge colors in table */
+  .type-DIVISION  { background: var(--erp-primary-lt);  color: var(--erp-primary); }
+  .type-DEPARTMENT{ background: var(--erp-info-lt);     color: var(--erp-info); }
+  .type-TEAM      { background: var(--erp-success-lt);  color: var(--erp-success); }
+
+  /* headcount summary */
+  .hc-bar { height: 8px; background: var(--erp-border); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .hc-bar-fill { height: 100%; border-radius: 4px; background: var(--erp-primary); }
+
+  .section-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div class="erp-flex" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title"><i class="fa fa-sitemap" style="margin-right:8px; color:var(--erp-primary);"></i>Organization Structure</h1>
+      <p class="erp-page-subtitle">Manage org units, reporting lines, and headcount allocation</p>
+    </div>
+    <div class="erp-flex erp-gap-8" style="align-self:center; flex-wrap:wrap;">
+      {% if appbuilder.sm.has_access('can_add', 'OrgUnitView') %}
+      <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal-add-unit">
+        <i class="fa fa-plus"></i> Add Org Unit
+      </button>
+      {% endif %}
+      <button class="btn btn-default btn-sm" data-toggle="modal" data-target="#modal-assign-manager">
+        <i class="fa fa-user-plus"></i> Assign Manager
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Headcount summary by org_type ────────────────────────────────────── #}
+{% if headcount_summary %}
+<div class="erp-kpi-grid erp-mb-24">
+  {% for row in headcount_summary %}
+  {% set accent = 'primary' if row.org_type == 'DIVISION' else ('info' if row.org_type == 'DEPARTMENT' else 'success') %}
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-{{ accent }}"></div>
+    <p class="erp-card-title erp-mb-0">{{ row.org_type | title }}</p>
+    <p class="erp-card-value">{{ row.unit_count }}</p>
+    <p class="erp-card-sub">{{ row.total_headcount | default(0) }} headcount total</p>
+  </div>
+  {% endfor %}
+  <div class="erp-card" style="padding:14px 18px;">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title erp-mb-0">Total Headcount</p>
+    <p class="erp-card-value">{{ headcount_summary | sum(attribute='total_headcount') | default(0) }}</p>
+    <p class="erp-card-sub">Across all units</p>
+  </div>
+</div>
+{% endif %}
+
+{# ── Visual Org Chart ──────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:24px;">
+  <p class="erp-section-title"><i class="fa fa-sitemap" style="margin-right:6px;"></i>Org Chart</p>
+
+  <div class="org-tree" id="org-chart-root">
+    {% macro render_node(unit, depth) %}
+    <div class="org-node-wrap">
+      <div class="org-node type-{{ unit.org_type }}" data-id="{{ unit.id }}"
+           title="{{ unit.name }} — {{ unit.org_type }}">
+        <div class="org-node-name">{{ unit.name }}</div>
+        {% if unit.manager_name %}
+        <div class="org-node-meta"><i class="fa fa-user-o" style="margin-right:3px;"></i>{{ unit.manager_name }}</div>
+        {% endif %}
+        <div class="org-node-hc"><i class="fa fa-users"></i> {{ unit.head_count | default(0) }}</div>
+      </div>
+
+      {% if unit.children %}
+      <div class="org-connector-row"><div class="org-connector-down"></div></div>
+      <div class="org-level">
+        {% for child in unit.children %}
+        <div style="display:flex; flex-direction:column; align-items:center;">
+          <div class="org-connector-row"><div class="org-connector-down"></div></div>
+          {{ render_node(child, depth + 1) }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endmacro %}
+
+    {% if org_units %}
+      {# Find root units (no parent or parent_unit is None) #}
+      {% set roots = org_units | selectattr('parent_unit', 'none') | list %}
+      {% if not roots %}{% set roots = org_units[:1] %}{% endif %}
+      <div class="org-level" style="justify-content:flex-start; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+        {% for root in roots %}
+          {{ render_node(root, 0) }}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="text-align:center; padding:48px; color:var(--erp-text-muted);">
+        <i class="fa fa-sitemap" style="font-size:40px; opacity:.3; display:block; margin-bottom:12px;"></i>
+        No org units configured. Add your first unit to get started.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Org Unit Table ────────────────────────────────────────────────────── #}
+<div class="erp-card">
+  <div class="section-toolbar">
+    <p class="erp-section-title" style="margin:0; border:none; padding:0;">
+      <i class="fa fa-table" style="margin-right:6px;"></i>All Org Units
+    </p>
+    <div class="erp-flex erp-gap-8">
+      <input type="text" id="unit-search" class="form-control input-sm"
+             placeholder="Search unit name…" style="width:220px;">
+      <select id="type-filter" class="form-control input-sm" style="width:140px;">
+        <option value="">All Types</option>
+        <option value="DIVISION">Division</option>
+        <option value="DEPARTMENT">Department</option>
+        <option value="TEAM">Team</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="erp-table-wrap">
+    <table class="erp-table" id="units-table">
+      <thead>
+        <tr>
+          <th>Unit Code</th>
+          <th>Name</th>
+          <th>Parent Unit</th>
+          <th>Type</th>
+          <th>Head Count</th>
+          <th>Manager</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if org_units %}
+          {% for unit in org_units %}
+          <tr data-name="{{ unit.name | lower }}" data-type="{{ unit.org_type }}">
+            <td><code style="font-size:12px; background:var(--erp-neutral-lt); padding:2px 6px; border-radius:3px;">{{ unit.unit_code }}</code></td>
+            <td style="font-weight:600;">{{ unit.name }}</td>
+            <td style="color:var(--erp-text-muted);">{{ unit.parent_unit or '—' }}</td>
+            <td>
+              <span class="erp-badge type-{{ unit.org_type }}">{{ unit.org_type | title }}</span>
+            </td>
+            <td>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-variant-numeric:tabular-nums; font-weight:600;">{{ unit.head_count | default(0) }}</span>
+                {% if unit.head_count %}
+                <div class="hc-bar" style="width:80px;">
+                  <div class="hc-bar-fill" style="width:{{ [((unit.head_count / (headcount_summary | sum(attribute='total_headcount') | default(1))) * 100) | int, 100] | min }}%;"></div>
+                </div>
+                {% endif %}
+              </div>
+            </td>
+            <td>{{ unit.manager_name or '<span style="color:var(--erp-text-muted);">Unassigned</span>' }}</td>
+            <td style="text-align:right;">
+              {% if appbuilder.sm.has_access('can_edit', 'OrgUnitView') %}
+              <a href="{{ url_for('OrgUnitView.edit', pk=unit.id) }}" class="btn btn-default btn-xs">
+                <i class="fa fa-pencil"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="7" style="text-align:center; padding:32px; color:var(--erp-text-muted);">No org units found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Add Org Unit Modal ───────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-add-unit" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-plus" style="color:var(--erp-primary); margin-right:6px;"></i>Add Org Unit</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Unit Code <span class="text-danger">*</span></label>
+          <input type="text" id="new-unit-code" class="form-control" placeholder="e.g. FIN-001">
+        </div>
+        <div class="form-group">
+          <label>Name <span class="text-danger">*</span></label>
+          <input type="text" id="new-unit-name" class="form-control" placeholder="e.g. Finance Department">
+        </div>
+        <div class="row">
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Org Type</label>
+              <select id="new-unit-type" class="form-control">
+                <option value="DIVISION">Division</option>
+                <option value="DEPARTMENT" selected>Department</option>
+                <option value="TEAM">Team</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="form-group">
+              <label>Parent Unit</label>
+              <select id="new-unit-parent" class="form-control">
+                <option value="">— None (root) —</option>
+                {% for unit in org_units %}
+                <option value="{{ unit.id }}">{{ unit.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-save-unit">
+          <i class="fa fa-save"></i> Save Org Unit
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Assign Manager Modal ─────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-assign-manager" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-user-plus" style="color:var(--erp-primary); margin-right:6px;"></i>Assign Manager</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Org Unit <span class="text-danger">*</span></label>
+          <select id="assign-unit" class="form-control">
+            <option value="">Select unit…</option>
+            {% for unit in org_units %}
+            <option value="{{ unit.id }}">{{ unit.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Manager Name <span class="text-danger">*</span></label>
+          <input type="text" id="assign-manager" class="form-control" placeholder="Employee name or ID">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="btn-assign-manager">
+          <i class="fa fa-check"></i> Assign
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  function _csrf() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function _post(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+
+  /* ── Table filtering ─────────────────────────────────────────── */
+  function filterTable() {
+    var q    = (document.getElementById('unit-search').value || '').toLowerCase();
+    var type = document.getElementById('type-filter').value;
+    document.querySelectorAll('#units-table tbody tr').forEach(function (tr) {
+      var name = tr.getAttribute('data-name') || '';
+      var t    = tr.getAttribute('data-type') || '';
+      var show = (!q || name.indexOf(q) !== -1) && (!type || t === type);
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+  document.getElementById('unit-search').addEventListener('input', filterTable);
+  document.getElementById('type-filter').addEventListener('change', filterTable);
+
+  /* ── Save Org Unit ───────────────────────────────────────────── */
+  document.getElementById('btn-save-unit').addEventListener('click', function () {
+    var code   = document.getElementById('new-unit-code').value.trim();
+    var name   = document.getElementById('new-unit-name').value.trim();
+    var type   = document.getElementById('new-unit-type').value;
+    var parent = document.getElementById('new-unit-parent').value || null;
+    if (!code || !name) { alert('Unit code and name are required.'); return; }
+
+    _post('/api/hcm/org-units', { unit_code: code, name: name, org_type: type, parent_id: parent })
+      .then(function () { location.reload(); })
+      .catch(function (e) { alert('Failed: ' + e.message); });
+  });
+
+  /* ── Assign Manager ──────────────────────────────────────────── */
+  document.getElementById('btn-assign-manager').addEventListener('click', function () {
+    var unitId  = document.getElementById('assign-unit').value;
+    var manager = document.getElementById('assign-manager').value.trim();
+    if (!unitId || !manager) { alert('Select a unit and enter manager name.'); return; }
+
+    _post('/api/hcm/org-units/' + unitId + '/assign-manager', { manager_name: manager })
+      .then(function () { location.reload(); })
+      .catch(function (e) { alert('Failed: ' + e.message); });
+  });
+}());
+</script>
+{% endblock %}
