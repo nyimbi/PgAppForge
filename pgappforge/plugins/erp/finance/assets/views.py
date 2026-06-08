@@ -22,7 +22,8 @@ from datetime import date, datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ def _fmt_cents(v: int | None) -> str:
 # AssetClassView
 # ---------------------------------------------------------------------------
 
-class AssetClassView(BaseView):
+class AssetClassView(BaseERPView):
 	"""Asset class CRUD.
 
 	GET  /assets/classes/            — list (JSON)
@@ -178,7 +179,7 @@ class AssetClassView(BaseView):
 # FixedAssetView
 # ---------------------------------------------------------------------------
 
-class FixedAssetView(BaseView):
+class FixedAssetView(BaseERPView):
 	"""Fixed asset register CRUD + business actions.
 
 	GET  /assets/register/               — list (JSON)
@@ -342,7 +343,7 @@ class FixedAssetView(BaseView):
 # AssetDepreciationView
 # ---------------------------------------------------------------------------
 
-class AssetDepreciationView(BaseView):
+class AssetDepreciationView(BaseERPView):
 	"""Depreciation entries browser + run trigger.
 
 	GET  /assets/depreciation/       — list entries (JSON, filterable by asset/period)
@@ -415,7 +416,7 @@ class AssetDepreciationView(BaseView):
 # AssetReportView  (3 reports)
 # ---------------------------------------------------------------------------
 
-class AssetReportView(BaseView):
+class AssetReportView(BaseERPView):
 	"""Asset Accounting reports.
 
 	GET /assets/reports/register                   — Fixed Asset Register (HTML)
@@ -434,6 +435,24 @@ class AssetReportView(BaseView):
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
 		status = request.args.get("status", "ACTIVE")
+
+		# --- KPI summary ---
+		_kpi_q = sa.select(
+			sa.func.count(FixedAsset.id).label("total_assets"),
+			sa.func.coalesce(sa.func.sum(FixedAsset.acquisition_cost_cents), 0).label("total_cost"),
+			sa.func.coalesce(sa.func.sum(FixedAsset.current_book_value_cents), 0).label("total_nbv"),
+		).where(FixedAsset.status.in_(["ACTIVE", "IMPAIRED", "FULLY_DEPRECIATED"]))
+		if tenant_id:
+			_kpi_q = _kpi_q.where(FixedAsset.tenant_id == tenant_id)
+		_kpi = session.execute(_kpi_q).one()
+		kpi_html = self.kpi_cards([
+			{"label": "Total Assets", "value": _kpi.total_assets,
+			 "format": "integer", "color": "#1a56db", "icon": "fa-building"},
+			{"label": "Total Cost (cents)", "value": _kpi.total_cost,
+			 "format": "integer", "color": "#0e9f6e", "icon": "fa-coins"},
+			{"label": "Net Book Value (cents)", "value": _kpi.total_nbv,
+			 "format": "integer", "color": "#7e3af2", "icon": "fa-balance-scale"},
+		])
 
 		q = (
 			sa.select(FixedAsset, AssetClass.name.label("class_name"))
@@ -469,6 +488,7 @@ class AssetReportView(BaseView):
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 <style>body{{padding:24px}} @media print{{.noprint{{display:none}}}}</style>
 </head><body>
+{kpi_html}
 <h3>Fixed Asset Register</h3>
 <div class="noprint" style="margin-bottom:8px">
   <a href="?status=ACTIVE" class="btn btn-xs btn-default">Active</a>

@@ -23,7 +23,8 @@ from datetime import date, datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def _cents(cents: int | None, currency: str = "USD") -> str:
 # SalesAccountView
 # ---------------------------------------------------------------------------
 
-class SalesAccountView(BaseView):
+class SalesAccountView(BaseERPView):
 	"""Sales Account CRUD.
 
 	GET  /crm/accounts/                  — list (HTML)
@@ -215,7 +216,7 @@ class SalesAccountView(BaseView):
 # SalesContactView
 # ---------------------------------------------------------------------------
 
-class SalesContactView(BaseView):
+class SalesContactView(BaseERPView):
 	"""Sales Contact CRUD.
 
 	GET  /crm/contacts/          — list (HTML)
@@ -356,7 +357,7 @@ class SalesContactView(BaseView):
 # LeadView
 # ---------------------------------------------------------------------------
 
-class LeadView(BaseView):
+class LeadView(BaseERPView):
 	"""Lead CRUD + scoring + conversion.
 
 	GET  /crm/leads/                 — list (HTML)
@@ -560,7 +561,7 @@ class LeadView(BaseView):
 # OpportunityView
 # ---------------------------------------------------------------------------
 
-class OpportunityView(BaseView):
+class OpportunityView(BaseERPView):
 	"""Opportunity CRUD + stage management.
 
 	GET  /crm/opportunities/                — list (HTML)
@@ -744,7 +745,7 @@ class OpportunityView(BaseView):
 # ActivityView
 # ---------------------------------------------------------------------------
 
-class ActivityView(BaseView):
+class ActivityView(BaseERPView):
 	"""Activity log CRUD.
 
 	GET  /crm/activities/         — list (JSON)
@@ -830,7 +831,7 @@ class ActivityView(BaseView):
 # SalesReportView — 3 standard reports
 # ---------------------------------------------------------------------------
 
-class SalesReportView(BaseView):
+class SalesReportView(BaseERPView):
 	"""Standard sales reports.
 
 	GET /crm/reports/pipeline          — Pipeline by Stage (HTML)
@@ -840,6 +841,75 @@ class SalesReportView(BaseView):
 
 	route_base = "/crm/reports"
 	default_view = "pipeline"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Sales dashboard — KPIs + pipeline by stage bar chart."""
+		session = _get_session()
+		from pgappforge.plugins.erp.crm.sales.models import Opportunity
+		tenant_id = request.args.get("tenant_id")
+		now = datetime.now(timezone.utc)
+		month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+		q_pipeline = sa.select(
+			sa.func.coalesce(sa.func.sum(Opportunity.amount_cents), 0)
+		).where(Opportunity.stage.not_in(["CLOSED_WON", "CLOSED_LOST"]))
+		q_won = sa.select(
+			sa.func.coalesce(sa.func.sum(Opportunity.amount_cents), 0)
+		).where(Opportunity.stage == "CLOSED_WON", Opportunity.closed_at >= month_start)
+		q_total = sa.select(sa.func.count(Opportunity.id)).where(
+			Opportunity.stage.not_in(["CLOSED_LOST"])
+		)
+		q_won_count = sa.select(sa.func.count(Opportunity.id)).where(
+			Opportunity.stage == "CLOSED_WON"
+		)
+		q_avg = sa.select(
+			sa.func.coalesce(sa.func.avg(Opportunity.amount_cents), 0)
+		).where(Opportunity.stage == "CLOSED_WON")
+		if tenant_id:
+			for q in (q_pipeline, q_won, q_total, q_won_count, q_avg):
+				q = q.where(Opportunity.tenant_id == tenant_id)
+
+		total_pipeline_cents = int(session.execute(q_pipeline).scalar() or 0)
+		won_this_month_cents = int(session.execute(q_won).scalar() or 0)
+		total_opps = int(session.execute(q_total).scalar() or 0)
+		won_count = int(session.execute(q_won_count).scalar() or 0)
+		conversion_rate_pct = round(won_count / total_opps * 100, 1) if total_opps else 0.0
+		avg_deal_size_cents = int(session.execute(q_avg).scalar() or 0)
+
+		kpi_html = self.kpi_cards([
+			{"label": "Total Pipeline", "value": total_pipeline_cents / 100, "format": "currency", "color": "#1a56db", "icon": "fa-funnel-dollar"},
+			{"label": "Won This Month", "value": won_this_month_cents / 100, "format": "currency", "color": "#057a55", "icon": "fa-trophy"},
+			{"label": "Conversion Rate", "value": conversion_rate_pct, "format": "percent", "color": "#9061f9", "icon": "fa-percentage"},
+			{"label": "Avg Deal Size", "value": avg_deal_size_cents / 100, "format": "currency", "color": "#d97706", "icon": "fa-dollar-sign"},
+		])
+
+		# Pipeline by stage bar chart
+		q_stage = (
+			sa.select(
+				Opportunity.stage.label("label"),
+				sa.func.coalesce(sa.func.sum(Opportunity.amount_cents), 0).label("value"),
+			)
+			.where(Opportunity.stage.not_in(["CLOSED_WON", "CLOSED_LOST"]))
+			.group_by(Opportunity.stage)
+			.order_by(Opportunity.stage)
+		)
+		if tenant_id:
+			q_stage = q_stage.where(Opportunity.tenant_id == tenant_id)
+		stage_rows = [{"label": r.label, "value": int(r.value) / 100} for r in session.execute(q_stage).all()]
+		chart_html = self.chart(stage_rows, chart_type="bar", x_col="label", y_col="value",
+		                        title="Pipeline by Stage (USD)", height=280)
+
+		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Sales Dashboard</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+</head><body style="padding:24px">
+<h3>Sales Dashboard</h3>
+{kpi_html}
+<div style="max-width:700px">{chart_html}</div>
+</body></html>"""
+		return make_response(html, 200)
 
 	# ------------------------------------------------------------------
 	# Report 1: Pipeline by Stage

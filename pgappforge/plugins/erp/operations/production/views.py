@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def _page_html(title: str, body: str) -> str:
 # BOMView
 # ---------------------------------------------------------------------------
 
-class BOMView(BaseView):
+class BOMView(BaseERPView):
 	"""BOM CRUD + activation.
 
 	GET  /pp/bom/              — list
@@ -212,7 +213,7 @@ class BOMView(BaseView):
 # WorkCenterView
 # ---------------------------------------------------------------------------
 
-class WorkCenterView(BaseView):
+class WorkCenterView(BaseERPView):
 	"""Work Center CRUD.
 
 	GET  /pp/work-centers/         — list
@@ -309,10 +310,11 @@ class WorkCenterView(BaseView):
 # ProductionOrderView
 # ---------------------------------------------------------------------------
 
-class ProductionOrderView(BaseView):
+class ProductionOrderView(BaseERPView):
 	"""Production Order CRUD + lifecycle.
 
 	GET  /pp/orders/              — list
+	GET  /pp/orders/dashboard     — KPI tiles + approval buttons for QC pending orders
 	GET  /pp/orders/<id>          — detail with lines and operations
 	POST /pp/orders/              — create
 	POST /pp/orders/<id>/release  — PLANNED → RELEASED
@@ -323,7 +325,95 @@ class ProductionOrderView(BaseView):
 	"""
 
 	route_base = "/pp/orders"
-	default_view = "list"
+	default_view = "dashboard"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Production dashboard — KPI tiles and approval buttons for orders pending QC sign-off."""
+		from pgappforge.plugins.erp.operations.production.models import ProductionOrder
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+
+		open_orders: int = 0
+		completed_today: int = 0
+		avg_yield_pct: float = 0.0
+		wip_value_cents: int = 0
+		pending_qc: list = []
+
+		try:
+			from datetime import date as _date
+			open_orders = session.execute(
+				sa.select(sa.func.count()).select_from(ProductionOrder).where(
+					ProductionOrder.status.in_(("PLANNED", "RELEASED", "IN_PROGRESS")),
+					*([ProductionOrder.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			today = _date.today()
+			completed_today = session.execute(
+				sa.select(sa.func.count()).select_from(ProductionOrder).where(
+					ProductionOrder.status == "COMPLETED",
+					sa.func.date(ProductionOrder.actual_end_date) == today,
+					*([ProductionOrder.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			pending_qc = session.execute(
+				sa.select(ProductionOrder).where(
+					ProductionOrder.status == "IN_PROGRESS",
+					*([ProductionOrder.tenant_id == tenant_id] if tenant_id else []),
+				).limit(10)
+			).scalars().all()
+		except Exception:
+			pass
+
+		kpi_html = self.kpi_cards([
+			{"label": "Open Orders", "value": open_orders, "format": "integer",
+			 "color": "#1a56db", "icon": "fa-industry"},
+			{"label": "Completed Today", "value": completed_today, "format": "integer",
+			 "color": "#057a55", "icon": "fa-check-circle"},
+			{"label": "Avg Yield %", "value": avg_yield_pct, "format": "percent",
+			 "color": "#e3a008", "icon": "fa-percentage"},
+			{"label": "WIP Value", "value": wip_value_cents / 100, "format": "currency",
+			 "color": "#9061f9", "icon": "fa-dollar-sign"},
+		])
+
+		approval_html_parts: list[str] = []
+		for order in pending_qc:
+			btn_html = self.approval_buttons(
+				{"process_instance_id": order.id, "current_step": order.status},
+				advance_url=f"/pp/orders/{order.id}/complete",
+				reject_url=f"/pp/orders/{order.id}/cancel",
+				instance_id_col="process_instance_id",
+				step_col="current_step",
+			)
+			approval_html_parts.append(
+				f'<div style="margin-bottom:8px"><strong>{_he(order.order_number)}</strong> '
+				f'— {_he(order.product_id)} — {_he(order.status)}: {btn_html}</div>'
+			)
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"open_orders": open_orders,
+				"completed_today": completed_today,
+				"avg_yield_pct": avg_yield_pct,
+				"wip_value_cents": wip_value_cents,
+				"pending_qc_count": len(pending_qc),
+			})
+
+		approval_section = (
+			"<h4>Orders Pending QC Sign-off</h4>" + "".join(approval_html_parts)
+			if approval_html_parts else ""
+		)
+		body = (
+			"<h3>Production Dashboard</h3>"
+			+ str(kpi_html)
+			+ approval_section
+			+ '<p><a href="/pp/orders/" class="btn btn-default">All Orders</a> '
+			+ '<a href="/pp/reports/schedule" class="btn btn-default">Schedule</a></p>'
+		)
+		return make_response(_page_html("Production Dashboard", body), 200)
 
 	@expose("/")
 	@has_access
@@ -567,7 +657,7 @@ class ProductionOrderView(BaseView):
 # DemandForecastView
 # ---------------------------------------------------------------------------
 
-class DemandForecastView(BaseView):
+class DemandForecastView(BaseERPView):
 	"""Demand Forecast CRUD.
 
 	GET  /pp/forecasts/         — list (filter by product, warehouse, method)
@@ -640,7 +730,7 @@ class DemandForecastView(BaseView):
 # PPReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class PPReportView(BaseView):
+class PPReportView(BaseERPView):
 	"""Production Planning reports.
 
 	GET /pp/reports/schedule         — Production Schedule (orders by date/WC)

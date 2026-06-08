@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def _he(s: object) -> str:
 # CaseView
 # ---------------------------------------------------------------------------
 
-class CaseView(BaseView):
+class CaseView(BaseERPView):
 	"""Case CRUD + business action endpoints."""
 
 	route_base = "/service/cases"
@@ -208,7 +209,7 @@ class CaseView(BaseView):
 # SLAPolicyView
 # ---------------------------------------------------------------------------
 
-class SLAPolicyView(BaseView):
+class SLAPolicyView(BaseERPView):
 	"""SLA Policy CRUD."""
 
 	route_base = "/service/sla-policies"
@@ -237,7 +238,7 @@ class SLAPolicyView(BaseView):
 # KnowledgeArticleView
 # ---------------------------------------------------------------------------
 
-class KnowledgeArticleView(BaseView):
+class KnowledgeArticleView(BaseERPView):
 	"""Knowledge Article CRUD + publish action."""
 
 	route_base = "/service/knowledge"
@@ -283,10 +284,80 @@ class KnowledgeArticleView(BaseView):
 # ServiceReportView — 3 ReportForge-compatible report endpoints
 # ---------------------------------------------------------------------------
 
-class ServiceReportView(BaseView):
+class ServiceReportView(BaseERPView):
 	"""Service Cloud reports: open cases, SLA compliance, CSAT summary."""
 
 	route_base = "/service/reports"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Service dashboard — KPIs + cases by priority doughnut."""
+		from pgappforge.plugins.erp.crm.service.models import Case
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+		now = datetime.now(timezone.utc)
+		week_ago = now.replace(hour=0, minute=0, second=0, microsecond=0)
+		from datetime import timedelta
+		week_ago = week_ago - timedelta(days=7)
+
+		q_open = sa.select(sa.func.count(Case.id)).where(
+			Case.status.not_in(["CLOSED", "RESOLVED"])
+		)
+		q_p1 = sa.select(sa.func.count(Case.id)).where(
+			Case.priority == "P1",
+			Case.status.not_in(["CLOSED", "RESOLVED"]),
+		)
+		q_breach = sa.select(sa.func.count(Case.id)).where(
+			Case.sla_breach_at <= now,
+			Case.status.not_in(["CLOSED", "RESOLVED"]),
+		)
+		q_resolved = sa.select(sa.func.count(Case.id)).where(
+			Case.status == "RESOLVED",
+			Case.resolved_at >= week_ago,
+		)
+		if tenant_id:
+			q_open = q_open.where(Case.tenant_id == tenant_id)
+			q_p1 = q_p1.where(Case.tenant_id == tenant_id)
+			q_breach = q_breach.where(Case.tenant_id == tenant_id)
+			q_resolved = q_resolved.where(Case.tenant_id == tenant_id)
+
+		open_cases = int(session.execute(q_open).scalar() or 0)
+		critical_p1_count = int(session.execute(q_p1).scalar() or 0)
+		sla_breach_count = int(session.execute(q_breach).scalar() or 0)
+		resolved_this_week = int(session.execute(q_resolved).scalar() or 0)
+
+		kpi_html = self.kpi_cards([
+			{"label": "Open Cases", "value": open_cases, "format": "integer", "color": "#1a56db", "icon": "fa-ticket-alt"},
+			{"label": "Critical P1", "value": critical_p1_count, "format": "integer", "color": "#e02424", "icon": "fa-fire"},
+			{"label": "SLA Breaches", "value": sla_breach_count, "format": "integer", "color": "#d97706", "icon": "fa-exclamation-triangle"},
+			{"label": "Resolved This Week", "value": resolved_this_week, "format": "integer", "color": "#057a55", "icon": "fa-check-circle"},
+		])
+
+		# Cases by priority doughnut
+		q_pri = (
+			sa.select(
+				Case.priority.label("label"),
+				sa.func.count(Case.id).label("value"),
+			)
+			.where(Case.status.not_in(["CLOSED", "RESOLVED"]))
+			.group_by(Case.priority)
+		)
+		if tenant_id:
+			q_pri = q_pri.where(Case.tenant_id == tenant_id)
+		pri_rows = [{"label": r.label or "NONE", "value": r.value} for r in session.execute(q_pri).all()]
+		chart_html = self.chart(pri_rows, chart_type="doughnut", x_col="label", y_col="value",
+		                        title="Open Cases by Priority", height=260)
+
+		return make_response(
+			f"<html><head><meta charset='utf-8'><title>Service Dashboard</title>"
+			f"<link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css'>"
+			f"</head><body style='padding:24px'>"
+			f"<h3>Service Dashboard</h3>"
+			f"{kpi_html}"
+			f"<div style='max-width:500px'>{chart_html}</div>"
+			f"</body></html>"
+		)
 
 	@expose("/open-by-priority")
 	@has_access

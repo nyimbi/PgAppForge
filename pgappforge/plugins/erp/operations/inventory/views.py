@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def _page_html(title: str, body: str) -> str:
 # ProductCategoryView
 # ---------------------------------------------------------------------------
 
-class ProductCategoryView(BaseView):
+class ProductCategoryView(BaseERPView):
 	"""Product category hierarchy CRUD.
 
 	GET  /inv/categories/         — list (flat with parent names)
@@ -178,7 +179,7 @@ class ProductCategoryView(BaseView):
 # ProductView
 # ---------------------------------------------------------------------------
 
-class ProductView(BaseView):
+class ProductView(BaseERPView):
 	"""Product master CRUD.
 
 	GET  /inv/products/               — list with filters
@@ -392,7 +393,7 @@ class ProductView(BaseView):
 # WarehouseView
 # ---------------------------------------------------------------------------
 
-class WarehouseView(BaseView):
+class WarehouseView(BaseERPView):
 	"""Warehouse + location management.
 
 	GET  /inv/warehouses/                 — list
@@ -560,7 +561,7 @@ class WarehouseView(BaseView):
 # StockLevelView
 # ---------------------------------------------------------------------------
 
-class StockLevelView(BaseView):
+class StockLevelView(BaseERPView):
 	"""Read-only stock position.
 
 	GET /inv/stock/                — list with filters
@@ -649,7 +650,7 @@ class StockLevelView(BaseView):
 # StockMovementView
 # ---------------------------------------------------------------------------
 
-class StockMovementView(BaseView):
+class StockMovementView(BaseERPView):
 	"""Read-only immutable stock movement ledger.
 
 	GET /inv/movements/           — list with filters (product, warehouse, type, date range)
@@ -731,16 +732,112 @@ class StockMovementView(BaseView):
 # InventoryReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class InventoryReportView(BaseView):
+class InventoryReportView(BaseERPView):
 	"""Inventory canned reports.
 
+	GET /inv/reports/                   — Dashboard with KPI tiles + warehouse value chart
 	GET /inv/reports/valuation          — Stock Valuation by warehouse
 	GET /inv/reports/reorder            — Reorder Suggestions
 	GET /inv/reports/movement-history   — Movement history for a product
 	"""
 
 	route_base = "/inv/reports"
-	default_view = "valuation"
+	default_view = "dashboard"
+
+	@expose("/")
+	@has_access
+	def dashboard(self):
+		"""Inventory dashboard — KPIs and inventory value by warehouse bar chart."""
+		from pgappforge.plugins.erp.operations.inventory.models import (
+			Product, StockLevel, Warehouse,
+		)
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+
+		total_skus: int = 0
+		total_value_cents: int = 0
+		below_reorder_count: int = 0
+		warehouse_count: int = 0
+		chart_rows: list[dict] = []
+
+		try:
+			total_skus = session.execute(
+				sa.select(sa.func.count()).select_from(Product).where(
+					Product.is_active.is_(True),
+					*([Product.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			warehouse_count = session.execute(
+				sa.select(sa.func.count()).select_from(Warehouse).where(
+					Warehouse.is_active.is_(True),
+					*([Warehouse.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			below_reorder_count = session.execute(
+				sa.select(sa.func.count()).select_from(StockLevel).join(
+					Product, StockLevel.product_id == Product.id
+				).where(
+					StockLevel.quantity_available <= Product.reorder_point,
+					*([StockLevel.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			wh_value_rows = session.execute(
+				sa.select(
+					StockLevel.warehouse_id,
+					sa.func.sum(
+						StockLevel.quantity_on_hand * StockLevel.average_cost_cents
+					).label("value_cents"),
+				)
+				.where(*([StockLevel.tenant_id == tenant_id] if tenant_id else []))
+				.group_by(StockLevel.warehouse_id)
+				.order_by(sa.desc("value_cents"))
+				.limit(20)
+			).all()
+
+			total_value_cents = sum(int(r.value_cents or 0) for r in wh_value_rows)
+			chart_rows = [
+				{"label": str(r.warehouse_id)[:12], "value": int(r.value_cents or 0) / 100}
+				for r in wh_value_rows
+			]
+		except Exception:
+			pass
+
+		kpi_html = self.kpi_cards([
+			{"label": "Total SKUs", "value": total_skus, "format": "integer",
+			 "color": "#1a56db", "icon": "fa-boxes"},
+			{"label": "Total Value", "value": total_value_cents / 100, "format": "currency",
+			 "color": "#057a55", "icon": "fa-dollar-sign"},
+			{"label": "Below Reorder", "value": below_reorder_count, "format": "integer",
+			 "color": "#e02424", "icon": "fa-exclamation-triangle"},
+			{"label": "Warehouses", "value": warehouse_count, "format": "integer",
+			 "color": "#9061f9", "icon": "fa-warehouse"},
+		])
+		chart_html = self.chart(
+			chart_rows, chart_type="bar",
+			x_col="label", y_col="value",
+			title="Inventory Value by Warehouse ($)",
+			height=260,
+		) if chart_rows else ""
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"total_skus": total_skus,
+				"total_value_cents": total_value_cents,
+				"below_reorder_count": below_reorder_count,
+				"warehouse_count": warehouse_count,
+			})
+
+		body = (
+			"<h3>Inventory Dashboard</h3>"
+			+ str(kpi_html)
+			+ str(chart_html)
+			+ '<p><a href="/inv/reports/reorder" class="btn btn-default">Reorder Suggestions</a> '
+			+ '<a href="/inv/reports/valuation?warehouse_id=..." class="btn btn-default">Valuation</a></p>'
+		)
+		return make_response(_page_html("Inventory Dashboard", body), 200)
 
 	@expose("/valuation")
 	@has_access

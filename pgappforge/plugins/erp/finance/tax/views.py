@@ -24,7 +24,8 @@ from datetime import date, datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ def _fmt(v: int | None) -> str:
 # TaxJurisdictionView
 # ---------------------------------------------------------------------------
 
-class TaxJurisdictionView(BaseView):
+class TaxJurisdictionView(BaseERPView):
 	"""Tax jurisdiction CRUD.
 
 	GET  /tax/jurisdictions/        — list (JSON)
@@ -177,7 +178,7 @@ class TaxJurisdictionView(BaseView):
 # TaxCodeView
 # ---------------------------------------------------------------------------
 
-class TaxCodeView(BaseView):
+class TaxCodeView(BaseERPView):
 	"""Tax code (rate) CRUD.
 
 	GET  /tax/codes/                     — list (JSON, filterable by jurisdiction_id)
@@ -314,7 +315,7 @@ class TaxCodeView(BaseView):
 # TaxTransactionView
 # ---------------------------------------------------------------------------
 
-class TaxTransactionView(BaseView):
+class TaxTransactionView(BaseERPView):
 	"""Tax transaction log browser + manual post.
 
 	GET  /tax/transactions/    — list (JSON, filterable)
@@ -437,7 +438,7 @@ class TaxTransactionView(BaseView):
 # TaxReturnView
 # ---------------------------------------------------------------------------
 
-class TaxReturnView(BaseView):
+class TaxReturnView(BaseERPView):
 	"""Tax return lifecycle management.
 
 	GET  /tax/returns/              — list (JSON)
@@ -585,7 +586,7 @@ class TaxReturnView(BaseView):
 # TaxReportView  (3 reports)
 # ---------------------------------------------------------------------------
 
-class TaxReportView(BaseView):
+class TaxReportView(BaseERPView):
 	"""Tax reports.
 
 	GET /tax/reports/vat-return/<id>      — VAT Return detail (HTML, printable)
@@ -650,9 +651,32 @@ class TaxReportView(BaseView):
 	@has_access
 	def tax_liability(self):
 		"""Tax liability summary by jurisdiction for open filed returns."""
-		from pgappforge.plugins.erp.finance.tax.models import TaxJurisdiction, TaxReturn
+		from pgappforge.plugins.erp.finance.tax.models import TaxJurisdiction, TaxReturn, TaxTransaction
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
+
+		# --- KPI summary ---
+		jurisdictions_count = session.execute(
+			sa.select(sa.func.count(TaxJurisdiction.id)).where(TaxJurisdiction.is_active.is_(True))
+		).scalar() or 0
+		pending_vat_returns = session.execute(
+			sa.select(sa.func.count(TaxReturn.id)).where(
+				TaxReturn.status.in_(["DRAFT", "FILED"])
+			)
+		).scalar() or 0
+		ytd_tax_collected_cents = session.execute(
+			sa.select(sa.func.coalesce(sa.func.sum(TaxTransaction.tax_amount_cents), 0)).where(
+				TaxTransaction.is_reversal.is_(False)
+			)
+		).scalar() or 0
+		kpi_html = self.kpi_cards([
+			{"label": "Active Jurisdictions", "value": jurisdictions_count,
+			 "format": "integer", "color": "#1a56db", "icon": "fa-globe"},
+			{"label": "Pending Returns", "value": pending_vat_returns,
+			 "format": "integer", "color": "#e3a008", "icon": "fa-file-alt"},
+			{"label": "YTD Tax Collected (cents)", "value": ytd_tax_collected_cents,
+			 "format": "integer", "color": "#0e9f6e", "icon": "fa-hand-holding-usd"},
+		])
 
 		q = (
 			sa.select(
@@ -695,6 +719,7 @@ class TaxReportView(BaseView):
 <title>Tax Liability Summary</title>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 <style>body{{padding:24px}}</style></head><body>
+{kpi_html}
 <h3>Tax Liability Summary — Outstanding Returns</h3>
 <table class="table table-bordered table-condensed table-hover" style="font-size:0.85em">
 <thead><tr><th>Code</th><th>Jurisdiction</th><th>Type</th><th>Period</th>

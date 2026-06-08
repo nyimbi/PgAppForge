@@ -20,7 +20,8 @@ import logging
 import sqlalchemy as sa
 from flask import abort, jsonify, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def _svc():
 # ConsentView
 # ---------------------------------------------------------------------------
 
-class ConsentView(BaseView):
+class ConsentView(BaseERPView):
 	route_base = "/privacy/consent"
 	default_view = "grant"
 
@@ -127,7 +128,7 @@ class ConsentView(BaseView):
 # DSRView
 # ---------------------------------------------------------------------------
 
-class DSRView(BaseView):
+class DSRView(BaseERPView):
 	route_base = "/privacy/dsr"
 	default_view = "list"
 
@@ -208,7 +209,7 @@ class DSRView(BaseView):
 # DataProcessingView
 # ---------------------------------------------------------------------------
 
-class DataProcessingView(BaseView):
+class DataProcessingView(BaseERPView):
 	route_base = "/privacy/processing-records"
 	default_view = "list"
 
@@ -264,9 +265,10 @@ class DataProcessingView(BaseView):
 # PrivacyReportView
 # ---------------------------------------------------------------------------
 
-class PrivacyReportView(BaseView):
+class PrivacyReportView(BaseERPView):
 	"""Privacy / GDPR reports.
 
+	GET /privacy/reports/              — Dashboard with KPI tiles
 	GET /privacy/reports/consent-summary  — consent counts by purpose and legal_basis
 	GET /privacy/reports/dsr-status       — DSR counts by status and type
 	GET /privacy/reports/overdue-dsrs     — DSRs past their due date
@@ -278,13 +280,86 @@ class PrivacyReportView(BaseView):
 	@expose("/")
 	@has_access
 	def index(self):
-		return jsonify({
-			"reports": [
-				{"name": "Consent Summary", "endpoint": "/privacy/reports/consent-summary"},
-				{"name": "DSR Status", "endpoint": "/privacy/reports/dsr-status"},
-				{"name": "Overdue DSRs", "endpoint": "/privacy/reports/overdue-dsrs"},
-			]
-		})
+		"""Privacy dashboard — open DSARs, active consents, breaches YTD, processing records."""
+		from pgappforge.plugins.erp.grc.privacy.models import (
+			ConsentRecord, DataSubjectRequest, DataProcessingRecord,
+		)
+		from datetime import date as _date
+		import sqlalchemy as _sa
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+
+		open_dsars: int = 0
+		consents_active: int = 0
+		breaches_ytd: int = 0
+		processing_records: int = 0
+
+		try:
+			open_dsars = session.execute(
+				_sa.select(_sa.func.count()).select_from(DataSubjectRequest).where(
+					DataSubjectRequest.status.in_(("PENDING", "IN_PROGRESS", "ACKNOWLEDGED")),
+					*([DataSubjectRequest.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			consents_active = session.execute(
+				_sa.select(_sa.func.count()).select_from(ConsentRecord).where(
+					ConsentRecord.withdrawn_at.is_(None),
+					*([ConsentRecord.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			processing_records = session.execute(
+				_sa.select(_sa.func.count()).select_from(DataProcessingRecord).where(
+					*([DataProcessingRecord.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+		except Exception:
+			pass
+
+		kpi_html = self.kpi_cards([
+			{"label": "Open DSARs", "value": open_dsars, "format": "integer",
+			 "color": "#e02424", "icon": "fa-user-shield"},
+			{"label": "Active Consents", "value": consents_active, "format": "integer",
+			 "color": "#057a55", "icon": "fa-check-circle"},
+			{"label": "Breaches YTD", "value": breaches_ytd, "format": "integer",
+			 "color": "#e3a008", "icon": "fa-exclamation-triangle"},
+			{"label": "Processing Records", "value": processing_records, "format": "integer",
+			 "color": "#1a56db", "icon": "fa-database"},
+		])
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"open_dsars": open_dsars,
+				"consents_active": consents_active,
+				"breaches_ytd": breaches_ytd,
+				"processing_records": processing_records,
+				"reports": [
+					{"name": "Consent Summary", "endpoint": "/privacy/reports/consent-summary"},
+					{"name": "DSR Status", "endpoint": "/privacy/reports/dsr-status"},
+					{"name": "Overdue DSRs", "endpoint": "/privacy/reports/overdue-dsrs"},
+				],
+			})
+
+		def _ph(t: str, b: str) -> str:
+			return (
+				f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{t}</title>'
+				'<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">'
+				'<style>body{padding:24px}</style>'
+				f'</head><body>{b}</body></html>'
+			)
+
+		from flask import make_response as _mr
+		body = (
+			"<h3>Privacy Dashboard</h3>"
+			+ str(kpi_html)
+			+ '<p>'
+			+ '<a href="/privacy/reports/consent-summary" class="btn btn-default">Consent Summary</a> '
+			+ '<a href="/privacy/reports/dsr-status" class="btn btn-default">DSR Status</a> '
+			+ '<a href="/privacy/reports/overdue-dsrs" class="btn btn-default">Overdue DSRs</a>'
+			+ '</p>'
+		)
+		return _mr(_ph("Privacy Dashboard", body), 200)
 
 	@expose("/consent-summary")
 	@has_access

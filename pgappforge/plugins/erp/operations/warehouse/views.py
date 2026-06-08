@@ -20,7 +20,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def _page_html(title: str, body: str) -> str:
 # PickListView
 # ---------------------------------------------------------------------------
 
-class PickListView(BaseView):
+class PickListView(BaseERPView):
 	"""Picking workflow management.
 
 	GET  /wms/picklists/                    — list with filters
@@ -268,7 +269,7 @@ class PickListView(BaseView):
 # PutawayView
 # ---------------------------------------------------------------------------
 
-class PutawayView(BaseView):
+class PutawayView(BaseERPView):
 	"""Putaway task management.
 
 	GET  /wms/putaway/                    — list pending tasks
@@ -382,7 +383,7 @@ class PutawayView(BaseView):
 # StockCountView
 # ---------------------------------------------------------------------------
 
-class StockCountView(BaseView):
+class StockCountView(BaseERPView):
 	"""Stock count workflow.
 
 	GET  /wms/counts/                      — list counts
@@ -564,16 +565,84 @@ class StockCountView(BaseView):
 # WMSReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class WMSReportView(BaseView):
+class WMSReportView(BaseERPView):
 	"""WMS canned reports.
 
+	GET /wms/reports/                     — Dashboard with KPI tiles
 	GET /wms/reports/picking-throughput   — orders picked per day/week
 	GET /wms/reports/putaway-backlog      — pending putaway tasks
 	GET /wms/reports/count-variance       — variance summary for a count
 	"""
 
 	route_base = "/wms/reports"
-	default_view = "picking_throughput"
+	default_view = "dashboard"
+
+	@expose("/")
+	@has_access
+	def dashboard(self):
+		"""WMS dashboard — active shipments, pending picks, utilization, workers active."""
+		from pgappforge.plugins.erp.operations.warehouse.models import PickList, PutawayTask
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+
+		active_shipments: int = 0
+		pending_picks: int = 0
+		utilization_pct: float = 0.0
+		workers_active: int = 0
+
+		try:
+			pending_picks = session.execute(
+				sa.select(sa.func.count()).select_from(PickList).where(
+					PickList.status.in_(("PENDING", "IN_PROGRESS", "ASSIGNED")),
+					*([PickList.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			active_shipments = session.execute(
+				sa.select(sa.func.count()).select_from(PutawayTask).where(
+					PutawayTask.status.in_(("PENDING", "IN_PROGRESS")),
+					*([PutawayTask.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			workers_active = session.execute(
+				sa.select(sa.func.count(sa.func.distinct(PickList.assigned_to))).select_from(
+					PickList
+				).where(
+					PickList.status == "IN_PROGRESS",
+					PickList.assigned_to.isnot(None),
+					*([PickList.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+		except Exception:
+			pass
+
+		kpi_html = self.kpi_cards([
+			{"label": "Active Shipments", "value": active_shipments, "format": "integer",
+			 "color": "#1a56db", "icon": "fa-truck-loading"},
+			{"label": "Pending Picks", "value": pending_picks, "format": "integer",
+			 "color": "#e3a008", "icon": "fa-clipboard-list"},
+			{"label": "Utilization %", "value": utilization_pct, "format": "percent",
+			 "color": "#057a55", "icon": "fa-chart-pie"},
+			{"label": "Workers Active", "value": workers_active, "format": "integer",
+			 "color": "#9061f9", "icon": "fa-users"},
+		])
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"active_shipments": active_shipments,
+				"pending_picks": pending_picks,
+				"utilization_pct": utilization_pct,
+				"workers_active": workers_active,
+			})
+
+		body = (
+			"<h3>WMS Dashboard</h3>"
+			+ str(kpi_html)
+			+ '<p><a href="/wms/reports/picking-throughput" class="btn btn-default">Picking Throughput</a> '
+			+ '<a href="/wms/reports/putaway-backlog" class="btn btn-default">Putaway Backlog</a></p>'
+		)
+		return make_response(_page_html("WMS Dashboard", body), 200)
 
 	@expose("/picking-throughput")
 	@has_access

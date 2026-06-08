@@ -23,7 +23,8 @@ from decimal import Decimal
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def _fmt(v: int | None) -> str:
 # BankAccountView
 # ---------------------------------------------------------------------------
 
-class BankAccountView(BaseView):
+class BankAccountView(BaseERPView):
 	"""Bank account master CRUD.
 
 	GET  /treasury/accounts/        — list (JSON)
@@ -166,7 +167,7 @@ class BankAccountView(BaseView):
 # FXDealView
 # ---------------------------------------------------------------------------
 
-class FXDealView(BaseView):
+class FXDealView(BaseERPView):
 	"""FX deal CRUD + settlement.
 
 	GET  /treasury/fx-deals/              — list (JSON)
@@ -311,7 +312,7 @@ class FXDealView(BaseView):
 # BankStatementView
 # ---------------------------------------------------------------------------
 
-class BankStatementView(BaseView):
+class BankStatementView(BaseERPView):
 	"""Bank statement import and reconciliation.
 
 	GET  /treasury/statements/              — list statements (JSON)
@@ -438,7 +439,7 @@ class BankStatementView(BaseView):
 # TreasuryReportView (3 reports)
 # ---------------------------------------------------------------------------
 
-class TreasuryReportView(BaseView):
+class TreasuryReportView(BaseERPView):
 	"""Treasury reports.
 
 	GET /treasury/reports/cash-position   — Daily cash position table (HTML)
@@ -545,7 +546,7 @@ class TreasuryReportView(BaseView):
 	@has_access
 	def bank_balances(self):
 		"""Bank account balances summary."""
-		from pgappforge.plugins.erp.finance.treasury.models import BankAccount
+		from pgappforge.plugins.erp.finance.treasury.models import BankAccount, BankStatement
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
 		q = (
@@ -556,6 +557,23 @@ class TreasuryReportView(BaseView):
 		if tenant_id:
 			q = q.where(BankAccount.tenant_id == tenant_id)
 		accounts = session.execute(q).scalars().all()
+
+		# --- KPI summary ---
+		bank_accounts_count = len(accounts)
+		total_balance_cents = sum(a.balance_cents or 0 for a in accounts)
+		pending_reconciliation = session.execute(
+			sa.select(sa.func.count(BankStatement.id)).where(
+				BankStatement.status.in_(["IMPORTED", "IN_PROGRESS"])
+			)
+		).scalar() or 0
+		kpi_html = self.kpi_cards([
+			{"label": "Bank Accounts", "value": bank_accounts_count,
+			 "format": "integer", "color": "#1a56db", "icon": "fa-university"},
+			{"label": "Total Balance (cents)", "value": total_balance_cents,
+			 "format": "integer", "color": "#0e9f6e", "icon": "fa-dollar-sign"},
+			{"label": "Pending Reconciliation", "value": pending_reconciliation,
+			 "format": "integer", "color": "#e3a008", "icon": "fa-sync-alt"},
+		])
 
 		table_rows = "".join(
 			f"<tr>"
@@ -573,6 +591,7 @@ class TreasuryReportView(BaseView):
 <title>Bank Balances</title>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 <style>body{{padding:24px}}</style></head><body>
+{kpi_html}
 <h3>Bank Account Balances</h3>
 <p style="color:#888">As at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
 <table class="table table-bordered table-condensed table-hover">

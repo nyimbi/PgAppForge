@@ -25,7 +25,8 @@ from datetime import date, datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ def _svc():
 # GLAccountView
 # ---------------------------------------------------------------------------
 
-class GLAccountView(BaseView):
+class GLAccountView(BaseERPView):
 	"""Chart of Accounts CRUD.
 
 	GET  /gl/accounts/                 — list
@@ -189,7 +190,7 @@ class GLAccountView(BaseView):
 # GLPeriodView
 # ---------------------------------------------------------------------------
 
-class GLPeriodView(BaseView):
+class GLPeriodView(BaseERPView):
 	"""GL Period CRUD + close-period business action.
 
 	GET  /gl/periods/                  — list
@@ -268,7 +269,7 @@ class GLPeriodView(BaseView):
 # GLJournalBatchView
 # ---------------------------------------------------------------------------
 
-class GLJournalBatchView(BaseView):
+class GLJournalBatchView(BaseERPView):
 	"""Journal batch workflow.
 
 	GET  /gl/batches/                  — list
@@ -457,7 +458,7 @@ class GLJournalBatchView(BaseView):
 # GLJournalEntryView
 # ---------------------------------------------------------------------------
 
-class GLJournalEntryView(BaseView):
+class GLJournalEntryView(BaseERPView):
 	"""Journal entry detail + reversal action.
 
 	GET  /gl/entries/<id>              — detail with lines
@@ -532,7 +533,7 @@ class GLJournalEntryView(BaseView):
 # GLBudgetView
 # ---------------------------------------------------------------------------
 
-class GLBudgetView(BaseView):
+class GLBudgetView(BaseERPView):
 	"""Budget CRUD.
 
 	GET  /gl/budgets/                  — list
@@ -594,7 +595,7 @@ class GLBudgetView(BaseView):
 # GLReportView  (Trial Balance, Budget vs Actual, Account Ledger)
 # ---------------------------------------------------------------------------
 
-class GLReportView(BaseView):
+class GLReportView(BaseERPView):
 	"""Canned GL reports.
 
 	GET /gl/reports/trial-balance/<period_id>        — trial balance
@@ -608,14 +609,36 @@ class GLReportView(BaseView):
 	@expose("/")
 	@has_access
 	def index(self):
+		from pgappforge.plugins.erp.finance.gl.models import GLAccount, GLPeriod, GLJournalBatch
+		session = _get_session()
+		total_accounts = session.execute(
+			sa.select(sa.func.count(GLAccount.account_code))
+		).scalar() or 0
+		total_periods = session.execute(
+			sa.select(sa.func.count(GLPeriod.id))
+		).scalar() or 0
+		recent_journals = session.execute(
+			sa.select(sa.func.count(GLJournalBatch.id)).where(
+				GLJournalBatch.status.in_(["DRAFT", "SUBMITTED", "APPROVED"])
+			)
+		).scalar() or 0
+		kpi_html = self.kpi_cards([
+			{"label": "Chart of Accounts", "value": total_accounts,
+			 "format": "integer", "color": "#1a56db", "icon": "fa-list"},
+			{"label": "Fiscal Periods", "value": total_periods,
+			 "format": "integer", "color": "#0e9f6e", "icon": "fa-calendar"},
+			{"label": "Open Batches", "value": recent_journals,
+			 "format": "integer", "color": "#e3a008", "icon": "fa-book"},
+		])
 		return jsonify({
+			"kpi_html": str(kpi_html),
 			"reports": [
 				{"name": "Trial Balance",     "endpoint": "/gl/reports/trial-balance/<period_id>"},
 				{"name": "Income Statement",  "endpoint": "/gl/reports/income-statement/<period_id>"},
 				{"name": "Balance Sheet",     "endpoint": "/gl/reports/balance-sheet/<period_id>"},
 				{"name": "Budget vs Actual",  "endpoint": "/gl/reports/budget-vs-actual/<period_id>"},
 				{"name": "Account Ledger",    "endpoint": "/gl/reports/account-ledger/<account_code>"},
-			]
+			],
 		})
 
 	@expose("/income-statement/<string:period_id>")

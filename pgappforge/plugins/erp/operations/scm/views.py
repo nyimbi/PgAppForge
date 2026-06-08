@@ -20,7 +20,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def _page_html(title: str, body: str) -> str:
 # SupplierView
 # ---------------------------------------------------------------------------
 
-class SupplierView(BaseView):
+class SupplierView(BaseERPView):
 	"""SCM Supplier CRUD + approve.
 
 	GET  /scm/suppliers/              — list
@@ -247,7 +248,7 @@ class SupplierView(BaseView):
 # SupplierProductView
 # ---------------------------------------------------------------------------
 
-class SupplierProductView(BaseView):
+class SupplierProductView(BaseERPView):
 	"""Supplier product catalogue / sourcing price records.
 
 	GET  /scm/supplier-products/          — list (filter by supplier, product)
@@ -362,7 +363,7 @@ class SupplierProductView(BaseView):
 # ShipmentTrackingView
 # ---------------------------------------------------------------------------
 
-class ShipmentTrackingView(BaseView):
+class ShipmentTrackingView(BaseERPView):
 	"""Shipment tracking CRUD + milestone events.
 
 	GET  /scm/shipments/                    — list
@@ -535,16 +536,77 @@ class ShipmentTrackingView(BaseView):
 # SCMReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class SCMReportView(BaseView):
+class SCMReportView(BaseERPView):
 	"""SCM canned reports.
 
+	GET /scm/reports/                   — Dashboard with KPI tiles
 	GET /scm/reports/scorecard          — Supplier Scorecard
 	GET /scm/reports/overdue-shipments  — Overdue Shipments
 	GET /scm/reports/price-comparison   — Sourcing Price Comparison
 	"""
 
 	route_base = "/scm/reports"
-	default_view = "scorecard"
+	default_view = "dashboard"
+
+	@expose("/")
+	@has_access
+	def dashboard(self):
+		"""SCM dashboard — KPI tiles for open POs, pending GRNs, approved suppliers, YTD spend."""
+		from pgappforge.plugins.erp.operations.scm.models import Supplier, ShipmentTracking
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+
+		open_pos: int = 0
+		pending_grns: int = 0
+		approved_suppliers: int = 0
+		ytd_spend_cents: int = 0
+
+		try:
+			import sqlalchemy as _sa
+			approved_suppliers = session.execute(
+				_sa.select(_sa.func.count()).select_from(Supplier).where(
+					Supplier.preferred.is_(True),
+					Supplier.is_active.is_(True),
+					*([Supplier.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			pending_grns = session.execute(
+				_sa.select(_sa.func.count()).select_from(ShipmentTracking).where(
+					ShipmentTracking.status == "IN_TRANSIT",
+					*([ShipmentTracking.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+		except Exception:
+			pass
+
+		kpi_html = self.kpi_cards([
+			{"label": "Open POs", "value": open_pos, "format": "integer",
+			 "color": "#1a56db", "icon": "fa-file-invoice"},
+			{"label": "Pending GRNs", "value": pending_grns, "format": "integer",
+			 "color": "#e3a008", "icon": "fa-truck"},
+			{"label": "Approved Suppliers", "value": approved_suppliers, "format": "integer",
+			 "color": "#057a55", "icon": "fa-check-circle"},
+			{"label": "YTD Spend", "value": ytd_spend_cents / 100, "format": "currency",
+			 "color": "#9061f9", "icon": "fa-dollar-sign"},
+		])
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"open_pos": open_pos,
+				"pending_grns": pending_grns,
+				"approved_suppliers": approved_suppliers,
+				"ytd_spend_cents": ytd_spend_cents,
+			})
+
+		body = (
+			"<h3>SCM Dashboard</h3>"
+			+ str(kpi_html)
+			+ '<p><a href="/scm/reports/scorecard" class="btn btn-default">Supplier Scorecard</a> '
+			+ '<a href="/scm/reports/overdue-shipments" class="btn btn-default">Overdue Shipments</a></p>'
+		)
+		from flask import make_response as _mr
+		return _mr(_page_html("SCM Dashboard", body), 200)
 
 	@expose("/scorecard")
 	@has_access

@@ -20,7 +20,8 @@ import logging
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ def _cents(v: int | None) -> str:
 # CampaignView
 # ---------------------------------------------------------------------------
 
-class CampaignView(BaseView):
+class CampaignView(BaseERPView):
 	"""Campaign CRUD + activate/complete actions."""
 
 	route_base = "/marketing/campaigns"
@@ -183,7 +184,7 @@ class CampaignView(BaseView):
 # EmailTemplateView
 # ---------------------------------------------------------------------------
 
-class EmailTemplateView(BaseView):
+class EmailTemplateView(BaseERPView):
 	"""Email Template CRUD."""
 
 	route_base = "/marketing/email-templates"
@@ -213,7 +214,7 @@ class EmailTemplateView(BaseView):
 # MarketingListView
 # ---------------------------------------------------------------------------
 
-class MarketingListView(BaseView):
+class MarketingListView(BaseERPView):
 	"""Marketing List CRUD."""
 
 	route_base = "/marketing/lists"
@@ -243,10 +244,58 @@ class MarketingListView(BaseView):
 # MarketingReportView — 3 ReportForge-compatible report endpoints
 # ---------------------------------------------------------------------------
 
-class MarketingReportView(BaseView):
+class MarketingReportView(BaseERPView):
 	"""Marketing reports."""
 
 	route_base = "/marketing/reports"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Marketing dashboard — KPIs."""
+		from pgappforge.plugins.erp.crm.marketing.models import Campaign, CampaignMember
+		from datetime import datetime, timezone, timedelta
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+		now = datetime.now(timezone.utc)
+		month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+		q_active = sa.select(sa.func.count(Campaign.id)).where(Campaign.status == "ACTIVE")
+		q_enrolled = sa.select(sa.func.count(CampaignMember.id))
+		q_conv = sa.select(
+			sa.func.coalesce(sa.func.avg(
+				sa.cast(CampaignMember.status == "RESPONDED", sa.Integer) * 100
+			), 0)
+		)
+		q_leads = sa.select(sa.func.count(CampaignMember.id)).where(
+			CampaignMember.created_at >= month_start
+		)
+		if tenant_id:
+			q_active = q_active.where(Campaign.tenant_id == tenant_id)
+			# join through campaign for member queries
+			campaign_ids = sa.select(Campaign.id).where(Campaign.tenant_id == tenant_id).scalar_subquery()
+			q_enrolled = q_enrolled.where(CampaignMember.campaign_id.in_(campaign_ids))
+			q_conv = q_conv.where(CampaignMember.campaign_id.in_(campaign_ids))
+			q_leads = q_leads.where(CampaignMember.campaign_id.in_(campaign_ids))
+
+		active_campaigns = int(session.execute(q_active).scalar() or 0)
+		total_enrolled = int(session.execute(q_enrolled).scalar() or 0)
+		avg_conversion_rate_pct = float(session.execute(q_conv).scalar() or 0)
+		leads_this_month = int(session.execute(q_leads).scalar() or 0)
+
+		kpi_html = self.kpi_cards([
+			{"label": "Active Campaigns", "value": active_campaigns, "format": "integer", "color": "#1a56db", "icon": "fa-bullhorn"},
+			{"label": "Total Enrolled", "value": total_enrolled, "format": "integer", "color": "#057a55", "icon": "fa-users"},
+			{"label": "Avg Conversion Rate", "value": avg_conversion_rate_pct, "format": "percent", "color": "#9061f9", "icon": "fa-percentage"},
+			{"label": "Leads This Month", "value": leads_this_month, "format": "integer", "color": "#d97706", "icon": "fa-user-plus"},
+		])
+
+		return make_response(
+			f"<html><head><meta charset='utf-8'><title>Marketing Dashboard</title>"
+			f"<link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css'>"
+			f"</head><body style='padding:24px'>"
+			f"<h3>Marketing Dashboard</h3>{kpi_html}</body></html>"
+		)
 
 	@expose("/campaign-performance")
 	@has_access

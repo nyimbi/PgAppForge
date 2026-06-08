@@ -21,7 +21,8 @@ from datetime import date
 import sqlalchemy as sa
 from flask import abort, jsonify, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def _svc():
 # ControlFrameworkView
 # ---------------------------------------------------------------------------
 
-class ControlFrameworkView(BaseView):
+class ControlFrameworkView(BaseERPView):
 	route_base = "/grc/controls/frameworks"
 	default_view = "list"
 
@@ -99,7 +100,7 @@ class ControlFrameworkView(BaseView):
 # ControlView
 # ---------------------------------------------------------------------------
 
-class ControlView(BaseView):
+class ControlView(BaseERPView):
 	route_base = "/grc/controls"
 	default_view = "list"
 
@@ -181,7 +182,7 @@ class ControlView(BaseView):
 # ControlTestView
 # ---------------------------------------------------------------------------
 
-class ControlTestView(BaseView):
+class ControlTestView(BaseERPView):
 	route_base = "/grc/controls"
 	default_view = "list_tests"
 
@@ -243,7 +244,7 @@ class ControlTestView(BaseView):
 # SoDView
 # ---------------------------------------------------------------------------
 
-class SoDView(BaseView):
+class SoDView(BaseERPView):
 	route_base = "/grc/controls/sod"
 	default_view = "list"
 
@@ -317,9 +318,10 @@ class SoDView(BaseView):
 # ControlReportView
 # ---------------------------------------------------------------------------
 
-class ControlReportView(BaseView):
+class ControlReportView(BaseERPView):
 	"""GRC Controls reports.
 
+	GET /grc/controls/reports/           — Dashboard with KPI tiles + controls-by-category chart
 	GET /grc/controls/reports/effectiveness  — control effectiveness summary
 	GET /grc/controls/reports/deficiencies   — open deficiencies needing remediation
 	GET /grc/controls/reports/sod-matrix     — full SoD conflict matrix
@@ -331,13 +333,113 @@ class ControlReportView(BaseView):
 	@expose("/")
 	@has_access
 	def index(self):
-		return jsonify({
-			"reports": [
-				{"name": "Control Effectiveness", "endpoint": "/grc/controls/reports/effectiveness"},
-				{"name": "Open Deficiencies", "endpoint": "/grc/controls/reports/deficiencies"},
-				{"name": "SoD Conflict Matrix", "endpoint": "/grc/controls/reports/sod-matrix"},
-			]
-		})
+		"""Controls dashboard — KPI tiles and controls-by-category doughnut chart."""
+		from pgappforge.plugins.erp.grc.controls.models import Control, ControlTest
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+
+		total_controls: int = 0
+		tested_pct: float = 0.0
+		overdue_tests: int = 0
+		critical_issues: int = 0
+		chart_rows: list[dict] = []
+
+		try:
+			total_controls = session.execute(
+				sa.select(sa.func.count()).select_from(Control).where(
+					*([Control.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			# Controls tested at least once
+			tested = session.execute(
+				sa.select(sa.func.count(sa.func.distinct(ControlTest.control_id))).where(
+					*([ControlTest.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+			tested_pct = round(tested / total_controls * 100, 1) if total_controls else 0.0
+
+			overdue_tests = session.execute(
+				sa.select(sa.func.count()).select_from(ControlTest).where(
+					ControlTest.remediation_due < date.today(),
+					ControlTest.deficiencies_noted.isnot(None),
+					ControlTest.deficiencies_noted != "",
+					*([ControlTest.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			critical_issues = session.execute(
+				sa.select(sa.func.count()).select_from(ControlTest).where(
+					ControlTest.test_result == "FAIL",
+					*([ControlTest.tenant_id == tenant_id] if tenant_id else []),
+				)
+			).scalar() or 0
+
+			# Category breakdown for doughnut
+			cat_rows = session.execute(
+				sa.select(
+					Control.control_type,
+					sa.func.count().label("cnt"),
+				)
+				.where(*([Control.tenant_id == tenant_id] if tenant_id else []))
+				.group_by(Control.control_type)
+				.order_by(sa.desc("cnt"))
+			).all()
+			chart_rows = [{"label": r.control_type, "value": r.cnt} for r in cat_rows]
+		except Exception:
+			pass
+
+		kpi_html = self.kpi_cards([
+			{"label": "Total Controls", "value": total_controls, "format": "integer",
+			 "color": "#1a56db", "icon": "fa-shield-alt"},
+			{"label": "Tested %", "value": tested_pct, "format": "percent",
+			 "color": "#057a55", "icon": "fa-check-double"},
+			{"label": "Overdue Tests", "value": overdue_tests, "format": "integer",
+			 "color": "#e02424", "icon": "fa-clock"},
+			{"label": "Critical Issues", "value": critical_issues, "format": "integer",
+			 "color": "#e3a008", "icon": "fa-exclamation-circle"},
+		])
+		chart_html = self.chart(
+			chart_rows, chart_type="doughnut",
+			x_col="label", y_col="value",
+			title="Controls by Category",
+			height=260,
+		) if chart_rows else ""
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"total_controls": total_controls,
+				"tested_pct": tested_pct,
+				"overdue_tests": overdue_tests,
+				"critical_issues": critical_issues,
+				"reports": [
+					{"name": "Control Effectiveness", "endpoint": "/grc/controls/reports/effectiveness"},
+					{"name": "Open Deficiencies", "endpoint": "/grc/controls/reports/deficiencies"},
+					{"name": "SoD Conflict Matrix", "endpoint": "/grc/controls/reports/sod-matrix"},
+				],
+			})
+
+		from flask import make_response as _mr
+
+		def _ph(t: str, b: str) -> str:
+			return (
+				f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{t}</title>'
+				'<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">'
+				'<style>body{padding:24px}</style>'
+				f'</head><body>{b}</body></html>'
+			)
+
+		body = (
+			"<h3>GRC Controls Dashboard</h3>"
+			+ str(kpi_html)
+			+ str(chart_html)
+			+ '<p>'
+			+ '<a href="/grc/controls/reports/effectiveness" class="btn btn-default">Effectiveness</a> '
+			+ '<a href="/grc/controls/reports/deficiencies" class="btn btn-default">Deficiencies</a> '
+			+ '<a href="/grc/controls/reports/sod-matrix" class="btn btn-default">SoD Matrix</a>'
+			+ '</p>'
+		)
+		return _mr(_ph("GRC Controls Dashboard", body), 200)
 
 	@expose("/effectiveness")
 	@has_access

@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def _page_html(title: str, body: str) -> str:
 # ShiftDefinitionView
 # ---------------------------------------------------------------------------
 
-class ShiftDefinitionView(BaseView):
+class ShiftDefinitionView(BaseERPView):
 	"""Shift definition CRUD.
 
 	GET  /hcm/time/shifts/       — list
@@ -166,7 +167,7 @@ class ShiftDefinitionView(BaseView):
 # AttendanceView
 # ---------------------------------------------------------------------------
 
-class AttendanceView(BaseView):
+class AttendanceView(BaseERPView):
 	"""Clock-in/out and attendance list.
 
 	POST /hcm/time/attendance/clock-in              — clock in
@@ -258,7 +259,7 @@ class AttendanceView(BaseView):
 # LeaveRequestView
 # ---------------------------------------------------------------------------
 
-class LeaveRequestView(BaseView):
+class LeaveRequestView(BaseERPView):
 	"""Leave request workflow.
 
 	POST /hcm/time/leave/                          — submit request
@@ -383,7 +384,7 @@ class LeaveRequestView(BaseView):
 # TimesheetView
 # ---------------------------------------------------------------------------
 
-class TimesheetView(BaseView):
+class TimesheetView(BaseERPView):
 	"""Timesheet management.
 
 	POST /hcm/time/timesheets/                     — create DRAFT
@@ -524,7 +525,7 @@ class TimesheetView(BaseView):
 # TimeReportView
 # ---------------------------------------------------------------------------
 
-class TimeReportView(BaseView):
+class TimeReportView(BaseERPView):
 	"""Time & Attendance canned reports.
 
 	GET /hcm/time/reports/overtime         — overtime summary by employee
@@ -534,6 +535,82 @@ class TimeReportView(BaseView):
 
 	route_base = "/hcm/time/reports"
 	default_view = "overtime"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Time & Attendance dashboard — KPIs + attendance heatmap."""
+		from pgappforge.plugins.erp.hcm.time.models import Timesheet, AttendanceRecord
+		from datetime import timedelta
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+		now = datetime.now(timezone.utc)
+		week_start = now.date() - timedelta(days=now.weekday())
+
+		# KPIs
+		q_submitted = sa.select(sa.func.count(Timesheet.id)).where(
+			Timesheet.week_start == week_start,
+			Timesheet.status.in_(("SUBMITTED", "APPROVED")),
+		)
+		q_pending = sa.select(sa.func.count(Timesheet.id)).where(
+			Timesheet.week_start == week_start,
+			Timesheet.status == "SUBMITTED",
+		)
+		q_hours = sa.select(
+			sa.func.coalesce(sa.func.sum(Timesheet.total_regular_hours), 0),
+			sa.func.coalesce(sa.func.sum(Timesheet.total_overtime_hours), 0),
+		).where(Timesheet.week_start == week_start)
+		if tenant_id:
+			q_submitted = q_submitted.where(Timesheet.tenant_id == tenant_id)
+			q_pending = q_pending.where(Timesheet.tenant_id == tenant_id)
+			q_hours = q_hours.where(Timesheet.tenant_id == tenant_id)
+
+		timesheets_submitted = session.execute(q_submitted).scalar() or 0
+		pending_approval = session.execute(q_pending).scalar() or 0
+		reg_h, ot_h = session.execute(q_hours).one()
+		hours_this_period = float(reg_h or 0)
+		overtime_hours = float(ot_h or 0)
+
+		kpi_html = self.kpi_cards([
+			{"label": "Timesheets Submitted", "value": timesheets_submitted, "format": "integer", "color": "#1a56db", "icon": "fa-file-alt"},
+			{"label": "Hours This Period", "value": hours_this_period, "format": "number", "color": "#057a55", "icon": "fa-clock"},
+			{"label": "Pending Approval", "value": pending_approval, "format": "integer", "color": "#d97706", "icon": "fa-hourglass-half"},
+			{"label": "Overtime Hours", "value": overtime_hours, "format": "number", "color": "#e02424", "icon": "fa-exclamation-circle"},
+		])
+
+		# Attendance heatmap — last 90 days
+		since = now.date() - timedelta(days=90)
+		q_att = (
+			sa.select(
+				AttendanceRecord.attendance_date.label("date"),
+				sa.func.coalesce(
+					sa.func.sum(
+						sa.cast(
+							sa.func.extract("epoch", AttendanceRecord.clock_out - AttendanceRecord.clock_in) / 3600,
+							sa.Numeric,
+						)
+					),
+					0,
+				).label("hours"),
+			)
+			.where(AttendanceRecord.attendance_date >= since)
+			.group_by(AttendanceRecord.attendance_date)
+			.order_by(AttendanceRecord.attendance_date)
+		)
+		if tenant_id:
+			q_att = q_att.where(AttendanceRecord.tenant_id == tenant_id)
+		att_rows = [
+			{"date": str(r.date), "hours": float(r.hours or 0)}
+			for r in session.execute(q_att).all()
+		]
+		heatmap_html = self.heatmap_calendar(att_rows, date_col="date", value_col="hours", title="Attendance Hours")
+
+		body = (
+			f'<h3>Time &amp; Attendance Dashboard</h3>'
+			f'{kpi_html}'
+			f'{heatmap_html}'
+		)
+		return make_response(_page_html("Time Dashboard", body), 200)
 
 	@expose("/overtime")
 	@has_access

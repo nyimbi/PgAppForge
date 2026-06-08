@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def _he(s: object) -> str:
 # ServiceTerritoryView
 # ---------------------------------------------------------------------------
 
-class ServiceTerritoryView(BaseView):
+class ServiceTerritoryView(BaseERPView):
 	"""Service Territory CRUD."""
 
 	route_base = "/field-service/territories"
@@ -100,7 +101,7 @@ class ServiceTerritoryView(BaseView):
 # ServiceResourceView
 # ---------------------------------------------------------------------------
 
-class ServiceResourceView(BaseView):
+class ServiceResourceView(BaseERPView):
 	"""Service Resource CRUD."""
 
 	route_base = "/field-service/resources"
@@ -152,7 +153,7 @@ class ServiceResourceView(BaseView):
 # WorkOrderView
 # ---------------------------------------------------------------------------
 
-class WorkOrderView(BaseView):
+class WorkOrderView(BaseERPView):
 	"""Work Order CRUD + schedule/complete actions."""
 
 	route_base = "/field-service/work-orders"
@@ -242,7 +243,7 @@ class WorkOrderView(BaseView):
 # ServiceAppointmentView
 # ---------------------------------------------------------------------------
 
-class ServiceAppointmentView(BaseView):
+class ServiceAppointmentView(BaseERPView):
 	"""Service Appointment: propose/confirm/cancel."""
 
 	route_base = "/field-service/appointments"
@@ -305,10 +306,68 @@ class ServiceAppointmentView(BaseView):
 # FieldServiceReportView — 3 ReportForge-compatible report endpoints
 # ---------------------------------------------------------------------------
 
-class FieldServiceReportView(BaseView):
+class FieldServiceReportView(BaseERPView):
 	"""Field Service reports."""
 
 	route_base = "/field-service/reports"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Field Service dashboard — KPIs."""
+		from pgappforge.plugins.erp.crm.field_service.models import WorkOrder, ServiceResource
+		import sqlalchemy.func as func
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+		now = datetime.now(timezone.utc)
+		today = now.date()
+
+		q_today = sa.select(sa.func.count(WorkOrder.id)).where(
+			sa.func.date(WorkOrder.scheduled_start) == today
+		)
+		q_completed = sa.select(sa.func.count(WorkOrder.id)).where(
+			sa.func.date(WorkOrder.scheduled_start) == today,
+			WorkOrder.status == "COMPLETED",
+		)
+		q_resources = sa.select(sa.func.count(ServiceResource.id)).where(
+			ServiceResource.is_active.is_(True)
+		)
+		# avg response hours: mean of (actual_start - created_at) in hours
+		q_response = sa.select(
+			sa.func.coalesce(
+				sa.func.avg(
+					sa.func.extract(
+						"epoch",
+						WorkOrder.actual_start - WorkOrder.created_at,
+					) / 3600
+				),
+				0,
+			)
+		).where(WorkOrder.actual_start.isnot(None))
+		if tenant_id:
+			q_today = q_today.where(WorkOrder.tenant_id == tenant_id)
+			q_completed = q_completed.where(WorkOrder.tenant_id == tenant_id)
+			q_resources = q_resources.where(ServiceResource.tenant_id == tenant_id)
+			q_response = q_response.where(WorkOrder.tenant_id == tenant_id)
+
+		work_orders_today = int(session.execute(q_today).scalar() or 0)
+		completed_today = int(session.execute(q_completed).scalar() or 0)
+		technicians_active = int(session.execute(q_resources).scalar() or 0)
+		avg_response_hours = float(session.execute(q_response).scalar() or 0)
+
+		kpi_html = self.kpi_cards([
+			{"label": "Work Orders Today", "value": work_orders_today, "format": "integer", "color": "#1a56db", "icon": "fa-tools"},
+			{"label": "Completed Today", "value": completed_today, "format": "integer", "color": "#057a55", "icon": "fa-check"},
+			{"label": "Technicians Active", "value": technicians_active, "format": "integer", "color": "#9061f9", "icon": "fa-hard-hat"},
+			{"label": "Avg Response (hrs)", "value": avg_response_hours, "format": "number", "color": "#d97706", "icon": "fa-clock"},
+		])
+
+		return make_response(
+			f"<html><head><meta charset='utf-8'><title>Field Service Dashboard</title>"
+			f"<link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css'>"
+			f"</head><body style='padding:24px'>"
+			f"<h3>Field Service Dashboard</h3>{kpi_html}</body></html>"
+		)
 
 	@expose("/open-work-orders")
 	@has_access

@@ -26,7 +26,8 @@ from datetime import date, datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ def _cents_to_display(cents: int | None, currency: str = "USD") -> str:
 # ARCustomerView
 # ---------------------------------------------------------------------------
 
-class ARCustomerView(BaseView):
+class ARCustomerView(BaseERPView):
 	"""AR Customer CRUD.
 
 	GET  /ar/customers/                — paginated list (HTML)
@@ -279,7 +280,7 @@ class ARCustomerView(BaseView):
 # ARInvoiceView
 # ---------------------------------------------------------------------------
 
-class ARInvoiceView(BaseView):
+class ARInvoiceView(BaseERPView):
 	"""AR Invoice CRUD + business actions.
 
 	GET  /ar/invoices/                    — paginated list (HTML)
@@ -578,7 +579,7 @@ class ARInvoiceView(BaseView):
 # ARPaymentView
 # ---------------------------------------------------------------------------
 
-class ARPaymentView(BaseView):
+class ARPaymentView(BaseERPView):
 	"""AR Payment CRUD + allocation.
 
 	GET  /ar/payments/                  — list (HTML)
@@ -751,7 +752,7 @@ class ARPaymentView(BaseView):
 # ARCreditNoteView
 # ---------------------------------------------------------------------------
 
-class ARCreditNoteView(BaseView):
+class ARCreditNoteView(BaseERPView):
 	"""AR Credit Note CRUD + application.
 
 	GET  /ar/credit-notes/             — list (JSON)
@@ -848,7 +849,7 @@ class ARCreditNoteView(BaseView):
 # ARDunningView
 # ---------------------------------------------------------------------------
 
-class ARDunningView(BaseView):
+class ARDunningView(BaseERPView):
 	"""Dunning run management.
 
 	GET  /ar/dunning/runs               — list runs (JSON)
@@ -955,7 +956,7 @@ class ARDunningView(BaseView):
 # ARReportView  — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class ARReportView(BaseView):
+class ARReportView(BaseERPView):
 	"""Standard AR reports.
 
 	GET /ar/reports/aging                         — AR Aging Report (HTML)
@@ -976,8 +977,43 @@ class ARReportView(BaseView):
 	def aging(self):
 		"""AR Aging Report — latest snapshot per customer."""
 		session = _get_session()
-		from pgappforge.plugins.erp.finance.ar.models import ARAging, ARCustomer
+		from pgappforge.plugins.erp.finance.ar.models import ARAging, ARCustomer, ARInvoice
 		tenant_id = request.args.get("tenant_id")
+
+		# --- KPI summary ---
+		today = date.today()
+		total_customers = session.execute(
+			sa.select(sa.func.count(ARCustomer.id)).where(ARCustomer.status == "ACTIVE")
+		).scalar() or 0
+		outstanding_cents = session.execute(
+			sa.select(sa.func.coalesce(sa.func.sum(ARInvoice.balance_due_cents), 0)).where(
+				ARInvoice.balance_due_cents > 0,
+				ARInvoice.status.not_in(["CANCELLED", "PAID", "WRITTEN_OFF"]),
+			)
+		).scalar() or 0
+		overdue_cents = session.execute(
+			sa.select(sa.func.coalesce(sa.func.sum(ARInvoice.balance_due_cents), 0)).where(
+				ARInvoice.balance_due_cents > 0,
+				ARInvoice.due_date < today,
+				ARInvoice.status.not_in(["CANCELLED", "PAID", "WRITTEN_OFF"]),
+			)
+		).scalar() or 0
+		avg_payment_days_row = session.execute(
+			sa.select(sa.func.avg(
+				sa.func.extract("day", sa.func.age(ARInvoice.paid_date, ARInvoice.invoice_date))
+			)).where(ARInvoice.paid_date.is_not(None))
+		).scalar()
+		avg_payment_days = int(avg_payment_days_row or 0)
+		kpi_html = self.kpi_cards([
+			{"label": "Active Customers", "value": total_customers,
+			 "format": "integer", "color": "#1a56db", "icon": "fa-users"},
+			{"label": "Outstanding (cents)", "value": outstanding_cents,
+			 "format": "integer", "color": "#0e9f6e", "icon": "fa-file-invoice-dollar"},
+			{"label": "Overdue (cents)", "value": overdue_cents,
+			 "format": "integer", "color": "#e02424", "icon": "fa-exclamation-triangle"},
+			{"label": "Avg Payment Days", "value": avg_payment_days,
+			 "format": "integer", "color": "#7e3af2", "icon": "fa-clock"},
+		])
 
 		# Latest snapshot date
 		max_date_sq = (
@@ -1045,6 +1081,7 @@ class ARReportView(BaseView):
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 <style>body{{padding:24px}} @media print{{.noprint{{display:none}}}}</style>
 </head><body>
+{kpi_html}
 <div class="noprint" style="margin-bottom:12px">
   <h3>AR Aging Report</h3>
   <button onclick="window.print()" class="btn btn-xs btn-primary">Print / PDF</button>

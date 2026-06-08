@@ -27,7 +27,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ def _page_html(title: str, body: str) -> str:
 # RequisitionView
 # ---------------------------------------------------------------------------
 
-class RequisitionView(BaseView):
+class RequisitionView(BaseERPView):
 	"""Job requisition CRUD + lifecycle.
 
 	GET  /talent/requisitions/                — list
@@ -258,7 +259,7 @@ class RequisitionView(BaseView):
 # CandidateView
 # ---------------------------------------------------------------------------
 
-class CandidateView(BaseView):
+class CandidateView(BaseERPView):
 	"""Candidate master CRUD.
 
 	GET  /talent/candidates/          — list
@@ -394,7 +395,7 @@ class CandidateView(BaseView):
 # ApplicationView
 # ---------------------------------------------------------------------------
 
-class ApplicationView(BaseView):
+class ApplicationView(BaseERPView):
 	"""Application CRUD + pipeline stage management.
 
 	GET  /talent/applications/                   — list
@@ -522,7 +523,7 @@ class ApplicationView(BaseView):
 # InterviewView
 # ---------------------------------------------------------------------------
 
-class InterviewView(BaseView):
+class InterviewView(BaseERPView):
 	"""Interview scheduling and completion.
 
 	POST /talent/interviews/                     — schedule interview
@@ -653,7 +654,7 @@ class InterviewView(BaseView):
 # OfferView
 # ---------------------------------------------------------------------------
 
-class OfferView(BaseView):
+class OfferView(BaseERPView):
 	"""Employment offer management.
 
 	POST /talent/offers/                       — extend offer (DRAFT)
@@ -784,7 +785,7 @@ class OfferView(BaseView):
 # PerformanceReviewView
 # ---------------------------------------------------------------------------
 
-class PerformanceReviewView(BaseView):
+class PerformanceReviewView(BaseERPView):
 	"""Performance review CRUD + workflow.
 
 	GET  /talent/reviews/                     — list
@@ -932,7 +933,7 @@ class PerformanceReviewView(BaseView):
 # TrainingView
 # ---------------------------------------------------------------------------
 
-class TrainingView(BaseView):
+class TrainingView(BaseERPView):
 	"""Training course catalogue + enrollment management.
 
 	GET  /talent/training/courses/               — list courses
@@ -1089,7 +1090,7 @@ class TrainingView(BaseView):
 # TalentReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class TalentReportView(BaseView):
+class TalentReportView(BaseERPView):
 	"""Talent Management canned reports.
 
 	GET /talent/reports/pipeline     — Pipeline Funnel per requisition
@@ -1099,6 +1100,90 @@ class TalentReportView(BaseView):
 
 	route_base = "/talent/reports"
 	default_view = "pipeline"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Talent dashboard — KPIs + 9-box distribution chart."""
+		from pgappforge.plugins.erp.hcm.talent.models import (
+			Requisition, PerformanceReview,
+		)
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+
+		# --- KPIs ---
+		q_emp = sa.select(sa.func.count()).select_from(
+			sa.select(PerformanceReview.employee_id).distinct().subquery()
+		)
+		q_open = sa.select(sa.func.count(Requisition.id)).where(
+			Requisition.status.in_(("POSTED", "IN_PROGRESS"))
+		)
+		if tenant_id:
+			q_emp = q_emp  # employee_id distinct already, keep simple
+			q_open = q_open.where(Requisition.tenant_id == tenant_id)
+
+		total_employees = session.execute(q_emp).scalar() or 0
+		open_positions = session.execute(q_open).scalar() or 0
+
+		# succession_ready: FINAL reviews with rating >= 4
+		q_ready = sa.select(sa.func.count(PerformanceReview.id)).where(
+			PerformanceReview.status == "FINAL",
+			PerformanceReview.overall_rating >= 4,
+		)
+		# flight_risk_high: FINAL reviews with rating <= 2
+		q_risk = sa.select(sa.func.count(PerformanceReview.id)).where(
+			PerformanceReview.status == "FINAL",
+			PerformanceReview.overall_rating <= 2,
+		)
+		if tenant_id:
+			q_ready = q_ready.where(PerformanceReview.tenant_id == tenant_id)
+			q_risk = q_risk.where(PerformanceReview.tenant_id == tenant_id)
+
+		succession_ready = session.execute(q_ready).scalar() or 0
+		flight_risk_high = session.execute(q_risk).scalar() or 0
+
+		kpi_html = self.kpi_cards([
+			{"label": "Total Employees", "value": total_employees, "format": "integer", "color": "#1a56db", "icon": "fa-users"},
+			{"label": "Succession Ready", "value": succession_ready, "format": "integer", "color": "#057a55", "icon": "fa-star"},
+			{"label": "Flight Risk (High)", "value": flight_risk_high, "format": "integer", "color": "#e02424", "icon": "fa-exclamation-triangle"},
+			{"label": "Open Positions", "value": open_positions, "format": "integer", "color": "#9061f9", "icon": "fa-briefcase"},
+		])
+
+		# --- 9-box distribution chart ---
+		# 3 performance bands × 3 potential bands; approximate via rating buckets
+		q_9box = (
+			sa.select(
+				sa.case(
+					(PerformanceReview.overall_rating >= 4, "High"),
+					(PerformanceReview.overall_rating >= 3, "Medium"),
+					else_="Low",
+				).label("perf_band"),
+				sa.func.count().label("count"),
+			)
+			.where(PerformanceReview.status == "FINAL")
+			.group_by("perf_band")
+		)
+		if tenant_id:
+			q_9box = q_9box.where(PerformanceReview.tenant_id == tenant_id)
+		box_rows = [
+			{"label": r.perf_band, "value": r.count}
+			for r in session.execute(q_9box).all()
+		]
+		chart_html = self.chart(
+			box_rows,
+			chart_type="bar",
+			x_col="label",
+			y_col="value",
+			title="9-Box Performance Distribution",
+			height=280,
+		)
+
+		body = (
+			f'<h3>Talent Dashboard</h3>'
+			f'{kpi_html}'
+			f'<div style="max-width:600px">{chart_html}</div>'
+		)
+		return make_response(_page_html("Talent Dashboard", body), 200)
 
 	@expose("/pipeline")
 	@has_access

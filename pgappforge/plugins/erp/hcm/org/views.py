@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def _page_html(title: str, body: str) -> str:
 # LegalEntityView
 # ---------------------------------------------------------------------------
 
-class LegalEntityView(BaseView):
+class LegalEntityView(BaseERPView):
 	"""Legal entity CRUD.
 
 	GET  /hcm/org/entities/                — list
@@ -188,7 +189,7 @@ class LegalEntityView(BaseView):
 # OrgUnitView
 # ---------------------------------------------------------------------------
 
-class OrgUnitView(BaseView):
+class OrgUnitView(BaseERPView):
 	"""Org unit CRUD + restructure + org tree.
 
 	GET  /hcm/org/units/                      — list
@@ -281,7 +282,7 @@ class OrgUnitView(BaseView):
 # PositionView
 # ---------------------------------------------------------------------------
 
-class PositionView(BaseView):
+class PositionView(BaseERPView):
 	"""Position CRUD + fill/vacate.
 
 	GET  /hcm/org/positions/              — list (filterable by is_filled, org_unit_id)
@@ -406,7 +407,7 @@ class PositionView(BaseView):
 # JobCatalogView
 # ---------------------------------------------------------------------------
 
-class JobCatalogView(BaseView):
+class JobCatalogView(BaseERPView):
 	"""Job catalog CRUD.
 
 	GET  /hcm/org/jobs/   — list
@@ -514,7 +515,7 @@ class JobCatalogView(BaseView):
 # CompensationGradeView
 # ---------------------------------------------------------------------------
 
-class CompensationGradeView(BaseView):
+class CompensationGradeView(BaseERPView):
 	"""Compensation grade read + publish (immutable ledger).
 
 	GET  /hcm/org/grades/            — list all bands
@@ -568,7 +569,7 @@ class CompensationGradeView(BaseView):
 # OrgReportView
 # ---------------------------------------------------------------------------
 
-class OrgReportView(BaseView):
+class OrgReportView(BaseERPView):
 	"""Org Management canned reports.
 
 	GET /hcm/org/reports/headcount         — headcount by org unit
@@ -578,6 +579,36 @@ class OrgReportView(BaseView):
 
 	route_base = "/hcm/org/reports"
 	default_view = "headcount"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		"""Org dashboard — KPIs."""
+		from pgappforge.plugins.erp.hcm.org.models import LegalEntity, OrgUnit
+		from pgappforge.plugins.erp.hcm.personnel.models import Employee
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+
+		q_entities = sa.select(sa.func.count(LegalEntity.id)).where(LegalEntity.is_active.is_(True))
+		q_units = sa.select(sa.func.count(OrgUnit.id)).where(OrgUnit.is_active.is_(True))
+		q_emp = sa.select(sa.func.count(Employee.id)).where(Employee.employment_status == "ACTIVE")
+		if tenant_id:
+			q_entities = q_entities.where(LegalEntity.tenant_id == tenant_id)
+			q_units = q_units.where(OrgUnit.tenant_id == tenant_id)
+			q_emp = q_emp.where(Employee.tenant_id == tenant_id)
+
+		total_entities = session.execute(q_entities).scalar() or 0
+		total_departments = session.execute(q_units).scalar() or 0
+		total_employees = session.execute(q_emp).scalar() or 0
+
+		kpi_html = self.kpi_cards([
+			{"label": "Legal Entities", "value": total_entities, "format": "integer", "color": "#1a56db", "icon": "fa-building"},
+			{"label": "Total Employees", "value": total_employees, "format": "integer", "color": "#057a55", "icon": "fa-users"},
+			{"label": "Departments", "value": total_departments, "format": "integer", "color": "#9061f9", "icon": "fa-sitemap"},
+		])
+
+		body = f'<h3>Org Dashboard</h3>{kpi_html}'
+		return make_response(_page_html("Org Dashboard", body), 200)
 
 	@expose("/headcount")
 	@has_access

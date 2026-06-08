@@ -25,7 +25,8 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
 
-from pgappforge import BaseView, expose
+from pgappforge import expose
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
 log = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ def _page_html(title: str, body: str) -> str:
 # APSupplierView
 # ---------------------------------------------------------------------------
 
-class APSupplierView(BaseView):
+class APSupplierView(BaseERPView):
 	"""Supplier master CRUD.
 
 	GET  /ap/suppliers/              — list (HTML or JSON)
@@ -273,7 +274,7 @@ class APSupplierView(BaseView):
 # APPurchaseOrderView
 # ---------------------------------------------------------------------------
 
-class APPurchaseOrderView(BaseView):
+class APPurchaseOrderView(BaseERPView):
 	"""Purchase order CRUD + lifecycle actions.
 
 	GET  /ap/purchase-orders/              — list
@@ -483,7 +484,7 @@ class APPurchaseOrderView(BaseView):
 # APGoodsReceiptView
 # ---------------------------------------------------------------------------
 
-class APGoodsReceiptView(BaseView):
+class APGoodsReceiptView(BaseERPView):
 	"""GRN CRUD + posting.
 
 	GET  /ap/grn/              — list
@@ -606,7 +607,7 @@ class APGoodsReceiptView(BaseView):
 # APInvoiceView
 # ---------------------------------------------------------------------------
 
-class APInvoiceView(BaseView):
+class APInvoiceView(BaseERPView):
 	"""Invoice CRUD + matching + approval.
 
 	GET  /ap/invoices/                   — list
@@ -879,7 +880,7 @@ class APInvoiceView(BaseView):
 # APPaymentRunView
 # ---------------------------------------------------------------------------
 
-class APPaymentRunView(BaseView):
+class APPaymentRunView(BaseERPView):
 	"""Payment run management.
 
 	GET  /ap/payment-runs/               — list
@@ -1013,7 +1014,7 @@ class APPaymentRunView(BaseView):
 # APReportView — 3 canned reports
 # ---------------------------------------------------------------------------
 
-class APReportView(BaseView):
+class APReportView(BaseERPView):
 	"""AP canned reports.
 
 	GET /ap/reports/aging            — AP Aging (current/30/60/90+ days overdue)
@@ -1032,6 +1033,32 @@ class APReportView(BaseView):
 		session = _get_session()
 		today = datetime.now(timezone.utc).date()
 		tenant_id = request.args.get("tenant_id")
+
+		# --- KPI summary ---
+		total_suppliers = session.execute(
+			sa.select(sa.func.count(APSupplier.id))
+		).scalar() or 0
+		pending_invoices = session.execute(
+			sa.select(sa.func.count(APInvoice.id)).where(
+				APInvoice.status.notin_(["PAID", "CANCELLED"])
+			)
+		).scalar() or 0
+		overdue_amount_cents = session.execute(
+			sa.select(sa.func.coalesce(
+				sa.func.sum(APInvoice.total_cents - APInvoice.paid_cents), 0
+			)).where(
+				APInvoice.status.notin_(["PAID", "CANCELLED"]),
+				APInvoice.due_date < today,
+			)
+		).scalar() or 0
+		kpi_html = self.kpi_cards([
+			{"label": "Total Suppliers", "value": total_suppliers,
+			 "format": "integer", "color": "#1a56db", "icon": "fa-truck"},
+			{"label": "Pending Invoices", "value": pending_invoices,
+			 "format": "integer", "color": "#e3a008", "icon": "fa-file-invoice"},
+			{"label": "Overdue (cents)", "value": overdue_amount_cents,
+			 "format": "integer", "color": "#e02424", "icon": "fa-exclamation-circle"},
+		])
 
 		q = (
 			sa.select(APInvoice, APSupplier)
@@ -1113,6 +1140,7 @@ class APReportView(BaseView):
 		body = (
 			f'<div class="noprint"><h3>AP Aging Report — as of {today}</h3>'
 			f'<button onclick="window.print()" class="btn btn-xs btn-primary">Print</button></div>'
+			f'{kpi_html}'
 			f'{sections}'
 			f'<p><strong>Grand Total Outstanding: {grand_total / 100:,.2f}</strong></p>'
 			f'<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</p>'
