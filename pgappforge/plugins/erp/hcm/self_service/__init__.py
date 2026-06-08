@@ -119,50 +119,21 @@ class SelfServicePlugin(BasePlugin):
 			Announcement,
 		]
 
-	def register_views(self, appbuilder: Any) -> None:
-		# Views are registered lazily to avoid circular imports at module load time.
-		# Import here so they only load when appbuilder is ready.
-		try:
-			from .views import (  # type: ignore[import]
-				AnnouncementView,
-				EssDocumentView,
-				LeaveBalanceView,
-				LeaveRequestView,
-				ProfileUpdateRequestView,
-			)
-			appbuilder.add_view(
-				LeaveRequestView,
-				"My Leave Requests",
-				icon="fa-calendar",
-				category=ESS_MENU_CATEGORY,
-			)
-			appbuilder.add_view(
-				LeaveBalanceView,
-				"Leave Balances",
-				icon="fa-balance-scale",
-				category=ESS_MENU_CATEGORY,
-			)
-			appbuilder.add_view(
-				ProfileUpdateRequestView,
-				"Profile Updates",
-				icon="fa-user-edit",
-				category=ESS_MENU_CATEGORY,
-			)
-			appbuilder.add_view(
-				EssDocumentView,
-				"My Documents",
-				icon="fa-file-alt",
-				category=ESS_MENU_CATEGORY,
-			)
-			appbuilder.add_view(
-				AnnouncementView,
-				"Announcements",
-				icon="fa-bullhorn",
-				category=ESS_MENU_CATEGORY,
-			)
-		except ImportError:
-			# views.py not yet implemented — safe to skip during early bootstrap
-			pass
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.hcm.self_service.views import (
+			AnnouncementView,
+			LeaveBalanceView,
+			LeaveRequestView,
+			SelfServiceDashboardView,
+		)
+		import logging
+		log = logging.getLogger(__name__)
+		cat = ESS_MENU_CATEGORY
+		self.add_view(SelfServiceDashboardView, "My Portal", icon="fa-tachometer", category=cat)
+		self.add_view(LeaveRequestView, "My Leave Requests", icon="fa-calendar", category=cat)
+		self.add_view(LeaveBalanceView, "Leave Balances", icon="fa-balance-scale", category=cat)
+		self.add_view(AnnouncementView, "Announcements", icon="fa-bullhorn", category=cat)
+		log.info("SelfServicePlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: Any) -> None:
 		"""Register business rule sets for ESS leave and announcement workflows."""

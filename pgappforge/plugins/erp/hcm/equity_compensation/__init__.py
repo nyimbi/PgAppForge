@@ -129,12 +129,18 @@ class EquityCompensationPlugin(BasePlugin):
 		return [EquityPlan, EquityGrant, VestingEvent, EquityExercise]
 
 	def register_views(self) -> None:
-		# Views are registered lazily to avoid circular imports at plugin load time.
-		# Implement EquityPlanView, EquityGrantView, etc. in views.py when UI is needed.
-		log.info(
-			"EquityCompensationPlugin: no views registered (API-only mode); "
-			"add views.py and call add_view() here to enable UI"
+		from pgappforge.plugins.erp.hcm.equity_compensation.views import (
+			EquityDashboardView,
+			EquityGrantView,
+			EquityPlanView,
+			VestingEventView,
 		)
+		cat = self.config.get("EQUITY_MENU_CATEGORY", "Equity")
+		self.add_view(EquityDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(EquityPlanView, "Equity Plans", icon="fa-chart-pie", category=cat)
+		self.add_view(EquityGrantView, "Grants", icon="fa-gift", category=cat)
+		self.add_view(VestingEventView, "Vesting Events", icon="fa-unlock", category=cat)
+		log.info("EquityCompensationPlugin: views registered under %r", cat)
 
 
 # ---------------------------------------------------------------------------

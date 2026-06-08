@@ -7,6 +7,7 @@ from sqlalchemy import (
 	BigInteger,
 	Date,
 	DateTime,
+	ForeignKey,
 	Index,
 	Integer,
 	Numeric,
@@ -44,11 +45,13 @@ class EmissionFactor(AuditMixin, Model):
 		UUID(as_uuid=False),
 		primary_key=True,
 		default=lambda: str(uuid.uuid4()),
+		server_default=func.gen_random_uuid(),
 	)
 	source_type: Mapped[str] = mapped_column(String(100), nullable=False)
 	country_code: Mapped[str] = mapped_column(
 		String(3), nullable=False, default="KEN"
 	)
+	region: Mapped[str | None] = mapped_column(String(100), nullable=True)
 	co2e_per_unit: Mapped[object] = mapped_column(
 		Numeric(12, 6), nullable=False
 	)
@@ -93,7 +96,9 @@ class EmissionRecord(AuditMixin, Model):
 	activity_data: Mapped[object] = mapped_column(Numeric(15, 4), nullable=False)
 	unit: Mapped[str] = mapped_column(String(30), nullable=False)
 	emission_factor_id: Mapped[str | None] = mapped_column(
-		UUID(as_uuid=False), nullable=True
+		UUID(as_uuid=False),
+		ForeignKey("co2_emission_factor.id", ondelete="SET NULL"),
+		nullable=True,
 	)
 	co2e_kg: Mapped[object] = mapped_column(Numeric(15, 4), nullable=False)
 	period: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -132,6 +137,7 @@ class GHGReport(AuditMixin, Model):
 	total_co2e_kg: Mapped[object] = mapped_column(Numeric(15, 4), nullable=False)
 	methodology: Mapped[str | None] = mapped_column(Text, nullable=True)
 	entity_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+	generated_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
 	tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
 
 

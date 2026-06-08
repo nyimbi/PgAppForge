@@ -43,7 +43,18 @@ class MultiBookPlugin(BasePlugin):
 		return [AccountingBook, BookJournalEntry]
 
 	def register_views(self) -> None:
-		log.info("MultiBookPlugin: views pending implementation")
+		try:
+			from pgappforge.plugins.erp.finance.multi_book.views import (
+				AccountingBookView,
+				BookJournalEntryView,
+			)
+		except ImportError:
+			log.warning("MultiBookPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("MULTI_BOOK_MENU_CATEGORY", "Multi-Book Accounting")
+		self.add_view(AccountingBookView, "Accounting Books", icon="fa-book", category=cat)
+		self.add_view(BookJournalEntryView, "Book Journal Entries", icon="fa-list", category=cat)
+		log.info("MultiBookPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: Any) -> None:
 		pass

@@ -132,10 +132,20 @@ class RecruitingPlugin(BasePlugin):
 		return [JobRequisition, JobApplication, InterviewSchedule, OfferLetter]
 
 	def register_views(self) -> None:
-		log.info(
-			"RecruitingPlugin: no views registered (API-only mode); "
-			"add views.py and call add_view() here to enable UI"
+		from pgappforge.plugins.erp.hcm.recruiting.views import (
+			InterviewScheduleView,
+			JobApplicationView,
+			JobRequisitionView,
+			OfferLetterView,
+			RecruitingDashboardView,
 		)
+		cat = self.config.get("RECRUITING_MENU_CATEGORY", "Recruiting")
+		self.add_view(RecruitingDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(JobRequisitionView, "Requisitions", icon="fa-briefcase", category=cat)
+		self.add_view(JobApplicationView, "Applications", icon="fa-file-alt", category=cat)
+		self.add_view(InterviewScheduleView, "Interviews", icon="fa-comments", category=cat)
+		self.add_view(OfferLetterView, "Offers", icon="fa-handshake", category=cat)
+		log.info("RecruitingPlugin: views registered under %r", cat)
 
 	# ------------------------------------------------------------------
 	# Event handlers

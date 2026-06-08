@@ -122,7 +122,17 @@ class LunchPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		_log.info("LunchPlugin.register_views: view registration pending implementation")
+		from pgappforge.plugins.erp.hcm.lunch.views import (
+			LunchMenuView,
+			LunchOrderView,
+			LunchSupplierView,
+		)
+		cat = self.appbuilder.get_app().config.get("LUNCH_MENU_CATEGORY", "Lunch") \
+			if self.appbuilder is not None else "Lunch"
+		self.add_view(LunchSupplierView, "Suppliers", icon="fa-store", category=cat)
+		self.add_view(LunchMenuView, "Menus", icon="fa-utensils", category=cat)
+		self.add_view(LunchOrderView, "Orders", icon="fa-shopping-cart", category=cat)
+		_log.info("LunchPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: object) -> None:  # type: ignore[override]
 		"""Install domain-level validation rulesets via the Rules Engine.

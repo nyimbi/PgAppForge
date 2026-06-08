@@ -125,7 +125,17 @@ class WellnessPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		_log.info("WellnessPlugin.register_views: view registration pending implementation")
+		from pgappforge.plugins.erp.hcm.wellness.views import (
+			WellnessCheckInView,
+			WellnessEnrollmentView,
+			WellnessProgramView,
+		)
+		cat = self.config.get("WELLNESS_MENU_CATEGORY", "Wellness") if self.appbuilder is None else \
+			self.appbuilder.get_app().config.get("WELLNESS_MENU_CATEGORY", "Wellness")
+		self.add_view(WellnessProgramView, "Programs", icon="fa-heartbeat", category=cat)
+		self.add_view(WellnessEnrollmentView, "Enrollments", icon="fa-user-plus", category=cat)
+		self.add_view(WellnessCheckInView, "Check-Ins", icon="fa-clipboard-check", category=cat)
+		_log.info("WellnessPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: object) -> None:  # type: ignore[override]
 		"""Install domain-level validation rulesets via the Rules Engine.

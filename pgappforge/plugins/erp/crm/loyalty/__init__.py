@@ -81,6 +81,18 @@ class LoyaltyPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("LoyaltyPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.crm.loyalty.views import (
+			LoyaltyProgramView,
+			LoyaltyAccountView,
+			LoyaltyTransactionView,
+		)
+		cat = self.config.get("LOYALTY_MENU_CATEGORY", "Loyalty")
+		self.add_view(LoyaltyProgramView, "Programs", icon="fa-star", category=cat)
+		self.add_view(LoyaltyAccountView, "Accounts", icon="fa-user-circle", category=cat)
+		self.add_view(LoyaltyTransactionView, "Transactions", icon="fa-exchange", category=cat)
+		log.info("LoyaltyPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.crm.loyalty.models import (
 			LoyaltyProgram,

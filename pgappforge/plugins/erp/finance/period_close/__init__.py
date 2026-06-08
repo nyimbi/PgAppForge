@@ -97,6 +97,22 @@ class PeriodClosePlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("PeriodClosePlugin initialised (config keys: %s)", list(self.config))
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.finance.period_close.views import (
+				PeriodCloseTemplateView,
+				PeriodCloseView,
+				PeriodCloseTaskView,
+			)
+		except ImportError:
+			log.warning("PeriodClosePlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("PERIOD_CLOSE_MENU_CATEGORY", "Period Close")
+		self.add_view(PeriodCloseView, "Period Close", icon="fa-calendar-check-o", category=cat)
+		self.add_view(PeriodCloseTaskView, "Close Tasks", icon="fa-tasks", category=cat)
+		self.add_view(PeriodCloseTemplateView, "Close Templates", icon="fa-file-text-o", category=cat)
+		log.info("PeriodClosePlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.finance.period_close.models import (
 			PeriodClose,

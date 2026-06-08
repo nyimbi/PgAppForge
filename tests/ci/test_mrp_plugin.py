@@ -82,32 +82,46 @@ def test_round_up_to_lot_zero_lot_size_defaults_to_one():
 # Model instantiation
 # ---------------------------------------------------------------------------
 
-def test_mrp_run_defaults():
+def test_mrp_run_explicit_values():
+	"""Column(default=...) fires at INSERT, not Python instantiation.
+	Verify that explicitly-set values round-trip correctly."""
 	from pgappforge.plugins.erp.operations.mrp.models import MRPRun
 	run = MRPRun(
 		tenant_id=_uuid4(),
 		period="2025-06",
+		status="IN_PROGRESS",
+		horizon_days=90,
+		planned_orders_count=0,
+		purchase_reqs_count=0,
 	)
 	assert run.status == "IN_PROGRESS"
 	assert run.horizon_days == 90
 	assert run.planned_orders_count == 0
 	assert run.purchase_reqs_count == 0
+	assert run.period == "2025-06"
 
 
-def test_mrp_product_config_defaults():
+def test_mrp_product_config_explicit_values():
+	"""Verify MRPProductConfig stores explicitly-passed values correctly."""
 	from pgappforge.plugins.erp.operations.mrp.models import MRPProductConfig
 	cfg = MRPProductConfig(
 		tenant_id=_uuid4(),
 		product_id=_uuid4(),
+		procurement_type="EXTERNAL",
+		lead_time_days=7,
+		lot_size_qty=Decimal("1"),
+		safety_stock_qty=Decimal("0"),
+		reorder_point_qty=Decimal("0"),
 	)
 	assert cfg.procurement_type == "EXTERNAL"
 	assert cfg.lead_time_days == 7
-	assert cfg.lot_size_qty == 1
-	assert cfg.safety_stock_qty == 0
-	assert cfg.reorder_point_qty == 0
+	assert cfg.lot_size_qty == Decimal("1")
+	assert cfg.safety_stock_qty == Decimal("0")
+	assert cfg.reorder_point_qty == Decimal("0")
 
 
-def test_mrp_planned_order_defaults():
+def test_mrp_planned_order_explicit_values():
+	"""Verify MRPPlannedOrder stores explicitly-passed values correctly."""
 	from pgappforge.plugins.erp.operations.mrp.models import MRPPlannedOrder
 	order = MRPPlannedOrder(
 		tenant_id=_uuid4(),
@@ -118,9 +132,12 @@ def test_mrp_planned_order_defaults():
 		required_date=date.today() + timedelta(days=30),
 		planned_start_date=date.today() + timedelta(days=23),
 		order_type="PURCHASE",
+		status="PLANNED",
+		converted_to_id=None,
 	)
 	assert order.status == "PLANNED"
 	assert order.converted_to_id is None
+	assert order.order_type == "PURCHASE"
 
 
 # ---------------------------------------------------------------------------
@@ -557,11 +574,8 @@ def test_convert_to_po_success():
 	session.execute = _fake_execute
 	session.flush = MagicMock()
 
-	with patch(
-		"pgappforge.plugins.erp.operations.mrp.services.SCMService",
-		create=True,
-	):
-		# SCM not loaded → falls back to stub PO ID
+	# Patch the SCM import so the lazy-import path hits ImportError → stub PO ID
+	with patch.dict("sys.modules", {"pgappforge.plugins.erp.operations.scm.services": None}):
 		result = MRPService.convert_to_po(order.id, session)
 
 	assert result["status"] == "RELEASED"

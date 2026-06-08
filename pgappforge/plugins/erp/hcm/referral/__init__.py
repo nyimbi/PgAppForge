@@ -117,7 +117,17 @@ class ReferralPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		_log.info("ReferralPlugin.register_views: view registration pending implementation")
+		from pgappforge.plugins.erp.hcm.referral.views import (
+			ReferralProgramView,
+			ReferralRewardView,
+			ReferralSubmissionView,
+		)
+		cat = self.appbuilder.get_app().config.get("REFERRAL_MENU_CATEGORY", "Referrals") \
+			if self.appbuilder is not None else "Referrals"
+		self.add_view(ReferralProgramView, "Programs", icon="fa-gift", category=cat)
+		self.add_view(ReferralSubmissionView, "Submissions", icon="fa-paper-plane", category=cat)
+		self.add_view(ReferralRewardView, "Rewards", icon="fa-award", category=cat)
+		_log.info("ReferralPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: object) -> None:  # type: ignore[override]
 		"""Install domain-level validation rulesets via the Rules Engine.

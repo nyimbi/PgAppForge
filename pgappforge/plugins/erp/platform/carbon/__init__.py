@@ -86,6 +86,20 @@ class CarbonPlugin(BasePlugin):
 		CARBON_DEFAULT_COUNTRY = "KEN"
 		log.info("CarbonPlugin initialized")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.carbon.views import (
+			CarbonDashboardView,
+			EmissionFactorView,
+			EmissionRecordView,
+			GHGReportView,
+		)
+		cat = self.config.get("CARBON_MENU_CATEGORY", "Sustainability")
+		self.add_view(CarbonDashboardView, "Carbon Dashboard", icon="fa-leaf", category=cat)
+		self.add_view(EmissionFactorView, "Emission Factors", icon="fa-database", category=cat)
+		self.add_view(EmissionRecordView, "Emission Records", icon="fa-list", category=cat)
+		self.add_view(GHGReportView, "GHG Reports", icon="fa-file-text-o", category=cat)
+		log.info("CarbonPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list[type]:
 		return [EmissionFactor, EmissionRecord, GHGReport, CarbonOffset]
 

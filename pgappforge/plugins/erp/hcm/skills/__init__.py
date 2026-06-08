@@ -107,9 +107,19 @@ class SkillsPlugin(BasePlugin):
 			JobRequiredSkill,
 		]
 
-	def register_views(self) -> list[Any]:
-		"""Register Flask-AppBuilder views. Stub — views not yet implemented."""
-		return []
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.hcm.skills.views import (
+			EmployeeSkillView,
+			SkillDomainView,
+			SkillsDashboardView,
+			SkillView,
+		)
+		cat = self.config.get("SKILLS_MENU_CATEGORY", "Talent & Skills")
+		self.add_view(SkillsDashboardView, "Skills Explorer", icon="fa-tachometer", category=cat)
+		self.add_view(SkillDomainView, "Skill Domains", icon="fa-sitemap", category=cat)
+		self.add_view(SkillView, "Skills", icon="fa-star", category=cat)
+		self.add_view(EmployeeSkillView, "Employee Skills", icon="fa-user-check", category=cat)
+		log.info("SkillsPlugin: views registered under %r", cat)
 
 	# ------------------------------------------------------------------
 	# Event handler stubs

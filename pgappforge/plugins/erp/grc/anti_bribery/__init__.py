@@ -83,6 +83,18 @@ class AntiBriberyPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("AntiBriberyPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.grc.anti_bribery.views import (
+			GiftsRegisterDashboardView,
+			GiftEntertainmentLogView,
+			ConflictOfInterestDeclarationView,
+		)
+		cat = self.config.get("AB_MENU_CATEGORY", "GRC")
+		self.add_view(GiftsRegisterDashboardView, "Gifts Register", icon="fa-gift", category=cat)
+		self.add_view(GiftEntertainmentLogView, "Gift & Entertainment Log", icon="fa-list", category=cat)
+		self.add_view(ConflictOfInterestDeclarationView, "COI Declarations", icon="fa-user-times", category=cat)
+		log.info("AntiBriberyPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.grc.anti_bribery.models import (
 			GiftEntertainmentLog,

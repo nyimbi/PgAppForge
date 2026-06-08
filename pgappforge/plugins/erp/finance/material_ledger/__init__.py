@@ -87,6 +87,20 @@ class MaterialLedgerPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("MaterialLedgerPlugin initialised")
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.finance.material_ledger.views import (
+				MaterialLedgerEntryView,
+				ActualCostRevaluationView,
+			)
+		except ImportError:
+			log.warning("MaterialLedgerPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("ML_MENU_CATEGORY", "Material Ledger")
+		self.add_view(MaterialLedgerEntryView, "Material Ledger", icon="fa-table", category=cat)
+		self.add_view(ActualCostRevaluationView, "Settlement Runs", icon="fa-cogs", category=cat)
+		log.info("MaterialLedgerPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.finance.material_ledger.models import (
 			CostingPeriod, MaterialLedger, MaterialMovement, CostSettlement,

@@ -106,9 +106,19 @@ class ContingentWorkforcePlugin(BasePlugin):
 			ContingentTimesheet,
 		]
 
-	def register_views(self) -> list[Any]:
-		"""Register Flask-AppBuilder views. Stub — views not yet implemented."""
-		return []
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.hcm.contingent.views import (
+			ContingentDashboardView,
+			ContingentTimesheetView,
+			ContingentWorkerView,
+			StatementOfWorkView,
+		)
+		cat = self.config.get("CONTINGENT_MENU_CATEGORY", "Contingent Workforce")
+		self.add_view(ContingentDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(ContingentWorkerView, "Workers", icon="fa-user-tie", category=cat)
+		self.add_view(StatementOfWorkView, "Statements of Work", icon="fa-file-contract", category=cat)
+		self.add_view(ContingentTimesheetView, "Timesheets", icon="fa-clock", category=cat)
+		log.info("ContingentWorkforcePlugin: views registered under %r", cat)
 
 	# ------------------------------------------------------------------
 	# Event handler stubs

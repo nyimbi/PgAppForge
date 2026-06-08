@@ -141,11 +141,20 @@ class CompensationPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		"""Register FAB views for the compensation module.
-
-		View classes are defined in views.py (not yet generated). This stub is safe
-		to call — it is a no-op until views.py is authored.
-		"""
+		from pgappforge.plugins.erp.hcm.compensation.views import (
+			AllowanceDefinitionView,
+			CompensationDashboardView,
+			CompensationGradeView,
+			CompensationPackageView,
+		)
+		import logging
+		log = logging.getLogger(__name__)
+		cat = self.appbuilder.app.config.get("COMPENSATION_MENU_CATEGORY", "Compensation")
+		self.add_view(CompensationDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(CompensationGradeView, "Grades", icon="fa-layer-group", category=cat)
+		self.add_view(CompensationPackageView, "Packages", icon="fa-money-bill", category=cat)
+		self.add_view(AllowanceDefinitionView, "Allowances", icon="fa-plus-circle", category=cat)
+		log.info("CompensationPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: Any) -> None:
 		"""Install default business rules into the rules engine.

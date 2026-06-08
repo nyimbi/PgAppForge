@@ -112,6 +112,18 @@ class CustomerPortalPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("CustomerPortalPlugin initialised (config keys: %s)", list(self.config))
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.crm.customer_portal.views import (
+			CustomerPortalUserView,
+			PortalPaymentView,
+			CustomerPortalDashboardView,
+		)
+		cat = self.config.get("PORTAL_MENU_CATEGORY", "Customer Portal")
+		self.add_view(CustomerPortalDashboardView, "Portal Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(CustomerPortalUserView, "Portal Users", icon="fa-users", category=cat)
+		self.add_view(PortalPaymentView, "Payments", icon="fa-credit-card", category=cat)
+		log.info("CustomerPortalPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.crm.customer_portal.models import (
 			CustomerPortalUser,

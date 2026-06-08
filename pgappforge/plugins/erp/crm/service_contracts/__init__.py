@@ -83,7 +83,14 @@ class ServiceContractsPlugin(BasePlugin):
 		return [ServiceContract, ContractRenewal]
 
 	def register_views(self) -> None:
-		log.info("ServiceContractsPlugin: views pending implementation")
+		from pgappforge.plugins.erp.crm.service_contracts.views import (
+			ServiceContractView,
+			ContractRenewalView,
+		)
+		cat = self.config.get("SERVICE_CONTRACTS_MENU_CATEGORY", "Service Contracts")
+		self.add_view(ServiceContractView, "Contracts", icon="fa-file-text", category=cat)
+		self.add_view(ContractRenewalView, "Renewals", icon="fa-refresh", category=cat)
+		log.info("ServiceContractsPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: Any) -> None:
 		pass

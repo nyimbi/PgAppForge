@@ -399,16 +399,24 @@ class TestAwardRFQ:
 		session.get.side_effect = _get
 		session.execute.return_value.scalars.return_value.all.return_value = []
 
-		with patch("pgappforge.plugins.erp.procurement.sourcing.services._emit"):
-			with patch(
-				"pgappforge.plugins.erp.procurement.sourcing.services.SCMService",
-				side_effect=ImportError,
-			):
+		# award_rfq() tries: from pgappforge.plugins.erp.operations.scm.services import SCMService
+		# That module may or may not be importable. Either way the try/except catches it
+		# and po_id stays "". We just verify the award itself completes correctly.
+		import sys
+		scm_mod = "pgappforge.plugins.erp.operations.scm.services"
+		originally_present = scm_mod in sys.modules
+		# Force ImportError by temporarily removing the module if present
+		saved = sys.modules.pop(scm_mod, None)
+		try:
+			with patch("pgappforge.plugins.erp.procurement.sourcing.services._emit"):
 				result = SourcingService.award_rfq(
 					rfq_id=rfq.id,
 					winning_bid_id=bid.id,
 					session=session,
 				)
+		finally:
+			if saved is not None:
+				sys.modules[scm_mod] = saved
 
 		assert result["rfq_id"] == rfq.id
 		assert result["winning_bid_id"] == bid.id

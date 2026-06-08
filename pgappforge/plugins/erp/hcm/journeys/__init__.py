@@ -133,12 +133,18 @@ class JourneysPlugin(BasePlugin):
 		return [JourneyTemplate, Journey, JourneyTask]
 
 	def register_views(self) -> None:
-		# Views registered lazily; implement JourneyTemplateView, JourneyView, etc.
-		# in views.py when UI is needed.
-		log.info(
-			"JourneysPlugin: no views registered (API-only mode); "
-			"add views.py and call add_view() here to enable UI"
+		from pgappforge.plugins.erp.hcm.journeys.views import (
+			JourneysDashboardView,
+			JourneyTaskView,
+			JourneyTemplateView,
+			JourneyView,
 		)
+		cat = self.config.get("JOURNEYS_MENU_CATEGORY", "HR")
+		self.add_view(JourneysDashboardView, "Journeys", icon="fa-tachometer", category=cat)
+		self.add_view(JourneyTemplateView, "Journey Templates", icon="fa-copy", category=cat)
+		self.add_view(JourneyView, "Active Journeys", icon="fa-route", category=cat)
+		self.add_view(JourneyTaskView, "Journey Tasks", icon="fa-tasks", category=cat)
+		log.info("JourneysPlugin: views registered under %r", cat)
 
 	# ------------------------------------------------------------------
 	# Event handlers (auto-start journeys on hire/termination)

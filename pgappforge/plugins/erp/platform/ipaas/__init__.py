@@ -78,6 +78,20 @@ class IPaaSPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("IPaaSPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.ipaas.views import (
+			IPaaSFlowsDashboardView,
+			ConnectorDefinitionView,
+			ConnectorInstanceView,
+			IntegrationFlowView,
+		)
+		cat = self.config.get("IPAAS_MENU_CATEGORY", "Integrations")
+		self.add_view(IPaaSFlowsDashboardView, "iPaaS Dashboard", icon="fa-exchange", category=cat)
+		self.add_view(ConnectorDefinitionView, "Connector Definitions", icon="fa-plug", category=cat)
+		self.add_view(ConnectorInstanceView, "Connector Instances", icon="fa-link", category=cat)
+		self.add_view(IntegrationFlowView, "Integration Flows", icon="fa-random", category=cat)
+		log.info("IPaaSPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.platform.ipaas.models import (
 			ConnectorDefinition,

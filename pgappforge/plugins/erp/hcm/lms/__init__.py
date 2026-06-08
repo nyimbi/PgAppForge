@@ -120,9 +120,19 @@ class LmsPlugin(BasePlugin):
 			LmsCertificate,
 		]
 
-	def register_views(self) -> list[Any]:
-		"""Register Flask-AppBuilder views. Stub — views not yet implemented."""
-		return []
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.hcm.lms.views import (
+			LmsCertificateView,
+			LmsCourseView,
+			LmsDashboardView,
+			LmsEnrollmentView,
+		)
+		cat = self.config.get("LMS_MENU_CATEGORY", "Learning & Development")
+		self.add_view(LmsDashboardView, "Course Catalog", icon="fa-tachometer", category=cat)
+		self.add_view(LmsCourseView, "Courses", icon="fa-book", category=cat)
+		self.add_view(LmsEnrollmentView, "Enrollments", icon="fa-user-graduate", category=cat)
+		self.add_view(LmsCertificateView, "Certificates", icon="fa-certificate", category=cat)
+		log.info("LmsPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: Session) -> None:
 		"""

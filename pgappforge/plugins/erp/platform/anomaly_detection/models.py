@@ -34,6 +34,7 @@ class AnomalyDetectionRun(AuditMixin, Model):
 	id: Mapped[str] = mapped_column(
 		UUID(as_uuid=False),
 		primary_key=True,
+		default=lambda: str(uuid.uuid4()),
 		server_default=func.gen_random_uuid(),
 	)
 	run_type: Mapped[str] = mapped_column(String(30), nullable=False)
@@ -59,6 +60,7 @@ class Anomaly(AuditMixin, Model):
 	__tablename__ = "anm_anomaly"
 	__table_args__ = (
 		Index("ix_anm_anomaly_tenant_status_severity", "tenant_id", "status", "severity"),
+		Index("ix_anm_anomaly_tenant_anomaly_type", "tenant_id", "anomaly_type"),
 		Index("ix_anm_anomaly_source_record_id", "source_record_id"),
 	)
 

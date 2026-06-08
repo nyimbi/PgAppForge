@@ -184,7 +184,16 @@ class AppointmentsPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		log.info("AppointmentsPlugin: no views registered (views.py not yet implemented)")
+		from pgappforge.plugins.erp.crm.appointments.views import (
+			AppointmentServiceView,
+			AppointmentView,
+			AppointmentCalendarView,
+		)
+		cat = self.config.get("APT_MENU_CATEGORY", "Appointments")
+		self.add_view(AppointmentCalendarView, "Booking Calendar", icon="fa-calendar", category=cat)
+		self.add_view(AppointmentServiceView, "Services", icon="fa-list", category=cat)
+		self.add_view(AppointmentView, "Appointments", icon="fa-clock-o", category=cat)
+		log.info("AppointmentsPlugin: views registered under %r", cat)
 
 	@staticmethod
 	def setup_rules(session: Any) -> None:

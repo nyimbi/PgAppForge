@@ -146,10 +146,18 @@ class BenefitsPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		"""Register FAB views — deferred until view classes are implemented."""
-		_log.info(
-			"BenefitsPlugin.register_views: view registration pending implementation"
+		from pgappforge.plugins.erp.hcm.benefits.views import (
+			BenefitClaimView,
+			BenefitEnrollmentView,
+			BenefitPlanView,
+			BenefitsDashboardView,
 		)
+		cat = self.config.get("BENEFITS_MENU_CATEGORY", "Benefits")
+		self.add_view(BenefitsDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(BenefitPlanView, "Benefit Plans", icon="fa-file-medical", category=cat)
+		self.add_view(BenefitEnrollmentView, "Enrollments", icon="fa-users", category=cat)
+		self.add_view(BenefitClaimView, "Claims", icon="fa-file-invoice", category=cat)
+		_log.info("BenefitsPlugin: views registered under %r", cat)
 
 	def setup_rules(self, session: object) -> None:  # type: ignore[override]
 		"""Install domain-level validation rulesets via the Rules Engine.

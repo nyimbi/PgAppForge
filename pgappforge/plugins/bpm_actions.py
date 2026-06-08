@@ -951,4 +951,360 @@ def _qc_raise_ncr(
 		return {"status": "error", "message": str(exc)}
 
 
+# ── Operations — Repair / RMA ─────────────────────────────────────────────────
+
+@BPMActionRegistry.register("ops.repair.create_order", "Create a new repair / RMA order")
+def _repair_create_order(
+	record_ctx: dict,
+	session: Any,
+	customer_name: str = "",
+	product_name: str = "",
+	problem_description: str = "",
+	customer_email: str | None = None,
+	customer_id: str | None = None,
+	serial_number: str | None = None,
+	entity_id: str | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.operations.repair.services import RepairService
+	except ImportError:
+		return {"status": "error", "message": "erp.operations.repair plugin not installed"}
+	tenant_id = record_ctx.get("tenant_id", "")
+	try:
+		order = RepairService.create_order(
+			customer_name=customer_name,
+			product_name=product_name,
+			problem_description=problem_description,
+			tenant_id=tenant_id,
+			session=session,
+			customer_email=customer_email,
+			customer_id=customer_id,
+			serial_number=serial_number,
+			entity_id=entity_id,
+		)
+		return {"status": "ok", "order_id": order.id, "order_ref": order.order_ref}
+	except Exception as exc:
+		log.warning("bpm repair.create_order failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("ops.repair.complete_repair", "Mark repair work complete")
+def _repair_complete_repair(
+	record_ctx: dict,
+	session: Any,
+	order_id: str = "",
+	technician_id: str = "",
+	actual_cost_cents: int | None = None,
+	parts_used: list | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.operations.repair.services import RepairService
+	except ImportError:
+		return {"status": "error", "message": "erp.operations.repair plugin not installed"}
+	try:
+		order = RepairService.complete_repair(
+			order_id=order_id,
+			technician_id=technician_id,
+			session=session,
+			actual_cost_cents=actual_cost_cents,
+			parts_used=parts_used,
+		)
+		return {
+			"status": "ok",
+			"order_id": order.id,
+			"order_ref": order.order_ref,
+			"new_status": order.status,
+		}
+	except Exception as exc:
+		log.warning("bpm repair.complete_repair failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+# ── Operations — Rental ───────────────────────────────────────────────────────
+
+@BPMActionRegistry.register("ops.rental.create_order", "Place a rental order for an asset")
+def _rental_create_order(
+	record_ctx: dict,
+	session: Any,
+	asset_id: str = "",
+	start_date: str = "",
+	end_date: str = "",
+	customer_name: str = "",
+	customer_id: str | None = None,
+	customer_email: str | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.operations.rental.services import RentalService
+	except ImportError:
+		return {"status": "error", "message": "erp.operations.rental plugin not installed"}
+	from datetime import date as _date
+	tenant_id = record_ctx.get("tenant_id", "")
+	try:
+		start = _date.fromisoformat(start_date)
+		end = _date.fromisoformat(end_date)
+		order = RentalService.create_order(
+			asset_id=asset_id,
+			start_date=start,
+			end_date=end,
+			customer_name=customer_name,
+			tenant_id=tenant_id,
+			session=session,
+			customer_id=customer_id,
+			customer_email=customer_email,
+		)
+		return {
+			"status": "ok",
+			"order_id": order.id,
+			"order_ref": order.order_ref,
+			"rental_amount_cents": order.rental_amount_cents,
+		}
+	except Exception as exc:
+		log.warning("bpm rental.create_order failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("ops.rental.return_asset", "Process asset return for a rental order")
+def _rental_return_asset(
+	record_ctx: dict,
+	session: Any,
+	order_id: str = "",
+	return_condition_notes: str = "",
+	damage_charge_cents: int = 0,
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.operations.rental.services import RentalService
+	except ImportError:
+		return {"status": "error", "message": "erp.operations.rental plugin not installed"}
+	try:
+		order = RentalService.return_asset(
+			order_id=order_id,
+			return_condition_notes=return_condition_notes,
+			session=session,
+			damage_charge_cents=damage_charge_cents,
+		)
+		return {
+			"status": "ok",
+			"order_id": order.id,
+			"order_ref": order.order_ref,
+			"actual_return_date": order.actual_return_date.isoformat() if order.actual_return_date else None,
+			"damage_charge_cents": order.damage_charge_cents,
+		}
+	except Exception as exc:
+		log.warning("bpm rental.return_asset failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+# ── Operations — PLM ─────────────────────────────────────────────────────────
+
+@BPMActionRegistry.register("ops.plm.approve_eco", "Approve an Engineering Change Order")
+def _plm_approve_eco(
+	record_ctx: dict,
+	session: Any,
+	eco_id: str = "",
+	approver_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.operations.plm.services import PlmService
+	except ImportError:
+		return {"status": "error", "message": "erp.operations.plm plugin not installed"}
+	try:
+		eco = PlmService.approve_eco(
+			eco_id=eco_id,
+			approver_id=approver_id,
+			session=session,
+		)
+		return {"status": "ok", "eco_id": eco.id, "new_status": eco.status}
+	except Exception as exc:
+		log.warning("bpm plm.approve_eco failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("ops.plm.release_version", "Release an approved product version")
+def _plm_release_version(
+	record_ctx: dict,
+	session: Any,
+	version_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.operations.plm.services import PlmService
+	except ImportError:
+		return {"status": "error", "message": "erp.operations.plm plugin not installed"}
+	try:
+		version = PlmService.release_version(
+			version_id=version_id,
+			session=session,
+		)
+		return {
+			"status": "ok",
+			"version_id": version.id,
+			"version_number": version.version_number,
+			"released_at": version.released_at.isoformat() if version.released_at else None,
+		}
+	except Exception as exc:
+		log.warning("bpm plm.release_version failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+# ── ERP HCM — Recruiting / ATS ───────────────────────────────────────────────
+
+@BPMActionRegistry.register("hcm.recruiting.advance_application", "Advance recruiting application status")
+def _rec_advance_application(
+	record_ctx: dict,
+	session: Any,
+	application_id: str = "",
+	new_status: str = "",
+	rejection_reason: str | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.hcm.recruiting.services import RecruitingService
+	except ImportError:
+		return {"status": "error", "message": "hcm.recruiting plugin not installed"}
+	try:
+		svc = RecruitingService()
+		app = svc.advance_status(
+			application_id, new_status, session,
+			rejection_reason=rejection_reason,
+		)
+		return {"status": "ok", "application_id": app.id, "app_status": app.status}
+	except Exception as exc:
+		log.warning("bpm recruiting.advance_application failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.recruiting.create_offer", "Create job offer letter")
+def _rec_create_offer(
+	record_ctx: dict,
+	session: Any,
+	application_id: str = "",
+	salary_cents: int = 0,
+	start_date: str | None = None,
+	expiry_date: str | None = None,
+	bonus_cents: int = 0,
+	currency_code: str = "KES",
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.hcm.recruiting.services import RecruitingService
+	except ImportError:
+		return {"status": "error", "message": "hcm.recruiting plugin not installed"}
+	tenant_id = record_ctx.get("tenant_id", "")
+	try:
+		from datetime import date
+		sd = date.fromisoformat(start_date) if start_date else None
+		ed = date.fromisoformat(expiry_date) if expiry_date else None
+		svc = RecruitingService()
+		offer = svc.create_offer(
+			application_id, salary_cents, sd, ed, tenant_id, session,
+			bonus_cents=bonus_cents,
+			currency_code=currency_code,
+		)
+		return {"status": "ok", "offer_id": offer.id, "offer_status": offer.status}
+	except Exception as exc:
+		log.warning("bpm recruiting.create_offer failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+# ── ERP HCM — Performance Review ─────────────────────────────────────────────
+
+@BPMActionRegistry.register("hcm.performance.request_reviews", "Request performance reviews for employee")
+def _perf_request_reviews(
+	record_ctx: dict,
+	session: Any,
+	employee_id: str = "",
+	cycle_id: str = "",
+	reviewer_ids: list | None = None,
+	review_type: str = "MANAGER",
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.hcm.performance.services import PerformanceService
+	except ImportError:
+		return {"status": "error", "message": "hcm.performance plugin not installed"}
+	try:
+		svc = PerformanceService()
+		reviews = svc.request_reviews(
+			employee_id, cycle_id, reviewer_ids or [], review_type, session
+		)
+		return {"status": "ok", "review_ids": [r.id for r in reviews]}
+	except Exception as exc:
+		log.warning("bpm performance.request_reviews failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.performance.update_goal_progress", "Update OKR/goal progress")
+def _perf_update_goal_progress(
+	record_ctx: dict,
+	session: Any,
+	goal_id: str = "",
+	progress_pct: float = 0.0,
+	key_result_updates: list | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.hcm.performance.services import PerformanceService
+	except ImportError:
+		return {"status": "error", "message": "hcm.performance plugin not installed"}
+	try:
+		svc = PerformanceService()
+		goal = svc.update_progress(
+			goal_id, progress_pct, session,
+			key_result_updates=key_result_updates,
+		)
+		return {"status": "ok", "goal_id": goal.id, "progress_pct": float(goal.progress_pct)}
+	except Exception as exc:
+		log.warning("bpm performance.update_goal_progress failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+# ── ERP HCM — Position Management ────────────────────────────────────────────
+
+@BPMActionRegistry.register("hcm.positions.fill", "Fill a position with an employee")
+def _pos_fill(
+	record_ctx: dict,
+	session: Any,
+	position_id: str = "",
+	employee_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.hcm.position_management.services import PositionManagementService
+	except ImportError:
+		return {"status": "error", "message": "hcm.position_management plugin not installed"}
+	try:
+		svc = PositionManagementService()
+		pos = svc.fill_position(position_id, employee_id, session)
+		return {"status": "ok", "position_id": pos.id, "position_status": pos.status}
+	except Exception as exc:
+		log.warning("bpm positions.fill failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.positions.vacate", "Vacate a position")
+def _pos_vacate(
+	record_ctx: dict,
+	session: Any,
+	position_id: str = "",
+	trigger: str = "RESIGNATION",
+	**kw: Any,
+) -> dict:
+	try:
+		from pgappforge.plugins.erp.hcm.position_management.services import PositionManagementService
+	except ImportError:
+		return {"status": "error", "message": "hcm.position_management plugin not installed"}
+	try:
+		svc = PositionManagementService()
+		pos = svc.vacate_position(position_id, trigger, session)
+		return {"status": "ok", "position_id": pos.id, "position_status": pos.status}
+	except Exception as exc:
+		log.warning("bpm positions.vacate failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
 __all__ = ["BPMActionRegistry"]

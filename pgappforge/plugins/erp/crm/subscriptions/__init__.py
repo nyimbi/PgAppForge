@@ -113,8 +113,18 @@ class SubscriptionsPlugin(BasePlugin):
 		return [SubscriptionPlan, Subscription, SubscriptionInvoice, SubscriptionUsage]
 
 	def register_views(self) -> None:
-		# Views deferred to views.py — REST API endpoints suffice for now.
-		log.info("SubscriptionsPlugin: no views registered (views.py not yet implemented)")
+		from pgappforge.plugins.erp.crm.subscriptions.views import (
+			SubscriptionPlanView,
+			SubscriptionView,
+			SubscriptionInvoiceView,
+			MRRDashboardView,
+		)
+		cat = self.config.get("SUBSCRIPTIONS_MENU_CATEGORY", "Subscriptions")
+		self.add_view(MRRDashboardView, "MRR Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(SubscriptionPlanView, "Plans", icon="fa-list", category=cat)
+		self.add_view(SubscriptionView, "Subscriptions", icon="fa-repeat", category=cat)
+		self.add_view(SubscriptionInvoiceView, "Invoices", icon="fa-file-text-o", category=cat)
+		log.info("SubscriptionsPlugin: views registered under %r", cat)
 
 	@staticmethod
 	def setup_rules(session: Any) -> None:

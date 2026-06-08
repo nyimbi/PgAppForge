@@ -107,7 +107,18 @@ class CapacitySchedulingPlugin(BasePlugin):
 		log.info("CapacitySchedulingPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
-		pass  # Views registered lazily by consuming application
+		from pgappforge.plugins.erp.operations.capacity_scheduling.views import (
+			CapacityGanttView,
+			WorkCenterView,
+			CapacityLoadView,
+			ProductionScheduleView,
+		)
+		cat = self.config.get("CSC_MENU_CATEGORY", "Capacity Planning")
+		self.add_view(CapacityGanttView, "Capacity Gantt", icon="fa-tachometer", category=cat)
+		self.add_view(WorkCenterView, "Work Centers", icon="fa-industry", category=cat)
+		self.add_view(CapacityLoadView, "Capacity Loads", icon="fa-bar-chart", category=cat)
+		self.add_view(ProductionScheduleView, "Production Schedules", icon="fa-calendar", category=cat)
+		log.info("CapacitySchedulingPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.capacity_scheduling.models import (

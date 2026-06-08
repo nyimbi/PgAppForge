@@ -76,6 +76,16 @@ class SpendAnalyticsPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("SpendAnalyticsPlugin initialised")
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.procurement.spend_analytics.views import SpendSnapshotView
+		except ImportError:
+			log.warning("SpendAnalyticsPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("SPEND_ANALYTICS_MENU_CATEGORY", "Procurement")
+		self.add_view(SpendSnapshotView, "Spend Analytics", icon="fa-pie-chart", category=cat)
+		log.info("SpendAnalyticsPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.procurement.spend_analytics.models import SpendSnapshot
 		return [SpendSnapshot]

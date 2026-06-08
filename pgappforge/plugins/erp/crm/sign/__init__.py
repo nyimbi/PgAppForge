@@ -106,7 +106,16 @@ class SignPlugin(BasePlugin):
 		]
 
 	def register_views(self) -> None:
-		log.info("SignPlugin: no views registered (views.py not yet implemented)")
+		from pgappforge.plugins.erp.crm.sign.views import (
+			SignatureRequestView,
+			SignatureSignatoryView,
+			SignWorkflowView,
+		)
+		cat = self.config.get("SIGN_MENU_CATEGORY", "Documents")
+		self.add_view(SignWorkflowView, "Sign Dashboard", icon="fa-pencil-square-o", category=cat)
+		self.add_view(SignatureRequestView, "Signature Requests", icon="fa-file-text-o", category=cat)
+		self.add_view(SignatureSignatoryView, "Signatories", icon="fa-users", category=cat)
+		log.info("SignPlugin: views registered under %r", cat)
 
 	@staticmethod
 	def setup_rules(session: Any) -> None:

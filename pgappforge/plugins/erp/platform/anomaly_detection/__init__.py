@@ -56,6 +56,7 @@ class AnomalyDetectionPlugin(BasePlugin):
 			"fraud",
 			"audit",
 			"internal-controls",
+			"ai",
 		],
 		priority=PluginPriority.NORMAL,
 	)
@@ -80,6 +81,18 @@ class AnomalyDetectionPlugin(BasePlugin):
 		global ANOMALY_MENU_CATEGORY
 		ANOMALY_MENU_CATEGORY = "Anomaly Detection"
 		log.info("AnomalyDetectionPlugin initialized")
+
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.anomaly_detection.views import (
+			AnomalyDashboardView,
+			AnomalyDetectionRunView,
+			AnomalyView,
+		)
+		cat = self.config.get("ANOMALY_MENU_CATEGORY", "Anomaly Detection")
+		self.add_view(AnomalyDashboardView, "Anomaly Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(AnomalyDetectionRunView, "Detection Runs", icon="fa-refresh", category=cat)
+		self.add_view(AnomalyView, "Anomalies", icon="fa-exclamation-circle", category=cat)
+		log.info("AnomalyDetectionPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list[type]:
 		return [AnomalyDetectionRun, Anomaly]

@@ -118,7 +118,10 @@ class LeanManufacturingPlugin(BasePlugin):
 		log.info("LeanManufacturingPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
-		pass  # Views registered lazily by consuming application
+		from pgappforge.plugins.erp.operations.lean.views import KanbanBoardView
+		cat = self.config.get("KBN_MENU_CATEGORY", "Lean / Kanban")
+		self.add_view(KanbanBoardView, "Kanban Boards", icon="fa-columns", category=cat)
+		log.info("LeanManufacturingPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.lean.models import (

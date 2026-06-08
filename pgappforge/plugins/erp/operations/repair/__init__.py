@@ -104,8 +104,16 @@ class RepairPlugin(BasePlugin):
 		log.info("RepairPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
+		from pgappforge.plugins.erp.operations.repair.views import (
+			RepairOrdersDashboardView,
+			RepairOrderView,
+			WarrantyClaimView,
+		)
 		cat = self.config.get("REPAIR_MENU_CATEGORY", "Repair & RMA")
-		log.info("RepairPlugin: views would be registered under category %r", cat)
+		self.add_view(RepairOrdersDashboardView, "Repair Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(RepairOrderView, "Repair Orders", icon="fa-wrench", category=cat)
+		self.add_view(WarrantyClaimView, "Warranty Claims", icon="fa-shield", category=cat)
+		log.info("RepairPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.repair.models import RepairOrder, WarrantyClaim

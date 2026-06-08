@@ -90,6 +90,20 @@ class LeaseAccountingPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("LeaseAccountingPlugin initialised")
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.finance.lease_accounting.views import (
+				LeaseView,
+				LeasePaymentScheduleView,
+			)
+		except ImportError:
+			log.warning("LeaseAccountingPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("LEASE_MENU_CATEGORY", "Lease Accounting")
+		self.add_view(LeaseView, "Leases", icon="fa-building-o", category=cat)
+		self.add_view(LeasePaymentScheduleView, "Payment Schedule", icon="fa-calendar", category=cat)
+		log.info("LeaseAccountingPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.finance.lease_accounting.models import (
 			Lease, LeasePaymentSchedule, RouAsset, LeaseModification,

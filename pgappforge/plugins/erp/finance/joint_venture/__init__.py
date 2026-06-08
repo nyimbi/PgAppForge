@@ -91,6 +91,22 @@ class JointVenturePlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("JointVenturePlugin initialised")
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.finance.joint_venture.views import (
+				JointVentureView,
+				JVCashCallView,
+				JVBillingRecordView,
+			)
+		except ImportError:
+			log.warning("JointVenturePlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("JV_MENU_CATEGORY", "Joint Ventures")
+		self.add_view(JointVentureView, "Joint Ventures", icon="fa-handshake-o", category=cat)
+		self.add_view(JVCashCallView, "Cash Calls", icon="fa-money", category=cat)
+		self.add_view(JVBillingRecordView, "Billing Statements", icon="fa-file-text", category=cat)
+		log.info("JointVenturePlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.finance.joint_venture.models import (
 			JointVenture, JvPartner, JvBillingStatement,

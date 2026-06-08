@@ -88,6 +88,20 @@ class HedgeAccountingPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("HedgeAccountingPlugin initialised")
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.finance.hedge_accounting.views import (
+				HedgeRelationshipView,
+				HedgeJournalEntryView,
+			)
+		except ImportError:
+			log.warning("HedgeAccountingPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("HEDGE_MENU_CATEGORY", "Hedge Accounting")
+		self.add_view(HedgeRelationshipView, "Hedge Relationships", icon="fa-link", category=cat)
+		self.add_view(HedgeJournalEntryView, "Hedge Journals", icon="fa-book", category=cat)
+		log.info("HedgeAccountingPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.finance.hedge_accounting.models import (
 			HedgeRelationship, HedgeEffectivenessTest, HedgeFairValueMovement,

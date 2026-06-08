@@ -1,0 +1,58 @@
+"""
+pgappforge/plugins/erp/crm/appointments/views.py
+
+Flask-AppBuilder views for the Appointments/Booking plugin.
+"""
+from __future__ import annotations
+
+import logging
+
+from flask import render_template
+from pgappforge import ModelView, expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import has_access
+
+from pgappforge.plugins.erp.base_view import BaseERPView
+
+log = logging.getLogger(__name__)
+
+
+class AppointmentServiceView(ModelView):
+	from pgappforge.plugins.erp.crm.appointments.models import AppointmentService
+	datamodel = SQLAInterface(AppointmentService)
+	list_columns = ['name', 'category', 'duration_minutes', 'price_cents', 'currency_code', 'is_active']
+	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
+	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
+
+
+class AppointmentView(ModelView):
+	from pgappforge.plugins.erp.crm.appointments.models import Appointment
+	datamodel = SQLAInterface(Appointment)
+	list_columns = ['booking_ref', 'customer_name', 'staff_id', 'start_at', 'end_at', 'status', 'amount_cents']
+	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
+	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
+
+
+class AppointmentCalendarView(BaseERPView):
+	route_base = "/crm/appointments"
+
+	@expose("/")
+	@has_access
+	def index(self):
+		kpi_html = self.kpi_cards([
+			{"label": "Today's Bookings", "value": 0, "icon": "fa-calendar-check-o", "color": "#1a56db"},
+			{"label": "Pending", "value": 0, "icon": "fa-clock-o", "color": "#ff5a1f"},
+			{"label": "Completed Today", "value": 0, "icon": "fa-check", "color": "#0e9f6e"},
+		])
+		return render_template(
+			"crm_appointments/booking_calendar.html",
+			kpi_html=kpi_html,
+			appbuilder=self.appbuilder,
+		)
+
+
+__all__ = [
+	"AppointmentServiceView",
+	"AppointmentView",
+	"AppointmentCalendarView",
+]

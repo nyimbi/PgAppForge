@@ -118,7 +118,16 @@ class ProcessManufacturingPlugin(BasePlugin):
 		log.info("ProcessManufacturingPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
-		pass  # Views registered lazily by consuming application
+		from pgappforge.plugins.erp.operations.process_manufacturing.views import (
+			RecipeView,
+			RecipeIngredientView,
+			BatchRecordView,
+		)
+		cat = self.config.get("PRM_MENU_CATEGORY", "Process Manufacturing")
+		self.add_view(RecipeView, "Recipes", icon="fa-flask", category=cat)
+		self.add_view(RecipeIngredientView, "Ingredients", icon="fa-list-ul", category=cat)
+		self.add_view(BatchRecordView, "Batch Records", icon="fa-clipboard", category=cat)
+		log.info("ProcessManufacturingPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.process_manufacturing.models import (

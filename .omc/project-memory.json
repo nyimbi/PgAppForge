@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1780414301811,
+  "lastScanned": 1780726238848,
   "projectRoot": "/Users/nyimbiodero/src/pjs/fab-ext",
   "techStack": {
     "languages": [
@@ -27,7 +27,7 @@
   },
   "build": {
     "buildCommand": "make build",
-    "testCommand": ".venv/bin/python -m pytest tests/ci/ -q --tb=no 2>&1 | tail -8",
+    "testCommand": "uv run pytest tests/ci/test_recruiting_plugin.py tests/ci/test_performance_plugin.py tests/ci/test_position_management_plugin.py -v --tb=short 2>&1",
     "lintCommand": "ruff check",
     "devCommand": null,
     "scripts": {}
@@ -59,7 +59,7 @@
       "path": "Flask_AppBuilder.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780414301802,
+      "lastAccessed": 1780726238834,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -72,7 +72,7 @@
       "path": "__pycache__",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1780414301804,
+      "lastAccessed": 1780726238835,
       "keyFiles": [
         "init_db.cpython-313.pyc",
         "setup.cpython-311.pyc",
@@ -85,7 +85,7 @@
       "path": "babel",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780414301804,
+      "lastAccessed": 1780726238835,
       "keyFiles": [
         "babel.cfg",
         "messages.pot"
@@ -95,7 +95,7 @@
       "path": "bin",
       "purpose": "Executable scripts",
       "fileCount": 13,
-      "lastAccessed": 1780414301804,
+      "lastAccessed": 1780726238836,
       "keyFiles": [
         "babel_extract.sh",
         "babel_init.sh",
@@ -108,14 +108,14 @@
       "path": "docker",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1780414301805,
+      "lastAccessed": 1780726238836,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
-      "fileCount": 64,
-      "lastAccessed": 1780414301805,
+      "fileCount": 66,
+      "lastAccessed": 1780726238838,
       "keyFiles": [
         "AI_SECURITY_DEPLOYMENT_GUIDE.md",
         "API_DOCUMENTATION.md",
@@ -128,7 +128,7 @@
       "path": "examples",
       "purpose": "Example code",
       "fileCount": 15,
-      "lastAccessed": 1780414301805,
+      "lastAccessed": 1780726238838,
       "keyFiles": [
         "README.md",
         "README.rst",
@@ -141,7 +141,7 @@
       "path": "hardware_store",
       "purpose": null,
       "fileCount": 10,
-      "lastAccessed": 1780414301806,
+      "lastAccessed": 1780726238839,
       "keyFiles": [
         "app.json",
         "babel.config.js",
@@ -154,7 +154,7 @@
       "path": "images",
       "purpose": null,
       "fileCount": 23,
-      "lastAccessed": 1780414301806,
+      "lastAccessed": 1780726238839,
       "keyFiles": [
         "ListThumbnail.png",
         "chart.png",
@@ -167,7 +167,7 @@
       "path": "init-scripts",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780414301806,
+      "lastAccessed": 1780726238839,
       "keyFiles": [
         "01-init-age.sql",
         "02-sample-data.sql"
@@ -177,7 +177,7 @@
       "path": "nginx",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1780414301806,
+      "lastAccessed": 1780726238839,
       "keyFiles": [
         "nginx.conf"
       ]
@@ -186,14 +186,14 @@
       "path": "packages",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1780414301806,
+      "lastAccessed": 1780726238840,
       "keyFiles": []
     },
     "pgappforge": {
       "path": "pgappforge",
       "purpose": null,
       "fileCount": 26,
-      "lastAccessed": 1780414301807,
+      "lastAccessed": 1780726238841,
       "keyFiles": [
         "IMPLEMENTATION_COMPLETE.md",
         "__init__.py",
@@ -206,7 +206,7 @@
       "path": "pgappforge.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780414301807,
+      "lastAccessed": 1780726238841,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -219,7 +219,7 @@
       "path": "pgforge.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780414301807,
+      "lastAccessed": 1780726238842,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -232,7 +232,7 @@
       "path": "requirements",
       "purpose": null,
       "fileCount": 17,
-      "lastAccessed": 1780414301807,
+      "lastAccessed": 1780726238843,
       "keyFiles": [
         "ai.in",
         "base.in",
@@ -245,7 +245,7 @@
       "path": "requirements-fe",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780414301808,
+      "lastAccessed": 1780726238843,
       "keyFiles": [
         "package-lock.json",
         "package.json"
@@ -255,7 +255,7 @@
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 11,
-      "lastAccessed": 1780414301808,
+      "lastAccessed": 1780726238843,
       "keyFiles": [
         "babel_extract.sh",
         "babel_init.sh",
@@ -267,8 +267,8 @@
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 94,
-      "lastAccessed": 1780414301808,
+      "fileCount": 103,
+      "lastAccessed": 1780726238844,
       "keyFiles": [
         "AUTHENTICATION_BYPASS_SECURITY_VALIDATION.md",
         "COMPREHENSIVE_ISSUE_RESOLUTION_REPORT.md",
@@ -281,7 +281,7 @@
       "path": "tmp",
       "purpose": null,
       "fileCount": 6,
-      "lastAccessed": 1780414301808,
+      "lastAccessed": 1780726238845,
       "keyFiles": [
         "gen_models.py",
         "gen_views.py",
@@ -294,7 +294,7 @@
       "path": "works",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1780414301808,
+      "lastAccessed": 1780726238845,
       "keyFiles": [
         "REMEDIATION_PLAN.md",
         "REORGANIZATION_LOG.md",
@@ -307,7 +307,7 @@
       "path": "hardware_store/app",
       "purpose": "Application code",
       "fileCount": 1,
-      "lastAccessed": 1780414301809,
+      "lastAccessed": 1780726238846,
       "keyFiles": [
         "_layout.tsx"
       ]
@@ -316,14 +316,14 @@
       "path": "hardware_store/components",
       "purpose": "UI components",
       "fileCount": 0,
-      "lastAccessed": 1780414301809,
+      "lastAccessed": 1780726238846,
       "keyFiles": []
     },
     "hardware_store/lib": {
       "path": "hardware_store/lib",
       "purpose": "Library code",
       "fileCount": 5,
-      "lastAccessed": 1780414301810,
+      "lastAccessed": 1780726238847,
       "keyFiles": [
         "auth.ts",
         "config.ts",
@@ -334,7 +334,7 @@
       "path": "pgappforge/api",
       "purpose": "API routes",
       "fileCount": 5,
-      "lastAccessed": 1780414301810,
+      "lastAccessed": 1780726238847,
       "keyFiles": [
         "__init__.py",
         "convert.py",
@@ -345,7 +345,7 @@
       "path": "tmp/utils",
       "purpose": "Utility functions",
       "fileCount": 10,
-      "lastAccessed": 1780414301811,
+      "lastAccessed": 1780726238848,
       "keyFiles": [
         "__init__.py",
         "additional-utils.md",
@@ -356,14 +356,14 @@
   "hotPaths": [
     {
       "path": "pgappforge/plugins/fintech/core_banking/services.py",
-      "accessCount": 245,
-      "lastAccessed": 1780666043940,
+      "accessCount": 251,
+      "lastAccessed": 1780701505281,
       "type": "file"
     },
     {
       "path": "pgappforge/plugins/fintech/payments/services.py",
-      "accessCount": 129,
-      "lastAccessed": 1780611739649,
+      "accessCount": 132,
+      "lastAccessed": 1780701516130,
       "type": "file"
     },
     {
@@ -386,8 +386,8 @@
     },
     {
       "path": "pgappforge/plugins/fintech/lending/services.py",
-      "accessCount": 112,
-      "lastAccessed": 1780611712192,
+      "accessCount": 116,
+      "lastAccessed": 1780701511180,
       "type": "file"
     },
     {
@@ -493,6 +493,12 @@
       "type": "file"
     },
     {
+      "path": "pgappforge/plugins/erp/foundation/events.py",
+      "accessCount": 41,
+      "lastAccessed": 1780851836435,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/fintech/sacco/events.py",
       "accessCount": 40,
       "lastAccessed": 1780479989656,
@@ -529,6 +535,12 @@
       "type": "file"
     },
     {
+      "path": "pgappforge/plugins/erp/finance/gl/services.py",
+      "accessCount": 33,
+      "lastAccessed": 1780819492891,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/fintech/mobile_money/__init__.py",
       "accessCount": 28,
       "lastAccessed": 1780502992654,
@@ -541,15 +553,15 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/erp/finance/gl/services.py",
-      "accessCount": 20,
-      "lastAccessed": 1780610608616,
-      "type": "file"
-    },
-    {
       "path": "tests/ci/test_core_banking_gl.py",
       "accessCount": 20,
       "lastAccessed": 1780611770383,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/erp/finance/gl/models.py",
+      "accessCount": 20,
+      "lastAccessed": 1780819365824,
       "type": "file"
     },
     {
@@ -583,12 +595,6 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/erp/finance/gl/models.py",
-      "accessCount": 11,
-      "lastAccessed": 1780610610547,
-      "type": "file"
-    },
-    {
       "path": "tests/ci/conftest.py",
       "accessCount": 10,
       "lastAccessed": 1780668001408,
@@ -607,6 +613,12 @@
       "type": "file"
     },
     {
+      "path": "pgappforge/plugins/erp/foundation/models.py",
+      "accessCount": 8,
+      "lastAccessed": 1780740581867,
+      "type": "file"
+    },
+    {
       "path": "pgappforge/plugins/fintech/sacco/__init__.py",
       "accessCount": 6,
       "lastAccessed": 1780478236419,
@@ -619,21 +631,9 @@
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/erp/foundation/events.py",
-      "accessCount": 5,
-      "lastAccessed": 1780595615869,
-      "type": "file"
-    },
-    {
       "path": "pgappforge/plugins/erp/foundation/services.py",
       "accessCount": 3,
       "lastAccessed": 1780570314488,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/erp/foundation/models.py",
-      "accessCount": 3,
-      "lastAccessed": 1780610628000,
       "type": "file"
     },
     {

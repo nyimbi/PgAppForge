@@ -141,8 +141,14 @@ class APAutomationPlugin(BasePlugin):
 		return [InvoiceCapture]
 
 	def register_views(self) -> None:
-		# Views wired here when a views.py is added.
-		log.debug("APAutomationPlugin: register_views called (no views module yet)")
+		try:
+			from pgappforge.plugins.erp.finance.ap_automation.views import InvoiceCaptureView
+		except ImportError:
+			log.warning("APAutomationPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("AP_AUTOMATION_MENU_CATEGORY", "AP Automation")
+		self.add_view(InvoiceCaptureView, "Invoice Captures", icon="fa-file-text-o", category=cat)
+		log.info("APAutomationPlugin: views registered under %r", cat)
 
 
 # ---------------------------------------------------------------------------

@@ -132,10 +132,18 @@ class PerformancePlugin(BasePlugin):
 		return [PerformanceCycle, PerformanceReview, Goal, ContinuousFeedback]
 
 	def register_views(self) -> None:
-		log.info(
-			"PerformancePlugin: no views registered (API-only mode); "
-			"add views.py and call add_view() here to enable UI"
+		from pgappforge.plugins.erp.hcm.performance.views import (
+			GoalView,
+			PerformanceCycleView,
+			PerformanceDashboardView,
+			PerformanceReviewView,
 		)
+		cat = self.config.get("PERFORMANCE_MENU_CATEGORY", "Performance")
+		self.add_view(PerformanceDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(PerformanceCycleView, "Review Cycles", icon="fa-sync-alt", category=cat)
+		self.add_view(PerformanceReviewView, "Reviews", icon="fa-clipboard-list", category=cat)
+		self.add_view(GoalView, "Goals & OKRs", icon="fa-bullseye", category=cat)
+		log.info("PerformancePlugin: views registered under %r", cat)
 
 
 # ---------------------------------------------------------------------------

@@ -120,10 +120,16 @@ class PositionManagementPlugin(BasePlugin):
 		return [Position, HeadcountRequest]
 
 	def register_views(self) -> None:
-		log.info(
-			"PositionManagementPlugin: no views registered (API-only mode); "
-			"add views.py and call add_view() here to enable UI"
+		from pgappforge.plugins.erp.hcm.position_management.views import (
+			HeadcountRequestView,
+			PositionManagementDashboardView,
+			PositionView,
 		)
+		cat = self.config.get("POSITIONS_MENU_CATEGORY", "Positions")
+		self.add_view(PositionManagementDashboardView, "Org Chart", icon="fa-tachometer", category=cat)
+		self.add_view(PositionView, "Positions", icon="fa-sitemap", category=cat)
+		self.add_view(HeadcountRequestView, "Headcount Requests", icon="fa-users", category=cat)
+		log.info("PositionManagementPlugin: views registered under %r", cat)
 
 
 # ---------------------------------------------------------------------------

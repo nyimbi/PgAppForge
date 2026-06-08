@@ -83,6 +83,22 @@ class TradeCompliancePlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("TradeCompliancePlugin initialised")
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.procurement.trade_compliance.views import (
+				TradeRestrictionListView,
+				TradeScreeningResultView,
+				HSCodeMappingView,
+			)
+		except ImportError:
+			log.warning("TradeCompliancePlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("TRADE_MENU_CATEGORY", "Procurement")
+		self.add_view(TradeRestrictionListView, "Restriction Lists", icon="fa-ban", category=cat)
+		self.add_view(TradeScreeningResultView, "Screening Results", icon="fa-search", category=cat)
+		self.add_view(HSCodeMappingView, "HS Codes", icon="fa-barcode", category=cat)
+		log.info("TradeCompliancePlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.procurement.trade_compliance.models import (
 			TradeRestrictionList,

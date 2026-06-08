@@ -82,6 +82,18 @@ class PRMPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("PRMPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.crm.prm.views import (
+			PartnerAccountView,
+			DealRegistrationView,
+			MDFRequestView,
+		)
+		cat = self.config.get("PRM_MENU_CATEGORY", "Partners")
+		self.add_view(PartnerAccountView, "Partners", icon="fa-handshake-o", category=cat)
+		self.add_view(DealRegistrationView, "Deal Registrations", icon="fa-briefcase", category=cat)
+		self.add_view(MDFRequestView, "MDF Requests", icon="fa-money", category=cat)
+		log.info("PRMPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.crm.prm.models import (
 			PartnerAccount,

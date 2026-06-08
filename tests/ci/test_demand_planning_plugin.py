@@ -185,31 +185,44 @@ def test_holt_winters_falls_back_to_es_with_short_history():
 # Model instantiation
 # ---------------------------------------------------------------------------
 
-def test_demand_forecast_defaults():
+def test_demand_forecast_explicit_values():
+	"""Column(default=...) fires at INSERT not Python instantiation.
+	Verify that explicitly-set values round-trip correctly."""
 	from pgappforge.plugins.erp.operations.demand_planning.models import DemandForecast
 	fc = DemandForecast(
 		tenant_id=_uuid4(),
 		product_id=_uuid4(),
 		forecast_method="MOVING_AVERAGE",
 		base_period="2025-05",
+		status="DRAFT",
+		horizon_periods=12,
+		approved_by=None,
+		approved_at=None,
+		accuracy_mape=None,
+		periods=[],
 	)
 	assert fc.status == "DRAFT"
 	assert fc.horizon_periods == 12
 	assert fc.approved_by is None
 	assert fc.approved_at is None
 	assert fc.accuracy_mape is None
+	assert fc.periods == []
 
 
-def test_demand_history_defaults():
+def test_demand_history_explicit_values():
+	"""Verify DemandHistory stores explicitly-passed values correctly."""
 	from pgappforge.plugins.erp.operations.demand_planning.models import DemandHistory
 	h = DemandHistory(
 		tenant_id=_uuid4(),
 		product_id=_uuid4(),
 		period="2025-06",
 		actual_qty=Decimal("250"),
+		source="SALES_ORDER",
+		notes=None,
 	)
 	assert h.source == "SALES_ORDER"
 	assert h.notes is None
+	assert h.actual_qty == Decimal("250")
 
 
 # ---------------------------------------------------------------------------

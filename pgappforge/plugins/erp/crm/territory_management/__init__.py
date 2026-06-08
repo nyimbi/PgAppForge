@@ -70,6 +70,16 @@ class TerritoryPlugin(BasePlugin):
 	def initialize(self) -> None:
 		log.info("TerritoryPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.crm.territory_management.views import (
+			SalesTerritoryView,
+			TerritoryAssignmentView,
+		)
+		cat = self.config.get("TERRITORY_MENU_CATEGORY", "Sales Territories")
+		self.add_view(SalesTerritoryView, "Territories", icon="fa-map-marker", category=cat)
+		self.add_view(TerritoryAssignmentView, "Assignments", icon="fa-user-plus", category=cat)
+		log.info("TerritoryPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.crm.territory_management.models import (
 			SalesTerritory,

@@ -34,6 +34,7 @@ class DiscussChannel(AuditMixin, Model):
 	channel directly to a domain record (e.g. a workflow instance).
 	"""
 
+	__allow_unmapped__ = True
 	__tablename__ = "dsc_channel"
 	__table_args__ = (
 		Index("ix_dsc_channel_tenant_type", "tenant_id", "channel_type"),
@@ -84,6 +85,7 @@ class DiscussChannel(AuditMixin, Model):
 class DiscussChannelMember(Model):
 	"""Membership record binding a user to a channel with role and read state."""
 
+	__allow_unmapped__ = True
 	__tablename__ = "dsc_member"
 	__table_args__ = (
 		UniqueConstraint("channel_id", "member_id", name="uq_dsc_member_channel_user"),
@@ -130,6 +132,7 @@ class DiscussMessage(AuditMixin, Model):
 	created_at (from AuditMixin) is the primary ordering column.
 	"""
 
+	__allow_unmapped__ = True
 	__tablename__ = "dsc_message"
 	__table_args__ = (
 		Index("ix_dsc_message_channel_ts", "channel_id", "created_at"),
@@ -144,6 +147,12 @@ class DiscussMessage(AuditMixin, Model):
 		server_default=_uuid4,
 	)
 	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+		server_default=sa.text("now()"),
+	)
 	channel_id = Column(
 		UUID(as_uuid=False),
 		ForeignKey("dsc_channel.id", ondelete="CASCADE"),

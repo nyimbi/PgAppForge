@@ -111,8 +111,18 @@ class PlmPlugin(BasePlugin):
 		log.info("PlmPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
+		from pgappforge.plugins.erp.operations.plm.views import (
+			PLMDashboardView,
+			PlmProductView,
+			PlmProductVersionView,
+			EngineeringChangeOrderView,
+		)
 		cat = self.config.get("PLM_MENU_CATEGORY", "Product Lifecycle")
-		log.info("PlmPlugin: views would be registered under category %r", cat)
+		self.add_view(PLMDashboardView, "PLM Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(PlmProductView, "Products", icon="fa-cube", category=cat)
+		self.add_view(PlmProductVersionView, "Versions", icon="fa-tag", category=cat)
+		self.add_view(EngineeringChangeOrderView, "ECOs", icon="fa-edit", category=cat)
+		log.info("PlmPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.plm.models import (

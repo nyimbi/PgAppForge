@@ -163,9 +163,20 @@ class GrantsPlugin(BasePlugin):
 		return [Fund, Grant, FundBalance, GrantExpenditure]
 
 	def register_views(self) -> None:
-		# Views wired here when a views.py is added.
-		# Placeholder keeps the lifecycle hook clean.
-		log.debug("GrantsPlugin: register_views called (no views module yet)")
+		try:
+			from pgappforge.plugins.erp.finance.grants.views import (
+				FundView,
+				GrantView,
+				GrantExpenditureView,
+			)
+		except ImportError:
+			log.warning("GrantsPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("GRANTS_MENU_CATEGORY", "Grant Accounting")
+		self.add_view(FundView, "Funds", icon="fa-archive", category=cat)
+		self.add_view(GrantView, "Grants", icon="fa-certificate", category=cat)
+		self.add_view(GrantExpenditureView, "Expenditures", icon="fa-credit-card", category=cat)
+		log.info("GrantsPlugin: views registered under %r", cat)
 
 
 # ---------------------------------------------------------------------------

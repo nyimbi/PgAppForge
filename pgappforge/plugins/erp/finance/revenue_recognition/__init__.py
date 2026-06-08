@@ -133,6 +133,22 @@ class RevRecPlugin(BasePlugin):
 	# Lifecycle
 	# ------------------------------------------------------------------
 
+	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.finance.revenue_recognition.views import (
+				RevRecContractView,
+				RevRecObligationView,
+				RevRecJournalEntryView,
+			)
+		except ImportError:
+			log.warning("RevRecPlugin.register_views: views module not available — skipping.")
+			return
+		cat = self.config.get("REV_REC_MENU_CATEGORY", "Revenue Recognition")
+		self.add_view(RevRecContractView, "Contracts", icon="fa-file-contract", category=cat)
+		self.add_view(RevRecObligationView, "Obligations", icon="fa-list-alt", category=cat)
+		self.add_view(RevRecJournalEntryView, "Journal Entries", icon="fa-book", category=cat)
+		log.info("RevRecPlugin: views registered under %r", cat)
+
 	def initialize(self) -> None:
 		"""Merge config defaults."""
 		defaults: dict[str, Any] = {

@@ -127,12 +127,18 @@ class SupplierPortalPlugin(BasePlugin):
 		log.info("SupplierPortalPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.procurement.supplier_portal.views import (
+				SupplierProfileView,
+				SupplierPerformanceCardView,
+			)
+		except ImportError:
+			log.warning("SupplierPortalPlugin.register_views: views module not available — skipping.")
+			return
 		cat = self.config.get("SUPPLIER_PORTAL_MENU_CATEGORY", "Procurement")
-		log.info(
-			"SupplierPortalPlugin: views would be registered under category %r "
-			"(views.py not yet added)",
-			cat,
-		)
+		self.add_view(SupplierProfileView, "Suppliers", icon="fa-truck", category=cat)
+		self.add_view(SupplierPerformanceCardView, "Performance", icon="fa-star", category=cat)
+		log.info("SupplierPortalPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import (

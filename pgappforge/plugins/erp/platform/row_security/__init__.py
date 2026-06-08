@@ -66,5 +66,17 @@ class RowSecurityPlugin(BasePlugin):
 	def initialize(self, app=None) -> None:
 		log.info("RowSecurityPlugin initialized")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.row_security.views import (
+			RowSecurityAdminView,
+			RowSecurityPolicyView,
+			SecurityContextView,
+		)
+		cat = self.config.get("ROW_SECURITY_MENU_CATEGORY", "Platform Admin")
+		self.add_view(RowSecurityAdminView, "Row Security", icon="fa-shield", category=cat)
+		self.add_view(RowSecurityPolicyView, "Policies", icon="fa-lock", category=cat)
+		self.add_view(SecurityContextView, "Security Contexts", icon="fa-user-secret", category=cat)
+		log.info("RowSecurityPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list[type]:
 		return [RowSecurityPolicy, SecurityContext]

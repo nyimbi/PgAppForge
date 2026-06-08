@@ -121,10 +121,16 @@ class WorkforcePlanningPlugin(BasePlugin):
 		log.info("WorkforcePlanningPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
-		log.info(
-			"WorkforcePlanningPlugin: views registered under category %r",
-			self.config.get("WORKFORCE_PLANNING_MENU_CATEGORY", "Workforce Planning"),
+		from pgappforge.plugins.erp.hcm.workforce_planning.views import (
+			PlannedPositionView,
+			WorkforcePlanningDashboardView,
+			WorkforcePlanView,
 		)
+		cat = self.config.get("WORKFORCE_PLANNING_MENU_CATEGORY", "Workforce Planning")
+		self.add_view(WorkforcePlanningDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(WorkforcePlanView, "Workforce Plans", icon="fa-project-diagram", category=cat)
+		self.add_view(PlannedPositionView, "Planned Positions", icon="fa-users", category=cat)
+		log.info("WorkforcePlanningPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.hcm.workforce_planning.models import (

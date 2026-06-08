@@ -97,8 +97,16 @@ class DemandPlanningPlugin(BasePlugin):
 		log.info("DemandPlanningPlugin initialised (config: %s)", list(self.config))
 
 	def register_views(self) -> None:
+		from pgappforge.plugins.erp.operations.demand_planning.views import (
+			DemandPlanningDashboardView,
+			DemandForecastView,
+			DemandHistoryView,
+		)
 		cat = self.config.get("DP_MENU_CATEGORY", "Supply Chain")
-		log.info("DemandPlanningPlugin: views would be registered under category %r", cat)
+		self.add_view(DemandPlanningDashboardView, "Demand Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(DemandForecastView, "Forecasts", icon="fa-line-chart", category=cat)
+		self.add_view(DemandHistoryView, "Demand History", icon="fa-history", category=cat)
+		log.info("DemandPlanningPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.demand_planning.models import (

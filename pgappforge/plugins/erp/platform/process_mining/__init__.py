@@ -70,6 +70,12 @@ class ProcessMiningPlugin(BasePlugin):
 	def initialize(self) -> None:
 		log.info("ProcessMiningPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.process_mining.views import ProcessMiningView
+		cat = self.config.get("PROCESS_MINING_MENU_CATEGORY", "Platform")
+		self.add_view(ProcessMiningView, "Process Mining", icon="fa-sitemap", category=cat)
+		log.info("ProcessMiningPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.platform.process_mining.models import ProcessMiningDefinition
 		return [ProcessMiningDefinition]

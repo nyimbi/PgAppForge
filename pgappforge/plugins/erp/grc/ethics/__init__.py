@@ -80,6 +80,18 @@ class EthicsHotlinePlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("EthicsHotlinePlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.grc.ethics.views import (
+			EthicsHotlineDashboardView,
+			EthicsReportView,
+			EthicsCaseView,
+		)
+		cat = self.config.get("ETHICS_MENU_CATEGORY", "GRC")
+		self.add_view(EthicsHotlineDashboardView, "Ethics Hotline", icon="fa-flag", category=cat)
+		self.add_view(EthicsReportView, "Reports", icon="fa-file-text-o", category=cat)
+		self.add_view(EthicsCaseView, "Cases", icon="fa-folder-open", category=cat)
+		log.info("EthicsHotlinePlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.grc.ethics.models import EthicsReport, EthicsCase
 		return [EthicsReport, EthicsCase]

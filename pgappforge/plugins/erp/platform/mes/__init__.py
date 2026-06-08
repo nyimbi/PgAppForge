@@ -80,6 +80,18 @@ class MESPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("MESPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.mes.views import (
+			MachineDefinitionView,
+			MachineReadingView,
+			ProductionAlertView,
+		)
+		cat = self.config.get("MES_MENU_CATEGORY", "Manufacturing Execution")
+		self.add_view(MachineDefinitionView, "Machines", icon="fa-cog", category=cat)
+		self.add_view(MachineReadingView, "Machine Readings", icon="fa-bar-chart", category=cat)
+		self.add_view(ProductionAlertView, "Production Alerts", icon="fa-bell", category=cat)
+		log.info("MESPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.platform.mes.models import (
 			MachineDefinition,

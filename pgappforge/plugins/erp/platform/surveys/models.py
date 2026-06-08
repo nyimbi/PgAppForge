@@ -35,6 +35,7 @@ class Survey(AuditMixin, Model):
 	opens_at / closes_at: optional scheduling window; None means open-ended.
 	"""
 
+	__allow_unmapped__ = True
 	__tablename__ = "srv_survey"
 	__table_args__ = (
 		Index("ix_srv_survey_tenant_status", "tenant_id", "status"),
@@ -48,6 +49,12 @@ class Survey(AuditMixin, Model):
 		server_default=_uuid4,
 	)
 	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+		server_default=sa.text("now()"),
+	)
 	title = Column(VARCHAR(300), nullable=False)
 	description = Column(Text, nullable=True)
 	survey_type = Column(VARCHAR(30), nullable=False, default="CUSTOM")
@@ -84,6 +91,7 @@ class SurveyQuestion(Model):
 	scale_min / scale_max: bounds for RATING_SCALE type.
 	"""
 
+	__allow_unmapped__ = True
 	__tablename__ = "srv_question"
 	__table_args__ = (
 		Index("ix_srv_question_survey_order", "survey_id", "order_num"),
@@ -127,6 +135,7 @@ class SurveyResponse(Model):
 	metadata_ can carry sourcing info: {"source": "email_campaign", "employee_id": "..."}.
 	"""
 
+	__allow_unmapped__ = True
 	__tablename__ = "srv_response"
 	__table_args__ = (
 		Index("ix_srv_response_survey_ts", "survey_id", "submitted_at"),
@@ -172,6 +181,7 @@ class SurveyAnswer(Model):
 	will be populated depending on question_type.
 	"""
 
+	__allow_unmapped__ = True
 	__tablename__ = "srv_answer"
 	__table_args__ = (
 		Index("ix_srv_answer_response_question", "response_id", "question_id"),

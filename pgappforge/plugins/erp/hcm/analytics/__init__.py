@@ -130,23 +130,16 @@ class HrAnalyticsPlugin(BasePlugin):
 		log.info("HrAnalyticsPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
-		"""Views registered lazily to avoid circular imports at plugin load time."""
-		try:
-			from pgappforge.plugins.erp.hcm.analytics.views import (  # type: ignore[import]
-				HrAnalyticsSnapshotView,
-				HrFlightRiskScoreView,
-				HrAnalyticsReportView,
-				HrAnalyticsDashboardView,
-			)
-		except ImportError:
-			log.debug("HrAnalyticsPlugin.register_views: views module not yet created; skipping")
-			return
-
+		from pgappforge.plugins.erp.hcm.analytics.views import (
+			HrAnalyticsReportView,
+			HrAnalyticsSnapshotView,
+			HrFlightRiskScoreView,
+		)
 		cat = self.config.get("HCM_ANALYTICS_MENU_CATEGORY", "HR Analytics")
-
-		self.add_view(HrAnalyticsDashboardView, "Dashboard", icon="fa-tachometer", category=cat)
 		self.add_view(HrAnalyticsSnapshotView, "Snapshots", icon="fa-camera", category=cat)
 		self.add_view(HrFlightRiskScoreView, "Flight Risk", icon="fa-plane", category=cat)
+		self.add_view(HrAnalyticsReportView, "Reports", icon="fa-bar-chart", category=cat)
+		log.info("HrAnalyticsPlugin: views registered under %r", cat)
 		self.add_view(HrAnalyticsReportView, "Reports", icon="fa-bar-chart", category=cat)
 
 		log.info("HrAnalyticsPlugin: views registered under category %r", cat)

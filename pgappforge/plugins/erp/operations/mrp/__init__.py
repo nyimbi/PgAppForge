@@ -101,9 +101,18 @@ class MRPPlugin(BasePlugin):
 		log.info("MRPPlugin initialised (config: %s)", list(self.config))
 
 	def register_views(self) -> None:
-		# Views are optional; register only if view classes exist
+		from pgappforge.plugins.erp.operations.mrp.views import (
+			MRPDashboardView,
+			MRPProductConfigView,
+			MRPPlannedOrderView,
+			MRPRunView,
+		)
 		cat = self.config.get("MRP_MENU_CATEGORY", "Manufacturing")
-		log.info("MRPPlugin: views would be registered under category %r", cat)
+		self.add_view(MRPDashboardView, "MRP Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(MRPProductConfigView, "Product Config", icon="fa-cog", category=cat)
+		self.add_view(MRPPlannedOrderView, "Planned Orders", icon="fa-list-ol", category=cat)
+		self.add_view(MRPRunView, "MRP Runs", icon="fa-refresh", category=cat)
+		log.info("MRPPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.mrp.models import (

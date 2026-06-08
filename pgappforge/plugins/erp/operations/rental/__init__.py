@@ -106,8 +106,16 @@ class RentalPlugin(BasePlugin):
 		log.info("RentalPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
+		from pgappforge.plugins.erp.operations.rental.views import (
+			RentalOrdersDashboardView,
+			RentalAssetView,
+			RentalOrderView,
+		)
 		cat = self.config.get("RENTAL_MENU_CATEGORY", "Rentals")
-		log.info("RentalPlugin: views would be registered under category %r", cat)
+		self.add_view(RentalOrdersDashboardView, "Rental Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(RentalAssetView, "Assets", icon="fa-cubes", category=cat)
+		self.add_view(RentalOrderView, "Rental Orders", icon="fa-list", category=cat)
+		log.info("RentalPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.operations.rental.models import RentalAsset, RentalOrder

@@ -80,6 +80,18 @@ class TenantControlPlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("TenantControlPlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.tenant_control.views import (
+			TenantControlAdminView,
+			TenantProfileView,
+			TenantUsageEventView,
+		)
+		cat = self.config.get("TENANT_MENU_CATEGORY", "Platform Admin")
+		self.add_view(TenantControlAdminView, "Tenant Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(TenantProfileView, "Tenants", icon="fa-building", category=cat)
+		self.add_view(TenantUsageEventView, "Usage Events", icon="fa-bar-chart", category=cat)
+		log.info("TenantControlPlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.platform.tenant_control.models import (
 			TenantProfile,

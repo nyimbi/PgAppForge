@@ -123,10 +123,18 @@ class SourcingPlugin(BasePlugin):
 		log.info("SourcingPlugin initialised (config keys: %s)", list(self.config))
 
 	def register_views(self) -> None:
+		try:
+			from pgappforge.plugins.erp.procurement.sourcing.views import (
+				RFQView,
+				SupplierBidView,
+			)
+		except ImportError:
+			log.warning("SourcingPlugin.register_views: views module not available — skipping.")
+			return
 		cat = self.config.get("SOURCING_MENU_CATEGORY", "Procurement")
-		log.info(
-			"SourcingPlugin: views would be registered under category %r (views.py not yet added)", cat
-		)
+		self.add_view(RFQView, "RFQs", icon="fa-bullhorn", category=cat)
+		self.add_view(SupplierBidView, "Supplier Bids", icon="fa-gavel", category=cat)
+		log.info("SourcingPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, SupplierBid

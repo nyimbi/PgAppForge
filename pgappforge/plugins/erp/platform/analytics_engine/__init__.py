@@ -79,6 +79,18 @@ class AnalyticsEnginePlugin(BasePlugin):
 		self.config = {**defaults, **self.config}
 		log.info("AnalyticsEnginePlugin initialised")
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.analytics_engine.views import (
+			AnalyticsDashboardView,
+			AnalyticsCubeView,
+			AnalyticsReportView,
+		)
+		cat = self.config.get("ANALYTICS_MENU_CATEGORY", "Analytics")
+		self.add_view(AnalyticsDashboardView, "Analytics Dashboard", icon="fa-tachometer", category=cat)
+		self.add_view(AnalyticsCubeView, "Cubes", icon="fa-database", category=cat)
+		self.add_view(AnalyticsReportView, "Reports", icon="fa-bar-chart", category=cat)
+		log.info("AnalyticsEnginePlugin: views registered under %r", cat)
+
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.platform.analytics_engine.models import (
 			AnalyticsCube,
