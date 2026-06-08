@@ -1,0 +1,552 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ channel.name if channel else 'Discuss' }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Discuss / Chat layout ────────────────────────────────────────── */
+
+  /* override base container — full viewport height chat */
+  .container-fluid { padding-top: 0 !important; padding-bottom: 0 !important; }
+
+  .discuss-wrap {
+    display: flex;
+    height: calc(100vh - 52px); /* 52px = FAB navbar height */
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  /* ── Sidebar ──────────────────────────────────────────────────────── */
+  .discuss-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: #1a1d2e;
+    color: #c9d1d9;
+    display: flex;
+    flex-direction: column;
+    border-radius: 6px 0 0 6px;
+    overflow: hidden;
+  }
+  .sidebar-brand {
+    padding: 16px 18px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    flex-shrink: 0;
+  }
+  .sidebar-brand i { margin-right: 6px; color: #7c83f0; }
+
+  .sidebar-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6b7684;
+    padding: 14px 18px 4px;
+  }
+  .channel-list { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; }
+  .channel-list::-webkit-scrollbar { width: 4px; }
+  .channel-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+  .channel-item a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 18px;
+    color: #c9d1d9;
+    text-decoration: none;
+    border-radius: 0;
+    font-size: 14px;
+    transition: background .12s;
+  }
+  .channel-item a:hover { background: rgba(255,255,255,.07); color: #fff; }
+  .channel-item.active a { background: rgba(124,131,240,.25); color: #fff; font-weight: 600; }
+
+  .channel-name { display: flex; align-items: center; gap: 6px; overflow: hidden;
+                  white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+  .channel-name .ch-hash { color: #6b7684; flex-shrink: 0; }
+  .ch-type-dm .ch-hash { color: #7c83f0; }
+
+  .unread-badge { background: #ef4444; color: #fff; font-size: 10px; font-weight: 700;
+                  border-radius: 10px; padding: 1px 6px; flex-shrink: 0; }
+
+  .sidebar-footer {
+    padding: 12px 18px;
+    border-top: 1px solid rgba(255,255,255,.08);
+    flex-shrink: 0;
+  }
+  .btn-new-channel {
+    width: 100%;
+    background: rgba(124,131,240,.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(124,131,240,.3);
+    border-radius: 4px;
+    padding: 7px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-new-channel:hover { background: rgba(124,131,240,.35); color: #c7d2fe; }
+
+  /* ── Main panel ───────────────────────────────────────────────────── */
+  .discuss-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: #fff;
+  }
+
+  .discuss-header {
+    padding: 14px 22px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: #fff;
+  }
+  .discuss-header .ch-title { font-size: 16px; font-weight: 700; color: #111827; }
+  .discuss-header .ch-desc  { font-size: 12px; color: #6b7280; margin-top: 1px; }
+  .discuss-header .ch-meta  { font-size: 12px; color: #9ca3af; }
+
+  /* message area */
+  .message-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #fafbfc;
+  }
+  .message-area::-webkit-scrollbar { width: 5px; }
+  .message-area::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+  /* date divider */
+  .msg-date-divider {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9ca3af;
+    margin: 14px 0 8px;
+    position: relative;
+  }
+  .msg-date-divider::before, .msg-date-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: calc(50% - 60px);
+    height: 1px;
+    background: #e5e7eb;
+  }
+  .msg-date-divider::before { left: 0; }
+  .msg-date-divider::after  { right: 0; }
+
+  /* message row */
+  .msg-row {
+    display: flex;
+    gap: 10px;
+    padding: 5px 6px;
+    border-radius: 6px;
+    transition: background .1s;
+  }
+  .msg-row:hover { background: #f3f4f6; }
+  .msg-row.is-mine { flex-direction: row-reverse; }
+  .msg-row.is-system {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin: 6px 0;
+    padding: 8px 14px;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #6b7280;
+  }
+
+  /* avatar */
+  .msg-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+
+  .msg-content { flex: 1; min-width: 0; }
+  .msg-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .msg-sender { font-size: 13px; font-weight: 700; color: #111827; }
+  .msg-time   { font-size: 11px; color: #9ca3af; }
+  .msg-text   { font-size: 14px; color: #374151; line-height: 1.5; word-break: break-word; }
+  .is-mine .msg-sender { color: #1d4ed8; }
+
+  /* thread reply count */
+  .thread-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #6b7280;
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 2px 8px;
+    margin-top: 4px;
+    cursor: pointer;
+    transition: background .12s;
+    border: 1px solid #e5e7eb;
+  }
+  .thread-count:hover { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+
+  /* composer */
+  .compose-area {
+    padding: 14px 22px 16px;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+    flex-shrink: 0;
+  }
+  .compose-box {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #f9fafb;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 14px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .compose-box:focus-within {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+    background: #fff;
+  }
+  .compose-textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-size: 14px;
+    color: #111827;
+    line-height: 1.5;
+    max-height: 140px;
+    overflow-y: auto;
+    outline: none;
+    padding: 0;
+  }
+  .compose-textarea::placeholder { color: #9ca3af; }
+  .btn-send {
+    flex-shrink: 0;
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-send:hover { background: #4338ca; }
+  .btn-send:disabled { background: #c7d2fe; cursor: default; }
+</style>
+{% endblock %}
+
+{% block page_header %}{% endblock %}
+
+{% block content %}
+<div class="discuss-wrap">
+
+  {# ── Sidebar ─────────────────────────────────────────────────────── #}
+  <div class="discuss-sidebar">
+    <div class="sidebar-brand"><i class="fa fa-comments"></i> Discuss</div>
+
+    <div class="sidebar-section-label">Channels</div>
+    <ul class="channel-list">
+      {% for ch in channels %}
+        <li class="channel-item {% if channel and ch.id == channel.id %}active{% endif %}">
+          <a href="/discuss/channels/{{ ch.id }}">
+            <span class="channel-name {% if ch.channel_type == 'DM' %}ch-type-dm{% endif %}">
+              {% if ch.channel_type == 'DM' %}
+                <i class="fa fa-circle ch-hash" style="font-size:8px;"></i>
+              {% else %}
+                <span class="ch-hash">#</span>
+              {% endif %}
+              {{ ch.name }}
+            </span>
+            {% if ch.unread_count | default(0) > 0 %}
+              <span class="unread-badge">{{ ch.unread_count }}</span>
+            {% endif %}
+          </a>
+        </li>
+      {% else %}
+        <li style="padding:14px 18px; font-size:13px; color:#6b7684;">No channels yet.</li>
+      {% endfor %}
+    </ul>
+
+    <div class="sidebar-footer">
+      <button class="btn-new-channel" data-toggle="modal" data-target="#newChannelModal">
+        <i class="fa fa-plus-circle"></i>&nbsp; New Channel
+      </button>
+    </div>
+  </div>
+
+  {# ── Main panel ──────────────────────────────────────────────────── #}
+  <div class="discuss-main">
+    {% if channel %}
+    <div class="discuss-header">
+      <div>
+        <div class="ch-title">
+          {% if channel.channel_type == 'DM' %}
+            <i class="fa fa-circle" style="font-size:9px; color:#22c55e; margin-right:4px;"></i>
+          {% else %}
+            <span style="color:#9ca3af;">#</span>
+          {% endif %}
+          {{ channel.name }}
+        </div>
+        {% if channel.description %}
+          <div class="ch-desc">{{ channel.description }}</div>
+        {% endif %}
+      </div>
+      <div class="ch-meta">
+        <i class="fa fa-users"></i>&nbsp; {{ channel.member_count | default(0) }} members
+      </div>
+    </div>
+
+    {# ── Message history ───────────────────────────────────────────── #}
+    <div class="message-area" id="message-area">
+      {% set ns = namespace(last_date='') %}
+      {% for msg in messages %}
+        {% set msg_date = msg.created_at[:10] if msg.created_at else '' %}
+        {% if msg_date != ns.last_date %}
+          <div class="msg-date-divider">{{ msg_date }}</div>
+          {% set ns.last_date = msg_date %}
+        {% endif %}
+
+        {% if msg.is_system | default(false) %}
+          {# system notification #}
+          <div class="msg-row is-system">
+            <i class="fa fa-info-circle" style="color:#6366f1; flex-shrink:0;"></i>
+            <span>{{ msg.body }}</span>
+            <span style="margin-left:auto; font-size:11px; color:#9ca3af;">{{ msg.created_at[11:16] if msg.created_at else '' }}</span>
+          </div>
+        {% else %}
+          {% set is_mine = (msg.author_id | string) == (current_user_id | string) %}
+          {% set initials = (msg.author_name[:1] | upper) if msg.author_name else '?' %}
+          {# deterministic avatar color from author_id #}
+          {% set avatar_colors = ['#4f46e5','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#db2777','#0284c7'] %}
+          {% set color_idx = (msg.author_id | string | length) % 8 %}
+          {% set av_color = avatar_colors[color_idx] %}
+
+          <div class="msg-row {% if is_mine %}is-mine{% endif %}">
+            <div class="msg-avatar" style="background: {{ av_color }};">{{ initials }}</div>
+            <div class="msg-content">
+              <div class="msg-meta">
+                <span class="msg-sender">{{ msg.author_name }}</span>
+                <span class="msg-time">{{ msg.created_at[11:16] if msg.created_at else '' }}</span>
+              </div>
+              <div class="msg-text">{{ msg.body | e }}</div>
+              {% if msg.reply_count | default(0) > 0 %}
+                <div class="thread-count" data-msg-id="{{ msg.id }}">
+                  <i class="fa fa-reply"></i>
+                  {{ msg.reply_count }} {{ 'reply' if msg.reply_count == 1 else 'replies' }}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% else %}
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; color:#9ca3af;">
+          <i class="fa fa-comments" style="font-size:48px; margin-bottom:16px; color:#d1d5db;"></i>
+          <div style="font-size:16px; font-weight:600;">No messages yet</div>
+          <div style="font-size:13px; margin-top:4px;">Be the first to say something in #{{ channel.name }}</div>
+        </div>
+      {% endfor %}
+    </div>{# /message-area #}
+
+    {# ── Composer ──────────────────────────────────────────────────── #}
+    <div class="compose-area">
+      <div class="compose-box">
+        <textarea class="compose-textarea"
+                  id="msg-input"
+                  rows="1"
+                  placeholder="Message #{{ channel.name }}…"></textarea>
+        <button class="btn-send" id="send-btn" disabled>
+          <i class="fa fa-paper-plane"></i>&nbsp; Send
+        </button>
+      </div>
+    </div>
+
+    {% else %}
+    {# no channel selected #}
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; color:#9ca3af; background:#fafbfc;">
+      <i class="fa fa-comments" style="font-size:64px; margin-bottom:20px; color:#e5e7eb;"></i>
+      <div style="font-size:18px; font-weight:700; color:#374151;">Welcome to Discuss</div>
+      <div style="font-size:14px; margin-top:6px;">Select a channel from the sidebar to start messaging.</div>
+    </div>
+    {% endif %}
+
+  </div>{# /discuss-main #}
+</div>{# /discuss-wrap #}
+
+{# ── New Channel modal ───────────────────────────────────────────────── #}
+<div class="modal fade" id="newChannelModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a1d2e; color:#fff; border-radius:5px 5px 0 0;">
+        <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-hashtag"></i>&nbsp; New Channel</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-size:13px;">Channel Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="new-channel-name" placeholder="e.g. general, engineering, sales" maxlength="80">
+          <span class="help-block" style="font-size:12px;">Lowercase, no spaces (use hyphens).</span>
+        </div>
+        <div class="form-group">
+          <label style="font-size:13px;">Description</label>
+          <input type="text" class="form-control" id="new-channel-desc" placeholder="What's this channel for?">
+        </div>
+        <div id="new-channel-error" class="alert alert-danger" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="create-channel-btn" style="background:#4f46e5; border-color:#4f46e5;">
+          <i class="fa fa-plus"></i> Create Channel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+
+  var CHANNEL_ID    = {{ (channel.id | tojson) if channel else 'null' }};
+  var CURRENT_USER  = {{ current_user_id | tojson }};
+
+  /* ── Auto-scroll to bottom on load ──────────────────────────────── */
+  var $area = $("#message-area");
+  if ($area.length) {
+    $area.scrollTop($area[0].scrollHeight);
+  }
+
+  /* ── Composer: enable Send when there's text ─────────────────────── */
+  var $input = $("#msg-input");
+  var $sendBtn = $("#send-btn");
+
+  $input.on("input", function () {
+    $sendBtn.prop("disabled", $.trim($input.val()) === "");
+    /* auto-grow textarea */
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 140) + "px";
+  });
+
+  /* send on Enter (shift+Enter = newline) */
+  $input.on("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!$sendBtn.prop("disabled")) $sendBtn.trigger("click");
+    }
+  });
+
+  /* ── Send message ────────────────────────────────────────────────── */
+  $sendBtn.on("click", function () {
+    var body = $.trim($input.val());
+    if (!body || !CHANNEL_ID) return;
+    $sendBtn.prop("disabled", true);
+
+    $.ajax({
+      url: "/api/discuss/messages",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ channel_id: CHANNEL_ID, body: body }),
+      success: function (resp) {
+        $input.val("").trigger("input");
+        /* append optimistic message */
+        appendMessage(resp);
+        $area.scrollTop($area[0].scrollHeight);
+      },
+      error: function () {
+        $sendBtn.prop("disabled", false);
+        alert("Failed to send message.");
+      }
+    });
+  });
+
+  function appendMessage(msg) {
+    var initials = msg.author_name ? msg.author_name.charAt(0).toUpperCase() : "?";
+    var timeStr  = msg.created_at ? msg.created_at.substring(11, 16) : "";
+    var isMine   = String(msg.author_id) === String(CURRENT_USER);
+    var colors   = ["#4f46e5","#0891b2","#059669","#d97706","#dc2626","#7c3aed","#db2777","#0284c7"];
+    var color    = colors[String(msg.author_id).length % 8];
+
+    var html = '<div class="msg-row' + (isMine ? " is-mine" : "") + '">' +
+      '<div class="msg-avatar" style="background:' + color + ';">' + initials + '</div>' +
+      '<div class="msg-content">' +
+        '<div class="msg-meta">' +
+          '<span class="msg-sender">' + $("<span>").text(msg.author_name).html() + '</span>' +
+          '<span class="msg-time">' + timeStr + '</span>' +
+        '</div>' +
+        '<div class="msg-text">' + $("<span>").text(msg.body).html() + '</div>' +
+      '</div>' +
+    '</div>';
+    $area.append(html);
+  }
+
+  /* ── New channel ─────────────────────────────────────────────────── */
+  $("#create-channel-btn").on("click", function () {
+    var name = $.trim($("#new-channel-name").val());
+    if (!name) { $("#new-channel-error").text("Channel name is required.").show(); return; }
+    var $btn = $(this).prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Creating…');
+    $.ajax({
+      url: "/api/discuss/channels",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ name: name, description: $("#new-channel-desc").val() }),
+      success: function (resp) {
+        $("#newChannelModal").modal("hide");
+        window.location.href = "/discuss/channels/" + resp.id;
+      },
+      error: function (xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.message) || "Failed to create channel.";
+        $("#new-channel-error").text(msg).show();
+        $btn.prop("disabled", false).html('<i class="fa fa-plus"></i> Create Channel');
+      }
+    });
+  });
+
+  /* ── Poll for new messages every 8s ────────────────────────────── */
+  if (CHANNEL_ID) {
+    var lastMsgId = {{ (messages[-1].id | tojson) if messages else 'null' }};
+
+    setInterval(function () {
+      if (!lastMsgId) return;
+      $.getJSON("/api/discuss/messages?channel_id=" + CHANNEL_ID + "&after_id=" + lastMsgId, function (data) {
+        if (data.messages && data.messages.length) {
+          data.messages.forEach(function (m) { appendMessage(m); });
+          lastMsgId = data.messages[data.messages.length - 1].id;
+          $area.scrollTop($area[0].scrollHeight);
+        }
+      });
+    }, 8000);
+  }
+}());
+</script>
+{% endblock %}

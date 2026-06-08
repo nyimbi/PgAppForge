@@ -1,0 +1,310 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Revenue Recognition — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .rev-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+  .rev-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:20px 24px; position:relative; overflow:hidden; }
+  .rev-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .rev-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 6px; font-weight:600; }
+  .rev-kpi-value { font-size:26px; font-weight:700; color:#111827; margin:0 0 2px; line-height:1.1; }
+  .rev-kpi-sub   { font-size:12px; color:#9ca3af; margin:0; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  .contract-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .contract-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .contract-table td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .contract-table tr:last-child td { border-bottom:none; }
+  .contract-table tr:hover td { background:#f9fafb; }
+  .erp-progress { height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; min-width:80px; }
+  .erp-progress-bar { height:100%; background:#1a56db; border-radius:3px; transition:width .3s; }
+  .erp-progress-bar.success { background:#10b981; }
+  .badge-open { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-satisfied { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-partial { background:#fef3c7; color:#92400e; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .filter-bar { display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .amounts-col { text-align:right; font-variant-numeric:tabular-nums; font-family:monospace; font-size:12px; }
+  .diff-positive { color:#10b981; font-weight:600; }
+  .diff-neutral  { color:#9ca3af; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 class="erp-page-title" style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Revenue Recognition</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">ASC 606 / IFRS 15 contract pipeline &amp; period recognition</p>
+  </div>
+  <button id="btn-recognize" class="btn btn-primary" style="height:38px; padding:0 20px; font-weight:600; font-size:13px;">
+    <i class="fa fa-play-circle"></i>&nbsp; Recognize Period
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Row ─────────────────────────────────────────────────────────────── #}
+<div class="rev-kpi-grid">
+  <div class="rev-kpi-card" style="--accent:#1a56db;">
+    <p class="rev-kpi-label">Total Contracts</p>
+    <p class="rev-kpi-value" id="kpi-total-contracts">
+      {{ kpis.total_contracts if kpis else '—' }}
+    </p>
+    <p class="rev-kpi-sub">active in system</p>
+  </div>
+  <div class="rev-kpi-card" style="--accent:#10b981;">
+    <p class="rev-kpi-label">Recognized YTD</p>
+    <p class="rev-kpi-value" id="kpi-recognized-ytd">
+      {{ "{:,.2f}".format(kpis.recognized_ytd_cents / 100) if kpis else '—' }}
+    </p>
+    <p class="rev-kpi-sub">YTD recognized revenue</p>
+  </div>
+  <div class="rev-kpi-card" style="--accent:#f59e0b;">
+    <p class="rev-kpi-label">Deferred Revenue</p>
+    <p class="rev-kpi-value" id="kpi-deferred">
+      {{ "{:,.2f}".format(kpis.deferred_cents / 100) if kpis else '—' }}
+    </p>
+    <p class="rev-kpi-sub">unearned obligations</p>
+  </div>
+  <div class="rev-kpi-card" style="--accent:#ef4444;">
+    <p class="rev-kpi-label">Pending Obligations</p>
+    <p class="rev-kpi-value" id="kpi-pending">
+      {{ kpis.pending_obligations if kpis else '—' }}
+    </p>
+    <p class="rev-kpi-sub">performance obligations</p>
+  </div>
+</div>
+
+{# ── Filter Bar ──────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:16px 20px; margin-bottom:16px;">
+  <div class="filter-bar">
+    <label for="filter-status">Filter by Status:</label>
+    <select id="filter-status" class="form-control" style="width:auto; height:32px; padding:2px 8px; font-size:13px;">
+      <option value="">All Statuses</option>
+      <option value="OPEN">Open</option>
+      <option value="PARTIAL">Partial</option>
+      <option value="FULLY_SATISFIED">Fully Satisfied</option>
+    </select>
+    <label for="filter-customer" style="margin-left:8px;">Customer:</label>
+    <input id="filter-customer" type="text" class="form-control" placeholder="Search customer…" style="width:180px; height:32px; padding:2px 10px; font-size:13px;">
+    <button id="btn-filter-apply" class="btn btn-default btn-sm" style="height:32px;">
+      <i class="fa fa-filter"></i> Apply
+    </button>
+    <button id="btn-filter-clear" class="btn btn-link btn-sm" style="height:32px; padding:0 8px;">Clear</button>
+    <span id="filter-count" style="margin-left:auto; font-size:12px; color:#6b7280;"></span>
+  </div>
+</div>
+
+{# ── Contract Pipeline Table ──────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div style="padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">Contract Pipeline</h4>
+    <span style="font-size:12px; color:#9ca3af;">Amounts in reporting currency</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="contract-table" id="contracts-table">
+      <thead>
+        <tr>
+          <th>Contract Ref</th>
+          <th>Customer</th>
+          <th class="amounts-col">Total Value</th>
+          <th class="amounts-col">Allocated</th>
+          <th class="amounts-col">Satisfied</th>
+          <th class="amounts-col">Remaining</th>
+          <th>Progress</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="contracts-tbody">
+        {% if contracts %}
+          {% for c in contracts %}
+          <tr data-status="{{ c.status }}" data-customer="{{ c.customer | lower }}">
+            <td><a href="#" style="font-weight:600; color:#1a56db; text-decoration:none;">{{ c.contract_ref }}</a></td>
+            <td>{{ c.customer }}</td>
+            <td class="amounts-col">{{ "{:,.2f}".format(c.total_cents / 100) }}</td>
+            <td class="amounts-col">{{ "{:,.2f}".format((c.allocated_cents or c.total_cents) / 100) }}</td>
+            <td class="amounts-col diff-positive">{{ "{:,.2f}".format(c.satisfied_cents / 100) }}</td>
+            <td class="amounts-col">{{ "{:,.2f}".format(c.remaining_cents / 100) }}</td>
+            <td style="min-width:100px;">
+              {% set pct = ((c.satisfied_cents / c.total_cents) * 100) | int if c.total_cents else 0 %}
+              <div class="erp-progress" title="{{ pct }}% complete">
+                <div class="erp-progress-bar {% if c.status == 'FULLY_SATISFIED' %}success{% endif %}"
+                     style="width:{{ pct }}%"></div>
+              </div>
+              <span style="font-size:10px; color:#9ca3af; display:block; margin-top:2px;">{{ pct }}%</span>
+            </td>
+            <td>
+              {% if c.status == 'FULLY_SATISFIED' %}
+                <span class="badge-satisfied">Satisfied</span>
+              {% elif c.status == 'PARTIAL' %}
+                <span class="badge-partial">Partial</span>
+              {% else %}
+                <span class="badge-open">Open</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="no-data-row"><td colspan="8" style="text-align:center; padding:32px; color:#9ca3af;">
+            <i class="fa fa-inbox" style="font-size:28px; display:block; margin-bottom:8px; opacity:.4;"></i>
+            No contracts found. Adjust filters or add contracts to the system.
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div style="padding:12px 20px; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; background:#fafafa;">
+    <span id="table-summary" style="font-size:12px; color:#6b7280;">
+      {% if contracts %}Showing {{ contracts | length }} contract(s){% endif %}
+    </span>
+    <span style="font-size:12px; color:#9ca3af;">
+      <i class="fa fa-info-circle"></i> Progress = satisfied / allocated
+    </span>
+  </div>
+</div>
+
+{# ── Recognize Period Modal ───────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-recognize" tabindex="-1" role="dialog" aria-labelledby="modal-recognize-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="modal-recognize-label" style="font-weight:700;">
+          <i class="fa fa-play-circle" style="color:#1a56db;"></i>&nbsp; Recognize Period
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Period (YYYY-MM)</label>
+          <input type="month" id="recognize-period" class="form-control"
+                 value="{{ current_period or '' }}"
+                 style="font-size:13px;">
+          <p class="help-block" style="font-size:11px;">
+            Revenue will be recognized for all contracts with obligations due in this period.
+          </p>
+        </div>
+        <div id="recognize-preview" style="display:none; background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:12px; font-size:12px; margin-top:8px;"></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-recognize-confirm" class="btn btn-primary" style="font-weight:600;">
+          <i class="fa fa-check"></i>&nbsp; Run Recognition
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Toast container ──────────────────────────────────────────────────────── #}
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── helpers ─────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtCents(cents) {
+    return (cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    el.innerHTML = '<i class="fa ' + (type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle') + '"></i> ' + _esc(msg);
+    var container = document.getElementById('toast-container');
+    container.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+
+  /* ── filter logic ────────────────────────────────────────────────────── */
+  function applyFilter() {
+    var status = document.getElementById('filter-status').value.toLowerCase();
+    var customer = document.getElementById('filter-customer').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#contracts-tbody tr[data-status]');
+    var visible = 0;
+    rows.forEach(function (row) {
+      var rowStatus   = (row.getAttribute('data-status') || '').toLowerCase();
+      var rowCustomer = (row.getAttribute('data-customer') || '').toLowerCase();
+      var show = (!status || rowStatus === status) && (!customer || rowCustomer.indexOf(customer) !== -1);
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    var noData = document.getElementById('no-data-row');
+    if (noData) noData.style.display = '';
+    document.getElementById('filter-count').textContent = rows.length ? ('Showing ' + visible + ' of ' + rows.length) : '';
+  }
+
+  document.getElementById('btn-filter-apply').addEventListener('click', applyFilter);
+  document.getElementById('btn-filter-clear').addEventListener('click', function () {
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-customer').value = '';
+    applyFilter();
+  });
+  document.getElementById('filter-customer').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') applyFilter();
+  });
+
+  /* ── Recognize Period button → modal ─────────────────────────────────── */
+  document.getElementById('btn-recognize').addEventListener('click', function () {
+    $('#modal-recognize').modal('show');
+  });
+
+  /* ── Confirm recognition → POST /api/revenue_recognition/recognize_period */
+  document.getElementById('btn-recognize-confirm').addEventListener('click', function () {
+    var period = document.getElementById('recognize-period').value;
+    if (!period) { toast('Select a period first.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Running…';
+
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    var headers  = { 'Content-Type': 'application/json' };
+    if (csrfMeta) headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+
+    fetch('/api/revenue_recognition/recognize_period', {
+      method:      'POST',
+      headers:     headers,
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: period })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-recognize').modal('hide');
+      if (res.ok) {
+        toast('Recognition complete for ' + period + '. ' + (res.data.entries_created || 0) + ' entries created.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Recognition failed.', 'error');
+      }
+    })
+    .catch(function (err) { toast('Network error: ' + err.message, 'error'); })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-check"></i>&nbsp; Run Recognition';
+    });
+  });
+
+  /* ── Initial filter count display ───────────────────────────────────── */
+  (function () {
+    var rows = document.querySelectorAll('#contracts-tbody tr[data-status]');
+    if (rows.length) document.getElementById('filter-count').textContent = 'Showing ' + rows.length + ' contract(s)';
+  }());
+}());
+</script>
+{% endblock %}

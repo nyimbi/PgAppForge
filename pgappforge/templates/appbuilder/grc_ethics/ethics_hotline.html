@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ethics &amp; Compliance Hotline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    a { color: #1d4ed8; }
+
+    /* ── Header ── */
+    .hl-header {
+      background: #1e3a5f;
+      color: #fff;
+      padding: 28px 24px 22px;
+      text-align: center;
+    }
+    .hl-header .hl-shield {
+      width: 52px; height: 52px;
+      background: rgba(255,255,255,.12);
+      border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+      font-size: 22px;
+    }
+    .hl-header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -.3px; }
+    .hl-header p  { margin: 0; font-size: 13px; opacity: .82; }
+    .hl-confidential-badge {
+      display: inline-block;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .5px;
+      margin-top: 10px;
+    }
+
+    /* ── Layout ── */
+    .hl-main {
+      max-width: 680px;
+      margin: 32px auto;
+      padding: 0 16px 60px;
+    }
+
+    /* ── Card ── */
+    .hl-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 28px 28px 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .hl-card-title {
+      font-size: 15px; font-weight: 700;
+      margin: 0 0 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .hl-card-title .icon { color: #1e3a5f; font-size: 16px; }
+    .hl-card-subtitle {
+      font-size: 12px; color: #6b7280; margin: 0 0 20px;
+    }
+
+    /* ── Form elements ── */
+    .hl-form-group { margin-bottom: 16px; }
+    .hl-form-group label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: #374151; margin-bottom: 5px;
+    }
+    .hl-form-group label .req { color: #ef4444; margin-left: 2px; }
+    select, textarea, input[type="text"] {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      color: #111827;
+      background: #fff;
+      transition: border-color .15s;
+      outline: none;
+    }
+    select:focus, textarea:focus, input[type="text"]:focus {
+      border-color: #1d4ed8;
+      box-shadow: 0 0 0 3px rgba(29,78,216,.1);
+    }
+    textarea { resize: vertical; min-height: 110px; }
+
+    /* ── Severity radio pills ── */
+    .severity-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .severity-pill input[type="radio"] { display: none; }
+    .severity-pill label {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 2px solid #d1d5db;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      color: #374151;
+      margin: 0;
+    }
+    .severity-pill input[type="radio"]:checked + label { border-color: currentColor; }
+    .severity-pill.low input:checked + label  { background:#f0fdf4; color:#15803d; border-color:#16a34a; }
+    .severity-pill.med input:checked + label  { background:#fffbeb; color:#b45309; border-color:#d97706; }
+    .severity-pill.high input:checked + label { background:#fef2f2; color:#b91c1c; border-color:#dc2626; }
+
+    /* ── Contact checkbox ── */
+    .hl-checkbox-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: #f9fafb; border: 1px solid #e5e7eb;
+      border-radius: 6px; padding: 12px 14px; margin-top: 6px;
+    }
+    .hl-checkbox-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+    .hl-checkbox-row .hl-chk-label { font-size: 12px; color: #374151; line-height: 1.5; }
+    .hl-checkbox-row .hl-chk-label strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+
+    /* ── Submit button ── */
+    .hl-submit-btn {
+      width: 100%;
+      background: #1e3a5f;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 11px 16px;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .hl-submit-btn:hover { background: #1e40af; }
+    .hl-submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    /* ── Token result ── */
+    .hl-token-box {
+      display: none;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 20px 22px;
+    }
+    .hl-token-box.visible { display: block; }
+    .hl-token-box h3 { margin: 0 0 6px; font-size: 15px; color: #14532d; font-weight: 700; }
+    .hl-token-box p  { margin: 0 0 12px; font-size: 13px; color: #166534; }
+    .hl-token-display {
+      background: #fff;
+      border: 1px solid #d1fae5;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: "Menlo","Consolas","Monaco",monospace;
+      font-size: 15px;
+      letter-spacing: 1px;
+      color: #065f46;
+      display: flex; align-items: center; justify-content: space-between;
+      word-break: break-all;
+    }
+    .copy-btn {
+      background: none; border: 1px solid #a7f3d0; border-radius: 4px;
+      padding: 3px 8px; font-size: 11px; font-weight: 600;
+      color: #065f46; cursor: pointer; flex-shrink: 0; margin-left: 10px;
+    }
+    .copy-btn:hover { background: #d1fae5; }
+    .hl-token-note { font-size: 11px; color: #6b7280; margin-top: 10px; }
+
+    /* ── Status check section ── */
+    .status-form { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
+    .status-form input[type="text"] { flex: 1; }
+    .status-check-btn {
+      background: #1e3a5f; color: #fff; border: none;
+      border-radius: 6px; padding: 8px 14px;
+      font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .status-check-btn:hover { background: #1e40af; }
+
+    .status-result-box { margin-top: 14px; display: none; }
+    .status-result-box.visible { display: block; }
+    .status-result-badge {
+      display: inline-block; border-radius: 12px; padding: 2px 10px;
+      font-size: 12px; font-weight: 700; margin-bottom: 6px;
+    }
+    .status-received   { background:#dbeafe; color:#1e40af; }
+    .status-under_review { background:#fef9c3; color:#854d0e; }
+    .status-resolved   { background:#dcfce7; color:#166534; }
+    .status-closed     { background:#f3f4f6; color:#4b5563; }
+
+    /* ── Reassurance strip ── */
+    .hl-reassurance {
+      display: flex; gap: 24px; flex-wrap: wrap;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 16px 20px; margin-bottom: 24px;
+      font-size: 12px; color: #6b7280;
+    }
+    .hl-reassurance-item { display: flex; align-items: center; gap: 7px; }
+    .hl-reassurance-item .icon { color: #1e3a5f; font-size: 14px; }
+
+    /* ── Footer ── */
+    .hl-footer {
+      text-align: center; font-size: 11px; color: #9ca3af; margin-top: 32px;
+    }
+
+    /* ── Alert ── */
+    .hl-alert { border-radius: 6px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+    .hl-alert-error { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; }
+    .hl-alert-info  { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+
+    /* ── Spinner ── */
+    .hl-spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.4); border-top-color: #fff;
+      border-radius: 50%; animation: hl-spin .7s linear infinite;
+    }
+    @keyframes hl-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <div class="hl-header">
+    <div class="hl-shield" aria-hidden="true">&#x1F6E1;</div>
+    <h1>Ethics &amp; Compliance Hotline</h1>
+    <p>Report concerns about conduct, safety, fraud, or misconduct.</p>
+    <div class="hl-confidential-badge">&#x1F512; YOUR REPORT IS CONFIDENTIAL</div>
+  </div>
+
+  <div class="hl-main" role="main">
+
+    <!-- ── Reassurance strip ──────────────────────────────────────────── -->
+    <div class="hl-reassurance" role="note">
+      <div class="hl-reassurance-item">
+        <span class="icon">&#x1F512;</span>
+        <span>Submissions are encrypted and anonymised</span>
+      </div>
+      <div class="hl-reassurance-item">
+        <span class="icon">&#x1F6AB;</span>
+        <span>No retaliation — protected by policy</span>
+      </div>
+      <div class="hl-reassurance-item">
+        <span class="icon">&#x231A;</span>
+        <span>All reports reviewed within 5 business days</span>
+      </div>
+      <div class="hl-reassurance-item">
+        <span class="icon">&#x1F465;</span>
+        <span>Handled by independent ethics team</span>
+      </div>
+    </div>
+
+    <!-- ── Submit a report ───────────────────────────────────────────── -->
+    <div class="hl-card" id="report-card">
+      <p class="hl-card-title"><span class="icon">&#x270D;</span> Submit a Report</p>
+      <p class="hl-card-subtitle">All fields marked <span style="color:#ef4444;">*</span> are required. You may remain anonymous.</p>
+
+      <div id="submit-error" class="hl-alert hl-alert-error" style="display:none;"></div>
+
+      <form id="report-form" novalidate>
+
+        <div class="hl-form-group">
+          <label for="report-category">Category <span class="req">*</span></label>
+          <select id="report-category" name="category" required>
+            <option value="">— Select a category —</option>
+            <option value="BRIBERY">Bribery / Corruption</option>
+            <option value="FRAUD">Fraud / Financial Misconduct</option>
+            <option value="HARASSMENT">Harassment / Discrimination</option>
+            <option value="SAFETY">Safety / Environmental Concern</option>
+            <option value="CONFLICT_OF_INTEREST">Conflict of Interest</option>
+            <option value="DATA_PRIVACY">Data Privacy Breach</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div class="hl-form-group">
+          <label>Severity <span class="req">*</span></label>
+          <div class="severity-pills" role="radiogroup" aria-label="Report severity">
+            <span class="severity-pill low">
+              <input type="radio" name="severity" id="sev-low" value="LOW">
+              <label for="sev-low">&#x1F7E2; Low</label>
+            </span>
+            <span class="severity-pill med">
+              <input type="radio" name="severity" id="sev-med" value="MEDIUM" checked>
+              <label for="sev-med">&#x1F7E1; Medium</label>
+            </span>
+            <span class="severity-pill high">
+              <input type="radio" name="severity" id="sev-high" value="HIGH">
+              <label for="sev-high">&#x1F534; High</label>
+            </span>
+          </div>
+        </div>
+
+        <div class="hl-form-group">
+          <label for="report-description">Description <span class="req">*</span></label>
+          <textarea id="report-description" name="description" required
+            placeholder="Describe the concern in as much detail as you are comfortable sharing. Include dates, locations, or names if known. The more context you provide, the better we can investigate."
+            maxlength="4000"></textarea>
+          <div style="text-align:right; font-size:11px; color:#9ca3af; margin-top:3px;">
+            <span id="desc-char-count">0</span> / 4000
+          </div>
+        </div>
+
+        <div class="hl-form-group" style="margin-bottom:20px;">
+          <div class="hl-checkbox-row">
+            <input type="checkbox" id="want-contact" name="want_contact" value="1">
+            <div class="hl-chk-label">
+              <strong>I would like to be contacted about this report</strong>
+              Checking this box will prompt you for contact details. Your information is still kept confidential from those involved in the incident.
+            </div>
+          </div>
+        </div>
+
+        <div id="contact-fields" style="display:none;">
+          <div class="hl-form-group">
+            <label for="contact-info">Preferred contact method (email or phone)</label>
+            <input type="text" id="contact-info" name="contact_info" placeholder="e.g. your.email@example.com or +254 700 000 000">
+          </div>
+        </div>
+
+        <button type="submit" class="hl-submit-btn" id="submit-btn">
+          <span id="submit-icon">&#x1F4E8;</span>
+          <span id="submit-label">Submit Confidential Report</span>
+        </button>
+
+      </form>
+
+      <!-- ── Token display (shown after submit) ───────────────────── -->
+      <div class="hl-token-box" id="token-box" role="alert" aria-live="polite">
+        <h3>&#x2705; Report submitted successfully</h3>
+        <p>Save your tracking token. You will need it to check the status of your report. Do not share it with others.</p>
+        <div class="hl-token-display">
+          <span id="display-token"></span>
+          <button class="copy-btn" id="copy-token-btn" type="button" aria-label="Copy tracking token">Copy</button>
+        </div>
+        <p class="hl-token-note">
+          &#x26A0;&#xFE0F; This token will not be shown again. Write it down or copy it now.
+        </p>
+      </div>
+    </div>
+
+    <!-- ── Check report status ───────────────────────────────────────── -->
+    <div class="hl-card" id="status-card">
+      <p class="hl-card-title"><span class="icon">&#x1F50D;</span> Check Report Status</p>
+      <p class="hl-card-subtitle">Enter your tracking token to see the current status of your report.</p>
+
+      <div id="status-error" class="hl-alert hl-alert-error" style="display:none;"></div>
+
+      <div class="status-form">
+        <input type="text" id="status-token-input" placeholder="Enter your tracking token…"
+               autocomplete="off" autocorrect="off" spellcheck="false">
+        <button type="button" class="status-check-btn" id="status-check-btn">
+          Check Status
+        </button>
+      </div>
+
+      <div class="status-result-box" id="status-result">
+        <span class="status-result-badge" id="status-badge"></span>
+        <div id="status-detail" style="font-size:13px; color:#374151;"></div>
+      </div>
+    </div>
+
+    <!-- ── Footer ────────────────────────────────────────────────────── -->
+    <div class="hl-footer">
+      <p>This hotline is administered independently. Reports are handled in accordance with our
+         <a href="/legal/ethics-policy" target="_blank" rel="noopener">Ethics &amp; Compliance Policy</a>.</p>
+      <p style="margin-top:4px;">For life-threatening emergencies, contact emergency services immediately.</p>
+    </div>
+
+  </div><!-- /hl-main -->
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ── Helpers ────────────────────────────────────────────────────── */
+    function _esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function csrfToken() {
+      var m = document.cookie.match(/csrf_token=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    function showError(elId, msg) {
+      var el = document.getElementById(elId);
+      if (!el) return;
+      el.textContent = msg;
+      el.style.display = msg ? '' : 'none';
+    }
+
+    /* ── Character counter ──────────────────────────────────────────── */
+    var descTA    = document.getElementById('report-description');
+    var charCount = document.getElementById('desc-char-count');
+    if (descTA && charCount) {
+      descTA.addEventListener('input', function () {
+        charCount.textContent = descTA.value.length;
+      });
+    }
+
+    /* ── Contact fields toggle ──────────────────────────────────────── */
+    var wantContact    = document.getElementById('want-contact');
+    var contactFields  = document.getElementById('contact-fields');
+    if (wantContact && contactFields) {
+      wantContact.addEventListener('change', function () {
+        contactFields.style.display = this.checked ? '' : 'none';
+      });
+    }
+
+    /* ── Report form submit ─────────────────────────────────────────── */
+    var reportForm = document.getElementById('report-form');
+    var submitBtn  = document.getElementById('submit-btn');
+    var tokenBox   = document.getElementById('token-box');
+
+    if (reportForm) {
+      reportForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        showError('submit-error', '');
+
+        var category    = document.getElementById('report-category').value;
+        var severity    = (document.querySelector('input[name="severity"]:checked') || {}).value || '';
+        var description = (descTA ? descTA.value.trim() : '');
+        var wantCon     = wantContact && wantContact.checked;
+        var contactInfo = (document.getElementById('contact-info') || {}).value || '';
+
+        if (!category) { showError('submit-error', 'Please select a category.'); return; }
+        if (!severity) { showError('submit-error', 'Please select a severity level.'); return; }
+        if (description.length < 20) { showError('submit-error', 'Please provide a description of at least 20 characters.'); return; }
+
+        /* Disable form while submitting */
+        submitBtn.disabled = true;
+        document.getElementById('submit-icon').innerHTML = '<span class="hl-spinner"></span>';
+        document.getElementById('submit-label').textContent = 'Submitting…';
+
+        var payload = {
+          category:     category,
+          severity:     severity,
+          description:  description,
+          want_contact: wantCon,
+          contact_info: wantCon ? contactInfo : ''
+        };
+
+        fetch('/api/ethics/report', {
+          method:  'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken':  csrfToken()
+          },
+          body: JSON.stringify(payload)
+        })
+          .then(function (res) {
+            if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || ('HTTP ' + res.status)); });
+            return res.json();
+          })
+          .then(function (data) {
+            /* Show token */
+            var token = data.tracking_token || data.token || '(no token returned)';
+            document.getElementById('display-token').textContent = token;
+            reportForm.style.display = 'none';
+            tokenBox.classList.add('visible');
+          })
+          .catch(function (err) {
+            showError('submit-error', 'Submission failed: ' + err.message + '. Please try again or contact HR directly.');
+            submitBtn.disabled = false;
+            document.getElementById('submit-icon').textContent = '📨';
+            document.getElementById('submit-label').textContent = 'Submit Confidential Report';
+          });
+      });
+    }
+
+    /* ── Copy token button ──────────────────────────────────────────── */
+    var copyBtn = document.getElementById('copy-token-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function () {
+        var token = (document.getElementById('display-token') || {}).textContent || '';
+        if (navigator.clipboard && token) {
+          navigator.clipboard.writeText(token).then(function () {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
+          });
+        } else {
+          /* Fallback — select text */
+          var range = document.createRange();
+          range.selectNode(document.getElementById('display-token'));
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+          copyBtn.textContent = 'Selected';
+          setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
+        }
+      });
+    }
+
+    /* ── Status check ───────────────────────────────────────────────── */
+    var statusBtn    = document.getElementById('status-check-btn');
+    var statusInput  = document.getElementById('status-token-input');
+    var statusResult = document.getElementById('status-result');
+    var statusBadge  = document.getElementById('status-badge');
+    var statusDetail = document.getElementById('status-detail');
+
+    var STATUS_LABELS = {
+      RECEIVED:     'Received',
+      UNDER_REVIEW: 'Under Review',
+      RESOLVED:     'Resolved',
+      CLOSED:       'Closed'
+    };
+    var STATUS_CLASSES = {
+      RECEIVED:     'status-received',
+      UNDER_REVIEW: 'status-under_review',
+      RESOLVED:     'status-resolved',
+      CLOSED:       'status-closed'
+    };
+
+    function checkStatus() {
+      showError('status-error', '');
+      statusResult.classList.remove('visible');
+      var token = statusInput ? statusInput.value.trim() : '';
+      if (!token) { showError('status-error', 'Please enter a tracking token.'); return; }
+
+      statusBtn.disabled = true;
+      statusBtn.textContent = 'Checking…';
+
+      fetch('/api/ethics/status/' + encodeURIComponent(token))
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || ('HTTP ' + res.status)); });
+          return res.json();
+        })
+        .then(function (data) {
+          var st = (data.status || '').toUpperCase();
+          statusBadge.textContent = STATUS_LABELS[st] || st;
+          statusBadge.className = 'status-result-badge ' + (STATUS_CLASSES[st] || 'status-received');
+          var html = '';
+          if (data.submitted_at) html += '<p style="margin:4px 0;"><strong>Submitted:</strong> ' + _esc(data.submitted_at) + '</p>';
+          if (data.category)     html += '<p style="margin:4px 0;"><strong>Category:</strong> '  + _esc(data.category)     + '</p>';
+          if (data.last_updated) html += '<p style="margin:4px 0;"><strong>Last updated:</strong> ' + _esc(data.last_updated) + '</p>';
+          if (data.investigator_note) {
+            html += '<p style="margin:8px 0 0;"><strong>Note from investigator:</strong></p>';
+            html += '<p style="margin:4px 0; padding:8px 10px; background:#f9fafb; border-radius:4px; font-size:12px;">' + _esc(data.investigator_note) + '</p>';
+          }
+          if (!html) html = '<p style="margin:4px 0;">Report found. No additional updates at this time.</p>';
+          statusDetail.innerHTML = html;
+          statusResult.classList.add('visible');
+        })
+        .catch(function (err) {
+          showError('status-error', 'Could not retrieve status: ' + err.message + '. Please check your token and try again.');
+        })
+        .finally(function () {
+          statusBtn.disabled = false;
+          statusBtn.textContent = 'Check Status';
+        });
+    }
+
+    if (statusBtn) {
+      statusBtn.addEventListener('click', checkStatus);
+    }
+    if (statusInput) {
+      statusInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') checkStatus();
+      });
+    }
+
+  }());
+  </script>
+</body>
+</html>

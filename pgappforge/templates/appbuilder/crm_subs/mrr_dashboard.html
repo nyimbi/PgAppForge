@@ -1,0 +1,307 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}MRR / ARR Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Subscriptions dashboard ──────────────────────────────────────── */
+  .subs-hero {
+    background: linear-gradient(135deg, #0d47a1 0%, #1565c0 55%, #1976d2 100%);
+    color: #fff;
+    padding: 26px 32px 20px;
+    border-radius: 6px;
+    margin-bottom: 24px;
+  }
+  .subs-hero h2 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
+  .subs-hero .subtitle { opacity: .8; font-size: 14px; }
+
+  /* KPI tiles */
+  .kpi-tile {
+    background: #fff;
+    border: 1px solid #dde3ec;
+    border-radius: 6px;
+    padding: 18px 20px 16px;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-tile::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .kpi-mrr::before        { background: #1565c0; }
+  .kpi-arr::before        { background: #0d47a1; }
+  .kpi-subs::before       { background: #2e7d32; }
+  .kpi-churn::before      { background: #c62828; }
+  .kpi-arpu::before       { background: #6a1b9a; }
+
+  .kpi-label { font-size: 11px; font-weight: 600; color: #90a4ae; text-transform: uppercase; letter-spacing: .6px; }
+  .kpi-value { font-size: 28px; font-weight: 700; color: #1a237e; line-height: 1.1; margin: 6px 0 4px; }
+  .kpi-value.danger { color: #c62828; }
+  .kpi-sub   { font-size: 12px; color: #78909c; }
+  .kpi-icon  { position: absolute; right: 16px; top: 18px; font-size: 32px; opacity: .08; }
+
+  /* chart panels */
+  .chart-panel { background: #fff; border: 1px solid #dde3ec; border-radius: 6px; padding: 20px 22px; }
+  .chart-panel .chart-title { font-size: 15px; font-weight: 700; color: #0d47a1; margin-bottom: 16px; }
+
+  /* renewal queue */
+  .renewal-item { display: flex; align-items: center; justify-content: space-between;
+                  padding: 11px 0; border-bottom: 1px solid #f5f7fb; }
+  .renewal-item:last-child { border-bottom: none; }
+  .renewal-name  { font-size: 14px; font-weight: 600; color: #212121; }
+  .renewal-plan  { font-size: 12px; color: #78909c; }
+  .renewal-amount{ font-size: 14px; font-weight: 700; color: #1565c0; }
+  .renewal-due   { font-size: 11px; color: #78909c; margin-top: 1px; }
+  .days-badge    { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .days-urgent   { background: #ffebee; color: #c62828; }
+  .days-soon     { background: #fff3e0; color: #e65100; }
+  .days-ok       { background: #e8f5e9; color: #2e7d32; }
+
+  /* churn table */
+  .badge-cancelled { background: #ffebee; color: #c62828; border-radius: 3px; padding: 2px 7px; font-size: 11px; }
+
+  .section-header { font-size: 16px; font-weight: 700; color: #0d47a1;
+                    border-bottom: 2px solid #e3f2fd; padding-bottom: 8px; margin-bottom: 16px; }
+
+  .fmt-currency { font-family: "Courier New", monospace; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="subs-hero">
+  <div class="row">
+    <div class="col-sm-9">
+      <h2><i class="fa fa-line-chart"></i>&nbsp; MRR / ARR Dashboard</h2>
+      <p class="subtitle">Subscription revenue metrics, renewal pipeline, and churn analysis.</p>
+    </div>
+    <div class="col-sm-3 text-right" style="padding-top:8px;">
+      <a href="/crm/subscriptions" class="btn btn-default btn-sm">
+        <i class="fa fa-list"></i>&nbsp; All Subscriptions
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI row ─────────────────────────────────────────────────────────── #}
+{% set mrr_dollars  = (mrr_summary.mrr_cents  / 100) %}
+{% set arr_dollars  = (mrr_summary.mrr_cents  * 12 / 100) %}
+{% set arpu_dollars = (mrr_summary.avg_revenue_per_user_cents / 100) %}
+
+<div class="row" style="margin-bottom:22px;">
+  <div class="col-sm-6 col-md-2" style="margin-bottom:14px;">
+    <div class="kpi-tile kpi-mrr">
+      <i class="fa fa-usd kpi-icon"></i>
+      <div class="kpi-label">Monthly Recurring Revenue</div>
+      <div class="kpi-value fmt-currency">${{ '{:,.0f}'.format(mrr_dollars) }}</div>
+      <div class="kpi-sub">MRR this month</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-2" style="margin-bottom:14px;">
+    <div class="kpi-tile kpi-arr">
+      <i class="fa fa-calendar kpi-icon"></i>
+      <div class="kpi-label">Annual Recurring Revenue</div>
+      <div class="kpi-value fmt-currency">${{ '{:,.0f}'.format(arr_dollars) }}</div>
+      <div class="kpi-sub">ARR (MRR × 12)</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-3" style="margin-bottom:14px;">
+    <div class="kpi-tile kpi-subs">
+      <i class="fa fa-users kpi-icon"></i>
+      <div class="kpi-label">Active Subscribers</div>
+      <div class="kpi-value">{{ '{:,}'.format(mrr_summary.active_subscribers) }}</div>
+      <div class="kpi-sub">currently active</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-3" style="margin-bottom:14px;">
+    <div class="kpi-tile kpi-churn">
+      <i class="fa fa-sign-out kpi-icon"></i>
+      <div class="kpi-label">Churn Rate</div>
+      <div class="kpi-value danger">{{ mrr_summary.churn_rate_pct | round(1) }}%</div>
+      <div class="kpi-sub">monthly churn</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-2" style="margin-bottom:14px;">
+    <div class="kpi-tile kpi-arpu">
+      <i class="fa fa-bar-chart kpi-icon"></i>
+      <div class="kpi-label">ARPU</div>
+      <div class="kpi-value fmt-currency">${{ '{:,.2f}'.format(arpu_dollars) }}</div>
+      <div class="kpi-sub">avg revenue / user</div>
+    </div>
+  </div>
+</div>
+
+{# ── Charts row ──────────────────────────────────────────────────────── #}
+<div class="row" style="margin-bottom:24px;">
+  <div class="col-md-8" style="margin-bottom:18px;">
+    <div class="chart-panel" style="height:340px;">
+      <div class="chart-title"><i class="fa fa-area-chart"></i>&nbsp; MRR Trend — Last 12 Months</div>
+      <canvas id="mrr-chart" height="260"></canvas>
+    </div>
+  </div>
+  <div class="col-md-4" style="margin-bottom:18px;">
+    <div class="chart-panel" style="height:340px;">
+      <div class="chart-title"><i class="fa fa-pie-chart"></i>&nbsp; Subscription Status Breakdown</div>
+      <canvas id="status-chart" height="230"></canvas>
+      <div id="status-legend" style="margin-top:10px; font-size:12px;"></div>
+    </div>
+  </div>
+</div>
+
+{# ── Renewal queue + Recent churn ────────────────────────────────────── #}
+<div class="row">
+  <div class="col-md-6" style="margin-bottom:24px;">
+    <div class="section-header"><i class="fa fa-refresh"></i>&nbsp; Renewal Queue — Next 30 Days</div>
+    <div class="panel" style="border:1px solid #dde3ec; border-radius:6px; background:#fff;">
+      <div class="panel-body" style="padding:0 18px;">
+        {% if upcoming_renewals %}
+          {% for ren in upcoming_renewals %}
+            <div class="renewal-item">
+              <div>
+                <div class="renewal-name">{{ ren.customer_name }}</div>
+                <div class="renewal-plan">{{ ren.plan_name }}</div>
+              </div>
+              <div class="text-right">
+                <div class="renewal-amount">${{ '{:,.2f}'.format(ren.amount_cents / 100) }}/mo</div>
+                <div class="renewal-due">
+                  {% set days_left = ren.days_until_renewal | default(0) %}
+                  {% if days_left <= 7 %}
+                    <span class="days-badge days-urgent"><i class="fa fa-exclamation-circle"></i> {{ days_left }}d</span>
+                  {% elif days_left <= 14 %}
+                    <span class="days-badge days-soon"><i class="fa fa-clock-o"></i> {{ days_left }}d</span>
+                  {% else %}
+                    <span class="days-badge days-ok"><i class="fa fa-calendar"></i> {{ days_left }}d</span>
+                  {% endif %}
+                  &nbsp;{{ ren.renewal_date }}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center; padding:28px; color:#90a4ae;">
+            <i class="fa fa-calendar-check-o" style="font-size:30px; display:block; margin-bottom:10px;"></i>
+            No renewals in the next 30 days.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6" style="margin-bottom:24px;">
+    <div class="section-header"><i class="fa fa-sign-out"></i>&nbsp; Recent Churn</div>
+    <div class="panel" style="border:1px solid #dde3ec; border-radius:6px; background:#fff;">
+      <div class="panel-body" style="padding:0;">
+        {% if recent_churn %}
+        <table class="table" style="margin-bottom:0;">
+          <thead>
+            <tr style="background:#fff5f5;">
+              <th style="padding-left:18px;">Customer</th>
+              <th>Plan</th>
+              <th>MRR Lost</th>
+              <th>Reason</th>
+              <th style="padding-right:18px;">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ch in recent_churn %}
+            <tr>
+              <td style="padding-left:18px; font-weight:600;">{{ ch.customer_name }}</td>
+              <td>{{ ch.plan_name }}</td>
+              <td style="color:#c62828; font-weight:700;">${{ '{:,.2f}'.format(ch.mrr_cents / 100) }}</td>
+              <td>
+                <span style="font-size:12px; color:#546e7a;">{{ ch.cancellation_reason | truncate(30) }}</span>
+              </td>
+              <td style="padding-right:18px; font-size:12px; color:#78909c;">{{ ch.cancelled_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <div style="text-align:center; padding:28px; color:#90a4ae;">
+            <i class="fa fa-check-circle" style="font-size:30px; display:block; margin-bottom:10px; color:#2e7d32;"></i>
+            No recent cancellations.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN (pinned minor) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ── MRR trend line chart ────────────────────────────────────────── */
+  var mrrCtx = document.getElementById("mrr-chart").getContext("2d");
+  var mrrChart = new Chart(mrrCtx, {
+    type: "line",
+    data: { labels: [], datasets: [{ label: "MRR ($)", data: [],
+      borderColor: "#1565c0", backgroundColor: "rgba(21,101,192,.08)",
+      borderWidth: 2, pointBackgroundColor: "#1565c0", pointRadius: 4,
+      fill: true, tension: .35 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: function (ctx) {
+                   return " $" + ctx.parsed.y.toLocaleString("en-US", { minimumFractionDigits: 0 });
+                 }}}},
+      scales: {
+        x: { grid: { color: "#f1f3f8" } },
+        y: { grid: { color: "#f1f3f8" },
+             ticks: { callback: function (v) { return "$" + (v/1000).toFixed(0) + "k"; }}}
+      }
+    }
+  });
+
+  /* fetch 12-month history */
+  $.getJSON("/api/subscriptions/mrr_trend", function (data) {
+    mrrChart.data.labels   = data.labels;
+    mrrChart.data.datasets[0].data = data.values;
+    mrrChart.update();
+  }).fail(function () {
+    /* graceful degradation — leave empty */
+  });
+
+  /* ── Status breakdown doughnut ───────────────────────────────────── */
+  var statusCtx = document.getElementById("status-chart").getContext("2d");
+  var statusColors = {
+    ACTIVE:    "#1565c0",
+    TRIALING:  "#0288d1",
+    PAST_DUE:  "#f59e0b",
+    CANCELLED: "#c62828"
+  };
+  /* derive from mrr_summary if provided, else leave empty */
+  var statusData   = {{ mrr_summary.status_breakdown | tojson | default('{}') }};
+  var statusLabels = Object.keys(statusData);
+  var statusValues = Object.values(statusData);
+  var statusBgColors = statusLabels.map(function (k) { return statusColors[k] || "#90a4ae"; });
+
+  new Chart(statusCtx, {
+    type: "doughnut",
+    data: {
+      labels: statusLabels,
+      datasets: [{ data: statusValues, backgroundColor: statusBgColors,
+                   borderWidth: 2, borderColor: "#fff" }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 12 }, padding: 12 }},
+                 tooltip: { callbacks: { label: function (ctx) {
+                   return " " + ctx.label + ": " + ctx.parsed.toLocaleString();
+                 }}}}
+    }
+  });
+}());
+</script>
+{% endblock %}

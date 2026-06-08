@@ -1,0 +1,480 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Enterprise Risk Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Heat map ── */
+  .erm-heatmap-wrap { background:var(--erp-surface,#fff); border:1px solid var(--erp-border,#e5e7eb); border-radius:10px; padding:20px 22px; margin-bottom:24px; }
+  .erm-heatmap-title { font-size:15px; font-weight:700; margin:0 0 16px; display:flex; align-items:center; gap:10px; }
+  .erm-heatmap-title .kri-badge { font-size:11px; font-weight:600; background:#fee2e2; color:#991b1b; padding:2px 10px; border-radius:12px; }
+
+  .erm-heatmap-grid {
+    display:grid;
+    grid-template-columns: 36px repeat(5, 1fr);
+    grid-template-rows: repeat(5, 48px) 36px;
+    gap:3px;
+  }
+  .erm-hm-axis-label {
+    font-size:10px; font-weight:600; color:var(--erp-text-muted,#6b7280);
+    display:flex; align-items:center; justify-content:center; text-align:center;
+  }
+  .erm-hm-axis-label.y { writing-mode:horizontal-tb; }
+  .erm-hm-cell {
+    border-radius:5px; display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; cursor:pointer; transition:opacity .15s, transform .1s;
+    position:relative; color:#fff;
+  }
+  .erm-hm-cell:hover { opacity:.82; transform:scale(1.06); z-index:1; }
+  .erm-hm-cell:focus { outline:2px solid #1a56db; outline-offset:2px; }
+  .erm-hm-cell.empty { cursor:default; color:transparent; }
+  .erm-hm-cell.empty:hover { opacity:1; transform:none; }
+
+  /* Score colour bands */
+  .hm-score-1, .hm-score-2   { background:#166534; }   /* dark green  */
+  .hm-score-3, .hm-score-4   { background:#16a34a; }   /* light green */
+  .hm-score-5, .hm-score-6   { background:#ca8a04; }   /* yellow      */
+  .hm-score-8, .hm-score-9   { background:#d97706; }   /* amber       */
+  .hm-score-10,.hm-score-12  { background:#ea580c; }   /* orange      */
+  .hm-score-15,.hm-score-16  { background:#dc2626; }   /* red         */
+  .hm-score-20,.hm-score-25  { background:#7f1d1d; }   /* dark red    */
+  .hm-score-empty { background:#f3f4f6; color:var(--erp-text-muted,#6b7280) !important; cursor:default; }
+  .hm-score-empty:hover { opacity:1; transform:none; }
+
+  .erm-heatmap-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .erm-heatmap-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--erp-text-muted); }
+  .erm-heatmap-legend-item span { width:12px;height:12px;border-radius:2px;display:inline-block; }
+
+  /* ── Risk register ── */
+  .erm-filter-bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .risk-score-pill { display:inline-block; min-width:28px; text-align:center; border-radius:4px; padding:2px 7px; font-size:12px; font-weight:700; color:#fff; }
+  .rs-low      { background:#16a34a; }
+  .rs-moderate { background:#ca8a04; }
+  .rs-high     { background:#ea580c; }
+  .rs-critical { background:#dc2626; }
+
+  .erm-sort-arrow { cursor:pointer; font-size:11px; color:var(--erp-text-muted); margin-left:3px; }
+  .erm-sort-arrow.active { color:#1a56db; }
+
+  /* ── KRI bar ── */
+  .kri-monitoring-bar { background:var(--erp-surface,#fff); border:1px solid var(--erp-border,#e5e7eb); border-radius:8px; padding:14px 18px; margin-bottom:24px; }
+  .kri-item { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--erp-border,#e5e7eb); }
+  .kri-item:last-child { border-bottom:none; }
+  .kri-name { flex:1; font-size:13px; font-weight:500; }
+  .kri-value { font-family:"Menlo","Consolas",monospace; font-size:13px; min-width:70px; text-align:right; }
+  .kri-threshold-bar { width:100px; height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; flex-shrink:0; }
+  .kri-threshold-fill { height:100%; border-radius:3px; }
+  .kri-status-ok      { color:#15803d; }
+  .kri-status-breach  { color:#b91c1c; }
+  .kri-breach-tag { background:#fee2e2; color:#991b1b; border-radius:3px; padding:1px 6px; font-size:11px; font-weight:700; }
+
+  /* ── Modal ── */
+  .erm-modal-risk-list { list-style:none; margin:0; padding:0; }
+  .erm-modal-risk-list li { padding:10px 0; border-bottom:1px solid #f3f4f6; display:flex; align-items:flex-start; gap:10px; }
+  .erm-modal-risk-list li:last-child { border-bottom:none; }
+  .erm-risk-id { font-size:11px; color:#6b7280; font-family:monospace; flex-shrink:0; margin-top:2px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-shield"></i> Enterprise Risk Management</h1>
+    <p class="erp-page-subtitle">Heat map, risk register, and KRI monitoring across all risk categories.</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+    <a href="/grc/risk/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Add Risk
+    </a>
+    <button class="btn btn-default btn-sm" id="export-register-btn">
+      <i class="fa fa-download"></i> Export Register
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI summary ─────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <p class="erp-card-title">Critical Risks</p>
+    <p class="erp-card-value" id="kpi-critical">{{ risks | selectattr('score','>=',20) | list | length if risks else '—' }}</p>
+    <p class="erp-card-sub">Score ≥ 20</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <p class="erp-card-title">High Risks</p>
+    <p class="erp-card-value" id="kpi-high">{{ risks | selectattr('score','>=',10) | selectattr('score','<',20) | list | length if risks else '—' }}</p>
+    <p class="erp-card-sub">Score 10 – 19</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-info"></div>
+    <p class="erp-card-title">Total Risks</p>
+    <p class="erp-card-value">{{ risks | length if risks else '—' }}</p>
+    <p class="erp-card-sub">Across all categories</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent {{ 'erp-card-accent-danger' if kri_breach_count else 'erp-card-accent-success' }}"></div>
+    <p class="erp-card-title">KRI Breaches</p>
+    <p class="erp-card-value" style="color:{{ '#dc2626' if kri_breach_count else '#16a34a' }};">
+      {{ kri_breach_count or 0 }}
+    </p>
+    <p class="erp-card-sub">Key risk indicators in breach</p>
+  </div>
+</div>
+
+{# ── Interactive 5×5 Heat Map ─────────────────────────────────────────── #}
+<div class="erm-heatmap-wrap erp-mb-24">
+  <div class="erm-heatmap-title">
+    <i class="fa fa-th"></i> Risk Heat Map
+    {% if kri_breach_count %}
+    <span class="kri-badge"><i class="fa fa-exclamation-circle"></i> {{ kri_breach_count }} KRI breach{{ 'es' if kri_breach_count != 1 else '' }}</span>
+    {% endif %}
+  </div>
+
+  {# Y-axis label #}
+  <div style="display:flex;gap:6px;align-items:flex-start;">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:16px;margin-right:4px;padding-top:4px;">
+      <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:600;color:var(--erp-text-muted);letter-spacing:.5px;text-transform:uppercase;">
+        Likelihood →
+      </span>
+    </div>
+    <div style="flex:1;">
+      <div class="erm-heatmap-grid" id="heatmap-grid" role="grid" aria-label="5x5 risk heat map">
+
+        {# Row 5 (top = likelihood 5) down to row 1 #}
+        {% for row in range(5, 0, -1) %}
+          {# Y-axis label #}
+          <div class="erm-hm-axis-label y" style="font-size:11px;">{{ row }}</div>
+          {% for col in range(1, 6) %}
+            {% set score = row * col %}
+            {% set key = (row, col) %}
+            {% set risk_ids = heatmap_data.get(key, []) if heatmap_data else [] %}
+            {% set count = risk_ids | length %}
+            {#
+              Score colour mapping:
+              score ≤2 → dark-green | 3-4 → light-green | 5-6 → yellow
+              8-9 → amber | 10-12 → orange | 15-16 → red | 20-25 → dark-red
+            #}
+            {% if score <= 2 %}
+              {% set band = '#166534' %}
+            {% elif score <= 4 %}
+              {% set band = '#16a34a' %}
+            {% elif score <= 6 %}
+              {% set band = '#ca8a04' %}
+            {% elif score <= 9 %}
+              {% set band = '#d97706' %}
+            {% elif score <= 12 %}
+              {% set band = '#ea580c' %}
+            {% elif score <= 16 %}
+              {% set band = '#dc2626' %}
+            {% else %}
+              {% set band = '#7f1d1d' %}
+            {% endif %}
+            <div
+              class="erm-hm-cell"
+              style="background:{{ band }};"
+              role="gridcell"
+              tabindex="0"
+              aria-label="Likelihood {{ row }}, Impact {{ col }}, score {{ score }}, {{ count }} risk(s)"
+              data-likelihood="{{ row }}"
+              data-impact="{{ col }}"
+              data-score="{{ score }}"
+              data-risk-ids="{{ risk_ids | join(',') }}"
+              onclick="openHeatmapCell({{ row }}, {{ col }}, {{ score }}, {{ risk_ids | tojson }})"
+              onkeydown="if(event.key==='Enter'||event.key===' ')openHeatmapCell({{ row }}, {{ col }}, {{ score }}, {{ risk_ids | tojson }})"
+            >
+              {% if count %}{{ count }}{% endif %}
+            </div>
+          {% endfor %}
+        {% endfor %}
+
+        {# X-axis labels — blank corner then 1-5 #}
+        <div></div>
+        {% for col in range(1, 6) %}
+          <div class="erm-hm-axis-label" style="font-size:11px;">{{ col }}</div>
+        {% endfor %}
+
+      </div>
+      <div style="text-align:center;font-size:10px;font-weight:600;color:var(--erp-text-muted);letter-spacing:.5px;text-transform:uppercase;margin-top:4px;">
+        Impact →
+      </div>
+    </div>
+  </div>
+
+  <div class="erm-heatmap-legend">
+    <div class="erm-heatmap-legend-item"><span style="background:#166534;"></span> Low (1–2)</div>
+    <div class="erm-heatmap-legend-item"><span style="background:#16a34a;"></span> Low-Med (3–4)</div>
+    <div class="erm-heatmap-legend-item"><span style="background:#ca8a04;"></span> Medium (5–6)</div>
+    <div class="erm-heatmap-legend-item"><span style="background:#d97706;"></span> Amber (8–9)</div>
+    <div class="erm-heatmap-legend-item"><span style="background:#ea580c;"></span> High (10–12)</div>
+    <div class="erm-heatmap-legend-item"><span style="background:#dc2626;"></span> Very High (15–16)</div>
+    <div class="erm-heatmap-legend-item"><span style="background:#7f1d1d;"></span> Critical (20–25)</div>
+  </div>
+</div>
+
+{# ── KRI Monitoring bar ───────────────────────────────────────────────── #}
+{% if kris %}
+<div class="kri-monitoring-bar erp-mb-24">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-tachometer"></i> KRI Monitoring</h4>
+    {% if kri_breach_count %}
+    <span class="kri-breach-tag"><i class="fa fa-exclamation-circle"></i> {{ kri_breach_count }} in breach</span>
+    {% else %}
+    <span class="erp-badge erp-badge-green"><i class="fa fa-check"></i> All within threshold</span>
+    {% endif %}
+  </div>
+  {% for kri in kris %}
+  {% set pct = [(kri.current_value / kri.threshold * 100), 100] | min if kri.threshold else 0 %}
+  {% set breached = kri.current_value > kri.threshold if kri.threshold else false %}
+  <div class="kri-item">
+    <div class="kri-name">
+      {% if breached %}<i class="fa fa-exclamation-circle" style="color:#dc2626;margin-right:4px;"></i>{% endif %}
+      {{ kri.name }}
+      <div style="font-size:11px;color:var(--erp-text-muted);">{{ kri.risk_name or '' }}</div>
+    </div>
+    <div class="kri-threshold-bar">
+      <div class="kri-threshold-fill" style="width:{{ pct | int }}%;background:{{ '#dc2626' if breached else '#16a34a' }};"></div>
+    </div>
+    <div class="kri-value {{ 'kri-status-breach' if breached else 'kri-status-ok' }}">
+      {{ kri.current_value }}{{ kri.unit or '' }}
+    </div>
+    <div style="font-size:11px;color:var(--erp-text-muted);min-width:90px;text-align:right;">
+      Threshold: {{ kri.threshold }}{{ kri.unit or '' }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Risk register table ──────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:14px 18px; border-bottom:1px solid var(--erp-border,#e5e7eb); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+    <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-list"></i> Risk Register</h4>
+    <div class="erm-filter-bar" style="margin:0;">
+      <select id="category-filter" class="form-control input-sm" style="width:auto;">
+        <option value="">All Categories</option>
+        {% for cat in risks | map(attribute='category') | unique | list if risks %}
+        <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+      <select id="score-filter" class="form-control input-sm" style="width:auto;">
+        <option value="">All Scores</option>
+        <option value="critical">Critical (≥20)</option>
+        <option value="high">High (10–19)</option>
+        <option value="moderate">Moderate (5–9)</option>
+        <option value="low">Low (&lt;5)</option>
+      </select>
+    </div>
+  </div>
+  <table class="erp-table" id="risk-register-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Risk Title
+          <span class="erm-sort-arrow" data-col="title" onclick="sortRegister('title')">&#x25B2;&#x25BC;</span>
+        </th>
+        <th>Category</th>
+        <th>Owner</th>
+        <th>Score
+          <span class="erm-sort-arrow active" data-col="score" onclick="sortRegister('score')">&#x25BC;</span>
+        </th>
+        <th>Likelihood</th>
+        <th>Impact</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="risk-register-body">
+      {% if risks %}
+        {% for risk in risks | sort(attribute='score', reverse=True) %}
+        <tr data-score="{{ risk.score }}" data-category="{{ risk.category }}">
+          <td style="font-family:monospace;font-size:12px;color:var(--erp-text-muted);">{{ risk.id or loop.index }}</td>
+          <td style="font-weight:600;">{{ risk.title }}</td>
+          <td><span class="erp-badge erp-badge-blue">{{ risk.category }}</span></td>
+          <td>{{ risk.owner or '—' }}</td>
+          <td>
+            {% set s = risk.score | int %}
+            <span class="risk-score-pill {{ 'rs-critical' if s >= 20 else ('rs-high' if s >= 10 else ('rs-moderate' if s >= 5 else 'rs-low')) }}">
+              {{ s }}
+            </span>
+          </td>
+          <td>{{ risk.likelihood }}</td>
+          <td>{{ risk.impact }}</td>
+          <td>
+            <span class="erp-badge {{ 'erp-badge-red' if risk.status == 'OPEN' else ('erp-badge-yellow' if risk.status == 'MITIGATED' else 'erp-badge-green') }}">
+              {{ risk.status or 'OPEN' }}
+            </span>
+          </td>
+          <td>
+            <a href="/grc/risk/edit/{{ risk.id }}" class="btn btn-xs btn-default"><i class="fa fa-pencil"></i></a>
+            <a href="/grc/risk/{{ risk.id }}" class="btn btn-xs btn-default"><i class="fa fa-eye"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+      <tr id="register-empty-row">
+        <td colspan="9" class="erp-text-center" style="padding:28px;color:var(--erp-text-muted);">
+          No risks registered. <a href="/grc/risk/add">Add the first risk</a>.
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Heat map cell drill-down modal ──────────────────────────────────── #}
+<div class="modal fade" id="heatmap-modal" tabindex="-1" role="dialog" aria-labelledby="heatmap-modal-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="heatmap-modal-label">Risks at this intersection</h4>
+      </div>
+      <div class="modal-body" id="heatmap-modal-body">
+        <p style="color:var(--erp-text-muted);font-size:13px;">Loading…</p>
+      </div>
+      <div class="modal-footer">
+        <a href="/grc/risk/add" class="btn btn-primary btn-sm"><i class="fa fa-plus"></i> Add Risk Here</a>
+        <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Data from server ────────────────────────────────────────────── */
+  var ALL_RISKS = {{ risks | tojson if risks else '[]' }};
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function scorePillClass(s) {
+    var n = parseInt(s) || 0;
+    return n >= 20 ? 'rs-critical' : (n >= 10 ? 'rs-high' : (n >= 5 ? 'rs-moderate' : 'rs-low'));
+  }
+
+  /* ── Heat map cell click ─────────────────────────────────────────── */
+  window.openHeatmapCell = function (likelihood, impact, score, riskIds) {
+    var modal = document.getElementById('heatmap-modal');
+    var body  = document.getElementById('heatmap-modal-body');
+    var label = document.getElementById('heatmap-modal-label');
+
+    label.textContent = 'Likelihood ' + likelihood + ' × Impact ' + impact + ' — Score ' + score;
+
+    var link = document.querySelector('#heatmap-modal .modal-footer a');
+    if (link) link.href = '/grc/risk/add?likelihood=' + likelihood + '&impact=' + impact;
+
+    if (!riskIds || !riskIds.length) {
+      body.innerHTML = '<p style="color:var(--erp-text-muted);font-size:13px;">No risks at this intersection. <a href="/grc/risk/add?likelihood=' + likelihood + '&impact=' + impact + '">Add one</a>.</p>';
+      $('#heatmap-modal').modal('show');
+      return;
+    }
+
+    /* Match risk IDs to the full risk list */
+    var idSet  = new Set(riskIds.map(String));
+    var matched = ALL_RISKS.filter(function (r) { return idSet.has(String(r.id)); });
+
+    var html = '<ul class="erm-modal-risk-list">';
+    matched.forEach(function (r) {
+      html +=
+        '<li>' +
+          '<span class="erm-risk-id">' + _esc(r.id) + '</span>' +
+          '<div style="flex:1;">' +
+            '<strong>' + _esc(r.title) + '</strong>' +
+            '<div style="font-size:12px;color:var(--erp-text-muted);margin-top:2px;">' +
+              _esc(r.category) + (r.owner ? ' &bull; ' + _esc(r.owner) : '') +
+            '</div>' +
+          '</div>' +
+          '<span class="risk-score-pill ' + scorePillClass(r.score) + '">' + _esc(r.score) + '</span>' +
+        '</li>';
+    });
+
+    if (!matched.length) {
+      /* IDs given but not in loaded risks — show just IDs */
+      riskIds.forEach(function (id) {
+        html += '<li><span class="erm-risk-id">' + _esc(id) + '</span><div style="flex:1;font-size:13px;">Risk #' + _esc(id) + '</div><a href="/grc/risk/' + _esc(id) + '" class="btn btn-xs btn-default">View</a></li>';
+      });
+    }
+    html += '</ul>';
+    body.innerHTML = html;
+    $('#heatmap-modal').modal('show');
+  };
+
+  /* ── Risk register filtering ─────────────────────────────────────── */
+  var catFilter   = document.getElementById('category-filter');
+  var scoreFilter = document.getElementById('score-filter');
+  var tbody       = document.getElementById('risk-register-body');
+
+  function filterRegister() {
+    var catVal   = catFilter   ? catFilter.value   : '';
+    var scoreVal = scoreFilter ? scoreFilter.value : '';
+    var rows = tbody ? Array.prototype.slice.call(tbody.querySelectorAll('tr[data-score]')) : [];
+    rows.forEach(function (tr) {
+      var cat   = tr.getAttribute('data-category') || '';
+      var score = parseInt(tr.getAttribute('data-score')) || 0;
+      var showCat = !catVal || cat === catVal;
+      var showSc  = true;
+      if (scoreVal === 'critical') showSc = score >= 20;
+      else if (scoreVal === 'high')     showSc = score >= 10 && score < 20;
+      else if (scoreVal === 'moderate') showSc = score >= 5  && score < 10;
+      else if (scoreVal === 'low')      showSc = score < 5;
+      tr.style.display = (showCat && showSc) ? '' : 'none';
+    });
+  }
+
+  if (catFilter)   catFilter.addEventListener('change', filterRegister);
+  if (scoreFilter) scoreFilter.addEventListener('change', filterRegister);
+
+  /* ── Risk register sort ──────────────────────────────────────────── */
+  var sortState = { col: 'score', dir: -1 }; /* descending by default */
+
+  window.sortRegister = function (col) {
+    if (sortState.col === col) { sortState.dir *= -1; } else { sortState.col = col; sortState.dir = -1; }
+
+    /* Update arrow indicators */
+    document.querySelectorAll('.erm-sort-arrow').forEach(function (el) { el.classList.remove('active'); });
+    var arrow = document.querySelector('[data-col="' + col + '"]');
+    if (arrow) arrow.classList.add('active');
+
+    if (!tbody) return;
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-score]'));
+    rows.sort(function (a, b) {
+      var va, vb;
+      if (col === 'score') {
+        va = parseInt(a.getAttribute('data-score')) || 0;
+        vb = parseInt(b.getAttribute('data-score')) || 0;
+      } else {
+        var cellIdx = { title: 1, category: 2, owner: 3 }[col] || 1;
+        va = (a.cells[cellIdx] ? a.cells[cellIdx].textContent.trim() : '').toLowerCase();
+        vb = (b.cells[cellIdx] ? b.cells[cellIdx].textContent.trim() : '').toLowerCase();
+      }
+      if (va < vb) return -1 * sortState.dir;
+      if (va > vb) return  1 * sortState.dir;
+      return 0;
+    });
+    rows.forEach(function (tr) { tbody.appendChild(tr); });
+  };
+
+  /* ── Export register ─────────────────────────────────────────────── */
+  var exportBtn = document.getElementById('export-register-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function () {
+      window.location.href = '/api/grc/erm/export?format=csv';
+    });
+  }
+
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,541 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Open Enrollment — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Step indicator */
+  .wizard-steps { display:flex; align-items:center; justify-content:center; gap:0; margin-bottom:32px; }
+  .wizard-step { display:flex; align-items:center; gap:10px; }
+  .step-circle { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; transition:all .25s; }
+  .step-circle.active    { background:#1a56db; color:#fff; box-shadow:0 0 0 4px rgba(26,86,219,.2); }
+  .step-circle.complete  { background:#10b981; color:#fff; }
+  .step-circle.inactive  { background:#e5e7eb; color:#9ca3af; }
+  .step-label { font-size:13px; font-weight:600; }
+  .step-label.active   { color:#111827; }
+  .step-label.complete { color:#10b981; }
+  .step-label.inactive { color:#9ca3af; }
+  .step-connector { width:60px; height:2px; background:#e5e7eb; margin:0 4px; flex-shrink:0; }
+  .step-connector.complete { background:#10b981; }
+  /* Plan cards */
+  .plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; margin-bottom:20px; }
+  .plan-card { background:#fff; border:2px solid #e5e7eb; border-radius:8px; padding:20px; transition:all .2s; position:relative; cursor:pointer; }
+  .plan-card:hover { border-color:#93c5fd; box-shadow:0 4px 12px rgba(26,86,219,.1); }
+  .plan-card.enrolled   { border-color:#10b981; background:#f0fdf4; }
+  .plan-card.waived     { border-color:#e5e7eb; background:#fafafa; opacity:.7; }
+  .plan-card.selected   { border-color:#1a56db; background:#eff6ff; }
+  .plan-badge { position:absolute; top:12px; right:12px; font-size:10px; font-weight:700; padding:3px 8px; border-radius:10px; text-transform:uppercase; }
+  .plan-badge.enrolled { background:#d1fae5; color:#065f46; }
+  .plan-badge.waived   { background:#f3f4f6; color:#6b7280; }
+  .plan-badge.new      { background:#dbeafe; color:#1d4ed8; }
+  .plan-type-pill { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:10px; margin-bottom:8px; display:inline-block; }
+  .plan-type-MEDICAL   { background:#eff6ff; color:#1d4ed8; }
+  .plan-type-DENTAL    { background:#f0fdf4; color:#15803d; }
+  .plan-type-VISION    { background:#fdf4ff; color:#7e22ce; }
+  .plan-type-LIFE      { background:#fff7ed; color:#c2410c; }
+  .plan-type-DISABILITY { background:#fef9ec; color:#92400e; }
+  .plan-type-FSA       { background:#ecfdf5; color:#065f46; }
+  .plan-name { font-size:15px; font-weight:700; color:#111827; margin:0 0 4px; }
+  .plan-premium-row { display:flex; gap:20px; margin:10px 0; font-size:12px; }
+  .premium-item { display:flex; flex-direction:column; gap:2px; }
+  .premium-label { color:#6b7280; font-size:10px; text-transform:uppercase; font-weight:600; }
+  .premium-value { font-size:16px; font-weight:700; color:#111827; font-family:monospace; }
+  .premium-sub   { font-size:10px; color:#9ca3af; }
+  .tier-select { margin:10px 0; }
+  .tier-select label { font-size:11px; font-weight:600; color:#374151; display:block; margin-bottom:4px; }
+  .plan-actions { display:flex; gap:8px; margin-top:12px; }
+  /* Summary table */
+  .election-summary { width:100%; border-collapse:collapse; font-size:13px; }
+  .election-summary th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; padding:9px 14px; border-bottom:2px solid #e5e7eb; }
+  .election-summary td { padding:10px 14px; border-bottom:1px solid #f3f4f6; }
+  .election-summary tr:last-child td { border-bottom:none; }
+  .deduction-total { font-size:18px; font-weight:700; color:#111827; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .waive-all-bar { background:#fef9ec; border:1px solid #fde68a; border-radius:5px; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; font-size:13px; }
+  .confirm-box { background:#f0fdf4; border:1px solid #86efac; border-radius:5px; padding:16px 20px; margin-bottom:20px; }
+  /* step panels */
+  .wizard-panel { display:none; }
+  .wizard-panel.active { display:block; }
+  .step-nav { display:flex; align-items:center; justify-content:space-between; margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="margin-bottom:8px;">
+  <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Open Enrollment</h1>
+  <p style="margin:0; font-size:13px; color:#6b7280;">
+    Employee: <strong>{{ employee_name or 'Unknown' }}</strong> &nbsp;|&nbsp;
+    Enrollment window: {{ enrollment_window_start or '' }} – {{ enrollment_window_end or '' }}
+  </p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# Hidden employee id for JS #}
+<input type="hidden" id="employee-id" value="{{ employee_id or '' }}">
+
+{# ── Step Indicator ──────────────────────────────────────────────────────── #}
+<div class="wizard-steps" id="wizard-steps">
+  <div class="wizard-step">
+    <div class="step-circle active" id="step-circle-1">1</div>
+    <span class="step-label active" id="step-label-1">Review Plans</span>
+  </div>
+  <div class="step-connector" id="connector-1-2"></div>
+  <div class="wizard-step">
+    <div class="step-circle inactive" id="step-circle-2">2</div>
+    <span class="step-label inactive" id="step-label-2">Make Elections</span>
+  </div>
+  <div class="step-connector" id="connector-2-3"></div>
+  <div class="wizard-step">
+    <div class="step-circle inactive" id="step-circle-3">3</div>
+    <span class="step-label inactive" id="step-label-3">Confirm</span>
+  </div>
+</div>
+
+{# ── Step 1: Review Plans ─────────────────────────────────────────────────── #}
+<div class="wizard-panel active" id="panel-1">
+  <div class="erp-card" style="padding:20px 24px; margin-bottom:0;">
+    <h4 style="font-size:16px; font-weight:700; margin:0 0 4px;">Available Benefit Plans</h4>
+    <p style="font-size:13px; color:#6b7280; margin:0 0 20px;">Review each plan, select your coverage tier, then enroll or waive.</p>
+
+    <div class="waive-all-bar">
+      <span><i class="fa fa-info-circle" style="color:#d97706;"></i>&nbsp; You may waive coverage for any plan. Waiving all is allowed.</span>
+      <button id="btn-waive-all" class="btn btn-default btn-sm" style="font-weight:600;">
+        <i class="fa fa-times-circle"></i>&nbsp; Waive All
+      </button>
+    </div>
+
+    <div class="plan-grid" id="plan-grid">
+      {% if plans %}
+        {% for plan in plans %}
+        {% set existing = current_enrollments | selectattr('plan_id', 'equalto', plan.id) | first if current_enrollments else None %}
+        <div class="plan-card {% if existing and existing.status == 'ACTIVE' %}enrolled{% elif existing and existing.status == 'WAIVED' %}waived{% else %}new{% endif %}"
+             id="plan-card-{{ plan.id }}"
+             data-plan-id="{{ plan.id }}"
+             data-plan-name="{{ plan.name }}"
+             data-plan-type="{{ plan.plan_type }}"
+             data-employee-premium="{{ plan.employee_premium_cents }}"
+             data-employer-premium="{{ plan.employer_premium_cents }}">
+
+          {% if existing and existing.status == 'ACTIVE' %}
+            <span class="plan-badge enrolled"><i class="fa fa-check"></i> Enrolled</span>
+          {% elif existing and existing.status == 'WAIVED' %}
+            <span class="plan-badge waived">Waived</span>
+          {% else %}
+            <span class="plan-badge new">New</span>
+          {% endif %}
+
+          <span class="plan-type-pill plan-type-{{ plan.plan_type }}">{{ plan.plan_type }}</span>
+          <p class="plan-name">{{ plan.name }}</p>
+          {% if plan.description %}
+            <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">{{ plan.description }}</p>
+          {% endif %}
+
+          <div class="plan-premium-row">
+            <div class="premium-item">
+              <span class="premium-label">Your cost</span>
+              <span class="premium-value">{{ "{:,.2f}".format(plan.employee_premium_cents / 100) }}</span>
+              <span class="premium-sub">per pay period</span>
+            </div>
+            <div class="premium-item">
+              <span class="premium-label">Employer pays</span>
+              <span class="premium-value" style="color:#10b981;">{{ "{:,.2f}".format(plan.employer_premium_cents / 100) }}</span>
+              <span class="premium-sub">per pay period</span>
+            </div>
+          </div>
+
+          {% if plan.coverage_tiers %}
+          <div class="tier-select">
+            <label>Coverage Tier</label>
+            <select class="form-control tier-selector" data-plan-id="{{ plan.id }}"
+                    style="height:30px; font-size:12px; padding:2px 8px;">
+              {% for tier in plan.coverage_tiers %}
+              <option value="{{ tier }}" {% if existing and existing.coverage_tier == tier %}selected{% endif %}>
+                {{ tier | replace('_', ' ') | title }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="plan-actions">
+            <button class="btn btn-success btn-sm btn-enroll-plan" data-plan-id="{{ plan.id }}"
+                    style="font-weight:600; font-size:12px; flex:1;">
+              <i class="fa fa-plus-circle"></i>
+              {% if existing and existing.status == 'ACTIVE' %}Update{% else %}Enroll{% endif %}
+            </button>
+            <button class="btn btn-default btn-sm btn-waive-plan" data-plan-id="{{ plan.id }}"
+                    style="font-size:12px; flex:1;">
+              <i class="fa fa-times"></i> Waive
+            </button>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="grid-column:1/-1; text-align:center; padding:40px; color:#9ca3af;">
+          <i class="fa fa-medkit" style="font-size:32px; display:block; margin-bottom:10px; opacity:.3;"></i>
+          No plans available for enrollment.
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="step-nav">
+      <span style="font-size:12px; color:#6b7280;" id="step1-summary"></span>
+      <button class="btn btn-primary" id="btn-step1-next" style="font-weight:600;">
+        Review Elections <i class="fa fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── Step 2: Make Elections / Summary ────────────────────────────────────── #}
+<div class="wizard-panel" id="panel-2">
+  <div class="erp-card" style="padding:20px 24px;">
+    <h4 style="font-size:16px; font-weight:700; margin:0 0 4px;">Your Elections</h4>
+    <p style="font-size:13px; color:#6b7280; margin:0 0 20px;">Review your selections. You may go back to change any election.</p>
+
+    <div style="overflow-x:auto;">
+      <table class="election-summary" id="elections-table">
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Type</th>
+            <th>Tier</th>
+            <th style="text-align:right;">Your Premium</th>
+            <th style="text-align:right;">Employer</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="elections-tbody">
+          <tr><td colspan="6" style="text-align:center; padding:20px; color:#9ca3af;">No elections made yet.</td></tr>
+        </tbody>
+        <tfoot>
+          <tr style="background:#f9fafb; font-weight:700;">
+            <td colspan="3" style="padding:12px 14px; font-size:13px;">Estimated Per-Period Deduction</td>
+            <td style="padding:12px 14px; text-align:right;">
+              <span class="deduction-total" id="total-deduction">0.00</span>
+            </td>
+            <td style="padding:12px 14px; text-align:right;">
+              <span class="deduction-total" id="total-employer" style="color:#10b981;">0.00</span>
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-default" id="btn-step2-back">
+        <i class="fa fa-arrow-left"></i> Back
+      </button>
+      <button class="btn btn-primary" id="btn-step2-next" style="font-weight:600;">
+        Proceed to Confirm <i class="fa fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── Step 3: Confirm ─────────────────────────────────────────────────────── #}
+<div class="wizard-panel" id="panel-3">
+  <div class="erp-card" style="padding:20px 24px;">
+    <h4 style="font-size:16px; font-weight:700; margin:0 0 4px;">Confirm &amp; Submit</h4>
+    <p style="font-size:13px; color:#6b7280; margin:0 0 20px;">Please review your final elections below. Submission is binding for this enrollment period.</p>
+
+    <div class="confirm-box">
+      <strong style="font-size:13px; color:#15803d;"><i class="fa fa-check-circle"></i> Ready to submit</strong>
+      <p style="font-size:12px; color:#374151; margin:6px 0 0;">
+        Your elections will be effective from the next plan year. Changes after submission require a qualifying life event.
+      </p>
+    </div>
+
+    <div id="confirm-summary" style="margin-bottom:20px; font-size:13px;"></div>
+
+    <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:5px; padding:12px 16px; margin-bottom:20px; font-size:12px; color:#92400e;">
+      <i class="fa fa-exclamation-triangle"></i>
+      By clicking <strong>Submit Elections</strong>, you agree that these benefit elections are accurate and binding.
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-default" id="btn-step3-back">
+        <i class="fa fa-arrow-left"></i> Back
+      </button>
+      <button class="btn btn-success" id="btn-submit-elections" style="font-weight:600; padding:0 28px; height:40px; font-size:14px;">
+        <i class="fa fa-paper-plane"></i>&nbsp; Submit Elections
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── state ────────────────────────────────────────────────────────────── */
+  var currentStep = 1;
+  // elections: { planId: { planId, planName, planType, tier, employeePremiumCents, employerPremiumCents, status } }
+  var elections = {};
+
+  /* ── seed from existing enrollments ─────────────────────────────────── */
+  {% if current_enrollments %}
+  {% for e in current_enrollments %}
+  elections['{{ e.plan_id }}'] = {
+    planId:               '{{ e.plan_id }}',
+    planName:             '{{ e.plan_name | default('') }}',
+    planType:             '{{ e.plan_type | default('') }}',
+    tier:                 '{{ e.coverage_tier | default('SINGLE') }}',
+    employeePremiumCents: {{ e.employee_premium_cents | default(0) }},
+    employerPremiumCents: {{ e.employer_premium_cents | default(0) }},
+    status:               '{{ e.status }}'
+  };
+  {% endfor %}
+  {% endif %}
+
+  /* ── helpers ─────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtCents(c) {
+    return (c / 100).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── step navigation ─────────────────────────────────────────────────── */
+  function goToStep(step) {
+    [1,2,3].forEach(function (s) {
+      var panel  = document.getElementById('panel-' + s);
+      var circle = document.getElementById('step-circle-' + s);
+      var label  = document.getElementById('step-label-' + s);
+      if (!panel) return;
+      panel.classList.toggle('active', s === step);
+      circle.className = 'step-circle ' + (s < step ? 'complete' : s === step ? 'active' : 'inactive');
+      label.className  = 'step-label '  + (s < step ? 'complete' : s === step ? 'active' : 'inactive');
+      if (s < step) circle.innerHTML = '<i class="fa fa-check"></i>';
+      else circle.textContent = s;
+    });
+    var c12 = document.getElementById('connector-1-2');
+    var c23 = document.getElementById('connector-2-3');
+    if (c12) c12.classList.toggle('complete', step > 1);
+    if (c23) c23.classList.toggle('complete', step > 2);
+    currentStep = step;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* ── plan card interactions ─────────────────────────────────────────── */
+  function getCardData(planId) {
+    var card = document.getElementById('plan-card-' + planId);
+    if (!card) return null;
+    var tierSel = card.querySelector('.tier-selector');
+    return {
+      planId:               planId,
+      planName:             card.getAttribute('data-plan-name'),
+      planType:             card.getAttribute('data-plan-type'),
+      tier:                 tierSel ? tierSel.value : 'SINGLE',
+      employeePremiumCents: parseInt(card.getAttribute('data-employee-premium') || '0', 10),
+      employerPremiumCents: parseInt(card.getAttribute('data-employer-premium') || '0', 10),
+      status:               'ENROLLED'
+    };
+  }
+
+  function markCardStatus(planId, status) {
+    var card = document.getElementById('plan-card-' + planId);
+    if (!card) return;
+    card.className = card.className.replace(/\b(enrolled|waived|new|selected)\b/g, '').trim();
+    card.classList.add(status === 'ENROLLED' ? 'enrolled' : status === 'WAIVED' ? 'waived' : 'new');
+    var badge = card.querySelector('.plan-badge');
+    if (badge) {
+      badge.className = 'plan-badge ' + (status === 'ENROLLED' ? 'enrolled' : 'waived');
+      badge.innerHTML = status === 'ENROLLED' ? '<i class="fa fa-check"></i> Enrolled' : 'Waived';
+    }
+    var enrollBtn = card.querySelector('.btn-enroll-plan');
+    if (enrollBtn) enrollBtn.innerHTML = '<i class="fa fa-' + (status === 'ENROLLED' ? 'check' : 'plus-circle') + '"></i> ' + (status === 'ENROLLED' ? 'Update' : 'Enroll');
+  }
+
+  function updateStep1Summary() {
+    var enrolled = Object.values(elections).filter(function (e) { return e.status === 'ENROLLED'; }).length;
+    var waived   = Object.values(elections).filter(function (e) { return e.status === 'WAIVED'; }).length;
+    var s = document.getElementById('step1-summary');
+    if (s) s.textContent = enrolled + ' enrolled, ' + waived + ' waived';
+  }
+
+  document.addEventListener('click', function (e) {
+    var enrollBtn = e.target.closest('.btn-enroll-plan');
+    var waiveBtn  = e.target.closest('.btn-waive-plan');
+
+    if (enrollBtn) {
+      var pid  = enrollBtn.getAttribute('data-plan-id');
+      var data = getCardData(pid);
+      if (data) {
+        data.status = 'ENROLLED';
+        elections[pid] = data;
+        markCardStatus(pid, 'ENROLLED');
+        updateStep1Summary();
+        toast('Enrolled in ' + data.planName + '.', 'success');
+      }
+    }
+    if (waiveBtn) {
+      var pid2 = waiveBtn.getAttribute('data-plan-id');
+      var data2 = getCardData(pid2);
+      if (data2) {
+        data2.status = 'WAIVED';
+        elections[pid2] = data2;
+        markCardStatus(pid2, 'WAIVED');
+        updateStep1Summary();
+        toast('Waived ' + data2.planName + '.', 'info');
+      }
+    }
+  });
+
+  document.getElementById('btn-waive-all').addEventListener('click', function () {
+    document.querySelectorAll('.plan-card').forEach(function (card) {
+      var pid = card.getAttribute('data-plan-id');
+      if (!pid) return;
+      var data = getCardData(pid);
+      if (data) { data.status = 'WAIVED'; elections[pid] = data; markCardStatus(pid, 'WAIVED'); }
+    });
+    updateStep1Summary();
+    toast('All plans waived.', 'info');
+  });
+
+  /* ── Step 1 → 2 ─────────────────────────────────────────────────────── */
+  document.getElementById('btn-step1-next').addEventListener('click', function () {
+    renderElectionsSummary();
+    goToStep(2);
+  });
+
+  /* ── Render step 2 elections table ─────────────────────────────────── */
+  function renderElectionsSummary() {
+    var tbody = document.getElementById('elections-tbody');
+    var keys  = Object.keys(elections);
+    if (!keys.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#9ca3af;">No elections made.</td></tr>';
+      document.getElementById('total-deduction').textContent = '0.00';
+      document.getElementById('total-employer').textContent  = '0.00';
+      return;
+    }
+    var totalEmp  = 0;
+    var totalEmpr = 0;
+    tbody.innerHTML = keys.map(function (pid) {
+      var e = elections[pid];
+      if (e.status === 'ENROLLED') { totalEmp += e.employeePremiumCents; totalEmpr += e.employerPremiumCents; }
+      var statusHtml = e.status === 'ENROLLED'
+        ? '<span style="background:#d1fae5;color:#065f46;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">Enrolled</span>'
+        : '<span style="background:#f3f4f6;color:#6b7280;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">Waived</span>';
+      return '<tr>' +
+        '<td style="font-weight:600;">' + _esc(e.planName) + '</td>' +
+        '<td><span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:8px;">' + _esc(e.planType) + '</span></td>' +
+        '<td style="font-size:12px;color:#6b7280;">' + _esc(e.tier) + '</td>' +
+        '<td style="text-align:right;font-family:monospace;font-size:12px;">' + (e.status === 'ENROLLED' ? fmtCents(e.employeePremiumCents) : '—') + '</td>' +
+        '<td style="text-align:right;font-family:monospace;font-size:12px;color:#10b981;">' + (e.status === 'ENROLLED' ? fmtCents(e.employerPremiumCents) : '—') + '</td>' +
+        '<td>' + statusHtml + '</td>' +
+        '</tr>';
+    }).join('');
+    document.getElementById('total-deduction').textContent = fmtCents(totalEmp);
+    document.getElementById('total-employer').textContent  = fmtCents(totalEmpr);
+  }
+
+  document.getElementById('btn-step2-back').addEventListener('click', function () { goToStep(1); });
+
+  /* ── Step 2 → 3 ─────────────────────────────────────────────────────── */
+  document.getElementById('btn-step2-next').addEventListener('click', function () {
+    renderConfirmSummary();
+    goToStep(3);
+  });
+
+  function renderConfirmSummary() {
+    var enrolled = Object.values(elections).filter(function (e) { return e.status === 'ENROLLED'; });
+    var waived   = Object.values(elections).filter(function (e) { return e.status === 'WAIVED'; });
+    var totalEmp = enrolled.reduce(function (s, e) { return s + e.employeePremiumCents; }, 0);
+    var div = document.getElementById('confirm-summary');
+    div.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">' +
+        '<div style="background:#f9fafb;border-radius:5px;padding:12px 16px;">' +
+          '<p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin:0 0 4px;">Plans Enrolled</p>' +
+          '<p style="font-size:22px;font-weight:700;color:#111827;margin:0;">' + enrolled.length + '</p>' +
+        '</div>' +
+        '<div style="background:#f9fafb;border-radius:5px;padding:12px 16px;">' +
+          '<p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin:0 0 4px;">Plans Waived</p>' +
+          '<p style="font-size:22px;font-weight:700;color:#111827;margin:0;">' + waived.length + '</p>' +
+        '</div>' +
+        '<div style="background:#f9fafb;border-radius:5px;padding:12px 16px;">' +
+          '<p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin:0 0 4px;">Per-Period Deduction</p>' +
+          '<p style="font-size:22px;font-weight:700;color:#1a56db;margin:0;font-family:monospace;">' + fmtCents(totalEmp) + '</p>' +
+        '</div>' +
+      '</div>' +
+      '<ul style="margin:0;padding:0;list-style:none;">' +
+        enrolled.map(function (e) {
+          return '<li style="padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:12px;display:flex;align-items:center;gap:8px;">' +
+            '<i class="fa fa-check-circle" style="color:#10b981;"></i>' +
+            '<strong>' + _esc(e.planName) + '</strong> — ' + _esc(e.tier) + ' — ' + fmtCents(e.employeePremiumCents) + '/period' +
+          '</li>';
+        }).join('') +
+      '</ul>';
+  }
+
+  document.getElementById('btn-step3-back').addEventListener('click', function () { goToStep(2); });
+
+  /* ── Submit → POST /api/benefits/enroll ──────────────────────────────── */
+  document.getElementById('btn-submit-elections').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Submitting…';
+
+    var employeeId = document.getElementById('employee-id').value;
+    var payload = {
+      employee_id: employeeId,
+      elections:   Object.values(elections).map(function (e) {
+        return { plan_id: e.planId, coverage_tier: e.tier, status: e.status };
+      })
+    };
+
+    fetch('/api/benefits/enroll', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify(payload)
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        toast('Elections submitted successfully!', 'success');
+        setTimeout(function () { window.location.href = res.data.redirect_url || '/hcm/benefits'; }, 2000);
+      } else {
+        toast(res.data.message || 'Submission failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-paper-plane"></i>&nbsp; Submit Elections';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-paper-plane"></i>&nbsp; Submit Elections';
+    });
+  });
+
+  /* ── init step1 summary ─────────────────────────────────────────────── */
+  updateStep1Summary();
+}());
+</script>
+{% endblock %}

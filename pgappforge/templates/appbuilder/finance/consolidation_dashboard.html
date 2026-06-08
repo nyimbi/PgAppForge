@@ -1,0 +1,415 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Group Consolidation — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .con-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .con-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:18px 20px; position:relative; overflow:hidden; }
+  .con-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .con-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .con-kpi-value { font-size:24px; font-weight:700; color:#111827; margin:0 0 2px; }
+  .con-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* entity tree */
+  .entity-tree { padding:0; margin:0; list-style:none; }
+  .entity-tree li { padding:10px 14px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; font-size:13px; }
+  .entity-tree li:last-child { border-bottom:none; }
+  .entity-tree .entity-name  { font-weight:600; color:#111827; flex:1; }
+  .entity-tree .entity-own   { font-size:11px; background:#eff6ff; color:#1d4ed8; padding:2px 7px; border-radius:10px; font-weight:600; }
+  .entity-tree .entity-method { font-size:11px; color:#6b7280; }
+  .entity-tree .entity-icon  { width:28px; height:28px; border-radius:4px; background:#e0e7ff; display:flex; align-items:center; justify-content:center; color:#3730a3; font-size:13px; flex-shrink:0; }
+  /* runs table */
+  .runs-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .runs-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:9px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .runs-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; color:#374151; }
+  .runs-table tr:last-child td { border-bottom:none; }
+  .runs-table tr:hover td { background:#fafafa; }
+  /* badges */
+  .badge-success { background:#d1fae5; color:#065f46; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-running { background:#dbeafe; color:#1d4ed8; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-failed  { background:#fee2e2; color:#991b1b; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .badge-pending { background:#f3f4f6; color:#374151; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* eliminations */
+  .elim-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+  .elim-tile { background:#f9fafb; border:1px solid #e5e7eb; border-radius:5px; padding:12px 16px; }
+  .elim-type  { font-size:11px; font-weight:600; text-transform:uppercase; color:#6b7280; margin:0 0 4px; }
+  .elim-count { font-size:22px; font-weight:700; color:#111827; margin:0; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .tabular { font-variant-numeric:tabular-nums; font-family:monospace; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Group Consolidation</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Multi-entity consolidation, IC eliminations &amp; consolidated reporting</p>
+  </div>
+  <button id="btn-run-consolidation" class="btn btn-primary" style="height:38px; padding:0 20px; font-weight:600; font-size:13px;">
+    <i class="fa fa-cogs"></i>&nbsp; Run Consolidation
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPIs ─────────────────────────────────────────────────────────── #}
+<div class="con-kpi-grid">
+  <div class="con-kpi-card" style="--accent:#1a56db;">
+    <p class="con-kpi-label">Group Entities</p>
+    <p class="con-kpi-value">{{ group_members | length if group_members else '—' }}</p>
+    <p class="con-kpi-sub">in consolidation scope</p>
+  </div>
+  <div class="con-kpi-card" style="--accent:#10b981;">
+    <p class="con-kpi-label">Last Run Status</p>
+    <p class="con-kpi-value" style="font-size:16px; padding-top:4px;">
+      {% if runs and runs | length > 0 %}
+        {% set lr = runs[0] %}
+        <span class="badge-{{ 'success' if lr.status == 'COMPLETE' else 'failed' if lr.status == 'FAILED' else 'running' }}">{{ lr.status }}</span>
+      {% else %}—{% endif %}
+    </p>
+    <p class="con-kpi-sub">most recent consolidation run</p>
+  </div>
+  <div class="con-kpi-card" style="--accent:#f59e0b;">
+    <p class="con-kpi-label">Total Eliminations</p>
+    <p class="con-kpi-value">
+      {% if runs and runs | length > 0 %}{{ runs[0].eliminations_count or 0 }}{% else %}—{% endif %}
+    </p>
+    <p class="con-kpi-sub">IC entries in last run</p>
+  </div>
+  <div class="con-kpi-card" style="--accent:#8b5cf6;">
+    <p class="con-kpi-label">Entities Processed</p>
+    <p class="con-kpi-value">
+      {% if runs and runs | length > 0 %}{{ runs[0].entities_processed or 0 }}{% else %}—{% endif %}
+    </p>
+    <p class="con-kpi-sub">in last run</p>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ── Left: Entity Tree + Eliminations ────────────────────────────────── #}
+  <div class="col-md-4">
+
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:14px 18px; border-bottom:1px solid #e5e7eb; background:#fff;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-sitemap" style="color:#1a56db; margin-right:6px;"></i> Group Structure
+        </h4>
+      </div>
+      <ul class="entity-tree">
+        {% if group_members %}
+          {% for e in group_members %}
+          <li>
+            <div class="entity-icon">
+              <i class="fa fa-building"></i>
+            </div>
+            <span class="entity-name">{{ e.name }}</span>
+            <span class="entity-own">{{ e.ownership_pct }}%</span>
+            <span class="entity-method">{{ e.method }}</span>
+          </li>
+          {% endfor %}
+        {% else %}
+          <li style="justify-content:center; color:#9ca3af; padding:24px;">
+            No group members configured.
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+
+    {# IC Elimination Summary #}
+    <div class="erp-card" style="padding:16px 18px; margin-bottom:20px;">
+      <h4 class="erp-section-title">IC Elimination Summary</h4>
+      <div class="elim-grid" id="elim-grid">
+        {% if elimination_summary %}
+          {% for item in elimination_summary %}
+          <div class="elim-tile">
+            <p class="elim-type">{{ item.elimination_type }}</p>
+            <p class="elim-count">{{ item.count }}</p>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="elim-tile" style="grid-column:1/-1; text-align:center; color:#9ca3af;">
+            No eliminations recorded.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Right: Run History + P&L Chart ──────────────────────────────────── #}
+  <div class="col-md-8">
+
+    <div class="erp-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:14px 18px; border-bottom:1px solid #e5e7eb;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-history" style="color:#1a56db; margin-right:6px;"></i> Consolidation Run History
+        </h4>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Status</th>
+              <th style="text-align:right;">Entities</th>
+              <th style="text-align:right;">Eliminations</th>
+              <th>Completed At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if runs %}
+              {% for run in runs %}
+              <tr>
+                <td><strong>{{ run.period }}</strong></td>
+                <td>
+                  {% if run.status == 'COMPLETE' %}<span class="badge-success">Complete</span>
+                  {% elif run.status == 'RUNNING' %}<span class="badge-running"><i class="fa fa-spinner fa-spin"></i> Running</span>
+                  {% elif run.status == 'FAILED'  %}<span class="badge-failed">Failed</span>
+                  {% else %}<span class="badge-pending">{{ run.status }}</span>{% endif %}
+                </td>
+                <td style="text-align:right;" class="tabular">{{ run.entities_processed or 0 }}</td>
+                <td style="text-align:right;" class="tabular">{{ run.eliminations_count or 0 }}</td>
+                <td style="color:#6b7280; font-size:12px;">
+                  {{ run.completed_at if run.completed_at else '—' }}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="5" style="text-align:center; padding:28px; color:#9ca3af;">
+                No consolidation runs found.
+              </td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Consolidated P&L Chart #}
+    <div class="erp-card" style="padding:16px 20px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">
+          <i class="fa fa-bar-chart" style="color:#1a56db; margin-right:6px;"></i> Consolidated P&amp;L
+        </h4>
+        <select id="pnl-period" class="form-control" style="width:auto; height:30px; padding:2px 8px; font-size:12px;">
+          {% if runs %}
+            {% for run in runs %}
+              <option value="{{ run.period }}">{{ run.period }}</option>
+            {% endfor %}
+          {% else %}
+            <option value="">No periods</option>
+          {% endif %}
+        </select>
+      </div>
+      <div data-island="erpConsolidationPnl" class="erp-island">
+        <canvas id="pnl-chart" height="110" aria-label="Consolidated P&L chart" role="img"></canvas>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ── Run Consolidation Modal ──────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-run-consolidation" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-cogs" style="color:#1a56db;"></i>&nbsp; Run Group Consolidation
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Consolidation Period</label>
+          <input type="month" id="consolidation-period" class="form-control"
+                 value="{{ current_period or '' }}" style="font-size:13px;">
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600; font-size:13px;">Entities to Include</label>
+          <div id="entity-checkboxes" style="max-height:180px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:4px; padding:10px;">
+            {% if group_members %}
+              {% for e in group_members %}
+              <div class="checkbox" style="margin:4px 0;">
+                <label style="font-size:13px; font-weight:400;">
+                  <input type="checkbox" name="entities" value="{{ e.entity_id }}" checked>
+                  {{ e.name }} ({{ e.ownership_pct }}%)
+                </label>
+              </div>
+              {% endfor %}
+            {% else %}
+              <p style="color:#9ca3af; margin:0; font-size:13px;">No entities configured.</p>
+            {% endif %}
+          </div>
+        </div>
+        <div id="run-info" style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:10px 14px; font-size:12px; color:#0369a1;">
+          <i class="fa fa-info-circle"></i>
+          This will consolidate all selected entities, eliminate inter-company transactions, and generate the consolidated trial balance.
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-run-confirm" class="btn btn-primary" style="font-weight:600;">
+          <i class="fa fa-play"></i>&nbsp; Start Consolidation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Open modal ─────────────────────────────────────────────────────── */
+  document.getElementById('btn-run-consolidation').addEventListener('click', function () {
+    $('#modal-run-consolidation').modal('show');
+  });
+
+  /* ── Confirm run → POST /api/consolidation/run ───────────────────────── */
+  document.getElementById('btn-run-confirm').addEventListener('click', function () {
+    var period = document.getElementById('consolidation-period').value;
+    if (!period) { toast('Select a period.', 'error'); return; }
+
+    var checked = Array.from(document.querySelectorAll('input[name="entities"]:checked'))
+                       .map(function (cb) { return cb.value; });
+    if (!checked.length) { toast('Select at least one entity.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Starting…';
+
+    fetch('/api/consolidation/run', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: period, entity_ids: checked })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-run-consolidation').modal('hide');
+      if (res.ok) {
+        toast('Consolidation run started for ' + period + '. Run ID: ' + (res.data.run_id || '?'), 'success');
+        setTimeout(function () { window.location.reload(); }, 2000);
+      } else {
+        toast(res.data.message || 'Run failed.', 'error');
+      }
+    })
+    .catch(function (err) { toast('Network error: ' + err.message, 'error'); })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-play"></i>&nbsp; Start Consolidation';
+    });
+  });
+
+  /* ── Consolidated P&L chart island ──────────────────────────────────── */
+  ERPIslands.register('erpConsolidationPnl', ['chartjs'], function (el) {
+    var canvas = el.querySelector('#pnl-chart');
+    if (!canvas) return;
+    var select = document.getElementById('pnl-period');
+
+    var chartInstance = null;
+
+    function loadChart(period) {
+      var url = '/api/consolidation/pnl_chart' + (period ? '?period=' + encodeURIComponent(period) : '');
+      ERPIslands.fetchJSON(url)
+        .then(function (data) {
+          if (chartInstance) { chartInstance.destroy(); }
+          chartInstance = new Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: data.labels || [],
+              datasets: [
+                {
+                  label:           'Revenue',
+                  data:            data.revenue || [],
+                  backgroundColor: 'rgba(26,86,219,.7)',
+                  borderRadius:    3
+                },
+                {
+                  label:           'Expenses',
+                  data:            data.expenses || [],
+                  backgroundColor: 'rgba(239,68,68,.65)',
+                  borderRadius:    3
+                },
+                {
+                  label:           'Net Income',
+                  data:            data.net_income || [],
+                  backgroundColor: 'rgba(16,185,129,.7)',
+                  borderRadius:    3
+                }
+              ]
+            },
+            options: {
+              responsive:          true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: { position: 'top', labels: { font: { size: 11 } } },
+                tooltip: {
+                  callbacks: {
+                    label: function (ctx) {
+                      return ' ' + (data.currency || '') + ctx.parsed.y.toLocaleString();
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: { color: 'rgba(0,0,0,.04)' },
+                  ticks: {
+                    callback: function (v) {
+                      return (data.currency || '') + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+                    }
+                  }
+                },
+                x: { grid: { display: false } }
+              }
+            }
+          });
+        })
+        .catch(function (err) {
+          el.innerHTML = '<div class="alert alert-warning">P&amp;L chart unavailable: ' + _esc(err.message) + '</div>';
+        });
+    }
+
+    var initialPeriod = select ? select.value : '';
+    loadChart(initialPeriod);
+
+    if (select) {
+      select.addEventListener('change', function () { loadChart(this.value); });
+    }
+  });
+
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,605 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Documents — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Document browser ─────────────────────────────────────────────── */
+  .docs-hero {
+    background: linear-gradient(135deg, #1b2a4a 0%, #1e3a5f 55%, #1d4ed8 100%);
+    color: #fff;
+    padding: 22px 28px 18px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+  }
+  .docs-hero h2  { margin: 0 0 3px; font-size: 22px; font-weight: 700; }
+  .docs-hero .subtitle { opacity: .8; font-size: 13px; }
+
+  /* toolbar */
+  .docs-toolbar {
+    background: #fff;
+    border: 1px solid #dde3ec;
+    border-radius: 5px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .docs-toolbar .input-group { flex: 1; min-width: 200px; max-width: 380px; }
+
+  /* breadcrumb */
+  .docs-breadcrumb {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 8px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .docs-breadcrumb ol { margin: 0; padding: 0; }
+  .docs-breadcrumb .breadcrumb { background: none; margin: 0; padding: 0; font-size: 13px; }
+  .docs-breadcrumb .breadcrumb li { color: #6b7280; }
+  .docs-breadcrumb .breadcrumb li.active { color: #111827; font-weight: 600; }
+  .docs-breadcrumb .breadcrumb > li + li::before { color: #9ca3af; content: "/ "; }
+
+  /* grid items */
+  .docs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .doc-item {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 18px 14px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: box-shadow .18s, border-color .18s, transform .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .doc-item:hover { box-shadow: 0 4px 16px rgba(30,58,138,.12); border-color: #93c5fd; transform: translateY(-2px); }
+  .doc-item.selected { border-color: #3b82f6; background: #eff6ff; box-shadow: 0 0 0 2px #bfdbfe; }
+
+  /* folder */
+  .doc-item.is-folder .item-icon { font-size: 44px; color: #2563eb; }
+  .doc-item.is-folder .item-name { font-size: 13px; font-weight: 600; color: #1e3a5f; margin-top: 8px;
+                                    word-break: break-word; line-height: 1.3; }
+  .doc-item.is-folder .item-meta { font-size: 11px; color: #6b7280; margin-top: 3px; }
+
+  /* file */
+  .doc-item.is-file .item-icon   { font-size: 40px; margin-top: 2px; }
+  .doc-item.is-file .item-name   { font-size: 12px; font-weight: 600; color: #111827; margin-top: 8px;
+                                    word-break: break-word; line-height: 1.3; max-height: 40px; overflow: hidden; }
+  .doc-item.is-file .item-meta   { font-size: 10px; color: #9ca3af; margin-top: 4px; }
+
+  /* file type icon colors */
+  .icon-pdf    { color: #dc2626; }
+  .icon-word   { color: #1d4ed8; }
+  .icon-excel  { color: #16a34a; }
+  .icon-ppt    { color: #ea580c; }
+  .icon-image  { color: #7c3aed; }
+  .icon-zip    { color: #d97706; }
+  .icon-text   { color: #374151; }
+  .icon-default{ color: #64748b; }
+
+  /* version badge */
+  .version-badge { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700;
+                   background: #dbeafe; color: #1e40af; border-radius: 3px; padding: 1px 5px; }
+
+  /* context menu on hover */
+  .item-actions {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(30,58,138,.92);
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 4px;
+    transform: translateY(100%);
+    transition: transform .15s;
+    border-radius: 0 0 8px 8px;
+  }
+  .doc-item:hover .item-actions { transform: translateY(0); }
+  .item-actions .btn { font-size: 11px; padding: 3px 7px; border-radius: 3px; }
+
+  /* list view (toggle) */
+  .docs-list-table th { background: #f8fafc; font-size: 12px; font-weight: 600;
+                        text-transform: uppercase; letter-spacing: .4px; color: #6b7280; }
+  .docs-list-table td { vertical-align: middle; font-size: 13px; }
+  .docs-list-table tr:hover { background: #f0f9ff; }
+  .file-row-icon { font-size: 20px; width: 30px; text-align: center; }
+
+  /* upload drop zone */
+  .drop-zone-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(30,58,138,.6);
+    z-index: 9998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    backdrop-filter: blur(4px);
+  }
+  .drop-zone-overlay.active { display: flex; }
+  .drop-zone-box {
+    border: 3px dashed rgba(255,255,255,.7);
+    border-radius: 16px;
+    padding: 60px 80px;
+    text-align: center;
+    pointer-events: none;
+  }
+  .drop-zone-box i { font-size: 64px; display: block; margin-bottom: 16px; opacity: .9; }
+  .drop-zone-box p { font-size: 20px; font-weight: 700; margin: 0; }
+
+  /* version history panel */
+  .version-list .version-row { display: flex; align-items: center; justify-content: space-between;
+                                padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .version-list .version-row:last-child { border-bottom: none; }
+  .version-num { font-weight: 700; color: #1d4ed8; min-width: 50px; }
+  .version-who { color: #374151; }
+  .version-when { color: #9ca3af; font-size: 12px; }
+
+  .view-toggle .btn { border-radius: 3px; }
+  .view-toggle .btn.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+
+  .section-header { font-size: 15px; font-weight: 700; color: #1e3a5f;
+                    border-bottom: 2px solid #dbeafe; padding-bottom: 8px; margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="docs-hero">
+  <div class="row">
+    <div class="col-sm-8">
+      <h2><i class="fa fa-folder-open"></i>&nbsp; Document Browser</h2>
+      <p class="subtitle">Manage, search, and collaborate on all your documents.</p>
+    </div>
+    <div class="col-sm-4 text-right" style="padding-top:6px;">
+      <div class="btn-group">
+        <button class="btn btn-default btn-sm" onclick="document.getElementById('upload-input').click()">
+          <i class="fa fa-upload"></i>&nbsp; Upload
+        </button>
+        <input type="file" id="upload-input" multiple style="display:none;">
+        <button class="btn btn-default btn-sm" data-toggle="modal" data-target="#newFolderModal">
+          <i class="fa fa-folder-o"></i>&nbsp; New Folder
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Toolbar ───────────────────────────────────────────────────────── #}
+<div class="docs-toolbar">
+  <div class="input-group">
+    <span class="input-group-addon"><i class="fa fa-search"></i></span>
+    <input type="text" id="doc-search" class="form-control" placeholder="Search documents…">
+    <span class="input-group-btn">
+      <button class="btn btn-default" id="search-btn" type="button">Go</button>
+    </span>
+  </div>
+  <div class="btn-group view-toggle" id="view-toggle">
+    <button class="btn btn-default btn-sm active" data-view="grid" title="Grid view"><i class="fa fa-th"></i></button>
+    <button class="btn btn-default btn-sm" data-view="list" title="List view"><i class="fa fa-list"></i></button>
+  </div>
+  <div style="margin-left:auto; font-size:12px; color:#9ca3af;">
+    {{ (folders | length) + (documents | length) }} item(s)
+  </div>
+</div>
+
+{# ── Breadcrumb ────────────────────────────────────────────────────── #}
+<div class="docs-breadcrumb">
+  <ol class="breadcrumb">
+    <li><a href="/documents"><i class="fa fa-home"></i> Home</a></li>
+    {% for crumb in folder_path %}
+      {% if loop.last %}
+        <li class="active">{{ crumb.name }}</li>
+      {% else %}
+        <li><a href="/documents/{{ crumb.id }}">{{ crumb.name }}</a></li>
+      {% endif %}
+    {% endfor %}
+  </ol>
+</div>
+
+{# ── Grid view ─────────────────────────────────────────────────────── #}
+<div id="grid-view">
+  {% if folders or documents %}
+  <div class="docs-grid" id="docs-grid">
+
+    {# folders first #}
+    {% for folder in folders %}
+    <div class="doc-item is-folder" data-name="{{ folder.name | lower }}"
+         ondblclick="window.location='/documents/{{ folder.id }}'">
+      <div class="item-icon"><i class="fa fa-folder"></i></div>
+      <div class="item-name">{{ folder.name }}</div>
+      <div class="item-meta">{{ folder.item_count | default(0) }} items</div>
+      <div class="item-actions">
+        <a href="/documents/{{ folder.id }}" class="btn btn-info btn-xs" title="Open">
+          <i class="fa fa-folder-open"></i>
+        </a>
+        <button class="btn btn-danger btn-xs archive-btn" data-type="folder" data-id="{{ folder.id }}" title="Archive">
+          <i class="fa fa-archive"></i>
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+
+    {# documents #}
+    {% for doc in documents %}
+      {% set ext = doc.filename.rsplit('.', 1)[-1] | lower if '.' in doc.filename else '' %}
+      {% if ext == 'pdf' %}
+        {% set icon_cls = 'fa-file-pdf-o icon-pdf' %}
+      {% elif ext in ['doc', 'docx'] %}
+        {% set icon_cls = 'fa-file-word-o icon-word' %}
+      {% elif ext in ['xls', 'xlsx', 'csv'] %}
+        {% set icon_cls = 'fa-file-excel-o icon-excel' %}
+      {% elif ext in ['ppt', 'pptx'] %}
+        {% set icon_cls = 'fa-file-powerpoint-o icon-ppt' %}
+      {% elif ext in ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'] %}
+        {% set icon_cls = 'fa-file-image-o icon-image' %}
+      {% elif ext in ['zip', 'tar', 'gz', '7z'] %}
+        {% set icon_cls = 'fa-file-archive-o icon-zip' %}
+      {% elif ext in ['txt', 'md', 'rst'] %}
+        {% set icon_cls = 'fa-file-text-o icon-text' %}
+      {% else %}
+        {% set icon_cls = 'fa-file-o icon-default' %}
+      {% endif %}
+
+    <div class="doc-item is-file" data-name="{{ doc.filename | lower }}"
+         data-id="{{ doc.id }}" data-doc-name="{{ doc.filename }}">
+      {% if doc.version | default(1) > 1 %}
+        <span class="version-badge">v{{ doc.version }}</span>
+      {% endif %}
+      <div class="item-icon"><i class="fa {{ icon_cls }}"></i></div>
+      <div class="item-name">{{ doc.filename }}</div>
+      <div class="item-meta">
+        {{ doc.size_display | default(((doc.size_bytes / 1024) | round(0) | int | string) + ' KB') }}
+        &middot; {{ doc.modified_date }}
+      </div>
+      <div class="item-actions">
+        <a href="/api/documents/{{ doc.id }}/download" class="btn btn-success btn-xs" title="Download">
+          <i class="fa fa-download"></i>
+        </a>
+        <button class="btn btn-info btn-xs history-btn"
+                data-doc-id="{{ doc.id }}"
+                data-doc-name="{{ doc.filename }}"
+                title="Version history">
+          <i class="fa fa-history"></i>
+        </button>
+        <button class="btn btn-warning btn-xs archive-btn"
+                data-type="document"
+                data-id="{{ doc.id }}"
+                title="Archive">
+          <i class="fa fa-archive"></i>
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+
+  </div>{# /docs-grid #}
+  {% else %}
+    <div style="text-align:center; padding:48px; color:#9ca3af; background:#fff;
+                border:1px solid #e2e8f0; border-radius:8px;">
+      <i class="fa fa-folder-open-o" style="font-size:56px; display:block; margin-bottom:16px; color:#d1d5db;"></i>
+      <div style="font-size:16px; font-weight:600; color:#374151;">This folder is empty</div>
+      <div style="font-size:13px; margin-top:6px;">Upload files or create a new folder to get started.</div>
+      <button class="btn btn-primary" style="margin-top:16px; background:#1d4ed8; border-color:#1d4ed8;"
+              onclick="document.getElementById('upload-input').click()">
+        <i class="fa fa-upload"></i>&nbsp; Upload Files
+      </button>
+    </div>
+  {% endif %}
+</div>{# /grid-view #}
+
+{# ── List view (hidden by default) ────────────────────────────────── #}
+<div id="list-view" style="display:none;">
+  <div class="panel" style="border:1px solid #e2e8f0; border-radius:6px; background:#fff;">
+    <div class="panel-body" style="padding:0;">
+      <table class="table docs-list-table" style="margin-bottom:0;">
+        <thead>
+          <tr>
+            <th style="width:36px; padding-left:16px;"></th>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Modified</th>
+            <th>Version</th>
+            <th class="text-right" style="padding-right:16px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for folder in folders %}
+          <tr style="cursor:pointer;" ondblclick="window.location='/documents/{{ folder.id }}'">
+            <td style="padding-left:16px;"><i class="fa fa-folder file-row-icon" style="color:#2563eb;"></i></td>
+            <td><strong>{{ folder.name }}</strong><br><small class="text-muted">{{ folder.item_count | default(0) }} items</small></td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td class="text-right" style="padding-right:16px;">
+              <a href="/documents/{{ folder.id }}" class="btn btn-default btn-xs"><i class="fa fa-folder-open"></i> Open</a>
+            </td>
+          </tr>
+          {% endfor %}
+          {% for doc in documents %}
+            {% set ext2 = doc.filename.rsplit('.', 1)[-1] | lower if '.' in doc.filename else '' %}
+            {% if ext2 == 'pdf' %} {% set li = 'fa-file-pdf-o icon-pdf' %}
+            {% elif ext2 in ['doc','docx'] %} {% set li = 'fa-file-word-o icon-word' %}
+            {% elif ext2 in ['xls','xlsx','csv'] %} {% set li = 'fa-file-excel-o icon-excel' %}
+            {% elif ext2 in ['png','jpg','jpeg','gif'] %} {% set li = 'fa-file-image-o icon-image' %}
+            {% else %} {% set li = 'fa-file-o icon-default' %} {% endif %}
+          <tr>
+            <td style="padding-left:16px;"><i class="fa {{ li }} file-row-icon"></i></td>
+            <td>
+              {{ doc.filename }}
+              {% if doc.version | default(1) > 1 %}
+                <span class="label label-info" style="font-size:10px; margin-left:4px;">v{{ doc.version }}</span>
+              {% endif %}
+            </td>
+            <td>{{ doc.size_display | default(((doc.size_bytes / 1024) | round(0) | int | string) + ' KB') }}</td>
+            <td style="color:#6b7280;">{{ doc.modified_date }}</td>
+            <td>{{ doc.version | default(1) }}</td>
+            <td class="text-right" style="padding-right:16px;">
+              <div class="btn-group btn-group-xs">
+                <a href="/api/documents/{{ doc.id }}/download" class="btn btn-success btn-xs">
+                  <i class="fa fa-download"></i>
+                </a>
+                <button class="btn btn-info btn-xs history-btn"
+                        data-doc-id="{{ doc.id }}"
+                        data-doc-name="{{ doc.filename }}">
+                  <i class="fa fa-history"></i>
+                </button>
+                <button class="btn btn-warning btn-xs archive-btn"
+                        data-type="document"
+                        data-id="{{ doc.id }}">
+                  <i class="fa fa-archive"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>{# /list-view #}
+
+{# ── Drag-drop overlay ─────────────────────────────────────────────── #}
+<div class="drop-zone-overlay" id="drop-overlay">
+  <div class="drop-zone-box">
+    <i class="fa fa-cloud-upload"></i>
+    <p>Drop files here to upload</p>
+    <small style="opacity:.7; font-size:14px; margin-top:8px; display:block;">
+      Files will be uploaded to the current folder
+    </small>
+  </div>
+</div>
+
+{# ── New folder modal ──────────────────────────────────────────────── #}
+<div class="modal fade" id="newFolderModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1e3a5f; color:#fff; border-radius:5px 5px 0 0;">
+        <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-folder-o"></i>&nbsp; New Folder</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Folder Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="new-folder-name" placeholder="e.g. Q2 Reports" maxlength="120">
+        </div>
+        <div id="new-folder-error" class="alert alert-danger" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="create-folder-btn" style="background:#1d4ed8; border-color:#1d4ed8;">
+          <i class="fa fa-check"></i> Create
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Version history modal ─────────────────────────────────────────── #}
+<div class="modal fade" id="versionModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1e3a5f; color:#fff; border-radius:5px 5px 0 0;">
+        <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-history"></i>&nbsp; Version History — <span id="vhist-doc-name"></span></h4>
+      </div>
+      <div class="modal-body">
+        <div id="vhist-loading" style="text-align:center; padding:20px;"><i class="fa fa-spinner fa-spin fa-2x"></i></div>
+        <div id="vhist-content" class="version-list" style="display:none;"></div>
+        <div id="vhist-empty" style="display:none; text-align:center; padding:20px; color:#9ca3af;">No version history available.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+
+  var CURRENT_FOLDER = {{ current_folder_id | tojson }};
+
+  /* ── View toggle ─────────────────────────────────────────────────── */
+  $("#view-toggle .btn").on("click", function () {
+    var view = $(this).data("view");
+    $("#view-toggle .btn").removeClass("active");
+    $(this).addClass("active");
+    if (view === "grid") {
+      $("#grid-view").show(); $("#list-view").hide();
+    } else {
+      $("#grid-view").hide(); $("#list-view").show();
+    }
+  });
+
+  /* ── Inline search filter ────────────────────────────────────────── */
+  function filterItems(query) {
+    query = query.toLowerCase().trim();
+    $(".doc-item").each(function () {
+      var name = $(this).data("name") || "";
+      $(this).toggle(!query || name.indexOf(query) !== -1);
+    });
+    /* list view */
+    $(".docs-list-table tbody tr").each(function () {
+      var name = $(this).find("td:eq(1)").text().toLowerCase();
+      $(this).toggle(!query || name.indexOf(query) !== -1);
+    });
+  }
+  $("#doc-search").on("input", function () { filterItems($(this).val()); });
+
+  /* server-side search */
+  $("#search-btn").on("click", function () {
+    var q = $("#doc-search").val().trim();
+    if (q) window.location.href = "/api/documents/search?q=" + encodeURIComponent(q) +
+                                  "&folder_id=" + (CURRENT_FOLDER || "");
+  });
+  $("#doc-search").on("keydown", function (e) {
+    if (e.key === "Enter") $("#search-btn").trigger("click");
+  });
+
+  /* ── Upload via file input ───────────────────────────────────────── */
+  $("#upload-input").on("change", function () {
+    var files = this.files;
+    if (!files.length) return;
+    uploadFiles(files);
+  });
+
+  function uploadFiles(files) {
+    var fd = new FormData();
+    for (var i = 0; i < files.length; i++) fd.append("files", files[i]);
+    if (CURRENT_FOLDER) fd.append("folder_id", CURRENT_FOLDER);
+
+    var $prog = $('<div class="alert alert-info" id="upload-progress">' +
+      '<i class="fa fa-spinner fa-spin"></i>&nbsp; Uploading ' + files.length + ' file(s)…</div>');
+    $(".docs-toolbar").after($prog);
+
+    $.ajax({
+      url: "/api/documents/upload",
+      method: "POST",
+      data: fd,
+      processData: false,
+      contentType: false,
+      success: function () {
+        $prog.removeClass("alert-info").addClass("alert-success")
+             .html('<i class="fa fa-check"></i>&nbsp; Upload complete. Refreshing…');
+        setTimeout(function () { location.reload(); }, 800);
+      },
+      error: function (xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.message) || "Upload failed.";
+        $prog.removeClass("alert-info").addClass("alert-danger")
+             .html('<i class="fa fa-times"></i>&nbsp; ' + msg);
+      }
+    });
+  }
+
+  /* ── Drag-drop ───────────────────────────────────────────────────── */
+  var dragCounter = 0;
+  $(document).on("dragenter", function (e) {
+    e.preventDefault();
+    dragCounter++;
+    if (e.originalEvent.dataTransfer && e.originalEvent.dataTransfer.types &&
+        Array.from(e.originalEvent.dataTransfer.types).indexOf("Files") !== -1) {
+      $("#drop-overlay").addClass("active");
+    }
+  });
+  $(document).on("dragleave", function () {
+    dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; $("#drop-overlay").removeClass("active"); }
+  });
+  $(document).on("dragover", function (e) { e.preventDefault(); });
+  $(document).on("drop", function (e) {
+    e.preventDefault();
+    dragCounter = 0;
+    $("#drop-overlay").removeClass("active");
+    var files = e.originalEvent.dataTransfer.files;
+    if (files.length) uploadFiles(files);
+  });
+
+  /* ── Create folder ───────────────────────────────────────────────── */
+  $("#create-folder-btn").on("click", function () {
+    var name = $.trim($("#new-folder-name").val());
+    if (!name) { $("#new-folder-error").text("Folder name required.").show(); return; }
+    var $btn = $(this).prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Creating…');
+    $.ajax({
+      url: "/api/documents/folders",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ name: name, parent_id: CURRENT_FOLDER }),
+      success: function () { location.reload(); },
+      error: function (xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.message) || "Failed to create folder.";
+        $("#new-folder-error").text(msg).show();
+        $btn.prop("disabled", false).html('<i class="fa fa-check"></i> Create');
+      }
+    });
+  });
+
+  /* ── Archive ─────────────────────────────────────────────────────── */
+  $(document).on("click", ".archive-btn", function (e) {
+    e.stopPropagation();
+    var type = $(this).data("type");
+    var id   = $(this).data("id");
+    if (!confirm("Archive this " + type + "?")) return;
+    $.ajax({
+      url: "/api/documents/" + type + "s/" + id + "/archive",
+      method: "POST",
+      success: function () { location.reload(); },
+      error: function () { alert("Archive failed."); }
+    });
+  });
+
+  /* ── Version history ─────────────────────────────────────────────── */
+  $(document).on("click", ".history-btn", function (e) {
+    e.stopPropagation();
+    var docId   = $(this).data("doc-id");
+    var docName = $(this).data("doc-name");
+    $("#vhist-doc-name").text(docName);
+    $("#vhist-content").hide();
+    $("#vhist-empty").hide();
+    $("#vhist-loading").show();
+    $("#versionModal").modal("show");
+
+    $.getJSON("/api/documents/" + docId + "/versions", function (data) {
+      $("#vhist-loading").hide();
+      if (!data.versions || !data.versions.length) {
+        $("#vhist-empty").show(); return;
+      }
+      var html = "";
+      data.versions.forEach(function (v) {
+        html += '<div class="version-row">' +
+          '<span class="version-num">v' + v.version + '</span>' +
+          '<span class="version-who"><i class="fa fa-user-o" style="margin-right:4px;color:#9ca3af;"></i>' + $("<s>").text(v.uploaded_by).html() + '</span>' +
+          '<span class="version-when"><i class="fa fa-clock-o" style="margin-right:4px;"></i>' + v.created_at + '</span>' +
+          '<a href="/api/documents/' + docId + '/versions/' + v.version + '/download" ' +
+             'class="btn btn-default btn-xs"><i class="fa fa-download"></i></a>' +
+        '</div>';
+      });
+      $("#vhist-content").html(html).show();
+    }).fail(function () {
+      $("#vhist-loading").hide();
+      $("#vhist-empty").show();
+    });
+  });
+
+  /* prevent action clicks from triggering item selection */
+  $(document).on("click", ".item-actions .btn", function (e) { e.stopPropagation(); });
+
+}());
+</script>
+{% endblock %}

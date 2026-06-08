@@ -1,0 +1,318 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Multi-Book Comparison — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .mb-header-bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px; }
+  .mb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .mb-summary-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:18px 20px; position:relative; overflow:hidden; }
+  .mb-summary-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .mb-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .mb-kpi-value { font-size:24px; font-weight:700; color:#111827; margin:0 0 2px; }
+  .mb-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* two-column books layout */
+  .books-header { display:grid; grid-template-columns:200px 1fr 1fr 130px; gap:0; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px 6px 0 0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#374151; }
+  .books-header > div { padding:10px 14px; border-right:1px solid #e5e7eb; }
+  .books-header > div:last-child { border-right:none; }
+  .books-row { display:grid; grid-template-columns:200px 1fr 1fr 130px; gap:0; background:#fff; border:1px solid #e5e7eb; border-top:none; font-size:13px; transition:background .12s; }
+  .books-row:last-child { border-radius:0 0 6px 6px; }
+  .books-row:hover { background:#f9fafb; }
+  .books-row > div { padding:9px 14px; border-right:1px solid #f3f4f6; display:flex; align-items:center; }
+  .books-row > div:last-child { border-right:none; }
+  .books-row.variance-row > div:last-child { background:#fef2f2; }
+  .books-row.variance-row .diff-value { color:#dc2626; font-weight:700; }
+  .acct-code { font-family:monospace; font-size:12px; color:#6b7280; margin-right:8px; }
+  .acct-name  { color:#111827; font-weight:500; }
+  .amount-cell { font-family:monospace; font-size:12px; text-align:right; display:block; width:100%; }
+  .diff-neutral { color:#9ca3af; font-size:12px; font-family:monospace; }
+  .diff-value   { color:#dc2626; font-weight:700; font-size:12px; font-family:monospace; }
+  .diff-minor   { color:#d97706; font-weight:600; font-size:12px; font-family:monospace; }
+  .book-label-ifrs  { background:#eff6ff; color:#1d4ed8; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; }
+  .book-label-gaap  { background:#f0fdf4; color:#15803d; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; }
+  .filter-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .filter-bar label { font-size:12px; font-weight:600; color:#374151; margin:0; }
+  /* variance threshold legend */
+  .legend-row { display:flex; align-items:center; gap:16px; font-size:11px; color:#6b7280; margin-top:10px; flex-wrap:wrap; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  .empty-state { text-align:center; padding:40px; color:#9ca3af; }
+  .section-wrap { overflow:hidden; border-radius:6px; margin-bottom:20px; }
+  @media (max-width:768px) {
+    .books-header, .books-row { grid-template-columns:1fr 1fr 1fr 90px; }
+    .acct-code { display:none; }
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="mb-header-bar">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Multi-Book Comparison</h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Side-by-side IFRS vs Local GAAP trial balance variance analysis</p>
+  </div>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <label style="font-size:12px; font-weight:600; color:#374151; margin:0;">Period:</label>
+      <input type="month" id="period-input" class="form-control"
+             value="{{ selected_period or '' }}"
+             style="width:160px; height:34px; font-size:13px; padding:2px 8px;">
+    </div>
+    <button id="btn-get-differences" class="btn btn-primary" style="height:34px; padding:0 18px; font-weight:600; font-size:13px;">
+      <i class="fa fa-refresh"></i>&nbsp; Get Differences
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPIs ─────────────────────────────────────────────────────────── #}
+<div class="mb-summary-grid">
+  <div class="mb-summary-card" style="--accent:#1a56db;">
+    <p class="mb-kpi-label">Accounts Compared</p>
+    <p class="mb-kpi-value" id="kpi-accounts">{{ differences | length if differences else '—' }}</p>
+    <p class="mb-kpi-sub">accounts in scope</p>
+  </div>
+  <div class="mb-summary-card" style="--accent:#ef4444;">
+    <p class="mb-kpi-label">Variances (&gt;1 000)</p>
+    <p class="mb-kpi-value" id="kpi-variances">
+      {% if differences %}
+        {{ differences | selectattr('difference_cents', 'gt', 1000) | list | length }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="mb-kpi-sub">accounts with material diff</p>
+  </div>
+  <div class="mb-summary-card" style="--accent:#f59e0b;">
+    <p class="mb-kpi-label">Total Variance</p>
+    <p class="mb-kpi-value" id="kpi-total-variance" style="font-size:18px;">
+      {% if differences %}
+        {{ "{:,.2f}".format(differences | sum(attribute='difference_cents') | abs / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="mb-kpi-sub">absolute sum of all diffs</p>
+  </div>
+  <div class="mb-summary-card" style="--accent:#10b981;">
+    <p class="mb-kpi-label">Zero Variance</p>
+    <p class="mb-kpi-value" id="kpi-zero">
+      {% if differences %}
+        {{ differences | selectattr('difference_cents', 'equalto', 0) | list | length }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="mb-kpi-sub">accounts fully matched</p>
+  </div>
+</div>
+
+{# ── Filter Bar ──────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:12px 18px; margin-bottom:16px;">
+  <div class="filter-bar">
+    <label>Show:</label>
+    <div class="btn-group btn-group-sm" role="group">
+      <button type="button" class="btn btn-default active" id="filter-all">All Accounts</button>
+      <button type="button" class="btn btn-default" id="filter-variances">Variances Only</button>
+      <button type="button" class="btn btn-default" id="filter-material">Material (&gt;1 000)</button>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <label style="margin:0;">Search account:</label>
+      <input type="text" id="acct-search" class="form-control" placeholder="Code or name…"
+             style="width:180px; height:30px; font-size:12px; padding:2px 8px;">
+    </div>
+  </div>
+  <div class="legend-row">
+    <span><span class="legend-dot" style="background:#dc2626;"></span> Material variance (&gt; 1 000)</span>
+    <span><span class="legend-dot" style="background:#d97706;"></span> Minor variance (1 – 1 000)</span>
+    <span><span class="legend-dot" style="background:#9ca3af;"></span> No variance</span>
+  </div>
+</div>
+
+{# ── Comparison Table ─────────────────────────────────────────────────────── #}
+<div class="section-wrap" id="comparison-section">
+  <div class="books-header">
+    <div>Account</div>
+    <div>
+      <span class="book-label-ifrs">Book A — IFRS</span>
+    </div>
+    <div>
+      <span class="book-label-gaap">Book B — Local GAAP</span>
+    </div>
+    <div>Difference</div>
+  </div>
+
+  <div id="comparison-body">
+    {% if differences %}
+      {% for d in differences %}
+      <div class="books-row {% if d.difference_cents | abs > 1000 %}variance-row{% endif %}"
+           data-diff="{{ d.difference_cents | abs }}"
+           data-account="{{ d.account | lower }}">
+        <div>
+          <span class="acct-code">{{ d.account_code or '' }}</span>
+          <span class="acct-name">{{ d.account }}</span>
+        </div>
+        <div>
+          <span class="amount-cell">{{ "{:,.2f}".format(d.book_a_balance / 100) }}</span>
+        </div>
+        <div>
+          <span class="amount-cell">{{ "{:,.2f}".format(d.book_b_balance / 100) }}</span>
+        </div>
+        <div>
+          {% if d.difference_cents == 0 %}
+            <span class="diff-neutral">0.00</span>
+          {% elif d.difference_cents | abs > 1000 %}
+            <span class="diff-value">{{ "{:,.2f}".format(d.difference_cents / 100) }}</span>
+          {% else %}
+            <span class="diff-minor">{{ "{:,.2f}".format(d.difference_cents / 100) }}</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div id="empty-state" class="empty-state">
+        <i class="fa fa-balance-scale" style="font-size:32px; display:block; margin-bottom:10px; opacity:.3;"></i>
+        Select a period and click <strong>Get Differences</strong> to load the comparison.
+      </div>
+    {% endif %}
+  </div>
+
+  <div id="table-footer" style="padding:10px 14px; border-top:1px solid #e5e7eb; background:#f9fafb; font-size:12px; color:#6b7280; display:flex; align-items:center; justify-content:space-between;">
+    <span id="visible-count">
+      {% if differences %}Showing {{ differences | length }} account(s){% endif %}
+    </span>
+    <span>Amounts in reporting currency (÷100 from cents)</span>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtCents(c) {
+    return (c / 100).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+
+  /* ── filter state ────────────────────────────────────────────────────── */
+  var activeFilter = 'all';
+  var searchTerm   = '';
+
+  function applyFilter() {
+    var rows    = document.querySelectorAll('#comparison-body .books-row');
+    var visible = 0;
+    rows.forEach(function (row) {
+      var diff    = parseInt(row.getAttribute('data-diff') || '0', 10);
+      var account = row.getAttribute('data-account') || '';
+      var show    = true;
+
+      if (activeFilter === 'variances') show = diff > 0;
+      if (activeFilter === 'material')  show = diff > 1000;
+      if (searchTerm) show = show && account.indexOf(searchTerm) !== -1;
+
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    var vc = document.getElementById('visible-count');
+    if (vc) vc.textContent = 'Showing ' + visible + ' of ' + rows.length + ' account(s)';
+  }
+
+  ['filter-all','filter-variances','filter-material'].forEach(function (id) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.btn-group .btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      activeFilter = id.replace('filter-', '');
+      applyFilter();
+    });
+  });
+
+  document.getElementById('acct-search').addEventListener('input', function () {
+    searchTerm = this.value.toLowerCase().trim();
+    applyFilter();
+  });
+
+  /* ── Get Differences → GET /api/multi_book/differences?period= ────────── */
+  document.getElementById('btn-get-differences').addEventListener('click', function () {
+    var period = document.getElementById('period-input').value;
+    if (!period) { toast('Select a period first.', 'error'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Loading…';
+
+    fetch('/api/multi_book/differences?period=' + encodeURIComponent(period), {
+      credentials: 'same-origin'
+    })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      renderDifferences(data.differences || data);
+      updateKpis(data.differences || data);
+      toast('Loaded ' + (data.differences || data).length + ' accounts for ' + period + '.', 'success');
+    })
+    .catch(function (err) { toast('Error: ' + err.message, 'error'); })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-refresh"></i>&nbsp; Get Differences';
+    });
+  });
+
+  function renderDifferences(diffs) {
+    var body = document.getElementById('comparison-body');
+    if (!diffs.length) {
+      body.innerHTML = '<div class="empty-state"><i class="fa fa-check-circle" style="font-size:28px; color:#10b981; display:block; margin-bottom:8px;"></i>No differences found for this period.</div>';
+      return;
+    }
+    body.innerHTML = diffs.map(function (d) {
+      var absDiff  = Math.abs(d.difference_cents);
+      var diffHtml = absDiff === 0
+        ? '<span class="diff-neutral">0.00</span>'
+        : absDiff > 1000
+          ? '<span class="diff-value">' + fmtCents(d.difference_cents) + '</span>'
+          : '<span class="diff-minor">'  + fmtCents(d.difference_cents) + '</span>';
+      return '<div class="books-row' + (absDiff > 1000 ? ' variance-row' : '') + '"' +
+             ' data-diff="' + absDiff + '"' +
+             ' data-account="' + _esc((d.account || '').toLowerCase()) + '">' +
+               '<div><span class="acct-code">' + _esc(d.account_code || '') + '</span>' +
+               '<span class="acct-name">'  + _esc(d.account) + '</span></div>' +
+               '<div><span class="amount-cell">' + fmtCents(d.book_a_balance) + '</span></div>' +
+               '<div><span class="amount-cell">' + fmtCents(d.book_b_balance) + '</span></div>' +
+               '<div>' + diffHtml + '</div>' +
+             '</div>';
+    }).join('');
+    applyFilter();
+  }
+
+  function updateKpis(diffs) {
+    document.getElementById('kpi-accounts').textContent = diffs.length;
+    var materialCount = diffs.filter(function (d) { return Math.abs(d.difference_cents) > 1000; }).length;
+    var zeroCount     = diffs.filter(function (d) { return d.difference_cents === 0; }).length;
+    var totalVariance = diffs.reduce(function (s, d) { return s + Math.abs(d.difference_cents); }, 0);
+    document.getElementById('kpi-variances').textContent     = materialCount;
+    document.getElementById('kpi-zero').textContent          = zeroCount;
+    document.getElementById('kpi-total-variance').textContent = fmtCents(totalVariance);
+  }
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,500 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Merit Cycle — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .mc-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .mc-kpi-card { background:#fff; border:1px solid #dde1e7; border-radius:6px; padding:18px 20px; position:relative; overflow:hidden; }
+  .mc-kpi-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,#1a56db); border-radius:6px 0 0 6px; }
+  .mc-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:0 0 4px; font-weight:600; }
+  .mc-kpi-value { font-size:24px; font-weight:700; color:#111827; margin:0 0 2px; line-height:1.1; }
+  .mc-kpi-sub   { font-size:11px; color:#9ca3af; margin:0; }
+  /* budget utilization */
+  .budget-bar-wrap { background:#e5e7eb; border-radius:6px; height:12px; overflow:hidden; }
+  .budget-bar-fill { height:100%; border-radius:6px; transition:width .5s; }
+  .budget-bar-fill.ok      { background:linear-gradient(90deg,#1a56db,#10b981); }
+  .budget-bar-fill.warning { background:linear-gradient(90deg,#f59e0b,#ef4444); }
+  .budget-bar-fill.over    { background:#ef4444; }
+  /* merit table */
+  .merit-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .merit-table th { background:#f9fafb; color:#374151; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:9px 12px; border-bottom:2px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .merit-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  .merit-table tr:last-child td { border-bottom:none; }
+  .merit-table tr:hover td { background:#fafafa; }
+  .merit-table tr.below-midpoint td { background:#fffbeb; }
+  .merit-table tr.below-midpoint:hover td { background:#fef3c7; }
+  /* status badges */
+  .mbadge { font-size:10px; padding:2px 7px; border-radius:8px; font-weight:700; text-transform:uppercase; }
+  .mbadge-pending   { background:#f3f4f6; color:#374151; }
+  .mbadge-review    { background:#dbeafe; color:#1d4ed8; }
+  .mbadge-approved  { background:#d1fae5; color:#065f46; }
+  .mbadge-rejected  { background:#fee2e2; color:#991b1b; }
+  /* equity section */
+  .equity-section { background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:16px 20px; margin-bottom:20px; }
+  .equity-title   { font-size:13px; font-weight:700; color:#92400e; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+  .equity-table   { width:100%; border-collapse:collapse; font-size:12px; }
+  .equity-table th { color:#92400e; font-weight:600; font-size:11px; text-transform:uppercase; padding:6px 10px; border-bottom:1px solid #fde68a; }
+  .equity-table td { padding:7px 10px; border-bottom:1px solid #fef3c7; }
+  .equity-table tr:last-child td { border-bottom:none; }
+  /* inline propose input */
+  .propose-form { display:flex; align-items:center; gap:6px; }
+  .propose-form input[type="number"] { width:70px; height:28px; font-size:12px; padding:2px 6px; text-align:right; }
+  .propose-form .btn { height:28px; font-size:11px; padding:0 10px; font-weight:600; }
+  .propose-form .pct-label { font-size:11px; color:#6b7280; }
+  /* amount columns */
+  .tabular { font-family:monospace; font-size:12px; font-variant-numeric:tabular-nums; text-align:right; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  /* avatar initials */
+  .emp-avatar { width:28px; height:28px; border-radius:50%; background:#e0e7ff; color:#3730a3; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; margin-right:8px; flex-shrink:0; }
+  .emp-cell { display:flex; align-items:center; }
+  .below-midpoint-flag { font-size:10px; background:#fef3c7; color:#d97706; padding:1px 6px; border-radius:6px; font-weight:600; margin-left:6px; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div>
+    <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">
+      Merit Cycle
+      {% if cycle %}<span style="font-size:16px; font-weight:400; color:#6b7280; margin-left:8px;">{{ cycle.cycle_name }}</span>{% endif %}
+    </h1>
+    <p style="margin:0; font-size:13px; color:#6b7280;">Manager-level merit review, pay equity analysis &amp; cycle approval</p>
+  </div>
+  <button id="btn-approve-cycle"
+          class="btn btn-success"
+          style="height:38px; padding:0 22px; font-weight:600; font-size:13px;"
+          {% if not all_approved %}disabled title="All reviews must be APPROVED before cycle can close"{% endif %}>
+    <i class="fa fa-check-double"></i>&nbsp; Approve Cycle
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Row ─────────────────────────────────────────────────────────────── #}
+<div class="mc-kpi-grid">
+  <div class="mc-kpi-card" style="--accent:#1a56db;">
+    <p class="mc-kpi-label">Participants</p>
+    <p class="mc-kpi-value">{{ cycle.participants_count if cycle else '—' }}</p>
+    <p class="mc-kpi-sub">employees in cycle</p>
+  </div>
+  <div class="mc-kpi-card" style="--accent:#10b981;">
+    <p class="mc-kpi-label">Budget Pool</p>
+    <p class="mc-kpi-value" style="font-size:18px;">
+      {{ "{:,.0f}".format(cycle.budget_pool_cents / 100) if cycle else '—' }}
+    </p>
+    <p class="mc-kpi-sub">total merit budget</p>
+  </div>
+  <div class="mc-kpi-card" style="--accent:#f59e0b;">
+    <p class="mc-kpi-label">Committed</p>
+    <p class="mc-kpi-value" style="font-size:18px;">
+      {{ "{:,.0f}".format(budget_status.committed_cents / 100) if budget_status else '—' }}
+    </p>
+    <p class="mc-kpi-sub">proposed increases</p>
+  </div>
+  <div class="mc-kpi-card" style="--accent:{% if budget_status and budget_status.remaining_cents < 0 %}#ef4444{% else %}#8b5cf6{% endif %};">
+    <p class="mc-kpi-label">Remaining</p>
+    <p class="mc-kpi-value" style="font-size:18px; {% if budget_status and budget_status.remaining_cents < 0 %}color:#dc2626;{% endif %}">
+      {{ "{:,.0f}".format(budget_status.remaining_cents / 100) if budget_status else '—' }}
+    </p>
+    <p class="mc-kpi-sub">available budget</p>
+  </div>
+  <div class="mc-kpi-card" style="--accent:#06b6d4;">
+    <p class="mc-kpi-label">Completion</p>
+    <p class="mc-kpi-value">{{ cycle.completion_pct | int if cycle else 0 }}%</p>
+    <p class="mc-kpi-sub">reviews complete</p>
+  </div>
+</div>
+
+{# ── Budget utilization bar ───────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:16px 20px; margin-bottom:20px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+    <span style="font-size:13px; font-weight:600; color:#374151;">Budget Utilization</span>
+    <span id="budget-pct-label" style="font-size:13px; font-weight:700; color:#1a56db;">
+      {% if budget_status and cycle %}
+        {% set util_pct = ((budget_status.committed_cents / cycle.budget_pool_cents) * 100) | int if cycle.budget_pool_cents else 0 %}
+        {{ util_pct }}%
+      {% else %}0%{% endif %}
+    </span>
+  </div>
+  <div class="budget-bar-wrap">
+    {% if budget_status and cycle and cycle.budget_pool_cents %}
+      {% set util_pct = ((budget_status.committed_cents / cycle.budget_pool_cents) * 100) | int %}
+      <div class="budget-bar-fill {% if util_pct > 100 %}over{% elif util_pct > 85 %}warning{% else %}ok{% endif %}"
+           style="width:{{ [util_pct, 100] | min }}%"
+           id="budget-bar"></div>
+    {% else %}
+      <div class="budget-bar-fill ok" style="width:0%;" id="budget-bar"></div>
+    {% endif %}
+  </div>
+  <div style="display:flex; justify-content:space-between; font-size:11px; color:#9ca3af; margin-top:6px;">
+    <span>0</span>
+    <span>Committed: {{ "{:,.0f}".format(budget_status.committed_cents / 100) if budget_status else '—' }} / Budget: {{ "{:,.0f}".format(cycle.budget_pool_cents / 100) if cycle else '—' }}</span>
+    <span>100%</span>
+  </div>
+</div>
+
+{# ── Pay Equity Section ───────────────────────────────────────────────────── #}
+{% set below_midpoint = reviews | selectattr('below_midpoint', 'equalto', true) | list if reviews else [] %}
+{% if below_midpoint %}
+<div class="equity-section">
+  <p class="equity-title">
+    <i class="fa fa-exclamation-triangle"></i>
+    Pay Equity Alert — {{ below_midpoint | length }} employee(s) below grade midpoint
+  </p>
+  <table class="equity-table">
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Grade</th>
+        <th style="text-align:right;">Current Salary</th>
+        <th style="text-align:right;">Midpoint</th>
+        <th style="text-align:right;">Compa-Ratio</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in below_midpoint %}
+      <tr>
+        <td><strong>{{ r.name }}</strong></td>
+        <td>{{ r.grade }}</td>
+        <td style="text-align:right; font-family:monospace;">{{ "{:,.0f}".format(r.current_salary_cents / 100) }}</td>
+        <td style="text-align:right; font-family:monospace;">{{ "{:,.0f}".format(r.grade_midpoint_cents / 100) if r.grade_midpoint_cents else '—' }}</td>
+        <td style="text-align:right; color:#d97706; font-weight:700; font-family:monospace;">
+          {% if r.grade_midpoint_cents and r.grade_midpoint_cents > 0 %}
+            {{ "{:.0f}%".format((r.current_salary_cents / r.grade_midpoint_cents) * 100) }}
+          {% else %}—{% endif %}
+        </td>
+        <td style="font-size:11px; color:#92400e; font-weight:600;">Consider higher increase</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ── Merit Review Table ───────────────────────────────────────────────────── #}
+<div class="erp-card" style="padding:0; overflow:hidden;">
+  <div style="padding:14px 20px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+    <h4 class="erp-section-title" style="margin:0; border:none; padding:0;">Employee Merit Reviews</h4>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <select id="filter-review-status" class="form-control" style="width:auto; height:30px; font-size:12px; padding:2px 8px;">
+        <option value="">All Statuses</option>
+        <option value="PENDING">Pending</option>
+        <option value="REVIEW">In Review</option>
+        <option value="APPROVED">Approved</option>
+        <option value="REJECTED">Rejected</option>
+      </select>
+      <input type="text" id="filter-emp-search" class="form-control" placeholder="Search name…"
+             style="width:160px; height:30px; font-size:12px; padding:2px 8px;">
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="merit-table" id="merit-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Grade</th>
+          <th class="tabular" style="text-align:right;">Current Salary</th>
+          <th class="tabular" style="text-align:right;">Proposed Increase</th>
+          <th class="tabular" style="text-align:right;">% Increase</th>
+          <th class="tabular" style="text-align:right;">New Salary</th>
+          <th>Status</th>
+          <th>Propose</th>
+        </tr>
+      </thead>
+      <tbody id="merit-tbody">
+        {% if reviews %}
+          {% for r in reviews %}
+          <tr id="review-row-{{ r.id }}"
+              data-review-id="{{ r.id }}"
+              data-status="{{ r.status }}"
+              data-name="{{ r.name | lower }}"
+              class="{% if r.below_midpoint %}below-midpoint{% endif %}">
+            <td>
+              <div class="emp-cell">
+                <span class="emp-avatar">{{ r.name[:2] | upper if r.name else '??' }}</span>
+                <span style="font-weight:600;">{{ r.name }}</span>
+                {% if r.below_midpoint %}
+                  <span class="below-midpoint-flag"><i class="fa fa-arrow-down"></i> Below mid</span>
+                {% endif %}
+              </div>
+            </td>
+            <td style="font-size:12px; color:#6b7280; font-weight:600;">{{ r.grade }}</td>
+            <td class="tabular">{{ "{:,.0f}".format(r.current_salary_cents / 100) }}</td>
+            <td class="tabular proposed-increase-cell" id="increase-display-{{ r.id }}">
+              {% if r.proposed_increase_cents %}
+                {{ "{:,.0f}".format(r.proposed_increase_cents / 100) }}
+              {% else %}
+                <span style="color:#9ca3af;">—</span>
+              {% endif %}
+            </td>
+            <td class="tabular increase-pct-cell" id="pct-display-{{ r.id }}">
+              {% if r.increase_pct %}
+                <span style="color:#10b981; font-weight:700;">{{ "{:.1f}%".format(r.increase_pct) }}</span>
+              {% else %}
+                <span style="color:#9ca3af;">—</span>
+              {% endif %}
+            </td>
+            <td class="tabular new-salary-cell" id="new-sal-{{ r.id }}">
+              {% if r.proposed_increase_cents %}
+                {{ "{:,.0f}".format((r.current_salary_cents + r.proposed_increase_cents) / 100) }}
+              {% else %}
+                <span style="color:#9ca3af;">—</span>
+              {% endif %}
+            </td>
+            <td id="status-cell-{{ r.id }}">
+              {% if r.status == 'APPROVED' %}
+                <span class="mbadge mbadge-approved">Approved</span>
+              {% elif r.status == 'REVIEW' %}
+                <span class="mbadge mbadge-review">In Review</span>
+              {% elif r.status == 'REJECTED' %}
+                <span class="mbadge mbadge-rejected">Rejected</span>
+              {% else %}
+                <span class="mbadge mbadge-pending">Pending</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.status not in ['APPROVED', 'REJECTED'] %}
+              <div class="propose-form">
+                <input type="number" id="propose-input-{{ r.id }}" min="0" max="100" step="0.1"
+                       value="{{ r.increase_pct | default('') }}"
+                       placeholder="0.0" class="form-control propose-pct-input"
+                       data-current-salary="{{ r.current_salary_cents }}"
+                       data-review-id="{{ r.id }}">
+                <span class="pct-label">%</span>
+                <button class="btn btn-primary btn-propose"
+                        data-review-id="{{ r.id }}"
+                        title="Propose increase">
+                  <i class="fa fa-check"></i>
+                </button>
+              </div>
+              {% else %}
+                <span style="font-size:11px; color:#9ca3af;">Locked</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="8" style="text-align:center; padding:32px; color:#9ca3af;">
+            No reviews found.
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div style="padding:10px 20px; border-top:1px solid #e5e7eb; background:#fafafa; font-size:12px; color:#6b7280; display:flex; justify-content:space-between;">
+    <span id="review-count">
+      {% if reviews %}{{ reviews | length }} review(s){% endif %}
+    </span>
+    <span><span style="display:inline-block; width:10px; height:10px; background:#fef3c7; border:1px solid #fde68a; border-radius:2px; margin-right:4px;"></span>Below grade midpoint</span>
+  </div>
+</div>
+
+{# ── Approve Cycle Modal ──────────────────────────────────────────────────── #}
+<div class="modal fade" id="modal-approve-cycle" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-check-double" style="color:#10b981;"></i>&nbsp; Approve Merit Cycle
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:4px; padding:12px 16px; margin-bottom:14px; font-size:13px;">
+          <strong style="color:#15803d;"><i class="fa fa-check-circle"></i> Ready for approval</strong>
+        </div>
+        <p style="font-size:13px; color:#374151;">
+          Approving cycle <strong>{{ cycle.cycle_name if cycle else '' }}</strong> will
+          lock all merit increases and queue payroll processing for the next pay period.
+        </p>
+        <div style="background:#fef9ec; border:1px solid #fde68a; border-radius:4px; padding:10px 14px; font-size:12px; color:#92400e; margin-top:10px;">
+          <i class="fa fa-exclamation-triangle"></i>
+          This action cannot be undone. Ensure all reviews have been finalized.
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-approve-confirm" class="btn btn-success" style="font-weight:600;">
+          <i class="fa fa-check"></i>&nbsp; Confirm Approval
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtCents(c) {
+    return (c / 100).toLocaleString(undefined, { minimumFractionDigits:0, maximumFractionDigits:0 });
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4500);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── live preview: update increase / new salary as pct changes ──────── */
+  document.addEventListener('input', function (e) {
+    var input = e.target.closest('.propose-pct-input');
+    if (!input) return;
+    var reviewId     = input.getAttribute('data-review-id');
+    var currentSal   = parseInt(input.getAttribute('data-current-salary') || '0', 10);
+    var pct          = parseFloat(input.value) || 0;
+    var increaseCents = Math.round(currentSal * pct / 100);
+    var newSalCents   = currentSal + increaseCents;
+
+    var incDisp  = document.getElementById('increase-display-' + reviewId);
+    var pctDisp  = document.getElementById('pct-display-' + reviewId);
+    var salDisp  = document.getElementById('new-sal-' + reviewId);
+
+    if (incDisp) incDisp.textContent = pct > 0 ? fmtCents(increaseCents) : '—';
+    if (pctDisp) pctDisp.innerHTML   = pct > 0
+      ? '<span style="color:#10b981;font-weight:700;">' + pct.toFixed(1) + '%</span>' : '<span style="color:#9ca3af;">—</span>';
+    if (salDisp) salDisp.textContent = pct > 0 ? fmtCents(newSalCents) : '—';
+  });
+
+  /* ── Propose increase → PATCH /api/compensation/propose ─────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-propose');
+    if (!btn) return;
+
+    var reviewId = btn.getAttribute('data-review-id');
+    var input    = document.getElementById('propose-input-' + reviewId);
+    if (!input) return;
+
+    var pct = parseFloat(input.value);
+    if (isNaN(pct) || pct < 0) { toast('Enter a valid percentage (0–100).', 'error'); return; }
+    if (pct > 100) { toast('Increase percentage cannot exceed 100%.', 'error'); return; }
+
+    var currentSal = parseInt(input.getAttribute('data-current-salary') || '0', 10);
+    var increaseCents = Math.round(currentSal * pct / 100);
+
+    var origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/compensation/propose', {
+      method:      'PATCH',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({
+        review_id:             reviewId,
+        increase_pct:          pct,
+        proposed_increase_cents: increaseCents
+      })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        /* update status badge */
+        var statusCell = document.getElementById('status-cell-' + reviewId);
+        if (statusCell) {
+          statusCell.innerHTML = '<span class="mbadge mbadge-review">In Review</span>';
+        }
+        var row = document.getElementById('review-row-' + reviewId);
+        if (row) row.setAttribute('data-status', 'REVIEW');
+        toast('Increase of ' + pct.toFixed(1) + '% proposed.', 'success');
+      } else {
+        toast(res.data.message || 'Proposal failed.', 'error');
+      }
+    })
+    .catch(function (err) { toast('Network error: ' + err.message, 'error'); })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    });
+  });
+
+  /* ── Table filters ───────────────────────────────────────────────────── */
+  function applyTableFilter() {
+    var status = document.getElementById('filter-review-status').value.toUpperCase();
+    var search = document.getElementById('filter-emp-search').value.toLowerCase().trim();
+    var rows   = document.querySelectorAll('#merit-tbody tr[data-status]');
+    var count  = 0;
+    rows.forEach(function (row) {
+      var rowStatus = (row.getAttribute('data-status') || '').toUpperCase();
+      var rowName   = (row.getAttribute('data-name')   || '').toLowerCase();
+      var show = (!status || rowStatus === status) && (!search || rowName.indexOf(search) !== -1);
+      row.style.display = show ? '' : 'none';
+      if (show) count++;
+    });
+    var rc = document.getElementById('review-count');
+    if (rc) rc.textContent = 'Showing ' + count + ' of ' + rows.length + ' review(s)';
+  }
+
+  document.getElementById('filter-review-status').addEventListener('change', applyTableFilter);
+  document.getElementById('filter-emp-search').addEventListener('input', applyTableFilter);
+
+  /* ── Approve Cycle button → modal ───────────────────────────────────── */
+  var approveCycleBtn = document.getElementById('btn-approve-cycle');
+  if (approveCycleBtn && !approveCycleBtn.disabled) {
+    approveCycleBtn.addEventListener('click', function () {
+      $('#modal-approve-cycle').modal('show');
+    });
+  }
+
+  document.getElementById('btn-approve-confirm').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Approving…';
+
+    {% if cycle %}
+    var cycleId = '{{ cycle.id }}';
+    {% else %}
+    var cycleId = '';
+    {% endif %}
+
+    fetch('/api/compensation/approve_cycle', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ cycle_id: cycleId })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-approve-cycle').modal('hide');
+      if (res.ok) {
+        toast('Merit cycle approved. Payroll processing queued.', 'success');
+        setTimeout(function () { window.location.reload(); }, 2000);
+      } else {
+        toast(res.data.message || 'Approval failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-check"></i>&nbsp; Confirm Approval';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-check"></i>&nbsp; Confirm Approval';
+    });
+  });
+}());
+</script>
+{% endblock %}

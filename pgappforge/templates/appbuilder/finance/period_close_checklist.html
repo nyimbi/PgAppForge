@@ -1,0 +1,359 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Period Close Checklist — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .close-header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .close-status-banner { display:flex; align-items:center; gap:10px; padding:10px 18px; border-radius:6px; font-size:13px; font-weight:600; }
+  .close-status-banner.OPEN        { background:#f0fdf4; border:1px solid #86efac; color:#15803d; }
+  .close-status-banner.IN_PROGRESS { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+  .close-status-banner.CLOSED      { background:#eff6ff; border:1px solid #93c5fd; color:#1d4ed8; }
+  .progress-wrap { background:#e5e7eb; border-radius:6px; height:10px; overflow:hidden; flex:1; min-width:200px; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,#1a56db,#10b981); border-radius:6px; transition:width .5s; }
+  .erp-section-title { font-size:15px; font-weight:700; color:#111827; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+  /* task list */
+  .task-category-header { background:#f9fafb; border:1px solid #e5e7eb; border-radius:5px 5px 0 0; padding:10px 16px; display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+  .task-category-header .cat-name  { font-size:13px; font-weight:700; color:#374151; flex:1; }
+  .task-category-header .cat-badge { font-size:11px; background:#e0e7ff; color:#3730a3; padding:2px 8px; border-radius:10px; }
+  .task-category-header .cat-prog  { font-size:11px; color:#6b7280; }
+  .task-group { margin-bottom:16px; }
+  .task-group-body { border:1px solid #e5e7eb; border-top:none; border-radius:0 0 5px 5px; overflow:hidden; }
+  .task-row { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border-bottom:1px solid #f3f4f6; background:#fff; transition:background .15s; }
+  .task-row:last-child { border-bottom:none; }
+  .task-row.COMPLETE { background:#f0fdf4; }
+  .task-row.SKIPPED  { background:#fafafa; opacity:.7; }
+  .task-row.blocked  { background:#fafafa; opacity:.55; pointer-events:none; }
+  .task-icon { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; margin-top:2px; }
+  .task-icon.PENDING     { background:#f3f4f6; color:#9ca3af; }
+  .task-icon.IN_PROGRESS { background:#dbeafe; color:#1d4ed8; }
+  .task-icon.COMPLETE    { background:#d1fae5; color:#065f46; }
+  .task-icon.SKIPPED     { background:#f3f4f6; color:#9ca3af; }
+  .task-body { flex:1; min-width:0; }
+  .task-title    { font-size:13px; font-weight:600; color:#111827; margin:0 0 3px; }
+  .task-meta     { font-size:11px; color:#6b7280; margin:0 0 4px; display:flex; gap:12px; flex-wrap:wrap; }
+  .task-notes    { font-size:11px; color:#6b7280; margin:2px 0 0; font-style:italic; }
+  .task-actions  { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  /* status badges inline */
+  .tbadge { font-size:10px; padding:2px 7px; border-radius:8px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .tbadge-pending     { background:#f3f4f6; color:#374151; }
+  .tbadge-in_progress { background:#dbeafe; color:#1d4ed8; }
+  .tbadge-complete    { background:#d1fae5; color:#065f46; }
+  .tbadge-skipped     { background:#f3f4f6; color:#6b7280; }
+  /* GL lock */
+  .gl-lock-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; }
+  .gl-lock-badge.locked   { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+  .gl-lock-badge.unlocked { background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+  /* toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+  .erp-toast { background:#1f2937; color:#fff; padding:12px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; min-width:260px; }
+  .erp-toast.success { border-left:4px solid #10b981; }
+  .erp-toast.error   { border-left:4px solid #ef4444; }
+  .erp-toast.info    { border-left:4px solid #1a56db; }
+  /* due date coloring */
+  .due-overdue { color:#dc2626; font-weight:600; }
+  .due-today   { color:#d97706; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="margin-bottom:24px;">
+  <h1 style="margin:0 0 4px; font-size:22px; font-weight:700; color:#111827;">Month-End Close Checklist</h1>
+  <p style="margin:0; font-size:13px; color:#6b7280;">Track, assign and complete all period-close tasks with full audit trail</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Period selector + status banner ─────────────────────────────────────── #}
+<div class="erp-card" style="padding:16px 20px; margin-bottom:20px;">
+  <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <label style="font-size:12px; font-weight:600; color:#374151; margin:0;">Period:</label>
+      <select id="period-select" class="form-control" style="width:auto; height:32px; font-size:13px; padding:2px 8px;">
+        {% if available_periods %}
+          {% for p in available_periods %}
+          <option value="{{ p }}" {% if close and close.period == p %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        {% else %}
+          <option>{{ close.period if close else '—' }}</option>
+        {% endif %}
+      </select>
+    </div>
+
+    {% if close %}
+    <div class="close-status-banner {{ close.status }}">
+      {% if close.status == 'OPEN' %}
+        <i class="fa fa-unlock-alt"></i> Open
+      {% elif close.status == 'IN_PROGRESS' %}
+        <i class="fa fa-clock-o fa-spin"></i> In Progress
+      {% elif close.status == 'CLOSED' %}
+        <i class="fa fa-lock"></i> Closed
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:200px;">
+      <span style="font-size:12px; color:#6b7280; white-space:nowrap;">
+        <span id="tasks-complete-count">{{ close.tasks_complete if close else 0 }}</span>
+        / <span id="tasks-total-count">{{ close.tasks_total if close else 0 }}</span> tasks
+      </span>
+      <div class="progress-wrap">
+        {% set pct = ((close.tasks_complete / close.tasks_total) * 100) | int if close and close.tasks_total else 0 %}
+        <div class="progress-fill" id="progress-fill" style="width:{{ pct }}%"></div>
+      </div>
+      <span id="progress-pct" style="font-size:12px; font-weight:700; color:#1a56db; white-space:nowrap;">{{ pct }}%</span>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px; margin-left:auto;">
+      {% if close and close.gl_locked %}
+        <span class="gl-lock-badge locked"><i class="fa fa-lock"></i> GL Locked</span>
+      {% else %}
+        <span class="gl-lock-badge unlocked"><i class="fa fa-unlock"></i> GL Open</span>
+      {% endif %}
+
+      <button id="btn-finalize"
+              class="btn btn-success"
+              style="height:34px; padding:0 18px; font-weight:600; font-size:13px;"
+              {% if not can_finalize %}disabled title="All tasks must be COMPLETE or SKIPPED"{% endif %}>
+        <i class="fa fa-flag-checkered"></i>&nbsp; Finalize Period
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── Task Groups ─────────────────────────────────────────────────────────── #}
+{% if tasks %}
+  {# Group tasks by category #}
+  {% set categories = tasks | map(attribute='category') | unique | list %}
+  {% for cat in categories %}
+    {% set cat_tasks = tasks | selectattr('category', 'equalto', cat) | list %}
+    {% set cat_complete = cat_tasks | selectattr('status', 'in', ['COMPLETE','SKIPPED']) | list | length %}
+    <div class="task-group" id="group-{{ cat | replace('_','-') | lower }}">
+      <div class="task-category-header" onclick="this.parentElement.querySelector('.task-group-body').style.display = this.parentElement.querySelector('.task-group-body').style.display === 'none' ? '' : 'none'">
+        <i class="fa fa-folder" style="color:#6b7280;"></i>
+        <span class="cat-name">{{ cat | replace('_', ' ') | title }}</span>
+        <span class="cat-badge">{{ cat_tasks | length }} tasks</span>
+        <span class="cat-prog">{{ cat_complete }}/{{ cat_tasks | length }}</span>
+        <i class="fa fa-chevron-down" style="color:#9ca3af; font-size:11px;"></i>
+      </div>
+      <div class="task-group-body">
+        {% for task in cat_tasks %}
+        <div class="task-row {{ task.status }}" id="task-row-{{ task.id }}"
+             {% if task.blocked %}data-blocked="true"{% endif %}>
+
+          <div class="task-icon {{ task.status }}">
+            {% if task.status == 'COMPLETE' %}
+              <i class="fa fa-check"></i>
+            {% elif task.status == 'IN_PROGRESS' %}
+              <i class="fa fa-spinner fa-spin"></i>
+            {% elif task.status == 'SKIPPED' %}
+              <i class="fa fa-minus"></i>
+            {% else %}
+              <i class="fa fa-circle-o"></i>
+            {% endif %}
+          </div>
+
+          <div class="task-body">
+            <p class="task-title">
+              {{ task.title }}
+              <span class="tbadge tbadge-{{ task.status | lower }}">{{ task.status | replace('_',' ') }}</span>
+            </p>
+            <div class="task-meta">
+              <span><i class="fa fa-user-o" style="margin-right:3px;"></i>{{ task.owner_role }}</span>
+              {% if task.due_date %}
+              <span class="{% if task.overdue %}due-overdue{% elif task.due_today %}due-today{% endif %}">
+                <i class="fa fa-calendar" style="margin-right:3px;"></i>Due: {{ task.due_date }}
+                {% if task.overdue %} <i class="fa fa-exclamation-triangle"></i>{% endif %}
+              </span>
+              {% endif %}
+              {% if task.depends_on %}
+              <span style="color:#d97706;"><i class="fa fa-chain" style="margin-right:3px;"></i>Depends on: {{ task.depends_on }}</span>
+              {% endif %}
+            </div>
+            {% if task.notes %}
+              <p class="task-notes"><i class="fa fa-comment-o" style="margin-right:3px;"></i>{{ task.notes }}</p>
+            {% endif %}
+          </div>
+
+          <div class="task-actions">
+            {% if task.status == 'IN_PROGRESS' %}
+            <button class="btn btn-success btn-sm btn-complete-task"
+                    data-task-id="{{ task.id }}"
+                    data-action="COMPLETE"
+                    style="font-size:11px; padding:3px 10px; font-weight:600;">
+              <i class="fa fa-check"></i> Complete
+            </button>
+            <button class="btn btn-default btn-sm btn-complete-task"
+                    data-task-id="{{ task.id }}"
+                    data-action="SKIPPED"
+                    style="font-size:11px; padding:3px 10px;">
+              Skip
+            </button>
+            {% elif task.status == 'PENDING' %}
+            <button class="btn btn-primary btn-sm btn-complete-task"
+                    data-task-id="{{ task.id }}"
+                    data-action="IN_PROGRESS"
+                    style="font-size:11px; padding:3px 10px; font-weight:600;">
+              <i class="fa fa-play"></i> Start
+            </button>
+            {% elif task.status == 'COMPLETE' %}
+            <span style="font-size:11px; color:#10b981; font-weight:600;">
+              <i class="fa fa-check-circle"></i> Done
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="erp-card" style="padding:40px; text-align:center; color:#9ca3af;">
+    <i class="fa fa-check-square-o" style="font-size:36px; display:block; margin-bottom:12px; opacity:.4;"></i>
+    No tasks found for this period.
+  </div>
+{% endif %}
+
+{# ── Finalize confirmation modal ─────────────────────────────────────────── #}
+<div class="modal fade" id="modal-finalize" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="border-bottom:1px solid #e5e7eb;">
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        <h4 class="modal-title" style="font-weight:700;">
+          <i class="fa fa-flag-checkered" style="color:#10b981;"></i>&nbsp; Finalize Period
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fef9ec; border:1px solid #fde68a; border-radius:4px; padding:12px 16px; margin-bottom:14px; font-size:13px;">
+          <i class="fa fa-exclamation-triangle" style="color:#d97706; margin-right:6px;"></i>
+          <strong>This action locks the GL period and cannot be undone.</strong>
+        </div>
+        <p style="font-size:13px; color:#374151;">
+          Period <strong>{{ close.period if close else '' }}</strong> will be finalized.
+          The GL will be locked and no further journal entries can be posted.
+        </p>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-finalize-confirm" class="btn btn-success" style="font-weight:600;">
+          <i class="fa fa-lock"></i>&nbsp; Lock &amp; Finalize
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'erp-toast ' + (type || 'info');
+    var icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    el.innerHTML = '<i class="fa ' + icon + '"></i> ' + _esc(msg);
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+  }
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  /* ── Task action buttons (Complete / Start / Skip) ────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-complete-task');
+    if (!btn) return;
+    e.preventDefault();
+    var taskId = btn.getAttribute('data-task-id');
+    var action = btn.getAttribute('data-action');
+    if (!taskId || !action) return;
+
+    btn.disabled = true;
+    var origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/api/period_close/tasks/' + encodeURIComponent(taskId), {
+      method:      'PATCH',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ status: action })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        var row = document.getElementById('task-row-' + taskId);
+        if (row) {
+          /* update icon + status badge by reloading the page — simple and correct */
+          window.location.reload();
+        }
+        toast('Task updated.', 'success');
+      } else {
+        toast(res.data.message || 'Update failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    });
+  });
+
+  /* ── Finalize button → confirm modal ────────────────────────────────── */
+  var finalizeBtn = document.getElementById('btn-finalize');
+  if (finalizeBtn && !finalizeBtn.disabled) {
+    finalizeBtn.addEventListener('click', function () {
+      $('#modal-finalize').modal('show');
+    });
+  }
+
+  document.getElementById('btn-finalize-confirm').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Finalizing…';
+
+    fetch('/api/period_close/finalize', {
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ period: document.getElementById('period-select').value })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      $('#modal-finalize').modal('hide');
+      if (res.ok) {
+        toast('Period finalized and GL locked.', 'success');
+        setTimeout(function () { window.location.reload(); }, 1800);
+      } else {
+        toast(res.data.message || 'Finalization failed.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-lock"></i>&nbsp; Lock &amp; Finalize';
+      }
+    })
+    .catch(function (err) {
+      toast('Network error: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-lock"></i>&nbsp; Lock &amp; Finalize';
+    });
+  });
+
+  /* ── Period selector navigation ─────────────────────────────────────── */
+  document.getElementById('period-select').addEventListener('change', function () {
+    window.location.href = window.location.pathname + '?period=' + encodeURIComponent(this.value);
+  });
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,369 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Employee Self-Service — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── ESS layout ───────────────────────────────────────────────────── */
+  .ess-hero {
+    background: linear-gradient(135deg, #004d40 0%, #00695c 55%, #00897b 100%);
+    color: #fff;
+    padding: 26px 32px 20px;
+    border-radius: 6px;
+    margin-bottom: 24px;
+  }
+  .ess-hero h2 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
+  .ess-hero .subtitle { opacity: .8; font-size: 14px; }
+
+  /* profile card */
+  .profile-card { background: #fff; border: 1px solid #dde3ec; border-radius: 6px;
+                  padding: 22px 22px 18px; height: 100%; }
+  .profile-avatar { width: 64px; height: 64px; border-radius: 50%;
+                    background: linear-gradient(135deg, #004d40, #00897b);
+                    color: #fff; font-size: 26px; font-weight: 700;
+                    display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .profile-name  { font-size: 18px; font-weight: 700; color: #212121; }
+  .profile-role  { font-size: 13px; color: #546e7a; margin-bottom: 14px; }
+  .profile-meta dt { font-size: 12px; color: #90a4ae; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+  .profile-meta dd { font-size: 14px; color: #37474f; margin-bottom: 10px; }
+
+  /* leave tiles */
+  .leave-tile { background: #fff; border: 1px solid #dde3ec; border-radius: 6px;
+                padding: 16px 18px; margin-bottom: 14px; }
+  .leave-tile .lt-type  { font-size: 13px; font-weight: 600; color: #37474f; text-transform: uppercase; letter-spacing: .4px; }
+  .leave-tile .lt-days  { font-size: 26px; font-weight: 700; line-height: 1; margin: 4px 0; }
+  .leave-tile .lt-label { font-size: 11px; color: #90a4ae; }
+  .leave-bar { height: 6px; border-radius: 10px; background: #eceff1; margin-top: 10px; overflow: hidden; }
+  .leave-bar-fill { height: 100%; border-radius: 10px; transition: width .5s; }
+  .leave-annual   .lt-days, .leave-bar-annual   { color: #1565c0; background: #1565c0; }
+  .leave-sick     .lt-days, .leave-bar-sick     { color: #c62828; background: #c62828; }
+  .leave-maternity .lt-days,.leave-bar-maternity{ color: #6a1b9a; background: #6a1b9a; }
+  .leave-comp     .lt-days, .leave-bar-comp     { color: #2e7d32; background: #2e7d32; }
+
+  /* payslip items */
+  .payslip-item { display: flex; align-items: center; justify-content: space-between;
+                  padding: 12px 0; border-bottom: 1px solid #f5f7fb; }
+  .payslip-item:last-child { border-bottom: none; }
+  .payslip-period { font-size: 14px; font-weight: 600; color: #212121; }
+  .payslip-gross  { font-size: 13px; color: #546e7a; }
+
+  /* status badges */
+  .badge-pending  { background: #fff3e0; color: #e65100; border-radius: 3px; padding: 2px 7px; font-size: 11px; }
+  .badge-approved { background: #e8f5e9; color: #2e7d32; border-radius: 3px; padding: 2px 7px; font-size: 11px; }
+  .badge-rejected { background: #ffebee; color: #c62828; border-radius: 3px; padding: 2px 7px; font-size: 11px; }
+  .badge-cancelled{ background: #eceff1; color: #546e7a; border-radius: 3px; padding: 2px 7px; font-size: 11px; }
+
+  /* benefit items */
+  .benefit-item { padding: 10px 0; border-bottom: 1px solid #f5f7fb; display: flex; align-items: center; gap: 10px; }
+  .benefit-item:last-child { border-bottom: none; }
+  .benefit-icon { width: 34px; height: 34px; border-radius: 50%; background: #e8f5e9;
+                  display: flex; align-items: center; justify-content: center;
+                  color: #2e7d32; font-size: 15px; flex-shrink: 0; }
+
+  .section-header { font-size: 16px; font-weight: 700; color: #004d40;
+                    border-bottom: 2px solid #e0f2f1; padding-bottom: 8px; margin-bottom: 16px; }
+  .panel-ess { border: 1px solid #dde3ec; border-radius: 6px; background: #fff; }
+  .panel-ess .panel-heading { background: #f5f7fb; border-bottom: 1px solid #dde3ec;
+                              border-radius: 6px 6px 0 0; padding: 12px 18px; font-weight: 600; color: #37474f; }
+  .panel-ess .panel-body { padding: 18px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="ess-hero">
+  <div class="row">
+    <div class="col-sm-8">
+      <h2><i class="fa fa-user-circle-o"></i>&nbsp; Employee Self-Service</h2>
+      <p class="subtitle">Welcome back, {{ employee.first_name }}. Manage your HR information in one place.</p>
+    </div>
+    <div class="col-sm-4 text-right" style="padding-top:6px;">
+      <button class="btn btn-default btn-sm" data-toggle="modal" data-target="#leaveModal">
+        <i class="fa fa-calendar-plus-o"></i>&nbsp; Apply for Leave
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+
+  {# ── Left: personal info ─────────────────────────────────────────── #}
+  <div class="col-md-3">
+    <div class="profile-card">
+      <div class="profile-avatar">{{ (employee.first_name[:1] + employee.last_name[:1]) | upper }}</div>
+      <div class="profile-name">{{ employee.first_name }} {{ employee.last_name }}</div>
+      <div class="profile-role">{{ employee.position }}</div>
+      <dl class="profile-meta">
+        <dt>Department</dt>
+        <dd>{{ employee.department | default('—') }}</dd>
+        <dt>Manager</dt>
+        <dd>{{ employee.manager_name | default('—') }}</dd>
+        <dt>Hire Date</dt>
+        <dd>{{ employee.hire_date }}</dd>
+        <dt>Employee ID</dt>
+        <dd>{{ employee.id }}</dd>
+      </dl>
+      <a href="/ess/update_details/{{ employee.id }}" class="btn btn-default btn-sm btn-block" style="margin-top:4px;">
+        <i class="fa fa-pencil"></i> Update Details
+      </a>
+    </div>
+  </div>
+
+  {# ── Right column ────────────────────────────────────────────────── #}
+  <div class="col-md-9">
+
+    {# ── Leave balances ──────────────────────────────────────────────── #}
+    <div class="section-header"><i class="fa fa-calendar-check-o"></i>&nbsp; Leave Balances</div>
+    <div class="row" style="margin-bottom:24px;">
+      {% for lb in leave_balances %}
+        {% set used_pct = ((lb.used_days / lb.entitled_days) * 100) | int if lb.entitled_days > 0 else 0 %}
+        {% set color_cls = 'annual' if 'annual' in lb.leave_type | lower
+                      else ('sick' if 'sick' in lb.leave_type | lower
+                      else ('maternity' if 'maternity' in lb.leave_type | lower else 'comp')) %}
+        <div class="col-sm-6 col-lg-3">
+          <div class="leave-tile leave-{{ color_cls }}">
+            <div class="lt-type">{{ lb.leave_type }}</div>
+            <div class="lt-days">{{ lb.remaining_days }}</div>
+            <div class="lt-label">days remaining of {{ lb.entitled_days }}</div>
+            <div class="leave-bar">
+              <div class="leave-bar-fill leave-bar-{{ color_cls }}" style="width:{{ used_pct }}%;"></div>
+            </div>
+            <div style="font-size:11px; color:#90a4ae; margin-top:4px;">
+              {{ lb.used_days }} used &middot; {{ lb.entitled_days }} entitled
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="col-sm-12"><p class="text-muted">No leave balance data.</p></div>
+      {% endfor %}
+    </div>
+
+    {# ── Pending requests ────────────────────────────────────────────── #}
+    <div class="section-header"><i class="fa fa-hourglass-half"></i>&nbsp; Pending Requests</div>
+    <div class="panel panel-ess" style="margin-bottom:24px;">
+      <div class="panel-body" style="padding:0;">
+        {% if pending_requests %}
+        <table class="table" style="margin-bottom:0;">
+          <thead>
+            <tr style="background:#f5f7fb;">
+              <th style="padding-left:18px;">Type</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Days</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th class="text-right" style="padding-right:18px;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for req in pending_requests %}
+            <tr>
+              <td style="padding-left:18px; font-weight:600;">{{ req.leave_type }}</td>
+              <td>{{ req.start_date }}</td>
+              <td>{{ req.end_date }}</td>
+              <td>{{ req.num_days | default('—') }}</td>
+              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                {{ req.reason | truncate(50) }}
+              </td>
+              <td>
+                {% if req.status == 'PENDING' %}
+                  <span class="badge-pending">Pending</span>
+                {% elif req.status == 'APPROVED' %}
+                  <span class="badge-approved">Approved</span>
+                {% elif req.status == 'REJECTED' %}
+                  <span class="badge-rejected">Rejected</span>
+                {% else %}
+                  <span class="badge-cancelled">{{ req.status | title }}</span>
+                {% endif %}
+              </td>
+              <td class="text-right" style="padding-right:18px;">
+                {% if req.status == 'PENDING' %}
+                <button class="btn btn-danger btn-xs cancel-leave-btn"
+                        data-request-id="{{ req.id }}"
+                        title="Cancel this request">
+                  <i class="fa fa-times"></i> Cancel
+                </button>
+                {% else %}
+                <span class="text-muted" style="font-size:12px;">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <div style="text-align:center; padding:28px; color:#90a4ae;">
+            <i class="fa fa-calendar-o" style="font-size:32px; display:block; margin-bottom:10px;"></i>
+            No pending leave requests.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Payslips + Benefits side-by-side ─────────────────────────── #}
+    <div class="row">
+      <div class="col-sm-7">
+        <div class="section-header"><i class="fa fa-file-text-o"></i>&nbsp; Recent Payslips</div>
+        <div class="panel panel-ess" style="margin-bottom:24px;">
+          <div class="panel-body">
+            {% for ps in recent_payslips[:3] %}
+            <div class="payslip-item">
+              <div>
+                <div class="payslip-period">{{ ps.period_label }}</div>
+                <div class="payslip-gross">Gross: <strong>{{ ps.currency | default('KES') }} {{ '{:,.2f}'.format(ps.gross_pay / 100) }}</strong></div>
+              </div>
+              <a href="/api/payslips/{{ ps.id }}/pdf"
+                 class="btn btn-default btn-xs"
+                 target="_blank"
+                 title="Download PDF">
+                <i class="fa fa-download"></i> PDF
+              </a>
+            </div>
+            {% else %}
+              <p class="text-muted" style="margin:0; text-align:center; padding:10px 0;">No payslips available.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-5">
+        <div class="section-header"><i class="fa fa-shield"></i>&nbsp; Benefits</div>
+        <div class="panel panel-ess" style="margin-bottom:24px;">
+          <div class="panel-body">
+            {% for be in benefit_enrollments %}
+            <div class="benefit-item">
+              <div class="benefit-icon"><i class="fa fa-check"></i></div>
+              <div>
+                <div style="font-size:14px; font-weight:600; color:#212121;">{{ be.benefit_name }}</div>
+                <div style="font-size:12px; color:#78909c;">
+                  {{ be.plan_name | default('') }}
+                  {% if be.effective_date %}&middot; Since {{ be.effective_date }}{% endif %}
+                </div>
+              </div>
+            </div>
+            {% else %}
+              <p class="text-muted" style="margin:0; text-align:center; padding:10px 0;">No active benefit enrollments.</p>
+            {% endfor %}
+            <div style="margin-top:12px;">
+              <a href="/ess/benefits/{{ employee.id }}" class="btn btn-default btn-sm btn-block">
+                <i class="fa fa-cog"></i> Manage Benefits
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>{# /row #}
+
+  </div>{# /col-md-9 #}
+</div>{# /row #}
+
+{# ── Apply for Leave modal ───────────────────────────────────────────── #}
+<div class="modal fade" id="leaveModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#004d40; color:#fff; border-radius:5px 5px 0 0;">
+        <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;"><span>&times;</span></button>
+        <h4 class="modal-title"><i class="fa fa-calendar-plus-o"></i>&nbsp; Apply for Leave</h4>
+      </div>
+      <form id="leave-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Leave Type <span class="text-danger">*</span></label>
+            <select class="form-control" id="leave-type" name="leave_type" required>
+              <option value="">— Select type —</option>
+              {% for lb in leave_balances %}
+              <option value="{{ lb.leave_type }}">{{ lb.leave_type }} ({{ lb.remaining_days }} days remaining)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label>Start Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="leave-start" name="start_date" required>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <label>End Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="leave-end" name="end_date" required>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="leave-reason" name="reason" rows="3" placeholder="Briefly describe the reason for your leave request…" required></textarea>
+          </div>
+          <div id="leave-form-error" class="alert alert-danger" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success" id="leave-submit-btn" style="background:#004d40; border-color:#004d40;">
+            <i class="fa fa-paper-plane"></i> Submit Request
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+
+  /* ── Submit leave request ────────────────────────────────────────── */
+  $("#leave-form").on("submit", function (e) {
+    e.preventDefault();
+    var $btn = $("#leave-submit-btn");
+    var payload = {
+      employee_id: "{{ employee.id }}",
+      leave_type:  $("#leave-type").val(),
+      start_date:  $("#leave-start").val(),
+      end_date:    $("#leave-end").val(),
+      reason:      $("#leave-reason").val()
+    };
+    if (payload.start_date > payload.end_date) {
+      $("#leave-form-error").text("End date must be on or after start date.").show();
+      return;
+    }
+    $btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Submitting…');
+    $.ajax({
+      url: "/api/ess/leave_requests",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify(payload),
+      success: function () {
+        $("#leaveModal").modal("hide");
+        location.reload();
+      },
+      error: function (xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : "Failed to submit request.";
+        $("#leave-form-error").text(msg).show();
+        $btn.prop("disabled", false).html('<i class="fa fa-paper-plane"></i> Submit Request');
+      }
+    });
+  });
+
+  /* ── Cancel leave request ────────────────────────────────────────── */
+  $(document).on("click", ".cancel-leave-btn", function () {
+    var rid = $(this).data("request-id");
+    if (!confirm("Cancel this leave request?")) return;
+    var $btn = $(this);
+    $btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i>');
+    $.ajax({
+      url: "/api/ess/leave_requests/" + rid + "/cancel",
+      method: "POST",
+      success: function () { location.reload(); },
+      error: function () {
+        $btn.prop("disabled", false).html('<i class="fa fa-times"></i> Cancel');
+        alert("Could not cancel request.");
+      }
+    });
+  });
+}());
+</script>
+{% endblock %}

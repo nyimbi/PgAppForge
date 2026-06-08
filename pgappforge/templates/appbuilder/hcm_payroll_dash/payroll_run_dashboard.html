@@ -1,0 +1,462 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Payroll Run — {{ payrun.period if payrun else '' }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Run header ── */
+  .payrun-header-card {
+    background:var(--erp-surface,#fff);
+    border:1px solid var(--erp-border,#e5e7eb);
+    border-radius:10px; padding:20px 24px;
+    margin-bottom:24px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:16px;
+  }
+  .payrun-entity  { font-size:18px; font-weight:700; margin:0 0 2px; }
+  .payrun-period  { font-size:13px; color:var(--erp-text-muted); margin:0; }
+  .payrun-status-badge { font-size:13px; font-weight:700; padding:5px 14px; border-radius:20px; }
+  .prs-DRAFT      { background:#f3f4f6; color:#374151; }
+  .prs-CALCULATED { background:#dbeafe; color:#1e40af; }
+  .prs-APPROVED   { background:#fef9c3; color:#854d0e; }
+  .prs-PAID       { background:#d1fae5; color:#065f46; }
+
+  /* ── KPI strip ── */
+  .payrun-kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+  @media (max-width:768px) { .payrun-kpi-strip { grid-template-columns:repeat(2,1fr); } }
+  .payrun-kpi-card { background:var(--erp-surface,#fff); border:1px solid var(--erp-border,#e5e7eb); border-radius:8px; padding:14px 16px; }
+  .payrun-kpi-label { font-size:11px; color:var(--erp-text-muted); text-transform:uppercase; letter-spacing:.5px; margin:0 0 4px; }
+  .payrun-kpi-value { font-size:20px; font-weight:700; margin:0; }
+  .payrun-kpi-sub   { font-size:11px; color:var(--erp-text-muted); margin:2px 0 0; }
+
+  /* ── Action buttons bar ── */
+  .payrun-action-bar { background:#f9fafb; border:1px solid var(--erp-border,#e5e7eb); border-radius:8px; padding:14px 18px; margin-bottom:24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .payrun-action-bar .action-title { font-size:13px; font-weight:600; color:#374151; margin-right:4px; }
+
+  /* ── Payslips table ── */
+  .payslip-search { max-width:280px; }
+  .money-cell { font-family:"Menlo","Consolas",monospace; font-size:12px; text-align:right; }
+  .money-cell.gross { color:#1e40af; }
+  .money-cell.tax   { color:#991b1b; }
+  .money-cell.net   { color:#065f46; font-weight:700; }
+
+  /* ── Statutory breakdown ── */
+  .statutory-table { width:100%; border-collapse:collapse; }
+  .statutory-table th { background:#f3f4f6; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:8px 12px; border-bottom:2px solid var(--erp-border,#e5e7eb); text-align:left; }
+  .statutory-table td { padding:9px 12px; border-bottom:1px solid var(--erp-border,#e5e7eb); font-size:13px; }
+  .statutory-table td.money { font-family:"Menlo","Consolas",monospace; text-align:right; }
+  .statutory-table .total-row td { font-weight:700; background:#f9fafb; border-top:2px solid var(--erp-border,#e5e7eb); }
+
+  /* ── GL journal status ── */
+  .gl-status-bar { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:8px; font-size:13px; }
+  .gl-status-bar.posted    { background:#d1fae5; border:1px solid #a7f3d0; color:#065f46; }
+  .gl-status-bar.not-posted { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+
+  /* ── Spinner ── */
+  .btn-loading { pointer-events:none; opacity:.7; }
+  .fa-spinner  { animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title"><i class="fa fa-money"></i> Payroll Run Dashboard</h1>
+  <p class="erp-page-subtitle">
+    Manage the full payroll workflow: calculate, approve, pay, and post to GL.
+  </p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Run header card ─────────────────────────────────────────────────── #}
+{% if payrun %}
+<div class="payrun-header-card">
+  <div>
+    <p class="payrun-entity">{{ payrun.entity_name or payrun.entity }}</p>
+    <p class="payrun-period">
+      Period: <strong>{{ payrun.period }}</strong>
+      {% if payrun.run_number %}&bull; Run #{{ payrun.run_number }}{% endif %}
+      {% if payrun.run_type %}&bull; {{ payrun.run_type }}{% endif %}
+    </p>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span class="payrun-status-badge prs-{{ payrun.status }}">
+      {% if payrun.status == 'DRAFT' %}<i class="fa fa-pencil"></i>
+      {% elif payrun.status == 'CALCULATED' %}<i class="fa fa-calculator"></i>
+      {% elif payrun.status == 'APPROVED' %}<i class="fa fa-check"></i>
+      {% elif payrun.status == 'PAID' %}<i class="fa fa-money"></i>
+      {% endif %}
+      {{ payrun.status }}
+    </span>
+    <button class="btn btn-default btn-sm" onclick="window.print()">
+      <i class="fa fa-print"></i> Print
+    </button>
+    <a href="/hcm/payroll/runs/{{ payrun.id }}/audit" class="btn btn-default btn-sm">
+      <i class="fa fa-history"></i> Audit Trail
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{# ── KPI strip ───────────────────────────────────────────────────────── #}
+<div class="payrun-kpi-strip erp-mb-0">
+  <div class="payrun-kpi-card">
+    <p class="payrun-kpi-label">Employees</p>
+    <p class="payrun-kpi-value">{{ payrun.employee_count if payrun else (payslips | length if payslips else '—') }}</p>
+    <p class="payrun-kpi-sub">On this payroll run</p>
+  </div>
+  <div class="payrun-kpi-card">
+    <p class="payrun-kpi-label">Total Gross</p>
+    <p class="payrun-kpi-value" style="color:#1e40af;">
+      {% if payrun and payrun.total_gross_cents is defined %}
+        {{ payrun.currency or 'KES' }} {{ '{:,.0f}'.format(payrun.total_gross_cents / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="payrun-kpi-sub">Before deductions</p>
+  </div>
+  <div class="payrun-kpi-card">
+    <p class="payrun-kpi-label">Total Tax</p>
+    <p class="payrun-kpi-value" style="color:#991b1b;">
+      {% if payrun and payrun.total_tax_cents is defined %}
+        {{ payrun.currency or 'KES' }} {{ '{:,.0f}'.format(payrun.total_tax_cents / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="payrun-kpi-sub">PAYE + statutory</p>
+  </div>
+  <div class="payrun-kpi-card">
+    <p class="payrun-kpi-label">Total Net Pay</p>
+    <p class="payrun-kpi-value" style="color:#065f46;">
+      {% if payrun and payrun.total_net_cents is defined %}
+        {{ payrun.currency or 'KES' }} {{ '{:,.0f}'.format(payrun.total_net_cents / 100) }}
+      {% else %}—{% endif %}
+    </p>
+    <p class="payrun-kpi-sub">Employee take-home</p>
+  </div>
+</div>
+
+{# ── Action buttons bar ──────────────────────────────────────────────── #}
+{% if payrun %}
+<div class="payrun-action-bar erp-mb-24" style="margin-top:14px;">
+  <span class="action-title">Actions:</span>
+  {% set status = payrun.status %}
+
+  {% if status == 'DRAFT' %}
+    <button class="btn btn-primary" id="btn-calculate" onclick="runAction('calculate')">
+      <i class="fa fa-calculator"></i> Calculate Run
+    </button>
+    <button class="btn btn-default" onclick="window.location.href='/hcm/payroll/runs/{{ payrun.id }}/edit'">
+      <i class="fa fa-pencil"></i> Edit Run
+    </button>
+
+  {% elif status == 'CALCULATED' %}
+    <button class="btn btn-warning" id="btn-approve" onclick="runAction('approve')">
+      <i class="fa fa-check-circle"></i> Approve Run
+    </button>
+    <button class="btn btn-default" onclick="runAction('recalculate')">
+      <i class="fa fa-refresh"></i> Recalculate
+    </button>
+
+  {% elif status == 'APPROVED' %}
+    <button class="btn btn-success" id="btn-pay" onclick="runAction('pay')">
+      <i class="fa fa-money"></i> Process Payment
+    </button>
+    <a href="/hcm/payroll/runs/{{ payrun.id }}/bank_file" class="btn btn-default">
+      <i class="fa fa-download"></i> Download Bank File
+    </a>
+
+  {% elif status == 'PAID' %}
+    <span class="erp-badge erp-badge-green" style="font-size:13px;padding:5px 12px;">
+      <i class="fa fa-check"></i> Payment Processed
+    </span>
+    <a href="/hcm/payroll/runs/{{ payrun.id }}/bank_file" class="btn btn-default btn-sm">
+      <i class="fa fa-download"></i> Bank File
+    </a>
+    <button class="btn btn-default btn-sm" onclick="bulkDownloadPayslips()">
+      <i class="fa fa-file-pdf-o"></i> All Payslips PDF
+    </button>
+  {% endif %}
+
+  <div id="action-feedback" style="font-size:12px;"></div>
+</div>
+{% endif %}
+
+<div class="row">
+
+  {# ── Payslip summary table ─────────────────────────────────────────── #}
+  <div class="col-md-8">
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:14px 18px; border-bottom:1px solid var(--erp-border,#e5e7eb); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-users"></i> Payslip Summary</h4>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="payslip-search" class="form-control input-sm payslip-search"
+                 placeholder="Search employee…" oninput="filterPayslips(this.value)">
+          <a href="/hcm/payroll/runs/{{ payrun.id if payrun else '' }}/export_payslips?format=csv"
+             class="btn btn-xs btn-default">
+            <i class="fa fa-download"></i> CSV
+          </a>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="erp-table" id="payslips-table">
+          <thead>
+            <tr>
+              <th>Emp No.</th>
+              <th>Name</th>
+              <th style="text-align:right;">Gross Pay</th>
+              <th style="text-align:right;">PAYE</th>
+              <th style="text-align:right;">Other Deductions</th>
+              <th style="text-align:right;">Net Pay</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="payslips-body">
+            {% if payslips %}
+              {% for ps in payslips %}
+              <tr data-name="{{ (ps.first_name ~ ' ' ~ ps.last_name) | lower }}" data-empno="{{ ps.employee_number | lower }}">
+                <td style="font-family:monospace;font-size:12px;">{{ ps.employee_number }}</td>
+                <td style="font-weight:600;">{{ ps.first_name }} {{ ps.last_name }}</td>
+                <td class="money-cell gross">
+                  {{ '{:,.0f}'.format(ps.gross_pay_cents / 100) if ps.gross_pay_cents is defined else '—' }}
+                </td>
+                <td class="money-cell tax">
+                  ({{ '{:,.0f}'.format(ps.income_tax_cents / 100) if ps.income_tax_cents is defined else '—' }})
+                </td>
+                <td class="money-cell tax">
+                  {% set other = (ps.gross_pay_cents or 0) - (ps.income_tax_cents or 0) - (ps.net_pay_cents or 0) %}
+                  ({{ '{:,.0f}'.format(other / 100) if other > 0 else '—' }})
+                </td>
+                <td class="money-cell net">
+                  {{ '{:,.0f}'.format(ps.net_pay_cents / 100) if ps.net_pay_cents is defined else '—' }}
+                </td>
+                <td>
+                  <a href="/hcm/payroll/payslips/{{ ps.id }}" class="btn btn-xs btn-default" target="_blank">
+                    <i class="fa fa-file-text-o"></i> Payslip
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+            <tr>
+              <td colspan="7" class="erp-text-center" style="padding:28px;color:var(--erp-text-muted);">
+                {% if payrun and payrun.status == 'DRAFT' %}
+                  Run has not been calculated yet. Click <strong>Calculate Run</strong> to generate payslips.
+                {% else %}
+                  No payslips found for this run.
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+          {% if payslips %}
+          <tfoot>
+            <tr style="background:#f9fafb; font-weight:700;">
+              <td colspan="2" style="padding:9px 12px; font-size:12px;">
+                TOTALS ({{ payslips | length }} employees)
+              </td>
+              <td class="money-cell gross" style="font-weight:700;">
+                {{ '{:,.0f}'.format(payrun.total_gross_cents / 100) if payrun and payrun.total_gross_cents is defined else '' }}
+              </td>
+              <td class="money-cell tax" style="font-weight:700;">
+                ({{ '{:,.0f}'.format(payrun.total_tax_cents / 100) if payrun and payrun.total_tax_cents is defined else '' }})
+              </td>
+              <td class="money-cell tax"></td>
+              <td class="money-cell net" style="font-size:14px;">
+                {{ '{:,.0f}'.format(payrun.total_net_cents / 100) if payrun and payrun.total_net_cents is defined else '' }}
+              </td>
+              <td></td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Right column: statutory + GL ─────────────────────────────────── #}
+  <div class="col-md-4">
+
+    {# Statutory breakdown #}
+    {% if statutory_totals %}
+    <div class="erp-card erp-mb-24" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--erp-border,#e5e7eb);">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-bank"></i> Statutory Breakdown</h4>
+      </div>
+      <table class="statutory-table">
+        <thead>
+          <tr>
+            <th>Deduction</th>
+            <th style="text-align:right;">Employee</th>
+            <th style="text-align:right;">Employer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>PAYE</strong></td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.paye_cents / 100) if statutory_totals.paye_cents is defined else '—' }}</td>
+            <td class="money" style="color:var(--erp-text-muted);">—</td>
+          </tr>
+          <tr>
+            <td><strong>NSSF</strong></td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.nssf_employee_cents / 100) if statutory_totals.nssf_employee_cents is defined else '—' }}</td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.nssf_employer_cents / 100) if statutory_totals.nssf_employer_cents is defined else '—' }}</td>
+          </tr>
+          <tr>
+            <td><strong>SHIF / NHIF</strong></td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.nhif_cents / 100) if statutory_totals.nhif_cents is defined else '—' }}</td>
+            <td class="money" style="color:var(--erp-text-muted);">—</td>
+          </tr>
+          <tr>
+            <td><strong>Housing Levy</strong></td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.housing_levy_employee_cents / 100) if statutory_totals.housing_levy_employee_cents is defined else '—' }}</td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.housing_levy_employer_cents / 100) if statutory_totals.housing_levy_employer_cents is defined else '—' }}</td>
+          </tr>
+          {% if statutory_totals.helb_cents is defined %}
+          <tr>
+            <td>HELB</td>
+            <td class="money">{{ '{:,.0f}'.format(statutory_totals.helb_cents / 100) }}</td>
+            <td class="money" style="color:var(--erp-text-muted);">—</td>
+          </tr>
+          {% endif %}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td>Total Statutory</td>
+            <td class="money">
+              {% set emp_total = (statutory_totals.paye_cents or 0) + (statutory_totals.nssf_employee_cents or 0) + (statutory_totals.nhif_cents or 0) + (statutory_totals.housing_levy_employee_cents or 0) %}
+              {{ '{:,.0f}'.format(emp_total / 100) }}
+            </td>
+            <td class="money">
+              {% set er_total = (statutory_totals.nssf_employer_cents or 0) + (statutory_totals.housing_levy_employer_cents or 0) %}
+              {{ '{:,.0f}'.format(er_total / 100) }}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% endif %}
+
+    {# GL journal status #}
+    <div class="erp-card" style="padding:16px 18px;">
+      <h4 class="erp-chart-title"><i class="fa fa-book"></i> GL Journal</h4>
+      {% if payrun and payrun.gl_posted %}
+        <div class="gl-status-bar posted">
+          <i class="fa fa-check-circle fa-lg"></i>
+          <div>
+            <strong>GL Posted</strong>
+            <div style="font-size:12px;">Journal #{{ payrun.gl_journal_ref or '—' }}
+              {% if payrun.gl_posted_at %}&bull; {{ payrun.gl_posted_at }}{% endif %}
+            </div>
+          </div>
+        </div>
+        <a href="/finance/journals/{{ payrun.gl_journal_id }}" class="btn btn-default btn-sm btn-block" style="margin-top:10px;">
+          <i class="fa fa-external-link"></i> View Journal
+        </a>
+      {% else %}
+        <div class="gl-status-bar not-posted">
+          <i class="fa fa-clock-o fa-lg"></i>
+          <div>
+            <strong>Not yet posted</strong>
+            <div style="font-size:12px;">Post the GL journal after the run is approved.</div>
+          </div>
+        </div>
+        {% if payrun and payrun.status in ['APPROVED', 'PAID'] %}
+        <button class="btn btn-warning btn-sm btn-block" id="btn-post-gl" style="margin-top:10px;"
+                onclick="runAction('post_gl')">
+          <i class="fa fa-book"></i> Post to GL
+        </button>
+        {% endif %}
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var PAYRUN_ID = '{{ payrun.id if payrun else "" }}';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function csrfToken() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function setFeedback(html, type) {
+    var el = document.getElementById('action-feedback');
+    if (!el) return;
+    el.innerHTML = html ? '<span class="text-' + (type || 'muted') + '" style="font-size:12px;">' + html + '</span>' : '';
+  }
+
+  /* ── Payslip search filter ───────────────────────────────────────── */
+  window.filterPayslips = function (query) {
+    var q = (query || '').toLowerCase().trim();
+    var rows = document.querySelectorAll('#payslips-body tr[data-name]');
+    rows.forEach(function (tr) {
+      var name  = tr.getAttribute('data-name') || '';
+      var empno = tr.getAttribute('data-empno') || '';
+      tr.style.display = (!q || name.indexOf(q) >= 0 || empno.indexOf(q) >= 0) ? '' : 'none';
+    });
+  };
+
+  /* ── Payroll run actions ─────────────────────────────────────────── */
+  var ACTION_MAP = {
+    calculate:   { url: '/api/hcm/payroll/runs/' + PAYRUN_ID + '/calculate',   method: 'POST', label: 'Calculating…',       success: 'Run calculated. Page will reload.' },
+    approve:     { url: '/api/hcm/payroll/runs/' + PAYRUN_ID + '/approve',     method: 'POST', label: 'Approving…',         success: 'Run approved. Page will reload.'   },
+    recalculate: { url: '/api/hcm/payroll/runs/' + PAYRUN_ID + '/calculate',   method: 'POST', label: 'Recalculating…',     success: 'Run recalculated. Page will reload.' },
+    pay:         { url: '/api/hcm/payroll/runs/' + PAYRUN_ID + '/pay',         method: 'POST', label: 'Processing payment…', success: 'Payment submitted. Page will reload.' },
+    post_gl:     { url: '/api/hcm/payroll/runs/' + PAYRUN_ID + '/post_gl',     method: 'POST', label: 'Posting to GL…',     success: 'GL journal posted. Page will reload.' }
+  };
+
+  window.runAction = function (action) {
+    var cfg = ACTION_MAP[action];
+    if (!cfg) return;
+
+    /* Find and disable the trigger button */
+    var btnMap = { calculate:'btn-calculate', approve:'btn-approve', pay:'btn-pay', post_gl:'btn-post-gl' };
+    var btn = btnMap[action] ? document.getElementById(btnMap[action]) : null;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> ' + cfg.label;
+    }
+    setFeedback('<i class="fa fa-spinner fa-spin"></i> ' + cfg.label, 'muted');
+
+    ERPIslands.fetchJSON(cfg.url, {
+      method:  cfg.method,
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body:    JSON.stringify({ run_id: PAYRUN_ID })
+    })
+      .then(function () {
+        setFeedback('<i class="fa fa-check"></i> ' + cfg.success, 'success');
+        setTimeout(function () { window.location.reload(); }, 1200);
+      })
+      .catch(function (err) {
+        setFeedback('<i class="fa fa-exclamation-triangle"></i> Action failed: ' + _esc(err.message), 'danger');
+        if (btn) {
+          btn.disabled = false;
+          /* Restore button label from original text — just reload to be safe */
+          btn.innerHTML = btn.innerHTML.replace(/<i[^>]+><\/i> .*$/, '');
+        }
+      });
+  };
+
+  /* ── Bulk payslips download ──────────────────────────────────────── */
+  window.bulkDownloadPayslips = function () {
+    window.location.href = '/hcm/payroll/runs/' + PAYRUN_ID + '/payslips_bulk.pdf';
+  };
+
+}());
+</script>
+{% endblock %}

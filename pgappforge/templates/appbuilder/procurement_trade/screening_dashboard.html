@@ -1,0 +1,439 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Trade Compliance Screening — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .screen-result-box { border-radius:8px; padding:16px 20px; margin-top:14px; display:none; }
+  .screen-result-box.visible { display:flex; gap:16px; align-items:flex-start; }
+  .screen-result-box.clear    { background:#f0fdf4; border:2px solid #16a34a; }
+  .screen-result-box.match    { background:#fef2f2; border:2px solid #dc2626; }
+  .screen-result-box.possible { background:#fffbeb; border:2px solid #d97706; }
+  .screen-result-icon { font-size:28px; flex-shrink:0; line-height:1; }
+  .screen-result-status { font-size:18px; font-weight:700; margin:0 0 4px; }
+  .screen-result-status.clear    { color:#15803d; }
+  .screen-result-status.match    { color:#b91c1c; }
+  .screen-result-status.possible { color:#b45309; }
+  .screen-result-detail { font-size:12px; color:#6b7280; margin:0; }
+  .match-detail-item { background:#fff; border:1px solid #fca5a5; border-radius:6px; padding:8px 12px; margin-top:8px; font-size:12px; }
+  .match-detail-item .match-name { font-weight:700; color:#991b1b; }
+  .match-score-bar { height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; margin-top:4px; }
+  .match-score-fill { height:100%; border-radius:3px; }
+  .match-score-fill.high { background:#dc2626; }
+  .match-score-fill.med  { background:#f59e0b; }
+  .match-score-fill.low  { background:#3b82f6; }
+
+  .list-status-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--erp-border,#e5e7eb); }
+  .list-status-row:last-child { border-bottom:none; }
+  .list-status-row .list-name { font-weight:600; font-size:13px; }
+  .list-status-row .list-meta { font-size:11px; color:var(--erp-text-muted,#6b7280); }
+  .list-active-dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px; }
+  .list-active-dot.on  { background:#16a34a; }
+  .list-active-dot.off { background:#9ca3af; }
+
+  .hs-result-box { margin-top:12px; background:var(--erp-surface,#fff); border:1px solid var(--erp-border,#e5e7eb); border-radius:8px; padding:14px 16px; display:none; }
+  .hs-result-box.visible { display:block; }
+  .hs-result-code { font-size:22px; font-weight:700; color:#1a56db; font-family:"Menlo","Consolas",monospace; }
+  .hs-result-duty { font-size:13px; color:#374151; margin-top:4px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title"><i class="fa fa-search"></i> Trade Compliance Screening</h1>
+  <p class="erp-page-subtitle">Restricted party screening, HS code classification, and sanction list management.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+
+  {# ── Left column: screen form + recent screenings ─────────────────── #}
+  <div class="col-md-8">
+
+    {# Screen entity form #}
+    <div class="erp-card erp-mb-24">
+      <div class="erp-card-accent erp-card-accent-primary"></div>
+      <h4 class="erp-chart-title"><i class="fa fa-user-secret"></i> Screen Entity</h4>
+      <p style="font-size:12px;color:var(--erp-text-muted);margin-bottom:14px;">
+        Check an entity (person, company, or vessel) against OFAC SDN, EU Consolidated, UN, and other active restriction lists.
+      </p>
+      <form id="screen-form">
+        <div class="input-group">
+          <input type="text" id="screen-entity-name" name="entity_name" class="form-control"
+                 placeholder="Enter entity name, AKA, or registration number…" required autocomplete="off">
+          <span class="input-group-btn">
+            <button type="submit" class="btn btn-primary" id="screen-btn">
+              <i class="fa fa-search"></i> Screen Now
+            </button>
+          </span>
+        </div>
+      </form>
+
+      <div class="screen-result-box" id="screen-result" role="alert" aria-live="polite">
+        <div class="screen-result-icon" id="screen-result-icon"></div>
+        <div style="flex:1;">
+          <p class="screen-result-status" id="screen-result-status"></p>
+          <p class="screen-result-detail" id="screen-result-detail"></p>
+          <div id="screen-match-details"></div>
+        </div>
+      </div>
+    </div>
+
+    {# Recent screenings table #}
+    <div class="erp-table-wrap erp-mb-24">
+      <div style="padding:14px 18px; border-bottom:1px solid var(--erp-border,#e5e7eb); display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-history"></i> Recent Screenings</h4>
+        <button class="btn btn-xs btn-default" id="export-screenings-btn">
+          <i class="fa fa-download"></i> Export CSV
+        </button>
+      </div>
+      <table class="erp-table" id="recent-screenings-table">
+        <thead>
+          <tr>
+            <th>Entity</th>
+            <th>Status</th>
+            <th>Top Match Score</th>
+            <th>Lists Hit</th>
+            <th>Screened At</th>
+            <th>Screened By</th>
+          </tr>
+        </thead>
+        <tbody id="screenings-body">
+          {% if recent_screenings %}
+            {% for s in recent_screenings %}
+            <tr>
+              <td style="font-weight:600;">{{ s.entity_name }}</td>
+              <td>
+                {% if s.status == 'CLEAR' %}
+                  <span class="erp-badge erp-badge-green"><i class="fa fa-check"></i> Clear</span>
+                {% elif s.status == 'MATCH' %}
+                  <span class="erp-badge erp-badge-red"><i class="fa fa-ban"></i> Match</span>
+                {% else %}
+                  <span class="erp-badge erp-badge-yellow"><i class="fa fa-exclamation-triangle"></i> Possible Match</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if s.top_match_score is not none %}
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="match-score-bar" style="width:60px;">
+                      <div class="match-score-fill {{ 'high' if s.top_match_score >= 80 else ('med' if s.top_match_score >= 50 else 'low') }}"
+                           style="width:{{ s.top_match_score }}%;"></div>
+                    </div>
+                    <span style="font-size:12px;">{{ s.top_match_score }}%</span>
+                  </div>
+                {% else %}
+                  <span style="color:var(--erp-text-muted);">—</span>
+                {% endif %}
+              </td>
+              <td>{{ s.lists_hit | join(', ') if s.lists_hit else '—' }}</td>
+              <td style="font-size:12px;">{{ s.screened_at }}</td>
+              <td style="font-size:12px;">{{ s.screened_by or '—' }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="6" class="erp-text-center" style="padding:24px;color:var(--erp-text-muted);">
+              No recent screenings. Use the form above to screen an entity.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  {# ── Right column: list status + HS lookup ────────────────────────── #}
+  <div class="col-md-4">
+
+    {# Restriction lists status #}
+    <div class="erp-card erp-mb-24">
+      <div class="erp-card-accent erp-card-accent-danger"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h4 class="erp-chart-title erp-mb-0"><i class="fa fa-list-alt"></i> Restriction Lists</h4>
+        <button class="btn btn-xs btn-warning" id="refresh-ofac-btn" title="Refresh OFAC SDN list">
+          <i class="fa fa-refresh"></i> Refresh OFAC
+        </button>
+      </div>
+      <div id="ofac-refresh-status" style="margin-bottom:10px;"></div>
+      {% if restriction_lists %}
+        {% for lst in restriction_lists %}
+        <div class="list-status-row">
+          <div>
+            <div class="list-name">
+              <span class="list-active-dot {{ 'on' if lst.is_active else 'off' }}"></span>
+              {{ lst.list_name }}
+            </div>
+            <div class="list-meta">
+              {{ '{:,}'.format(lst.entry_count) }} entries &bull; Updated {{ lst.last_updated }}
+            </div>
+          </div>
+          <span class="erp-badge {{ 'erp-badge-green' if lst.is_active else 'erp-badge-gray' }}">
+            {{ 'Active' if lst.is_active else 'Inactive' }}
+          </span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div data-island="restrictionListsIsland" class="erp-island" id="lists-island">
+          <p style="color:var(--erp-text-muted);font-size:12px;text-align:center;padding:16px 0;">
+            <i class="fa fa-spinner fa-spin"></i> Loading list status…
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    {# HS Code lookup #}
+    <div class="erp-card">
+      <div class="erp-card-accent erp-card-accent-info"></div>
+      <h4 class="erp-chart-title"><i class="fa fa-barcode"></i> HS Code Lookup</h4>
+      <p style="font-size:12px;color:var(--erp-text-muted);margin-bottom:14px;">
+        Classify a product or enter a partial description to retrieve its HS code and applicable duty rate.
+      </p>
+      <form id="hs-lookup-form">
+        <div class="input-group" style="margin-bottom:10px;">
+          <input type="text" id="hs-product-input" class="form-control input-sm"
+                 placeholder="Product description or code…" required>
+          <span class="input-group-btn">
+            <button type="submit" class="btn btn-info btn-sm">
+              <i class="fa fa-search"></i> Classify
+            </button>
+          </span>
+        </div>
+      </form>
+      <div class="hs-result-box" id="hs-result" role="status" aria-live="polite">
+        <p style="font-size:11px;color:var(--erp-text-muted);margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;">HS Code</p>
+        <div class="hs-result-code" id="hs-code-display"></div>
+        <div class="hs-result-duty" id="hs-duty-display"></div>
+        <div id="hs-description-display" style="font-size:12px;color:var(--erp-text-muted);margin-top:6px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function csrfToken() {
+    var m = document.cookie.match(/csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function scoreClass(n) {
+    return n >= 80 ? 'high' : (n >= 50 ? 'med' : 'low');
+  }
+
+  /* ── Entity screening form ────────────────────────────────────────── */
+  var screenForm   = document.getElementById('screen-form');
+  var screenResult = document.getElementById('screen-result');
+  var screenBtn    = document.getElementById('screen-btn');
+
+  if (screenForm) {
+    screenForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = document.getElementById('screen-entity-name').value.trim();
+      if (!name) return;
+
+      screenResult.className = 'screen-result-box';
+      screenBtn.disabled = true;
+      screenBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Screening…';
+
+      ERPIslands.fetchJSON('/api/trade/screen', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+        body:    JSON.stringify({ entity_name: name })
+      })
+        .then(function (data) {
+          var status = (data.status || '').toUpperCase();
+          var resultEl  = document.getElementById('screen-result');
+          var iconEl    = document.getElementById('screen-result-icon');
+          var statusEl  = document.getElementById('screen-result-status');
+          var detailEl  = document.getElementById('screen-result-detail');
+          var matchsEl  = document.getElementById('screen-match-details');
+
+          var cls, icon, label, detail;
+          if (status === 'CLEAR') {
+            cls = 'clear'; icon = '✅'; label = 'Clear — No Matches Found';
+            detail = 'No entries found across ' + (data.lists_checked || 0) + ' active restriction lists. Entity is clear to transact.';
+          } else if (status === 'MATCH') {
+            cls = 'match'; icon = '🚫'; label = 'Match — Transaction Blocked';
+            detail = 'Entity matched against ' + (data.matches || []).length + ' restricted party entry/entries. Do NOT proceed without compliance approval.';
+          } else {
+            cls = 'possible'; icon = '⚠️'; label = 'Possible Match — Manual Review Required';
+            detail = 'Potential similarity detected. A compliance officer must review before proceeding.';
+          }
+
+          resultEl.className = 'screen-result-box visible ' + cls;
+          iconEl.textContent  = icon;
+          statusEl.textContent = label;
+          statusEl.className  = 'screen-result-status ' + cls;
+          detailEl.textContent = detail;
+
+          /* Render match details */
+          matchsEl.innerHTML = '';
+          (data.matches || []).forEach(function (m) {
+            var scoreN = parseFloat(m.score || 0);
+            var div = document.createElement('div');
+            div.className = 'match-detail-item';
+            div.innerHTML =
+              '<div class="match-name">' + _esc(m.name) + '</div>' +
+              '<div style="color:#6b7280;">' +
+                _esc(m.list_name || '') +
+                (m.reason ? ' — ' + _esc(m.reason) : '') +
+              '</div>' +
+              '<div class="match-score-bar" style="margin-top:6px;">' +
+                '<div class="match-score-fill ' + scoreClass(scoreN) + '" style="width:' + scoreN + '%;"></div>' +
+              '</div>' +
+              '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">Match score: ' + scoreN.toFixed(0) + '%</div>';
+            matchsEl.appendChild(div);
+          });
+
+          /* Prepend to screenings table */
+          var tbody = document.getElementById('screenings-body');
+          if (tbody && status) {
+            var badgeMap = { CLEAR: 'erp-badge-green', MATCH: 'erp-badge-red', POSSIBLE_MATCH: 'erp-badge-yellow' };
+            var iconMap  = { CLEAR: 'check', MATCH: 'ban', POSSIBLE_MATCH: 'exclamation-triangle' };
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+              '<td style="font-weight:600;">' + _esc(name) + '</td>' +
+              '<td><span class="erp-badge ' + (badgeMap[status] || 'erp-badge-gray') + '">' +
+                '<i class="fa fa-' + (iconMap[status] || 'circle') + '"></i> ' + _esc(status.replace('_', ' ')) +
+              '</span></td>' +
+              '<td>' + (data.top_match_score != null ?
+                '<div style="display:flex;align-items:center;gap:8px;"><div class="match-score-bar" style="width:60px;"><div class="match-score-fill ' + scoreClass(data.top_match_score) + '" style="width:' + data.top_match_score + '%;"></div></div><span style="font-size:12px;">' + data.top_match_score + '%</span></div>'
+                : '—') +
+              '</td>' +
+              '<td>' + _esc((data.lists_hit || []).join(', ') || '—') + '</td>' +
+              '<td style="font-size:12px;">just now</td>' +
+              '<td style="font-size:12px;">{{ g.user.username if g.user else '' }}</td>';
+            /* Remove empty-state row if present */
+            var emptyRow = tbody.querySelector('td[colspan]');
+            if (emptyRow) emptyRow.closest('tr').remove();
+            tbody.insertBefore(tr, tbody.firstChild);
+          }
+        })
+        .catch(function (err) {
+          screenResult.className = 'screen-result-box visible possible';
+          document.getElementById('screen-result-icon').textContent = '⚠️';
+          document.getElementById('screen-result-status').textContent = 'Screening Error';
+          document.getElementById('screen-result-status').className = 'screen-result-status possible';
+          document.getElementById('screen-result-detail').textContent = 'Screening service error: ' + err.message;
+          document.getElementById('screen-match-details').innerHTML = '';
+        })
+        .finally(function () {
+          screenBtn.disabled = false;
+          screenBtn.innerHTML = '<i class="fa fa-search"></i> Screen Now';
+        });
+    });
+  }
+
+  /* ── Refresh OFAC button ──────────────────────────────────────────── */
+  var refreshBtn    = document.getElementById('refresh-ofac-btn');
+  var refreshStatus = document.getElementById('ofac-refresh-status');
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', function () {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Refreshing…';
+      refreshStatus.innerHTML = '';
+
+      ERPIslands.fetchJSON('/api/trade/refresh_ofac', {
+        method:  'POST',
+        headers: { 'X-CSRFToken': csrfToken() }
+      })
+        .then(function (data) {
+          refreshStatus.innerHTML =
+            '<div class="alert alert-success" style="font-size:12px;padding:8px 12px;margin:0;">' +
+            '<i class="fa fa-check"></i> OFAC list refreshed — ' +
+            _esc(data.entry_count != null ? data.entry_count + ' entries' : '') +
+            (data.updated_at ? ' as of ' + _esc(data.updated_at) : '') +
+            '</div>';
+          refreshBtn.innerHTML = '<i class="fa fa-check"></i> Refreshed';
+          setTimeout(function () { refreshBtn.innerHTML = '<i class="fa fa-refresh"></i> Refresh OFAC'; }, 3000);
+        })
+        .catch(function (err) {
+          refreshStatus.innerHTML =
+            '<div class="alert alert-danger" style="font-size:12px;padding:8px 12px;margin:0;">' +
+            '<i class="fa fa-exclamation-triangle"></i> Refresh failed: ' + _esc(err.message) +
+            '</div>';
+          refreshBtn.innerHTML = '<i class="fa fa-refresh"></i> Refresh OFAC';
+        })
+        .finally(function () {
+          refreshBtn.disabled = false;
+        });
+    });
+  }
+
+  /* ── Dynamic restriction lists island ───────────────────────────── */
+  ERPIslands.register('restrictionListsIsland', [], function (el) {
+    {% if not restriction_lists %}
+    ERPIslands.fetchJSON('/api/trade/restriction_lists')
+      .then(function (data) {
+        var lists = data.lists || data;
+        el.innerHTML = '';
+        lists.forEach(function (lst) {
+          var div = document.createElement('div');
+          div.className = 'list-status-row';
+          div.innerHTML =
+            '<div>' +
+              '<div class="list-name"><span class="list-active-dot ' + (lst.is_active ? 'on' : 'off') + '"></span>' + _esc(lst.list_name) + '</div>' +
+              '<div class="list-meta">' + (lst.entry_count != null ? parseInt(lst.entry_count).toLocaleString() : '—') + ' entries &bull; Updated ' + _esc(lst.last_updated || '—') + '</div>' +
+            '</div>' +
+            '<span class="erp-badge ' + (lst.is_active ? 'erp-badge-green' : 'erp-badge-gray') + '">' + (lst.is_active ? 'Active' : 'Inactive') + '</span>';
+          el.appendChild(div);
+        });
+      })
+      .catch(function (err) {
+        el.innerHTML = '<p style="font-size:12px;color:var(--erp-danger);">Failed to load lists: ' + _esc(err.message) + '</p>';
+      });
+    {% endif %}
+  });
+
+  /* ── HS Code lookup ──────────────────────────────────────────────── */
+  var hsForm   = document.getElementById('hs-lookup-form');
+  var hsResult = document.getElementById('hs-result');
+
+  if (hsForm) {
+    hsForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var product = document.getElementById('hs-product-input').value.trim();
+      if (!product) return;
+
+      hsResult.className = 'hs-result-box';
+      document.getElementById('hs-code-display').textContent = '…';
+      document.getElementById('hs-duty-display').textContent = '';
+      document.getElementById('hs-description-display').textContent = '';
+      hsResult.classList.add('visible');
+
+      ERPIslands.fetchJSON('/api/trade/classify?product_code=' + encodeURIComponent(product))
+        .then(function (data) {
+          document.getElementById('hs-code-display').textContent        = data.hs_code || '—';
+          document.getElementById('hs-duty-display').innerHTML          =
+            '<strong>Duty rate:</strong> ' + _esc(data.duty_rate != null ? data.duty_rate + '%' : '—') +
+            (data.duty_type ? ' <span style="color:#6b7280;">(' + _esc(data.duty_type) + ')</span>' : '');
+          document.getElementById('hs-description-display').textContent = data.description || '';
+        })
+        .catch(function (err) {
+          document.getElementById('hs-code-display').textContent        = 'Error';
+          document.getElementById('hs-duty-display').textContent        = err.message;
+          document.getElementById('hs-description-display').textContent = '';
+        });
+    });
+  }
+
+}());
+</script>
+{% endblock %}
