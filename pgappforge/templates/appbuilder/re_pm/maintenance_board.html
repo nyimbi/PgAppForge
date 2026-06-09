@@ -1,0 +1,447 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Maintenance Board — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pm-kanban-cols         { display:flex; gap:16px; align-items:flex-start; }
+  .pm-kanban-col          { flex:1; min-width:0; }
+  .pm-kanban-col-header   { font-size:11px; font-weight:700; letter-spacing:.07em;
+                             text-transform:uppercase; color:var(--erp-text-muted);
+                             padding:0 4px 8px; display:flex; align-items:center; gap:6px; }
+  .pm-kanban-col-header .pm-col-count {
+                             background:var(--erp-surface-alt,#f0f1f3);
+                             border-radius:10px; padding:1px 7px;
+                             font-size:11px; color:var(--erp-text-body); }
+  .pm-kanban-drop         { min-height:80px; border-radius:6px;
+                             border:2px dashed transparent; transition:border-color .15s; }
+  .pm-kanban-drop.drag-over { border-color:var(--erp-primary,#1a56db); }
+
+  .pm-card                { background:#fff; border:1px solid var(--erp-border,#e5e7eb);
+                             border-radius:6px; padding:12px 14px; margin-bottom:10px;
+                             cursor:grab; position:relative;
+                             transition:box-shadow .15s; }
+  .pm-card:hover          { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+  .pm-card.selected       { outline:2px solid var(--erp-primary,#1a56db); }
+  .pm-card-unit           { font-weight:700; font-size:13px; margin-bottom:4px; }
+  .pm-card-desc           { font-size:12px; color:var(--erp-text-body);
+                             white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+                             margin-bottom:6px; }
+  .pm-card-footer         { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .pm-card-select         { position:absolute; top:10px; right:10px; cursor:pointer; }
+
+  .pm-priority-dot        { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .pm-priority-CRITICAL   { background:#7e3af2; }
+  .pm-priority-HIGH       { background:#e02424; }
+  .pm-priority-MEDIUM     { background:#e3a008; }
+  .pm-priority-LOW        { background:#057a55; }
+
+  .pm-filter-bar          { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+                             margin-bottom:20px; }
+  .pm-filter-bar .form-control { width:auto; min-width:140px; }
+
+  .pm-bulk-bar            { display:none; align-items:center; gap:10px;
+                             background:var(--erp-primary,#1a56db); color:#fff;
+                             padding:8px 16px; border-radius:6px; margin-bottom:16px;
+                             font-size:13px; }
+  .pm-bulk-bar.visible    { display:flex; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div style="flex:1;">
+    <h1 class="erp-page-title">Maintenance Board</h1>
+    <p class="erp-page-subtitle">Track, assign and resolve maintenance requests across all units.</p>
+  </div>
+  <div class="erp-page-header-actions">
+    <a href="/pm/maintenance/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Log Request
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Filter bar ────────────────────────────────────────────────────────────── #}
+<div class="pm-filter-bar erp-mb-24">
+  <select id="pm-filter-priority" class="form-control input-sm" aria-label="Filter by priority">
+    <option value="">All Priorities</option>
+    <option value="CRITICAL">Critical</option>
+    <option value="HIGH">High</option>
+    <option value="MEDIUM">Medium</option>
+    <option value="LOW">Low</option>
+  </select>
+
+  <select id="pm-filter-category" class="form-control input-sm" aria-label="Filter by category">
+    <option value="">All Categories</option>
+    <option value="PLUMBING">Plumbing</option>
+    <option value="ELECTRICAL">Electrical</option>
+    <option value="HVAC">HVAC</option>
+    <option value="STRUCTURAL">Structural</option>
+    <option value="APPLIANCE">Appliance</option>
+    <option value="PEST">Pest Control</option>
+    <option value="CLEANING">Cleaning</option>
+    <option value="OTHER">Other</option>
+  </select>
+
+  <div style="position:relative; flex:1; max-width:280px;">
+    <i class="fa fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--erp-text-muted);pointer-events:none;"></i>
+    <input id="pm-filter-search" type="text" class="form-control input-sm"
+           placeholder="Search unit, description…" style="padding-left:30px;"
+           aria-label="Search maintenance requests">
+  </div>
+
+  <button id="pm-filter-clear" class="btn btn-default btn-sm" type="button">
+    <i class="fa fa-times"></i> Clear
+  </button>
+</div>
+
+{# ── Bulk action bar (visible when cards selected) ────────────────────────── #}
+<div id="pm-bulk-bar" class="pm-bulk-bar" role="alert" aria-live="polite">
+  <i class="fa fa-check-square-o"></i>
+  <span id="pm-bulk-count">0 selected</span>
+  <button id="pm-assign-btn" class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.4);" type="button">
+    <i class="fa fa-user-plus"></i> Assign Selected
+  </button>
+  <button id="pm-bulk-clear" class="btn btn-sm" style="background:transparent;color:rgba(255,255,255,.8);border:none;" type="button">
+    <i class="fa fa-times"></i> Clear selection
+  </button>
+</div>
+
+{# ── Kanban board ──────────────────────────────────────────────────────────── #}
+<div data-island="pmKanban" class="erp-island">
+
+  {# Skeleton #}
+  <div id="kanban-skeleton" class="pm-kanban-cols">
+    {% for col_label in ['OPEN', 'ASSIGNED', 'IN PROGRESS', 'RESOLVED'] %}
+    <div class="pm-kanban-col">
+      <div class="pm-kanban-col-header">{{ col_label }}</div>
+      {% for _ in range(3) %}
+      <div class="erp-card" style="margin-bottom:10px; padding:14px;">
+        <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:8px;"></div>
+        <div class="erp-skeleton erp-skeleton-text wide" style="margin-bottom:8px;"></div>
+        <div class="erp-skeleton erp-skeleton-text mid"></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Live board (hidden until loaded) #}
+  <div id="kanban-board" style="display:none;" class="pm-kanban-cols">
+    {% for col_id, col_label, col_accent in [
+        ('OPEN',        'Open',        '#e02424'),
+        ('ASSIGNED',    'Assigned',    '#e3a008'),
+        ('IN_PROGRESS', 'In Progress', '#1a56db'),
+        ('RESOLVED',    'Resolved',    '#057a55')
+    ] %}
+    <div class="pm-kanban-col" data-col="{{ col_id }}">
+      <div class="pm-kanban-col-header" style="border-top:3px solid {{ col_accent }}; padding-top:8px;">
+        <span>{{ col_label }}</span>
+        <span class="pm-col-count" id="col-count-{{ col_id }}">0</span>
+      </div>
+      <div class="pm-kanban-drop" id="col-{{ col_id }}"
+           data-col="{{ col_id }}"
+           ondragover="event.preventDefault(); this.classList.add('drag-over');"
+           ondragleave="this.classList.remove('drag-over');"
+           ondrop="window._pmKanbanDrop(event, '{{ col_id }}');">
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>{# /island #}
+
+{# ── Assign modal (lightweight Bootstrap 3) ───────────────────────────────── #}
+<div class="modal fade" id="pm-assign-modal" tabindex="-1" role="dialog" aria-labelledby="pm-assign-modal-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="pm-assign-modal-label">Assign Maintenance Requests</h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="pm-assign-vendor">Vendor / Technician</label>
+          <select id="pm-assign-vendor" class="form-control">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="pm-assign-note">Note (optional)</label>
+          <textarea id="pm-assign-note" class="form-control" rows="2" placeholder="Instructions for vendor…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="pm-assign-confirm">
+          <i class="fa fa-check"></i> Assign
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+
+  /* ── XSS escape ────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ── State ─────────────────────────────────────────────────────────────── */
+  var _allCards    = [];   /* flat array of all loaded request objects */
+  var _selected    = {};   /* { id: true } */
+  var _dragId      = null;
+
+  /* ── Category badge colours ────────────────────────────────────────────── */
+  var CAT_CLASS = {
+    PLUMBING: 'info', ELECTRICAL: 'warning', HVAC: 'primary',
+    STRUCTURAL: 'danger', APPLIANCE: 'default', PEST: 'warning',
+    CLEANING: 'default', OTHER: 'default'
+  };
+
+  /* ── Build a card element ───────────────────────────────────────────────── */
+  function makeCard(r) {
+    var div = document.createElement('div');
+    div.className = 'pm-card';
+    div.id        = 'pm-card-' + r.id;
+    div.setAttribute('draggable', 'true');
+    div.setAttribute('data-id',       r.id);
+    div.setAttribute('data-status',   r.status);
+    div.setAttribute('data-priority', r.priority || '');
+    div.setAttribute('data-category', r.category || '');
+    div.setAttribute('data-desc',     (r.description || '').toLowerCase());
+    div.setAttribute('data-unit',     (r.unit_number || '').toLowerCase());
+
+    var catCls  = CAT_CLASS[r.category] || 'default';
+    var priKey  = r.priority || 'LOW';
+
+    div.innerHTML =
+      '<input type="checkbox" class="pm-card-select" data-id="' + _esc(r.id) + '" aria-label="Select request ' + _esc(r.id) + '">' +
+      '<div class="pm-card-unit">' + _esc(r.unit_number || '—') + '</div>' +
+      '<div class="pm-card-desc" title="' + _esc(r.description) + '">' + _esc(r.description) + '</div>' +
+      '<div class="pm-card-footer">' +
+        '<span class="pm-priority-dot pm-priority-' + _esc(priKey) + '" title="' + _esc(priKey) + '"></span>' +
+        '<span class="label label-' + catCls + '" style="font-size:10px;">' + _esc(r.category || '') + '</span>' +
+        '<span style="font-size:11px;color:var(--erp-text-muted);margin-left:auto;">' + _esc(r.days_open || 0) + 'd open</span>' +
+      '</div>';
+
+    /* Drag ────────────────────────────────────────────────────── */
+    div.addEventListener('dragstart', function (e) {
+      _dragId = r.id;
+      e.dataTransfer.effectAllowed = 'move';
+      div.style.opacity = '.4';
+    });
+    div.addEventListener('dragend', function () {
+      div.style.opacity = '';
+      document.querySelectorAll('.pm-kanban-drop').forEach(function (d) {
+        d.classList.remove('drag-over');
+      });
+    });
+
+    /* Checkbox selection ──────────────────────────────────────── */
+    div.querySelector('.pm-card-select').addEventListener('change', function (e) {
+      e.stopPropagation();
+      if (this.checked) {
+        _selected[r.id] = true;
+        div.classList.add('selected');
+      } else {
+        delete _selected[r.id];
+        div.classList.remove('selected');
+      }
+      updateBulkBar();
+    });
+
+    return div;
+  }
+
+  /* ── Drop handler (global) ──────────────────────────────────────────────── */
+  window._pmKanbanDrop = function (event, targetStatus) {
+    event.preventDefault();
+    var dropZone = event.currentTarget;
+    dropZone.classList.remove('drag-over');
+    if (!_dragId) return;
+
+    var card = document.getElementById('pm-card-' + _dragId);
+    if (!card) return;
+
+    /* Optimistic UI move */
+    dropZone.appendChild(card);
+    card.setAttribute('data-status', targetStatus);
+    recountCols();
+
+    /* Persist via API */
+    ERPIslands.fetchJSON('/api/pm/maintenance/' + encodeURIComponent(_dragId) + '/status', {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ status: targetStatus })
+    }).catch(function (err) {
+      console.warn('Status update failed', err);
+    });
+
+    _dragId = null;
+  };
+
+  /* ── Recount column badges ──────────────────────────────────────────────── */
+  function recountCols() {
+    ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED'].forEach(function (col) {
+      var el = document.getElementById('col-' + col);
+      var ct = document.getElementById('col-count-' + col);
+      if (el && ct) ct.textContent = el.querySelectorAll('.pm-card').length;
+    });
+  }
+
+  /* ── Bulk bar ────────────────────────────────────────────────────────────── */
+  function updateBulkBar() {
+    var count = Object.keys(_selected).length;
+    var bar   = document.getElementById('pm-bulk-bar');
+    var label = document.getElementById('pm-bulk-count');
+    if (!bar) return;
+    if (count > 0) {
+      bar.classList.add('visible');
+      if (label) label.textContent = count + ' selected';
+    } else {
+      bar.classList.remove('visible');
+    }
+  }
+
+  document.getElementById('pm-bulk-clear') && document.getElementById('pm-bulk-clear').addEventListener('click', function () {
+    _selected = {};
+    document.querySelectorAll('.pm-card-select').forEach(function (cb) { cb.checked = false; });
+    document.querySelectorAll('.pm-card.selected').forEach(function (c) { c.classList.remove('selected'); });
+    updateBulkBar();
+  });
+
+  document.getElementById('pm-assign-btn') && document.getElementById('pm-assign-btn').addEventListener('click', function () {
+    /* Populate vendor list before opening */
+    ERPIslands.fetchJSON('/api/pm/vendors')
+      .then(function (vendors) {
+        var sel = document.getElementById('pm-assign-vendor');
+        sel.innerHTML = '<option value="">— Select —</option>';
+        vendors.forEach(function (v) {
+          var opt = document.createElement('option');
+          opt.value = v.id; opt.textContent = v.name;
+          sel.appendChild(opt);
+        });
+      })
+      .catch(function () {});
+    jQuery('#pm-assign-modal').modal('show');
+  });
+
+  document.getElementById('pm-assign-confirm') && document.getElementById('pm-assign-confirm').addEventListener('click', function () {
+    var vendorId = document.getElementById('pm-assign-vendor').value;
+    var note     = document.getElementById('pm-assign-note').value;
+    if (!vendorId) { alert('Please select a vendor.'); return; }
+    var ids = Object.keys(_selected);
+    ERPIslands.fetchJSON('/api/pm/maintenance/bulk-assign', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ids: ids, vendor_id: vendorId, note: note })
+    }).then(function () {
+      jQuery('#pm-assign-modal').modal('hide');
+      /* Move assigned cards to ASSIGNED column optimistically */
+      var col = document.getElementById('col-ASSIGNED');
+      ids.forEach(function (id) {
+        var card = document.getElementById('pm-card-' + id);
+        if (card && col) {
+          col.appendChild(card);
+          card.setAttribute('data-status', 'ASSIGNED');
+        }
+        delete _selected[id];
+        var cb = document.querySelector('.pm-card-select[data-id="' + id + '"]');
+        if (cb) { cb.checked = false; }
+        var c2 = document.getElementById('pm-card-' + id);
+        if (c2) c2.classList.remove('selected');
+      });
+      recountCols();
+      updateBulkBar();
+    }).catch(function (err) {
+      alert('Assign failed: ' + err.message);
+    });
+  });
+
+  /* ── Filter logic ────────────────────────────────────────────────────────── */
+  function applyFilters() {
+    var pri  = (document.getElementById('pm-filter-priority') || {}).value || '';
+    var cat  = (document.getElementById('pm-filter-category') || {}).value || '';
+    var term = ((document.getElementById('pm-filter-search')  || {}).value || '').toLowerCase().trim();
+
+    document.querySelectorAll('.pm-card').forEach(function (card) {
+      var show = true;
+      if (pri  && card.getAttribute('data-priority') !== pri)       show = false;
+      if (cat  && card.getAttribute('data-category') !== cat)       show = false;
+      if (term && card.getAttribute('data-desc').indexOf(term) < 0
+               && card.getAttribute('data-unit').indexOf(term) < 0) show = false;
+      card.style.display = show ? '' : 'none';
+    });
+    recountCols();
+  }
+
+  ['pm-filter-priority', 'pm-filter-category'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+  var searchEl = document.getElementById('pm-filter-search');
+  if (searchEl) {
+    var _debounce;
+    searchEl.addEventListener('input', function () {
+      clearTimeout(_debounce);
+      _debounce = setTimeout(applyFilters, 180);
+    });
+  }
+  var clearBtn = document.getElementById('pm-filter-clear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      ['pm-filter-priority', 'pm-filter-category'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      if (searchEl) searchEl.value = '';
+      applyFilters();
+    });
+  }
+
+  /* ── Main Kanban island ──────────────────────────────────────────────────── */
+  ERPIslands.register('pmKanban', [], function (el) {
+    var skeleton = el.querySelector('#kanban-skeleton');
+    var board    = el.querySelector('#kanban-board');
+
+    ERPIslands.fetchJSON('/api/pm/maintenance/board')
+      .then(function (data) {
+        /* data = { OPEN: [...], ASSIGNED: [...], IN_PROGRESS: [...], RESOLVED: [...] } */
+        var cols = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED'];
+        cols.forEach(function (col) {
+          var drop  = el.querySelector('#col-' + col);
+          var count = el.querySelector('#col-count-' + col);
+          if (!drop) return;
+          var items = data[col] || [];
+          items.forEach(function (r) {
+            _allCards.push(r);
+            drop.appendChild(makeCard(r));
+          });
+          if (count) count.textContent = items.length;
+        });
+
+        if (skeleton) skeleton.style.display = 'none';
+        if (board)    board.style.display     = 'flex';
+      })
+      .catch(function (err) {
+        if (skeleton) skeleton.innerHTML =
+          '<div class="alert alert-warning">Board unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+}());
+</script>
+{% endblock %}

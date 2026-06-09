@@ -1,0 +1,477 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}CAM Reconciliation — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header erp-mb-24">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title" id="cam-property-name">
+        <i class="fa fa-calculator" style="color:#1a56db;"></i>
+        CAM Reconciliation
+      </h1>
+      <p class="erp-page-subtitle" id="cam-subtitle">
+        Common Area Maintenance — budget vs. actual analysis and tenant true-up.
+      </p>
+    </div>
+    <div id="cam-header-badges" style="display:flex; align-items:center; gap:8px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary Cards ─────────────────────────────────────────────────────── #}
+<div data-island="camSummary" id="cam-summary-island" class="erp-island erp-mb-24">
+  <div class="erp-kpi-grid" id="cam-summary-skeleton">
+    {% for _ in range(3) %}
+    <div class="erp-card">
+      <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:10px;"></div>
+      <div class="erp-skeleton erp-skeleton-text wide" style="height:30px; margin-bottom:8px;"></div>
+      <div class="erp-skeleton erp-skeleton-text mid"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="erp-kpi-grid" id="cam-summary-cards" style="display:none;"></div>
+</div>
+
+{# ── Charts + Category Table ─────────────────────────────────────────── #}
+<div class="row erp-mb-24">
+
+  <div class="col-md-6">
+    <div class="erp-chart-wrap">
+      <h4 class="erp-chart-title">Budget vs. Actual by Category</h4>
+      <div data-island="camVarianceChart" class="erp-island" id="cam-chart-island">
+        <div id="cam-chart-skeleton">
+          {% for _ in range(3) %}
+          <div class="erp-skeleton" style="height:32px; margin-bottom:8px; border-radius:4px;"></div>
+          {% endfor %}
+        </div>
+        <canvas id="cam-variance-chart" height="180" aria-label="CAM budget vs actual by category" role="img"
+                style="display:none;"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="erp-card" style="padding:0;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0">Category Breakdown</h4>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="erp-table table table-condensed" id="cam-category-table" style="margin:0;">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th class="text-right">Budget</th>
+              <th class="text-right">Actual</th>
+              <th class="text-right">Variance</th>
+            </tr>
+          </thead>
+          <tbody id="cam-category-tbody">
+            {% for _ in range(5) %}
+            <tr>
+              <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+              <td><div class="erp-skeleton erp-skeleton-text short"></div></td>
+              <td><div class="erp-skeleton erp-skeleton-text short"></div></td>
+              <td><div class="erp-skeleton erp-skeleton-text short"></div></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{# ── Tenant Allocations Table ────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:14px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-users" style="color:#1a56db;"></i>
+      Tenant Allocations &amp; True-Up
+    </h4>
+    <span id="cam-alloc-count" class="badge" style="background:#1a56db;"></span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="erp-table table table-condensed" id="cam-alloc-table" style="margin:0;">
+      <thead>
+        <tr>
+          <th>Tenant</th>
+          <th>Suite</th>
+          <th class="text-right">Proration %</th>
+          <th class="text-right">Estimated</th>
+          <th class="text-right">Actual</th>
+          <th class="text-right">True-Up</th>
+        </tr>
+      </thead>
+      <tbody id="cam-alloc-tbody">
+        {% for _ in range(5) %}
+        <tr>
+          {% for _ in range(6) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Actions ────────────────────────────────────────────────────────── #}
+<div class="erp-card" style="background:var(--erp-surface,#f9fafb); border:1px dashed var(--erp-border);">
+  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+    <button type="button" id="btn-finalize-cam"
+            class="btn btn-success"
+            style="font-weight:600;">
+      <i class="fa fa-check-circle"></i> Finalize Reconciliation
+    </button>
+    <a href="/industry/commercial-re/cam/" class="btn btn-default">
+      <i class="fa fa-arrow-left"></i> Back to List
+    </a>
+    <span id="cam-finalize-msg" style="display:none; color:var(--erp-text-muted); font-size:.9em;"></span>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── helpers ────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function _fmtMoney(cents, currency) {
+    if (cents == null) return '—';
+    var sign  = cents < 0 ? '-' : '';
+    var major = Math.floor(Math.abs(cents) / 100);
+    var minor = String(Math.abs(cents) % 100).padStart(2, '0');
+    return sign + (currency || 'USD') + ' ' + major.toLocaleString() + '.' + minor;
+  }
+
+  function _varCell(cents, currency) {
+    if (cents == null) return '<td class="text-right">—</td>';
+    var fmt   = _fmtMoney(cents, currency);
+    var color = cents <= 0 ? 'color:#057a55;' : 'color:#c81e1e;';
+    var icon  = cents <= 0
+      ? '<i class="fa fa-check-circle" style="margin-right:4px;"></i>'
+      : '<i class="fa fa-exclamation-circle" style="margin-right:4px;"></i>';
+    return '<td class="text-right" style="' + color + '">' + icon + _esc(fmt) + '</td>';
+  }
+
+  function _trueUpCell(cents, currency) {
+    if (cents == null) return '<td class="text-right">—</td>';
+    var fmt   = _fmtMoney(Math.abs(cents), currency);
+    if (cents > 0) {
+      return '<td class="text-right"><span class="label label-danger" title="Tenant owes">+' + _esc(fmt) + '</span></td>';
+    } else if (cents < 0) {
+      return '<td class="text-right"><span class="label label-success" title="Landlord credit">−' + _esc(fmt) + '</span></td>';
+    }
+    return '<td class="text-right"><span class="label label-default">Settled</span></td>';
+  }
+
+  function _statusBadge(status) {
+    var map = {
+      DRAFT:  ['label-warning',  'Draft'],
+      FINAL:  ['label-success',  'Final'],
+      LOCKED: ['label-default',  'Locked']
+    };
+    var pair = map[status] || ['label-default', _esc(status || '—')];
+    return '<span class="label ' + pair[0] + '" style="font-size:.9em; padding:4px 10px;">' + pair[1] + '</span>';
+  }
+
+  /* ── URL params helper ──────────────────────────────────────────────── */
+  function _param(key) {
+    return new URLSearchParams(window.location.search).get(key);
+  }
+
+  var PROPERTY_ID = _param('property_id');
+  var YEAR        = _param('year') || new Date().getFullYear();
+  var CURRENCY    = 'USD';
+
+  /* ── Summary island ─────────────────────────────────────────────────── */
+  ERPIslands.register('camSummary', [], function (el) {
+    var skeleton = document.getElementById('cam-summary-skeleton');
+    var cards    = document.getElementById('cam-summary-cards');
+    var subtitle = document.getElementById('cam-subtitle');
+    var badges   = document.getElementById('cam-header-badges');
+
+    var url = '/api/commercial-re/cam/summary?year=' + YEAR;
+    if (PROPERTY_ID) url += '&property_id=' + encodeURIComponent(PROPERTY_ID);
+
+    ERPIslands.fetchJSON(url)
+      .then(function (data) {
+        CURRENCY = data.currency || CURRENCY;
+
+        /* Update header */
+        if (data.property_name) {
+          document.getElementById('cam-property-name').innerHTML =
+            '<i class="fa fa-calculator" style="color:#1a56db;"></i> ' + _esc(data.property_name);
+        }
+        if (subtitle) {
+          subtitle.textContent = 'Year: ' + YEAR + ' — CAM reconciliation detail';
+        }
+        if (badges) {
+          badges.innerHTML = _statusBadge(data.status) +
+            '<span style="color:var(--erp-text-muted); font-size:.85em;">' + _esc(YEAR) + '</span>';
+        }
+
+        var budget   = data.total_budgeted_cents || 0;
+        var actual   = data.total_actual_cents   || 0;
+        var variance = data.variance_cents        || (actual - budget);
+
+        var cardDefs = [
+          {
+            label:   'Total Budget',
+            value:   _fmtMoney(budget, CURRENCY),
+            color:   '#1a56db',
+            icon:    'fa-clipboard',
+            sub:     'Planned CAM spend'
+          },
+          {
+            label:   'Total Actual',
+            value:   _fmtMoney(actual, CURRENCY),
+            color:   variance > 0 ? '#c81e1e' : '#057a55',
+            icon:    'fa-money',
+            sub:     'Recorded spend'
+          },
+          {
+            label:   'Variance',
+            value:   _fmtMoney(variance, CURRENCY),
+            color:   variance <= 0 ? '#057a55' : '#c81e1e',
+            icon:    variance <= 0 ? 'fa-arrow-down' : 'fa-arrow-up',
+            sub:     variance <= 0 ? 'Under budget' : 'Over budget'
+          }
+        ];
+
+        skeleton.style.display = 'none';
+        cards.innerHTML        = '';
+        cards.style.display    = '';
+
+        cardDefs.forEach(function (def) {
+          var card = document.createElement('div');
+          card.className = 'erp-card';
+          card.innerHTML =
+            '<p class="erp-card-title" style="color:var(--erp-text-muted);">' + _esc(def.label) + '</p>' +
+            '<p class="erp-card-value" style="color:' + def.color + '; font-size:1.4em; font-weight:700; margin:4px 0;">' +
+              _esc(def.value) +
+            '</p>' +
+            '<p style="margin:0; font-size:.82em; color:var(--erp-text-muted);">' +
+              '<i class="fa ' + def.icon + '" style="margin-right:4px;"></i>' + _esc(def.sub) +
+            '</p>';
+          cards.appendChild(card);
+        });
+      })
+      .catch(function (err) {
+        skeleton.innerHTML = '<div class="alert alert-warning">CAM summary unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Variance Chart island ──────────────────────────────────────────── */
+  ERPIslands.register('camVarianceChart', ['chartjs'], function (el) {
+    var skeleton = document.getElementById('cam-chart-skeleton');
+    var canvas   = document.getElementById('cam-variance-chart');
+    var tbody    = document.getElementById('cam-category-tbody');
+
+    var url = '/api/commercial-re/cam/categories?year=' + YEAR;
+    if (PROPERTY_ID) url += '&property_id=' + encodeURIComponent(PROPERTY_ID);
+
+    ERPIslands.fetchJSON(url)
+      .then(function (data) {
+        /*
+         * Expected payload:
+         * { categories: [
+         *     { name: "Maintenance", budget_cents: 5000_00, actual_cents: 4800_00 },
+         *     ...
+         *   ]
+         * }
+         */
+        var cats     = data.categories || [];
+        var labels   = cats.map(function (c) { return c.name; });
+        var budgets  = cats.map(function (c) { return (c.budget_cents || 0) / 100; });
+        var actuals  = cats.map(function (c) { return (c.actual_cents  || 0) / 100; });
+
+        /* Render chart */
+        skeleton.style.display = 'none';
+        canvas.style.display   = '';
+
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label:           'Budget',
+                data:            budgets,
+                backgroundColor: 'rgba(26,86,219,.65)',
+                borderRadius:    3
+              },
+              {
+                label:           'Actual',
+                data:            actuals,
+                backgroundColor: function (ctx) {
+                  var i = ctx.dataIndex;
+                  return actuals[i] > budgets[i]
+                    ? 'rgba(200,30,30,.7)'
+                    : 'rgba(5,122,85,.7)';
+                },
+                borderRadius: 3
+              }
+            ]
+          },
+          options: {
+            responsive:          true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'bottom', labels: { boxWidth: 12 } }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: {
+                  callback: function (v) {
+                    return CURRENCY + ' ' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+                  }
+                }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+
+        /* Render category table */
+        tbody.innerHTML = '';
+        var CATEGORIES = ['Maintenance', 'Insurance', 'Taxes', 'Management'];
+        var catMap = {};
+        cats.forEach(function (c) { catMap[c.name] = c; });
+
+        /* Defined categories first, then any extras */
+        var rows = CATEGORIES.concat(
+          Object.keys(catMap).filter(function (k) { return CATEGORIES.indexOf(k) === -1; })
+        );
+
+        var totalBudget = 0, totalActual = 0;
+        rows.forEach(function (name) {
+          var c = catMap[name] || { budget_cents: null, actual_cents: null };
+          var variance = (c.budget_cents != null && c.actual_cents != null)
+            ? (c.actual_cents - c.budget_cents) : null;
+          if (c.budget_cents != null) totalBudget += c.budget_cents;
+          if (c.actual_cents  != null) totalActual += c.actual_cents;
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + _esc(name) + '</td>' +
+            '<td class="text-right">' + _esc(_fmtMoney(c.budget_cents, CURRENCY)) + '</td>' +
+            '<td class="text-right">' + _esc(_fmtMoney(c.actual_cents,  CURRENCY)) + '</td>' +
+            _varCell(variance, CURRENCY);
+          tbody.appendChild(tr);
+        });
+
+        /* Totals row */
+        var totalVariance = totalActual - totalBudget;
+        var tfr = document.createElement('tr');
+        tfr.style.fontWeight = '700';
+        tfr.style.borderTop  = '2px solid var(--erp-border)';
+        tfr.innerHTML =
+          '<td>Total</td>' +
+          '<td class="text-right">' + _esc(_fmtMoney(totalBudget, CURRENCY)) + '</td>' +
+          '<td class="text-right">' + _esc(_fmtMoney(totalActual, CURRENCY)) + '</td>' +
+          _varCell(totalVariance, CURRENCY);
+        tbody.appendChild(tfr);
+      })
+      .catch(function (err) {
+        el.innerHTML = '<div class="alert alert-warning">Category data unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Tenant Allocations (eager load, no island needed) ──────────────── */
+  (function loadAllocations() {
+    var tbody = document.getElementById('cam-alloc-tbody');
+    var count = document.getElementById('cam-alloc-count');
+
+    var url = '/api/commercial-re/cam/allocations?year=' + YEAR;
+    if (PROPERTY_ID) url += '&property_id=' + encodeURIComponent(PROPERTY_ID);
+
+    ERPIslands.fetchJSON(url)
+      .then(function (data) {
+        var allocs = data.allocations || [];
+        if (count) count.textContent = allocs.length;
+        tbody.innerHTML = '';
+
+        if (allocs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:20px;">No tenant allocations found.</td></tr>';
+          return;
+        }
+
+        allocs.forEach(function (a) {
+          var prorationPct = a.proration_pct != null
+            ? (a.proration_pct * 100).toFixed(2) + '%'
+            : '—';
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + _esc(a.tenant_name || a.tenant_id) + '</td>' +
+            '<td>' + _esc(a.suite_code  || '—') + '</td>' +
+            '<td class="text-right">' + _esc(prorationPct) + '</td>' +
+            '<td class="text-right">' + _esc(_fmtMoney(a.estimated_cents, CURRENCY)) + '</td>' +
+            '<td class="text-right">' + _esc(_fmtMoney(a.actual_cents,    CURRENCY)) + '</td>' +
+            _trueUpCell(a.true_up_cents, CURRENCY);
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Allocation data unavailable.</td></tr>';
+      });
+  }());
+
+  /* ── Finalize button ────────────────────────────────────────────────── */
+  var btnFinalize = document.getElementById('btn-finalize-cam');
+  var finalizeMsg = document.getElementById('cam-finalize-msg');
+
+  if (btnFinalize) {
+    btnFinalize.addEventListener('click', function () {
+      if (!PROPERTY_ID) {
+        alert('No property_id in URL — cannot finalize.');
+        return;
+      }
+      if (!confirm('Finalise CAM reconciliation for ' + YEAR + '? This cannot be undone.')) return;
+
+      btnFinalize.disabled = true;
+      btnFinalize.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Finalizing…';
+
+      fetch('/industry/commercial-re/cam/reconcile', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ property_id: PROPERTY_ID, year: Number(YEAR), finalize: true,
+                                  tenant_id: '' })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (resp) {
+          if (resp.ok) {
+            btnFinalize.className  = 'btn btn-default disabled';
+            btnFinalize.innerHTML  = '<i class="fa fa-check"></i> Finalised';
+            finalizeMsg.style.display = '';
+            finalizeMsg.textContent   = 'Reconciliation finalised — variance: ' + (resp.variance_display || '—');
+          } else {
+            btnFinalize.disabled = false;
+            btnFinalize.innerHTML = '<i class="fa fa-check-circle"></i> Finalize Reconciliation';
+            alert('Error: ' + (resp.error || 'Unknown error'));
+          }
+        })
+        .catch(function (err) {
+          btnFinalize.disabled = false;
+          btnFinalize.innerHTML = '<i class="fa fa-check-circle"></i> Finalize Reconciliation';
+          alert('Request failed: ' + err.message);
+        });
+    });
+  }
+
+}());
+</script>
+{% endblock %}

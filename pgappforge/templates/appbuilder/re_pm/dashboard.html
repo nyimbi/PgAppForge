@@ -1,0 +1,224 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Property Management — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div style="flex:1;">
+    <h1 class="erp-page-title">Property Management</h1>
+    <p class="erp-page-subtitle">Leases, rent, maintenance and occupancy at a glance.</p>
+  </div>
+  <div class="erp-page-header-actions">
+    <a href="/pm/rent-payments/add" class="btn btn-primary btn-sm">
+      <i class="fa fa-money"></i> Record Payment
+    </a>
+    <a href="/pm/maintenance/add" class="btn btn-default btn-sm" style="margin-left:8px;">
+      <i class="fa fa-wrench"></i> Log Maintenance
+    </a>
+    <a href="/pm/leases/add" class="btn btn-default btn-sm" style="margin-left:8px;">
+      <i class="fa fa-refresh"></i> Create Renewal Offer
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles (server-rendered) ─────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  {{ kpi_html | safe }}
+</div>
+
+{# ── Rent Roll summary + Maintenance pipeline ────────────────────────────── #}
+<div class="row erp-mb-24">
+
+  {# Rent Roll summary island #}
+  <div class="col-md-7">
+    <div class="erp-card" style="padding:0;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0">Rent Roll — Current Period</h4>
+        <a href="/industry/property-management/rent-roll" class="btn btn-xs btn-default">
+          Full Report <i class="fa fa-arrow-right"></i>
+        </a>
+      </div>
+
+      <div data-island="pmRentRollSummary" class="erp-island" style="padding:0;">
+        {# Skeleton rows #}
+        <div id="rent-roll-skeleton" style="padding:12px 20px;">
+          {% for _ in range(5) %}
+          <div style="display:flex; gap:12px; margin-bottom:10px; align-items:center;">
+            <div class="erp-skeleton erp-skeleton-text" style="width:80px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:120px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:70px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:60px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:90px;"></div>
+          </div>
+          {% endfor %}
+        </div>
+        {# Live table (hidden until data loads) #}
+        <div id="rent-roll-table-wrap" style="display:none; overflow-x:auto;">
+          <table class="table table-condensed table-hover" style="margin-bottom:0;">
+            <thead>
+              <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+                <th>Unit</th>
+                <th>Tenant</th>
+                <th style="text-align:right;">Rent</th>
+                <th>Status</th>
+                <th style="text-align:right;">Days to Expiry</th>
+              </tr>
+            </thead>
+            <tbody id="rent-roll-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Maintenance mini-board island #}
+  <div class="col-md-5">
+    <div class="erp-card" style="padding:0; height:100%;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0">Maintenance Pipeline</h4>
+        <a href="/industry/property-management/maintenance-board" class="btn btn-xs btn-default">
+          Board <i class="fa fa-columns"></i>
+        </a>
+      </div>
+
+      <div data-island="pmMaintenanceBoard" class="erp-island" style="padding:16px;">
+        {# Skeleton placeholder #}
+        <div id="maint-board-skeleton" style="display:flex; gap:12px;">
+          {% for _ in range(3) %}
+          <div style="flex:1;">
+            <div class="erp-skeleton erp-skeleton-text" style="width:70%; margin-bottom:8px;"></div>
+            {% for _ in range(3) %}
+            <div class="erp-card" style="padding:10px; margin-bottom:8px;">
+              <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:6px;"></div>
+              <div class="erp-skeleton erp-skeleton-text wide"></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {# Live board #}
+        <div id="maint-board" style="display:none; display:flex; gap:12px;">
+          {% for col_id, col_label in [('open','OPEN'), ('assigned','ASSIGNED'), ('in-progress','IN PROGRESS')] %}
+          <div style="flex:1;">
+            <div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--erp-text-muted); margin-bottom:8px; text-transform:uppercase;">
+              {{ col_label }}
+            </div>
+            <div id="maint-col-{{ col_id }}" class="maint-mini-col" style="min-height:60px;"></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+
+  /* ── shared XSS escape ─────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ── status badge helper ───────────────────────────────────────────────── */
+  var STATUS_COLOR = {
+    PAID:    'success',
+    ACTIVE:  'success',
+    PENDING: 'warning',
+    LATE:    'danger',
+    VACANT:  'default',
+    OPEN:    'danger',
+    ASSIGNED:'warning',
+    IN_PROGRESS: 'primary'
+  };
+  function statusBadge(s) {
+    var cls = STATUS_COLOR[s] || 'default';
+    return '<span class="label label-' + cls + '">' + _esc(s) + '</span>';
+  }
+
+  /* ── Rent Roll Summary island ──────────────────────────────────────────── */
+  ERPIslands.register('pmRentRollSummary', [], function (el) {
+    var skeleton  = el.querySelector('#rent-roll-skeleton');
+    var tableWrap = el.querySelector('#rent-roll-table-wrap');
+    var tbody     = el.querySelector('#rent-roll-tbody');
+
+    ERPIslands.fetchJSON('/api/pm/rent-roll/summary')
+      .then(function (rows) {
+        tbody.innerHTML = '';
+        rows.forEach(function (r) {
+          var daysClass = r.days_to_expiry <= 30 ? 'style="color:var(--erp-danger,#e02424);font-weight:600;"' : '';
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td><strong>' + _esc(r.unit_number) + '</strong></td>' +
+            '<td>' + _esc(r.tenant_name) + '</td>' +
+            '<td style="text-align:right;">' + _esc(r.monthly_rent) + '</td>' +
+            '<td>' + statusBadge(r.status) + '</td>' +
+            '<td style="text-align:right;" ' + daysClass + '>' + _esc(r.days_to_expiry) + '</td>';
+          tbody.appendChild(tr);
+        });
+        if (skeleton)  skeleton.style.display  = 'none';
+        if (tableWrap) tableWrap.style.display  = '';
+      })
+      .catch(function () {
+        if (skeleton) skeleton.innerHTML =
+          '<div class="alert alert-warning" style="margin:12px;">Rent roll data unavailable.</div>';
+      });
+  });
+
+  /* ── Maintenance Mini-Board island ─────────────────────────────────────── */
+  ERPIslands.register('pmMaintenanceBoard', [], function (el) {
+    var skeleton = el.querySelector('#maint-board-skeleton');
+    var board    = el.querySelector('#maint-board');
+
+    var PRIORITY_COLOR = { HIGH: '#e02424', MEDIUM: '#e3a008', LOW: '#057a55', CRITICAL: '#7e3af2' };
+
+    ERPIslands.fetchJSON('/api/pm/maintenance/pipeline')
+      .then(function (data) {
+        ['open', 'assigned', 'in-progress'].forEach(function (col) {
+          var colEl = el.querySelector('#maint-col-' + col);
+          if (!colEl) return;
+          colEl.innerHTML = '';
+          var key = col.replace('-', '_').toUpperCase();
+          var items = data[key] || data[col] || [];
+          if (items.length === 0) {
+            colEl.innerHTML = '<p style="color:var(--erp-text-muted);font-size:12px;text-align:center;padding:8px 0;">None</p>';
+            return;
+          }
+          items.slice(0, 4).forEach(function (item) {
+            var dot = PRIORITY_COLOR[item.priority] || '#999';
+            var card = document.createElement('div');
+            card.className = 'erp-card';
+            card.style.cssText = 'padding:10px 12px; margin-bottom:8px; border-left:3px solid ' + dot + ';';
+            card.innerHTML =
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                '<strong style="font-size:12px;">' + _esc(item.unit_number) + '</strong>' +
+                '<span class="label label-default" style="font-size:10px;">' + _esc(item.category) + '</span>' +
+              '</div>' +
+              '<p style="font-size:12px;margin:0 0 4px;color:var(--erp-text-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+                _esc(item.description) +
+              '</p>' +
+              '<span style="font-size:11px;color:var(--erp-text-muted);">' + _esc(item.days_open) + 'd open</span>';
+            colEl.appendChild(card);
+          });
+        });
+        if (skeleton) skeleton.style.display = 'none';
+        if (board)    board.style.display     = 'flex';
+      })
+      .catch(function () {
+        if (skeleton) skeleton.innerHTML =
+          '<div class="alert alert-warning">Maintenance data unavailable.</div>';
+      });
+  });
+
+}());
+</script>
+{% endblock %}

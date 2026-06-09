@@ -1,0 +1,588 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ portfolio.name }} — Portfolio Detail — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div style="flex:1;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      <h1 class="erp-page-title erp-mb-0">{{ portfolio.name | e }}</h1>
+      {% if portfolio.status == 'ACTIVE' %}
+      <span class="label label-success" style="font-size:13px;padding:4px 10px;">ACTIVE</span>
+      {% elif portfolio.status == 'CLOSED' %}
+      <span class="label label-default" style="font-size:13px;padding:4px 10px;">CLOSED</span>
+      {% else %}
+      <span class="label label-warning" style="font-size:13px;padding:4px 10px;">{{ portfolio.status | e }}</span>
+      {% endif %}
+    </div>
+    {% if portfolio.description %}
+    <p class="erp-page-subtitle">{{ portfolio.description | e }}</p>
+    {% endif %}
+  </div>
+  <div class="erp-page-header-actions">
+    <a href="/industry/portfolio/" class="btn btn-default btn-sm">
+      <i class="fa fa-arrow-left"></i> Dashboard
+    </a>
+    <a href="/industry/portfolio/portfolios/" class="btn btn-default btn-sm" style="margin-left:8px;">
+      <i class="fa fa-list"></i> All Portfolios
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── AUM header strip ──────────────────────────────────────────────────────── #}
+{% if aum_display %}
+<div class="erp-card erp-mb-24" style="background:linear-gradient(135deg,#1a56db 0%,#1e40af 100%);color:#fff;border:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div>
+      <p style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.08em;opacity:.8;">
+        Total Assets Under Management
+      </p>
+      <p style="margin:4px 0 0;font-size:2rem;font-weight:700;">{{ aum_display }}</p>
+    </div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;">
+      <div style="text-align:center;">
+        <p style="margin:0;font-size:12px;opacity:.8;">Properties</p>
+        <p style="margin:4px 0 0;font-size:1.5rem;font-weight:700;">{{ property_count }}</p>
+      </div>
+      <div style="text-align:center;">
+        <p style="margin:0;font-size:12px;opacity:.8;">Investors</p>
+        <p style="margin:4px 0 0;font-size:1.5rem;font-weight:700;">{{ investor_count }}</p>
+      </div>
+      <div style="text-align:center;">
+        <p style="margin:0;font-size:12px;opacity:.8;">Active Loans</p>
+        <p style="margin:4px 0 0;font-size:1.5rem;font-weight:700;">{{ debt_count }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── 4-metric row: NOI | Cap Rate | DSCR | IRR ────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24" data-island="portfolioMetrics" id="metrics-island">
+  {# Skeleton #}
+  {% for _ in range(4) %}
+  <div class="erp-card">
+    <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:10px;"></div>
+    <div class="erp-skeleton erp-skeleton-text wide" style="height:28px;margin-bottom:8px;"></div>
+    <div class="erp-skeleton erp-skeleton-text short"></div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Properties table ──────────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-building-o" style="color:#1a56db;"></i>
+      Properties
+    </h4>
+  </div>
+  <div data-island="portfolioProperties" class="erp-island" style="overflow-x:auto;">
+    <table class="table table-hover table-condensed" style="margin:0;">
+      <thead>
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+          <th>Address</th>
+          <th>Type</th>
+          <th class="text-right">Acq. Cost</th>
+          <th class="text-right">Current Value</th>
+          <th class="text-right">Equity</th>
+          <th class="text-right">NOI</th>
+          <th class="text-right">Cap Rate</th>
+        </tr>
+      </thead>
+      <tbody id="properties-tbody">
+        {% for _ in range(5) %}
+        <tr>
+          {% for _ in range(7) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Debt schedule ─────────────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border);">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-bank" style="color:#dc2626;"></i>
+      Debt Schedule
+    </h4>
+  </div>
+  <div data-island="debtSchedule" class="erp-island" style="overflow-x:auto;">
+    <table class="table table-hover table-condensed" style="margin:0;">
+      <thead>
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+          <th>Lender</th>
+          <th class="text-right">Balance</th>
+          <th class="text-right">Rate</th>
+          <th class="text-right">Monthly Payment</th>
+          <th>Maturity</th>
+          <th class="text-right">LTV</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="debt-schedule-tbody">
+        {% for _ in range(3) %}
+        <tr>
+          {% for _ in range(7) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── CapEx chart + Investor holdings row ──────────────────────────────────── #}
+<div class="row erp-mb-24">
+
+  {# CapEx bar chart #}
+  <div class="col-md-5">
+    <div class="erp-card" style="height:100%;">
+      <h4 class="erp-chart-title" style="margin-bottom:16px;">
+        <i class="fa fa-wrench" style="color:#c27803;"></i>
+        CapEx by Category
+      </h4>
+      <div class="erp-chart-wrap">
+        <div data-island="capexChart" class="erp-island">
+          <canvas id="capex-chart-canvas" height="180"
+                  aria-label="CapEx by category bar chart" role="img"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Investor holdings table #}
+  <div class="col-md-7">
+    <div class="erp-card" style="height:100%;padding:0;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+        <h4 class="erp-chart-title erp-mb-0">
+          <i class="fa fa-users" style="color:#057a55;"></i>
+          Investor Holdings
+        </h4>
+        <a href="/industry/portfolio/investors/?portfolio_id={{ portfolio.id | e }}"
+           class="btn btn-xs btn-default">All Investors</a>
+      </div>
+      <div data-island="investorHoldings" class="erp-island" style="overflow-x:auto;">
+        <table class="table table-hover table-condensed" style="margin:0;">
+          <thead>
+            <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+              <th>Investor</th>
+              <th class="text-right">Ownership %</th>
+              <th class="text-right">Investment</th>
+              <th class="text-right">Distributions Recv.</th>
+              <th class="text-right">Current Value</th>
+            </tr>
+          </thead>
+          <tbody id="investor-holdings-tbody">
+            {% for _ in range(4) %}
+            <tr>
+              {% for _ in range(5) %}
+              <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{# ── Distribution history ──────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-history" style="color:#9333ea;"></i>
+      Distribution History
+    </h4>
+    <a href="/industry/portfolio/distributions/?portfolio_id={{ portfolio.id | e }}"
+       class="btn btn-xs btn-default">All Distributions</a>
+  </div>
+  <div data-island="distributionHistory" class="erp-island" style="overflow-x:auto;">
+    <table class="table table-hover table-condensed" style="margin:0;">
+      <thead>
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+          <th>Period</th>
+          <th class="text-right">Total Distributable</th>
+          <th class="text-right">Investor Share</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="dist-history-tbody">
+        {% for _ in range(4) %}
+        <tr>
+          {% for _ in range(5) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var PORTFOLIO_ID = '{{ portfolio.id | e }}';
+
+  /* ── helpers ──────────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function _fmtMoney(cents) {
+    if (cents == null) return '—';
+    var v = Math.abs(cents / 100);
+    var pfx = (cents < 0 ? '-' : '') + '$';
+    if (v >= 1e9) return pfx + (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return pfx + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return pfx + (v / 1e3).toFixed(1) + 'k';
+    return pfx + v.toFixed(0);
+  }
+
+  function _fmtPct(v) {
+    if (v == null) return '—';
+    var n = parseFloat(v);
+    return isNaN(n) ? '—' : n.toFixed(2) + '%';
+  }
+
+  function _dscrBadge(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) return '<span class="label label-default">—</span>';
+    var cls = n >= 1.25 ? 'success' : n >= 1.0 ? 'warning' : 'danger';
+    return '<span class="label label-' + cls + '">' + n.toFixed(2) + '</span>';
+  }
+
+  function _capRateBadge(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) return '<span class="label label-default">—</span>';
+    var cls = n >= 7 ? 'success' : n >= 5 ? 'warning' : 'danger';
+    return '<span class="label label-' + cls + '">' + n.toFixed(2) + '%</span>';
+  }
+
+  function _trendArrow(v) {
+    if (v == null) return '';
+    var n = parseFloat(v);
+    if (isNaN(n) || n === 0) return ' <i class="fa fa-minus" style="color:#94a3b8;"></i>';
+    return n > 0
+      ? ' <i class="fa fa-arrow-up" style="color:#057a55;font-size:11px;"></i>'
+      : ' <i class="fa fa-arrow-down" style="color:#dc2626;font-size:11px;"></i>';
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: portfolio metrics (NOI | Cap Rate | DSCR | IRR)                     */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('portfolioMetrics', [], function (el) {
+    ERPIslands.fetchJSON('/industry/portfolio/api/portfolio/' + PORTFOLIO_ID + '/metrics')
+      .then(function (m) {
+        var CARDS = [
+          {
+            label: 'NOI', value: _fmtMoney(m.noi_cents),
+            sub: 'Net Operating Income', trend: m.noi_trend,
+            icon: 'fa-bar-chart', color: '#1a56db'
+          },
+          {
+            label: 'Cap Rate', value: _fmtPct(m.cap_rate),
+            sub: 'Capitalisation Rate', trend: m.cap_rate_trend,
+            icon: 'fa-percent', color: m.cap_rate >= 7 ? '#057a55' : m.cap_rate >= 5 ? '#c27803' : '#dc2626'
+          },
+          {
+            label: 'DSCR', value: m.dscr != null ? parseFloat(m.dscr).toFixed(2) : '—',
+            sub: 'Debt Service Coverage', trend: m.dscr_trend,
+            icon: 'fa-bank', color: m.dscr >= 1.25 ? '#057a55' : m.dscr >= 1.0 ? '#c27803' : '#dc2626'
+          },
+          {
+            label: 'IRR', value: _fmtPct(m.irr),
+            sub: 'Internal Rate of Return', trend: m.irr_trend,
+            icon: 'fa-line-chart', color: '#9333ea'
+          }
+        ];
+
+        el.innerHTML = '';
+        CARDS.forEach(function (c) {
+          var card = document.createElement('div');
+          card.className = 'erp-card';
+          card.style.cssText = 'border-top:3px solid ' + c.color + ';';
+          card.innerHTML =
+            '<p class="erp-card-title">' +
+              '<i class="fa ' + _esc(c.icon) + '" style="color:' + _esc(c.color) + ';margin-right:6px;"></i>' +
+              _esc(c.label) +
+            '</p>' +
+            '<p class="erp-card-value" style="font-size:1.6rem;font-weight:700;margin:4px 0;">' +
+              _esc(c.value) + _trendArrow(c.trend) +
+            '</p>' +
+            '<p class="erp-card-sub" style="color:var(--erp-text-muted);font-size:.8rem;margin:0;">' +
+              _esc(c.sub) +
+            '</p>';
+          el.appendChild(card);
+        });
+      })
+      .catch(function () {
+        /* Silently replace skeletons with dashes — API may not be wired yet */
+        var cards = el.querySelectorAll('.erp-card');
+        ['NOI', 'Cap Rate', 'DSCR', 'IRR'].forEach(function (label, i) {
+          if (cards[i]) {
+            cards[i].querySelector('.erp-skeleton:nth-child(2)') &&
+              (cards[i].innerHTML =
+                '<p class="erp-card-title">' + _esc(label) + '</p>' +
+                '<p class="erp-card-value" style="font-size:1.6rem;font-weight:700;margin:4px 0;">—</p>');
+          }
+        });
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: properties table                                                     */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('portfolioProperties', [], function (el) {
+    var tbody = el.querySelector('#properties-tbody');
+    if (!tbody) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/portfolio/' + PORTFOLIO_ID + '/properties')
+      .then(function (rows) {
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:20px;">No properties in this portfolio.</td></tr>';
+          return;
+        }
+        rows.forEach(function (p) {
+          var equity = (p.current_value_cents || 0) - (p.debt_balance_cents || 0);
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td><strong>' + _esc(p.address || p.id) + '</strong>' +
+              (p.type ? ' <span class="label label-default" style="font-size:10px;">' + _esc(p.type) + '</span>' : '') +
+            '</td>' +
+            '<td>' + _esc(p.property_type || '—') + '</td>' +
+            '<td class="text-right">' + _fmtMoney(p.acquisition_cost_cents) + '</td>' +
+            '<td class="text-right">' + _fmtMoney(p.current_value_cents) + '</td>' +
+            '<td class="text-right" style="' + (equity < 0 ? 'color:#dc2626;' : '') + '">' +
+              _fmtMoney(equity) +
+            '</td>' +
+            '<td class="text-right">' + _fmtMoney(p.noi_cents) + '</td>' +
+            '<td class="text-right">' + _capRateBadge(p.cap_rate) + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Properties data unavailable.</td></tr>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: debt schedule                                                        */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('debtSchedule', [], function (el) {
+    var tbody = el.querySelector('#debt-schedule-tbody');
+    if (!tbody) return;
+
+    /* PropertyDebt links to properties, not portfolios directly.
+     * The API endpoint /industry/portfolio/api/portfolio/<id>/debts would
+     * do the join server-side; fall back to the raw list filtered by status
+     * until that endpoint is wired. */
+    ERPIslands.fetchJSON('/industry/portfolio/api/portfolio/' + PORTFOLIO_ID + '/debts')
+      .then(function (data) {
+        var rows = data.debts || data || [];
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:20px;">No active debt.</td></tr>';
+          return;
+        }
+        rows.forEach(function (d) {
+          var urgency = '';
+          if (d.maturity_date) {
+            var daysLeft = Math.round((new Date(d.maturity_date) - new Date()) / 86400000);
+            urgency = daysLeft <= 90  ? 'color:#dc2626;font-weight:600;' :
+                      daysLeft <= 180 ? 'color:#c27803;font-weight:600;' : '';
+          }
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td><strong>' + _esc(d.lender_name) + '</strong></td>' +
+            '<td class="text-right">' + _fmtMoney(d.current_balance_cents) + '</td>' +
+            '<td class="text-right">' + _fmtPct(d.interest_rate) + '</td>' +
+            '<td class="text-right">' + _fmtMoney(d.monthly_payment_cents) + '</td>' +
+            '<td style="' + urgency + '">' + _esc(d.maturity_date || '—') + '</td>' +
+            '<td class="text-right">' + _fmtPct(d.ltv) + '</td>' +
+            '<td><span class="label label-' + (d.status === 'ACTIVE' ? 'success' : 'default') + '">' +
+              _esc(d.status) + '</span></td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Debt schedule unavailable.</td></tr>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: CapEx bar chart by category                                          */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('capexChart', ['chartjs'], function (el) {
+    var canvas = el.querySelector('#capex-chart-canvas');
+    if (!canvas) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/portfolio/' + PORTFOLIO_ID + '/capex')
+      .then(function (data) {
+        var records = data.capex_records || data || [];
+        /* Aggregate by category */
+        var totals = {};
+        records.forEach(function (r) {
+          var cat = r.category || 'OTHER';
+          totals[cat] = (totals[cat] || 0) + (r.capex_cents || 0);
+        });
+
+        var CAT_COLOR = {
+          IMPROVEMENT:  '#1a56db',
+          REPAIR:       '#f59e0b',
+          REPLACEMENT:  '#10b981',
+          MAINTENANCE:  '#6366f1',
+          OTHER:        '#94a3b8'
+        };
+
+        var labels  = Object.keys(totals);
+        var values  = labels.map(function (k) { return totals[k] / 100; });
+        var colors  = labels.map(function (k) { return CAT_COLOR[k] || '#94a3b8'; });
+
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label:           'CapEx ($)',
+              data:            values,
+              backgroundColor: colors,
+              borderRadius:    4
+            }]
+          },
+          options: {
+            responsive:          true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' $' + ctx.parsed.y.toLocaleString(undefined, { maximumFractionDigits: 0 });
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: {
+                  callback: function (v) {
+                    return '$' + (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' :
+                                  v >= 1e3 ? (v / 1e3).toFixed(0) + 'k' : v);
+                  }
+                }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function (err) {
+        el.innerHTML = '<div class="alert alert-warning">CapEx chart unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: investor holdings table                                              */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('investorHoldings', [], function (el) {
+    var tbody = el.querySelector('#investor-holdings-tbody');
+    if (!tbody) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/investors/?portfolio_id=' + PORTFOLIO_ID + '&_fmt=json')
+      .then(function (data) {
+        var rows = data.holdings || data || [];
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No investor holdings.</td></tr>';
+          return;
+        }
+        rows.forEach(function (h) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + _esc(h.investor_name || h.investor_party_id) + '</td>' +
+            '<td class="text-right">' + _fmtPct(h.ownership_pct) + '</td>' +
+            '<td class="text-right">' + _fmtMoney(h.investment_cents) + '</td>' +
+            '<td class="text-right">' + _fmtMoney(h.total_distributions_cents) + '</td>' +
+            '<td class="text-right">' + _fmtMoney(h.current_value_cents) + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Investor data unavailable.</td></tr>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: distribution history table                                           */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('distributionHistory', [], function (el) {
+    var tbody = el.querySelector('#dist-history-tbody');
+    if (!tbody) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/distributions/?portfolio_id=' + PORTFOLIO_ID + '&_fmt=json')
+      .then(function (data) {
+        var rows = data.distributions || data || [];
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No distributions recorded.</td></tr>';
+          return;
+        }
+        rows.forEach(function (d) {
+          var statusCls = d.status === 'PAID' ? 'success' : d.status === 'DRAFT' ? 'warning' : 'default';
+          /* Per-investor share: total_distributable × your_ownership (not known here — show total) */
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + _esc(d.period) + '</td>' +
+            '<td class="text-right">' + _fmtMoney(d.total_distributable_cents) + '</td>' +
+            '<td class="text-right">' +
+              (d.investor_share_cents != null
+                ? _fmtMoney(d.investor_share_cents)
+                : '<span class="text-muted">—</span>') +
+            '</td>' +
+            '<td><span class="label label-' + statusCls + '">' + _esc(d.status) + '</span>' +
+              (d.distributed_at
+                ? ' <small class="text-muted">' + _esc(d.distributed_at.substring(0, 10)) + '</small>'
+                : '') +
+            '</td>' +
+            '<td>' +
+              (d.status === 'DRAFT'
+                ? '<form method="POST" action="/industry/portfolio/api/distributions/' +
+                    _esc(d.id) + '/pay" style="margin:0;">' +
+                    '<button type="submit" class="btn btn-xs btn-success">' +
+                      '<i class="fa fa-send"></i> Pay' +
+                    '</button></form>'
+                : '') +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Distribution history unavailable.</td></tr>';
+      });
+  });
+
+}());
+</script>
+{% endblock %}

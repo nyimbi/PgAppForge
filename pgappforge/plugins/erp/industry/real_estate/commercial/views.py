@@ -37,10 +37,9 @@ CommercialREDashboardView  /industry/commercial-re/
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 import sqlalchemy as sa
-from flask import abort, jsonify, make_response, request
+from flask import abort, jsonify, render_template, request
 
 from pgappforge.plugins.erp.base_view import BaseERPView, BaseERPModelView
 from pgappforge import expose
@@ -122,6 +121,15 @@ class SpaceUnitView(BaseERPView):
 	@expose("/")
 	@has_access
 	def list(self):
+		# Return JSON for API callers; render the dashboard for browser navigation.
+		if request.accept_mimetypes.best_match(["application/json", "text/html"]) == "application/json":
+			return self._list_json()
+		return render_template(
+			"appbuilder/re_commercial/dashboard.html",
+			appbuilder=self.appbuilder,
+		)
+
+	def _list_json(self):
 		session = _get_session()
 		property_id = request.args.get("property_id")
 		status = request.args.get("status")
@@ -743,7 +751,9 @@ class LeaseAbstractView(BaseERPView):
 class CommercialREDashboardView(BaseERPView):
 	"""Commercial Real Estate dashboard — KPI counts and portfolio overview.
 
-	GET /industry/commercial-re/   — HTML dashboard with live KPI cards.
+	GET /industry/commercial-re/       — HTML dashboard with live KPI cards.
+	GET /industry/commercial-re/cam    — CAM reconciliation detail page.
+	GET /industry/commercial-re/loi    — LOI pipeline kanban board.
 	"""
 
 	route_base = "/industry/commercial-re"
@@ -752,88 +762,79 @@ class CommercialREDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def dashboard(self):
-		session = _get_session()
-
-		# Live KPI counts — all wrapped in try/except via self._count()
-		active_leases = self._count(CommercialLease, status="ACTIVE")
-		vacant_spaces = self._count(SpaceUnit, status="VACANT")
-		pending_lois = self._count(LOI, status="SUBMITTED")
+		active_leases    = self._count(CommercialLease, status="ACTIVE")
+		vacant_spaces    = self._count(SpaceUnit, status="VACANT")
+		pending_lois     = self._count(LOI, status="SUBMITTED")
 		negotiating_lois = self._count(LOI, status="NEGOTIATING")
-		draft_recons = self._count(CAMReconciliation, status="DRAFT")
-		total_spaces = self._count(SpaceUnit)
+		draft_recons     = self._count(CAMReconciliation, status="DRAFT")
+		total_spaces     = self._count(SpaceUnit)
 
 		kpi_html = self.kpi_cards([
 			{
-				"label": "Active Leases",
-				"value": active_leases,
+				"label":  "Active Leases",
+				"value":  active_leases,
 				"format": "integer",
-				"color": "#057a55",
-				"icon": "fa-file-contract",
+				"color":  "#057a55",
+				"icon":   "fa-file-text",
 			},
 			{
-				"label": "Vacant Spaces",
-				"value": vacant_spaces,
+				"label":  "Vacant Spaces",
+				"value":  vacant_spaces,
 				"format": "integer",
-				"color": "#e3a008",
-				"icon": "fa-building",
+				"color":  "#e3a008",
+				"icon":   "fa-building",
 			},
 			{
-				"label": "Pending LOIs",
-				"value": pending_lois,
+				"label":  "Pending LOIs",
+				"value":  pending_lois,
 				"format": "integer",
-				"color": "#1a56db",
-				"icon": "fa-handshake-o",
+				"color":  "#1a56db",
+				"icon":   "fa-handshake-o",
 			},
 			{
-				"label": "Negotiating LOIs",
-				"value": negotiating_lois,
+				"label":  "Negotiating LOIs",
+				"value":  negotiating_lois,
 				"format": "integer",
-				"color": "#9061f9",
-				"icon": "fa-comments",
+				"color":  "#9061f9",
+				"icon":   "fa-comments",
 			},
 			{
-				"label": "CAM Recons (Draft)",
-				"value": draft_recons,
+				"label":  "CAM Recons (Draft)",
+				"value":  draft_recons,
 				"format": "integer",
-				"color": "#c81e1e",
-				"icon": "fa-calculator",
+				"color":  "#c81e1e",
+				"icon":   "fa-calculator",
 			},
 			{
-				"label": "Total Spaces",
-				"value": total_spaces,
+				"label":  "Total Spaces",
+				"value":  total_spaces,
 				"format": "integer",
-				"color": "#0e9f6e",
-				"icon": "fa-th",
+				"color":  "#0e9f6e",
+				"icon":   "fa-th",
 			},
 		])
 
-		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Commercial Real Estate Dashboard</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-<style>body{{padding:24px}}.well{{border-radius:4px}}</style>
-</head><body>
-<h3>Commercial Real Estate <small>Portfolio Overview</small></h3>
-{kpi_html}
-<div class="row" style="margin-top:20px">
-  <div class="col-md-4">
-    <div class="panel panel-default">
-      <div class="panel-heading"><strong>Quick Links</strong></div>
-      <div class="panel-body">
-        <ul class="list-unstyled">
-          <li><a href="/industry/commercial-re/spaces/">Space Units</a></li>
-          <li><a href="/industry/commercial-re/leases/">Leases</a></li>
-          <li><a href="/industry/commercial-re/loi/">Letters of Intent</a></li>
-          <li><a href="/industry/commercial-re/cam/">CAM Reconciliation</a></li>
-          <li><a href="/industry/commercial-re/abstracts/">Lease Abstracts</a></li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</div>
-<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
-</body></html>"""
-		return make_response(html, 200)
+		return render_template(
+			"appbuilder/re_commercial/dashboard.html",
+			kpi_html=kpi_html,
+			appbuilder=self.appbuilder,
+		)
+
+	@expose("/cam")
+	@has_access
+	def cam_view(self):
+		return render_template(
+			"appbuilder/re_commercial/cam_reconciliation.html",
+			appbuilder=self.appbuilder,
+		)
+
+	@expose("/loi")
+	@has_access
+	def loi_view(self):
+		return render_template(
+			"appbuilder/re_commercial/loi_pipeline.html",
+			appbuilder=self.appbuilder,
+		)
 
 
 __all__ = [

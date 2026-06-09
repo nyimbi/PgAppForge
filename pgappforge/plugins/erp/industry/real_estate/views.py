@@ -163,7 +163,7 @@ class PropertyView(BaseView):
 		)
 		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>MLS Properties</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<link rel="stylesheet" href="/static/appbuilder/css/bootstrap.min.css">
 <style>body{{padding:24px}}.badge-success{{background:#27ae60}}.badge-secondary{{background:#7f8c8d}}</style>
 </head><body>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -676,7 +676,7 @@ class MarketDashboard(BaseView):
 
 		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Real Estate Market Dashboard</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<link rel="stylesheet" href="/static/appbuilder/css/bootstrap.min.css">
 <style>body{{padding:24px}}.well{{border-radius:4px}}</style>
 </head><body>
 <h3>Real Estate Market Dashboard</h3>

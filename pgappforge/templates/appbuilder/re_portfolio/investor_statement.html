@@ -1,0 +1,326 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+{#
+  Investor Statement — per-investor view for a single portfolio.
+
+  Context variables expected:
+    investor_name    str   — display name of the investor
+    portfolio_name   str   — portfolio name
+    as_of_date       str   — ISO date "YYYY-MM-DD"
+    ownership_pct    str   — formatted ownership percentage, e.g. "12.50%"
+    total_invested_display  str  — formatted investment amount
+    current_value_display   str  — formatted current estimated value
+    total_distributions_display  str  — formatted total distributions received
+    annualised_return_display    str  — formatted annualised return, e.g. "+9.4%"
+    holding_id       str   — investor holding UUID (for API calls)
+    portfolio_id     str   — portfolio UUID (for API calls)
+#}
+
+{% block title %}Investor Statement — {{ investor_name | e }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Print: hide sidebar, navbar, and page chrome; maximise content width */
+  @media print {
+    .navbar, .sidebar, .erp-sidebar, .erp-topbar,
+    nav, header, footer, .erp-page-header-actions,
+    .no-print { display: none !important; }
+    body, .erp-main, .erp-content, main { margin: 0 !important; padding: 0 !important; }
+    .erp-card { box-shadow: none !important; border: 1px solid #d1d5db !important; }
+    .erp-card, .container, .container-fluid { width: 100% !important; }
+    .statement-header { page-break-after: avoid; }
+  }
+
+  .return-chip {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+  .return-chip.positive { background: #d1fae5; color: #065f46; }
+  .return-chip.negative { background: #fee2e2; color: #991b1b; }
+  .return-chip.neutral  { background: #f3f4f6; color: #374151; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header statement-header">
+  <div style="flex:1;">
+    <h1 class="erp-page-title">Investor Statement</h1>
+    <p class="erp-page-subtitle">
+      {{ investor_name | e }} &nbsp;&middot;&nbsp;
+      {{ portfolio_name | e }} &nbsp;&middot;&nbsp;
+      As of {{ as_of_date | e }}
+    </p>
+  </div>
+  <div class="erp-page-header-actions no-print">
+    <button type="button" class="btn btn-default btn-sm" onclick="window.print();">
+      <i class="fa fa-print"></i> Print
+    </button>
+    <a href="/industry/portfolio/portfolios/{{ portfolio_id | e }}"
+       class="btn btn-default btn-sm" style="margin-left:8px;">
+      <i class="fa fa-arrow-left"></i> Portfolio
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Holdings summary strip ────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="background:linear-gradient(135deg,#1e40af 0%,#1a56db 100%);color:#fff;border:none;">
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:center;">
+
+    <div style="flex:1;min-width:200px;">
+      <p style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.08em;opacity:.75;">Investor</p>
+      <p style="margin:4px 0 0;font-size:1.4rem;font-weight:700;">{{ investor_name | e }}</p>
+      <p style="margin:2px 0 0;font-size:.85rem;opacity:.8;">Portfolio: {{ portfolio_name | e }}</p>
+    </div>
+
+    <div style="text-align:center;">
+      <p style="margin:0;font-size:11px;text-transform:uppercase;opacity:.75;">Ownership</p>
+      <p style="margin:4px 0 0;font-size:1.6rem;font-weight:700;">{{ ownership_pct | e }}</p>
+    </div>
+
+    <div style="text-align:center;">
+      <p style="margin:0;font-size:11px;text-transform:uppercase;opacity:.75;">Total Invested</p>
+      <p style="margin:4px 0 0;font-size:1.6rem;font-weight:700;">{{ total_invested_display | e }}</p>
+    </div>
+
+    <div style="text-align:center;">
+      <p style="margin:0;font-size:11px;text-transform:uppercase;opacity:.75;">Current Value</p>
+      <p style="margin:4px 0 0;font-size:1.6rem;font-weight:700;">{{ current_value_display | e }}</p>
+    </div>
+
+    <div style="text-align:center;">
+      <p style="margin:0;font-size:11px;text-transform:uppercase;opacity:.75;">Distributions Received</p>
+      <p style="margin:4px 0 0;font-size:1.6rem;font-weight:700;">{{ total_distributions_display | e }}</p>
+    </div>
+
+  </div>
+</div>
+
+{# ── Annualised return — hero number ───────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="text-align:center;padding:28px 20px;">
+  <p style="margin:0 0 8px;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--erp-text-muted);">
+    Annualised Return (IRR)
+  </p>
+  {% set ret = annualised_return_display | string %}
+  {% if ret.startswith('+') or (ret | float(default=0)) > 0 %}
+  <span class="return-chip positive">{{ ret | e }}</span>
+  {% elif ret.startswith('-') or (ret | float(default=0)) < 0 %}
+  <span class="return-chip negative">{{ ret | e }}</span>
+  {% else %}
+  <span class="return-chip neutral">{{ ret | e }}</span>
+  {% endif %}
+  <p style="margin:10px 0 0;font-size:.8rem;color:var(--erp-text-muted);">
+    Since inception · as of {{ as_of_date | e }}
+  </p>
+</div>
+
+{# ── Distribution timeline table ───────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-history" style="color:#1a56db;"></i>
+      Distribution Timeline
+    </h4>
+  </div>
+  <div data-island="investorDistTimeline" class="erp-island" style="overflow-x:auto;">
+    <table class="table table-hover table-condensed" style="margin:0;">
+      <thead>
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+          <th>Period</th>
+          <th class="text-right">Amount</th>
+          <th>Paid Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="dist-timeline-tbody">
+        {% for _ in range(5) %}
+        <tr>
+          {% for _ in range(4) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot id="dist-timeline-tfoot" style="display:none;">
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);font-weight:700;">
+          <td>Total</td>
+          <td class="text-right" id="dist-total-cell">—</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+{# ── Quarterly distribution chart ──────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24">
+  <h4 class="erp-chart-title" style="margin-bottom:16px;">
+    <i class="fa fa-bar-chart" style="color:#1a56db;"></i>
+    Quarterly Distributions
+  </h4>
+  <div class="erp-chart-wrap">
+    <div data-island="distChart" class="erp-island">
+      <canvas id="dist-chart-canvas" height="80"
+              aria-label="Quarterly distributions bar chart" role="img"></canvas>
+    </div>
+  </div>
+</div>
+
+{# ── Statement footer (print-friendly) ────────────────────────────────────── #}
+<div class="erp-card" style="background:var(--erp-surface-alt,#f8f9fa);border:none;">
+  <p style="margin:0;font-size:.8rem;color:var(--erp-text-muted);text-align:center;">
+    This statement is generated for informational purposes only and does not constitute tax advice.
+    Portfolio values are estimates based on most recent appraisals.
+    <br>
+    Generated: {{ as_of_date | e }} &nbsp;&middot;&nbsp; {{ portfolio_name | e }}
+  </p>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var HOLDING_ID  = '{{ holding_id | e }}';
+  var PORTFOLIO_ID = '{{ portfolio_id | e }}';
+
+  /* ── helpers ──────────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function _fmtMoney(cents) {
+    if (cents == null) return '—';
+    var v   = Math.abs(cents / 100);
+    var pfx = (cents < 0 ? '-' : '') + '$';
+    if (v >= 1e9) return pfx + (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return pfx + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return pfx + (v / 1e3).toFixed(1) + 'k';
+    return pfx + v.toFixed(0);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: distribution timeline                                                */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('investorDistTimeline', [], function (el) {
+    var tbody = el.querySelector('#dist-timeline-tbody');
+    var tfoot = el.querySelector('#dist-timeline-tfoot');
+    var totalCell = el.querySelector('#dist-total-cell');
+    if (!tbody) return;
+
+    ERPIslands.fetchJSON(
+      '/industry/portfolio/api/investor/' + HOLDING_ID + '/distributions'
+    ).then(function (rows) {
+      tbody.innerHTML = '';
+      if (!rows.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="4" class="text-center text-muted" style="padding:20px;">No distributions on record.</td></tr>';
+        return;
+      }
+
+      var grandTotal = 0;
+      rows.forEach(function (d) {
+        var statusCls = d.status === 'PAID' ? 'success' : d.status === 'DRAFT' ? 'warning' : 'default';
+        grandTotal += (d.amount_cents || 0);
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + _esc(d.period) + '</td>' +
+          '<td class="text-right"><strong>' + _fmtMoney(d.amount_cents) + '</strong></td>' +
+          '<td>' + _esc(d.paid_date || '—') + '</td>' +
+          '<td><span class="label label-' + statusCls + '">' + _esc(d.status) + '</span></td>';
+        tbody.appendChild(tr);
+      });
+
+      if (totalCell) totalCell.textContent = _fmtMoney(grandTotal);
+      if (tfoot) tfoot.style.display = '';
+    }).catch(function () {
+      tbody.innerHTML =
+        '<tr><td colspan="4" class="text-center text-muted">Distribution data unavailable.</td></tr>';
+    });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: quarterly distributions bar chart                                   */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('distChart', ['chartjs'], function (el) {
+    var canvas = el.querySelector('#dist-chart-canvas');
+    if (!canvas) return;
+
+    ERPIslands.fetchJSON(
+      '/industry/portfolio/api/investor/' + HOLDING_ID + '/distributions'
+    ).then(function (rows) {
+      /* Aggregate by quarter: "Q1 2025", etc. */
+      var qtotals = {};
+      rows.forEach(function (d) {
+        /* period expected as "YYYY-QN" or "YYYY-MM" — normalise to quarter label */
+        var label = d.quarter_label || d.period || '?';
+        qtotals[label] = (qtotals[label] || 0) + (d.amount_cents || 0);
+      });
+
+      /* Sort by label ascending */
+      var labels = Object.keys(qtotals).sort();
+      var values = labels.map(function (k) { return qtotals[k] / 100; });
+
+      if (!labels.length) {
+        /* No data — show placeholder */
+        labels = ['No distributions'];
+        values = [0];
+      }
+
+      new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label:           'Distribution ($)',
+            data:            values,
+            backgroundColor: '#1a56db',
+            borderRadius:    4
+          }]
+        },
+        options: {
+          responsive:          true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  return ' $' + ctx.parsed.y.toLocaleString(undefined, { maximumFractionDigits: 0 });
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,.04)' },
+              ticks: {
+                callback: function (v) {
+                  return '$' + (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' :
+                                v >= 1e3 ? (v / 1e3).toFixed(0) + 'k' : v);
+                }
+              }
+            },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }).catch(function (err) {
+      el.innerHTML =
+        '<div class="alert alert-warning">Chart unavailable: ' + _esc(err.message) + '</div>';
+    });
+  });
+
+}());
+</script>
+{% endblock %}

@@ -239,10 +239,28 @@ class PropertyManagementDashboardView(BaseERPView):
 			},
 		])
 
-		return self.render_template(
-			"appbuilder/general/model/edit.html",
+		return render_template(
+			"appbuilder/re_pm/dashboard.html",
 			kpi_html=kpi_html,
-			title="Property Management Dashboard",
+			appbuilder=self.appbuilder,
+		)
+
+	@expose("/rent-roll")
+	@has_access
+	def rent_roll(self):
+		"""Rent roll report — all units, current period."""
+		return render_template(
+			"appbuilder/re_pm/rent_roll.html",
+			appbuilder=self.appbuilder,
+		)
+
+	@expose("/maintenance-board")
+	@has_access
+	def maintenance_board(self):
+		"""Kanban maintenance board."""
+		return render_template(
+			"appbuilder/re_pm/maintenance_board.html",
+			appbuilder=self.appbuilder,
 		)
 
 

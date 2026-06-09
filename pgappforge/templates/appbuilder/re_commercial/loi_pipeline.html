@@ -1,0 +1,419 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}LOI Pipeline — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .loi-board {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .loi-col {
+    flex: 0 0 220px;
+    min-width: 220px;
+  }
+  .loi-col-header {
+    padding: 10px 14px;
+    border-radius: 6px 6px 0 0;
+    font-weight: 700;
+    font-size: .85em;
+    letter-spacing: .04em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-transform: uppercase;
+  }
+  .loi-col-body {
+    min-height: 200px;
+    padding: 8px;
+    border: 1px solid var(--erp-border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    background: #f9fafb;
+  }
+  .loi-card {
+    background: #fff;
+    border: 1px solid var(--erp-border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: grab;
+    transition: box-shadow .15s;
+    position: relative;
+  }
+  .loi-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,.10);
+  }
+  .loi-card.loi-accepted {
+    border-color: #10b981;
+    background: #f0fdf4;
+  }
+  .loi-card.loi-rejected {
+    opacity: .55;
+    background: #f3f4f6;
+    cursor: default;
+  }
+  .loi-card.loi-rejected .loi-prospect,
+  .loi-card.loi-rejected .loi-rent {
+    text-decoration: line-through;
+    color: #9ca3af;
+  }
+  .loi-prospect {
+    font-weight: 600;
+    font-size: .9em;
+    margin-bottom: 4px;
+  }
+  .loi-rent {
+    font-size: 1.05em;
+    font-weight: 700;
+    color: #1a56db;
+    margin-bottom: 4px;
+  }
+  .loi-meta {
+    font-size: .78em;
+    color: var(--erp-text-muted);
+    line-height: 1.6;
+  }
+  .loi-expiry-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: .72em;
+  }
+  .loi-skeleton-card {
+    background: #fff;
+    border: 1px solid var(--erp-border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .loi-summary-bar {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .loi-summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .loi-summary-label {
+    font-size: .78em;
+    color: var(--erp-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .loi-summary-value {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #1a56db;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header erp-mb-24">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-filter" style="color:#1a56db;"></i>
+        LOI Pipeline
+      </h1>
+      <p class="erp-page-subtitle">Letters of Intent — drag cards between columns to update status.</p>
+    </div>
+    <div>
+      <a href="/industry/commercial-re/" class="btn btn-default btn-sm">
+        <i class="fa fa-arrow-left"></i> Dashboard
+      </a>
+      <button type="button" class="btn btn-primary btn-sm" id="btn-new-loi" style="margin-left:6px;">
+        <i class="fa fa-plus"></i> New LOI
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary Bar ──────────────────────────────────────────────────────── #}
+<div class="loi-summary-bar erp-mb-24" id="loi-summary-bar">
+  <div class="loi-summary-item">
+    <span class="loi-summary-label">Pipeline Value</span>
+    <span class="loi-summary-value" id="loi-pipeline-value">
+      <span class="erp-skeleton erp-skeleton-text mid" style="display:inline-block; height:20px; width:100px;"></span>
+    </span>
+  </div>
+  <div class="loi-summary-item">
+    <span class="loi-summary-label">Active LOIs</span>
+    <span class="loi-summary-value" id="loi-active-count">
+      <span class="erp-skeleton erp-skeleton-text short" style="display:inline-block; height:20px; width:40px;"></span>
+    </span>
+  </div>
+  <div class="loi-summary-item">
+    <span class="loi-summary-label">Avg. Term</span>
+    <span class="loi-summary-value" id="loi-avg-term">
+      <span class="erp-skeleton erp-skeleton-text short" style="display:inline-block; height:20px; width:60px;"></span>
+    </span>
+  </div>
+  <div style="margin-left:auto;">
+    <span style="font-size:.8em; color:var(--erp-text-muted);">SUBMITTED + NEGOTIATING rent totals</span>
+  </div>
+</div>
+
+{# ── Kanban Board ──────────────────────────────────────────────────────── #}
+<div data-island="loiPipeline" id="loi-board-island" class="erp-island">
+
+  {# Skeleton state #}
+  <div id="loi-board-skeleton" class="loi-board">
+    {% set col_colors = ['#9ca3af','#60a5fa','#f59e0b','#10b981','#ef4444'] %}
+    {% set col_labels = ['Draft','Submitted','Negotiating','Accepted','Rejected'] %}
+    {% for i in range(5) %}
+    <div class="loi-col">
+      <div class="loi-col-header" style="background:{{ col_colors[i] }}20; color:{{ col_colors[i] }};">
+        {{ col_labels[i] }}
+        <span class="badge" style="background:{{ col_colors[i] }}; color:#fff;">—</span>
+      </div>
+      <div class="loi-col-body">
+        {% for _ in range(2 if i < 3 else 1) %}
+        <div class="loi-skeleton-card">
+          <div class="erp-skeleton erp-skeleton-text wide" style="margin-bottom:6px;"></div>
+          <div class="erp-skeleton erp-skeleton-text mid" style="margin-bottom:6px; height:18px;"></div>
+          <div class="erp-skeleton erp-skeleton-text short"></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Live board — rendered by JS #}
+  <div id="loi-board" class="loi-board" style="display:none;"></div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── helpers ────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function _fmtMoney(cents, currency) {
+    if (cents == null) return '—';
+    var sign  = cents < 0 ? '-' : '';
+    var major = Math.floor(Math.abs(cents) / 100);
+    var minor = String(Math.abs(cents) % 100).padStart(2, '0');
+    return sign + (currency || 'USD') + ' ' + major.toLocaleString() + '.' + minor;
+  }
+
+  function _daysUntil(isoDate) {
+    if (!isoDate) return null;
+    var diff = new Date(isoDate) - new Date();
+    return Math.ceil(diff / 86400000);
+  }
+
+  function _expiryBadge(isoDate) {
+    var days = _daysUntil(isoDate);
+    if (days == null) return '';
+    if (days < 0)   return '<span class="label label-danger loi-expiry-badge">Expired</span>';
+    if (days <= 7)  return '<span class="label label-danger loi-expiry-badge">' + days + 'd</span>';
+    if (days <= 14) return '<span class="label label-warning loi-expiry-badge">' + days + 'd</span>';
+    return '<span class="label label-default loi-expiry-badge">' + days + 'd</span>';
+  }
+
+  /* ── stage config ───────────────────────────────────────────────────── */
+  var STAGES = [
+    { key: 'DRAFT',       label: 'Draft',       color: '#9ca3af', bg: '#f3f4f6' },
+    { key: 'SUBMITTED',   label: 'Submitted',   color: '#2563eb', bg: '#eff6ff' },
+    { key: 'NEGOTIATING', label: 'Negotiating', color: '#d97706', bg: '#fffbeb' },
+    { key: 'ACCEPTED',    label: 'Accepted',    color: '#059669', bg: '#ecfdf5' },
+    { key: 'REJECTED',    label: 'Rejected',    color: '#dc2626', bg: '#fef2f2' }
+  ];
+
+  /* ── Build a LOI card element ───────────────────────────────────────── */
+  function _buildCard(loi) {
+    var div = document.createElement('div');
+    var extraClass = '';
+    if (loi.status === 'ACCEPTED')  extraClass = ' loi-accepted';
+    if (loi.status === 'REJECTED')  extraClass = ' loi-rejected';
+    div.className     = 'loi-card' + extraClass;
+    div.dataset.loiId = loi.id;
+    div.dataset.status = loi.status;
+
+    var startDate = loi.proposed_start_date
+      ? new Date(loi.proposed_start_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
+      : '—';
+
+    div.innerHTML =
+      _expiryBadge(loi.expires_at) +
+      '<p class="loi-prospect">' + _esc(loi.prospect_name || loi.prospect_party_id) + '</p>' +
+      '<p class="loi-rent">' + _esc(_fmtMoney(loi.proposed_rent_cents, loi.currency || 'USD')) + '/mo</p>' +
+      '<div class="loi-meta">' +
+        '<span><i class="fa fa-calendar-o"></i> Start: ' + _esc(startDate) + '</span><br>' +
+        '<span><i class="fa fa-clock-o"></i> Term: ' + _esc(loi.proposed_term_months || '—') + ' months</span>' +
+        (loi.ti_requested_cents
+          ? '<br><span><i class="fa fa-wrench"></i> TI: ' + _esc(_fmtMoney(loi.ti_requested_cents, loi.currency || 'USD')) + '</span>'
+          : '') +
+      '</div>';
+
+    return div;
+  }
+
+  /* ── Patch status via PATCH endpoint ───────────────────────────────── */
+  function _patchStatus(loiId, newStatus) {
+    return fetch('/industry/commercial-re/loi/' + encodeURIComponent(loiId), {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ status: newStatus })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (resp) {
+        if (!resp.ok) {
+          console.warn('LOI status patch failed:', resp.error);
+        }
+        return resp;
+      })
+      .catch(function (err) {
+        console.error('LOI patch error:', err);
+      });
+  }
+
+  /* ── LOI Pipeline island (uses SortableJS for drag-drop) ───────────── */
+  ERPIslands.register('loiPipeline', ['sortable'], function (el) {
+    var skeleton = document.getElementById('loi-board-skeleton');
+    var board    = document.getElementById('loi-board');
+
+    ERPIslands.fetchJSON('/api/commercial-re/loi/all')
+      .then(function (data) {
+        var lois     = data.lois || [];
+        var currency = data.currency || 'USD';
+
+        /* Group by stage */
+        var byStage = {};
+        STAGES.forEach(function (s) { byStage[s.key] = []; });
+        lois.forEach(function (loi) {
+          var key = (loi.status || 'DRAFT').toUpperCase();
+          if (!byStage[key]) byStage[key] = [];
+          byStage[key].push(loi);
+        });
+
+        /* Compute summary */
+        var pipelineValue = 0;
+        var activeCount   = 0;
+        var termSum       = 0;
+        var termCount     = 0;
+
+        lois.forEach(function (loi) {
+          if (loi.status === 'SUBMITTED' || loi.status === 'NEGOTIATING') {
+            if (loi.proposed_rent_cents) pipelineValue += loi.proposed_rent_cents;
+            activeCount++;
+          }
+          if (loi.proposed_term_months) { termSum += loi.proposed_term_months; termCount++; }
+        });
+
+        var pvEl    = document.getElementById('loi-pipeline-value');
+        var acEl    = document.getElementById('loi-active-count');
+        var atmEl   = document.getElementById('loi-avg-term');
+        if (pvEl)  pvEl.textContent  = _fmtMoney(pipelineValue, currency) + '/mo';
+        if (acEl)  acEl.textContent  = activeCount;
+        if (atmEl) atmEl.textContent = termCount > 0 ? (termSum / termCount).toFixed(1) + ' mo' : '—';
+
+        /* Build board */
+        skeleton.style.display = 'none';
+        board.innerHTML        = '';
+        board.style.display    = '';
+
+        STAGES.forEach(function (stage) {
+          var cards    = byStage[stage.key] || [];
+          var colCount = cards.length;
+
+          var col = document.createElement('div');
+          col.className = 'loi-col';
+
+          var header = document.createElement('div');
+          header.className = 'loi-col-header';
+          header.style.background = stage.bg;
+          header.style.color      = stage.color;
+          header.innerHTML =
+            _esc(stage.label) +
+            '<span class="badge" style="background:' + stage.color + '; color:#fff;">' + colCount + '</span>';
+
+          var body = document.createElement('div');
+          body.className      = 'loi-col-body';
+          body.dataset.status = stage.key;
+
+          cards.forEach(function (loi) {
+            loi.currency = loi.currency || currency;
+            body.appendChild(_buildCard(loi));
+          });
+
+          col.appendChild(header);
+          col.appendChild(body);
+          board.appendChild(col);
+
+          /* Sortable — skip ACCEPTED and REJECTED targets for drag-out only */
+          if (typeof Sortable !== 'undefined') {
+            Sortable.create(body, {
+              group:     'loi-board',
+              animation: 150,
+              ghostClass: 'bg-info',
+              onEnd: function (evt) {
+                var card      = evt.item;
+                var loiId     = card.dataset.loiId;
+                var newStatus = evt.to.dataset.status;
+                if (!loiId || !newStatus) return;
+                if (card.dataset.status === newStatus) return;
+
+                /* Optimistic update */
+                card.dataset.status = newStatus;
+                if (newStatus === 'ACCEPTED') card.classList.add('loi-accepted');
+                else card.classList.remove('loi-accepted');
+                if (newStatus === 'REJECTED') card.classList.add('loi-rejected');
+                else card.classList.remove('loi-rejected');
+
+                /* Update badge counts */
+                var allBodies = board.querySelectorAll('.loi-col-body');
+                allBodies.forEach(function (b) {
+                  var hdr = b.parentElement.querySelector('.loi-col-header .badge');
+                  if (hdr) hdr.textContent = b.querySelectorAll('.loi-card').length;
+                });
+
+                _patchStatus(loiId, newStatus);
+              }
+            });
+          }
+        });
+      })
+      .catch(function (err) {
+        skeleton.innerHTML =
+          '<div class="alert alert-warning">LOI pipeline unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── New LOI button ─────────────────────────────────────────────────── */
+  var btnNew = document.getElementById('btn-new-loi');
+  if (btnNew) {
+    btnNew.addEventListener('click', function () {
+      /* Navigate to LOI submission form — adjust URL to match your form route */
+      window.location.href = '/industry/commercial-re/loi/new';
+    });
+  }
+
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,303 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Commercial Real Estate — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header erp-mb-24">
+  <h1 class="erp-page-title">Commercial Real Estate</h1>
+  <p class="erp-page-subtitle">Portfolio overview — leases, vacancies, LOI pipeline and CAM reconciliations.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Row ───────────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24">
+  {{ kpi_html | safe }}
+</div>
+
+{# ── Occupancy Chart + Lease Expiry ────────────────────────────────────── #}
+<div class="row erp-mb-24">
+
+  <div class="col-md-7">
+    <div class="erp-chart-wrap">
+      <h4 class="erp-chart-title">Space Occupancy by Floor</h4>
+      <div data-island="comOccupancyChart" class="erp-island" id="occupancy-island">
+        <div id="occupancy-skeleton">
+          {% for _ in range(4) %}
+          <div class="erp-skeleton" style="height:28px; margin-bottom:8px; border-radius:4px;"></div>
+          {% endfor %}
+        </div>
+        <canvas id="occupancy-chart" height="160" aria-label="Space occupancy by floor" role="img"
+                style="display:none;"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-5">
+    <div class="erp-card" style="height:100%; padding:0;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0">
+          <i class="fa fa-clock-o" style="color:var(--erp-warning);"></i>
+          Leases Expiring — Next 90 Days
+        </h4>
+      </div>
+      <div data-island="comLeaseExpiry" id="expiry-island" class="erp-island" style="padding:8px 20px; max-height:340px; overflow-y:auto;">
+        <ul id="expiry-list" class="erp-feed" style="list-style:none; padding:0; margin:0;">
+          {% for _ in range(4) %}
+          <li class="erp-feed-item" style="padding:10px 0; border-bottom:1px solid var(--erp-border);">
+            <div style="flex:1;">
+              <div class="erp-skeleton erp-skeleton-text wide" style="margin-bottom:6px;"></div>
+              <div class="erp-skeleton erp-skeleton-text short"></div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        <p id="expiry-empty" class="text-muted" style="display:none; padding:20px 0; text-align:center; font-size:.9em;">
+          No leases expiring in the next 90 days.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{# ── LOI Pipeline Funnel + Quick Actions ──────────────────────────────── #}
+<div class="row erp-mb-24">
+
+  <div class="col-md-8">
+    <div class="erp-card" style="padding:0;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--erp-border);">
+        <h4 class="erp-chart-title erp-mb-0">
+          <i class="fa fa-filter" style="color:#1a56db;"></i>
+          LOI Pipeline
+        </h4>
+      </div>
+      <div data-island="comLOIPipeline" id="loi-funnel-island" class="erp-island" style="padding:20px;">
+        <div id="loi-funnel-skeleton">
+          <div class="erp-skeleton" style="height:60px; margin-bottom:8px; border-radius:6px;"></div>
+          <div class="erp-skeleton" style="height:48px; margin-bottom:8px; border-radius:6px;"></div>
+          <div class="erp-skeleton" style="height:36px; border-radius:6px;"></div>
+        </div>
+        <div id="loi-funnel" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="erp-card">
+      <h4 class="erp-chart-title">Quick Actions</h4>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <a href="/industry/commercial-re/loi/"
+           class="btn btn-primary btn-block">
+          <i class="fa fa-plus"></i> New LOI
+        </a>
+        <a href="/industry/commercial-re/spaces/"
+           class="btn btn-default btn-block">
+          <i class="fa fa-building"></i> New Space
+        </a>
+        <button type="button" class="btn btn-warning btn-block" id="btn-run-cam">
+          <i class="fa fa-calculator"></i> Run CAM Reconciliation
+        </button>
+        <a href="/industry/commercial-re/leases/"
+           class="btn btn-default btn-block">
+          <i class="fa fa-file-text"></i> All Leases
+        </a>
+        <a href="/industry/commercial-re/cam/"
+           class="btn btn-default btn-block">
+          <i class="fa fa-list-alt"></i> CAM History
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── shared escape helper ───────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function _fmtMoney(cents, currency) {
+    if (cents == null) return '—';
+    var sign  = cents < 0 ? '-' : '';
+    var major = Math.floor(Math.abs(cents) / 100);
+    var minor = String(Math.abs(cents) % 100).padStart(2, '0');
+    return sign + (currency || 'USD') + ' ' + major.toLocaleString() + '.' + minor;
+  }
+
+  /* ── urgency badge helper ───────────────────────────────────────────── */
+  function _urgencyBadge(daysLeft) {
+    if (daysLeft <= 30)  return '<span class="label label-danger">'  + daysLeft + 'd</span>';
+    if (daysLeft <= 60)  return '<span class="label label-warning">' + daysLeft + 'd</span>';
+    return                      '<span class="label label-default">' + daysLeft + 'd</span>';
+  }
+
+  /* ── Occupancy Chart island ─────────────────────────────────────────── */
+  ERPIslands.register('comOccupancyChart', ['chartjs'], function (el) {
+    var skeleton = document.getElementById('occupancy-skeleton');
+    var canvas   = document.getElementById('occupancy-chart');
+
+    ERPIslands.fetchJSON('/api/commercial-re/occupancy')
+      .then(function (data) {
+        /*
+         * Expected payload:
+         * { labels: ["Floor 1", ...],
+         *   occupied: [n, ...], vacant: [n, ...], negotiating: [n, ...] }
+         */
+        skeleton.style.display = 'none';
+        canvas.style.display   = '';
+
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: data.labels || [],
+            datasets: [
+              {
+                label:           'Occupied',
+                data:            data.occupied || [],
+                backgroundColor: '#1a56db',
+                borderRadius:    3
+              },
+              {
+                label:           'Under Negotiation',
+                data:            data.negotiating || [],
+                backgroundColor: '#f59e0b',
+                borderRadius:    3
+              },
+              {
+                label:           'Vacant',
+                data:            data.vacant || [],
+                backgroundColor: '#e5e7eb',
+                borderRadius:    3
+              }
+            ]
+          },
+          options: {
+            indexAxis:           'y',
+            responsive:          true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'bottom', labels: { boxWidth: 12 } },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' ' + ctx.dataset.label + ': ' + ctx.parsed.x + ' unit(s)';
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { stacked: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { precision: 0 } },
+              y: { stacked: true, grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function (err) {
+        el.innerHTML = '<div class="alert alert-warning">Occupancy data unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── Lease Expiry island ────────────────────────────────────────────── */
+  ERPIslands.register('comLeaseExpiry', [], function (el) {
+    var list  = document.getElementById('expiry-list');
+    var empty = document.getElementById('expiry-empty');
+
+    ERPIslands.fetchJSON('/api/commercial-re/leases/expiring?days=90')
+      .then(function (items) {
+        list.innerHTML = '';
+        if (!items || items.length === 0) {
+          list.style.display  = 'none';
+          empty.style.display = '';
+          return;
+        }
+        items.forEach(function (item) {
+          var daysLeft = item.days_remaining != null ? item.days_remaining : '?';
+          var li = document.createElement('li');
+          li.className = 'erp-feed-item';
+          li.style.cssText = 'padding:10px 0; border-bottom:1px solid var(--erp-border);';
+          li.innerHTML =
+            '<div style="flex:1;">' +
+              '<p style="margin:0 0 4px; font-weight:600;">' + _esc(item.tenant_name || item.tenant_party_id) + '</p>' +
+              '<p style="margin:0; font-size:.85em; color:var(--erp-text-muted);">' +
+                'Suite: ' + _esc(item.suite_code || '—') + ' &nbsp;|&nbsp; ' +
+                'Expires: ' + _esc(item.lease_end || '—') +
+              '</p>' +
+            '</div>' +
+            '<div style="margin-left:12px; text-align:right;">' +
+              (typeof daysLeft === 'number' ? _urgencyBadge(daysLeft) : '<span class="label label-default">' + _esc(daysLeft) + '</span>') +
+            '</div>';
+          list.appendChild(li);
+        });
+      })
+      .catch(function (err) {
+        list.innerHTML = '<li style="padding:10px 0; color:var(--erp-text-muted);">Lease expiry data unavailable.</li>';
+      });
+  });
+
+  /* ── LOI Pipeline Funnel island ─────────────────────────────────────── */
+  ERPIslands.register('comLOIPipeline', [], function (el) {
+    var skeleton = document.getElementById('loi-funnel-skeleton');
+    var funnel   = document.getElementById('loi-funnel');
+
+    var STAGES = [
+      { key: 'DRAFT',       label: 'Draft',       color: '#9ca3af', width: '100%' },
+      { key: 'SUBMITTED',   label: 'Submitted',   color: '#60a5fa', width: '85%'  },
+      { key: 'NEGOTIATING', label: 'Negotiating', color: '#f59e0b', width: '70%'  },
+      { key: 'ACCEPTED',    label: 'Accepted',    color: '#10b981', width: '55%'  }
+    ];
+
+    ERPIslands.fetchJSON('/api/commercial-re/loi/counts')
+      .then(function (data) {
+        /*
+         * Expected payload: { DRAFT: 3, SUBMITTED: 7, NEGOTIATING: 4, ACCEPTED: 2 }
+         */
+        skeleton.style.display = 'none';
+        funnel.style.display   = '';
+        funnel.innerHTML       = '';
+
+        STAGES.forEach(function (stage) {
+          var count = data[stage.key] || 0;
+          var row = document.createElement('div');
+          row.style.cssText = 'margin-bottom:8px;';
+          row.innerHTML =
+            '<div style="display:flex; align-items:center; margin-bottom:3px;">' +
+              '<span style="width:110px; font-size:.85em; color:var(--erp-text-muted);">' + _esc(stage.label) + '</span>' +
+              '<span style="font-weight:700; font-size:1.05em;">' + count + '</span>' +
+            '</div>' +
+            '<div style="background:#f3f4f6; border-radius:4px; height:28px; width:' + stage.width + ';">' +
+              '<div style="background:' + stage.color + '; height:100%; border-radius:4px; width:' +
+                (count > 0 ? Math.min(100, count * 12) + '%' : '0') + '; min-width:' + (count > 0 ? '28px' : '0') + ';' +
+                'transition:width .4s ease; display:flex; align-items:center; padding-left:8px;">' +
+                (count > 0 ? '<span style="color:#fff; font-size:.8em; font-weight:600;">' + count + '</span>' : '') +
+              '</div>' +
+            '</div>';
+          funnel.appendChild(row);
+        });
+      })
+      .catch(function (err) {
+        skeleton.innerHTML = '<div class="alert alert-warning">LOI pipeline unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ── CAM reconciliation quick-launch ────────────────────────────────── */
+  var btnCam = document.getElementById('btn-run-cam');
+  if (btnCam) {
+    btnCam.addEventListener('click', function () {
+      window.location.href = '/industry/commercial-re/cam/';
+    });
+  }
+
+}());
+</script>
+{% endblock %}

@@ -6,26 +6,26 @@ Flask views for the Real Estate Portfolio Analytics sub-plugin.
 Route summary
 -------------
 PropertyPortfolioView     /industry/portfolio/portfolios/
-  ├─ GET  /               — list active portfolios
-  └─ GET  /<id>           — portfolio detail with summary analytics
+  ├─ GET  /               — list active portfolios (HTML)
+  └─ GET  /<id>           — portfolio detail deep-dive (HTML)
 PropertyDebtView          /industry/portfolio/debts/
-  └─ GET  /               — list debt instruments
+  └─ GET  /               — list debt instruments (JSON)
 CapExRecordView           /industry/portfolio/capex/
-  └─ GET  /               — list capex records
+  └─ GET  /               — list capex records (JSON)
 InvestorHoldingView       /industry/portfolio/investors/
-  └─ GET  /               — list investor holdings
+  └─ GET  /               — list investor holdings (JSON)
 DistributionRecordView    /industry/portfolio/distributions/
-  └─ GET  /               — list distribution records
+  └─ GET  /               — list distribution records (JSON)
 PortfolioDashboardView    /industry/portfolio/
-  └─ GET  /dashboard      — KPI dashboard (active portfolios, active debts, pending distributions)
+  └─ GET  /               — KPI dashboard (active portfolios, active debts, pending distributions)
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import sqlalchemy as sa
-from flask import abort, jsonify, make_response, request
+from flask import abort, jsonify, render_template, request
 
 from pgappforge import BaseView, expose
 from pgappforge.security.decorators import has_access
@@ -58,16 +58,6 @@ def _get_session():
 	raise RuntimeError("Cannot obtain database session")
 
 
-def _he(s: object) -> str:
-	return (
-		str(s)
-		.replace("&", "&amp;")
-		.replace("<", "&lt;")
-		.replace(">", "&gt;")
-		.replace('"', "&quot;")
-	)
-
-
 def _cents(cents: int | None, currency: str = "USD") -> str:
 	if cents is None:
 		return "—"
@@ -77,8 +67,23 @@ def _cents(cents: int | None, currency: str = "USD") -> str:
 	return f"{sign}{major:,}.{minor:02d} {currency}"
 
 
+def _fmt_display(cents: int | None) -> str:
+	"""Human-readable amount for template context, e.g. '$2.50M'."""
+	if cents is None:
+		return "—"
+	v = abs(cents / 100)
+	pfx = ("-" if cents < 0 else "") + "$"
+	if v >= 1_000_000_000:
+		return f"{pfx}{v / 1_000_000_000:.2f}B"
+	if v >= 1_000_000:
+		return f"{pfx}{v / 1_000_000:.2f}M"
+	if v >= 1_000:
+		return f"{pfx}{v / 1_000:.1f}k"
+	return f"{pfx}{v:.0f}"
+
+
 # ---------------------------------------------------------------------------
-# PropertyPortfolioView
+# PropertyPortfolioView — HTML list + detail
 # ---------------------------------------------------------------------------
 
 class PropertyPortfolioView(BaseERPView):
@@ -90,11 +95,17 @@ class PropertyPortfolioView(BaseERPView):
 	@expose("/")
 	@has_access
 	def list(self):
+		"""Render portfolio list using the dashboard template."""
+		from flask import current_app
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
 		status = request.args.get("status", "ACTIVE")
 
-		q = sa.select(PropertyPortfolio).order_by(sa.asc(PropertyPortfolio.name)).limit(500)
+		q = (
+			sa.select(PropertyPortfolio)
+			.order_by(sa.asc(PropertyPortfolio.name))
+			.limit(500)
+		)
 		if tenant_id:
 			q = q.where(PropertyPortfolio.tenant_id == tenant_id)
 		if status:
@@ -102,66 +113,117 @@ class PropertyPortfolioView(BaseERPView):
 
 		portfolios = session.execute(q).scalars().all()
 
-		rows = "".join(
-			f"<tr>"
-			f"<td>{_he(p.name)}</td>"
-			f"<td><span class='badge badge-{'success' if p.status == 'ACTIVE' else 'secondary'}'>"
-			f"{_he(p.status)}</span></td>"
-			f"<td>{_he(p.description or '—')}</td>"
-			f"<td><a href='/industry/portfolio/portfolios/{_he(p.id)}' class='btn btn-xs btn-primary'>View</a></td>"
-			f"</tr>"
-			for p in portfolios
+		# Live KPI counts
+		try:
+			active_portfolios = self._count(PropertyPortfolio, status="ACTIVE")
+			active_debts = self._count(PropertyDebt, status="ACTIVE")
+			pending_distributions = self._count(DistributionRecord, status="DRAFT")
+			total_properties = self._count(PortfolioProperty)
+		except Exception:
+			active_portfolios = active_debts = pending_distributions = total_properties = 0
+
+		kpi_html = self.kpi_cards([
+			{
+				"label":   "Active Portfolios",
+				"value":   active_portfolios,
+				"format":  "integer",
+				"color":   "#1a56db",
+				"icon":    "fa-briefcase",
+			},
+			{
+				"label":   "Active Debt Instruments",
+				"value":   active_debts,
+				"format":  "integer",
+				"color":   "#dc2626",
+				"icon":    "fa-bank",
+			},
+			{
+				"label":   "Pending Distributions",
+				"value":   pending_distributions,
+				"format":  "integer",
+				"color":   "#c27803",
+				"icon":    "fa-money",
+			},
+			{
+				"label":   "Total Properties",
+				"value":   total_properties,
+				"format":  "integer",
+				"color":   "#057a55",
+				"icon":    "fa-building",
+			},
+		])
+
+		return render_template(
+			"appbuilder/re_portfolio/dashboard.html",
+			portfolios=portfolios,
+			kpi_html=kpi_html,
+			appbuilder=current_app.appbuilder,
 		)
-		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Portfolios</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-<style>body{{padding:24px}}.badge-success{{background:#27ae60}}.badge-secondary{{background:#7f8c8d}}</style>
-</head><body>
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-  <h3>Portfolios <small>({len(portfolios)})</small></h3>
-  <a href="/industry/portfolio/dashboard" class="btn btn-default btn-sm">Dashboard</a>
-</div>
-<table class="table table-bordered table-hover table-condensed">
-<thead><tr><th>Name</th><th>Status</th><th>Description</th><th></th></tr></thead>
-<tbody>{rows}</tbody></table>
-<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
-</body></html>"""
-		return make_response(html, 200)
 
 	@expose("/<string:portfolio_id>")
 	@has_access
 	def detail(self, portfolio_id: str):
+		"""Render individual portfolio deep-dive."""
+		from flask import current_app
 		session = _get_session()
 		portfolio = session.get(PropertyPortfolio, portfolio_id)
 		if portfolio is None:
 			abort(404)
 
 		tenant_id = request.args.get("tenant_id") or portfolio.tenant_id
-		try:
-			from pgappforge.plugins.erp.industry.real_estate.portfolio.services import (
-				PortfolioAnalyticsService,
-			)
-			summary = PortfolioAnalyticsService().get_portfolio_summary(
-				portfolio_id=portfolio_id,
-				tenant_id=tenant_id,
-				session=session,
-			)
-		except Exception as exc:
-			log.warning("PortfolioDashboard.detail: summary failed: %s", exc)
-			summary = {"properties": [], "totals": {}}
 
-		return jsonify({
-			"id": portfolio.id,
-			"tenant_id": portfolio.tenant_id,
-			"name": portfolio.name,
-			"description": portfolio.description,
-			"status": portfolio.status,
-			"summary": summary,
-		})
+		# Aggregate stats for the header strip
+		try:
+			q_props = (
+				sa.select(sa.func.count())
+				.select_from(PortfolioProperty)
+				.where(PortfolioProperty.portfolio_id == portfolio_id)
+			)
+			property_count = session.execute(q_props).scalar_one() or 0
+
+			q_aum = (
+				sa.select(
+					sa.func.coalesce(
+						sa.func.sum(PortfolioProperty.current_value_cents), 0
+					)
+				)
+				.where(PortfolioProperty.portfolio_id == portfolio_id)
+			)
+			aum_cents = int(session.execute(q_aum).scalar_one() or 0)
+
+			q_inv = (
+				sa.select(sa.func.count())
+				.select_from(InvestorHolding)
+				.where(InvestorHolding.portfolio_id == portfolio_id)
+				.where(InvestorHolding.status == "ACTIVE")
+			)
+			investor_count = session.execute(q_inv).scalar_one() or 0
+
+			q_debt = (
+				sa.select(sa.func.count())
+				.select_from(PropertyDebt)
+				.where(PropertyDebt.portfolio_id == portfolio_id)
+				.where(PropertyDebt.status == "ACTIVE")
+			)
+			debt_count = session.execute(q_debt).scalar_one() or 0
+		except Exception as exc:
+			log.warning("portfolio detail aggregates failed: %s", exc)
+			property_count = investor_count = debt_count = 0
+			aum_cents = None
+
+		return render_template(
+			"appbuilder/re_portfolio/portfolio_detail.html",
+			portfolio=portfolio,
+			aum_display=_fmt_display(aum_cents),
+			property_count=property_count,
+			investor_count=investor_count,
+			debt_count=debt_count,
+			appbuilder=current_app.appbuilder,
+		)
 
 
 # ---------------------------------------------------------------------------
-# PropertyDebtView
+# PropertyDebtView — JSON list
 # ---------------------------------------------------------------------------
 
 class PropertyDebtView(BaseERPView):
@@ -194,19 +256,19 @@ class PropertyDebtView(BaseERPView):
 		return jsonify({
 			"debts": [
 				{
-					"id": d.id,
-					"property_id": d.property_id,
-					"lender_name": d.lender_name,
-					"loan_type": d.loan_type,
-					"original_principal_cents": d.original_principal_cents,
-					"original_principal_display": _cents(d.original_principal_cents),
-					"current_balance_cents": d.current_balance_cents,
-					"current_balance_display": _cents(d.current_balance_cents),
-					"interest_rate": str(d.interest_rate),
-					"monthly_payment_cents": d.monthly_payment_cents,
-					"maturity_date": d.maturity_date.isoformat() if d.maturity_date else None,
-					"status": d.status,
-					"lien_position": d.lien_position,
+					"id":                          d.id,
+					"property_id":                 d.property_id,
+					"lender_name":                 d.lender_name,
+					"loan_type":                   d.loan_type,
+					"original_principal_cents":    d.original_principal_cents,
+					"original_principal_display":  _cents(d.original_principal_cents),
+					"current_balance_cents":        d.current_balance_cents,
+					"current_balance_display":     _cents(d.current_balance_cents),
+					"interest_rate":               str(d.interest_rate),
+					"monthly_payment_cents":       d.monthly_payment_cents,
+					"maturity_date":               d.maturity_date.isoformat() if d.maturity_date else None,
+					"status":                      d.status,
+					"lien_position":               d.lien_position,
 				}
 				for d in debts
 			]
@@ -214,7 +276,7 @@ class PropertyDebtView(BaseERPView):
 
 
 # ---------------------------------------------------------------------------
-# CapExRecordView
+# CapExRecordView — JSON list
 # ---------------------------------------------------------------------------
 
 class CapExRecordView(BaseERPView):
@@ -247,15 +309,15 @@ class CapExRecordView(BaseERPView):
 		return jsonify({
 			"capex_records": [
 				{
-					"id": r.id,
-					"property_id": r.property_id,
-					"description": r.description,
-					"capex_cents": r.capex_cents,
-					"capex_display": _cents(r.capex_cents),
-					"capex_date": r.capex_date.isoformat(),
-					"category": r.category,
-					"budget_cents": r.budget_cents,
-					"vendor_name": r.vendor_name,
+					"id":               r.id,
+					"property_id":      r.property_id,
+					"description":      r.description,
+					"capex_cents":      r.capex_cents,
+					"capex_display":    _cents(r.capex_cents),
+					"capex_date":       r.capex_date.isoformat(),
+					"category":         r.category,
+					"budget_cents":     r.budget_cents,
+					"vendor_name":      r.vendor_name,
 					"is_capitalizable": r.is_capitalizable,
 				}
 				for r in records
@@ -264,7 +326,7 @@ class CapExRecordView(BaseERPView):
 
 
 # ---------------------------------------------------------------------------
-# InvestorHoldingView
+# InvestorHoldingView — JSON list
 # ---------------------------------------------------------------------------
 
 class InvestorHoldingView(BaseERPView):
@@ -297,14 +359,14 @@ class InvestorHoldingView(BaseERPView):
 		return jsonify({
 			"holdings": [
 				{
-					"id": h.id,
-					"portfolio_id": h.portfolio_id,
-					"investor_party_id": h.investor_party_id,
-					"ownership_pct": str(h.ownership_pct),
-					"investment_cents": h.investment_cents,
+					"id":                 h.id,
+					"portfolio_id":       h.portfolio_id,
+					"investor_party_id":  h.investor_party_id,
+					"ownership_pct":      str(h.ownership_pct),
+					"investment_cents":   h.investment_cents,
 					"investment_display": _cents(h.investment_cents),
-					"since_date": h.since_date.isoformat(),
-					"status": h.status,
+					"since_date":         h.since_date.isoformat(),
+					"status":             h.status,
 				}
 				for h in holdings
 			]
@@ -312,7 +374,7 @@ class InvestorHoldingView(BaseERPView):
 
 
 # ---------------------------------------------------------------------------
-# DistributionRecordView
+# DistributionRecordView — JSON list
 # ---------------------------------------------------------------------------
 
 class DistributionRecordView(BaseERPView):
@@ -345,14 +407,14 @@ class DistributionRecordView(BaseERPView):
 		return jsonify({
 			"distributions": [
 				{
-					"id": d.id,
-					"portfolio_id": d.portfolio_id,
-					"period": d.period,
+					"id":                       d.id,
+					"portfolio_id":             d.portfolio_id,
+					"period":                   d.period,
 					"total_distributable_cents": d.total_distributable_cents,
-					"total_display": _cents(d.total_distributable_cents),
-					"status": d.status,
-					"distributed_at": d.distributed_at.isoformat() if d.distributed_at else None,
-					"allocation_count": len(d.allocations) if d.allocations else 0,
+					"total_display":            _cents(d.total_distributable_cents),
+					"status":                   d.status,
+					"distributed_at":           d.distributed_at.isoformat() if d.distributed_at else None,
+					"allocation_count":         len(d.allocations) if d.allocations else 0,
 				}
 				for d in dists
 			]
@@ -360,99 +422,270 @@ class DistributionRecordView(BaseERPView):
 
 
 # ---------------------------------------------------------------------------
-# PortfolioDashboardView
+# PortfolioDashboardView — main entry point dashboard
 # ---------------------------------------------------------------------------
 
 class PortfolioDashboardView(BaseERPView):
 	"""Portfolio Analytics KPI dashboard.
 
-	GET /industry/portfolio/dashboard  — live KPI tiles with counts and totals.
+	GET /industry/portfolio/   — live KPI tiles, charts, and pending distributions.
 	"""
 
 	route_base = "/industry/portfolio"
-	default_view = "dashboard"
+	default_view = "index"
 
-	@expose("/dashboard")
+	# ------------------------------------------------------------------
+	# Per-portfolio data API endpoints
+	# All four join through PortfolioProperty to resolve the
+	# portfolio → property → debt/capex relationships.
+	# ------------------------------------------------------------------
+
+	@expose("/api/portfolio/<string:portfolio_id>/metrics")
 	@has_access
-	def dashboard(self):
-		"""Portfolio dashboard with live counts and aggregate analytics."""
+	def api_portfolio_metrics(self, portfolio_id: str):
+		"""NOI, cap rate, DSCR, IRR aggregates for one portfolio.
+
+		GET /industry/portfolio/api/portfolio/<id>/metrics
+		Returns JSON with keys: noi_cents, cap_rate, dscr, irr (all nullable).
+		"""
+		session = _get_session()
+		portfolio = session.get(PropertyPortfolio, portfolio_id)
+		if portfolio is None:
+			abort(404)
+
+		try:
+			from pgappforge.plugins.erp.industry.real_estate.portfolio.services import (
+				PortfolioAnalyticsService,
+			)
+			summary = PortfolioAnalyticsService().get_portfolio_summary(
+				portfolio_id=portfolio_id,
+				tenant_id=portfolio.tenant_id,
+				session=session,
+			)
+			totals = summary.get("totals", {})
+		except Exception as exc:
+			log.warning("api_portfolio_metrics: analytics service failed: %s", exc)
+			totals = {}
+
+		return jsonify({
+			"portfolio_id":  portfolio_id,
+			"noi_cents":     totals.get("noi_cents"),
+			"cap_rate":      totals.get("cap_rate"),
+			"dscr":          totals.get("dscr"),
+			"irr":           totals.get("irr"),
+			"noi_trend":     totals.get("noi_trend"),
+			"cap_rate_trend": totals.get("cap_rate_trend"),
+			"dscr_trend":    totals.get("dscr_trend"),
+			"irr_trend":     totals.get("irr_trend"),
+		})
+
+	@expose("/api/portfolio/<string:portfolio_id>/properties")
+	@has_access
+	def api_portfolio_properties(self, portfolio_id: str):
+		"""Properties belonging to a portfolio with per-property analytics.
+
+		GET /industry/portfolio/api/portfolio/<id>/properties
+		Returns JSON list of property rows.
+		"""
+		session = _get_session()
+		portfolio = session.get(PropertyPortfolio, portfolio_id)
+		if portfolio is None:
+			abort(404)
+
+		q = (
+			sa.select(PortfolioProperty)
+			.where(PortfolioProperty.portfolio_id == portfolio_id)
+			.order_by(sa.desc(PortfolioProperty.current_value_cents))
+			.limit(200)
+		)
+		props = session.execute(q).scalars().all()
+
+		rows = []
+		for p in props:
+			debt_q = (
+				sa.select(
+					sa.func.coalesce(sa.func.sum(PropertyDebt.current_balance_cents), 0)
+				)
+				.where(PropertyDebt.property_id == p.property_id)
+				.where(PropertyDebt.status == "ACTIVE")
+			)
+			debt_balance = int(session.execute(debt_q).scalar_one() or 0)
+			rows.append({
+				"id":                       p.property_id,
+				"address":                  getattr(p, "address", None),
+				"property_type":            getattr(p, "property_type", None),
+				"acquisition_cost_cents":   p.acquisition_cost_cents,
+				"current_value_cents":      p.current_value_cents,
+				"debt_balance_cents":       debt_balance,
+				"noi_cents":                getattr(p, "noi_cents", None),
+				"cap_rate":                 str(p.cap_rate) if getattr(p, "cap_rate", None) is not None else None,
+			})
+		return jsonify(rows)
+
+	@expose("/api/portfolio/<string:portfolio_id>/debts")
+	@has_access
+	def api_portfolio_debts(self, portfolio_id: str):
+		"""Debt instruments for all properties in a portfolio.
+
+		GET /industry/portfolio/api/portfolio/<id>/debts
+		Joins PropertyDebt through PortfolioProperty on property_id.
+		"""
+		session = _get_session()
+		portfolio = session.get(PropertyPortfolio, portfolio_id)
+		if portfolio is None:
+			abort(404)
+
+		property_ids_q = sa.select(PortfolioProperty.property_id).where(
+			PortfolioProperty.portfolio_id == portfolio_id
+		)
+		property_ids = [r for (r,) in session.execute(property_ids_q).all()]
+
+		if not property_ids:
+			return jsonify({"debts": []})
+
+		q = (
+			sa.select(PropertyDebt)
+			.where(PropertyDebt.property_id.in_(property_ids))
+			.order_by(sa.desc(PropertyDebt.current_balance_cents))
+			.limit(500)
+		)
+		debts = session.execute(q).scalars().all()
+		return jsonify({
+			"debts": [
+				{
+					"id":                         d.id,
+					"property_id":                d.property_id,
+					"lender_name":                d.lender_name,
+					"loan_type":                  d.loan_type,
+					"current_balance_cents":      d.current_balance_cents,
+					"interest_rate":              str(d.interest_rate),
+					"monthly_payment_cents":      d.monthly_payment_cents,
+					"maturity_date":              d.maturity_date.isoformat() if d.maturity_date else None,
+					"status":                     d.status,
+					"lien_position":              d.lien_position,
+					"ltv":                        str(d.ltv) if getattr(d, "ltv", None) is not None else None,
+				}
+				for d in debts
+			]
+		})
+
+	@expose("/api/portfolio/<string:portfolio_id>/capex")
+	@has_access
+	def api_portfolio_capex(self, portfolio_id: str):
+		"""CapEx records for all properties in a portfolio.
+
+		GET /industry/portfolio/api/portfolio/<id>/capex
+		Joins CapExRecord through PortfolioProperty on property_id.
+		"""
+		session = _get_session()
+		portfolio = session.get(PropertyPortfolio, portfolio_id)
+		if portfolio is None:
+			abort(404)
+
+		property_ids_q = sa.select(PortfolioProperty.property_id).where(
+			PortfolioProperty.portfolio_id == portfolio_id
+		)
+		property_ids = [r for (r,) in session.execute(property_ids_q).all()]
+
+		if not property_ids:
+			return jsonify({"capex_records": []})
+
+		q = (
+			sa.select(CapExRecord)
+			.where(CapExRecord.property_id.in_(property_ids))
+			.order_by(sa.desc(CapExRecord.capex_date))
+			.limit(500)
+		)
+		records = session.execute(q).scalars().all()
+		return jsonify({
+			"capex_records": [
+				{
+					"id":               r.id,
+					"property_id":      r.property_id,
+					"description":      r.description,
+					"capex_cents":      r.capex_cents,
+					"capex_date":       r.capex_date.isoformat(),
+					"category":         r.category,
+					"budget_cents":     r.budget_cents,
+					"vendor_name":      r.vendor_name,
+					"is_capitalizable": r.is_capitalizable,
+				}
+				for r in records
+			]
+		})
+
+	@expose("/")
+	@has_access
+	def index(self):
+		"""Portfolio analytics dashboard with live KPIs."""
+		from flask import current_app
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
 
-		# Live counts — uses BaseERPView._count()
-		active_portfolios = self._count(PropertyPortfolio, status="ACTIVE")
-		active_debts = self._count(PropertyDebt, status="ACTIVE")
-		pending_distributions = self._count(DistributionRecord, status="DRAFT")
+		# Live counts
+		try:
+			active_portfolios = self._count(PropertyPortfolio, status="ACTIVE")
+			active_debts = self._count(PropertyDebt, status="ACTIVE")
+			pending_distributions = self._count(DistributionRecord, status="DRAFT")
+			total_properties = self._count(PortfolioProperty)
+		except Exception:
+			active_portfolios = active_debts = pending_distributions = total_properties = 0
 
 		# Aggregate debt outstanding
-		q_debt = sa.select(
-			sa.func.coalesce(sa.func.sum(PropertyDebt.current_balance_cents), 0)
-		).where(PropertyDebt.status == "ACTIVE")
-		if tenant_id:
-			q_debt = q_debt.where(PropertyDebt.tenant_id == tenant_id)
-		total_debt_cents = int(session.execute(q_debt).scalar_one() or 0)
-
-		# Aggregate CapEx YTD
-		from datetime import date
-		today = date.today()
-		q_capex = sa.select(
-			sa.func.coalesce(sa.func.sum(CapExRecord.capex_cents), 0)
-		).where(CapExRecord.capex_date >= date(today.year, 1, 1))
-		if tenant_id:
-			q_capex = q_capex.where(CapExRecord.tenant_id == tenant_id)
-		capex_ytd_cents = int(session.execute(q_capex).scalar_one() or 0)
+		try:
+			q_debt = sa.select(
+				sa.func.coalesce(sa.func.sum(PropertyDebt.current_balance_cents), 0)
+			).where(PropertyDebt.status == "ACTIVE")
+			if tenant_id:
+				q_debt = q_debt.where(PropertyDebt.tenant_id == tenant_id)
+			total_debt_cents = int(session.execute(q_debt).scalar_one() or 0)
+		except Exception:
+			total_debt_cents = 0
 
 		kpi_html = self.kpi_cards([
 			{
-				"label": "Active Portfolios",
-				"value": active_portfolios,
-				"format": "integer",
-				"color": "#1a56db",
-				"icon": "fa-briefcase",
+				"label":   "Active Portfolios",
+				"value":   active_portfolios,
+				"format":  "integer",
+				"color":   "#1a56db",
+				"icon":    "fa-briefcase",
 			},
 			{
-				"label": "Active Debt Instruments",
-				"value": active_debts,
-				"format": "integer",
-				"color": "#d9534f",
-				"icon": "fa-bank",
+				"label":   "Active Debt Instruments",
+				"value":   active_debts,
+				"format":  "integer",
+				"color":   "#dc2626",
+				"icon":    "fa-bank",
 			},
 			{
-				"label": "Pending Distributions",
-				"value": pending_distributions,
-				"format": "integer",
-				"color": "#f0ad4e",
-				"icon": "fa-money",
+				"label":   "Pending Distributions",
+				"value":   pending_distributions,
+				"format":  "integer",
+				"color":   "#c27803",
+				"icon":    "fa-money",
 			},
 			{
-				"label": "Total Debt Outstanding",
-				"value": total_debt_cents // 100,
-				"format": "currency",
-				"color": "#c0392b",
-				"icon": "fa-credit-card",
+				"label":   "Total Properties",
+				"value":   total_properties,
+				"format":  "integer",
+				"color":   "#057a55",
+				"icon":    "fa-building",
 			},
 			{
-				"label": "CapEx YTD",
-				"value": capex_ytd_cents // 100,
-				"format": "currency",
-				"color": "#27ae60",
-				"icon": "fa-wrench",
+				"label":   "Total Debt Outstanding",
+				"value":   total_debt_cents // 100,
+				"format":  "currency",
+				"color":   "#7e3af2",
+				"icon":    "fa-credit-card",
 			},
 		])
 
-		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Portfolio Analytics Dashboard</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-<style>body{{padding:24px}}</style>
-</head><body>
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-  <h3>Portfolio Analytics Dashboard</h3>
-  <a href="/industry/portfolio/portfolios/" class="btn btn-default btn-sm">All Portfolios</a>
-</div>
-{kpi_html}
-<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
-</body></html>"""
-		return make_response(html, 200)
+		return render_template(
+			"appbuilder/re_portfolio/dashboard.html",
+			portfolios=[],
+			kpi_html=kpi_html,
+			appbuilder=current_app.appbuilder,
+		)
 
 
 __all__ = [

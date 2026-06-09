@@ -1,0 +1,292 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Rent Roll — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <div style="flex:1;">
+    <h1 class="erp-page-title">Rent Roll</h1>
+    <p class="erp-page-subtitle">Monthly rent schedule — all units, all tenants.</p>
+  </div>
+  <div class="erp-page-header-actions">
+    {# Property selector #}
+    <select id="pm-property-filter" class="form-control input-sm"
+            style="width:200px; display:inline-block; margin-right:8px;"
+            aria-label="Filter by property">
+      <option value="">All Properties</option>
+    </select>
+    <a href="/pm/rent-payments/export" class="btn btn-default btn-sm">
+      <i class="fa fa-download"></i> Export CSV
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary KPI row ──────────────────────────────────────────────────────── #}
+<div class="erp-kpi-grid erp-mb-24" id="rr-kpi-row">
+  {% for _ in range(3) %}
+  <div class="erp-card">
+    <div class="erp-skeleton erp-skeleton-text short" style="margin-bottom:12px;"></div>
+    <div class="erp-skeleton erp-skeleton-text wide" style="height:28px;margin-bottom:8px;"></div>
+    <div class="erp-skeleton erp-skeleton-text mid"></div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Main rent roll table + donut chart ───────────────────────────────────── #}
+<div class="row">
+
+  {# Table #}
+  <div class="col-md-8">
+    <div class="erp-card" style="padding:0;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; align-items:center; justify-content:space-between;">
+        <h4 class="erp-chart-title erp-mb-0">Unit-by-Unit Detail</h4>
+        <span id="rr-period-label" style="font-size:13px; color:var(--erp-text-muted);"></span>
+      </div>
+
+      <div data-island="pmRentRollTable" class="erp-island" style="padding:0;">
+        {# Skeleton #}
+        <div id="rr-table-skeleton" style="padding:16px 20px;">
+          {% for _ in range(7) %}
+          <div style="display:flex; gap:12px; margin-bottom:10px;">
+            <div class="erp-skeleton erp-skeleton-text" style="width:70px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:130px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:80px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:80px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:90px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:80px;"></div>
+            <div class="erp-skeleton erp-skeleton-text" style="width:70px;"></div>
+          </div>
+          {% endfor %}
+        </div>
+
+        {# Live table #}
+        <div id="rr-table-wrap" style="display:none; overflow-x:auto;">
+          <table class="table table-condensed table-hover" style="margin-bottom:0;">
+            <thead>
+              <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+                <th>Unit</th>
+                <th>Tenant</th>
+                <th style="text-align:right;">Monthly Rent</th>
+                <th>Due Date</th>
+                <th>Last Payment</th>
+                <th style="text-align:right;">Balance</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rr-tbody"></tbody>
+            <tfoot id="rr-tfoot" style="border-top:2px solid var(--erp-border); font-weight:700;"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Donut chart + legend #}
+  <div class="col-md-4">
+    <div class="erp-card erp-mb-24" style="height:100%; display:flex; flex-direction:column;">
+      <h4 class="erp-chart-title" style="margin-bottom:16px;">Payment Status Distribution</h4>
+
+      <div data-island="pmRentRollChart" class="erp-island" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+        <div id="rr-chart-skeleton" style="width:140px; height:140px; border-radius:50%; background:var(--erp-surface-alt,#f0f1f3); margin:16px auto;"></div>
+        <div id="rr-chart-wrap" style="display:none; width:100%;">
+          <canvas id="rr-donut" width="220" height="220" aria-label="Payment status donut chart" role="img"></canvas>
+          <ul id="rr-legend" style="list-style:none; padding:0; margin:16px 0 0; font-size:13px;"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+
+  /* ── XSS escape ────────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ── Status badge ──────────────────────────────────────────────────────── */
+  var STATUS_CLASS = { PAID: 'success', PENDING: 'warning', LATE: 'danger' };
+  function statusBadge(s) {
+    return '<span class="label label-' + (STATUS_CLASS[s] || 'default') + '">' + _esc(s) + '</span>';
+  }
+
+  /* ── Format currency (cents → display) ─────────────────────────────────── */
+  function fmtCents(c, currency) {
+    currency = currency || '';
+    if (c == null) return '—';
+    var val = (c / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return currency + val;
+  }
+
+  /* ── Property filter population ────────────────────────────────────────── */
+  ERPIslands.fetchJSON('/api/pm/properties')
+    .then(function (props) {
+      var sel = document.getElementById('pm-property-filter');
+      if (!sel) return;
+      props.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value       = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(function () { /* non-fatal */ });
+
+  /* ── Rent Roll Table island ─────────────────────────────────────────────── */
+  ERPIslands.register('pmRentRollTable', [], function (el) {
+    var skeleton  = el.querySelector('#rr-table-skeleton');
+    var tableWrap = el.querySelector('#rr-table-wrap');
+    var tbody     = el.querySelector('#rr-tbody');
+    var tfoot     = el.querySelector('#rr-tfoot');
+    var kpiRow    = document.getElementById('rr-kpi-row');
+    var periodLbl = document.getElementById('rr-period-label');
+
+    function load(propertyId) {
+      var url = '/api/pm/rent-roll' + (propertyId ? '?property_id=' + encodeURIComponent(propertyId) : '');
+      ERPIslands.fetchJSON(url)
+        .then(function (data) {
+          var rows     = data.rows     || [];
+          var totals   = data.totals   || {};
+          var currency = data.currency || '';
+
+          if (periodLbl) periodLbl.textContent = data.period || '';
+
+          /* KPI summary cards */
+          if (kpiRow) {
+            kpiRow.innerHTML = [
+              { label: 'Total Rent Roll',    value: fmtCents(totals.total_rent_cents, currency),        cls: 'primary' },
+              { label: 'Total Collected',    value: fmtCents(totals.collected_cents,  currency),        cls: 'success' },
+              { label: 'Total Outstanding',  value: fmtCents(totals.outstanding_cents,currency),        cls: 'danger'  }
+            ].map(function (k) {
+              return '<div class="erp-card">' +
+                '<div class="erp-card-accent erp-card-accent-' + k.cls + '"></div>' +
+                '<p class="erp-card-title">' + _esc(k.label) + '</p>' +
+                '<p class="erp-card-value">' + _esc(k.value) + '</p>' +
+              '</div>';
+            }).join('');
+          }
+
+          /* Table rows */
+          tbody.innerHTML = '';
+          rows.forEach(function (r) {
+            var balClass = (r.balance_cents || 0) > 0 ? 'style="color:var(--erp-danger,#e02424);"' : '';
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+              '<td><strong>' + _esc(r.unit_number)  + '</strong></td>' +
+              '<td>' + _esc(r.tenant_name)           + '</td>' +
+              '<td style="text-align:right;">' + _esc(fmtCents(r.monthly_rent_cents, currency)) + '</td>' +
+              '<td>' + _esc(r.due_date)              + '</td>' +
+              '<td>' + _esc(r.last_payment_date || '—') + '</td>' +
+              '<td style="text-align:right;" ' + balClass + '>' + _esc(fmtCents(r.balance_cents, currency)) + '</td>' +
+              '<td>' + statusBadge(r.status)          + '</td>';
+            tbody.appendChild(tr);
+          });
+
+          /* Totals footer row */
+          tfoot.innerHTML =
+            '<tr>' +
+              '<td colspan="2">Totals</td>' +
+              '<td style="text-align:right;">' + _esc(fmtCents(totals.total_rent_cents,    currency)) + '</td>' +
+              '<td></td>' +
+              '<td></td>' +
+              '<td style="text-align:right;">' + _esc(fmtCents(totals.outstanding_cents,   currency)) + '</td>' +
+              '<td></td>' +
+            '</tr>';
+
+          if (skeleton)  skeleton.style.display  = 'none';
+          if (tableWrap) tableWrap.style.display  = '';
+        })
+        .catch(function (err) {
+          if (skeleton) skeleton.innerHTML =
+            '<div class="alert alert-warning" style="margin:12px;">Rent roll unavailable: ' + _esc(err.message) + '</div>';
+        });
+    }
+
+    load('');
+
+    var sel = document.getElementById('pm-property-filter');
+    if (sel) {
+      sel.addEventListener('change', function () { load(sel.value); });
+    }
+  });
+
+  /* ── Rent Roll Chart island ─────────────────────────────────────────────── */
+  ERPIslands.register('pmRentRollChart', ['chartjs'], function (el) {
+    var skeleton  = el.querySelector('#rr-chart-skeleton');
+    var chartWrap = el.querySelector('#rr-chart-wrap');
+    var canvas    = el.querySelector('#rr-donut');
+    var legend    = el.querySelector('#rr-legend');
+
+    var PALETTE = { PAID: '#0e9f6e', PENDING: '#e3a008', LATE: '#e02424' };
+
+    ERPIslands.fetchJSON('/api/pm/rent-roll/status-summary')
+      .then(function (data) {
+        /* data = { PAID: 12, PENDING: 4, LATE: 2 } */
+        var labels = Object.keys(data);
+        var values = labels.map(function (k) { return data[k]; });
+        var colors = labels.map(function (k) { return PALETTE[k] || '#6b7280'; });
+
+        new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels:   labels,
+            datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+          },
+          options: {
+            responsive:          true,
+            maintainAspectRatio: true,
+            cutout:              '65%',
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                    var pct   = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                    return ' ' + ctx.label + ': ' + ctx.parsed + ' units (' + pct + '%)';
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        /* Custom legend */
+        if (legend) {
+          legend.innerHTML = '';
+          labels.forEach(function (k, i) {
+            var total = values.reduce(function (a, b) { return a + b; }, 0);
+            var pct   = total > 0 ? ((values[i] / total) * 100).toFixed(1) : '0.0';
+            var li    = document.createElement('li');
+            li.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+            li.innerHTML =
+              '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + colors[i] + ';flex-shrink:0;"></span>' +
+              '<span style="flex:1;">' + _esc(k) + '</span>' +
+              '<strong>' + _esc(values[i]) + '</strong>' +
+              '<span style="color:var(--erp-text-muted);font-size:11px;">(' + pct + '%)</span>';
+            legend.appendChild(li);
+          });
+        }
+
+        if (skeleton)  skeleton.style.display  = 'none';
+        if (chartWrap) chartWrap.style.display  = '';
+      })
+      .catch(function () {
+        if (skeleton) skeleton.innerHTML =
+          '<div class="alert alert-warning" style="font-size:12px;">Chart unavailable.</div>';
+      });
+  });
+
+}());
+</script>
+{% endblock %}

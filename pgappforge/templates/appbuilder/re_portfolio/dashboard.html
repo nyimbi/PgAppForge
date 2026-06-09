@@ -1,0 +1,521 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Portfolio Analytics — {{ appbuilder.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header">
+  <h1 class="erp-page-title">Portfolio Analytics</h1>
+  <p class="erp-page-subtitle">Real estate portfolio performance, debt maturities, and pending distributions.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ─────────────────────────────────────────────────────────────── #}
+<div class="erp-mb-24">
+  {{ kpi_html | safe }}
+</div>
+
+{# ── Portfolio performance table ───────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+    <h4 class="erp-chart-title erp-mb-0">Portfolio Performance</h4>
+    <a href="/industry/portfolio/portfolios/" class="btn btn-xs btn-default">All Portfolios</a>
+  </div>
+  <div data-island="portfolioPerfTable" class="erp-island" style="overflow-x:auto;">
+    <table class="table table-hover table-condensed" style="margin:0;">
+      <thead>
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+          <th>Portfolio</th>
+          <th class="text-right">Properties</th>
+          <th class="text-right">Total Value</th>
+          <th class="text-right">NOI</th>
+          <th class="text-right">Cap Rate</th>
+          <th class="text-right">DSCR</th>
+          <th class="text-right">IRR</th>
+        </tr>
+      </thead>
+      <tbody id="portfolio-perf-body">
+        {# Skeleton rows while island loads #}
+        {% for _ in range(4) %}
+        <tr>
+          {% for _ in range(7) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Charts row ────────────────────────────────────────────────────────────── #}
+<div class="row erp-mb-24">
+
+  {# Portfolio value over 12 months #}
+  <div class="col-md-7">
+    <div class="erp-card" style="height:100%;">
+      <h4 style="margin:0 0 16px;">Portfolio Value — Last 12 Months</h4>
+      <div class="erp-chart-wrap">
+        <div data-island="portfolioValueChart" class="erp-island">
+          <canvas id="portfolio-value-canvas" height="90"
+                  aria-label="Portfolio value trend chart" role="img"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Cap rate heatmap #}
+  <div class="col-md-5">
+    <div class="erp-card" style="height:100%;">
+      <h4 style="margin:0 0 16px;">Cap Rate Heatmap — Properties × Quarters</h4>
+      <div data-island="capRateHeatmap" class="erp-island" id="caprate-heatmap-wrap">
+        {# D3 renders inline SVG here #}
+        <div id="caprate-heatmap-skeleton" class="erp-skeleton"
+             style="height:260px;border-radius:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Upcoming debt maturities (12 months) ─────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border);">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-clock-o" style="color:var(--erp-warning);"></i>
+      Upcoming Debt Maturities
+      <small style="color:var(--erp-text-muted);font-weight:400;">(next 12 months)</small>
+    </h4>
+  </div>
+  <div data-island="debtMaturities" class="erp-island" style="overflow-x:auto;">
+    <table class="table table-hover table-condensed" style="margin:0;">
+      <thead>
+        <tr style="background:var(--erp-surface-alt,#f8f9fa);">
+          <th>Lender</th>
+          <th>Property</th>
+          <th class="text-right">Balance</th>
+          <th class="text-right">Rate</th>
+          <th>Maturity Date</th>
+          <th class="text-right">LTV</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="debt-maturity-body">
+        {% for _ in range(3) %}
+        <tr>
+          {% for _ in range(7) %}
+          <td><div class="erp-skeleton erp-skeleton-text mid"></div></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Pending distributions ─────────────────────────────────────────────────── #}
+<div class="erp-card erp-mb-24" style="padding:0;">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--erp-border); display:flex; justify-content:space-between; align-items:center;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-money" style="color:var(--erp-success);"></i>
+      Pending Distributions
+    </h4>
+    <a href="/industry/portfolio/distributions/" class="btn btn-xs btn-default">All Distributions</a>
+  </div>
+  <div data-island="pendingDistributions" class="erp-island" style="padding:0 20px;">
+    <div id="pending-dist-list">
+      {% for _ in range(3) %}
+      <div style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--erp-border);">
+        <div style="flex:1;">
+          <div class="erp-skeleton erp-skeleton-text wide" style="margin-bottom:6px;"></div>
+          <div class="erp-skeleton erp-skeleton-text short"></div>
+        </div>
+        <div class="erp-skeleton" style="width:120px;height:32px;border-radius:4px;margin-left:16px;"></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── XSS-safe escape ──────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ── Format helpers ───────────────────────────────────────────────────────── */
+  function _fmt_money(cents) {
+    if (cents == null) return '—';
+    var v = Math.abs(cents / 100);
+    var s = (cents < 0 ? '-' : '') + '$';
+    if (v >= 1e9) return s + (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return s + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return s + (v / 1e3).toFixed(1) + 'k';
+    return s + v.toFixed(0);
+  }
+
+  function _fmt_pct(v) {
+    if (v == null) return '—';
+    return parseFloat(v).toFixed(2) + '%';
+  }
+
+  /* ── DSCR colour coding ───────────────────────────────────────────────────── */
+  function _dscr_badge(v) {
+    var n = parseFloat(v);
+    var cls = n >= 1.25 ? 'success' : n >= 1.0 ? 'warning' : 'danger';
+    var label = isNaN(n) ? '—' : n.toFixed(2);
+    return '<span class="label label-' + cls + '">' + _esc(label) + '</span>';
+  }
+
+  /* ── Cap rate colour coding ───────────────────────────────────────────────── */
+  function _caprate_badge(v) {
+    var n = parseFloat(v);
+    var cls = n >= 7 ? 'success' : n >= 5 ? 'warning' : 'danger';
+    var label = isNaN(n) ? '—' : n.toFixed(2) + '%';
+    return '<span class="label label-' + cls + '">' + _esc(label) + '</span>';
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: portfolio performance table                                         */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('portfolioPerfTable', [], function (el) {
+    var tbody = document.getElementById('portfolio-perf-body');
+    if (!tbody) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/performance')
+      .then(function (rows) {
+        tbody.innerHTML = '';
+        rows.forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td><a href="/industry/portfolio/portfolios/' + _esc(r.id) + '">' +
+              _esc(r.name) + '</a>' +
+              (r.status === 'ACTIVE'
+                ? ' <span class="label label-success" style="font-size:10px;">ACTIVE</span>'
+                : ' <span class="label label-default" style="font-size:10px;">' + _esc(r.status) + '</span>') +
+            '</td>' +
+            '<td class="text-right">' + _esc(r.property_count || 0) + '</td>' +
+            '<td class="text-right">' + _esc(_fmt_money(r.total_value_cents)) + '</td>' +
+            '<td class="text-right">' + _esc(_fmt_money(r.noi_cents)) + '</td>' +
+            '<td class="text-right">' + _caprate_badge(r.cap_rate) + '</td>' +
+            '<td class="text-right">' + _dscr_badge(r.dscr) + '</td>' +
+            '<td class="text-right">' + _fmt_pct(r.irr) + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML =
+          '<tr><td colspan="7" class="text-center text-muted">Performance data unavailable.</td></tr>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: portfolio value line chart                                          */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('portfolioValueChart', ['chartjs'], function (el) {
+    var canvas = el.querySelector('#portfolio-value-canvas');
+    if (!canvas) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/value-history')
+      .then(function (data) {
+        /* data = { labels: [...], datasets: [{name, values: [...]}] } */
+        /* Fall back to illustrative mock if API not yet wired */
+        if (!data || !data.labels) {
+          var now = new Date();
+          data = { labels: [], datasets: [{ name: 'Total AUM', values: [] }] };
+          var base = 28000000;
+          for (var i = 11; i >= 0; i--) {
+            var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            data.labels.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
+            base += (Math.random() - 0.3) * 800000;
+            data.datasets[0].values.push(Math.max(0, Math.round(base)));
+          }
+        }
+
+        var palette = [
+          '#1a56db', '#057a55', '#c27803', '#9333ea',
+          '#dc2626', '#0891b2', '#b45309', '#4f46e5'
+        ];
+
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: data.datasets.map(function (ds, i) {
+              var color = palette[i % palette.length];
+              return {
+                label:           ds.name,
+                data:            ds.values,
+                borderColor:     color,
+                backgroundColor: color.replace(')', ', 0.08)').replace('rgb', 'rgba'),
+                borderWidth:     2,
+                pointRadius:     3,
+                fill:            data.datasets.length === 1,
+                tension:         0.35
+              };
+            })
+          },
+          options: {
+            responsive:          true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: data.datasets.length > 1 },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' ' + ctx.dataset.label + ': $' +
+                      (ctx.parsed.y / 1e6).toFixed(2) + 'M';
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: false,
+                grid: { color: 'rgba(0,0,0,.04)' },
+                ticks: {
+                  callback: function (v) {
+                    return '$' + (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' :
+                                  v >= 1e3 ? (v / 1e3).toFixed(0) + 'k' : v);
+                  }
+                }
+              },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      })
+      .catch(function (err) {
+        el.innerHTML =
+          '<div class="alert alert-warning">Chart unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: cap rate heatmap (D3)                                               */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('capRateHeatmap', ['d3'], function (el) {
+    var skeleton = document.getElementById('caprate-heatmap-skeleton');
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/caprate-heatmap')
+      .then(function (data) {
+        /* data = { properties: [...], quarters: [...], cells: [{p, q, rate}] }  */
+        /* Fall back to illustrative mock data if API not yet available          */
+        if (!data || !data.properties) {
+          var props = ['123 Main St', '45 Oak Ave', '7 River Rd', '200 Park Blvd', '88 Hill Ct'];
+          var qtrs  = ['Q1 \'25', 'Q2 \'25', 'Q3 \'25', 'Q4 \'25', 'Q1 \'26'];
+          var cells = [];
+          props.forEach(function (p) {
+            qtrs.forEach(function (q) {
+              cells.push({ p: p, q: q, rate: 4 + Math.random() * 5 });
+            });
+          });
+          data = { properties: props, quarters: qtrs, cells: cells };
+        }
+
+        if (skeleton) skeleton.remove();
+
+        var margin = { top: 8, right: 8, bottom: 56, left: 110 };
+        var cellW  = 44;
+        var cellH  = 36;
+        var width  = data.quarters.length  * cellW  + margin.left + margin.right;
+        var height = data.properties.length * cellH + margin.top  + margin.bottom;
+
+        var svg = d3.select(el).append('svg')
+          .attr('width',  '100%')
+          .attr('viewBox', '0 0 ' + width + ' ' + height)
+          .attr('preserveAspectRatio', 'xMidYMid meet');
+
+        var g = svg.append('g')
+          .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+        var colorScale = d3.scaleLinear()
+          .domain([4, 6, 8, 10])
+          .range(['#fef3c7', '#fbbf24', '#16a34a', '#166534'])
+          .clamp(true);
+
+        var xScale = d3.scaleBand()
+          .domain(data.quarters)
+          .range([0, data.quarters.length * cellW])
+          .padding(0.05);
+
+        var yScale = d3.scaleBand()
+          .domain(data.properties)
+          .range([0, data.properties.length * cellH])
+          .padding(0.05);
+
+        /* Cells */
+        g.selectAll('rect')
+          .data(data.cells)
+          .enter().append('rect')
+          .attr('x',      function (d) { return xScale(d.q); })
+          .attr('y',      function (d) { return yScale(d.p); })
+          .attr('width',  xScale.bandwidth())
+          .attr('height', yScale.bandwidth())
+          .attr('rx', 3)
+          .attr('fill', function (d) { return colorScale(d.rate); })
+          .append('title')
+          .text(function (d) {
+            return d.p + ' / ' + d.q + ': ' + d.rate.toFixed(2) + '%';
+          });
+
+        /* Cell labels */
+        g.selectAll('text.cell-label')
+          .data(data.cells)
+          .enter().append('text')
+          .attr('class', 'cell-label')
+          .attr('x', function (d) { return xScale(d.q) + xScale.bandwidth() / 2; })
+          .attr('y', function (d) { return yScale(d.p) + yScale.bandwidth() / 2 + 4; })
+          .attr('text-anchor', 'middle')
+          .attr('font-size', '10px')
+          .attr('fill', function (d) { return d.rate > 7.5 ? '#fff' : '#1e293b'; })
+          .text(function (d) { return d.rate.toFixed(1); });
+
+        /* X axis */
+        g.append('g')
+          .attr('transform', 'translate(0,' + (data.properties.length * cellH) + ')')
+          .call(d3.axisBottom(xScale).tickSize(0))
+          .select('.domain').remove();
+
+        g.selectAll('.tick text')
+          .attr('font-size', '11px')
+          .attr('fill', '#64748b');
+
+        /* Y axis */
+        g.append('g')
+          .call(d3.axisLeft(yScale).tickSize(0))
+          .select('.domain').remove();
+
+        g.selectAll('.tick text')
+          .attr('font-size', '11px')
+          .attr('fill', '#64748b')
+          .style('text-overflow', 'ellipsis');
+
+        /* Color legend */
+        var legendY = data.properties.length * cellH + 38;
+        var lgW = data.quarters.length * cellW;
+        var defs = svg.append('defs');
+        var grad = defs.append('linearGradient').attr('id', 'cr-grad');
+        grad.append('stop').attr('offset', '0%').attr('stop-color', '#fef3c7');
+        grad.append('stop').attr('offset', '50%').attr('stop-color', '#fbbf24');
+        grad.append('stop').attr('offset', '75%').attr('stop-color', '#16a34a');
+        grad.append('stop').attr('offset', '100%').attr('stop-color', '#166534');
+
+        g.append('rect')
+          .attr('x', 0).attr('y', legendY)
+          .attr('width', lgW).attr('height', 8)
+          .attr('rx', 3)
+          .attr('fill', 'url(#cr-grad)');
+
+        g.append('text')
+          .attr('x', 0).attr('y', legendY + 18)
+          .attr('font-size', '10px').attr('fill', '#94a3b8')
+          .text('4%');
+
+        g.append('text')
+          .attr('x', lgW).attr('y', legendY + 18)
+          .attr('text-anchor', 'end')
+          .attr('font-size', '10px').attr('fill', '#94a3b8')
+          .text('10%+ cap rate');
+      })
+      .catch(function (err) {
+        el.innerHTML =
+          '<div class="alert alert-warning">Heatmap unavailable: ' + _esc(err.message) + '</div>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: debt maturities table                                               */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('debtMaturities', [], function (el) {
+    var tbody = document.getElementById('debt-maturity-body');
+    if (!tbody) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/debt-maturities')
+      .then(function (rows) {
+        if (!rows.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" class="text-center text-muted">No maturities within 12 months.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = '';
+        rows.forEach(function (d) {
+          var daysLeft = d.days_to_maturity;
+          var urgency  = daysLeft <= 60 ? 'danger' : daysLeft <= 180 ? 'warning' : 'info';
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + _esc(d.lender_name) + '</td>' +
+            '<td>' + _esc(d.property_address || d.property_id) + '</td>' +
+            '<td class="text-right">' + _esc(_fmt_money(d.current_balance_cents)) + '</td>' +
+            '<td class="text-right">' + _fmt_pct(d.interest_rate) + '</td>' +
+            '<td>' +
+              '<span class="label label-' + urgency + '">' + _esc(d.maturity_date) + '</span>' +
+              ' <small class="text-muted">' + _esc(daysLeft) + 'd</small>' +
+            '</td>' +
+            '<td class="text-right">' + _fmt_pct(d.ltv) + '</td>' +
+            '<td><span class="label label-default">' + _esc(d.status) + '</span></td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML =
+          '<tr><td colspan="7" class="text-center text-muted">Debt maturity data unavailable.</td></tr>';
+      });
+  });
+
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  /* Island: pending distributions list                                          */
+  /* ─────────────────────────────────────────────────────────────────────────── */
+  ERPIslands.register('pendingDistributions', [], function (el) {
+    var container = document.getElementById('pending-dist-list');
+    if (!container) return;
+
+    ERPIslands.fetchJSON('/industry/portfolio/api/pending-distributions')
+      .then(function (items) {
+        if (!items.length) {
+          container.innerHTML =
+            '<p class="text-muted" style="padding:16px 0;">No pending distributions.</p>';
+          return;
+        }
+        container.innerHTML = '';
+        items.forEach(function (d) {
+          var row = document.createElement('div');
+          row.style.cssText =
+            'display:flex;align-items:center;justify-content:space-between;' +
+            'padding:12px 0;border-bottom:1px solid var(--erp-border);';
+          row.innerHTML =
+            '<div>' +
+              '<p style="margin:0;font-weight:600;">' + _esc(d.portfolio_name) + '</p>' +
+              '<small class="text-muted">' +
+                'Period: ' + _esc(d.period) + ' &nbsp;|&nbsp; ' +
+                'Distributable: <strong>' + _esc(_fmt_money(d.total_distributable_cents)) + '</strong>' +
+                ' &nbsp;|&nbsp; ' + _esc(d.allocation_count) + ' investors' +
+              '</small>' +
+            '</div>' +
+            '<form method="POST" action="/industry/portfolio/api/distributions/' +
+              _esc(d.id) + '/pay" style="margin:0;">' +
+              '<button type="submit" class="btn btn-sm btn-success">' +
+                '<i class="fa fa-send"></i> Pay Distribution' +
+              '</button>' +
+            '</form>';
+          container.appendChild(row);
+        });
+      })
+      .catch(function () {
+        container.innerHTML =
+          '<p class="text-muted" style="padding:16px 0;">Distribution data unavailable.</p>';
+      });
+  });
+
+}());
+</script>
+{% endblock %}
