@@ -49,10 +49,19 @@ class SelfServiceDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.self_service.models import (
+				Announcement,
+				LeaveRequest,
+			)
+			sess = self._session()
+			pending_leaves = self._count(LeaveRequest, session=sess, status="PENDING")
+			announcements = self._count(Announcement, session=sess)
+		except Exception:
+			pending_leaves = announcements = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Pending Leaves", "value": 0, "icon": "fa-calendar-times", "color": "#f59e0b"},
-			{"label": "Announcements", "value": 0, "icon": "fa-bullhorn", "color": "#1a56db"},
-			{"label": "Leave Balance (days)", "value": 0, "icon": "fa-umbrella-beach", "color": "#0e9f6e"},
+			{"label": "Pending Leaves", "value": pending_leaves, "icon": "fa-calendar-times", "color": "#f59e0b"},
+			{"label": "Announcements", "value": announcements, "icon": "fa-bullhorn", "color": "#1a56db"},
 		])
 		return render_template(
 			"appbuilder/hcm_ess/employee_portal.html",

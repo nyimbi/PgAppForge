@@ -13,12 +13,16 @@ from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge.plugins.erp.crm.subscriptions.models import (
+	Subscription,
+	SubscriptionInvoice,
+	SubscriptionPlan,
+)
 
 log = logging.getLogger(__name__)
 
 
 class SubscriptionPlanView(ModelView):
-	from pgappforge.plugins.erp.crm.subscriptions.models import SubscriptionPlan
 	datamodel = SQLAInterface(SubscriptionPlan)
 	list_columns = ['name', 'plan_code', 'billing_interval', 'base_price_cents', 'currency_code', 'is_active']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -26,7 +30,6 @@ class SubscriptionPlanView(ModelView):
 
 
 class SubscriptionView(ModelView):
-	from pgappforge.plugins.erp.crm.subscriptions.models import Subscription
 	datamodel = SQLAInterface(Subscription)
 	list_columns = ['customer_id', 'plan_id', 'status', 'current_period_start']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -34,7 +37,6 @@ class SubscriptionView(ModelView):
 
 
 class SubscriptionInvoiceView(ModelView):
-	from pgappforge.plugins.erp.crm.subscriptions.models import SubscriptionInvoice
 	datamodel = SQLAInterface(SubscriptionInvoice)
 	list_columns = ['subscription_id', 'status', 'amount_cents', 'currency_code', 'due_date']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -47,10 +49,25 @@ class MRRDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			import sqlalchemy as sa
+			sess = self._session()
+			active_subs = self._count(Subscription, session=sess, status="ACTIVE")
+			# MRR: sum base_price_cents of active plans linked to active subscriptions
+			mrr_row = sess.execute(
+				sa.select(sa.func.coalesce(sa.func.sum(SubscriptionPlan.base_price_cents), 0))
+				.select_from(SubscriptionPlan)
+				.join(Subscription, Subscription.plan_id == SubscriptionPlan.id)
+				.where(Subscription.status == "ACTIVE")
+			).scalar_one()
+			mrr = int(mrr_row)
+			churned = self._count(Subscription, session=sess, status="CANCELLED")
+		except Exception:
+			active_subs = mrr = churned = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Subscriptions", "value": 0, "icon": "fa-repeat", "color": "#1a56db"},
-			{"label": "MRR (cents)", "value": 0, "icon": "fa-money", "color": "#0e9f6e"},
-			{"label": "Churned This Month", "value": 0, "icon": "fa-sign-out", "color": "#9e1c00"},
+			{"label": "Active Subscriptions", "value": active_subs, "icon": "fa-repeat", "color": "#1a56db"},
+			{"label": "MRR (cents)", "value": mrr, "icon": "fa-money", "color": "#0e9f6e"},
+			{"label": "Churned This Month", "value": churned, "icon": "fa-sign-out", "color": "#9e1c00"},
 		])
 		return render_template(
 			"crm_subs/mrr_dashboard.html",

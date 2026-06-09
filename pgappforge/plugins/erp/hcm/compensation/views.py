@@ -50,10 +50,19 @@ class CompensationDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.compensation.models import (
+				CompensationGrade,
+				CompensationReviewCycle,
+			)
+			sess = self._session()
+			active_grades = self._count(CompensationGrade, session=sess, is_active=True)
+			open_cycles = self._count(CompensationReviewCycle, session=sess, status="IN_PROGRESS")
+		except Exception:
+			active_grades = open_cycles = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Grades", "value": 0, "icon": "fa-layer-group", "color": "#1a56db"},
-			{"label": "Packages This Month", "value": 0, "icon": "fa-money-bill", "color": "#0e9f6e"},
-			{"label": "Open Review Cycles", "value": 0, "icon": "fa-sync", "color": "#f59e0b"},
+			{"label": "Active Grades", "value": active_grades, "icon": "fa-layer-group", "color": "#1a56db"},
+			{"label": "Open Review Cycles", "value": open_cycles, "icon": "fa-sync", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_comp/merit_cycle_dashboard.html",

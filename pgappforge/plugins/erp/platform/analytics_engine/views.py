@@ -13,12 +13,15 @@ from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge.plugins.erp.platform.analytics_engine.models import (
+	AnalyticsCube,
+	AnalyticsReport,
+)
 
 log = logging.getLogger(__name__)
 
 
 class AnalyticsCubeView(ModelView):
-	from pgappforge.plugins.erp.platform.analytics_engine.models import AnalyticsCube
 	datamodel = SQLAInterface(AnalyticsCube)
 	list_columns = ['name', 'base_query', 'refresh_schedule', 'last_refreshed', 'is_active']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -26,7 +29,6 @@ class AnalyticsCubeView(ModelView):
 
 
 class AnalyticsReportView(ModelView):
-	from pgappforge.plugins.erp.platform.analytics_engine.models import AnalyticsReport
 	datamodel = SQLAInterface(AnalyticsReport)
 	list_columns = ['name', 'cube_id', 'filters']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -39,9 +41,15 @@ class AnalyticsDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			sess = self._session()
+			active_cubes = self._count(AnalyticsCube, session=sess, is_active=True)
+			reports = self._count(AnalyticsReport, session=sess)
+		except Exception:
+			active_cubes = reports = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Cubes", "value": 0, "icon": "fa-database", "color": "#1a56db"},
-			{"label": "Reports", "value": 0, "icon": "fa-bar-chart", "color": "#0e9f6e"},
+			{"label": "Active Cubes", "value": active_cubes, "icon": "fa-database", "color": "#1a56db"},
+			{"label": "Reports", "value": reports, "icon": "fa-bar-chart", "color": "#0e9f6e"},
 		])
 		return render_template(
 			"platform/analytics_dashboard.html",

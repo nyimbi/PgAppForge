@@ -49,10 +49,21 @@ class JourneysDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.journeys.models import (
+				Journey,
+				JourneyTask,
+			)
+			sess = self._session()
+			active_journeys = self._count(Journey, session=sess, status="ACTIVE")
+			pending_tasks = self._count(JourneyTask, session=sess, status="PENDING")
+			in_progress_tasks = self._count(JourneyTask, session=sess, status="IN_PROGRESS")
+		except Exception:
+			active_journeys = pending_tasks = in_progress_tasks = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Journeys", "value": 0, "icon": "fa-route", "color": "#1a56db"},
-			{"label": "Overdue Tasks", "value": 0, "icon": "fa-exclamation-triangle", "color": "#e02424"},
-			{"label": "Completed This Month", "value": 0, "icon": "fa-check-circle", "color": "#0e9f6e"},
+			{"label": "Active Journeys", "value": active_journeys, "icon": "fa-route", "color": "#1a56db"},
+			{"label": "Pending Tasks", "value": pending_tasks, "icon": "fa-exclamation-triangle", "color": "#e02424"},
+			{"label": "Tasks In Progress", "value": in_progress_tasks, "icon": "fa-check-circle", "color": "#0e9f6e"},
 		])
 		return render_template(
 			"appbuilder/hcm_journeys/journey_tracker.html",

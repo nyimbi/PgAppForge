@@ -50,10 +50,22 @@ class BenefitsDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.benefits.models import (
+				BenefitClaim,
+				BenefitEnrollment,
+				BenefitPlan,
+			)
+			sess = self._session()
+			active_plans = self._count(BenefitPlan, session=sess, is_active=True)
+			active_enrollments = self._count(BenefitEnrollment, session=sess, status="ACTIVE")
+			pending_claims = self._count(BenefitClaim, session=sess, status="SUBMITTED")
+		except Exception:
+			active_plans = active_enrollments = pending_claims = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Plans", "value": 0, "icon": "fa-file-medical", "color": "#1a56db"},
-			{"label": "Active Enrollments", "value": 0, "icon": "fa-users", "color": "#0e9f6e"},
-			{"label": "Pending Claims", "value": 0, "icon": "fa-clock", "color": "#f59e0b"},
+			{"label": "Active Plans", "value": active_plans, "icon": "fa-file-medical", "color": "#1a56db"},
+			{"label": "Active Enrollments", "value": active_enrollments, "icon": "fa-users", "color": "#0e9f6e"},
+			{"label": "Pending Claims", "value": pending_claims, "icon": "fa-clock", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_benefits/enrollment_wizard.html",

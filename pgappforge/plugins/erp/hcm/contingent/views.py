@@ -49,10 +49,22 @@ class ContingentDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.contingent.models import (
+				ContingentTimesheet,
+				ContingentWorker,
+				StatementOfWork,
+			)
+			sess = self._session()
+			active_workers = self._count(ContingentWorker, session=sess, status="ACTIVE")
+			open_sows = self._count(StatementOfWork, session=sess, status="ACTIVE")
+			pending_timesheets = self._count(ContingentTimesheet, session=sess, status="SUBMITTED")
+		except Exception:
+			active_workers = open_sows = pending_timesheets = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Workers", "value": 0, "icon": "fa-user-tie", "color": "#1a56db"},
-			{"label": "Open SOWs", "value": 0, "icon": "fa-file-contract", "color": "#0e9f6e"},
-			{"label": "Pending Timesheets", "value": 0, "icon": "fa-clock", "color": "#f59e0b"},
+			{"label": "Active Workers", "value": active_workers, "icon": "fa-user-tie", "color": "#1a56db"},
+			{"label": "Open SOWs", "value": open_sows, "icon": "fa-file-contract", "color": "#0e9f6e"},
+			{"label": "Pending Timesheets", "value": pending_timesheets, "icon": "fa-clock", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_contingent/contingent_workforce.html",

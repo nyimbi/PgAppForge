@@ -39,10 +39,21 @@ class WorkforcePlanningDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.workforce_planning.models import (
+				PlannedPosition,
+				WorkforcePlan,
+			)
+			sess = self._session()
+			active_plans = self._count(WorkforcePlan, session=sess, status="APPROVED")
+			submitted_plans = self._count(WorkforcePlan, session=sess, status="SUBMITTED")
+			pending_positions = self._count(PlannedPosition, session=sess, approval_status="PENDING")
+		except Exception:
+			active_plans = submitted_plans = pending_positions = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Plans", "value": 0, "icon": "fa-project-diagram", "color": "#1a56db"},
-			{"label": "Planned FTE", "value": 0, "icon": "fa-users", "color": "#0e9f6e"},
-			{"label": "Budget (KES)", "value": 0, "format": "currency", "icon": "fa-coins", "color": "#f59e0b"},
+			{"label": "Approved Plans", "value": active_plans, "icon": "fa-project-diagram", "color": "#1a56db"},
+			{"label": "Submitted Plans", "value": submitted_plans, "icon": "fa-users", "color": "#0e9f6e"},
+			{"label": "Positions Pending Approval", "value": pending_positions, "icon": "fa-coins", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_workforce/workforce_planning.html",

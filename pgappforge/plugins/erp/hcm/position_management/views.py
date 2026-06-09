@@ -39,10 +39,21 @@ class PositionManagementDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.position_management.models import (
+				HeadcountRequest,
+				Position,
+			)
+			sess = self._session()
+			total_positions = self._count(Position, session=sess)
+			vacant_positions = self._count(Position, session=sess, status="VACANT")
+			filled_positions = self._count(Position, session=sess, status="FILLED")
+		except Exception:
+			total_positions = vacant_positions = filled_positions = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Total Positions", "value": 0, "icon": "fa-sitemap", "color": "#1a56db"},
-			{"label": "Vacant", "value": 0, "icon": "fa-user-slash", "color": "#e02424"},
-			{"label": "Filled", "value": 0, "icon": "fa-user-check", "color": "#0e9f6e"},
+			{"label": "Total Positions", "value": total_positions, "icon": "fa-sitemap", "color": "#1a56db"},
+			{"label": "Vacant", "value": vacant_positions, "icon": "fa-user-slash", "color": "#e02424"},
+			{"label": "Filled", "value": filled_positions, "icon": "fa-user-check", "color": "#0e9f6e"},
 		])
 		return render_template(
 			"appbuilder/hcm_positions/position_org_chart.html",

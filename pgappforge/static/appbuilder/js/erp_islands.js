@@ -11,10 +11,10 @@
 
   /* ── CDN library registry ─────────────────────────────────────────── */
   var CDN = {
-    alpine:   'https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js',
-    chartjs:  'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js',
-    sortable: 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js',
-    d3:       'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js'
+    alpine:   { url: 'https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js',      integrity: 'sha384-O8NPfezTLQ/sgLfQYBJEnezJLlum9L6KOqHsfIWauzaFfD1TQSuvA4iUpgWGHeuZ', crossOrigin: 'anonymous' },
+    chartjs:  { url: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js', integrity: 'sha384-JUh163oCRItcbPme8pYnROHQMC6fNKTBWtRG3I3I0erJkzNgL7uxKlNwcrcFKeqF', crossOrigin: 'anonymous' },
+    sortable: { url: 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js',    integrity: 'sha384-BSxuMLxX+FCbTdYec3TbXlnMGEEM2QXTFdtDaveen71o+jswm2J36+xFqp8k4VHM', crossOrigin: 'anonymous' },
+    d3:       { url: 'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js',              integrity: 'sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i', crossOrigin: 'anonymous' }
   };
 
   /* ── In-flight / resolved promise cache ──────────────────────────── */
@@ -30,29 +30,29 @@
     if (_loaded[name])  return Promise.resolve();
     if (_pending[name]) return _pending[name];
 
-    var url = CDN[name];
-    if (!url) {
-      return Promise.reject(new Error('ERP Islands: unknown lib "' + name + '"'));
-    }
+    var lib = CDN[name];
+    if (!lib) return Promise.reject(new Error('ERP Islands: unknown lib "' + name + '"'));
 
-    _pending[name] = new Promise(function (resolve, reject) {
-      var script   = document.createElement('script');
-      script.src   = url;
-      script.async = true;
-
-      script.onload = function () {
-        _loaded[name] = true;
-        delete _pending[name];
-        resolve();
-      };
-
-      script.onerror = function () {
-        delete _pending[name];
-        reject(new Error('ERP Islands: failed to load lib "' + name + '" from ' + url));
-      };
-
-      document.head.appendChild(script);
-    });
+    _pending[name] = Promise.race([
+      new Promise(function (resolve, reject) {
+        var script     = document.createElement('script');
+        script.src     = lib.url;
+        script.async   = true;
+        if (lib.integrity) {
+          script.integrity   = lib.integrity;
+          script.crossOrigin = lib.crossOrigin || 'anonymous';
+        }
+        script.onload  = function () { _loaded[name] = true; delete _pending[name]; resolve(); };
+        script.onerror = function () { delete _pending[name]; reject(new Error('ERP Islands: failed to load "' + name + '" from ' + lib.url)); };
+        document.head.appendChild(script);
+      }),
+      new Promise(function (_, reject) {
+        setTimeout(function () {
+          delete _pending[name];
+          reject(new Error('ERP Islands: timeout loading "' + name + '" (10s)'));
+        }, 10000);
+      })
+    ]);
 
     return _pending[name];
   }

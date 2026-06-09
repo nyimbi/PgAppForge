@@ -13,24 +13,29 @@ from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge.plugins.erp.platform.row_security.models import (
+	RowSecurityPolicy,
+	SecurityContext,
+)
 
 log = logging.getLogger(__name__)
 
 
 class RowSecurityPolicyView(ModelView):
-	from pgappforge.plugins.erp.platform.row_security.models import RowSecurityPolicy
 	datamodel = SQLAInterface(RowSecurityPolicy)
-	list_columns = ['name', 'entity_type', 'scope_field', 'role_id', 'is_active']
-	add_exclude_columns = ['id', 'created_on', 'changed_on']
+	base_permissions     = ["can_list", "can_show", "can_add", "can_edit"]
+	list_columns         = ['name', 'entity_type', 'scope_field', 'role_id', 'is_active']
+	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
 
 class SecurityContextView(ModelView):
-	from pgappforge.plugins.erp.platform.row_security.models import SecurityContext
 	datamodel = SQLAInterface(SecurityContext)
-	list_columns = ['user_id', 'computed_scope']
-	add_exclude_columns = ['id', 'created_on', 'changed_on']
+	base_permissions     = ["can_list", "can_show"]
+	list_columns         = ['entity_type', 'is_active', 'last_computed_at']
+	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
+	show_exclude_columns = ['computed_scope']
 
 
 class RowSecurityAdminView(BaseERPView):
@@ -39,9 +44,16 @@ class RowSecurityAdminView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.platform.row_security.models import RowSecurityPolicy, SecurityContext
+			sess = self._session()
+			active_policies = self._count(RowSecurityPolicy, session=sess, is_active=True)
+			scoped_users = self._count(SecurityContext, session=sess)
+		except Exception:
+			active_policies = scoped_users = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Policies", "value": 0, "icon": "fa-shield", "color": "#1a56db"},
-			{"label": "Scoped Users", "value": 0, "icon": "fa-user-secret", "color": "#0e9f6e"},
+			{"label": "Active Policies", "value": active_policies, "icon": "fa-shield", "color": "#1a56db"},
+			{"label": "Scoped Users", "value": scoped_users, "icon": "fa-user-secret", "color": "#0e9f6e"},
 		])
 		return render_template(
 			"platform_admin/row_security_admin.html",

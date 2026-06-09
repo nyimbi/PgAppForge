@@ -13,12 +13,18 @@ from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.erp.base_view import BaseERPView
+from pgappforge.plugins.erp.crm.marketing_automation.models import (
+	CampaignAttribution,
+	CampaignContact,
+	LeadScore,
+	MarketingCampaign,
+	MarketingSequence,
+)
 
 log = logging.getLogger(__name__)
 
 
 class MarketingCampaignView(ModelView):
-	from pgappforge.plugins.erp.crm.marketing_automation.models import MarketingCampaign
 	datamodel = SQLAInterface(MarketingCampaign)
 	list_columns = ['name', 'campaign_type', 'status', 'start_date', 'end_date', 'budget_cents']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -26,7 +32,6 @@ class MarketingCampaignView(ModelView):
 
 
 class MarketingSequenceView(ModelView):
-	from pgappforge.plugins.erp.crm.marketing_automation.models import MarketingSequence
 	datamodel = SQLAInterface(MarketingSequence)
 	list_columns = ['campaign_id', 'step_number', 'step_type', 'delay_hours', 'subject_line']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -34,7 +39,6 @@ class MarketingSequenceView(ModelView):
 
 
 class CampaignContactView(ModelView):
-	from pgappforge.plugins.erp.crm.marketing_automation.models import CampaignContact
 	datamodel = SQLAInterface(CampaignContact)
 	list_columns = ['campaign_id', 'contact_id', 'email', 'status', 'enrolled_at', 'current_step']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -42,7 +46,6 @@ class CampaignContactView(ModelView):
 
 
 class LeadScoreView(ModelView):
-	from pgappforge.plugins.erp.crm.marketing_automation.models import LeadScore
 	datamodel = SQLAInterface(LeadScore)
 	list_columns = ['contact_id', 'score', 'grade', 'converted', 'last_activity_at']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -50,7 +53,6 @@ class LeadScoreView(ModelView):
 
 
 class CampaignAttributionView(ModelView):
-	from pgappforge.plugins.erp.crm.marketing_automation.models import CampaignAttribution
 	datamodel = SQLAInterface(CampaignAttribution)
 	list_columns = ['campaign_id', 'contact_id', 'revenue_cents', 'attribution_model', 'attributed_at']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -63,10 +65,22 @@ class MarketingDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.crm.marketing_automation.models import MarketingCampaign, CampaignContact, LeadScore
+			import sqlalchemy as sa
+			sess = self._session()
+			active_campaigns = self._count(MarketingCampaign, session=sess, status="ACTIVE")
+			enrolled_contacts = self._count(CampaignContact, session=sess, status="ENROLLED")
+			avg_score_row = sess.execute(
+				sa.select(sa.func.coalesce(sa.func.avg(LeadScore.score), 0))
+			).scalar_one()
+			avg_lead_score = int(avg_score_row)
+		except Exception:
+			active_campaigns = enrolled_contacts = avg_lead_score = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Campaigns", "value": 0, "icon": "fa-bullhorn", "color": "#1a56db"},
-			{"label": "Enrolled Contacts", "value": 0, "icon": "fa-users", "color": "#0e9f6e"},
-			{"label": "Avg Lead Score", "value": 0, "icon": "fa-star", "color": "#ff5a1f"},
+			{"label": "Active Campaigns", "value": active_campaigns, "icon": "fa-bullhorn", "color": "#1a56db"},
+			{"label": "Enrolled Contacts", "value": enrolled_contacts, "icon": "fa-users", "color": "#0e9f6e"},
+			{"label": "Avg Lead Score", "value": avg_lead_score, "icon": "fa-star", "color": "#ff5a1f"},
 		])
 		return render_template(
 			"crm_admin/marketing_campaigns.html",

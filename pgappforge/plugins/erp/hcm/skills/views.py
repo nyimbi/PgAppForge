@@ -50,10 +50,22 @@ class SkillsDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.skills.models import (
+				EmployeeSkill,
+				Skill,
+				SkillDomain,
+			)
+			sess = self._session()
+			domain_count = self._count(SkillDomain, session=sess)
+			skill_count = self._count(Skill, session=sess)
+			employee_skill_count = self._count(EmployeeSkill, session=sess)
+		except Exception:
+			domain_count = skill_count = employee_skill_count = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Skill Domains", "value": 0, "icon": "fa-sitemap", "color": "#1a56db"},
-			{"label": "Total Skills", "value": 0, "icon": "fa-star", "color": "#0e9f6e"},
-			{"label": "Employee Skills", "value": 0, "icon": "fa-user-check", "color": "#f59e0b"},
+			{"label": "Skill Domains", "value": domain_count, "icon": "fa-sitemap", "color": "#1a56db"},
+			{"label": "Total Skills", "value": skill_count, "icon": "fa-star", "color": "#0e9f6e"},
+			{"label": "Employee Skills", "value": employee_skill_count, "icon": "fa-user-check", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_skills/skills_explorer.html",

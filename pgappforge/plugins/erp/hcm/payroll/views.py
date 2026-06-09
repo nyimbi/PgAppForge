@@ -62,7 +62,7 @@ def _he(s: object) -> str:
 def _page_html(title: str, body: str) -> str:
 	return (
 		f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{title}</title>'
-		'<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">'
+		'<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">'
 		'<style>body{padding:24px} @media print{.noprint{display:none}}</style>'
 		f'</head><body>{body}</body></html>'
 	)
@@ -304,7 +304,7 @@ class PayrollRunView(BaseERPView):
 			sa.select(Payslip)
 			.where(Payslip.payrun_id == run_id)
 			.where(Payslip.status != "REVERSED")
-			.order_by(Payslip.employee_id)
+			.order_by(Payslip.employee_id).limit(100)
 		).scalars().all()
 
 		# ── KPI cards ───────────────────────────────────────────────────

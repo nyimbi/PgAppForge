@@ -49,10 +49,22 @@ class LmsDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.lms.models import (
+				LmsCertificate,
+				LmsCourse,
+				LmsEnrollment,
+			)
+			sess = self._session()
+			published_courses = self._count(LmsCourse, session=sess, status="PUBLISHED")
+			active_enrollments = self._count(LmsEnrollment, session=sess, status="IN_PROGRESS")
+			certificates_issued = self._count(LmsCertificate, session=sess)
+		except Exception:
+			published_courses = active_enrollments = certificates_issued = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Published Courses", "value": 0, "icon": "fa-book", "color": "#1a56db"},
-			{"label": "Active Enrollments", "value": 0, "icon": "fa-user-graduate", "color": "#0e9f6e"},
-			{"label": "Certificates Issued", "value": 0, "icon": "fa-certificate", "color": "#f59e0b"},
+			{"label": "Published Courses", "value": published_courses, "icon": "fa-book", "color": "#1a56db"},
+			{"label": "Active Enrollments", "value": active_enrollments, "icon": "fa-user-graduate", "color": "#0e9f6e"},
+			{"label": "Certificates Issued", "value": certificates_issued, "icon": "fa-certificate", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_lms/course_catalog.html",

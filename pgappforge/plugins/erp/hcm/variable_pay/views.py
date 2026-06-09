@@ -49,10 +49,22 @@ class VariablePayDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.variable_pay.models import (
+				CommissionPayout,
+				EmployeeQuota,
+				IncentivePlan,
+			)
+			sess = self._session()
+			active_plans = self._count(IncentivePlan, session=sess, is_active=True)
+			open_quotas = self._count(EmployeeQuota, session=sess, status="ACTIVE")
+			pending_payouts = self._count(CommissionPayout, session=sess, status="PENDING")
+		except Exception:
+			active_plans = open_quotas = pending_payouts = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Plans", "value": 0, "icon": "fa-trophy", "color": "#1a56db"},
-			{"label": "Open Quotas", "value": 0, "icon": "fa-bullseye", "color": "#0e9f6e"},
-			{"label": "Pending Payouts", "value": 0, "icon": "fa-hand-holding-usd", "color": "#f59e0b"},
+			{"label": "Active Plans", "value": active_plans, "icon": "fa-trophy", "color": "#1a56db"},
+			{"label": "Open Quotas", "value": open_quotas, "icon": "fa-bullseye", "color": "#0e9f6e"},
+			{"label": "Pending Payouts", "value": pending_payouts, "icon": "fa-hand-holding-usd", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_vp/variable_pay_dashboard.html",

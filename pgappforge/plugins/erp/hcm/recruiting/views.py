@@ -59,11 +59,24 @@ class RecruitingDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.recruiting.models import (
+				JobApplication,
+				JobRequisition,
+				OfferLetter,
+			)
+			sess = self._session()
+			open_reqs = self._count(JobRequisition, session=sess, status="OPEN")
+			screening_apps = self._count(JobApplication, session=sess, status="SCREENING")
+			pending_offers = self._count(OfferLetter, session=sess, status="SENT")
+			total_apps = self._count(JobApplication, session=sess)
+		except Exception:
+			open_reqs = screening_apps = pending_offers = total_apps = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Open Requisitions", "value": 0, "icon": "fa-briefcase", "color": "#1a56db"},
-			{"label": "Applications", "value": 0, "icon": "fa-file-alt", "color": "#0e9f6e"},
-			{"label": "Interviews This Week", "value": 0, "icon": "fa-comments", "color": "#f59e0b"},
-			{"label": "Pending Offers", "value": 0, "icon": "fa-handshake", "color": "#7e3af2"},
+			{"label": "Open Requisitions", "value": open_reqs, "icon": "fa-briefcase", "color": "#1a56db"},
+			{"label": "Applications", "value": total_apps, "icon": "fa-file-alt", "color": "#0e9f6e"},
+			{"label": "In Screening", "value": screening_apps, "icon": "fa-comments", "color": "#f59e0b"},
+			{"label": "Pending Offers", "value": pending_offers, "icon": "fa-handshake", "color": "#7e3af2"},
 		])
 		return render_template(
 			"appbuilder/hcm_rec_full/recruiting_full.html",

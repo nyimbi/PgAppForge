@@ -9,12 +9,15 @@ import logging
 
 from pgappforge import ModelView
 from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.plugins.erp.crm.territory_management.models import (
+	SalesTerritory,
+	TerritoryAssignment,
+)
 
 log = logging.getLogger(__name__)
 
 
 class SalesTerritoryView(ModelView):
-	from pgappforge.plugins.erp.crm.territory_management.models import SalesTerritory
 	datamodel = SQLAInterface(SalesTerritory)
 	list_columns = ['name', 'region', 'country_codes', 'is_active']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -22,7 +25,6 @@ class SalesTerritoryView(ModelView):
 
 
 class TerritoryAssignmentView(ModelView):
-	from pgappforge.plugins.erp.crm.territory_management.models import TerritoryAssignment
 	datamodel = SQLAInterface(TerritoryAssignment)
 	list_columns = ['territory_id', 'salesperson_id', 'effective_from', 'effective_to']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']

@@ -49,10 +49,22 @@ class PerformanceDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.performance.models import (
+				Goal,
+				PerformanceCycle,
+				PerformanceReview,
+			)
+			sess = self._session()
+			active_cycles = self._count(PerformanceCycle, session=sess, status="ACTIVE")
+			reviews_pending = self._count(PerformanceReview, session=sess, status="SUBMITTED")
+			goals_active = self._count(Goal, session=sess, status="ACTIVE")
+		except Exception:
+			active_cycles = reviews_pending = goals_active = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Cycles", "value": 0, "icon": "fa-sync-alt", "color": "#1a56db"},
-			{"label": "Reviews Pending", "value": 0, "icon": "fa-clipboard-list", "color": "#f59e0b"},
-			{"label": "Goals on Track", "value": 0, "icon": "fa-bullseye", "color": "#0e9f6e"},
+			{"label": "Active Cycles", "value": active_cycles, "icon": "fa-sync-alt", "color": "#1a56db"},
+			{"label": "Reviews Submitted", "value": reviews_pending, "icon": "fa-clipboard-list", "color": "#f59e0b"},
+			{"label": "Active Goals", "value": goals_active, "icon": "fa-bullseye", "color": "#0e9f6e"},
 		])
 		return render_template(
 			"appbuilder/hcm/performance_okr.html",

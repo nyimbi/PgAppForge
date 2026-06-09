@@ -49,10 +49,22 @@ class EquityDashboardView(BaseERPView):
 	@expose("/")
 	@has_access
 	def index(self):
+		try:
+			from pgappforge.plugins.erp.hcm.equity_compensation.models import (
+				EquityGrant,
+				EquityPlan,
+				VestingEvent,
+			)
+			sess = self._session()
+			active_plans = self._count(EquityPlan, session=sess, is_active=True)
+			outstanding_grants = self._count(EquityGrant, session=sess, status="ACTIVE")
+			unprocessed_vesting = self._count(VestingEvent, session=sess, is_processed=False)
+		except Exception:
+			active_plans = outstanding_grants = unprocessed_vesting = 0
 		kpi_html = self.kpi_cards([
-			{"label": "Active Plans", "value": 0, "icon": "fa-chart-pie", "color": "#1a56db"},
-			{"label": "Outstanding Grants", "value": 0, "icon": "fa-gift", "color": "#0e9f6e"},
-			{"label": "Vesting This Month", "value": 0, "icon": "fa-unlock", "color": "#f59e0b"},
+			{"label": "Active Plans", "value": active_plans, "icon": "fa-chart-pie", "color": "#1a56db"},
+			{"label": "Outstanding Grants", "value": outstanding_grants, "icon": "fa-gift", "color": "#0e9f6e"},
+			{"label": "Pending Vesting Events", "value": unprocessed_vesting, "icon": "fa-unlock", "color": "#f59e0b"},
 		])
 		return render_template(
 			"appbuilder/hcm_equity/equity_dashboard.html",
