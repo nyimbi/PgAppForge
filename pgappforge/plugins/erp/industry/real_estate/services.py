@@ -719,3 +719,126 @@ __all__ = [
 	"TransactionNotFoundError",
 	"RealEstateValidationError",
 ]
+
+
+# ---------------------------------------------------------------------------
+# BPM action registrations for real estate
+# ---------------------------------------------------------------------------
+
+import logging as _logging
+_bpm_log = _logging.getLogger(__name__ + ".bpm")
+
+try:
+	from pgappforge.plugins.workflow.engine import BPMActionRegistry
+
+	@BPMActionRegistry.register("realestate.list_property", "Create a new MLS property listing")
+	def _bpm_list_property(params: dict, session=None) -> dict:
+		"""BPM wrapper: RealEstateService.list_property."""
+		try:
+			svc = RealEstateService()
+			prop = svc.list_property(details=params, session=session)
+			return {"ok": True, "property_id": str(prop.id), "mls_number": prop.mls_number}
+		except RealEstateValidationError as exc:
+			return {"ok": False, "error": str(exc)}
+		except Exception as exc:
+			_bpm_log.warning("bpm realestate.list_property failed: %s", exc)
+			return {"ok": False, "error": str(exc)}
+
+	@BPMActionRegistry.register("realestate.calculate_avm", "Run automated valuation model on a property")
+	def _bpm_calculate_avm(params: dict, session=None) -> dict:
+		"""BPM wrapper: RealEstateService.calculate_avm."""
+		property_id = params.get("property_id")
+		if not property_id:
+			return {"ok": False, "error": "property_id required"}
+		try:
+			svc = RealEstateService()
+			valuation = svc.calculate_avm(
+				property_id=property_id,
+				comparables_radius_km=float(params.get("comparables_radius_km") or 1.0),
+				session=session,
+			)
+			return {"ok": True, "valuation_id": str(valuation.id)}
+		except (PropertyNotFoundError, RealEstateValidationError) as exc:
+			return {"ok": False, "error": str(exc)}
+		except Exception as exc:
+			_bpm_log.warning("bpm realestate.calculate_avm failed: %s", exc)
+			return {"ok": False, "error": str(exc)}
+
+	@BPMActionRegistry.register("rental.create_order", "Place a real estate rental order (residential/commercial)")
+	def _bpm_rental_create_order(params: dict, session=None) -> dict:
+		"""BPM wrapper: create a rental order via PropertyManagementService.
+
+		Delegates to pm.create_unit + pm_tenant_lease creation path.
+		params: tenant_id, unit_id, tenant_party_id, lease_start, lease_end,
+		        monthly_rent_cents, lease_type
+		"""
+		try:
+			from pgappforge.plugins.erp.industry.real_estate.property_management.services import (
+				PropertyManagementService,
+				PropertyManagementError,
+			)
+			svc = PropertyManagementService()
+			lease = svc.create_lease(
+				unit_id=params["unit_id"],
+				tenant_party_id=params["tenant_party_id"],
+				landlord_id=params.get("landlord_id", ""),
+				lease_start=params["lease_start"],
+				lease_end=params["lease_end"],
+				monthly_rent_cents=int(params["monthly_rent_cents"]),
+				tenant_id=params["tenant_id"],
+				session=session,
+				security_deposit_cents=int(params.get("security_deposit_cents") or 0),
+				lease_type=params.get("lease_type", "FIXED"),
+				escalation_type=params.get("escalation_type", "NONE"),
+			)
+			return {"ok": True, "lease_id": str(lease.id), "status": lease.status}
+		except KeyError as exc:
+			return {"ok": False, "error": f"Missing required param: {exc}"}
+		except Exception as exc:
+			_bpm_log.warning("bpm rental.create_order failed: %s", exc)
+			return {"ok": False, "error": str(exc)}
+
+	@BPMActionRegistry.register("lease.terminate_lease", "Terminate a residential or commercial lease")
+	def _bpm_terminate_lease(params: dict, session=None) -> dict:
+		"""BPM wrapper: terminate a TenantLease (residential) or CommercialLease.
+
+		params: lease_id, tenant_id, lease_kind ("residential"|"commercial"),
+		        termination_date (optional ISO date string)
+		"""
+		lease_kind = params.get("lease_kind", "residential")
+		lease_id = params.get("lease_id")
+		tenant_id = params.get("tenant_id", "")
+		if not lease_id:
+			return {"ok": False, "error": "lease_id required"}
+		try:
+			if lease_kind == "commercial":
+				from pgappforge.plugins.erp.industry.real_estate.commercial.services import (
+					CommercialLeaseService,
+					CommercialREServiceError,
+				)
+				svc = CommercialLeaseService()
+				lease = svc.terminate_commercial_lease(
+					lease_id=lease_id,
+					tenant_id=tenant_id,
+					session=session,
+					termination_date=params.get("termination_date"),
+				)
+				return {"ok": True, "lease_id": str(lease.id), "status": lease.status}
+			else:
+				from pgappforge.plugins.erp.industry.real_estate.property_management.services import (
+					PropertyManagementService,
+					PropertyManagementError,
+				)
+				svc = PropertyManagementService()
+				lease = svc.terminate_lease(
+					lease_id=lease_id,
+					tenant_id=tenant_id,
+					session=session,
+				)
+				return {"ok": True, "lease_id": str(lease.id), "status": lease.status}
+		except Exception as exc:
+			_bpm_log.warning("bpm lease.terminate_lease failed: %s", exc)
+			return {"ok": False, "error": str(exc)}
+
+except ImportError:
+	pass
