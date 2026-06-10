@@ -1826,93 +1826,114 @@ class PaymentsService:
 
 		Uses xml.etree.ElementTree so all text values are automatically
 		XML-escaped (ampersands, angle brackets, quotes in names/IDs are safe).
-		Includes all mandatory elements per the PAIN.001.001.03 XSD:
-		  GrpHdr, PmtInf, PmtMtd, SvcLvl, LclInstrm, CdtrAgt, DbtrAcct, DbtrAgt.
+
+		Mandatory elements covered:
+		  Document/CstmrCdtTrfInitn/GrpHdr — MsgId, CreDtTm, NbOfTxs, CtrlSum,
+		    InitgPty/Nm
+		  PmtInf — PmtInfId, PmtMtd (TRF), PmtTpInf/SvcLvl/Cd, PmtTpInf/
+		    LclInstrm/Cd, ReqdExctnDt, Dbtr/Nm, DbtrAcct, DbtrAgt
+		  CdtTrfTxInf — PmtId/InstrId + EndToEndId, Amt/InstdAmt[@Ccy],
+		    CdtrAgt/FinInstnId/BIC, Cdtr/Nm, CdtrAcct, RmtInf/Ustrd
 		"""
 		import xml.etree.ElementTree as ET
 
 		try:
 			from flask import current_app
-			bank_bic = current_app.config.get("PY_BANK_BIC", "XXXXXXXX")
+			cfg = current_app.config
 		except RuntimeError:
-			bank_bic = "XXXXXXXX"
+			cfg = {}
+
+		bank_name = cfg.get("BANK_NAME", "PgAppForge Bank")
+		bank_bic = cfg.get("BANK_BIC", "KCOOKENA")
+		settlement_account = cfg.get("BANK_SETTLEMENT_ACCOUNT") or str(batch.id)
+
+		# rail_code: prefer explicit attribute on batch (may not exist), else batch_type
+		rail_code = str(getattr(batch, "rail_code", None) or batch.batch_type or "EFT")
 
 		ns = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03"
 		ET.register_namespace("", ns)
 
-		doc = ET.Element(f"{{{ns}}}Document")
-		initn = ET.SubElement(doc, f"{{{ns}}}CstmrCdtTrfInitn")
+		root = ET.Element(f"{{{ns}}}Document")
+		initn = ET.SubElement(root, f"{{{ns}}}CstmrCdtTrfInitn")
 
-		# Group Header
+		# ── Group Header ────────────────────────────────────────────────────────
 		grp = ET.SubElement(initn, f"{{{ns}}}GrpHdr")
-		ET.SubElement(grp, f"{{{ns}}}MsgId").text = batch.batch_number
+		ET.SubElement(grp, f"{{{ns}}}MsgId").text = str(batch.batch_number or batch.id)
 		ET.SubElement(grp, f"{{{ns}}}CreDtTm").text = _now_utc().strftime("%Y-%m-%dT%H:%M:%S")
 		ET.SubElement(grp, f"{{{ns}}}NbOfTxs").text = str(batch.total_payments or len(orders))
 		ctrl_sum = (batch.total_amount_cents or 0) / 100
 		ET.SubElement(grp, f"{{{ns}}}CtrlSum").text = f"{ctrl_sum:.2f}"
 		initg_pty = ET.SubElement(grp, f"{{{ns}}}InitgPty")
-		ET.SubElement(initg_pty, f"{{{ns}}}Nm").text = "PgAppForge Payments"
+		ET.SubElement(initg_pty, f"{{{ns}}}Nm").text = str(bank_name)
 
-		# One PmtInf block per batch (all orders share batch-level debtor + rail)
+		# ── Payment Information (one block per batch) ───────────────────────────
 		pmt_inf = ET.SubElement(initn, f"{{{ns}}}PmtInf")
-		ET.SubElement(pmt_inf, f"{{{ns}}}PmtInfId").text = batch.batch_number
-		# PmtMtd: TRF = credit transfer (mandatory)
+		ET.SubElement(pmt_inf, f"{{{ns}}}PmtInfId").text = str(batch.batch_number or batch.id)
+		# PmtMtd: TRF = credit transfer (mandatory per XSD)
 		ET.SubElement(pmt_inf, f"{{{ns}}}PmtMtd").text = "TRF"
-		# PmtTpInf → SvcLvl + LclInstrm
+
+		# PmtTpInf → SvcLvl/Cd + LclInstrm/Cd
 		pmt_tp = ET.SubElement(pmt_inf, f"{{{ns}}}PmtTpInf")
 		svc_lvl = ET.SubElement(pmt_tp, f"{{{ns}}}SvcLvl")
-		# URGP = urgent (RTGS), NURG = non-urgent (EFT/ACH)
+		# URGP = urgent (RTGS/KEPSS), NURG = non-urgent (EFT/ACH/PESALINK)
 		svc_code = "URGP" if batch.batch_type in {"RTGS"} else "NURG"
 		ET.SubElement(svc_lvl, f"{{{ns}}}Cd").text = svc_code
 		lcl_instr = ET.SubElement(pmt_tp, f"{{{ns}}}LclInstrm")
-		ET.SubElement(lcl_instr, f"{{{ns}}}Cd").text = batch.batch_type
+		ET.SubElement(lcl_instr, f"{{{ns}}}Cd").text = rail_code
 
 		ET.SubElement(pmt_inf, f"{{{ns}}}ReqdExctnDt").text = str(batch.value_date)
 
-		# DbtrAgt (our bank BIC — mandatory)
-		dbtr_agt = ET.SubElement(pmt_inf, f"{{{ns}}}DbtrAgt")
-		dbtr_agt_fi = ET.SubElement(dbtr_agt, f"{{{ns}}}FinInstnId")
-		ET.SubElement(dbtr_agt_fi, f"{{{ns}}}BIC").text = bank_bic
+		# Dbtr (initiating party as debtor — mandatory for PAIN.001)
+		dbtr = ET.SubElement(pmt_inf, f"{{{ns}}}Dbtr")
+		ET.SubElement(dbtr, f"{{{ns}}}Nm").text = str(bank_name)
 
-		# DbtrAcct (batch-level debtor account — use first order's debtor_account_id)
+		# DbtrAcct: use configured settlement account or batch.id as fallback
 		dbtr_acct = ET.SubElement(pmt_inf, f"{{{ns}}}DbtrAcct")
 		dbtr_acct_id = ET.SubElement(dbtr_acct, f"{{{ns}}}Id")
 		dbtr_othr = ET.SubElement(dbtr_acct_id, f"{{{ns}}}Othr")
-		first_debtor = str(orders[0].debtor_account_id) if orders else ""
-		ET.SubElement(dbtr_othr, f"{{{ns}}}Id").text = first_debtor
+		ET.SubElement(dbtr_othr, f"{{{ns}}}Id").text = str(settlement_account)
 
-		# Credit transfer transactions
+		# DbtrAgt: our bank's BIC (mandatory)
+		dbtr_agt = ET.SubElement(pmt_inf, f"{{{ns}}}DbtrAgt")
+		dbtr_agt_fi = ET.SubElement(dbtr_agt, f"{{{ns}}}FinInstnId")
+		ET.SubElement(dbtr_agt_fi, f"{{{ns}}}BIC").text = str(bank_bic)
+
+		# ── Credit Transfer Transactions ────────────────────────────────────────
 		for o in orders:
 			tx = ET.SubElement(pmt_inf, f"{{{ns}}}CdtTrfTxInf")
+
 			pmt_id = ET.SubElement(tx, f"{{{ns}}}PmtId")
-			ET.SubElement(pmt_id, f"{{{ns}}}EndToEndId").text = o.payment_reference
-			if o.uetr:
-				ET.SubElement(pmt_id, f"{{{ns}}}UETR").text = o.uetr
+			ET.SubElement(pmt_id, f"{{{ns}}}InstrId").text = str(o.payment_reference or o.id)
+			ET.SubElement(pmt_id, f"{{{ns}}}EndToEndId").text = str(o.payment_reference or o.id)
 
 			amt = ET.SubElement(tx, f"{{{ns}}}Amt")
 			instd = ET.SubElement(amt, f"{{{ns}}}InstdAmt")
-			instd.set("Ccy", o.currency_code or "KES")
+			instd.set("Ccy", str(o.currency_code or "KES"))
 			instd.text = f"{(o.amount_cents or 0) / 100:.2f}"
 
-			# CdtrAgt (creditor bank BIC, if known)
-			if o.creditor_bank_code:
-				cdtr_agt = ET.SubElement(tx, f"{{{ns}}}CdtrAgt")
-				cdtr_agt_fi = ET.SubElement(cdtr_agt, f"{{{ns}}}FinInstnId")
-				ET.SubElement(cdtr_agt_fi, f"{{{ns}}}BIC").text = o.creditor_bank_code
+			# CdtrAgt: always emit; use NOTPROVIDED when BIC unknown
+			cdtr_agt = ET.SubElement(tx, f"{{{ns}}}CdtrAgt")
+			cdtr_agt_fi = ET.SubElement(cdtr_agt, f"{{{ns}}}FinInstnId")
+			ET.SubElement(cdtr_agt_fi, f"{{{ns}}}BIC").text = str(
+				o.creditor_bank_code or "NOTPROVIDED"
+			)
 
 			cdtr = ET.SubElement(tx, f"{{{ns}}}Cdtr")
-			ET.SubElement(cdtr, f"{{{ns}}}Nm").text = o.creditor_name or ""
+			ET.SubElement(cdtr, f"{{{ns}}}Nm").text = str(o.creditor_name or "")
 
 			cdtr_acct = ET.SubElement(tx, f"{{{ns}}}CdtrAcct")
 			cdtr_acct_id = ET.SubElement(cdtr_acct, f"{{{ns}}}Id")
 			cdtr_othr = ET.SubElement(cdtr_acct_id, f"{{{ns}}}Othr")
-			ET.SubElement(cdtr_othr, f"{{{ns}}}Id").text = o.creditor_account_number or ""
+			ET.SubElement(cdtr_othr, f"{{{ns}}}Id").text = str(
+				o.creditor_account_number or ""
+			)
 
-			if o.remittance_info:
-				rmt = ET.SubElement(tx, f"{{{ns}}}RmtInf")
-				ET.SubElement(rmt, f"{{{ns}}}Ustrd").text = o.remittance_info
+			rmt = ET.SubElement(tx, f"{{{ns}}}RmtInf")
+			ET.SubElement(rmt, f"{{{ns}}}Ustrd").text = str(
+				o.remittance_info or o.payment_reference or o.id
+			)
 
-		return ET.tostring(doc, encoding="unicode", xml_declaration=True)
+		return ET.tostring(root, encoding="unicode", xml_declaration=True)
 
 	def _emit(self, event: Any) -> None:
 		"""Emit a domain event and persist it to the transactional outbox.

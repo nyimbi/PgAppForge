@@ -230,19 +230,66 @@ class LoanOriginationService:
 		if app.status not in ("SUBMITTED", "UNDER_REVIEW"):
 			raise ValueError(f"Cannot run credit check on application in status {app.status!r}")
 
-		# Stub: real implementation calls CRB Kenya (TransUnion / Metropol / CreditInfo)
-		# External bureau response is stored as-is in JSONB
-		bureau_response: dict = {
-			"bureau": "TRANSUNION_KE",
-			"reference": str(uuid.uuid4()),
-			"score": 650,
-			"default_probability_pct": "5.2",
-			"active_facilities": 2,
-			"npas": 0,
-			"checked_at": datetime.now(timezone.utc).isoformat(),
-		}
+		# CRB Kenya bureau lookup (TransUnion / Metropol / Mock fallback)
+		from pgappforge.plugins.fintech.lending.crb_adapter import (
+			get_crb_adapter,
+			CRBError,
+			CRBIdentityNotFoundError,
+		)
 
-		credit_score: int = bureau_response["score"]
+		id_number = getattr(app, "applicant_id_number", "") or getattr(app, "applicant_id", "") or ""
+		id_type = getattr(app, "applicant_id_type", "NATIONAL_ID") or "NATIONAL_ID"
+		full_name = getattr(app, "applicant_name", "") or ""
+		phone = getattr(app, "applicant_phone", "") or ""
+
+		bureau_response: dict
+		credit_score: int
+
+		try:
+			crb_result = get_crb_adapter().inquire(
+				id_number=id_number,
+				id_type=id_type,
+				full_name=full_name,
+				phone_msisdn=phone,
+			)
+			bureau_response = crb_result.to_dict()
+			credit_score = crb_result.score
+			if crb_result.listed_negative:
+				# Hard decline — persist fields and return immediately
+				app.credit_score = credit_score
+				app.credit_bureau_response = bureau_response
+				app.credit_checked_at = datetime.now(timezone.utc)
+				app.status = "CREDIT_CHECK"
+				session.flush()
+				return {
+					"score": credit_score,
+					"recommendation": "DECLINE",
+					"bureau_response": bureau_response,
+					"dti": None,
+					"ltv": None,
+					"passed": False,
+					"decline_reason": "LISTED_NEGATIVE",
+				}
+		except CRBIdentityNotFoundError:
+			log.warning("CRB: identity not found for application %s", application_id)
+			bureau_response = {
+				"bureau": "UNKNOWN",
+				"reference": str(uuid.uuid4()),
+				"score": 0,
+				"error": "identity_not_found",
+				"checked_at": datetime.now(timezone.utc).isoformat(),
+			}
+			credit_score = 0
+		except CRBError as exc:
+			log.warning("CRB lookup failed for %s: %s - using fallback score 500", application_id, exc)
+			bureau_response = {
+				"bureau": "UNAVAILABLE",
+				"reference": str(uuid.uuid4()),
+				"score": 500,
+				"error": str(exc),
+				"checked_at": datetime.now(timezone.utc).isoformat(),
+			}
+			credit_score = 500
 
 		# DTI: stub — real implementation queries applicant income from HR/payroll
 		dti = Decimal("35.00")

@@ -102,6 +102,10 @@ class InvalidAlertStatusError(RegulatoryError):
 	"""Raised on illegal alert status transitions."""
 
 
+class FRCSubmissionError(Exception):
+	"""Raised when SAR submission to FRC Kenya goAML fails."""
+
+
 # ---------------------------------------------------------------------------
 # CBK minimum capital ratios (Basel III / CBK Prudential Guideline 3)
 # ---------------------------------------------------------------------------
@@ -138,6 +142,54 @@ def _pct(numerator: int, denominator: int) -> Decimal:
 
 def _new_uuid() -> str:
 	return str(uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# FRC Kenya goAML helpers
+# ---------------------------------------------------------------------------
+
+def _build_goaml_xml(sar: Any, institution_config: dict) -> str:
+	"""Build goAML v4.0 XML from a SAR using ElementTree (not f-strings)."""
+	import xml.etree.ElementTree as ET
+	NS = "http://www.unodc.org/goaml/en"
+	root = ET.Element("Report")
+	root.set("xmlns", NS)
+	# reporting_person
+	rp = ET.SubElement(root, "reporting_person")
+	for tag, val in [("gender","M"),("first_name","Compliance"),("last_name","Officer"),("occupation","COMPLIANCE")]:
+		ET.SubElement(rp, tag).text = val
+	# entity
+	ent = ET.SubElement(root, "entity")
+	ET.SubElement(ent, "name").text = institution_config.get("INSTITUTION_NAME", "Financial Institution")
+	ET.SubElement(ent, "incorporation_number").text = institution_config.get("INSTITUTION_ID", "")
+	ET.SubElement(ent, "incorporation_country").text = "KE"
+	ET.SubElement(ent, "business").text = institution_config.get("BUSINESS_TYPE", "BANK")
+	# report
+	rpt = ET.SubElement(root, "report")
+	from datetime import date as _date
+	ET.SubElement(rpt, "rentity_id").text = str(sar.sar_number or "")
+	ET.SubElement(rpt, "submission_code").text = "E"
+	ET.SubElement(rpt, "report_code").text = "STR"
+	ET.SubElement(rpt, "submission_date").text = _date.today().isoformat()
+	ET.SubElement(rpt, "currency_code_local").text = "KES"
+	ET.SubElement(rpt, "reason").text = str(getattr(sar, "narrative", "") or "")
+	return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
+def _get_frc_token(base_url: str, client_id: str, client_secret: str, timeout: int) -> str:
+	"""Get OAuth2 Bearer token from FRC goAML. Raises FRCSubmissionError on failure."""
+	import urllib.request, urllib.error, json, base64
+	creds = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+	body = b"grant_type=client_credentials"
+	req = urllib.request.Request(
+		f"{base_url}/oauth/token", data=body, method="POST",
+		headers={"Authorization": f"Basic {creds}", "Content-Type": "application/x-www-form-urlencoded"}
+	)
+	try:
+		with urllib.request.urlopen(req, timeout=timeout) as resp:
+			return json.loads(resp.read())["access_token"]
+	except Exception as exc:
+		raise FRCSubmissionError(f"FRC OAuth failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -789,15 +841,15 @@ class RegulatoryComplianceService:
 		alert.closed_at = now
 		self._session.flush()
 
-		# Stub: submit to FRC Kenya API
-		regulator_ref = self._submit_to_frc_kenya(sar)
-		if regulator_ref:
-			# Direct SQL update to bypass ImmutableRecordMixin on regulator_reference only
-			self._session.execute(
-				sa_text(
-					"UPDATE reg_sar SET regulator_reference = :ref WHERE id = :id"
-				).bindparams(ref=regulator_ref, id=str(sar.id))
-			)
+		# Submit to FRC Kenya goAML
+		try:
+			regulator_ref = self._submit_to_frc_kenya(sar)
+			if regulator_ref and regulator_ref != "DISABLED":
+				sar.regulator_reference = regulator_ref
+			elif regulator_ref == "DISABLED":
+				log.info("SAR %s filed locally; FRC goAML submission disabled", sar.sar_number)
+		except FRCSubmissionError as exc:
+			log.error("FRC SAR submission failed for %s: %s (SAR still filed locally)", sar.sar_number, exc)
 
 		try:
 			emit_event(
@@ -839,18 +891,52 @@ class RegulatoryComplianceService:
 			return 0
 
 	def _submit_to_frc_kenya(self, sar: SuspiciousActivityReport) -> str | None:
-		"""Stub: submit SAR to FRC Kenya goAML system.
+		"""Submit SAR to FRC Kenya goAML system.
 
-		Replace with real HTTP POST to FRC Kenya API endpoint.
-		Returns regulator reference string on success, None on failure.
+		Reads FRC_GOAML_ENABLED from Flask app config; returns "DISABLED" when off.
+		Returns regulator reference string on success.
+		Raises FRCSubmissionError on API or network failure.
 		"""
-		# TODO: implement FRC Kenya goAML API integration
-		# POST https://goaml.frc.go.ke/api/reports
-		log.info(
-			"FRC Kenya SAR submission stub: SAR %r (implement goAML API)",
-			sar.sar_number,
-		)
-		return None
+		import urllib.request, urllib.error, json
+		try:
+			from flask import current_app
+			cfg = current_app.config
+		except RuntimeError:
+			cfg = {}
+
+		enabled = cfg.get("FRC_GOAML_ENABLED", False)
+		if not enabled:
+			log.warning("FRC goAML submission disabled (set FRC_GOAML_ENABLED=True to enable). SAR filed locally.")
+			return "DISABLED"
+
+		base_url = (cfg.get("FRC_GOAML_BASE_URL", "https://goaml.frc.go.ke/api/v2")).rstrip("/")
+		client_id = cfg.get("FRC_GOAML_CLIENT_ID", "")
+		client_secret = cfg.get("FRC_GOAML_CLIENT_SECRET", "")
+		timeout = int(cfg.get("FRC_GOAML_TIMEOUT", 30))
+		institution_config = {k: cfg.get(k, "") for k in ("INSTITUTION_NAME","INSTITUTION_ID","BUSINESS_TYPE")}
+
+		try:
+			token = _get_frc_token(base_url, client_id, client_secret, timeout)
+			xml_body = _build_goaml_xml(sar, institution_config).encode("utf-8")
+			req = urllib.request.Request(
+				f"{base_url}/reports", data=xml_body, method="POST",
+				headers={"Authorization": f"Bearer {token}", "Content-Type": "application/xml;charset=UTF-8"}
+			)
+			with urllib.request.urlopen(req, timeout=timeout) as resp:
+				try:
+					data = json.loads(resp.read())
+					regulator_ref = data.get("reference") or data.get("report_id") or data.get("id")
+				except Exception:
+					regulator_ref = f"FRC-{sar.sar_number}"
+			log.info("FRC goAML: SAR %s submitted, ref=%s", sar.sar_number, regulator_ref)
+			return regulator_ref
+		except FRCSubmissionError:
+			raise
+		except urllib.error.HTTPError as exc:
+			body = exc.read().decode(errors="replace")
+			raise FRCSubmissionError(f"FRC HTTP {exc.code}: {body[:200]}") from exc
+		except Exception as exc:
+			raise FRCSubmissionError(f"FRC submission failed: {exc}") from exc
 
 	# ------------------------------------------------------------------
 	# SAR reversal (HIGH gap)
@@ -3009,6 +3095,7 @@ __all__ = [
 	"AMLAlertNotFoundError",
 	"SARAlreadyFiledError",
 	"InvalidAlertStatusError",
+	"FRCSubmissionError",
 	"CBK_MINIMUMS",
 	"LARGE_EXPOSURE_LIMIT_PCT",
 ]
