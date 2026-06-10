@@ -51,57 +51,9 @@ class TradeComplianceService:
 	# ------------------------------------------------------------------
 
 	def _jaro_winkler(self, s1: str, s2: str) -> float:
-		"""Jaro-Winkler similarity — stdlib only, no fuzzy library required."""
-		if s1 == s2:
-			return 1.0
-		s1, s2 = s1.lower(), s2.lower()
-		if not s1 or not s2:
-			return 0.0
-
-		match_dist = max(len(s1), len(s2)) // 2 - 1
-		if match_dist < 0:
-			match_dist = 0
-
-		s1_matches = [False] * len(s1)
-		s2_matches = [False] * len(s2)
-		matches = 0
-		transpositions = 0
-
-		for i, c1 in enumerate(s1):
-			start = max(0, i - match_dist)
-			end = min(i + match_dist + 1, len(s2))
-			for j in range(start, end):
-				if not s2_matches[j] and c1 == s2[j]:
-					s1_matches[i] = s2_matches[j] = True
-					matches += 1
-					break
-
-		if matches == 0:
-			return 0.0
-
-		k = 0
-		for i in range(len(s1)):
-			if s1_matches[i]:
-				while not s2_matches[k]:
-					k += 1
-				if s1[i] != s2[k]:
-					transpositions += 1
-				k += 1
-
-		jaro = (
-			matches / len(s1)
-			+ matches / len(s2)
-			+ (matches - transpositions / 2) / matches
-		) / 3
-
-		prefix = 0
-		for i in range(min(4, min(len(s1), len(s2)))):
-			if s1[i] == s2[i]:
-				prefix += 1
-			else:
-				break
-
-		return jaro + prefix * 0.1 * (1 - jaro)
+		"""Delegate to shared foundation utility."""
+		from pgappforge.plugins.erp.foundation.commons import jaro_winkler
+		return jaro_winkler(s1, s2)
 
 	# ------------------------------------------------------------------
 	# screen_entity
