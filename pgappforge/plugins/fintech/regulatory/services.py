@@ -522,8 +522,8 @@ class RegulatoryComplianceService:
 		    "customer_id": str,
 		    "is_pep": bool,
 		    "pep_entries": [{"pep_type": ..., "position": ..., "country": ...}],
-		    "sanctions_hit": bool,          # stub — always False
-		    "adverse_media_hit": bool,       # stub — always False
+		    "sanctions_hit": bool,          # True if party_id matches local SanctionsList
+		    "adverse_media_hit": bool,       # always False; requires external media API
 		    "overall_risk": "LOW|MEDIUM|HIGH|CRITICAL",
 		    "screening_timestamp": str,
 		  }
@@ -565,12 +565,13 @@ class RegulatoryComplianceService:
 				except Exception:
 					pass
 
-		# Sanctions check: query local SanctionsList (party_id exact + fuzzy name match)
+		# Sanctions check: query local SanctionsList by party_id (exact match).
+		# Fuzzy name matching available via jaro_winkler() from foundation.commons
+		# when the caller provides a customer name (extend screen_customer signature as needed).
 		sanctions_hit = False
 		sanctions_entries: list[dict] = []
 		try:
-			from pgappforge.plugins.erp.foundation.commons import jaro_winkler
-			# Exact party_id match
+			# Exact party_id match against tenant's local sanctions register
 			exact_sanctions = self._session.execute(
 				select(SanctionsList).where(
 					and_(
@@ -1741,10 +1742,9 @@ class RegulatoryComplianceService:
 		lcr_pct = None
 		try:
 			from pgappforge.plugins.fintech.core_banking.models import Account
-			from sqlalchemy import func as _func, and_ as _and
 			hqla_cents = self._session.execute(
-				select(_func.sum(Account.available_balance_cents)).where(
-					_and(
+				select(func.sum(Account.available_balance_cents)).where(
+					and_(
 						Account.tenant_id == self._tenant_id,
 						Account.status == "ACTIVE",
 						Account.product_code.in_(["CURRENT", "SAVINGS", "NOSTRO", "CASH"]),
@@ -1752,8 +1752,8 @@ class RegulatoryComplianceService:
 				)
 			).scalar_one_or_none() or 0
 			total_deposits = self._session.execute(
-				select(_func.sum(Account.current_balance_cents)).where(
-					_and(
+				select(func.sum(Account.current_balance_cents)).where(
+					and_(
 						Account.tenant_id == self._tenant_id,
 						Account.status == "ACTIVE",
 						Account.account_type == "DEPOSIT",
