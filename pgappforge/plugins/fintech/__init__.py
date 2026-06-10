@@ -1,7 +1,7 @@
 """
 pgappforge/plugins/fintech/__init__.py
 
-Fintech plugin suite — 8 plugins covering the complete fintech stack.
+Fintech plugin suite — 11 plugins covering the complete fintech stack.
 
 Dependency order (must install in this sequence):
   1. CoreBanking          — foundational: accounts, ledger, interest, products
@@ -9,9 +9,12 @@ Dependency order (must install in this sequence):
      Payments             — depends on CoreBanking (payment rails, clearing)
      MobileMoney          — depends on CoreBanking (wallets, agents, USSD)
      PswitchAdapter       — depends on CoreBanking (card auth + settlement via Hyperion-X)
+     CardIssuing          — depends on CoreBanking (virtual/physical card lifecycle, PIN, 3DS)
+     SWIFT                — depends on CoreBanking + Payments (MT103/MT202/MT700, GPI, nostro)
+     Treasury             — depends on CoreBanking + Payments (FX deals, rates, limits)
   3. SACCO                — depends on CoreBanking + Lending
      TradeFinance         — depends on CoreBanking + Payments
-  4. Regulatory           — depends on all above (AML, Basel III, IFRS 9, CBK returns)
+  4. Regulatory           — depends on all above (AML, Basel III, IFRS 9, CBK/goAML returns)
 
 Usage::
 
@@ -27,6 +30,9 @@ Or individually::
 	from pgappforge.plugins.fintech.payments import PaymentsPlugin
 	from pgappforge.plugins.fintech.mobile_money import MobileMoneyPlugin
 	from pgappforge.plugins.fintech.pswitch_adapter import PswitchAdapterPlugin
+	from pgappforge.plugins.fintech.card_issuing import CardIssuingPlugin
+	from pgappforge.plugins.fintech.swift import SwiftPlugin
+	from pgappforge.plugins.fintech.treasury import TreasuryPlugin
 	from pgappforge.plugins.fintech.sacco import SACCOPlugin
 	from pgappforge.plugins.fintech.trade_finance import TradeFinancePlugin
 	from pgappforge.plugins.fintech.regulatory import RegulatoryPlugin
@@ -51,6 +57,9 @@ PLUGIN_REGISTRY: MappingProxyType[str, str] = MappingProxyType({
 	"payments":        "pgappforge.plugins.fintech.payments",
 	"mobile_money":    "pgappforge.plugins.fintech.mobile_money",
 	"pswitch_adapter": "pgappforge.plugins.fintech.pswitch_adapter",
+	"card_issuing":    "pgappforge.plugins.fintech.card_issuing",
+	"swift":           "pgappforge.plugins.fintech.swift",
+	"treasury":        "pgappforge.plugins.fintech.treasury",
 	"sacco":           "pgappforge.plugins.fintech.sacco",
 	"trade_finance":   "pgappforge.plugins.fintech.trade_finance",
 	"regulatory":      "pgappforge.plugins.fintech.regulatory",
@@ -65,6 +74,9 @@ _INSTALL_ORDER: list[str] = [
 	"payments",
 	"mobile_money",
 	"pswitch_adapter",
+	"card_issuing",
+	"swift",
+	"treasury",
 	"sacco",
 	"trade_finance",
 	"regulatory",
