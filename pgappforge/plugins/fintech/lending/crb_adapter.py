@@ -25,7 +25,7 @@ import secrets
 import time
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -175,6 +175,11 @@ class TransUnionKEAdapter:
 		except Exception as exc:
 			raise CRBUnavailableError(f"TransUnion KE request failed: {exc}") from exc
 
+		# NOTE: Response schema below is based on TransUnion KE's documented API format.
+		# Keys: score.value (int), score.pd_pct (Decimal str), credit_summary.active_accounts (int),
+		# credit_summary.npa_count (int), credit_summary.delinquent_count (int),
+		# credit_summary.total_outstanding_kes (float str), negative_listing (bool).
+		# Verify against current TransUnion KE Developer Portal before going live.
 		try:
 			score = int(raw["score"]["value"])
 			pd_pct = Decimal(str(raw["score"]["pd_pct"]))
@@ -211,6 +216,10 @@ class MetropolAdapter:
 
 	Auth: OAuth2 client_credentials.  Token cached until expiry.
 	"""
+	# NOTE: Metropol's production API uses HMAC-SHA256 signing with X-API-KEY and
+	# X-METROPOL-REST-API-PUBLIC-KEY headers, NOT OAuth2. This adapter implements
+	# an OAuth2-compatible flow for testing. Replace with Metropol's actual HMAC
+	# signing per https://metropol.co.ke/api-docs before going live.
 
 	_PROVIDER = "METROPOL_KE"
 	_TOKEN_URL = "https://api.metropol.co.ke/oauth/token"
@@ -357,11 +366,18 @@ class MockCRBAdapter:
 		digest = hashlib.sha256(id_number.encode("utf-8")).hexdigest()
 		score = 400 + (int(digest[:4], 16) % 500)
 
+		default_probability_pct = (
+			Decimal("2.0") if score >= 750
+			else Decimal("8.0") if score >= 650
+			else Decimal("20.0") if score >= 550
+			else Decimal("45.0")
+		)
+
 		return CRBResponse(
 			provider=self._PROVIDER,
 			reference=f"MOCK-{digest[:12].upper()}",
 			score=score,
-			default_probability_pct=Decimal("5.0"),
+			default_probability_pct=default_probability_pct,
 			active_facilities=1,
 			npas=0,
 			delinquent_accounts=0,

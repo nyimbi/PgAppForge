@@ -285,7 +285,7 @@ class TestOTP:
 		_clear_key()
 
 	def _expected_otp(self, card_id: str) -> str:
-		key = CardIssuingService._get_pin_key(card_id)[:20]
+		key = CardIssuingService._get_pin_key(card_id)
 		t = int(time.time()) // 30
 		msg = struct.pack(">Q", t)
 		h = hmac.new(key, msg, hashlib.sha1).digest()

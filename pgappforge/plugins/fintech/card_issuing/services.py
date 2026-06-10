@@ -28,6 +28,14 @@ from typing import Any
 
 from sqlalchemy import select
 
+from pgappforge.plugins.fintech.card_issuing.events import (
+	CardActivatedEvent,
+	CardAuthorizationEvent,
+	CardBlockedEvent,
+	CardIssuedEvent,
+	CardPINSetEvent,
+	CardReplacedEvent,
+)
 from pgappforge.plugins.fintech.card_issuing.models import (
 	CardAuthorizationLog,
 	CardBIN,
@@ -36,6 +44,14 @@ from pgappforge.plugins.fintech.card_issuing.models import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def _emit(event: Any) -> None:
+	try:
+		from pgappforge.plugins.erp.foundation.commons import emit_event
+		emit_event(event)
+	except Exception as exc:
+		log.debug("CardIssuingService: event emit suppressed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -331,11 +347,9 @@ class CardIssuingService:
 		# Derive stored fields from PAN
 		pan_hash = hashlib.sha256(pan.encode()).hexdigest()
 		last4 = pan[-4:]
-		# Format: first 4 visible, rest masked, last 4 visible
-		# e.g. "4242 **** **** 1234" for a 16-digit PAN
-		groups = [pan[i:i+4] for i in range(0, len(pan), 4)]
-		masked_groups = [groups[0]] + ["****"] * (len(groups) - 2) + [groups[-1]]
-		masked = " ".join(masked_groups)
+		# Mask: show BIN (first 6) + asterisks + last 4
+		mask_len = max(0, len(pan) - len(bin_code) - 4)
+		masked = bin_code + ("*" * mask_len) + pan[-4:]
 
 		# Compute expiry
 		now = datetime.now(timezone.utc)
@@ -358,6 +372,14 @@ class CardIssuingService:
 		)
 		session.add(card)
 		session.flush()  # Populate card.id
+		_emit(CardIssuedEvent(
+			aggregate_id=card.id,
+			aggregate_type="IssuedCard",
+			card_id=card.id,
+			account_id=account_id,
+			is_virtual=True,
+			card_number_last4=card.card_number_last4,
+		))
 
 		log.info(
 			"issue_virtual_card: issued card %s for account %s (BIN %s)",
@@ -392,6 +414,11 @@ class CardIssuingService:
 		card.status = "ACTIVE"
 		card.activated_at = datetime.now(timezone.utc)
 		session.flush()
+		_emit(CardActivatedEvent(
+			aggregate_id=card.id,
+			aggregate_type="IssuedCard",
+			card_id=card.id,
+		))
 		log.info("activate_card: card %s activated", card_id)
 		return card
 
@@ -420,6 +447,12 @@ class CardIssuingService:
 		card.status = "BLOCKED"
 		card.block_reason = reason[:50]
 		session.flush()
+		_emit(CardBlockedEvent(
+			aggregate_id=card.id,
+			aggregate_type="IssuedCard",
+			card_id=card.id,
+			block_reason=reason,
+		))
 		log.info("block_card: card %s blocked (reason=%r)", card_id, reason)
 		return card
 
@@ -461,6 +494,13 @@ class CardIssuingService:
 			session=session,
 			daily_limit_cents=old_card.daily_limit_cents,
 		)
+		_emit(CardReplacedEvent(
+			aggregate_id=new_card.id,
+			aggregate_type="IssuedCard",
+			old_card_id=card_id,
+			new_card_id=new_card.id,
+			replace_reason=reason,
+		))
 		log.info(
 			"replace_card: card %s replaced by %s (reason=%r)",
 			card_id, new_card.id, reason,
@@ -522,6 +562,11 @@ class CardIssuingService:
 		card.pin_attempts = 0
 		card.pin_set_at = datetime.now(timezone.utc)
 		session.flush()
+		_emit(CardPINSetEvent(
+			aggregate_id=card_id,
+			aggregate_type="IssuedCard",
+			card_id=card_id,
+		))
 		log.info("set_pin: PIN set for card %s", card_id)
 
 	def verify_pin(
@@ -572,7 +617,7 @@ class CardIssuingService:
 				card.status = "BLOCKED"
 				card.block_reason = "PIN_LOCKED"
 				log.warning("verify_pin: card %s blocked after %d failed attempts", card_id, card.pin_attempts)
-			session.flush()
+		session.flush()
 
 		return ok
 
@@ -588,7 +633,7 @@ class CardIssuingService:
 	) -> str:
 		"""Generate a 6-digit HMAC-TOTP OTP for 3DS authentication (RFC 6238).
 
-		Key: first 20 bytes of the per-card derived key (_get_pin_key).
+		Key: full 32-byte per-card derived key (_get_pin_key / HMAC-SHA256).
 		Time step: 30 seconds (standard TOTP window).
 
 		Args:
@@ -606,7 +651,7 @@ class CardIssuingService:
 		# Validate card exists
 		self._get_card(card_id, tenant_id, session)
 
-		key = self._get_pin_key(card_id)[:20]  # TOTP spec: 20-byte key
+		key = self._get_pin_key(card_id)  # full 32 bytes — SHA-256 output
 		t = int(time.time()) // 30
 
 		# Pack counter as big-endian 8-byte integer (RFC 6238 / RFC 4226)
@@ -687,14 +732,13 @@ class CardIssuingService:
 
 		# 3. Daily limit check
 		if result == "APPROVED" and card.daily_limit_cents > 0:
+			from datetime import timezone as _tz
 			from sqlalchemy import func
-			import datetime as _dt
-			today_start = datetime.now(timezone.utc).replace(
-				hour=0, minute=0, second=0, microsecond=0
-			)
+			today_start = datetime.now(_tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 			daily_spent = session.execute(
 				select(func.coalesce(func.sum(CardAuthorizationLog.amount_cents), 0))
 				.where(
+					CardAuthorizationLog.tenant_id == tenant_id,
 					CardAuthorizationLog.card_id == card_id,
 					CardAuthorizationLog.result == "APPROVED",
 					CardAuthorizationLog.created_at >= today_start,
@@ -706,9 +750,27 @@ class CardIssuingService:
 				decline_reason = "DAILY_LIMIT_EXCEEDED"
 
 		# Generate authorization code on approval
+		auth_code: str | None = None
 		if result == "APPROVED":
-			authorization_code = secrets.token_hex(3).upper()  # 6 hex chars
+			auth_code = secrets.token_hex(3).upper()  # 6 hex chars
+			authorization_code = auth_code
 			card.last_used_at = datetime.now(timezone.utc)
+
+			# Place a hold on the linked core banking account for the authorized amount.
+			try:
+				from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
+				cb = CoreBankingService()
+				cb.place_hold(
+					account_number=card.account_id,  # account_id stores the account number
+					amount_cents=amount_cents,
+					hold_type="CARD_AUTHORIZATION",
+					reference=rrn,
+					session=session,
+					tenant_id=tenant_id,
+					expires_hours=24,
+				)
+			except Exception as exc:
+				log.debug("authorize_transaction: GL hold skipped: %s", exc)
 
 		# --- Log the authorization ---
 		auth_log = CardAuthorizationLog(
@@ -726,6 +788,14 @@ class CardIssuingService:
 		)
 		session.add(auth_log)
 		session.flush()
+		_emit(CardAuthorizationEvent(
+			aggregate_id=str(auth_log.id),
+			aggregate_type="CardAuthorizationLog",
+			card_id=card_id,
+			amount_cents=amount_cents,
+			result=result,
+			authorization_code=auth_code or "",
+		))
 
 		log.info(
 			"authorize_transaction: card=%s type=%s amount=%d result=%s",

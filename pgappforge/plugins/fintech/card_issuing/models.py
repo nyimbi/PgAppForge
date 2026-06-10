@@ -370,6 +370,7 @@ class CardAuthorizationLog(ImmutableRecordMixin, Model):
 	__allow_unmapped__ = True
 	__tablename__ = "ci_auth_log"
 	__table_args__ = (
+		Index("ix_ci_auth_tenant", "tenant_id"),
 		Index("ix_ci_auth_card", "card_id"),
 		Index("ix_ci_auth_result", "result"),
 		Index("ix_ci_auth_created", "created_at"),
@@ -388,6 +389,12 @@ class CardAuthorizationLog(ImmutableRecordMixin, Model):
 		primary_key=True,
 		default=_uuid4,
 		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(
+		UUID(as_uuid=False),
+		nullable=False,
+		index=True,
+		comment="Tenant scope — required for multi-tenant daily limit queries",
 	)
 	card_id = Column(
 		UUID(as_uuid=False),

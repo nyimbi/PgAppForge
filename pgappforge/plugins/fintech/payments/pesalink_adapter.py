@@ -25,6 +25,8 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
+import sqlalchemy as sa
+
 log = logging.getLogger(__name__)
 
 # Status mapping: PESALINK transfer status → internal PaymentOrder status
@@ -160,7 +162,11 @@ class PESALINKAdapter:
 		if not enabled:
 			log.info("PESALINKAdapter.send_transfer: mock mode order_id=%s", payment_order_id)
 			mock_ref = "MOCK-" + payment_order_id[:8]
-			_set_external_ref(order, mock_ref)
+			session.execute(
+				sa.update(PaymentOrder)
+				.where(PaymentOrder.id == payment_order_id)
+				.values(clearing_reference=mock_ref)
+			)
 			session.flush()
 			return {
 				"status": "ACCEPTED",
@@ -220,7 +226,11 @@ class PESALINKAdapter:
 
 		pesalink_ref = data.get("pesalink_ref", data.get("transaction_id", ""))
 
-		_set_external_ref(order, pesalink_ref)
+		session.execute(
+			sa.update(PaymentOrder)
+			.where(PaymentOrder.id == payment_order_id)
+			.values(clearing_reference=pesalink_ref)
+		)
 		session.flush()
 
 		log.info(
@@ -322,11 +332,10 @@ class PESALINKAdapter:
 		Returns:
 			dict with keys: payment_order_id, pesalink_ref, new_status, previous_status.
 		"""
-		from pgappforge.plugins.fintech.payments.models import PaymentOrder
+		from pgappforge.plugins.fintech.payments.models import PaymentOrder, PaymentStatusEvent
 
 		pesalink_ref: str = payload.get("pesalink_ref", "")
 		raw_status: str = payload.get("status", "")
-		reason: str = payload.get("reason", "")
 
 		if not pesalink_ref:
 			raise PESALINKError("process_webhook: payload missing pesalink_ref")
@@ -339,24 +348,16 @@ class PESALINKAdapter:
 			)
 			new_status = "PROCESSING"
 
-		# Locate PaymentOrder by external_ref attribute
-		order: PaymentOrder | None = None
-		try:
-			order = (
-				session.query(PaymentOrder)
-				.filter(PaymentOrder.external_ref == pesalink_ref)
-				.first()
-			)
-		except Exception:
-			# external_ref column may not exist in older schema versions; fall back
-			for o in session.query(PaymentOrder).all():
-				if getattr(o, "external_ref", None) == pesalink_ref:
-					order = o
-					break
+		# Locate PaymentOrder by clearing_reference (stores the pesalink_ref)
+		order: PaymentOrder | None = (
+			session.query(PaymentOrder)
+			.filter(PaymentOrder.clearing_reference == pesalink_ref)
+			.first()
+		)
 
 		if order is None:
 			log.warning(
-				"PESALINKAdapter.process_webhook: no PaymentOrder with external_ref=%r",
+				"PESALINKAdapter.process_webhook: no PaymentOrder with clearing_reference=%r",
 				pesalink_ref,
 			)
 			return {
@@ -367,13 +368,26 @@ class PESALINKAdapter:
 				"matched": False,
 			}
 
-		previous_status = order.status
-		order.status = new_status
+		from_status = order.status
+		session.execute(
+			sa.update(PaymentOrder)
+			.where(PaymentOrder.id == order.id)
+			.values(status=new_status)
+		)
+		session.add(PaymentStatusEvent(
+			tenant_id=order.tenant_id,
+			payment_order_id=order.id,
+			from_status=from_status,
+			to_status=new_status,
+			actor_id="pesalink_webhook",
+			notes=payload.get("reason"),
+		))
 		session.flush()
+		previous_status = from_status
 
 		log.info(
 			"PESALINKAdapter.process_webhook: ref=%s order=%s %s → %s reason=%r",
-			pesalink_ref, order.id, previous_status, new_status, reason,
+			pesalink_ref, order.id, previous_status, new_status, payload.get("reason"),
 		)
 
 		return {

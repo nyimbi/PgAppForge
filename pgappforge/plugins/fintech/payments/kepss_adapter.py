@@ -15,6 +15,7 @@ Config keys (all in Flask app.config):
 from __future__ import annotations
 
 import logging
+import re
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -22,6 +23,8 @@ import json
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
+
+import sqlalchemy as sa
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +81,11 @@ class KEPSSAdapter:
 
 		Returns:
 			dict with keys: status, submission_ref, timestamp (ISO-8601), kepss_enabled.
+
+		# NOTE: The production CBK KEPSS gateway uses SWIFTNet FIN-Copy, not REST/HTTP.
+		# This adapter implements an HTTP POST interface suitable for CBK's REST-based
+		# sandbox/test environment or an institution's own KEPSS gateway proxy.
+		# For production connectivity, configure a SWIFTNet Alliance adapter.
 		"""
 		cfg = self._get_config()
 		enabled: bool = bool(cfg.get("KEPSS_ENABLED", False))
@@ -229,28 +237,27 @@ class KEPSSAdapter:
 		Returns:
 			dict with keys: matched (int), unmatched (int), rejected (int).
 		"""
-		from pgappforge.plugins.fintech.payments.models import PaymentOrder  # local import avoids circular
+		from pgappforge.plugins.fintech.payments.models import PaymentOrder, PaymentStatusEvent  # local import avoids circular
 
 		try:
 			root = ET.fromstring(report_xml)
 		except ET.ParseError as exc:
 			raise KEPSSError(f"Invalid pacs.002 XML: {exc}") from exc
 
-		ns = _PACS002_NS
+		# Detect namespace from root.tag to handle both versioned and bare XML gracefully
+		ns_match = re.search(r'\{([^}]+)\}', root.tag or '')
+		ns = '{' + ns_match.group(1) + '}' if ns_match else ''
+
 		# pacs.002 structure: Document/FIToFIPmtStsRpt/TxInfAndSts (repeated)
-		# Support both namespaced and un-namespaced XML gracefully
-		tx_elements = (
-			root.findall(f".//{{{ns}}}TxInfAndSts")
-			or root.findall(".//TxInfAndSts")
-		)
+		tx_elements = root.findall(f".//{ns}TxInfAndSts")
 
 		matched = 0
 		unmatched = 0
 		rejected = 0
 
 		for tx in tx_elements:
-			end_to_end_id = _find_text(tx, f"{{{ns}}}OrgnlEndToEndId") or _find_text(tx, "OrgnlEndToEndId")
-			tx_sts = _find_text(tx, f"{{{ns}}}TxSts") or _find_text(tx, "TxSts")
+			end_to_end_id = _find_text(tx, f"{ns}OrgnlEndToEndId")
+			tx_sts = _find_text(tx, f"{ns}TxSts")
 
 			if not end_to_end_id or not tx_sts:
 				log.warning("KEPSSAdapter.ingest_settlement_report: skipping element missing OrgnlEndToEndId or TxSts")
@@ -280,7 +287,18 @@ class KEPSSAdapter:
 				continue
 
 			prev_status = order.status
-			order.status = new_status
+			session.execute(
+				sa.update(PaymentOrder)
+				.where(PaymentOrder.id == order.id)
+				.values(status=new_status)
+			)
+			session.add(PaymentStatusEvent(
+				tenant_id=order.tenant_id,
+				payment_order_id=order.id,
+				from_status=prev_status,
+				to_status=new_status,
+				actor_id="kepss_settlement",
+			))
 			session.flush()
 
 			log.info(
