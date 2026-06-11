@@ -64,11 +64,21 @@ PLUGIN_REGISTRY: MappingProxyType[str, str] = MappingProxyType({
 	"trade_finance":   "pgappforge.plugins.fintech.trade_finance",
 	"regulatory":      "pgappforge.plugins.fintech.regulatory",
 	"banking_api":     "pgappforge.plugins.fintech.banking_api",
+	"remittance":         "pgappforge.plugins.fintech.remittance",
+	"bnpl":               "pgappforge.plugins.fintech.bnpl",
+	"agency_banking":     "pgappforge.plugins.fintech.agency",
+	"embedded_finance":   "pgappforge.plugins.fintech.embedded_finance",
+	"terminal_management": "pgappforge.plugins.fintech.terminal_management",
+	"insurtech":           "pgappforge.plugins.fintech.insurtech",
+	"wealth_management":   "pgappforge.plugins.fintech.wealth_management",
+	"robo_advisory":       "pgappforge.plugins.fintech.robo_advisory",
 })
 
 # Install order respects dependency graph:
 #   CoreBanking → [Lending, Payments, MobileMoney, PswitchAdapter]
 #              → [SACCO, TradeFinance] → Regulatory
+#   Remittance depends on CoreBanking + Regulatory (soft)
+#   BNPL depends on CoreBanking + Lending (soft)
 _INSTALL_ORDER: list[str] = [
 	"core_banking",
 	"lending",
@@ -82,6 +92,14 @@ _INSTALL_ORDER: list[str] = [
 	"trade_finance",
 	"regulatory",
 	"banking_api",
+	"remittance",
+	"bnpl",
+	"agency_banking",
+	"embedded_finance",
+	"terminal_management",
+	"insurtech",
+	"wealth_management",
+	"robo_advisory",
 ]
 
 
