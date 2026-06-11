@@ -63,6 +63,7 @@ PLUGIN_REGISTRY: MappingProxyType[str, str] = MappingProxyType({
 	"sacco":           "pgappforge.plugins.fintech.sacco",
 	"trade_finance":   "pgappforge.plugins.fintech.trade_finance",
 	"regulatory":      "pgappforge.plugins.fintech.regulatory",
+	"banking_api":     "pgappforge.plugins.fintech.banking_api",
 })
 
 # Install order respects dependency graph:
@@ -80,6 +81,7 @@ _INSTALL_ORDER: list[str] = [
 	"sacco",
 	"trade_finance",
 	"regulatory",
+	"banking_api",
 ]
 
 

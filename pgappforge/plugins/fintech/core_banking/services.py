@@ -144,6 +144,7 @@ _CB_GL: dict[str, str] = {
 	"INTEREST_INCOME":           "4100",   # Income: interest earned on loans
 	"INTEREST_EXPENSE":          "5100",   # Expense: interest paid on deposits
 	"FEE_INCOME":                "4200",   # Income: fee revenue
+	"FX_SUSPENSE":               "1050",   # Asset: FX conversion suspense / clearing
 }
 
 # ---------------------------------------------------------------------------
@@ -603,16 +604,23 @@ class CoreBankingService:
 		reference: str,
 		narrative: str | None = None,
 		exchange_rate: Decimal | None = None,
+		auto_fx_rate: bool = True,
 		tenant_id: str = "",
 		correlation_id: str = "",
 	) -> dict:
 		"""Atomic intra-bank transfer: DEBIT from + CREDIT to in one journal_id.
 
-		Supports same-currency and cross-currency transfers (provide
-		exchange_rate as Decimal for FX; defaults to 1 for same-currency).
+		Supports same-currency and cross-currency transfers.  For FX transfers
+		the exchange rate is resolved in this order:
+		  1. Caller-supplied *exchange_rate* (always takes precedence).
+		  2. Auto-lookup from TreasuryService when *auto_fx_rate=True* and
+		     source/destination currencies differ.
+		  3. Falls back to rate=1 if neither is available (same-currency path).
 
 		For cross-currency: from_account debited amount_cents in its currency;
-		to_account credited money_multiply(amount_cents, exchange_rate) in its currency.
+		to_account credited floor(amount_cents * exchange_rate) in its currency.
+		A two-leg GL entry passes through FX_SUSPENSE (1050) to track the
+		cross-currency clearance.
 
 		Returns::
 
@@ -622,6 +630,9 @@ class CoreBankingService:
 				"credit_entry_id": str,
 				"from_new_balance_cents": int,
 				"to_new_balance_cents": int,
+				"exchange_rate": str,
+				"source_currency": str,
+				"dest_currency": str,
 			}
 		"""
 		if amount_cents <= 0:
@@ -643,6 +654,30 @@ class CoreBankingService:
 			reference=reference,
 			tenant_id=tenant_id,
 		)
+
+		source_currency = from_acct.currency_code
+		dest_currency = to_acct.currency_code
+		is_cross_currency = source_currency != dest_currency
+
+		# Auto-fetch FX rate from treasury when currencies differ and caller
+		# has not supplied an explicit rate.
+		if is_cross_currency and auto_fx_rate and exchange_rate is None:
+			try:
+				from pgappforge.plugins.fintech.treasury.services import TreasuryService
+				_ts = TreasuryService(session=session, tenant_id=tenant_id or "default")
+				rate_row = _ts._get_active_rate(source_currency, dest_currency)
+				if rate_row is not None:
+					exchange_rate = Decimal(str(rate_row.mid_rate))
+					log.debug(
+						"transfer: auto-fetched FX rate %s/%s = %s (mid)",
+						source_currency, dest_currency, exchange_rate,
+					)
+			except Exception as exc:
+				# Non-fatal — caller must supply explicit exchange_rate or accept rate=1
+				log.debug(
+					"transfer: FX auto-lookup failed for %s/%s (non-fatal): %s",
+					source_currency, dest_currency, exc,
+				)
 
 		from_product = session.get(BankProduct, from_acct.product_id)
 		min_bal = from_product.min_balance_cents if from_product else 0
@@ -713,31 +748,90 @@ class CoreBankingService:
 		session.add(credit_entry)
 		session.flush()
 
-		# GL bridge: DR CUSTOMER_DEPOSITS (from) / CR CUSTOMER_DEPOSITS (to)
-		# Both sides use the same GL account; party_id differentiates them.
-		self._post_to_gl(
-			session=session,
-			lines=[
-				{
-					"account_code": "CUSTOMER_DEPOSITS",
-					"debit_cents": amount_cents,
-					"credit_cents": 0,
-					"party_id": from_acct.id,
-					"description": f"Transfer out {reference}",
-				},
-				{
-					"account_code": "CUSTOMER_DEPOSITS",
-					"debit_cents": 0,
-					"credit_cents": amount_cents,  # use source currency for GL balance; FX tracked in LedgerEntry
-					"party_id": to_acct.id,
-					"description": f"Transfer in {reference}",
-				},
-			],
-			description=f"TRANSFER {from_acct.account_number}→{to_acct.account_number} {reference}",
-			tenant_id=tenant_id,
-			source_doc_id=journal_id,
-			source_doc_type="CB_TRANSFER",
-		)
+		# GL bridge — two patterns:
+		#
+		# Same-currency: DR CUSTOMER_DEPOSITS (from) / CR CUSTOMER_DEPOSITS (to)
+		#
+		# Cross-currency (FX): three-leg via FX_SUSPENSE clearing account:
+		#   leg 1: DR CUSTOMER_DEPOSITS (from, source_currency)
+		#          CR FX_SUSPENSE        (source side cleared)
+		#   leg 2: DR FX_SUSPENSE        (dest side cleared)
+		#          CR CUSTOMER_DEPOSITS  (to,   dest_currency)
+		# The FX_SUSPENSE entries net to zero across both legs, providing a
+		# clear audit trail through the suspense/clearing account.
+		if is_cross_currency and exchange_rate is not None and exchange_rate != Decimal("1"):
+			fx_suspense_code = self._resolve_gl("FX_SUSPENSE")
+			self._post_to_gl(
+				session=session,
+				lines=[
+					{
+						"account_code": "CUSTOMER_DEPOSITS",
+						"debit_cents": amount_cents,
+						"credit_cents": 0,
+						"party_id": from_acct.id,
+						"description": f"FX transfer out {source_currency} {reference}",
+					},
+					{
+						"account_code": "FX_SUSPENSE",
+						"debit_cents": 0,
+						"credit_cents": amount_cents,
+						"party_id": from_acct.id,
+						"description": f"FX suspense in {source_currency} {reference}",
+					},
+				],
+				description=f"FX-OUT {from_acct.account_number} {source_currency} {reference}",
+				tenant_id=tenant_id,
+				source_doc_id=journal_id,
+				source_doc_type="CB_TRANSFER",
+			)
+			self._post_to_gl(
+				session=session,
+				lines=[
+					{
+						"account_code": "FX_SUSPENSE",
+						"debit_cents": credit_amount_cents,
+						"credit_cents": 0,
+						"party_id": to_acct.id,
+						"description": f"FX suspense out {dest_currency} {reference}",
+					},
+					{
+						"account_code": "CUSTOMER_DEPOSITS",
+						"debit_cents": 0,
+						"credit_cents": credit_amount_cents,
+						"party_id": to_acct.id,
+						"description": f"FX transfer in {dest_currency} {reference}",
+					},
+				],
+				description=f"FX-IN {to_acct.account_number} {dest_currency} {reference}",
+				tenant_id=tenant_id,
+				source_doc_id=journal_id,
+				source_doc_type="CB_TRANSFER",
+			)
+		else:
+			# Same-currency: simple two-leg GL entry
+			self._post_to_gl(
+				session=session,
+				lines=[
+					{
+						"account_code": "CUSTOMER_DEPOSITS",
+						"debit_cents": amount_cents,
+						"credit_cents": 0,
+						"party_id": from_acct.id,
+						"description": f"Transfer out {reference}",
+					},
+					{
+						"account_code": "CUSTOMER_DEPOSITS",
+						"debit_cents": 0,
+						"credit_cents": amount_cents,
+						"party_id": to_acct.id,
+						"description": f"Transfer in {reference}",
+					},
+				],
+				description=f"TRANSFER {from_acct.account_number}→{to_acct.account_number} {reference}",
+				tenant_id=tenant_id,
+				source_doc_id=journal_id,
+				source_doc_type="CB_TRANSFER",
+			)
 
 		try:
 			emit_event(
@@ -774,6 +868,9 @@ class CoreBankingService:
 			"credit_entry_id": credit_entry.id,
 			"from_new_balance_cents": from_acct.current_balance_cents,
 			"to_new_balance_cents": to_acct.current_balance_cents,
+			"exchange_rate": str(rate),
+			"source_currency": source_currency,
+			"dest_currency": dest_currency,
 		}
 
 	# ------------------------------------------------------------------
@@ -857,11 +954,40 @@ class CoreBankingService:
 					)
 				continue
 
+			# Tiered rate override — attempt to replace the product flat rate with
+			# a blended weighted-average rate derived from InterestRateTierService.
+			# Falls back silently to the product's flat interest_rate_pa on any error.
+			flat_rate = Decimal(str(product.interest_rate_pa))
+			try:
+				from pgappforge.plugins.fintech.core_banking.interest_tiers import (
+					InterestRateTierService,
+				)
+				_tier_svc = InterestRateTierService()
+				_active_tiers = _tier_svc.get_active_tiers(
+					account.product_code, account.tenant_id, session
+				)
+				if _active_tiers:
+					# Use average-daily balance as the balance basis when available
+					_basis = (
+						self._compute_avg_daily_balance(session, account, accrual_date)
+						if (product.interest_calculation or "DAILY_BALANCE").upper()
+						== "AVERAGE_DAILY_BALANCE"
+						else account.current_balance_cents
+					)
+					flat_rate = _tier_svc.compute_tiered_rate(
+						account.product_code, _basis, account.tenant_id, session
+					)
+			except Exception as _tier_exc:
+				log.debug(
+					"accrue_interest: tiered rate lookup failed for %s (non-fatal): %s",
+					account.account_number, _tier_exc,
+				)
+
 			# Dispatch on product.interest_calculation:
 			#   DAILY_BALANCE      — current balance × rate / 365
 			#   FLAT               — original principal × rate / 365
 			#   AVERAGE_DAILY_BALANCE — time-weighted intraday average × rate / 365
-			daily_rate = Decimal(str(product.interest_rate_pa)) / Decimal("365")
+			daily_rate = flat_rate / Decimal("365")
 			calc_method = (product.interest_calculation or "DAILY_BALANCE").upper()
 			if calc_method == "FLAT":
 				# Flat-rate loan: interest is computed on the original principal,
@@ -892,7 +1018,7 @@ class CoreBankingService:
 				account_id=account.id,
 				accrual_date=accrual_date,
 				opening_balance_cents=account.current_balance_cents,
-				rate_applied_pa=product.interest_rate_pa,
+				rate_applied_pa=flat_rate,   # tiered blended rate, or product flat rate
 				accrued_cents=accrued,
 				cumulative_accrued_cents=cumulative,
 				is_capitalized=False,

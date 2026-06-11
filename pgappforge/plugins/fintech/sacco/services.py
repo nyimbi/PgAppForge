@@ -94,6 +94,7 @@ class SACCOService:
 		share_account_id: str | None = None,
 		deposit_account_id: str | None = None,
 		membership_date: date | None = None,
+		**kwargs: Any,
 	) -> Any:
 		"""Onboard a Party as a SACCO member.
 
@@ -123,6 +124,34 @@ class SACCOService:
 				f"Party {party_id!r} is already an active member of SACCO {sacco_id!r} "
 				f"(member_number={existing.member_number!r})"
 			)
+
+		# ------------------------------------------------------------------
+		# Common bond enforcement
+		# Members must satisfy the SACCO's eligibility criteria if defined.
+		# common_bond_rules JSONB: {"type": "EMPLOYER", "values": ["SAFARICOM"]}
+		# Supported types: EMPLOYER | REGION | PROFESSION | INSTITUTION
+		# ------------------------------------------------------------------
+		if getattr(sacco, "common_bond_rules", None):
+			rules = sacco.common_bond_rules
+			bond_type = rules.get("type", "")
+			bond_values = [v.upper() for v in (rules.get("values") or []) if v]
+			if bond_type and bond_values:
+				# kwargs may carry employer_code / region_code passed by callers
+				# as extra keyword arguments; fall through gracefully if absent.
+				# The applicant bond value must match one of the permitted values.
+				# If no bond value is provided we skip enforcement (open registration path).
+				applicant_bond = ""
+				# Check well-known kwargs aliases in order of precedence
+				for _field in ("employer_code", "region_code", "profession_code", "institution_code"):
+					_val = kwargs.get(_field, "")
+					if _val:
+						applicant_bond = str(_val).upper()
+						break
+				if applicant_bond and applicant_bond not in bond_values:
+					raise ValueError(
+						f"Applicant does not meet SACCO common bond requirement "
+						f"({bond_type}: must be one of {bond_values}, got {applicant_bond!r})"
+					)
 
 		mem_date = membership_date or date.today()
 		share_value_cents = 10000  # default KES 100.00 per share; SACCO configures this

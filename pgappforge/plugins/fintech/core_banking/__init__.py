@@ -167,6 +167,67 @@ class CoreBankingPlugin(BasePlugin):
 				exc,
 			)
 
+	def _on_party_created(self, event: object) -> None:
+		"""Auto-open a CURRENT account when a new party (customer) is created.
+
+		Triggered by the foundation event bus via BasePlugin.post_initialize()
+		which auto-wires _on_<event_type_dots_as_underscores> handlers.
+
+		Requires CB_DEFAULT_PRODUCT_CODE (default "CURRENT") to be set.
+		Non-fatal: failures are logged and swallowed.
+		"""
+		try:
+			from flask import current_app
+			ab = current_app.extensions.get("appbuilder")
+			if ab is None:
+				return
+			session = ab.get_session
+			tenant_id = (
+				str(getattr(event, "tenant_id", "")) or
+				self.config.get("CB_TENANT_ID", self.config.get("CB_DEFAULT_TENANT_ID", "default"))
+			)
+			party_id = str(
+				getattr(event, "party_id", "") or
+				getattr(event, "aggregate_id", "") or
+				""
+			)
+			if not party_id:
+				return
+
+			# Skip if an active/dormant account already exists for this party
+			from pgappforge.plugins.fintech.core_banking.models import Account
+			import sqlalchemy as sa
+			existing = session.execute(
+				sa.select(Account).where(
+					Account.customer_id == party_id,
+					Account.tenant_id == tenant_id,
+					Account.status.in_(["ACTIVE", "DORMANT"]),
+				)
+			).scalar_one_or_none()
+			if existing:
+				return
+
+			from pgappforge.plugins.fintech.core_banking.services import CoreBankingService
+			svc = CoreBankingService()
+			account = svc.open_account(
+				session=session,
+				customer_id=party_id,
+				product_code=self.config.get("CB_DEFAULT_PRODUCT_CODE", "CURRENT"),
+				opening_deposit_cents=0,
+				tenant_id=tenant_id,
+				branch_code=self.config.get("CB_DEFAULT_BRANCH_CODE", "HQ"),
+			)
+			session.commit()
+			log.info(
+				"CoreBankingPlugin._on_party_created: auto-opened account %s for party %s",
+				account.account_number,
+				party_id,
+			)
+		except Exception as exc:
+			log.warning(
+				"CoreBankingPlugin._on_party_created failed (non-fatal): %s", exc
+			)
+
 	# ------------------------------------------------------------------
 	# Lifecycle
 	# ------------------------------------------------------------------
@@ -193,9 +254,10 @@ class CoreBankingPlugin(BasePlugin):
 		log.info("CoreBankingPlugin initialised (config: %s)", list(self.config))
 
 	def post_initialize(self) -> None:
-		"""Seed default products if configured."""
+		"""Seed default products and interest rate tiers if configured."""
 		if self.config.get("CB_SEED_DEFAULT_PRODUCTS", True):
 			self._try_seed_products()
+		self._try_seed_default_tiers()
 
 	def register_views(self) -> None:
 		"""Register views under the configured menu category."""
@@ -372,6 +434,18 @@ class CoreBankingPlugin(BasePlugin):
 			InterestAccrual,
 			LedgerEntry,
 		)
+		from pgappforge.plugins.fintech.core_banking.interest_tiers import (
+			InterestRateTier,
+		)
+		from pgappforge.plugins.fintech.core_banking.kyc import (
+			KYCDocument,
+			KYCProfile,
+		)
+		from pgappforge.plugins.fintech.core_banking.teller import (
+			TellerSession,
+			TellerTransaction,
+			TellerVault,
+		)
 		return [
 			BankProduct,
 			Account,
@@ -381,6 +455,14 @@ class CoreBankingPlugin(BasePlugin):
 			AccountStatement,
 			AMLScreeningResult,
 			GLAccountMapping,
+			InterestRateTier,
+			# KYC
+			KYCProfile,
+			KYCDocument,
+			# Teller
+			TellerVault,
+			TellerSession,
+			TellerTransaction,
 		]
 
 	# ------------------------------------------------------------------
@@ -521,8 +603,64 @@ class CoreBankingPlugin(BasePlugin):
 		return inserted
 
 	# ------------------------------------------------------------------
-	# Internal seed helper
+	# Internal seed helpers
 	# ------------------------------------------------------------------
+
+	def _try_seed_default_tiers(self) -> None:
+		"""Seed example tiered interest rates for SAVINGS product.
+
+		Only seeds if no active tiers already exist for the product+tenant.
+		Non-fatal: failures are logged and swallowed so plugin initialisation
+		is never blocked by a missing table or unavailable session.
+		"""
+		try:
+			from datetime import date
+			from flask import current_app
+			from pgappforge.plugins.fintech.core_banking.interest_tiers import (
+				InterestRateTierService,
+			)
+			ab = current_app.extensions.get("appbuilder")
+			if ab is None:
+				return
+			session = ab.get_session
+			tenant_id = self.config.get("CB_TENANT_ID", self.config.get("CB_DEFAULT_TENANT_ID", "default"))
+			svc = InterestRateTierService()
+			existing = svc.get_active_tiers("SAVINGS", tenant_id, session)
+			if existing:
+				return
+			svc.set_tiers(
+				"SAVINGS",
+				[
+					{
+						"tier_order": 1,
+						"min_balance_cents": 0,
+						"max_balance_cents": 10_000_00,
+						"annual_rate_pct": "3.0",
+					},
+					{
+						"tier_order": 2,
+						"min_balance_cents": 10_000_00,
+						"max_balance_cents": 100_000_00,
+						"annual_rate_pct": "5.0",
+					},
+					{
+						"tier_order": 3,
+						"min_balance_cents": 100_000_00,
+						"max_balance_cents": None,
+						"annual_rate_pct": "7.0",
+					},
+				],
+				tenant_id,
+				session,
+				effective_from=date.today(),
+			)
+			session.commit()
+			log.info("CoreBankingPlugin: seeded default tiered rates for SAVINGS")
+		except RuntimeError:
+			# No app context yet — skip silently
+			pass
+		except Exception as exc:
+			log.debug("_try_seed_default_tiers failed (non-fatal): %s", exc)
 
 	def _try_seed_products(self) -> None:
 		"""Attempt product seeding; log failures, never raise."""
@@ -566,6 +704,10 @@ def create_plugin(
 # Public API re-exports
 # ---------------------------------------------------------------------------
 
+from pgappforge.plugins.fintech.core_banking.interest_tiers import (  # noqa: E402
+	InterestRateTier,
+	InterestRateTierService,
+)
 from pgappforge.plugins.fintech.core_banking.models import (  # noqa: E402
 	Account,
 	AccountHold,
@@ -638,6 +780,17 @@ from pgappforge.plugins.fintech.core_banking.views import (  # noqa: E402
 	LedgerView,
 	ProductView,
 )
+from pgappforge.plugins.fintech.core_banking.kyc import (  # noqa: E402
+	KYCDocument,
+	KYCProfile,
+	KYCService,
+)
+from pgappforge.plugins.fintech.core_banking.teller import (  # noqa: E402
+	TellerService,
+	TellerSession,
+	TellerTransaction,
+	TellerVault,
+)
 
 __all__ = [
 	# plugin
@@ -653,6 +806,18 @@ __all__ = [
 	"AMLScreeningResult",
 	"GLAccountMapping",
 	"CB_ACCOUNT_SEQ",
+	# tiered interest rates
+	"InterestRateTier",
+	"InterestRateTierService",
+	# kyc
+	"KYCProfile",
+	"KYCDocument",
+	"KYCService",
+	# teller
+	"TellerVault",
+	"TellerSession",
+	"TellerTransaction",
+	"TellerService",
 	# events — classes
 	"AccountOpenedEvent",
 	"AccountCreditedEvent",

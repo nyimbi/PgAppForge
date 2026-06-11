@@ -123,6 +123,18 @@ class SACCO(AuditMixin, Model):
 		comment="e.g. 'Employees of ABC Ltd' / 'Teachers, Nairobi County'",
 	)
 
+	# Structured common bond eligibility rules (JSONB)
+	# e.g. {"type": "EMPLOYER", "values": ["SAFARICOM", "KCB"]}
+	# NOTE: This column was added in migration 2026-06-11. If the column is absent,
+	# run: ALTER TABLE sc_sacco ADD COLUMN common_bond_rules JSONB NOT NULL DEFAULT '{}';
+	common_bond_rules: dict[str, Any] = Column(
+		JSONB, nullable=False, default=dict, server_default="{}",
+		comment=(
+			"Structured eligibility rules: "
+			"{type: EMPLOYER|REGION|PROFESSION, values: [...]}"
+		),
+	)
+
 	# Aggregate statistics (updated by nightly batch — NOT transactional source of truth)
 	membership_count = Column(Integer, nullable=False, default=0)
 	total_shares_cents = Column(
@@ -280,6 +292,18 @@ class Member(AuditMixin, Model):
 	monthly_contribution_cents = Column(
 		Integer, nullable=False, default=0,
 		comment="Contractual monthly savings contribution in cents",
+	)
+
+	# FOSA deposit balance (maintained by FOSABridgeService)
+	fosa_balance_cents = Column(
+		Integer, nullable=False, default=0,
+		comment="Member FOSA deposit balance in cents (synced from SaccoLedgerEntry)",
+	)
+
+	# Payroll deduction flags (set by HCM integration)
+	payroll_deduction_enabled = Column(
+		Boolean, nullable=False, default=False,
+		comment="True if member has authorised payroll deduction for SACCO contributions",
 	)
 
 	# Guarantor exposure
@@ -1872,6 +1896,86 @@ class SACCOAccountMap(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# FOSAAccountLink — member ↔ core banking account mapping for FOSA
+# ---------------------------------------------------------------------------
+
+class FOSAAccountLink(AuditMixin, Model):
+	"""Links a SACCO member's FOSA account to a core banking account.
+
+	One row per member per account_type (FOSA / BOSA / SHARES).
+	Created by FOSABridgeService.provision_fosa_account() when a member is
+	onboarded or when their FOSA arm is activated.
+
+	cb_account_number: the core banking account number (from cb_account table).
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sc_fosa_account_link"
+	__table_args__ = (
+		UniqueConstraint("member_id", "account_type", "tenant_id", name="uq_sc_fal_member_type"),
+		Index("ix_sc_fal_member", "member_id"),
+		Index("ix_sc_fal_sacco", "sacco_id"),
+		Index("ix_sc_fal_account_type", "account_type"),
+		Index("ix_sc_fal_tenant", "tenant_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(String(64), nullable=False, index=True)
+
+	sacco_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sc_sacco.id", ondelete="RESTRICT"),
+		nullable=False, index=True,
+	)
+	member_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sc_member.id", ondelete="RESTRICT"),
+		nullable=False, index=True,
+	)
+	account_type = Column(
+		String(20), nullable=False, default="FOSA",
+		comment="FOSA | BOSA | SHARES",
+	)
+	cb_account_number = Column(
+		String(50), nullable=True,
+		comment="Core banking account number from cb_account",
+	)
+	cb_account_id = Column(
+		UUID(as_uuid=False), nullable=True,
+		comment="FK reference to cb_account.id (denormalised for fast lookups)",
+	)
+	currency_code = Column(String(3), nullable=False, default="KES")
+	is_active = Column(Boolean, nullable=False, default=True)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return (
+			f"<FOSAAccountLink member={self.member_id!r} "
+			f"type={self.account_type!r} "
+			f"cb_acct={self.cb_account_number!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -1888,6 +1992,7 @@ __all__ = [
 	"SaccoLedgerEntry",
 	"LoanRepaymentSchedule",
 	"SACCOAccountMap",
+	"FOSAAccountLink",
 	# HIGH gaps
 	"SaccoStandingOrder",
 	"BatchRunLog",
