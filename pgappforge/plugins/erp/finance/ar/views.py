@@ -1273,6 +1273,62 @@ class ARReportView(BaseERPView):
 		return make_response(html, 200)
 
 
+# ---------------------------------------------------------------------------
+# ARInvoiceDownloadView  — PDF and CSV downloads for individual invoices
+# ---------------------------------------------------------------------------
+
+class ARInvoiceDownloadView(BaseERPView):
+	"""Invoice document downloads.
+
+	GET /ar/invoices/<invoice_id>.pdf  — PDF invoice (attachment)
+	GET /ar/invoices/<invoice_id>.csv  — CSV line-items export (attachment)
+
+	``tenant_id`` must be supplied as a query-string parameter.
+	"""
+
+	route_base = "/ar/invoices"
+	default_view = "download_pdf"
+
+	def _svc(self):
+		from pgappforge.plugins.erp.finance.ar.invoice_pdf import InvoicePDFService
+		return InvoicePDFService()
+
+	@expose("/<string:invoice_id>.pdf")
+	@has_access
+	def download_pdf(self, invoice_id: str):
+		"""Download invoice as PDF.  Returns 503 when reportlab is absent."""
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+		try:
+			data = self._svc().generate_invoice_pdf(invoice_id, tenant_id, session)
+		except ValueError:
+			abort(404)
+		if not data:
+			return make_response(
+				jsonify({"error": "PDF generation unavailable — reportlab not installed"}),
+				503,
+			)
+		resp = make_response(data)
+		resp.headers["Content-Type"] = "application/pdf"
+		resp.headers["Content-Disposition"] = f'attachment; filename="invoice_{invoice_id}.pdf"'
+		return resp
+
+	@expose("/<string:invoice_id>.csv")
+	@has_access
+	def download_csv(self, invoice_id: str):
+		"""Download invoice line items as CSV."""
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id", "")
+		try:
+			data = self._svc().generate_invoice_csv(invoice_id, tenant_id, session)
+		except ValueError:
+			abort(404)
+		resp = make_response(data)
+		resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+		resp.headers["Content-Disposition"] = f'attachment; filename="invoice_{invoice_id}.csv"'
+		return resp
+
+
 __all__ = [
 	"ARCustomerView",
 	"ARInvoiceView",
@@ -1280,4 +1336,5 @@ __all__ = [
 	"ARCreditNoteView",
 	"ARDunningView",
 	"ARReportView",
+	"ARInvoiceDownloadView",
 ]
