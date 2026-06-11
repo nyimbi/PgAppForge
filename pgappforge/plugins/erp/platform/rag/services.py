@@ -233,7 +233,13 @@ class RAGService:
 
 		q_vec = query_embeddings[0]
 
-		# Load all active chunks with their parent document metadata
+		# Try pgvector ANN query first (sub-linear, requires `vector` extension + VECTOR column).
+		# Falls back to full in-memory scan when pgvector is unavailable or column doesn't exist.
+		pgvector_results = self._search_pgvector(q_vec, tenant_id, session, top_k, source_types)
+		if pgvector_results is not None:
+			return pgvector_results
+
+		# In-memory cosine scan (correct, O(n) — suitable for <10K chunks per tenant).
 		stmt = (
 			sa.select(RAGChunk, RAGDocument)
 			.join(RAGDocument, RAGDocument.id == RAGChunk.document_id)
@@ -264,6 +270,63 @@ class RAGService:
 
 		scored.sort(key=lambda x: x["score"], reverse=True)
 		return scored[:top_k]
+
+	def _search_pgvector(
+		self,
+		q_vec: list[float],
+		tenant_id: str,
+		session: Any,
+		top_k: int,
+		source_types: list[str] | None,
+	) -> list[dict] | None:
+		"""Attempt ANN search using PostgreSQL pgvector extension.
+
+		Returns ranked results if the `vector` extension is available and the
+		`embedding_vector` column exists on plat_rag_chunk.  Returns None to
+		signal the caller should fall back to the in-memory scan.
+
+		Migration (run once when pgvector is installed):
+		  ALTER TABLE plat_rag_chunk ADD COLUMN embedding_vector vector(1536);
+		  UPDATE plat_rag_chunk SET embedding_vector = embedding::vector;
+		  CREATE INDEX ON plat_rag_chunk USING ivfflat (embedding_vector vector_cosine_ops);
+		"""
+		try:
+			import json
+			vec_literal = "[" + ",".join(str(x) for x in q_vec) + "]"
+
+			# Build the filter clause
+			filter_clause = "AND d.is_active = TRUE AND c.embedding_vector IS NOT NULL"
+			params: dict = {"tenant_id": tenant_id, "top_k": top_k, "vec": vec_literal}
+			if source_types:
+				filter_clause += " AND d.source_type = ANY(:source_types)"
+				params["source_types"] = source_types
+
+			sql = sa.text(f"""
+				SELECT c.id, c.document_id, d.title, c.content, d.source_type,
+				       1 - (c.embedding_vector <=> :vec::vector) AS score
+				FROM plat_rag_chunk c
+				JOIN plat_rag_document d ON d.id = c.document_id
+				WHERE c.tenant_id = :tenant_id
+				  {filter_clause}
+				ORDER BY c.embedding_vector <=> :vec::vector
+				LIMIT :top_k
+			""")
+			rows = session.execute(sql, params).fetchall()
+			return [
+				{
+					"chunk_id":    str(r[0]),
+					"document_id": str(r[1]),
+					"title":       r[2] or "",
+					"content":     r[3] or "",
+					"source_type": r[4] or "",
+					"score":       float(r[5]),
+				}
+				for r in rows
+			]
+		except Exception as exc:
+			# pgvector not installed, column missing, or any DB error — use in-memory scan
+			log.debug("_search_pgvector unavailable, using in-memory scan: %s", exc)
+			return None
 
 	# ── Q&A ───────────────────────────────────────────────────────────────────
 
