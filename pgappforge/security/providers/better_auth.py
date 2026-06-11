@@ -146,24 +146,8 @@ class BetterAuthProvider:
 		return []
 
 	def sync_to_fab(self, user: AuthUser, session: Any) -> Any:
-		try:
-			from flask import current_app
-			sm = current_app.appbuilder.sm
-			fab_user = sm.find_user(email=user.email)
-			if fab_user is None:
-				role_objs = [sm.find_role(r) or sm.add_role(r) for r in user.roles]
-				fab_user = sm.add_user(
-					username=user.username,
-					first_name=user.first_name,
-					last_name=user.last_name,
-					email=user.email,
-					role=role_objs[0] if role_objs else sm.find_role(sm.auth_role_public),
-					password="",
-				)
-			return fab_user
-		except Exception as exc:
-			log.warning("BetterAuthProvider.sync_to_fab: %s", exc)
-			return None
+		from pgappforge.security.providers.utils import sync_external_user_to_fab
+		return sync_external_user_to_fab(user, lookup_by_email=True)
 
 
 __all__ = ["BetterAuthProvider"]

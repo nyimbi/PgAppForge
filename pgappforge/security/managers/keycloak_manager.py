@@ -22,6 +22,10 @@ log = logging.getLogger(__name__)
 class KeycloakSecurityManager(SecurityManager):
 	"""FAB SecurityManager extended with Keycloak JWT validation."""
 
+	def __init__(self, appbuilder):
+		super().__init__(appbuilder)
+		appbuilder.get_app().before_request(self.before_request)
+
 	def get_oauth_user_info(self, provider_name: str, resp: Any) -> dict:
 		"""Map Keycloak OAuth userinfo to FAB user fields, including role sync."""
 		me = super().get_oauth_user_info(provider_name, resp)

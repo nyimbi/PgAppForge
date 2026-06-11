@@ -16,6 +16,10 @@ log = logging.getLogger(__name__)
 class ClerkSecurityManager(SecurityManager):
 	"""FAB SecurityManager that validates Clerk session tokens on API requests."""
 
+	def __init__(self, appbuilder):
+		super().__init__(appbuilder)
+		appbuilder.get_app().before_request(self.before_request)
+
 	def before_request(self) -> None:
 		try:
 			from flask import request, g

@@ -13,7 +13,6 @@ resources with SpiceDB relationships at your own pace.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from pgappforge.security.sqla.manager import SecurityManager
 
@@ -47,21 +46,5 @@ class SpiceDBSecurityManager(SecurityManager):
 			except Exception as exc:
 				log.debug("SpiceDB has_access check failed, using FAB RBAC: %s", exc)
 		return super().has_access(permission_name, view_name)
-
-	def add_permission_view_menu(self, permission_action: str, view_menu_name: str) -> Any:
-		"""Mirror FAB permission grants into SpiceDB relationships."""
-		pvm = super().add_permission_view_menu(permission_action, view_menu_name)
-		from pgappforge.security.providers.spicedb import get_authz_provider
-		authz = get_authz_provider()
-		if authz and pvm:
-			try:
-				authz.write_relationship(
-					"permission", permission_action,
-					"view_menu", "view", view_menu_name,
-				)
-			except Exception as exc:
-				log.debug("SpiceDB relationship write failed: %s", exc)
-		return pvm
-
 
 __all__ = ["SpiceDBSecurityManager"]
