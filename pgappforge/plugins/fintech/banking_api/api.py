@@ -36,6 +36,46 @@ BANKING_API_BP = Blueprint("banking_api", __name__, url_prefix="/api/v1/banking"
 
 
 # ---------------------------------------------------------------------------
+# CORS — allow cross-origin requests from configured origins
+# ---------------------------------------------------------------------------
+
+@BANKING_API_BP.after_request
+def _add_cors_headers(response):
+	"""Add CORS headers for banking API consumers (mobile apps, web frontends)."""
+	try:
+		from flask import current_app, request as _req
+		allowed_origins = current_app.config.get(
+			"BANKING_API_CORS_ORIGINS", "*"
+		)
+		origin = _req.headers.get("Origin", "")
+		if allowed_origins == "*":
+			response.headers["Access-Control-Allow-Origin"] = "*"
+		elif origin in (allowed_origins if isinstance(allowed_origins, list) else [allowed_origins]):
+			response.headers["Access-Control-Allow-Origin"] = origin
+			response.headers["Vary"] = "Origin"
+		response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+		response.headers["Access-Control-Allow-Headers"] = (
+			"Authorization, X-API-Key, Content-Type, Accept"
+		)
+		response.headers["Access-Control-Max-Age"] = "600"
+	except Exception:
+		pass
+	return response
+
+
+@BANKING_API_BP.route("/<path:_>", methods=["OPTIONS"])
+@BANKING_API_BP.route("/", methods=["OPTIONS"])
+def _handle_options(_=None):
+	"""Handle CORS preflight requests."""
+	from flask import make_response
+	resp = make_response("", 204)
+	resp.headers["Access-Control-Allow-Origin"] = "*"
+	resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+	resp.headers["Access-Control-Allow-Headers"] = "Authorization, X-API-Key, Content-Type"
+	return resp
+
+
+# ---------------------------------------------------------------------------
 # OpenAPI 3.0 specification
 # ---------------------------------------------------------------------------
 
