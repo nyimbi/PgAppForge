@@ -117,7 +117,7 @@ class BankingAPIPlugin(BasePlugin):
 		log.info("BankingAPIPlugin initialized")
 
 	def register_views(self) -> None:
-		"""Register the Banking API blueprint with the Flask app.
+		"""Register the Banking API blueprint and FAB nav link with the Flask app.
 
 		Idempotent: skips registration if the blueprint is already present
 		(e.g. when the plugin is activated more than once in tests).
@@ -142,6 +142,26 @@ class BankingAPIPlugin(BasePlugin):
 			log.debug("BankingAPIPlugin.register_views: no app context, deferred")
 		except Exception as exc:
 			log.warning("BankingAPIPlugin.register_views failed: %s", exc)
+
+		try:
+			from pgappforge.plugins.erp.base_view import BaseERPView
+			from pgappforge import expose
+			from pgappforge.security.decorators import has_access
+			from flask import redirect
+
+			class BankingAPIDocsView(BaseERPView):
+				route_base = "/fintech/banking-api-docs"
+
+				@expose("/")
+				@has_access
+				def index(self):
+					from flask import redirect
+					return redirect("/api/v1/banking/docs")
+
+			self.add_view(BankingAPIDocsView, "Banking API Docs", icon="fa-code", category="Fintech")
+		except Exception as exc:
+			import logging
+			logging.getLogger(__name__).debug("BankingAPIPlugin.register_views: %s", exc)
 
 	def register_models(self) -> list:
 		"""No new models — this plugin reuses core_banking models."""
