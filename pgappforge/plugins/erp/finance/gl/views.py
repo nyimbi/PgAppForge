@@ -765,6 +765,117 @@ class GLReportView(BaseERPView):
 		})
 
 
+# ---------------------------------------------------------------------------
+# ReportDownloadView  (PDF + CSV downloads for financial statements)
+# ---------------------------------------------------------------------------
+
+class ReportDownloadView(BaseERPView):
+	"""Downloadable financial statements — PDF or CSV.
+
+	GET /gl/reports/trial-balance/<period_id>.pdf
+	GET /gl/reports/trial-balance/<period_id>.csv
+	GET /gl/reports/income-statement/<period_id>.pdf
+	GET /gl/reports/income-statement/<period_id>.csv
+	GET /gl/reports/balance-sheet/<period_id>.pdf
+	GET /gl/reports/balance-sheet/<period_id>.csv
+
+	``fmt`` is the file extension: "pdf" or "csv".
+	``tenant_id`` may be passed as a query-string parameter.
+	"""
+
+	route_base = "/gl/reports"
+	default_view = "index"
+
+	# Re-use the index from GLReportView so route_base collision is harmless
+	# when both views are registered; the download routes are distinct.
+
+	def _report_svc(self):
+		from pgappforge.plugins.erp.finance.gl.reports import FinancialReportService
+		return FinancialReportService()
+
+	def _tenant(self) -> str | None:
+		return request.args.get("tenant_id")
+
+	@staticmethod
+	def _pdf_response(data: bytes, filename: str):
+		if not data:
+			return make_response(
+				jsonify({"error": "PDF generation unavailable — reportlab not installed"}),
+				503,
+			)
+		resp = make_response(data)
+		resp.headers["Content-Type"] = "application/pdf"
+		resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+		return resp
+
+	@staticmethod
+	def _csv_response(data: str, filename: str):
+		resp = make_response(data)
+		resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+		resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+		return resp
+
+	# -- Trial Balance -------------------------------------------------------
+
+	@expose("/trial-balance/<string:period_id>.<string:fmt>")
+	@has_access
+	def download_trial_balance(self, period_id: str, fmt: str):
+		"""Download trial balance as PDF or CSV.
+
+		Accepted formats: ``pdf``, ``csv``.
+		"""
+		session = _get_session()
+		svc = self._report_svc()
+		tenant_id = self._tenant()
+
+		if fmt == "pdf":
+			data = svc.generate_trial_balance_pdf(period_id, tenant_id, session)
+			return self._pdf_response(data, f"trial_balance_{period_id}.pdf")
+		elif fmt == "csv":
+			data = svc.generate_trial_balance_csv(period_id, tenant_id, session)
+			return self._csv_response(data, f"trial_balance_{period_id}.csv")
+		else:
+			return make_response(jsonify({"error": f"Unsupported format {fmt!r}; use 'pdf' or 'csv'"}), 400)
+
+	# -- Income Statement ----------------------------------------------------
+
+	@expose("/income-statement/<string:period_id>.<string:fmt>")
+	@has_access
+	def download_income_statement(self, period_id: str, fmt: str):
+		"""Download income statement as PDF or CSV."""
+		session = _get_session()
+		svc = self._report_svc()
+		tenant_id = self._tenant()
+
+		if fmt == "pdf":
+			data = svc.generate_income_statement_pdf(period_id, tenant_id, session)
+			return self._pdf_response(data, f"income_statement_{period_id}.pdf")
+		elif fmt == "csv":
+			data = svc.generate_income_statement_csv(period_id, tenant_id, session)
+			return self._csv_response(data, f"income_statement_{period_id}.csv")
+		else:
+			return make_response(jsonify({"error": f"Unsupported format {fmt!r}; use 'pdf' or 'csv'"}), 400)
+
+	# -- Balance Sheet -------------------------------------------------------
+
+	@expose("/balance-sheet/<string:period_id>.<string:fmt>")
+	@has_access
+	def download_balance_sheet(self, period_id: str, fmt: str):
+		"""Download balance sheet as PDF or CSV."""
+		session = _get_session()
+		svc = self._report_svc()
+		tenant_id = self._tenant()
+
+		if fmt == "pdf":
+			data = svc.generate_balance_sheet_pdf(period_id, tenant_id, session)
+			return self._pdf_response(data, f"balance_sheet_{period_id}.pdf")
+		elif fmt == "csv":
+			data = svc.generate_balance_sheet_csv(period_id, tenant_id, session)
+			return self._csv_response(data, f"balance_sheet_{period_id}.csv")
+		else:
+			return make_response(jsonify({"error": f"Unsupported format {fmt!r}; use 'pdf' or 'csv'"}), 400)
+
+
 __all__ = [
 	"GLAccountView",
 	"GLPeriodView",
@@ -772,4 +883,5 @@ __all__ = [
 	"GLJournalEntryView",
 	"GLBudgetView",
 	"GLReportView",
+	"ReportDownloadView",
 ]

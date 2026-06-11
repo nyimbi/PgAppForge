@@ -68,16 +68,36 @@ class AnalyticsEnginePlugin(BasePlugin):
 	def subscribe_to(self) -> list[str]:
 		return []
 
-	def activate(self) -> None:
-		self.initialize()
-
 	def initialize(self) -> None:
 		defaults: dict[str, Any] = {
 			"ANALYTICS_DEFAULT_LIMIT": 1000,
 			"ANALYTICS_CACHE_TTL_MINUTES": 60,
+			"ANALYTICS_SEED_CUBES": True,
 		}
 		self.config = {**defaults, **self.config}
 		log.info("AnalyticsEnginePlugin initialised")
+
+	def post_initialize(self) -> None:
+		super().post_initialize()
+		if self.config.get("ANALYTICS_SEED_CUBES", True):
+			self._try_seed_cubes()
+
+	def _try_seed_cubes(self) -> None:
+		"""Attempt to seed standard analytics cubes against the live DB.
+
+		Non-fatal: any exception (missing tables, no app context, etc.) is
+		logged at DEBUG and swallowed so the plugin activates regardless.
+		"""
+		try:
+			from flask import current_app
+			from pgappforge.plugins.erp.platform.analytics_engine.standard_cubes import seed_standard_cubes
+			session = current_app.appbuilder.get_session()
+			tenant_id = self.config.get("ANALYTICS_TENANT_ID", "default")
+			n = seed_standard_cubes(tenant_id, session)
+			session.commit()
+			log.info("AnalyticsEnginePlugin: seeded %d standard cubes for tenant %r", n, tenant_id)
+		except Exception as exc:
+			log.debug("AnalyticsEnginePlugin._try_seed_cubes skipped (non-fatal): %s", exc)
 
 	def register_views(self) -> None:
 		from pgappforge.plugins.erp.platform.analytics_engine.views import (
@@ -120,6 +140,10 @@ from pgappforge.plugins.erp.platform.analytics_engine.events import (  # noqa: E
 from pgappforge.plugins.erp.platform.analytics_engine.services import (  # noqa: E402
 	AnalyticsEngineService,
 )
+from pgappforge.plugins.erp.platform.analytics_engine.standard_cubes import (  # noqa: E402
+	STANDARD_CUBES,
+	seed_standard_cubes,
+)
 
 __all__ = [
 	"AnalyticsEnginePlugin",
@@ -131,4 +155,6 @@ __all__ = [
 	"CubeRefreshedEvent",
 	"ReportRunEvent",
 	"AnalyticsEngineService",
+	"STANDARD_CUBES",
+	"seed_standard_cubes",
 ]
