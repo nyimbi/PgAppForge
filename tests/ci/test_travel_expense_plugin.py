@@ -131,7 +131,10 @@ sys.modules["pgappforge.plugins.erp.foundation.events"] = foundation_events
 
 # Stub base_plugin classes
 class _PluginPriority:
+    CRITICAL = 1
+    HIGH = 2
     NORMAL = 3
+    LOW = 4
 
 class _BasePlugin:
     def __init__(self, appbuilder=None, config=None):

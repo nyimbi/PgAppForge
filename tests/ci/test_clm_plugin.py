@@ -147,7 +147,10 @@ if "pgappforge.plugins.rules.mixin" not in sys.modules:
 import enum as _enum
 
 class _PluginPriority(_enum.IntEnum):
+	CRITICAL = 10
+	HIGH = 20
 	NORMAL = 50
+	LOW = 80
 
 class _PluginMetadata:
 	def __init__(self, **kw: Any) -> None:
