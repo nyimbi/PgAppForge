@@ -1,5 +1,56 @@
 version: "3.7"
+
+# ── PgAppForge development stack ──────────────────────────────────────────────
+# Usage:
+#   docker compose up -d postgres          # DB only (for local dev with venv)
+#   docker compose up -d                   # Full stack including app
+#   docker compose exec app flask fab create-admin
+#   docker compose exec app flask db upgrade
+#
+# Copy .env.example → .env and fill in SECRET_KEY before starting.
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
+  # ── Application ──────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: pgappforge-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app            # mount source for hot-reload in dev
+    command: >
+      flask run --host=0.0.0.0 --port=8080 --reload
+
+  # ── Worker (batch scheduler) ──────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: pgappforge-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app
+    depends_on:
+      - postgres
+    command: >
+      flask fab run-scheduler
+    profiles:
+      - worker   # opt-in: docker compose --profile worker up
+
   postgres:
     container_name: fab-postgres
     image: postgres:14
