@@ -1,0 +1,350 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% set display_name = contract.get('display_name', capability_prefix | replace('-', ' ') | title) %}
+{% block title %}Actions — {{ display_name }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  :root {
+    --apg-primary: #1a56db;
+    --apg-border:  #e5e7eb;
+    --apg-surface: #f9fafb;
+    --apg-muted:   #6b7280;
+  }
+
+  .apg-action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .apg-action-card {
+    background: #fff;
+    border: 1px solid var(--apg-border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow .15s;
+  }
+  .apg-action-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.09); }
+
+  .apg-action-card-header {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--apg-border);
+    background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+  }
+  .apg-action-name {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin: 0;
+    word-break: break-all;
+  }
+
+  .apg-action-card-body {
+    padding: 10px 16px;
+    flex: 1;
+  }
+  .apg-action-desc {
+    font-size: 13px;
+    color: #374151;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .apg-action-card-footer {
+    padding: 8px 16px 12px;
+    background: var(--apg-surface);
+    border-top: 1px solid var(--apg-border);
+  }
+
+  .apg-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--apg-muted);
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--apg-border);
+  }
+
+  /* Rules table */
+  .apg-rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .apg-rules-table thead tr {
+    background: var(--apg-surface);
+    border-bottom: 2px solid var(--apg-border);
+  }
+  .apg-rules-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+  }
+  .apg-rules-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--apg-border);
+    color: #111827;
+    vertical-align: top;
+  }
+  .apg-rules-table tr:last-child td { border-bottom: none; }
+  .apg-rules-table td.mono { font-family: monospace; font-size: 12px; color: #374151; }
+
+  .apg-rule-priority {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+    min-width: 24px;
+    text-align: center;
+  }
+
+  /* Result display */
+  #apg-result-container {
+    margin-top: 20px;
+    display: none;
+  }
+  #apg-result-container.visible { display: block; }
+
+  #apg-result-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 6px 6px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--apg-border);
+    border-bottom: none;
+    background: var(--apg-surface);
+  }
+  #apg-result-header.success { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+  #apg-result-header.error   { background: #fff1f2; border-color: #fca5a5; color: #b91c1c; }
+
+  #apg-result-body {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 0 0 6px 6px;
+    padding: 12px 16px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--apg-border);
+    border-top: none;
+  }
+
+  #apg-global-spinner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--apg-muted);
+    margin-top: 12px;
+  }
+  #apg-global-spinner.visible { display: flex; }
+
+  .apg-empty-actions {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--apg-muted);
+    background: var(--apg-surface);
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+  }
+  .apg-empty-actions i { font-size: 36px; opacity: .3; display: block; margin-bottom: 10px; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex; align-items:center; gap:14px; margin-bottom:20px; flex-wrap:wrap;">
+  <a href="{{ url_for('APGCapabilityPortalView.capability_dashboard', capability_prefix=capability_prefix) }}" class="btn btn-default btn-sm">
+    <i class="fa fa-arrow-left"></i>
+  </a>
+  <div style="flex:1;">
+    <h1 style="font-size:20px; font-weight:700; margin:0 0 4px; color:#111827;">
+      Actions &mdash; {{ display_name | e }}
+    </h1>
+    <span style="font-family:monospace; font-size:12px; color:#9ca3af;">{{ capability_prefix }}</span>
+  </div>
+  <a
+    href="{{ url_for('APGCapabilityPortalView.index') }}"
+    class="btn btn-default btn-sm"
+  >
+    <i class="fa fa-th-large"></i>&nbsp; All Capabilities
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Action cards ─────────────────────────────────────────────────────── #}
+<div style="margin-bottom:8px;">
+  <p class="apg-section-title">Available Actions</p>
+</div>
+
+{% if provides %}
+<div class="apg-action-grid" id="apg-action-grid">
+  {% for action in provides %}
+  {% set action_desc = contract.get('action_descriptions', {}).get(action, '') %}
+  <div class="apg-action-card erp-card">
+    <div class="apg-action-card-header">
+      <p class="apg-action-name">
+        <i class="fa fa-terminal" style="margin-right:6px; opacity:.6;"></i>{{ action | e }}
+      </p>
+    </div>
+    <div class="apg-action-card-body">
+      {% if action_desc %}
+      <p class="apg-action-desc">{{ action_desc | e }}</p>
+      {% else %}
+      <p class="apg-action-desc" style="color:#9ca3af; font-style:italic;">No description available.</p>
+      {% endif %}
+    </div>
+    <div class="apg-action-card-footer">
+      <button
+        class="btn btn-sm btn-primary apg-run-btn"
+        style="background:var(--apg-primary); border-color:var(--apg-primary);"
+        data-action="{{ action | e }}"
+      >
+        <i class="fa fa-play"></i>&nbsp; Run
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="apg-empty-actions">
+  <i class="fa fa-bolt"></i>
+  <p>This capability declares no PROVIDES actions.</p>
+</div>
+{% endif %}
+
+{# ── Global spinner + result area ─────────────────────────────────────── #}
+<div id="apg-global-spinner">
+  <i class="fa fa-spinner fa-spin"></i>
+  <span id="apg-spinner-label">Evaluating action…</span>
+</div>
+
+<div id="apg-result-container">
+  <div id="apg-result-header">
+    <i class="fa fa-circle" id="apg-result-icon"></i>
+    <span id="apg-result-title">Result</span>
+    <span id="apg-result-action-label" style="font-family:monospace; font-weight:400; margin-left:auto; font-size:12px;"></span>
+  </div>
+  <pre id="apg-result-body"></pre>
+</div>
+
+{# ── Rules table ──────────────────────────────────────────────────────── #}
+{% if rules %}
+<div style="margin-top:32px;">
+  <p class="apg-section-title">Rule Engine — Top Rules</p>
+  <div class="erp-card" style="padding:0; overflow:hidden;">
+    <table class="apg-rules-table">
+      <thead>
+        <tr>
+          <th style="width:42px;">#</th>
+          <th>Rule Name</th>
+          <th>Condition</th>
+          <th>Action</th>
+          <th style="width:70px;">Priority</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rule in rules %}
+        <tr>
+          <td style="color:#9ca3af; font-size:12px;">{{ loop.index }}</td>
+          <td style="font-weight:500;">{{ rule.get('name', '—') | e }}</td>
+          <td class="mono">{{ rule.get('condition', '—') | e }}</td>
+          <td class="mono">{{ rule.get('action', '—') | e }}</td>
+          <td>
+            {% if rule.get('priority') is not none %}
+            <span class="apg-rule-priority">{{ rule.priority }}</span>
+            {% else %}
+            <span style="color:#9ca3af;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var PREFIX  = {{ capability_prefix | tojson }};
+  var spinner = document.getElementById('apg-global-spinner');
+  var spinLbl = document.getElementById('apg-spinner-label');
+  var resCont = document.getElementById('apg-result-container');
+  var resHdr  = document.getElementById('apg-result-header');
+  var resBody = document.getElementById('apg-result-body');
+  var resTtl  = document.getElementById('apg-result-title');
+  var resAct  = document.getElementById('apg-result-action-label');
+  var resIcon = document.getElementById('apg-result-icon');
+
+  document.querySelectorAll('.apg-run-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var action = btn.dataset.action || '';
+      runAction(action, btn);
+    });
+  });
+
+  function runAction(action, triggerBtn) {
+    /* Disable all run buttons during the request */
+    document.querySelectorAll('.apg-run-btn').forEach(function (b) { b.disabled = true; });
+    spinLbl.textContent = 'Evaluating “' + action + '”…';
+    spinner.classList.add('visible');
+    resCont.classList.remove('visible');
+
+    fetch('/platform/apg/capability/' + encodeURIComponent(PREFIX) + '/evaluate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ action: action }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var ok = !!data.success;
+        resHdr.className = ok ? 'success' : 'error';
+        resIcon.className = 'fa ' + (ok ? 'fa-check-circle' : 'fa-exclamation-circle');
+        resTtl.textContent = ok ? 'Success' : 'Error';
+        resAct.textContent = action;
+        resBody.textContent = JSON.stringify(ok ? data.result : (data.error || data), null, 2);
+        resCont.classList.add('visible');
+      })
+      .catch(function (err) {
+        resHdr.className = 'error';
+        resIcon.className = 'fa fa-exclamation-circle';
+        resTtl.textContent = 'Request Failed';
+        resAct.textContent = action;
+        resBody.textContent = 'Network error: ' + err.message;
+        resCont.classList.add('visible');
+      })
+      .finally(function () {
+        document.querySelectorAll('.apg-run-btn').forEach(function (b) { b.disabled = false; });
+        spinner.classList.remove('visible');
+        /* Scroll result into view */
+        resCont.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+  }
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,311 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}APG Capability Portal — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  :root {
+    --apg-primary: #1a56db;
+    --apg-success: #0e9f6e;
+    --apg-danger:  #e02424;
+    --apg-border:  #e5e7eb;
+    --apg-muted:   #6b7280;
+    --apg-surface: #f9fafb;
+  }
+
+  .apg-callout {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-left: 4px solid #f59e0b;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .apg-callout h4 { margin: 0 0 8px; color: #92400e; font-size: 15px; }
+  .apg-callout p  { margin: 0; color: #78350f; font-size: 13px; line-height: 1.6; }
+  .apg-callout code {
+    background: rgba(0,0,0,.07);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .apg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 8px;
+  }
+
+  .apg-cap-card {
+    background: #fff;
+    border: 1px solid var(--apg-border);
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+    transition: box-shadow .15s;
+  }
+  .apg-cap-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+
+  .apg-cap-card-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--apg-border);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .apg-cap-card-title {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 4px;
+    line-height: 1.3;
+  }
+  .apg-cap-card-body { padding: 12px 16px; }
+
+  .apg-domain-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    white-space: nowrap;
+  }
+
+  .apg-health-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .apg-health-dot.healthy   { background: var(--apg-success); box-shadow: 0 0 0 3px rgba(14,159,110,.18); }
+  .apg-health-dot.unhealthy { background: var(--apg-danger);  box-shadow: 0 0 0 3px rgba(224,36,36,.18); }
+
+  .apg-provides-list {
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .apg-provides-list li {
+    background: var(--apg-surface);
+    border: 1px solid var(--apg-border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: #374151;
+    font-family: monospace;
+  }
+  .apg-provides-more {
+    font-size: 11px;
+    color: var(--apg-muted);
+    margin-bottom: 10px;
+  }
+
+  .apg-cap-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 16px 14px;
+    border-top: 1px solid var(--apg-border);
+    background: var(--apg-surface);
+  }
+
+  .apg-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--apg-muted);
+  }
+  .apg-empty i { font-size: 48px; margin-bottom: 16px; display: block; opacity: .3; }
+  .apg-empty p { font-size: 15px; margin: 0; }
+
+  .apg-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--apg-muted);
+    margin-bottom: 20px;
+  }
+  .apg-status-bar .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="margin-bottom:20px;">
+  <h1 class="erp-page-title" style="font-size:22px; margin:0 0 4px;">
+    <i class="fa fa-cubes" style="color:var(--apg-primary); margin-right:8px;"></i>APG Capability Portal
+  </h1>
+  <p class="erp-page-subtitle" style="margin:0; color:#6b7280; font-size:13px;">
+    Browse and interact with APG capability services natively within {{ appbuilder.app_name }}.
+  </p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI row ──────────────────────────────────────────────────────────── #}
+{{ kpi_html | safe }}
+
+{# ── APG disabled callout ─────────────────────────────────────────────── #}
+{% if not apg_enabled %}
+<div class="apg-callout">
+  <h4><i class="fa fa-info-circle"></i>&nbsp; APG integration is not enabled</h4>
+  <p>
+    To connect this instance to an APG capability platform, set the following keys in your
+    Flask application config:
+  </p>
+  <p style="margin-top:8px;">
+    <code>APG_ENABLED = True</code>&nbsp;&nbsp;
+    <code>APG_BASE_URL = "http://&lt;apg-host&gt;:5000"</code>&nbsp;&nbsp;
+    <code>APG_MARKETPLACE_URL = "http://&lt;apg-host&gt;:8000"</code>&nbsp;&nbsp;
+    <code>APG_STATIC_TOKEN = "&lt;your-jwt&gt;"</code>
+    &nbsp;<em style="font-size:12px;">(or use APG_AUTH_EMAIL + APG_AUTH_PASSWORD)</em>
+  </p>
+</div>
+{% endif %}
+
+{# ── APG enabled but unreachable ──────────────────────────────────────── #}
+{% if apg_enabled and not apg_available %}
+<div class="apg-callout" style="background:#fff1f2; border-color:#fca5a5; border-left-color:#ef4444;">
+  <h4 style="color:#991b1b;"><i class="fa fa-exclamation-triangle"></i>&nbsp; APG service unreachable</h4>
+  <p style="color:#7f1d1d;">
+    <code>APG_ENABLED=True</code> but the APG health check failed.
+    Verify <code>APG_BASE_URL</code> and that the APG service is running.
+    Capabilities listed below may be stale.
+  </p>
+</div>
+{% endif %}
+
+{# ── Capability grid ──────────────────────────────────────────────────── #}
+<div
+  data-island="apgPortal"
+  id="apg-portal-island"
+  style="margin-top:8px;"
+>
+  {% if capabilities %}
+
+  <div class="apg-status-bar">
+    <span class="dot" style="background:{% if apg_available %}#0e9f6e{% else %}#9ca3af{% endif %};"></span>
+    <span>
+      {% if apg_available %}Connected to APG{% else %}APG offline — showing cached data{% endif %}
+      &nbsp;·&nbsp; {{ capabilities | length }} capabilities
+    </span>
+  </div>
+
+  <div class="apg-grid">
+    {% for cap in capabilities %}
+    <div class="apg-cap-card erp-card">
+
+      <div class="apg-cap-card-header">
+        <div style="flex:1;">
+          <p class="apg-cap-card-title">{{ cap.display_name | e }}</p>
+          {% if cap.domain %}
+          <span class="apg-domain-badge">{{ cap.domain | e }}</span>
+          {% endif %}
+        </div>
+        <span
+          class="apg-health-dot {% if cap.is_healthy %}healthy{% else %}unhealthy{% endif %}"
+          title="{% if cap.is_healthy %}Healthy{% else %}Unreachable{% endif %}"
+        ></span>
+      </div>
+
+      <div class="apg-cap-card-body">
+        {% if cap.provides %}
+        <ul class="apg-provides-list">
+          {% for action in cap.provides[:3] %}
+          <li>{{ action | e }}</li>
+          {% endfor %}
+        </ul>
+        {% if cap.provides | length > 3 %}
+        <p class="apg-provides-more">+{{ cap.provides | length - 3 }} more actions</p>
+        {% endif %}
+        {% else %}
+        <p style="font-size:12px; color:#9ca3af; margin:0 0 8px;">No actions declared</p>
+        {% endif %}
+      </div>
+
+      <div class="apg-cap-actions">
+        <a
+          href="{{ url_for('APGCapabilityPortalView.capability_dashboard', capability_prefix=cap.prefix) }}"
+          class="btn btn-sm btn-primary"
+          style="background:var(--apg-primary); border-color:var(--apg-primary);"
+        >
+          <i class="fa fa-tachometer"></i>&nbsp; Dashboard
+        </a>
+        <a
+          href="{{ url_for('APGCapabilityPortalView.capability_actions', capability_prefix=cap.prefix) }}"
+          class="btn btn-sm btn-default"
+        >
+          <i class="fa fa-bolt"></i>&nbsp; Actions
+        </a>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+
+  <div class="apg-empty">
+    <i class="fa fa-cubes"></i>
+    <p>
+      {% if apg_available %}
+        No capabilities found in the APG marketplace.
+      {% elif apg_enabled %}
+        APG service is unreachable — no capabilities to display.
+      {% else %}
+        Enable APG integration to see available capabilities here.
+      {% endif %}
+    </p>
+  </div>
+
+  {% endif %}
+</div>{# /data-island #}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  /* ── APG Portal island — live capability status refresh ───────────── */
+  ERPIslands.register('apgPortal', [], function (el) {
+    /* Poll /platform/apg/status every 60 s and update health dots */
+    function refreshStatus() {
+      ERPIslands.fetchJSON('/platform/apg/status')
+        .then(function (s) {
+          var dots = el.querySelectorAll('.apg-health-dot');
+          var online = !!s.apg_available;
+          /* Update global status bar dot */
+          var bar = el.querySelector('.apg-status-bar .dot');
+          if (bar) {
+            bar.style.background = online ? '#0e9f6e' : '#9ca3af';
+          }
+        })
+        .catch(function () { /* silent — offline state already visible */ });
+    }
+
+    /* Initial refresh after a short delay, then on an interval */
+    setTimeout(refreshStatus, 2000);
+    setInterval(refreshStatus, 60000);
+  });
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+}());
+</script>
+{% endblock %}

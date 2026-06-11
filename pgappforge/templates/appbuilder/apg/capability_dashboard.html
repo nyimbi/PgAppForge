@@ -1,0 +1,396 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ contract.get('display_name', capability_prefix) }} — APG — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  :root {
+    --apg-primary: {{ theme.get('primary', '#1a56db') }};
+    --apg-accent:  {{ theme.get('accent',  '#7e3af2') }};
+    --apg-border:  #e5e7eb;
+    --apg-surface: #f9fafb;
+    --apg-muted:   #6b7280;
+  }
+
+  .apg-section { margin-bottom: 28px; }
+  .apg-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--apg-muted);
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--apg-border);
+  }
+
+  .apg-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 2px 3px 2px 0;
+    font-family: monospace;
+  }
+  .apg-pill-provides {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+  }
+  .apg-pill-requires {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+  .apg-kv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .apg-kv-table th {
+    text-align: left;
+    padding: 7px 12px;
+    font-weight: 600;
+    color: #374151;
+    background: var(--apg-surface);
+    border-bottom: 1px solid var(--apg-border);
+    width: 35%;
+  }
+  .apg-kv-table td {
+    padding: 7px 12px;
+    color: #111827;
+    border-bottom: 1px solid var(--apg-border);
+    word-break: break-word;
+  }
+  .apg-kv-table tr:last-child th,
+  .apg-kv-table tr:last-child td { border-bottom: none; }
+
+  .apg-kv-table td.apg-kv-complex {
+    font-family: monospace;
+    font-size: 11px;
+    background: #f8fafc;
+    white-space: pre-wrap;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .apg-route-list {
+    list-style: none;
+    margin: 0; padding: 0;
+  }
+  .apg-route-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--apg-surface);
+    margin-bottom: 6px;
+    font-size: 13px;
+    border: 1px solid var(--apg-border);
+  }
+  .apg-route-method {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    min-width: 42px;
+    text-align: center;
+  }
+  .apg-route-method.GET  { background: #dcfce7; color: #15803d; }
+  .apg-route-method.POST { background: #fef3c7; color: #92400e; }
+  .apg-route-method.PUT  { background: #dbeafe; color: #1d4ed8; }
+  .apg-route-method.DELETE { background: #fee2e2; color: #b91c1c; }
+  .apg-route-path { font-family: monospace; color: #374151; flex: 1; }
+  .apg-route-desc { color: var(--apg-muted); font-size: 12px; }
+
+  .apg-stream-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #5b21b6;
+    margin-bottom: 8px;
+  }
+
+  .apg-evaluate-panel {
+    background: var(--apg-surface);
+    border: 1px solid var(--apg-border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .apg-evaluate-panel textarea {
+    width: 100%;
+    font-family: monospace;
+    font-size: 12px;
+    border: 1px solid var(--apg-border);
+    border-radius: 4px;
+    padding: 8px;
+    resize: vertical;
+    background: #fff;
+  }
+  #apg-eval-result {
+    margin-top: 12px;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 6px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    max-height: 280px;
+    overflow-y: auto;
+    display: none;
+  }
+  #apg-eval-result.visible { display: block; }
+  #apg-eval-spinner { display: none; color: var(--apg-muted); font-size: 13px; margin-top: 8px; }
+  #apg-eval-spinner.visible { display: inline-block; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+{% set display_name = contract.get('display_name', capability_prefix | replace('-', ' ') | title) %}
+{% set domain = contract.get('domain', '') %}
+<div style="display:flex; align-items:center; gap:14px; margin-bottom:20px; flex-wrap:wrap;">
+  <a href="{{ url_for('APGCapabilityPortalView.index') }}" class="btn btn-default btn-sm">
+    <i class="fa fa-arrow-left"></i>
+  </a>
+  <div style="flex:1;">
+    <h1 style="font-size:20px; font-weight:700; margin:0 0 4px; color:#111827;">
+      {{ display_name | e }}
+    </h1>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      {% if domain %}
+      <span style="
+        display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px;
+        font-weight:600; text-transform:uppercase; letter-spacing:.5px;
+        background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;
+      ">{{ domain | e }}</span>
+      {% endif %}
+      <span style="font-family:monospace; font-size:12px; color:#9ca3af;">{{ capability_prefix }}</span>
+    </div>
+  </div>
+  <a
+    href="{{ url_for('APGCapabilityPortalView.capability_actions', capability_prefix=capability_prefix) }}"
+    class="btn btn-primary btn-sm"
+    style="background:var(--apg-primary); border-color:var(--apg-primary);"
+  >
+    <i class="fa fa-bolt"></i>&nbsp; Actions
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+
+  {# ── Left column: contract overview + dashboard data ─────────────── #}
+  <div class="col-md-7">
+
+    {# Provides / Requires pills #}
+    <div class="apg-section">
+      <p class="apg-section-title">Provides</p>
+      {% if provides %}
+        {% for action in provides %}
+        <span class="apg-pill apg-pill-provides">{{ action | e }}</span>
+        {% endfor %}
+      {% else %}
+        <span style="font-size:13px; color:#9ca3af;">None declared</span>
+      {% endif %}
+
+      {% if requires %}
+      <p class="apg-section-title" style="margin-top:16px;">Requires</p>
+      {% for dep in requires %}
+      <span class="apg-pill apg-pill-requires">{{ dep | e }}</span>
+      {% endfor %}
+      {% endif %}
+    </div>
+
+    {# Dashboard data #}
+    {% if dashboard_data %}
+    <div class="apg-section erp-card" style="padding:0; overflow:hidden;">
+      <p class="apg-section-title" style="padding:12px 16px; margin:0; border-bottom:1px solid var(--apg-border);">
+        Dashboard Data
+      </p>
+      <table class="apg-kv-table">
+        {% for key, val in dashboard_data.items() %}
+        <tr>
+          <th>{{ key | e }}</th>
+          {% if val is mapping or val is sequence and val is not string %}
+          <td class="apg-kv-complex">{{ val | tojson(indent=2) }}</td>
+          {% else %}
+          <td>{{ val | e if val is not none else '—' }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+    <div class="apg-section">
+      <p class="apg-section-title">Dashboard Data</p>
+      <div style="
+        background:#f9fafb; border:1px dashed #d1d5db; border-radius:6px;
+        padding:24px; text-align:center; color:#9ca3af; font-size:13px;
+      ">
+        <i class="fa fa-info-circle" style="margin-right:6px;"></i>
+        No dashboard data returned — capability may require an active APG session.
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# /col-md-7 #}
+
+  {# ── Right column: routes, streaming, evaluate panel ─────────────── #}
+  <div class="col-md-5">
+
+    {# Route list #}
+    {% if routes %}
+    <div class="apg-section">
+      <p class="apg-section-title">Routes</p>
+      <ul class="apg-route-list">
+        {% for route in routes %}
+        {% set method = route.get('method', 'GET') | upper %}
+        <li class="apg-route-item">
+          <span class="apg-route-method {{ method }}">{{ method }}</span>
+          <span class="apg-route-path">{{ route.get('path', '') | e }}</span>
+          {% if route.get('description') %}
+          <span class="apg-route-desc">{{ route.description | e }}</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {# Streaming section #}
+    {% set streaming = contract.get('streaming', {}) %}
+    {% if streaming %}
+    <div class="apg-section">
+      <p class="apg-section-title">Event Streaming</p>
+      {% if streaming.get('stream') %}
+      <div class="apg-stream-badge">
+        <i class="fa fa-bolt"></i>{{ streaming.stream | e }}
+      </div>
+      {% endif %}
+      {% if streaming.get('event_types') %}
+      <div style="margin-top:6px;">
+        {% for et in streaming.event_types %}
+        <span class="apg-pill" style="background:#f5f3ff; color:#5b21b6; border-color:#ddd6fe;">{{ et | e }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Evaluate action panel #}
+    <div class="apg-section">
+      <p class="apg-section-title">Evaluate Action</p>
+      <div
+        class="apg-evaluate-panel"
+        data-island="apgEvaluate"
+        data-prefix="{{ capability_prefix | e }}"
+      >
+        <label for="apg-eval-action" style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">
+          Action
+        </label>
+        <select id="apg-eval-action" class="form-control input-sm" style="margin-bottom:10px; font-family:monospace;">
+          {% for action in provides %}
+          <option value="{{ action | e }}">{{ action | e }}</option>
+          {% endfor %}
+          {% if not provides %}
+          <option value="">— no actions —</option>
+          {% endif %}
+        </select>
+
+        <label for="apg-eval-payload" style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">
+          Payload (JSON)
+        </label>
+        <textarea id="apg-eval-payload" rows="5" placeholder='{"key": "value"}'>{}</textarea>
+
+        <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+          <button
+            id="apg-eval-btn"
+            class="btn btn-sm btn-primary"
+            style="background:var(--apg-primary); border-color:var(--apg-primary);"
+            {% if not provides %}disabled{% endif %}
+          >
+            <i class="fa fa-play"></i>&nbsp; Run
+          </button>
+          <span id="apg-eval-spinner"><i class="fa fa-spinner fa-spin"></i>&nbsp; Evaluating…</span>
+        </div>
+
+        <pre id="apg-eval-result"></pre>
+      </div>
+    </div>
+
+  </div>{# /col-md-5 #}
+
+</div>{# /row #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  ERPIslands.register('apgEvaluate', [], function (el) {
+    var prefix  = el.dataset.prefix || '';
+    var btn     = document.getElementById('apg-eval-btn');
+    var spinner = document.getElementById('apg-eval-spinner');
+    var result  = document.getElementById('apg-eval-result');
+    var action  = document.getElementById('apg-eval-action');
+    var payload = document.getElementById('apg-eval-payload');
+
+    if (!btn) return;
+
+    btn.addEventListener('click', function () {
+      var act = action ? action.value : '';
+      var raw = payload ? payload.value : '{}';
+      var body;
+      try {
+        body = JSON.parse(raw);
+      } catch (e) {
+        result.textContent = 'Invalid JSON: ' + e.message;
+        result.classList.add('visible');
+        return;
+      }
+      body.action = act;
+
+      btn.disabled = true;
+      spinner.classList.add('visible');
+      result.classList.remove('visible');
+
+      fetch('/platform/apg/capability/' + _esc(prefix) + '/evaluate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          result.textContent = JSON.stringify(data, null, 2);
+          result.classList.add('visible');
+        })
+        .catch(function (err) {
+          result.textContent = 'Request failed: ' + err.message;
+          result.classList.add('visible');
+        })
+        .finally(function () {
+          btn.disabled = false;
+          spinner.classList.remove('visible');
+        });
+    });
+  });
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+}());
+</script>
+{% endblock %}

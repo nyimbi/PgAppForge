@@ -100,3 +100,90 @@ def test_apg_connector_name_format():
 	src = inspect.getsource(APGBridgeService.sync_capabilities_to_ipaas)
 	assert "APG:" in src
 
+
+# ── portal_views tests ────────────────────────────────────────────────────
+
+def test_portal_view_import():
+	from pgappforge.plugins.erp.platform.apg_bridge.portal_views import APGCapabilityPortalView
+	assert APGCapabilityPortalView.route_base == "/platform/apg"
+
+
+def test_portal_view_methods_exist():
+	from pgappforge.plugins.erp.platform.apg_bridge.portal_views import APGCapabilityPortalView
+	for method in ("index", "capability_dashboard", "capability_actions",
+	               "evaluate_action", "status"):
+		assert callable(getattr(APGCapabilityPortalView, method)), (
+			f"APGCapabilityPortalView.{method} missing"
+		)
+
+
+def test_portal_view_reexported_from_package():
+	from pgappforge.plugins.erp.platform.apg_bridge import APGCapabilityPortalView
+	assert APGCapabilityPortalView.route_base == "/platform/apg"
+
+
+def test_portal_view_inherits_base_erp_view():
+	from pgappforge.plugins.erp.platform.apg_bridge.portal_views import APGCapabilityPortalView
+	from pgappforge.plugins.erp.base_view import BaseERPView
+	assert issubclass(APGCapabilityPortalView, BaseERPView)
+
+
+def test_portal_view_evaluate_uses_service():
+	"""evaluate_action must delegate to APGBridgeService.call_capability."""
+	from pgappforge.plugins.erp.platform.apg_bridge import portal_views
+	src = inspect.getsource(portal_views.APGCapabilityPortalView.evaluate_action)
+	assert "APGBridgeService" in src
+	assert "call_capability" in src
+
+
+def test_portal_view_register_views_in_plugin():
+	"""register_views() in the plugin must reference APGCapabilityPortalView."""
+	from pgappforge.plugins.erp.platform.apg_bridge import APGBridgePlugin
+	src = inspect.getsource(APGBridgePlugin.register_views)
+	assert "APGCapabilityPortalView" in src
+
+
+def test_portal_templates_exist():
+	"""All three APG portal templates must be present."""
+	import os
+	base = os.path.join(
+		os.path.dirname(__file__), "..", "..",
+		"pgappforge", "templates", "appbuilder", "apg",
+	)
+	for name in ("portal.html", "capability_dashboard.html", "capability_actions.html"):
+		path = os.path.normpath(os.path.join(base, name))
+		assert os.path.isfile(path), f"Missing template: {name}"
+
+
+def test_portal_templates_jinja2_valid():
+	"""Templates must parse without Jinja2 syntax errors."""
+	import os
+	from jinja2 import Environment, FileSystemLoader, TemplateSyntaxError
+	tpl_root = os.path.normpath(os.path.join(
+		os.path.dirname(__file__), "..", "..",
+		"pgappforge", "templates",
+	))
+	env = Environment(loader=FileSystemLoader(tpl_root))
+	for name in ("portal.html", "capability_dashboard.html", "capability_actions.html"):
+		path = f"appbuilder/apg/{name}"
+		try:
+			env.get_template(path)
+		except TemplateSyntaxError as e:
+			raise AssertionError(f"Jinja2 syntax error in {name} line {e.lineno}: {e.message}") from e
+
+
+def test_portal_template_extends_base_erp():
+	"""Every APG template must extend base_erp.html."""
+	import os
+	base = os.path.normpath(os.path.join(
+		os.path.dirname(__file__), "..", "..",
+		"pgappforge", "templates", "appbuilder", "apg",
+	))
+	for name in ("portal.html", "capability_dashboard.html", "capability_actions.html"):
+		path = os.path.join(base, name)
+		with open(path) as fh:
+			content = fh.read()
+		assert "base_erp.html" in content, (
+			f"{name} does not extend appbuilder/erp/base_erp.html"
+		)
+

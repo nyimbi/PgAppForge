@@ -142,6 +142,9 @@ class APGBridgePlugin(BasePlugin):
 			APGBridgeDashboardView,
 			APGCapabilityCacheView,
 		)
+		from pgappforge.plugins.erp.platform.apg_bridge.portal_views import (
+			APGCapabilityPortalView,
+		)
 		cat = self.config.get("APG_MENU_CATEGORY", "Integrations")
 		self.add_view(
 			APGBridgeDashboardView,
@@ -151,9 +154,15 @@ class APGBridgePlugin(BasePlugin):
 		)
 		self.add_view(
 			APGCapabilityCacheView,
+			"APG Capabilities (Cache)",
+			icon="fa-database",
+			category=cat,
+		)
+		self.add_view(
+			APGCapabilityPortalView,
 			"APG Capabilities",
 			icon="fa-cubes",
-			category=cat,
+			category="APG Capabilities",
 		)
 		log.info("APGBridgePlugin: views registered under %r", cat)
 
@@ -189,6 +198,7 @@ from pgappforge.plugins.erp.platform.apg_bridge.models import (  # noqa: E402
 	APGEventBridgeLog,
 )
 from pgappforge.plugins.erp.platform.apg_bridge.services import APGBridgeService  # noqa: E402
+from pgappforge.plugins.erp.platform.apg_bridge.portal_views import APGCapabilityPortalView  # noqa: E402
 
 __all__ = [
 	# Plugin
@@ -204,4 +214,6 @@ __all__ = [
 	"APGEventBridgeLog",
 	# Service
 	"APGBridgeService",
+	# Views
+	"APGCapabilityPortalView",
 ]
