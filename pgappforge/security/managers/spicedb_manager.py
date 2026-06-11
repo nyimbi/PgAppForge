@@ -23,8 +23,15 @@ class SpiceDBSecurityManager(SecurityManager):
 	"""FAB SecurityManager that uses SpiceDB for fine-grained has_access() checks.
 
 	Requires AUTHZ_PROVIDER = "spicedb" in app.config.
-	SpiceDB is checked first; if it returns False the call passes through to
-	FAB's own RBAC, preserving admin bootstrapping and existing role assignments.
+
+	Behaviour:
+	  - SpiceDB not reachable / no authenticated user → delegates to FAB RBAC.
+	  - SpiceDB GRANTED → access allowed immediately (FAB RBAC not consulted).
+	  - SpiceDB DENIED  → access denied immediately (FAB RBAC cannot override).
+
+	The fail-closed design means SpiceDB is authoritative once reachable.
+	During SpiceDB bootstrap, temporarily remove AUTHZ_PROVIDER to let FAB
+	RBAC handle initial admin access.
 	"""
 
 	def has_access(self, permission_name: str, view_name: str) -> bool:

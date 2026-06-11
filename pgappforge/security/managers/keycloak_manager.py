@@ -24,7 +24,8 @@ class KeycloakSecurityManager(SecurityManager):
 
 	def __init__(self, appbuilder):
 		super().__init__(appbuilder)
-		appbuilder.get_app().before_request(self.before_request)
+		if appbuilder and getattr(appbuilder, "app", None):
+			appbuilder.app.before_request(self.before_request)
 
 	def get_oauth_user_info(self, provider_name: str, resp: Any) -> dict:
 		"""Map Keycloak OAuth userinfo to FAB user fields, including role sync."""

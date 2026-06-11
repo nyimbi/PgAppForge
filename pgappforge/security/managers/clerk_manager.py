@@ -18,7 +18,8 @@ class ClerkSecurityManager(SecurityManager):
 
 	def __init__(self, appbuilder):
 		super().__init__(appbuilder)
-		appbuilder.get_app().before_request(self.before_request)
+		if appbuilder and getattr(appbuilder, "app", None):
+			appbuilder.app.before_request(self.before_request)
 
 	def before_request(self) -> None:
 		try:

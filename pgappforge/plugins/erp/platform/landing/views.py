@@ -569,10 +569,11 @@ _MODULE_REGISTRY: list[dict[str, str]] = [
 def _get_deployed_modules(
 	domain_filter: str | None = None,
 ) -> list[dict[str, str]]:
-	"""Return the module registry, optionally filtered by comma-separated domains.
+	"""Return the module registry filtered by domain and registered routes.
 
-	The caller can further restrict to specific domains via app config
-	``LANDING_MODULES_FILTER`` (comma-separated domain names).
+	Modules whose ``url`` does not match any registered Flask route prefix
+	are marked ``available: False`` so the template can show them as disabled
+	tiles rather than dead links.
 	"""
 	try:
 		cfg_filter: str = current_app.config.get("LANDING_MODULES_FILTER", "") or ""
@@ -583,13 +584,28 @@ def _get_deployed_modules(
 		}
 		if domain_filter:
 			filter_domains = {d.strip().lower() for d in domain_filter.split(",") if d.strip()}
-	except RuntimeError:
-		# outside app context (e.g. tests importing the module)
-		filter_domains = set()
 
-	if filter_domains:
-		return [m for m in _MODULE_REGISTRY if m["domain"].lower() in filter_domains]
-	return list(_MODULE_REGISTRY)
+		# Build a set of registered route prefixes for availability checking
+		registered_prefixes: set[str] = set()
+		for rule in current_app.url_map.iter_rules():
+			parts = rule.rule.split("/")
+			if len(parts) >= 2:
+				registered_prefixes.add("/" + parts[1])
+	except RuntimeError:
+		filter_domains = set()
+		registered_prefixes = set()
+
+	candidates = (
+		[m for m in _MODULE_REGISTRY if m["domain"].lower() in filter_domains]
+		if filter_domains else list(_MODULE_REGISTRY)
+	)
+
+	result = []
+	for m in candidates:
+		prefix = "/" + m["url"].strip("/").split("/")[0]
+		available = not registered_prefixes or prefix in registered_prefixes
+		result.append({**m, "available": available})
+	return result
 
 
 def _get_announcements() -> list[dict[str, Any]]:
