@@ -800,8 +800,13 @@ class AccessEvent(ImmutableRecordMixin, Model):
 	member_id = Column(
 		UUID(as_uuid=False),
 		ForeignKey("club_member.id", ondelete="RESTRICT"),
-		nullable=False,
+		nullable=True,  # NULL when member cannot be identified (UNKNOWN_MEMBER denials)
 		index=True,
+	)
+	attempted_identifier = Column(
+		String(100),
+		nullable=True,
+		comment="Raw identifier supplied by door controller when member not found",
 	)
 
 	door_id = Column(String(50), nullable=False, comment="Logical door code e.g. MAIN_GATE, POOL_ENTRY")

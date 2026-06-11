@@ -31,6 +31,12 @@ log = logging.getLogger(__name__)
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+def _hhmm_to_minutes(t: str) -> int:
+	"""Convert 'HH:MM' string to minutes since midnight."""
+	h, m = t.split(":")
+	return int(h) * 60 + int(m)
+
+
 def _emit(event: Any, session: Any = None) -> None:
 	"""Fire-and-forget event emit — non-fatal on failure."""
 	try:
@@ -462,10 +468,6 @@ class FacilityService:
 		).scalars().all()
 
 		# Generate 30-min slots
-		def _hhmm_to_minutes(hhmm: str) -> int:
-			h, m = hhmm.split(":")
-			return int(h) * 60 + int(m)
-
 		def _minutes_to_hhmm(minutes: int) -> str:
 			return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
@@ -563,10 +565,6 @@ class FacilityService:
 			)
 
 		# 5. Duration
-		def _hhmm_to_minutes(hhmm: str) -> int:
-			h, m = hhmm.split(":")
-			return int(h) * 60 + int(m)
-
 		duration_minutes = _hhmm_to_minutes(end_time) - _hhmm_to_minutes(start_time)
 		if duration_minutes <= 0:
 			raise ClubError(f"end_time {end_time!r} must be after start_time {start_time!r}")
@@ -849,7 +847,13 @@ class MemberAccountService:
 		tenant_id: str,
 		session: Any,
 	) -> dict:
-		"""Record a payment (posts negative charge) and return new balance."""
+		"""Record a payment (posts negative charge) and return new balance.
+
+		post_charge() uses an atomic sa.update() which bypasses the ORM identity
+		map, so we must do a fresh scalar SELECT to avoid returning a stale value.
+		"""
+		from pgappforge.plugins.erp.industry.clubs.models import MemberAccount
+
 		self.post_charge(
 			member_id,
 			"MISCELLANEOUS",
@@ -858,12 +862,18 @@ class MemberAccountService:
 			tenant_id,
 			session,
 		)
-		new_balance = self.get_outstanding_balance(member_id, tenant_id, session)
+		# Fresh read — bypasses any stale ORM-cached instance
+		fresh_balance = session.execute(
+			select(MemberAccount.current_balance_cents).where(
+				MemberAccount.member_id == member_id,
+				MemberAccount.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none() or 0
 		log.info("record_payment: member=%s ref=%s amount=%d¢", member_id, payment_ref, amount_cents)
 		return {
 			"member_id": member_id,
 			"payment_ref": payment_ref,
-			"new_balance_cents": new_balance,
+			"new_balance_cents": fresh_balance,
 		}
 
 	def get_outstanding_balance(
@@ -917,12 +927,14 @@ class MemberAccountService:
 
 		account = self.get_or_create_account(member_id, tenant_id, session)
 
-		# Determine period start
+		# Determine period start — advance by one day to avoid double-counting
+		# charges that fell on the closing day of the previous statement.
+		from datetime import timedelta
 		if account.last_statement_date:
-			period_start = account.last_statement_date
+			period_start: date | None = account.last_statement_date + timedelta(days=1)
 		else:
 			member = session.get(ClubMember, member_id)
-			period_start = (member.joined_date if member and member.joined_date else date(1970, 1, 1))
+			period_start = (member.joined_date if member and member.joined_date else None)
 
 		# Opening balance = closing balance of last statement, or 0
 		last_stmt = session.execute(
@@ -938,14 +950,17 @@ class MemberAccountService:
 		opening_balance = (last_stmt.closing_balance_cents or 0) if last_stmt else 0
 
 		# Aggregate charges/payments in period
-		charge_rows = session.execute(
-			select(MemberCharge.amount_cents)
-			.where(
-				MemberCharge.member_id == member_id,
-				MemberCharge.tenant_id == tenant_id,
-				MemberCharge.charged_at >= datetime.combine(period_start, datetime.min.time()).replace(tzinfo=timezone.utc),
-				MemberCharge.charged_at <= datetime.combine(statement_date, datetime.max.time()).replace(tzinfo=timezone.utc),
+		period_filter = [
+			MemberCharge.member_id == member_id,
+			MemberCharge.tenant_id == tenant_id,
+			MemberCharge.charged_at <= datetime.combine(statement_date, datetime.max.time()).replace(tzinfo=timezone.utc),
+		]
+		if period_start is not None:
+			period_filter.append(
+				MemberCharge.charged_at >= datetime.combine(period_start, datetime.min.time()).replace(tzinfo=timezone.utc)
 			)
+		charge_rows = session.execute(
+			select(MemberCharge.amount_cents).where(*period_filter)
 		).scalars().all()
 
 		charges_cents = sum(c for c in charge_rows if c > 0)
@@ -1197,7 +1212,8 @@ class AccessControlService:
 		if member is None:
 			event = AccessEvent(
 				tenant_id=tenant_id,
-				member_id=member_identifier if len(member_identifier) == 36 else _uuid4(),
+				member_id=None,  # unknown — do not fabricate a UUID
+				attempted_identifier=str(member_identifier)[:100],
 				door_id=door_id,
 				door_name=door_name,
 				direction=direction,
@@ -1213,7 +1229,7 @@ class AccessControlService:
 					aggregate_id=event.id,
 					aggregate_type="AccessEvent",
 					tenant_id=tenant_id,
-					member_id=event.member_id,
+					member_id=None,
 					door_id=door_id,
 					reason="UNKNOWN_MEMBER",
 				),
@@ -1471,8 +1487,11 @@ try:
 		except Exception as exc:
 			return {"status": "error", "message": str(exc)}
 
-except (ImportError, Exception):
+except ImportError:
 	pass
+except Exception as exc:
+	import logging as _log
+	_log.getLogger(__name__).warning("clubs: BPM registration failed: %s", exc)
 
 
 __all__ = [

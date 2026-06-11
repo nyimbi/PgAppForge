@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
+from typing import Any
 
 import sqlalchemy as sa
 from flask import make_response, request
@@ -286,11 +287,13 @@ class ClubsDashboardView(BaseERPView):
 		from pgappforge import expose
 		from pgappforge.security.decorators import has_access
 
-		# Live counts — each in its own try/except via self._count()
-		active_members = self._count(ClubMember, status="ACTIVE")
-		pending_applications = self._count(MembershipApplication, status="PENDING")
-		outstanding_accounts = self._count_positive_balance()
-		todays_bookings = self._count_todays_bookings()
+		# Live counts — scoped to current tenant
+		sess = self._session()
+		tid = self._tenant_id()
+		active_members = self._count(ClubMember, session=sess, tenant_id=tid, status="ACTIVE")
+		pending_applications = self._count(MembershipApplication, session=sess, tenant_id=tid, status="PENDING")
+		outstanding_accounts = self._count_positive_balance(sess, tid)
+		todays_bookings = self._count_todays_bookings(sess, tid)
 
 		kpi_html = self.kpi_cards([
 			{
@@ -373,30 +376,38 @@ class ClubsDashboardView(BaseERPView):
 	# Private helpers
 	# ------------------------------------------------------------------
 
-	def _count_positive_balance(self) -> int:
-		"""Count MemberAccounts with current_balance_cents > 0."""
+	def _count_positive_balance(self, session: Any = None, tenant_id: str | None = None) -> int:
+		"""Count MemberAccounts with current_balance_cents > 0 for the given tenant."""
 		try:
-			from flask import current_app
-			session = current_app.appbuilder.get_session()
-			return session.execute(
+			if session is None:
+				from flask import current_app
+				session = current_app.appbuilder.get_session()
+			q = (
 				sa.select(sa.func.count()).select_from(MemberAccount)
 				.where(MemberAccount.current_balance_cents > 0)
-			).scalar_one() or 0
+			)
+			if tenant_id is not None:
+				q = q.where(MemberAccount.tenant_id == tenant_id)
+			return session.execute(q).scalar_one() or 0
 		except Exception:
 			return 0
 
-	def _count_todays_bookings(self) -> int:
-		"""Count FacilityBookings for today with status CONFIRMED."""
+	def _count_todays_bookings(self, session: Any = None, tenant_id: str | None = None) -> int:
+		"""Count FacilityBookings for today with status CONFIRMED for the given tenant."""
 		try:
-			from flask import current_app
-			session = current_app.appbuilder.get_session()
-			return session.execute(
+			if session is None:
+				from flask import current_app
+				session = current_app.appbuilder.get_session()
+			q = (
 				sa.select(sa.func.count()).select_from(FacilityBooking)
 				.where(
 					FacilityBooking.booking_date == date.today(),
 					FacilityBooking.status == "CONFIRMED",
 				)
-			).scalar_one() or 0
+			)
+			if tenant_id is not None:
+				q = q.where(FacilityBooking.tenant_id == tenant_id)
+			return session.execute(q).scalar_one() or 0
 		except Exception:
 			return 0
 
