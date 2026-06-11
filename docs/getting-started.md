@@ -109,6 +109,11 @@ PGAPPFORGE_PLUGINS = [
     "pgappforge.plugins.erp.platform.notifications",     # event notifications
     "pgappforge.plugins.erp.platform.analytics_engine",  # analytics cubes
     "pgappforge.plugins.erp.platform.landing",           # editable landing page
+
+    # AI / ML (requires LiteLLM gateway — see below)
+    "pgappforge.plugins.erp.platform.nlp",               # classify, sentiment, NER, summarize
+    "pgappforge.plugins.erp.platform.rag",               # document Q&A over ERP data
+    "pgappforge.plugins.erp.platform.ml_predictions",    # duplicate detection, attrition, lead scoring
 ]
 ```
 
@@ -132,6 +137,107 @@ PGAPPFORGE_PLUGINS += [
     "pgappforge.plugins.fintech.sacco",
     "pgappforge.plugins.fintech.banking_api",   # REST API at /api/v1/banking
 ]
+```
+
+### New APG-gap fintech plugins (20 total via install_all)
+
+```python
+from pgappforge.plugins.fintech import install_all
+install_all(appbuilder)  # activates all 20 plugins
+# Includes: remittance, bnpl, agency_banking, embedded_finance,
+#           terminal_management, insurtech, wealth_management, robo_advisory
+```
+
+---
+
+## AI / ML (NLP, RAG, ML Predictions)
+
+Requires the **LiteLLM gateway** — a running LiteLLM proxy that provides
+OpenAI-compatible endpoints. The project's live gateway is pre-configured as default.
+
+```python
+# config.py — AI/ML settings
+LITELLM_URL          = "http://84.247.181.100:4000/v1"   # LiteLLM proxy
+LITELLM_API_KEY      = "sk-pjs-litellm-master-key"
+LLM_MODEL            = "gpt-4o"            # for complex tasks
+LLM_FAST_MODEL       = "gpt-4o-mini"       # for classification, Q&A
+LLM_EMBEDDING_MODEL  = "text-embedding-ada-002"   # 1536-dim vectors
+
+# All AI/ML features degrade gracefully when LiteLLM is unavailable.
+```
+
+### NLP capabilities (`platform/nlp/`)
+
+```python
+from pgappforge.plugins.erp.platform.nlp.services import NLPService
+svc = NLPService()
+
+# Classify text into categories
+svc.classify_text("Invoice from Safaricom", ["TELCO","UTILITIES","IT"])
+
+# Extract entities (persons, orgs, dates, amounts, locations)
+svc.extract_entities("John signed the contract with KCB on 15 Jan 2026")
+
+# Sentiment analysis
+svc.analyze_sentiment("Great service, very satisfied with the team")
+
+# Summarize documents
+svc.summarize(long_text, style="executive")  # or "technical" or "bullet_points"
+
+# Extract invoice fields from OCR text
+svc.extract_invoice_fields(invoice_ocr_text)
+
+# ERP-specific helpers
+svc.classify_support_ticket(description)
+svc.classify_expense_category(description)
+svc.classify_ledger_description(description)
+```
+
+### RAG — Document Q&A (`platform/rag/`)
+
+```python
+from pgappforge.plugins.erp.platform.rag.services import RAGService
+svc = RAGService()
+
+# Ingest a document
+svc.ingest_document("HR Policy", policy_text, "POLICY", tenant_id, session)
+
+# Ingest all GL accounts (auto-indexes account descriptions)
+svc.ingest_erp_data(tenant_id, session, sources=["GL_ACCOUNTS"])
+
+# Answer questions from indexed knowledge base
+result = svc.ask("What is the travel expense reimbursement limit?", tenant_id, session)
+print(result["answer"])   # LLM-generated answer
+print(result["sources"])  # [{title, score, excerpt}]
+```
+
+Interactive at: `GET /platform/rag/` (dashboard) and `POST /platform/rag/ask` (API)
+
+### ML Predictions (`platform/ml_predictions/`)
+
+```python
+from pgappforge.plugins.erp.platform.ml_predictions.services import MLPredictionService
+svc = MLPredictionService()
+
+# AP duplicate detection
+svc.detect_duplicate_invoice(invoice_id, tenant_id, session)
+# → {is_duplicate, score, duplicate_of_id, explanation}
+
+# HR attrition risk
+svc.predict_attrition_risk(employee_id, tenant_id, session)
+# → {score, label: HIGH/MEDIUM/LOW, risk_factors, explanation}
+
+# CRM lead scoring
+svc.score_lead(opportunity_id, tenant_id, session)
+# → {score, label: HOT/WARM/COLD, key_signals, recommended_action}
+
+# GL anomaly detection (z-score)
+svc.detect_gl_anomaly(journal_entry_id, tenant_id, session)
+# → {is_anomaly, z_score, mean_cents, std_cents, explanation}
+
+# Demand forecasting (moving average)
+svc.forecast_demand(product_id, tenant_id, session, periods_ahead=3)
+# → {forecast: [{period, predicted_qty}], trend, confidence}
 ```
 
 ---
