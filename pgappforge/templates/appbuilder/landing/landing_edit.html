@@ -1,0 +1,765 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Customize Landing Page — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Edit-page layout ─────────────────────────────────────────────── */
+  .le-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .le-layout { grid-template-columns: 1fr; }
+    .le-sidebar { order: -1; }
+  }
+
+  /* ── Card shell ───────────────────────────────────────────────────── */
+  .le-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    box-shadow: var(--erp-shadow-sm);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .le-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--erp-border);
+    background: var(--erp-neutral-lt);
+  }
+
+  .le-card-header-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .85rem;
+    flex-shrink: 0;
+  }
+
+  .le-card-title {
+    font-size: .875rem;
+    font-weight: 700;
+    color: var(--erp-text);
+    margin: 0;
+  }
+
+  .le-card-subtitle {
+    font-size: .75rem;
+    color: var(--erp-text-muted);
+    margin: 2px 0 0;
+  }
+
+  .le-card-body {
+    padding: 20px;
+  }
+
+  /* ── Form fields ──────────────────────────────────────────────────── */
+  .le-field {
+    margin-bottom: 18px;
+  }
+
+  .le-field:last-child { margin-bottom: 0; }
+
+  .le-label {
+    display: block;
+    font-size: .775rem;
+    font-weight: 600;
+    color: var(--erp-text);
+    margin-bottom: 6px;
+    letter-spacing: .01em;
+  }
+
+  .le-label-hint {
+    font-weight: 400;
+    color: var(--erp-text-muted);
+    font-size: .72rem;
+    margin-left: 6px;
+  }
+
+  .le-input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: .825rem;
+    color: var(--erp-text);
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    transition: border-color var(--erp-transition), box-shadow var(--erp-transition);
+    font-family: var(--erp-font);
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .le-input:focus {
+    border-color: var(--erp-primary);
+    box-shadow: 0 0 0 3px rgba(26,86,219,.10);
+  }
+
+  .le-input-color {
+    width: 48px;
+    height: 38px;
+    padding: 3px 4px;
+    border-radius: var(--erp-radius);
+    border: 1px solid var(--erp-border);
+    cursor: pointer;
+    vertical-align: middle;
+  }
+
+  .le-color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .le-color-text {
+    flex: 1;
+  }
+
+  /* toggle checkbox */
+  .le-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .le-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .le-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+
+  .le-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--erp-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background var(--erp-transition);
+  }
+
+  .le-toggle-slider::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    transition: transform var(--erp-transition);
+  }
+
+  .le-toggle input:checked + .le-toggle-slider {
+    background: var(--erp-primary);
+  }
+
+  .le-toggle input:checked + .le-toggle-slider::after {
+    transform: translateX(18px);
+  }
+
+  .le-toggle-label {
+    font-size: .825rem;
+    color: var(--erp-text);
+    cursor: pointer;
+  }
+
+  /* ── Action buttons ───────────────────────────────────────────────── */
+  .le-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 20px;
+    background: var(--erp-primary);
+    color: #fff !important;
+    border: none;
+    border-radius: var(--erp-radius);
+    font-size: .825rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none !important;
+    transition: filter var(--erp-transition), box-shadow var(--erp-transition);
+    font-family: var(--erp-font);
+  }
+
+  .le-btn-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 4px 12px rgba(26,86,219,.25);
+    color: #fff !important;
+  }
+
+  .le-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    background: var(--erp-surface);
+    color: var(--erp-text) !important;
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    font-size: .825rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none !important;
+    transition: border-color var(--erp-transition), box-shadow var(--erp-transition);
+    font-family: var(--erp-font);
+  }
+
+  .le-btn-secondary:hover {
+    border-color: var(--erp-primary);
+    color: var(--erp-primary) !important;
+    text-decoration: none !important;
+  }
+
+  .le-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    background: var(--erp-surface);
+    color: var(--erp-danger) !important;
+    border: 1px solid var(--erp-danger-lt);
+    border-radius: var(--erp-radius);
+    font-size: .825rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none !important;
+    transition: all var(--erp-transition);
+    font-family: var(--erp-font);
+  }
+
+  .le-btn-danger:hover {
+    background: var(--erp-danger-lt);
+    border-color: var(--erp-danger);
+    color: var(--erp-danger) !important;
+    text-decoration: none !important;
+  }
+
+  /* ── Preview panel ────────────────────────────────────────────────── */
+  .le-preview-hero {
+    border-radius: var(--erp-radius-lg);
+    padding: 24px 20px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    transition: background var(--erp-transition);
+  }
+
+  .le-preview-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
+  }
+
+  .le-preview-inner { position: relative; z-index: 1; }
+
+  .le-preview-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0;
+    color: #fff;
+  }
+
+  .le-preview-tagline {
+    font-size: .75rem;
+    opacity: .75;
+    margin: 4px 0 0;
+  }
+
+  .le-preview-stats {
+    display: flex;
+    gap: 0;
+    margin-top: 14px;
+    background: rgba(255,255,255,.12);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .le-preview-stat {
+    flex: 1;
+    padding: 8px 10px;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,.1);
+    font-size: .65rem;
+    opacity: .85;
+  }
+
+  .le-preview-stat:last-child { border-right: none; }
+
+  /* ── Tip list ─────────────────────────────────────────────────────── */
+  .le-tip {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--erp-border);
+    font-size: .775rem;
+  }
+
+  .le-tip:last-child { border-bottom: none; }
+
+  .le-tip-icon {
+    width: 20px;
+    text-align: center;
+    color: var(--erp-primary);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .le-tip-text { color: var(--erp-text-muted); line-height: 1.5; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header erp-island">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h1 class="erp-page-title">
+        <i class="fa fa-paint-brush" style="color:var(--erp-primary);margin-right:8px;"></i>
+        Customize Landing Page
+      </h1>
+      <p class="erp-page-subtitle">
+        Changes apply immediately at runtime. Restart to make them permanent.
+      </p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <a href="/" target="_blank" class="le-btn-secondary">
+        <i class="fa fa-external-link"></i> Preview
+      </a>
+      <a href="/" class="le-btn-secondary">
+        <i class="fa fa-arrow-left"></i> Back to Home
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<form
+  method="POST"
+  action="/landing/edit"
+  id="landing-edit-form"
+  class="erp-island">
+
+  <div class="le-layout">
+
+    {# ── Left column: form fields ─────────────────────────────────── #}
+    <div class="le-main">
+
+      {# ── Branding ──────────────────────────────────────────── #}
+      <div class="le-card">
+        <div class="le-card-header">
+          <div class="le-card-header-icon" style="background:var(--erp-primary-lt);color:var(--erp-primary);">
+            <i class="fa fa-tag"></i>
+          </div>
+          <div>
+            <div class="le-card-title">Branding</div>
+            <div class="le-card-subtitle">Name, tagline, and logo shown in the hero.</div>
+          </div>
+        </div>
+        <div class="le-card-body">
+
+          <div class="le-field">
+            <label class="le-label" for="f-LANDING_TITLE">
+              Page Title
+              <span class="le-label-hint">Displayed as the H1 in the hero</span>
+            </label>
+            <input
+              id="f-LANDING_TITLE"
+              name="LANDING_TITLE"
+              type="text"
+              class="le-input"
+              placeholder="PgAppForge ERP"
+              value="{{ current_config.get('LANDING_TITLE', '') }}"
+              oninput="syncPreview()">
+          </div>
+
+          <div class="le-field">
+            <label class="le-label" for="f-LANDING_TAGLINE">
+              Tagline
+              <span class="le-label-hint">Shown below the title</span>
+            </label>
+            <input
+              id="f-LANDING_TAGLINE"
+              name="LANDING_TAGLINE"
+              type="text"
+              class="le-input"
+              placeholder="Intelligent Enterprise Platform"
+              value="{{ current_config.get('LANDING_TAGLINE', '') }}"
+              oninput="syncPreview()">
+          </div>
+
+          <div class="le-field">
+            <label class="le-label" for="f-LANDING_LOGO_URL">
+              Logo URL
+              <span class="le-label-hint">Absolute URL or path to logo image (64px height recommended)</span>
+            </label>
+            <input
+              id="f-LANDING_LOGO_URL"
+              name="LANDING_LOGO_URL"
+              type="url"
+              class="le-input"
+              placeholder="https://example.com/logo.png"
+              value="{{ current_config.get('LANDING_LOGO_URL', '') }}">
+          </div>
+
+        </div>
+      </div>
+
+      {# ── Appearance ────────────────────────────────────────── #}
+      <div class="le-card">
+        <div class="le-card-header">
+          <div class="le-card-header-icon" style="background:#fef3c7;color:#d97706;">
+            <i class="fa fa-paint-brush"></i>
+          </div>
+          <div>
+            <div class="le-card-title">Appearance</div>
+            <div class="le-card-subtitle">Hero gradient and environment label.</div>
+          </div>
+        </div>
+        <div class="le-card-body">
+
+          <div class="le-field">
+            <label class="le-label">
+              Hero Accent Colour
+              <span class="le-label-hint">Left edge of the hero gradient</span>
+            </label>
+            <div class="le-color-row">
+              <input
+                id="f-LANDING_ACCENT_COLOR"
+                name="LANDING_ACCENT_COLOR"
+                type="color"
+                class="le-input-color"
+                value="{{ current_config.get('LANDING_ACCENT_COLOR', '#1a56db') }}"
+                oninput="syncColor(this.value)">
+              <input
+                id="f-LANDING_ACCENT_COLOR_txt"
+                type="text"
+                class="le-input le-color-text"
+                value="{{ current_config.get('LANDING_ACCENT_COLOR', '#1a56db') }}"
+                maxlength="7"
+                placeholder="#1a56db"
+                oninput="syncColorFromText(this.value)">
+            </div>
+          </div>
+
+          <div class="le-field">
+            <label class="le-label" for="f-LANDING_ENV_LABEL">
+              Environment Label
+              <span class="le-label-hint">Shown in the footer (e.g. Production, Staging, UAT)</span>
+            </label>
+            <input
+              id="f-LANDING_ENV_LABEL"
+              name="LANDING_ENV_LABEL"
+              type="text"
+              class="le-input"
+              placeholder="Production"
+              value="{{ current_config.get('LANDING_ENV_LABEL', '') }}">
+          </div>
+
+        </div>
+      </div>
+
+      {# ── Module visibility ─────────────────────────────────── #}
+      <div class="le-card">
+        <div class="le-card-header">
+          <div class="le-card-header-icon" style="background:var(--erp-success-lt);color:var(--erp-success);">
+            <i class="fa fa-th-large"></i>
+          </div>
+          <div>
+            <div class="le-card-title">Module Visibility</div>
+            <div class="le-card-subtitle">Control which capability domains appear on the landing page.</div>
+          </div>
+        </div>
+        <div class="le-card-body">
+
+          <div class="le-field">
+            <label class="le-label" for="f-LANDING_MODULES_FILTER">
+              Domain Filter
+              <span class="le-label-hint">Comma-separated list of domains to show. Leave blank to show all.</span>
+            </label>
+            <input
+              id="f-LANDING_MODULES_FILTER"
+              name="LANDING_MODULES_FILTER"
+              type="text"
+              class="le-input"
+              placeholder="finance, crm, hcm, operations, grc, analytics, fintech, platform, industry"
+              value="{{ current_config.get('LANDING_MODULES_FILTER', '') }}">
+            <div style="margin-top:8px;font-size:.72rem;color:var(--erp-text-muted);line-height:1.6;">
+              Available domains:
+              <code style="background:var(--erp-neutral-lt);padding:1px 5px;border-radius:4px;font-size:.7rem;">
+                finance, crm, hcm, operations, grc, analytics, fintech, platform, industry
+              </code>
+            </div>
+          </div>
+
+          <div class="le-field">
+            <div class="le-toggle-row">
+              <label class="le-toggle">
+                <input
+                  type="checkbox"
+                  name="LANDING_SHOW_STATS"
+                  id="f-LANDING_SHOW_STATS"
+                  {{ 'checked' if current_config.get('LANDING_SHOW_STATS', 'true') not in ('false', '0', '') else '' }}>
+                <span class="le-toggle-slider"></span>
+              </label>
+              <label for="f-LANDING_SHOW_STATS" class="le-toggle-label">
+                Show Stats Bar in hero
+              </label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {# ── Action row ────────────────────────────────────────── #}
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:4px 0 20px;">
+        <button type="submit" class="le-btn-primary">
+          <i class="fa fa-save"></i> Save Changes
+        </button>
+        <a href="/" class="le-btn-secondary">
+          <i class="fa fa-times"></i> Cancel
+        </a>
+        <button
+          type="button"
+          class="le-btn-danger"
+          onclick="resetDefaults()"
+          style="margin-left:auto;">
+          <i class="fa fa-undo"></i> Reset to Defaults
+        </button>
+      </div>
+
+    </div>{# /le-main #}
+
+    {# ── Right sidebar ────────────────────────────────────────────── #}
+    <div class="le-sidebar">
+
+      {# Live preview #}
+      <div class="le-card">
+        <div class="le-card-header">
+          <div class="le-card-header-icon" style="background:var(--erp-info-lt);color:var(--erp-info);">
+            <i class="fa fa-eye"></i>
+          </div>
+          <div>
+            <div class="le-card-title">Live Preview</div>
+            <div class="le-card-subtitle">Updates as you type.</div>
+          </div>
+        </div>
+        <div class="le-card-body" style="padding:16px;">
+          <div
+            class="le-preview-hero"
+            id="preview-hero"
+            style="background:linear-gradient(135deg,
+              {{ current_config.get('LANDING_ACCENT_COLOR', '#1a56db') }} 0%,
+              #0f2a4a 100%);">
+            <div class="le-preview-inner">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <div style="width:28px;height:28px;border-radius:6px;
+                            background:rgba(255,255,255,.15);
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:.85rem;color:rgba(255,255,255,.8);">
+                  <i class="fa fa-cubes"></i>
+                </div>
+                <div>
+                  <div class="le-preview-title" id="preview-title">
+                    {{ current_config.get('LANDING_TITLE', 'PgAppForge ERP') or 'PgAppForge ERP' }}
+                  </div>
+                  <div class="le-preview-tagline" id="preview-tagline">
+                    {{ current_config.get('LANDING_TAGLINE', 'Intelligent Enterprise Platform') or 'Intelligent Enterprise Platform' }}
+                  </div>
+                </div>
+              </div>
+              <div class="le-preview-stats">
+                <div class="le-preview-stat"><strong>—</strong><br>Users</div>
+                <div class="le-preview-stat"><strong>45</strong><br>Modules</div>
+                <div class="le-preview-stat"><strong>8</strong><br>Domains</div>
+                <div class="le-preview-stat"><strong>99.9%</strong><br>Uptime</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <a href="/" target="_blank" class="le-btn-primary" style="width:100%;justify-content:center;">
+              <i class="fa fa-external-link"></i> Open Full Preview
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {# Tips ────────────────────────────────────────────────── #}
+      <div class="le-card">
+        <div class="le-card-header">
+          <div class="le-card-header-icon" style="background:var(--erp-warning-lt);color:var(--erp-warning);">
+            <i class="fa fa-lightbulb-o"></i>
+          </div>
+          <div>
+            <div class="le-card-title">Tips</div>
+          </div>
+        </div>
+        <div class="le-card-body" style="padding:12px 20px;">
+          <div class="le-tip">
+            <div class="le-tip-icon"><i class="fa fa-image"></i></div>
+            <div class="le-tip-text">
+              Use a square or landscape logo hosted on HTTPS. Recommended height: 60px.
+            </div>
+          </div>
+          <div class="le-tip">
+            <div class="le-tip-icon"><i class="fa fa-palette" style="font-size:.7rem;"></i></div>
+            <div class="le-tip-text">
+              Pick an accent colour that contrasts with white text (WCAG AA: ratio ≥ 4.5:1).
+            </div>
+          </div>
+          <div class="le-tip">
+            <div class="le-tip-icon"><i class="fa fa-cog"></i></div>
+            <div class="le-tip-text">
+              Set config values in <code>app.config</code> for permanence across restarts.
+              Runtime changes are lost on server restart.
+            </div>
+          </div>
+          <div class="le-tip">
+            <div class="le-tip-icon"><i class="fa fa-filter"></i></div>
+            <div class="le-tip-text">
+              Domain filter is case-insensitive. Example:
+              <code>finance, crm, hcm</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Current effective config ──────────────────────────── #}
+      <div class="le-card">
+        <div class="le-card-header">
+          <div class="le-card-header-icon" style="background:var(--erp-neutral-lt);color:var(--erp-neutral);">
+            <i class="fa fa-info-circle"></i>
+          </div>
+          <div>
+            <div class="le-card-title">Effective Config</div>
+            <div class="le-card-subtitle">Read-only current values.</div>
+          </div>
+        </div>
+        <div class="le-card-body" style="padding:12px 20px;">
+          {% for key, label, _ in config_keys %}
+            <div style="display:flex;justify-content:space-between;padding:5px 0;
+                        border-bottom:1px solid var(--erp-border);font-size:.72rem;">
+              <span style="color:var(--erp-text-muted);font-weight:500;">{{ label }}</span>
+              <span style="color:var(--erp-text);max-width:140px;
+                           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                           text-align:right;"
+                    title="{{ current_config.get(key, '—') }}">
+                {{ current_config.get(key, '—') or '—' }}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>{# /le-sidebar #}
+
+  </div>{# /le-layout #}
+
+</form>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Live preview sync ─────────────────────────────────────────────── */
+function syncPreview() {
+  var titleEl    = document.getElementById('f-LANDING_TITLE');
+  var taglineEl  = document.getElementById('f-LANDING_TAGLINE');
+  var prevTitle   = document.getElementById('preview-title');
+  var prevTagline = document.getElementById('preview-tagline');
+
+  if (prevTitle && titleEl) {
+    prevTitle.textContent = titleEl.value || 'PgAppForge ERP';
+  }
+  if (prevTagline && taglineEl) {
+    prevTagline.textContent = taglineEl.value || 'Intelligent Enterprise Platform';
+  }
+}
+
+function syncColor(hex) {
+  var txtEl   = document.getElementById('f-LANDING_ACCENT_COLOR_txt');
+  var heroEl  = document.getElementById('preview-hero');
+  if (txtEl)  txtEl.value = hex;
+  if (heroEl) heroEl.style.background =
+    'linear-gradient(135deg, ' + hex + ' 0%, #0f2a4a 100%)';
+}
+
+function syncColorFromText(hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  var pickerEl = document.getElementById('f-LANDING_ACCENT_COLOR');
+  var heroEl   = document.getElementById('preview-hero');
+  if (pickerEl) pickerEl.value = hex;
+  if (heroEl)   heroEl.style.background =
+    'linear-gradient(135deg, ' + hex + ' 0%, #0f2a4a 100%)';
+}
+
+/* ── Reset to defaults ────────────────────────────────────────────── */
+var _DEFAULTS = {
+  'f-LANDING_TITLE':          'PgAppForge ERP',
+  'f-LANDING_TAGLINE':        'Intelligent Enterprise Platform',
+  'f-LANDING_LOGO_URL':       '',
+  'f-LANDING_ACCENT_COLOR':   '#1a56db',
+  'f-LANDING_ACCENT_COLOR_txt': '#1a56db',
+  'f-LANDING_ENV_LABEL':      'Production',
+  'f-LANDING_MODULES_FILTER': '',
+};
+
+function resetDefaults() {
+  if (!confirm('Reset all landing page settings to defaults?')) return;
+  Object.keys(_DEFAULTS).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') {
+      el.checked = true;
+    } else {
+      el.value = _DEFAULTS[id];
+    }
+  });
+  syncPreview();
+  syncColor('#1a56db');
+}
+
+/* ── Unsaved-changes guard ────────────────────────────────────────── */
+(function () {
+  var dirty = false;
+  var form  = document.getElementById('landing-edit-form');
+  if (!form) return;
+
+  form.addEventListener('input', function() { dirty = true; });
+  form.addEventListener('change', function() { dirty = true; });
+  form.addEventListener('submit', function() { dirty = false; });
+
+  window.addEventListener('beforeunload', function(e) {
+    if (dirty) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes.';
+    }
+  });
+})();
+</script>
+{% endblock %}

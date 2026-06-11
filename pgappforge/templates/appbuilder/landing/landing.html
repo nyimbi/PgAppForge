@@ -1,0 +1,685 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ config.get('LANDING_TITLE', appbuilder.app_name) }} — Home{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Landing-specific tokens & overrides ─────────────────────────── */
+  :root {
+    --landing-hero-from: {{ config.get('LANDING_ACCENT_COLOR', '#1a56db') }};
+    --landing-hero-to:   #0f2a4a;
+  }
+
+  .landing-hero {
+    background: linear-gradient(135deg, var(--landing-hero-from) 0%, var(--landing-hero-to) 100%);
+    padding: 52px 44px 40px;
+    border-radius: var(--erp-radius-lg);
+    color: #fff;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* subtle mesh-grid overlay */
+  .landing-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+
+  .landing-hero-inner {
+    position: relative;
+    z-index: 1;
+  }
+
+  .landing-hero-brand {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 12px;
+  }
+
+  .landing-hero-logo {
+    height: 60px;
+    width: auto;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    flex-shrink: 0;
+  }
+
+  .landing-hero-title {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    color: #fff;
+  }
+
+  .landing-hero-tagline {
+    font-size: .95rem;
+    opacity: .75;
+    margin: 6px 0 0;
+    font-weight: 400;
+  }
+
+  /* ── Stats bar ──────────────────────────────────────────────────── */
+  .landing-stats-bar {
+    display: flex;
+    gap: 0;
+    margin-top: 28px;
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: var(--erp-radius-lg);
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+  }
+
+  .landing-stat {
+    flex: 1;
+    padding: 16px 20px;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,.12);
+    transition: background var(--erp-transition);
+  }
+
+  .landing-stat:last-child { border-right: none; }
+  .landing-stat:hover { background: rgba(255,255,255,.06); }
+
+  .landing-stat-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .landing-stat-label {
+    font-size: .7rem;
+    opacity: .65;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-top: 4px;
+  }
+
+  .landing-stat-icon {
+    font-size: .85rem;
+    opacity: .6;
+    margin-bottom: 4px;
+  }
+
+  /* skeleton placeholder while JS fetches stats */
+  .landing-stat-skeleton {
+    height: 20px;
+    border-radius: 4px;
+    background: rgba(255,255,255,.15);
+    animation: erp-skeleton-pulse 1.6s ease-in-out infinite;
+    background-size: 800px 100%;
+    margin: 4px auto;
+  }
+
+  /* ── Section headers ────────────────────────────────────────────── */
+  .landing-section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .landing-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--erp-text);
+    margin: 0;
+    letter-spacing: -.01em;
+  }
+
+  .landing-section-meta {
+    font-size: .75rem;
+    color: var(--erp-text-muted);
+  }
+
+  /* ── Domain group tabs ──────────────────────────────────────────── */
+  .landing-domain-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .landing-domain-tab {
+    padding: 5px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--erp-border);
+    background: var(--erp-surface);
+    color: var(--erp-text-muted);
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--erp-transition);
+    user-select: none;
+  }
+
+  .landing-domain-tab:hover,
+  .landing-domain-tab.active {
+    background: var(--erp-primary);
+    border-color: var(--erp-primary);
+    color: #fff;
+  }
+
+  /* ── Module tile grid ───────────────────────────────────────────── */
+  .landing-modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+
+  .landing-module-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 18px 16px 16px;
+    text-decoration: none !important;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: var(--erp-shadow-sm);
+    transition: box-shadow var(--erp-transition), transform var(--erp-transition), border-color var(--erp-transition);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  .landing-module-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--module-color, var(--erp-primary));
+    opacity: 0;
+    transition: opacity var(--erp-transition);
+  }
+
+  .landing-module-card:hover {
+    box-shadow: var(--erp-shadow);
+    transform: translateY(-2px);
+    border-color: var(--module-color, var(--erp-primary));
+    text-decoration: none !important;
+  }
+
+  .landing-module-card:hover::after { opacity: 1; }
+
+  .landing-module-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-bottom: 2px;
+  }
+
+  .landing-module-name {
+    font-size: .825rem;
+    font-weight: 700;
+    color: var(--erp-text);
+    line-height: 1.3;
+  }
+
+  .landing-module-desc {
+    font-size: .72rem;
+    color: var(--erp-text-muted);
+    line-height: 1.4;
+  }
+
+  .landing-module-domain-badge {
+    display: inline-block;
+    font-size: .65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-top: 4px;
+    width: fit-content;
+  }
+
+  /* ── Announcements ──────────────────────────────────────────────── */
+  .landing-announcement {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-left: 4px solid var(--ann-color, var(--erp-primary));
+    border-radius: 0 var(--erp-radius-lg) var(--erp-radius-lg) 0;
+    padding: 14px 18px;
+    box-shadow: var(--erp-shadow-sm);
+    margin-bottom: 10px;
+  }
+
+  .landing-ann-title {
+    font-size: .875rem;
+    font-weight: 700;
+    color: var(--erp-text);
+    margin-bottom: 3px;
+  }
+
+  .landing-ann-body {
+    font-size: .8rem;
+    color: var(--erp-text-muted);
+    line-height: 1.5;
+  }
+
+  .landing-ann-meta {
+    font-size: .7rem;
+    color: var(--erp-text-muted);
+    margin-top: 6px;
+    opacity: .7;
+  }
+
+  /* ── Quick-links bar ────────────────────────────────────────────── */
+  .landing-quicklinks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .landing-quicklink {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--erp-primary-lt);
+    border: 1px solid rgba(26,86,219,.15);
+    border-radius: 999px;
+    color: var(--erp-primary) !important;
+    font-size: .8rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: all var(--erp-transition);
+  }
+
+  .landing-quicklink:hover {
+    background: var(--erp-primary);
+    color: #fff !important;
+    text-decoration: none !important;
+  }
+
+  /* ── Admin edit bar ─────────────────────────────────────────────── */
+  .landing-admin-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--erp-surface);
+    border: 2px dashed var(--erp-border);
+    border-radius: var(--erp-radius-lg);
+    padding: 12px 16px;
+    margin-bottom: 20px;
+  }
+
+  .landing-admin-bar-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--erp-primary-lt);
+    color: var(--erp-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .8rem;
+    flex-shrink: 0;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────── */
+  .landing-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 16px 0;
+    border-top: 1px solid var(--erp-border);
+    margin-top: 16px;
+  }
+
+  .landing-footer-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: .75rem;
+    color: var(--erp-text-muted);
+  }
+
+  .landing-footer-right {
+    display: flex;
+    gap: 16px;
+    font-size: .75rem;
+  }
+
+  .landing-footer-link {
+    color: var(--erp-text-muted);
+    text-decoration: none;
+    transition: color var(--erp-transition);
+  }
+
+  .landing-footer-link:hover { color: var(--erp-primary); }
+
+  /* ── Responsive ─────────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .landing-hero { padding: 32px 20px 28px; }
+    .landing-hero-title { font-size: 1.4rem; }
+    .landing-stats-bar { flex-wrap: wrap; }
+    .landing-stat { flex: 0 0 50%; }
+    .landing-modules-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .landing-footer { flex-direction: column; align-items: flex-start; }
+  }
+
+  @media (max-width: 480px) {
+    .landing-stat { flex: 0 0 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,.12); }
+    .landing-modules-grid { grid-template-columns: 1fr 1fr; }
+    .landing-hero-brand { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Hero ──────────────────────────────────────────────────────────── #}
+<div class="landing-hero erp-island">
+  <div class="landing-hero-inner">
+
+    <div class="landing-hero-brand">
+      {% if config.get('LANDING_LOGO_URL') %}
+        <img
+          src="{{ config.get('LANDING_LOGO_URL') }}"
+          alt="{{ config.get('LANDING_TITLE', appbuilder.app_name) }} logo"
+          class="landing-hero-logo">
+      {% else %}
+        <div style="width:60px;height:60px;border-radius:10px;background:rgba(255,255,255,.15);
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:1.6rem;color:rgba(255,255,255,.9);flex-shrink:0;">
+          <i class="fa fa-cubes"></i>
+        </div>
+      {% endif %}
+      <div>
+        <h1 class="landing-hero-title">
+          {{ config.get('LANDING_TITLE', appbuilder.app_name) }}
+        </h1>
+        <p class="landing-hero-tagline">
+          {{ config.get('LANDING_TAGLINE', 'Intelligent Enterprise Platform') }}
+        </p>
+      </div>
+    </div>
+
+    {# Stats bar — skeleton until JS island hydrates #}
+    <div
+      id="landing-stats-bar"
+      class="landing-stats-bar"
+      data-island="landingStats"
+      data-src="/landing/api/stats">
+
+      {% for _ in range(4) %}
+        <div class="landing-stat">
+          <div class="landing-stat-skeleton" style="width:48px;"></div>
+          <div class="landing-stat-skeleton" style="width:72px;margin-top:6px;height:10px;opacity:.6;"></div>
+        </div>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
+
+{# ── Admin edit bar (visible to admins only) ───────────────────────── #}
+{% if g.user and appbuilder.sm.has_access('can_edit', 'LandingPage') %}
+<div class="landing-admin-bar">
+  <div class="landing-admin-bar-icon"><i class="fa fa-pencil"></i></div>
+  <div style="flex:1;">
+    <span style="font-size:.825rem;font-weight:600;color:var(--erp-text);">
+      Admin Mode
+    </span>
+    <span style="font-size:.775rem;color:var(--erp-text-muted);margin-left:8px;">
+      Customize this landing page to match your deployment.
+    </span>
+  </div>
+  <a href="/landing/edit" class="landing-quicklink" style="border-radius:var(--erp-radius);">
+    <i class="fa fa-cog"></i> Edit Landing Page
+  </a>
+</div>
+{% endif %}
+
+{# ── Announcements ─────────────────────────────────────────────────── #}
+{% if announcements %}
+<div class="landing-section-header" style="margin-top:4px;">
+  <h2 class="landing-section-title">
+    <i class="fa fa-bullhorn" style="color:var(--erp-warning);margin-right:8px;"></i>Announcements
+  </h2>
+  <span class="landing-section-meta">{{ announcements|length }} active</span>
+</div>
+<div style="margin-bottom:28px;">
+  {% for ann in announcements %}
+    <div class="landing-announcement" style="--ann-color:{{ ann.color | default('#1a56db') }};">
+      <div class="landing-ann-title">{{ ann.title }}</div>
+      <div class="landing-ann-body">{{ ann.body }}</div>
+      {% if ann.get('timestamp') %}
+        <div class="landing-ann-meta">
+          <i class="fa fa-clock-o"></i> {{ ann.timestamp }}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Quick-access links ────────────────────────────────────────────── #}
+{% set quicklinks = config.get('LANDING_QUICKLINKS', [
+  {'label': 'General Ledger',   'url': '/erp/finance/gl',       'icon': 'fa-book'},
+  {'label': 'Sales Pipeline',   'url': '/erp/crm/sales',        'icon': 'fa-bar-chart'},
+  {'label': 'Employee Records', 'url': '/erp/hcm/personnel',    'icon': 'fa-users'},
+  {'label': 'Payroll Run',      'url': '/erp/hcm/payroll',      'icon': 'fa-money'},
+  {'label': 'Risk Controls',    'url': '/erp/grc/controls',     'icon': 'fa-shield'},
+  {'label': 'Analytics',        'url': '/erp/analytics',        'icon': 'fa-line-chart'},
+]) %}
+
+<div class="landing-section-header">
+  <h2 class="landing-section-title">Quick Access</h2>
+</div>
+<div class="landing-quicklinks erp-mb-24">
+  {% for ql in quicklinks %}
+    <a href="{{ ql.url }}" class="landing-quicklink">
+      <i class="fa {{ ql.icon }}"></i>
+      {{ ql.label }}
+    </a>
+  {% endfor %}
+</div>
+
+{# ── Module capability tiles ───────────────────────────────────────── #}
+<div class="landing-section-header">
+  <h2 class="landing-section-title">
+    <i class="fa fa-th-large" style="color:var(--erp-primary);margin-right:8px;font-size:.9rem;"></i>
+    Deployed Capabilities
+  </h2>
+  <span class="landing-section-meta">
+    {{ modules | length }} modules across {{ modules | map(attribute='domain') | unique | list | length }} domains
+  </span>
+</div>
+
+{# Domain filter tabs #}
+{% set domains = modules | map(attribute='domain') | unique | list | sort %}
+<div class="landing-domain-tabs" id="landing-domain-tabs">
+  <button class="landing-domain-tab active" data-domain="all" onclick="filterDomain('all', this)">
+    All
+  </button>
+  {% for domain in domains %}
+    <button
+      class="landing-domain-tab"
+      data-domain="{{ domain }}"
+      onclick="filterDomain('{{ domain }}', this)">
+      {{ domain | title }}
+    </button>
+  {% endfor %}
+</div>
+
+<div class="landing-modules-grid" id="landing-modules-grid">
+  {% for module in modules %}
+    <a
+      href="{{ module.url }}"
+      class="landing-module-card"
+      data-domain="{{ module.domain }}"
+      style="--module-color:{{ module.color }};">
+
+      <div
+        class="landing-module-icon"
+        style="background:{{ module.color }}18;color:{{ module.color }};">
+        <i class="fa {{ module.icon }}"></i>
+      </div>
+
+      <div class="landing-module-name">{{ module.name }}</div>
+      <div class="landing-module-desc">{{ module.description }}</div>
+
+      <span
+        class="landing-module-domain-badge"
+        style="background:{{ module.color }}14;color:{{ module.color }};">
+        {{ module.domain }}
+      </span>
+    </a>
+  {% endfor %}
+</div>
+
+{# ── Landing page footer ───────────────────────────────────────────── #}
+<div class="landing-footer">
+  <div class="landing-footer-left">
+    <span style="font-weight:600;color:var(--erp-text);">
+      {{ config.get('LANDING_TITLE', appbuilder.app_name) }}
+    </span>
+    <span>v{{ appbuilder.version if appbuilder.version is defined else '4.8' }}</span>
+    <span>{{ config.get('LANDING_ENV_LABEL', 'Production') }}</span>
+  </div>
+  <div class="landing-footer-right">
+    <a href="/api/v1/" class="landing-footer-link">
+      <i class="fa fa-code"></i> API
+    </a>
+    <a href="/appbuilder/info" class="landing-footer-link">
+      <i class="fa fa-info-circle"></i> System Info
+    </a>
+    {% if g.user and appbuilder.sm.has_access('can_edit', 'LandingPage') %}
+      <a href="/landing/edit" class="landing-footer-link" style="color:var(--erp-primary);">
+        <i class="fa fa-cog"></i> Settings
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Domain filter ──────────────────────────────────────────────────── */
+function filterDomain(domain, btn) {
+  /* update tab active state */
+  document.querySelectorAll('.landing-domain-tab').forEach(function(t) {
+    t.classList.remove('active');
+  });
+  btn.classList.add('active');
+
+  /* show / hide cards */
+  document.querySelectorAll('.landing-module-card').forEach(function(card) {
+    if (domain === 'all' || card.dataset.domain === domain) {
+      card.style.display = '';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+/* ── landingStats island ────────────────────────────────────────────── */
+(function () {
+  'use strict';
+
+  var bar = document.getElementById('landing-stats-bar');
+  if (!bar) return;
+
+  var src = bar.getAttribute('data-src') || '/landing/api/stats';
+
+  function renderStats(stats) {
+    bar.innerHTML = stats.map(function(s) {
+      return [
+        '<div class="landing-stat">',
+          '<div class="landing-stat-icon"><i class="fa ' + (s.icon || 'fa-circle') + '"></i></div>',
+          '<div class="landing-stat-value" id="stat-val-' + s.label.replace(/\s+/g,'_') + '">',
+            s.value,
+          '</div>',
+          '<div class="landing-stat-label">' + s.label + '</div>',
+        '</div>'
+      ].join('');
+    }).join('');
+
+    /* animate count-up for numeric values */
+    stats.forEach(function(s) {
+      var el = document.getElementById('stat-val-' + s.label.replace(/\s+/g,'_'));
+      if (!el) return;
+      var num = parseInt(s.value.toString().replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(num) && num > 0 && num < 100000) {
+        animateCount(el, 0, num, 900, s.value);
+      }
+    });
+  }
+
+  function animateCount(el, from, to, duration, rawValue) {
+    var start = null;
+    function step(ts) {
+      if (!start) start = ts;
+      var progress = Math.min((ts - start) / duration, 1);
+      var ease = 1 - Math.pow(1 - progress, 3); /* cubic ease-out */
+      el.textContent = Math.round(from + (to - from) * ease).toLocaleString();
+      if (progress < 1) requestAnimationFrame(step);
+      else el.textContent = rawValue; /* restore original string (may have +/units) */
+    }
+    requestAnimationFrame(step);
+  }
+
+  function renderError() {
+    bar.innerHTML = [
+      '<div class="landing-stat" style="flex:1;opacity:.6;">',
+        '<div class="landing-stat-value">—</div>',
+        '<div class="landing-stat-label">Stats unavailable</div>',
+      '</div>'
+    ].join('');
+  }
+
+  /* fetch with a 6-second timeout */
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, 6000) : null;
+
+  fetch(src, {
+    credentials: 'same-origin',
+    headers: { 'Accept': 'application/json' },
+    signal: ctrl ? ctrl.signal : undefined
+  })
+  .then(function(r) {
+    clearTimeout(timer);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(data) {
+    if (data && Array.isArray(data.stats)) {
+      renderStats(data.stats);
+    } else {
+      renderError();
+    }
+  })
+  .catch(function() {
+    renderError();
+  });
+})();
+</script>
+{% endblock %}
