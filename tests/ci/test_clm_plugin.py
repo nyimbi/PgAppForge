@@ -188,6 +188,10 @@ class _DomainEvent:
 	tenant_id: str = ""
 	occurred_at: str = ""
 
+	def build_payload(self) -> dict:
+		_BASE = {"aggregate_id", "aggregate_type", "tenant_id", "event_id", "occurred_at", "event_type", "payload"}
+		return {k: v for k, v in self.__dict__.items() if k not in _BASE}
+
 def _emit_event(event: Any, session: Any = None) -> None:
 	_emitted_events.append(event)
 

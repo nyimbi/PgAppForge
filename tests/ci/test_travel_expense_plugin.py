@@ -124,6 +124,10 @@ class _DomainEvent:
     event_id: str = _field(default_factory=lambda: str(uuid.uuid4()))
     occurred_at: str = _field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+    def build_payload(self) -> dict:
+        _BASE = {"aggregate_id", "aggregate_type", "tenant_id", "event_id", "occurred_at", "event_type", "payload"}
+        return {k: v for k, v in self.__dict__.items() if k not in _BASE}
+
 foundation_events.DomainEvent = _DomainEvent
 foundation_events.emit_event = _emit_event
 foundation_events.subscribe = lambda *a, **kw: None
