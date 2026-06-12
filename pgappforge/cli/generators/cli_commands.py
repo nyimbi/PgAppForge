@@ -891,6 +891,13 @@ def generate_api(
         'Examples: web,desktop  |  all'
     ),
 )
+@click.option('--auth-provider', default='fab',
+              type=click.Choice(['fab', 'keycloak', 'clerk', 'better_auth', 'banking_api']),
+              help='Authentication provider for generated mobile app.')
+@click.option('--keycloak-realm-url', default='',
+              help='Keycloak realm URL (used when --auth-provider=keycloak).')
+@click.option('--openapi-url', default='',
+              help='OpenAPI spec URL to generate additional typed screens (e.g. /api/v1/banking/openapi.json).')
 @click.option('--desktop-target', default='pywebview',
               type=click.Choice(['pywebview', 'pyside6', 'both']),
               show_default=True,
@@ -908,6 +915,9 @@ def generate_all(
     author: Optional[str],
     email: Optional[str],
     platform: str,
+    auth_provider: str,
+    keycloak_realm_url: str,
+    openapi_url: str,
     desktop_target: str,
     api_url: str,
     app_id: Optional[str],
@@ -991,9 +1001,26 @@ def generate_all(
                     app_id=resolved_id,
                     framework="expo",
                     api_base_url=api_url,
+                    auth_provider=auth_provider,
+                    auth_config={'realm_url': keycloak_realm_url} if keycloak_realm_url else {},
                 )
                 MobileGenerator(inspector, mobile_config, mobile_out).generate_complete_app()
             click.echo(f"   ✓ Mobile app generated → {mobile_out}")
+
+        # ── OpenAPI screens ───────────────────────────────────────────────────
+        if openapi_url and do_mobile:
+            click.echo(f"📱 Generating OpenAPI screens from {openapi_url}...")
+            from .openapi_screen_generator import OpenAPIScreenGenerator, OpenAPIScreenConfig
+            full_openapi_url = api_url.rstrip('/') + openapi_url if openapi_url.startswith('/') else openapi_url
+            screen_gen = OpenAPIScreenGenerator(OpenAPIScreenConfig(
+                spec_url=full_openapi_url,
+                output_dir=str(Path(output_dir) / "screens" / "api"),
+                base_url=api_url,
+                auth_type='bearer' if auth_provider in ('fab', 'keycloak', 'clerk') else 'apikey',
+                primary_color='#1a56db',
+            ))
+            screen_count = len(screen_gen.generate())
+            click.echo(f"  ✓ Generated {screen_count} API screen files")
 
         # ── Summary ───────────────────────────────────────────────────────────
         click.echo("\n🎉 Generation complete!")
@@ -1133,6 +1160,13 @@ def inspect_database(
     show_default=True,
     help='Comma-separated feature set to generate'
 )
+@click.option('--auth-provider', default='fab',
+              type=click.Choice(['fab', 'keycloak', 'clerk', 'better_auth', 'banking_api']),
+              help='Authentication provider for the generated mobile app.')
+@click.option('--keycloak-realm-url', default='',
+              help='Keycloak realm URL (used when --auth-provider=keycloak).')
+@click.option('--openapi-url', default='',
+              help='OpenAPI spec URL to generate additional typed screens (e.g. /api/v1/banking/openapi.json).')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
 def generate_mobile(
     uri: str,
@@ -1143,6 +1177,9 @@ def generate_mobile(
     api_url: str,
     primary_color: str,
     features: str,
+    auth_provider: str,
+    keycloak_realm_url: str,
+    openapi_url: str,
     verbose: bool,
 ):
     """Generate a complete React Native (Expo) mobile app from database schema.
@@ -1173,6 +1210,7 @@ def generate_mobile(
     click.echo(f"📱 Generating {framework} mobile app: {name}")
     click.echo(f"   Bundle ID : {resolved_app_id}")
     click.echo(f"   API URL   : {api_url}")
+    click.echo(f"   Auth      : {auth_provider}")
     click.echo(f"   Features  : {', '.join(feature_list)}")
     click.echo(f"   Output    : {output_dir}")
 
@@ -1185,6 +1223,8 @@ def generate_mobile(
                 api_base_url=api_url,
                 primary_color=primary_color,
                 features=feature_list,
+                auth_provider=auth_provider,
+                auth_config={'realm_url': keycloak_realm_url} if keycloak_realm_url else {},
             )
             generator = MobileGenerator(inspector, mobile_config, output_dir)
 
@@ -1192,6 +1232,22 @@ def generate_mobile(
             files = generator.generate_complete_app()
 
         click.echo(f"✅ Mobile app generated — {len(files)} files written to {output_dir}")
+
+        # ── OpenAPI screens ────────────────────────────────────────────────
+        if openapi_url:
+            click.echo(f"📱 Generating OpenAPI screens from {openapi_url}...")
+            from .openapi_screen_generator import OpenAPIScreenGenerator, OpenAPIScreenConfig
+            full_openapi_url = api_url.rstrip('/') + openapi_url if openapi_url.startswith('/') else openapi_url
+            screen_gen = OpenAPIScreenGenerator(OpenAPIScreenConfig(
+                spec_url=full_openapi_url,
+                output_dir=str(Path(output_dir) / "screens" / "api"),
+                base_url=api_url,
+                auth_type='bearer' if auth_provider in ('fab', 'keycloak', 'clerk') else 'apikey',
+                primary_color=primary_color,
+            ))
+            screen_count = len(screen_gen.generate())
+            click.echo(f"  ✓ Generated {screen_count} API screen files")
+
         click.echo("\n📋 Next steps:")
         click.echo("   1. cd into the output directory")
         click.echo("   2. Copy .env.example to .env and set EXPO_PUBLIC_API_BASE_URL")

@@ -157,6 +157,57 @@ class MobileGenerationConfig:
 	])
 	framework: str = "expo"       # valid values: "expo" | "pwa"
 
+	auth_provider: str = "fab"
+	# Valid values: "fab" | "keycloak" | "clerk" | "better_auth" | "banking_api"
+	# "fab"         — POST /api/v1/security/login (default, existing behaviour)
+	# "keycloak"    — Keycloak OIDC token endpoint with JWT validation
+	# "clerk"       — Clerk JWT; frontend SDK delivers the token, no u/p flow
+	# "better_auth" — BetterAuth session API (email + password)
+	# "banking_api" — API-key auth via X-API-Key header, no password flow
+
+	auth_config: dict = field(default_factory=dict)
+	# Provider-specific config:
+	#   keycloak:    {realm_url, client_id}
+	#   clerk:       {jwks_url}
+	#   better_auth: {base_url}
+	#   banking_api: {api_key_env_var: "EXPO_PUBLIC_BANKING_API_KEY"}
+
+	erp_domains: dict = field(default_factory=dict)
+	# Maps domain name → list of table-name prefixes for grouped navigation.
+	# Auto-populated by from_erp_plugins() classmethod.
+	# Example: {"Finance": ["erp_ap_", "erp_ar_", "erp_gl_"], "HCM": ["hcm_"]}
+
+	@classmethod
+	def from_erp_plugins(
+		cls,
+		app_name: str,
+		api_base_url: str,
+		auth_provider: str = "fab",
+		**kwargs,
+	) -> "MobileGenerationConfig":
+		"""Build a config with erp_domains auto-populated from the ERP plugin registry.
+
+		Falls back to empty erp_domains if pgappforge.plugins.erp.foundation is not
+		importable (e.g. ERP suite not installed).
+		"""
+		erp_domains: dict[str, list[str]] = {}
+		try:
+			from pgappforge.plugins.erp.foundation import plugin_registry  # type: ignore[import]
+			for plugin in plugin_registry.all():
+				domain = getattr(plugin, "domain", None) or "General"
+				prefixes = list(getattr(plugin, "table_prefixes", []))
+				if prefixes:
+					erp_domains.setdefault(domain, []).extend(prefixes)
+		except Exception:
+			pass
+		return cls(
+			app_name=app_name,
+			api_base_url=api_base_url,
+			auth_provider=auth_provider,
+			erp_domains=erp_domains,
+			**kwargs,
+		)
+
 	def __post_init__(self):
 		import warnings
 		if not self.app_id:
@@ -303,6 +354,14 @@ class MobileGenerator:
 			files[f"{base}/new.tsx"] = self._gen_form_screen(tinfo, edit=False)
 			files[f"{base}/edit/[id].tsx"] = self._gen_form_screen(tinfo, edit=True)
 
+		# ERP domain index screens (one per domain group, links into per-model routes)
+		erp_groups = self._build_erp_navigation(tables)
+		for group in erp_groups:
+			domain = group["domain"]
+			domain_tables = group["tables"]
+			route = _kebab(domain)
+			files[f"app/(app)/{route}/index.tsx"] = self._gen_erp_domain_screen(domain, domain_tables)
+
 		# Plugin screens
 		if plugins.get("bpm"):
 			files["app/(app)/workflow/tasks.tsx"] = self._gen_workflow_tasks()
@@ -414,6 +473,103 @@ class MobileGenerator:
 			),
 			"voice":    "voice" in list(getattr(self.config, "features", [])),
 		}
+
+	def _build_erp_navigation(self, tables: dict) -> list[dict]:
+		"""Group tables into ERP domain buckets for nested tab navigation.
+
+		Returns a list of dicts:
+		    [{"domain": "Finance", "icon": "fa-line-chart", "tables": ["erp_ap_invoice", ...]}, ...]
+
+		If self.config.erp_domains is empty, returns an empty list (caller falls
+		back to the flat per-table tab layout).
+		"""
+		erp_domains = self.config.erp_domains
+		if not erp_domains:
+			return []
+
+		_DOMAIN_ICONS: dict[str, str] = {
+			"Finance":    "trending-up-outline",
+			"HCM":        "people-outline",
+			"CRM":        "handshake-outline",
+			"Operations": "cog-outline",
+			"Inventory":  "cube-outline",
+			"Payroll":    "cash-outline",
+			"Procurement":"cart-outline",
+			"Logistics":  "car-outline",
+			"Tax":        "receipt-outline",
+			"Treasury":   "wallet-outline",
+			"Research":   "flask-outline",
+			"Assets":     "layers-outline",
+		}
+		_DEFAULT_ICON = "grid-outline"
+
+		table_names = list(tables.keys())
+		assigned: set[str] = set()
+		groups: list[dict] = []
+
+		for domain, prefixes in erp_domains.items():
+			matched = [
+				t for t in table_names
+				if any(t.startswith(p) for p in prefixes) and t not in assigned
+			]
+			if matched:
+				assigned.update(matched)
+				groups.append({
+					"domain": domain,
+					"icon":   _DOMAIN_ICONS.get(domain, _DEFAULT_ICON),
+					"tables": matched,
+				})
+
+		# Anything that didn't match a domain goes into a "General" bucket
+		unmatched = [t for t in table_names if t not in assigned]
+		if unmatched:
+			groups.append({
+				"domain": "General",
+				"icon":   _DEFAULT_ICON,
+				"tables": unmatched,
+			})
+
+		return groups
+
+	def _gen_erp_domain_screen(self, domain: str, domain_tables: list[str]) -> str:
+		"""Generate a domain index screen listing all tables that belong to the domain.
+
+		Renders as a simple pressable card grid that pushes into each model's
+		stack route — the same routes emitted by generate_complete_app() for each
+		table individually.
+		"""
+		items = ""
+		for t in domain_tables:
+			label = _label(t)
+			kebab = _kebab(t)
+			items += (
+				f"    <Pressable\n"
+				f"      key=\"{t}\"\n"
+				f"      onPress={{() => router.push('/(app)/{kebab}/' as never)}}\n"
+				f"      className=\"bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3 flex-row items-center shadow-sm active:opacity-70\"\n"
+				f"    >\n"
+				f"      <View className=\"flex-1\">\n"
+				f"        <Text className=\"text-base font-semibold text-gray-900 dark:text-white\">{label}</Text>\n"
+				f"        <Text className=\"text-xs text-gray-400 mt-0.5\">{t}</Text>\n"
+				f"      </View>\n"
+				f"      <Ionicons name=\"chevron-forward-outline\" size={{20}} color=\"#9ca3af\" />\n"
+				f"    </Pressable>\n"
+			)
+
+		return (
+			"import { ScrollView, View, Text, Pressable } from 'react-native';\n"
+			"import { useRouter } from 'expo-router';\n"
+			"import { Ionicons } from '@expo/vector-icons';\n\n"
+			f"export default function {_pascal(domain)}DomainScreen() {{\n"
+			"  const router = useRouter();\n"
+			"  return (\n"
+			"    <ScrollView className=\"flex-1 bg-gray-50 dark:bg-gray-900\" contentContainerStyle={{ padding: 16 }}>\n"
+			f"      <Text className=\"text-2xl font-bold text-gray-900 dark:text-white mb-6\">{domain}</Text>\n"
+			+ items +
+			"    </ScrollView>\n"
+			"  );\n"
+			"}\n"
+		)
 
 	# ── Root config files ─────────────────────────────────────────────────────
 
@@ -800,57 +956,130 @@ export default function MFAScreen() {
 
 	def _gen_app_group_layout(self) -> str:
 		c = self.config
-		tables = list(self._tables.keys())[:4]  # max 4 model tabs + settings
+		erp_groups = self._build_erp_navigation(self._tables)
 
-		tab_items = ""
-		for t in tables:
-			m = _pascal(t)
-			label = _label(t)
-			icon = "list"  # generic icon
-			tab_items += (
-				f"      <Tabs.Screen\n"
-				f"        name=\"{_kebab(t)}\"\n"
-				f"        options={{{{ title: '{label}', tabBarIcon: ({{ color }}) => "
-				f"<Ionicons name=\"{icon}-outline\" size={{24}} color={{color}} /> }}}}\n"
-				f"      />\n"
+		if erp_groups:
+			# ── ERP domain-grouped navigation ─────────────────────────────────
+			# Each domain becomes a single tab whose route name is the kebab-case
+			# domain name.  The domain screen is a stack sub-navigator that lists
+			# every table in that domain.  This keeps the tab bar to ≤8 items even
+			# for large ERP deployments.
+			tab_items = ""
+			for group in erp_groups:
+				domain = group["domain"]
+				icon = group["icon"]
+				route_name = _kebab(domain)
+				tab_items += (
+					f"      <Tabs.Screen\n"
+					f"        name=\"{route_name}\"\n"
+					f"        options={{{{ title: '{domain}', tabBarIcon: ({{ color }}) => "
+					f"<Ionicons name=\"{icon}\" size={{24}} color={{color}} /> }}}}\n"
+					f"      />\n"
+				)
+
+			if self._plugins.get("bpm"):
+				tab_items += (
+					"      <Tabs.Screen\n"
+					"        name=\"workflow\"\n"
+					"        options={{ title: 'Tasks', tabBarIcon: ({ color }) => "
+					"<Ionicons name=\"checkmark-circle-outline\" size={24} color={color} /> }}\n"
+					"      />\n"
+				)
+
+			# Also emit a companion domain-index file for each group so expo-router
+			# can resolve the route.  We attach these as a comment so the caller can
+			# inspect which files are implied — the generate_complete_app() method
+			# handles actual file emission below.
+			domain_routes_comment = (
+				"// Domain routes implied by ERP navigation grouping:\n"
+				+ "".join(
+					f"//   app/(app)/{_kebab(g['domain'])}/index.tsx  "
+					f"→ lists tables: {', '.join(g['tables'][:3])}"
+					+ (" …" if len(g['tables']) > 3 else "") + "\n"
+					for g in erp_groups
+				)
 			)
 
-		if self._plugins.get("bpm"):
-			tab_items += (
+			return (
+				"import { Tabs } from 'expo-router';\n"
+				"import { Ionicons } from '@expo/vector-icons';\n\n"
+				+ domain_routes_comment + "\n"
+				"export default function AppLayout() {\n"
+				"  return (\n"
+				"    <Tabs\n"
+				"      screenOptions={{\n"
+				"        tabBarActiveTintColor: '" + c.primary_color + "',\n"
+				"        tabBarStyle: { borderTopWidth: 1 },\n"
+				"        headerShown: true,\n"
+				"      }}\n"
+				"    >\n"
 				"      <Tabs.Screen\n"
-				"        name=\"workflow\"\n"
-				"        options={{ title: 'Tasks', tabBarIcon: ({ color }) => "
-				"<Ionicons name=\"checkmark-circle-outline\" size={24} color={color} /> }}\n"
+				"        name=\"dashboard\"\n"
+				"        options={{ title: 'Dashboard', tabBarIcon: ({ color }) => "
+				"<Ionicons name=\"home-outline\" size={24} color={color} /> }}\n"
 				"      />\n"
+				+ tab_items +
+				"      <Tabs.Screen\n"
+				"        name=\"settings\"\n"
+				"        options={{ title: 'Settings', tabBarIcon: ({ color }) => "
+				"<Ionicons name=\"settings-outline\" size={24} color={color} /> }}\n"
+				"      />\n"
+				"    </Tabs>\n"
+				"  );\n"
+				"}\n"
 			)
 
-		return (
-			"import { Tabs } from 'expo-router';\n"
-			"import { Ionicons } from '@expo/vector-icons';\n\n"
-			"export default function AppLayout() {\n"
-			"  return (\n"
-			"    <Tabs\n"
-			"      screenOptions={{\n"
-			"        tabBarActiveTintColor: '" + c.primary_color + "',\n"
-			"        tabBarStyle: { borderTopWidth: 1 },\n"
-			"        headerShown: true,\n"
-			"      }}\n"
-			"    >\n"
-			"      <Tabs.Screen\n"
-			"        name=\"dashboard\"\n"
-			"        options={{ title: 'Dashboard', tabBarIcon: ({ color }) => "
-			"<Ionicons name=\"home-outline\" size={24} color={color} /> }}\n"
-			"      />\n"
-			+ tab_items +
-			"      <Tabs.Screen\n"
-			"        name=\"settings\"\n"
-			"        options={{ title: 'Settings', tabBarIcon: ({ color }) => "
-			"<Ionicons name=\"settings-outline\" size={24} color={color} /> }}\n"
-			"      />\n"
-			"    </Tabs>\n"
-			"  );\n"
-			"}\n"
-		)
+		else:
+			# ── Flat per-table tabs (original behaviour) ───────────────────────
+			tables = list(self._tables.keys())[:4]  # max 4 model tabs + settings
+
+			tab_items = ""
+			for t in tables:
+				label = _label(t)
+				tab_items += (
+					f"      <Tabs.Screen\n"
+					f"        name=\"{_kebab(t)}\"\n"
+					f"        options={{{{ title: '{label}', tabBarIcon: ({{ color }}) => "
+					f"<Ionicons name=\"list-outline\" size={{24}} color={{color}} /> }}}}\n"
+					f"      />\n"
+				)
+
+			if self._plugins.get("bpm"):
+				tab_items += (
+					"      <Tabs.Screen\n"
+					"        name=\"workflow\"\n"
+					"        options={{ title: 'Tasks', tabBarIcon: ({ color }) => "
+					"<Ionicons name=\"checkmark-circle-outline\" size={24} color={color} /> }}\n"
+					"      />\n"
+				)
+
+			return (
+				"import { Tabs } from 'expo-router';\n"
+				"import { Ionicons } from '@expo/vector-icons';\n\n"
+				"export default function AppLayout() {\n"
+				"  return (\n"
+				"    <Tabs\n"
+				"      screenOptions={{\n"
+				"        tabBarActiveTintColor: '" + c.primary_color + "',\n"
+				"        tabBarStyle: { borderTopWidth: 1 },\n"
+				"        headerShown: true,\n"
+				"      }}\n"
+				"    >\n"
+				"      <Tabs.Screen\n"
+				"        name=\"dashboard\"\n"
+				"        options={{ title: 'Dashboard', tabBarIcon: ({ color }) => "
+				"<Ionicons name=\"home-outline\" size={24} color={color} /> }}\n"
+				"      />\n"
+				+ tab_items +
+				"      <Tabs.Screen\n"
+				"        name=\"settings\"\n"
+				"        options={{ title: 'Settings', tabBarIcon: ({ color }) => "
+				"<Ionicons name=\"settings-outline\" size={24} color={color} /> }}\n"
+				"      />\n"
+				"    </Tabs>\n"
+				"  );\n"
+				"}\n"
+			)
 
 	# ── Dashboard ─────────────────────────────────────────────────────────────
 
@@ -4017,66 +4246,274 @@ export function ApprovalActions({ taskId, action }: ApprovalActionsProps) {
 
 	def _gen_auth_lib(self) -> str:
 		c = self.config
-		return (
-			"import * as SecureStore from 'expo-secure-store';\n"
-			"import * as LocalAuth from 'expo-local-authentication';\n"
-			"import axios from 'axios';\n\n"
-			"const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? '" + c.api_base_url + "';\n"
-			"const TOKEN_KEY = 'access_token';\n"
-			"const REFRESH_KEY = 'refresh_token';\n\n"
-			"export async function saveToken(access: string, refresh?: string) {\n"
-			"  await SecureStore.setItemAsync(TOKEN_KEY, access);\n"
-			"  if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);\n"
-			"}\n\n"
-			"export async function getStoredToken(): Promise<string | null> {\n"
-			"  return SecureStore.getItemAsync(TOKEN_KEY);\n"
-			"}\n\n"
-			"export async function logout() {\n"
-			"  await SecureStore.deleteItemAsync(TOKEN_KEY);\n"
-			"  await SecureStore.deleteItemAsync(REFRESH_KEY);\n"
-			"}\n\n"
-			"export async function isAuthenticated(): Promise<boolean> {\n"
-			"  const token = await getStoredToken();\n"
-			"  return !!token;\n"
-			"}\n\n"
-			"export async function login(username: string, password: string): Promise<boolean> {\n"
-			"  try {\n"
-			"    const res = await axios.post(`${API}/api/v1/security/login`, {\n"
-			"      username, password, provider: 'db',\n"
-			"    });\n"
-			"    await saveToken(res.data.access_token, res.data.refresh_token);\n"
-			"    return true;\n"
-			"  } catch { return false; }\n"
-			"}\n\n"
-			"export async function refreshAccessToken(): Promise<string | null> {\n"
-			"  const refresh = await SecureStore.getItemAsync(REFRESH_KEY);\n"
-			"  if (!refresh) return null;\n"
-			"  try {\n"
-			"    const res = await axios.post(`${API}/api/v1/security/refresh`, {}, {\n"
-			"      headers: { Authorization: `Bearer ${refresh}` },\n"
-			"    });\n"
-			"    const token = res.data.access_token;\n"
-			"    await saveToken(token);\n"
-			"    return token;\n"
-			"  } catch { return null; }\n"
-			"}\n\n"
-			"export async function getBiometricType(): Promise<'face' | 'fingerprint' | null> {\n"
-			"  const available = await LocalAuth.hasHardwareAsync();\n"
-			"  if (!available) return null;\n"
-			"  const types = await LocalAuth.supportedAuthenticationTypesAsync();\n"
-			"  if (types.includes(LocalAuth.AuthenticationType.FACIAL_RECOGNITION)) return 'face';\n"
-			"  if (types.includes(LocalAuth.AuthenticationType.FINGERPRINT)) return 'fingerprint';\n"
-			"  return null;\n"
-			"}\n\n"
-			"export async function loginWithBiometric(): Promise<boolean> {\n"
-			"  const result = await LocalAuth.authenticateAsync({\n"
-			"    promptMessage: 'Sign in with biometrics',\n"
-			"    fallbackLabel: 'Use password',\n"
-			"  });\n"
-			"  if (!result.success) return false;\n"
-			"  const token = await getStoredToken();\n"
-			"  return !!token;\n"
-			"}\n"
+		provider = c.auth_provider
+		cfg = c.auth_config
+
+		# ── shared biometric tail (appended to every provider) ────────────────
+		biometric_tail = """\
+
+export async function getBiometricType(): Promise<'face' | 'fingerprint' | null> {
+  const available = await LocalAuth.hasHardwareAsync();
+  if (!available) return null;
+  const types = await LocalAuth.supportedAuthenticationTypesAsync();
+  if (types.includes(LocalAuth.AuthenticationType.FACIAL_RECOGNITION)) return 'face';
+  if (types.includes(LocalAuth.AuthenticationType.FINGERPRINT)) return 'fingerprint';
+  return null;
+}
+
+export async function loginWithBiometric(): Promise<boolean> {
+  const result = await LocalAuth.authenticateAsync({
+    promptMessage: 'Sign in with biometrics',
+    fallbackLabel: 'Use password',
+  });
+  if (!result.success) return false;
+  const token = await getStoredToken();
+  return !!token;
+}
+"""
+
+		if provider == "fab":
+			return (
+				"import * as SecureStore from 'expo-secure-store';\n"
+				"import * as LocalAuth from 'expo-local-authentication';\n"
+				"import axios from 'axios';\n\n"
+				"const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? '" + c.api_base_url + "';\n"
+				"const TOKEN_KEY = 'access_token';\n"
+				"const REFRESH_KEY = 'refresh_token';\n\n"
+				"export async function saveToken(access: string, refresh?: string): Promise<void> {\n"
+				"  await SecureStore.setItemAsync(TOKEN_KEY, access);\n"
+				"  if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);\n"
+				"}\n\n"
+				"export async function getStoredToken(): Promise<string | null> {\n"
+				"  return SecureStore.getItemAsync(TOKEN_KEY);\n"
+				"}\n\n"
+				"export async function logout(): Promise<void> {\n"
+				"  await SecureStore.deleteItemAsync(TOKEN_KEY);\n"
+				"  await SecureStore.deleteItemAsync(REFRESH_KEY);\n"
+				"}\n\n"
+				"export async function isAuthenticated(): Promise<boolean> {\n"
+				"  const token = await getStoredToken();\n"
+				"  return !!token;\n"
+				"}\n\n"
+				"export async function login(username: string, password: string): Promise<boolean> {\n"
+				"  try {\n"
+				"    const res = await axios.post(`${API}/api/v1/security/login`, {\n"
+				"      username, password, provider: 'db',\n"
+				"    });\n"
+				"    await saveToken(res.data.access_token, res.data.refresh_token);\n"
+				"    return true;\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"export async function refreshAccessToken(): Promise<string | null> {\n"
+				"  const refresh = await SecureStore.getItemAsync(REFRESH_KEY);\n"
+				"  if (!refresh) return null;\n"
+				"  try {\n"
+				"    const res = await axios.post(`${API}/api/v1/security/refresh`, {}, {\n"
+				"      headers: { Authorization: `Bearer ${refresh}` },\n"
+				"    });\n"
+				"    const token = res.data.access_token;\n"
+				"    await saveToken(token);\n"
+				"    return token;\n"
+				"  } catch { return null; }\n"
+				"}\n"
+				+ biometric_tail
+			)
+
+		if provider == "keycloak":
+			realm_url = cfg.get("realm_url", "https://keycloak.example.com/realms/myrealm")
+			client_id = cfg.get("client_id", "pgappforge")
+			return (
+				"import * as SecureStore from 'expo-secure-store';\n"
+				"import * as LocalAuth from 'expo-local-authentication';\n"
+				"import axios from 'axios';\n\n"
+				"const REALM_URL = '" + realm_url + "';\n"
+				"const CLIENT_ID = '" + client_id + "';\n"
+				"const TOKEN_ENDPOINT = `${REALM_URL}/protocol/openid-connect/token`;\n"
+				"const TOKEN_KEY = 'kc_access_token';\n"
+				"const REFRESH_KEY = 'kc_refresh_token';\n\n"
+				"export type KeycloakTokens = { access_token: string; refresh_token: string; expires_in: number };\n\n"
+				"export async function saveToken(access: string, refresh?: string): Promise<void> {\n"
+				"  await SecureStore.setItemAsync(TOKEN_KEY, access);\n"
+				"  if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);\n"
+				"}\n\n"
+				"export async function getStoredToken(): Promise<string | null> {\n"
+				"  return SecureStore.getItemAsync(TOKEN_KEY);\n"
+				"}\n\n"
+				"export async function logout(): Promise<void> {\n"
+				"  await SecureStore.deleteItemAsync(TOKEN_KEY);\n"
+				"  await SecureStore.deleteItemAsync(REFRESH_KEY);\n"
+				"}\n\n"
+				"export async function isAuthenticated(): Promise<boolean> {\n"
+				"  const token = await getStoredToken();\n"
+				"  if (!token) return false;\n"
+				"  // Decode JWT exp claim without a library\n"
+				"  try {\n"
+				"    const payload = JSON.parse(atob(token.split('.')[1]));\n"
+				"    return payload.exp * 1000 > Date.now();\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"export async function login(username: string, password: string): Promise<boolean> {\n"
+				"  try {\n"
+				"    const params = new URLSearchParams({\n"
+				"      grant_type: 'password',\n"
+				"      client_id: CLIENT_ID,\n"
+				"      username,\n"
+				"      password,\n"
+				"    });\n"
+				"    const res = await axios.post<KeycloakTokens>(TOKEN_ENDPOINT, params, {\n"
+				"      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+				"    });\n"
+				"    await saveToken(res.data.access_token, res.data.refresh_token);\n"
+				"    return true;\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"export async function refreshAccessToken(): Promise<string | null> {\n"
+				"  const refresh = await SecureStore.getItemAsync(REFRESH_KEY);\n"
+				"  if (!refresh) return null;\n"
+				"  try {\n"
+				"    const params = new URLSearchParams({\n"
+				"      grant_type: 'refresh_token',\n"
+				"      client_id: CLIENT_ID,\n"
+				"      refresh_token: refresh,\n"
+				"    });\n"
+				"    const res = await axios.post<KeycloakTokens>(TOKEN_ENDPOINT, params, {\n"
+				"      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+				"    });\n"
+				"    await saveToken(res.data.access_token, res.data.refresh_token);\n"
+				"    return res.data.access_token;\n"
+				"  } catch { return null; }\n"
+				"}\n"
+				+ biometric_tail
+			)
+
+		if provider == "clerk":
+			return (
+				"import * as SecureStore from 'expo-secure-store';\n"
+				"import * as LocalAuth from 'expo-local-authentication';\n\n"
+				"// Clerk authentication: the Clerk frontend SDK (or @clerk/clerk-expo)\n"
+				"// delivers a signed JWT. This module only stores and validates it.\n"
+				"const TOKEN_KEY = 'clerk_jwt';\n\n"
+				"export async function saveToken(token: string): Promise<void> {\n"
+				"  await SecureStore.setItemAsync(TOKEN_KEY, token);\n"
+				"}\n\n"
+				"export async function getStoredToken(): Promise<string | null> {\n"
+				"  return SecureStore.getItemAsync(TOKEN_KEY);\n"
+				"}\n\n"
+				"export async function logout(): Promise<void> {\n"
+				"  await SecureStore.deleteItemAsync(TOKEN_KEY);\n"
+				"}\n\n"
+				"export async function isAuthenticated(): Promise<boolean> {\n"
+				"  const token = await getStoredToken();\n"
+				"  if (!token) return false;\n"
+				"  try {\n"
+				"    const payload = JSON.parse(atob(token.split('.')[1]));\n"
+				"    return payload.exp * 1000 > Date.now();\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"/** Call this after receiving a Clerk session token from @clerk/clerk-expo. */\n"
+				"export async function login(token: string): Promise<boolean> {\n"
+				"  try {\n"
+				"    await saveToken(token);\n"
+				"    return true;\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"/** Clerk token rotation is managed by the Clerk SDK — this is a no-op shim. */\n"
+				"export async function refreshAccessToken(): Promise<string | null> {\n"
+				"  return getStoredToken();\n"
+				"}\n"
+				+ biometric_tail
+			)
+
+		if provider == "better_auth":
+			base_url = cfg.get("base_url", "http://localhost:3000")
+			return (
+				"import * as SecureStore from 'expo-secure-store';\n"
+				"import * as LocalAuth from 'expo-local-authentication';\n"
+				"import axios from 'axios';\n\n"
+				"const BASE_URL = '" + base_url + "';\n"
+				"const TOKEN_KEY = 'ba_token';\n\n"
+				"export type BetterAuthUser = { id: string; email: string; name: string };\n"
+				"export type BetterAuthSession = { user: BetterAuthUser; token: string };\n\n"
+				"export async function saveToken(token: string): Promise<void> {\n"
+				"  await SecureStore.setItemAsync(TOKEN_KEY, token);\n"
+				"}\n\n"
+				"export async function getStoredToken(): Promise<string | null> {\n"
+				"  return SecureStore.getItemAsync(TOKEN_KEY);\n"
+				"}\n\n"
+				"export async function logout(): Promise<void> {\n"
+				"  await SecureStore.deleteItemAsync(TOKEN_KEY);\n"
+				"}\n\n"
+				"export async function isAuthenticated(): Promise<boolean> {\n"
+				"  const token = await getStoredToken();\n"
+				"  return !!token;\n"
+				"}\n\n"
+				"export async function login(email: string, password: string): Promise<boolean> {\n"
+				"  try {\n"
+				"    const res = await axios.post<BetterAuthSession>(\n"
+				"      `${BASE_URL}/api/auth/sign-in/email`,\n"
+				"      { email, password },\n"
+				"      { withCredentials: true },\n"
+				"    );\n"
+				"    await saveToken(res.data.token);\n"
+				"    return true;\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"/** BetterAuth refreshes via session cookie — revalidate with the session endpoint. */\n"
+				"export async function refreshAccessToken(): Promise<string | null> {\n"
+				"  try {\n"
+				"    const res = await axios.get<BetterAuthSession>(\n"
+				"      `${BASE_URL}/api/auth/session`,\n"
+				"      { withCredentials: true },\n"
+				"    );\n"
+				"    await saveToken(res.data.token);\n"
+				"    return res.data.token;\n"
+				"  } catch { return null; }\n"
+				"}\n"
+				+ biometric_tail
+			)
+
+		if provider == "banking_api":
+			api_key_env = cfg.get("api_key_env_var", "EXPO_PUBLIC_BANKING_API_KEY")
+			return (
+				"import * as SecureStore from 'expo-secure-store';\n"
+				"import * as LocalAuth from 'expo-local-authentication';\n\n"
+				"// Banking API key authentication — no username/password flow.\n"
+				"// The API key is stored in SecureStore and sent as X-API-Key on every request.\n"
+				"const API_KEY_STORE_KEY = 'BANKING_API_KEY';\n"
+				"const API_KEY_ENV_VAR = '" + api_key_env + "';\n\n"
+				"export async function saveToken(apiKey: string): Promise<void> {\n"
+				"  await SecureStore.setItemAsync(API_KEY_STORE_KEY, apiKey);\n"
+				"}\n\n"
+				"/** Returns the stored API key (used as the 'token' abstraction). */\n"
+				"export async function getStoredToken(): Promise<string | null> {\n"
+				"  const stored = await SecureStore.getItemAsync(API_KEY_STORE_KEY);\n"
+				"  // Fall back to build-time env var (e.g. for CI or demo builds)\n"
+				"  return stored ?? process.env[API_KEY_ENV_VAR] ?? null;\n"
+				"}\n\n"
+				"export async function logout(): Promise<void> {\n"
+				"  await SecureStore.deleteItemAsync(API_KEY_STORE_KEY);\n"
+				"}\n\n"
+				"export async function isAuthenticated(): Promise<boolean> {\n"
+				"  const key = await getStoredToken();\n"
+				"  return !!key;\n"
+				"}\n\n"
+				"/** Store the API key. Call this during onboarding or settings screens. */\n"
+				"export async function login(apiKey: string): Promise<boolean> {\n"
+				"  try {\n"
+				"    await saveToken(apiKey);\n"
+				"    return true;\n"
+				"  } catch { return false; }\n"
+				"}\n\n"
+				"/** API keys do not expire — no-op shim for interface compatibility. */\n"
+				"export async function refreshAccessToken(): Promise<string | null> {\n"
+				"  return getStoredToken();\n"
+				"}\n"
+				+ biometric_tail
+			)
+
+		raise ValueError(
+			f"Unknown auth_provider {provider!r}. "
+			"Valid values: 'fab', 'keycloak', 'clerk', 'better_auth', 'banking_api'."
 		)
 
 	def _gen_config_lib(self) -> str:
