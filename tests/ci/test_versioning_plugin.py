@@ -57,7 +57,8 @@ class TestVersioningServiceNoGit:
 
 	def test_instantiation(self):
 		svc = VersioningService("/tmp")
-		assert svc.repo_path == Path("/tmp")
+		# Use resolve() — on macOS /tmp is a symlink to /private/tmp
+		assert svc.repo_path.resolve() == Path("/tmp").resolve()
 
 	def test_get_config_history_no_repo(self, tmp_path):
 		"""Should return [] when not in a git repo."""
