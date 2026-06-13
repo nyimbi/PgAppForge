@@ -1,0 +1,595 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ page_title }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ─── Wizard shell ─────────────────────────────────────────────────────── */
+.pgaf-wizard-shell {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 0 0 64px;
+}
+
+/* ─── Wizard page header ───────────────────────────────────────────────── */
+.pgaf-wizard-header {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	margin-bottom: 28px;
+}
+.pgaf-wizard-header-icon {
+	width: 48px;
+	height: 48px;
+	border-radius: 12px;
+	background: linear-gradient(135deg, #1d4ed8, #2563eb);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+	font-size: 20px;
+	flex-shrink: 0;
+}
+.pgaf-wizard-header-text h1 {
+	font-size: 20px;
+	font-weight: 700;
+	color: #111827;
+	margin: 0 0 3px;
+}
+.pgaf-wizard-header-text p {
+	font-size: 13px;
+	color: #6b7280;
+	margin: 0;
+}
+
+/* ─── Progress bar ─────────────────────────────────────────────────────── */
+.pgaf-wizard-progress {
+	position: relative;
+	background: #f9fafb;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	padding: 20px 24px 16px;
+	margin-bottom: 24px;
+	overflow: hidden;
+}
+.wizard-steps-track {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	position: relative;
+	z-index: 1;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	gap: 0;
+}
+.wizard-step-item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	flex: 1;
+	min-width: 64px;
+	cursor: default;
+	transition: opacity 0.2s;
+}
+.wizard-connector {
+	flex: 1;
+	height: 2px;
+	background: #d1d5db;
+	margin-top: 17px;
+	min-width: 12px;
+	transition: background 0.3s;
+}
+.wizard-step-completed .wizard-connector,
+.wizard-step-active .wizard-connector {
+	background: #1d4ed8;
+}
+.wizard-step-circle {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+	transition: all 0.2s;
+	border: 2px solid #d1d5db;
+	background: #fff;
+	color: #9ca3af;
+	position: relative;
+}
+.wizard-step-completed .wizard-step-circle {
+	background: #1d4ed8;
+	border-color: #1d4ed8;
+	color: #fff;
+}
+.wizard-step-active .wizard-step-circle {
+	background: #fff;
+	border-color: #1d4ed8;
+	color: #1d4ed8;
+	box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.12);
+}
+.wizard-step-pending .wizard-step-circle {
+	opacity: 0.55;
+}
+.wizard-step-label {
+	font-size: 11px;
+	text-align: center;
+	margin-top: 6px;
+	color: #6b7280;
+	line-height: 1.3;
+	max-width: 72px;
+	word-wrap: break-word;
+}
+.wizard-step-active .wizard-step-label {
+	color: #1d4ed8;
+	font-weight: 600;
+}
+.wizard-step-completed .wizard-step-label {
+	color: #374151;
+}
+.wizard-optional-badge {
+	display: block;
+	font-size: 9px;
+	color: #9ca3af;
+	font-style: italic;
+	text-transform: lowercase;
+}
+/* Bottom progress fill */
+.wizard-progress-fill {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	height: 3px;
+	background: linear-gradient(90deg, #1d4ed8, #60a5fa);
+	border-radius: 0 3px 3px 0;
+	transition: width 0.4s ease;
+}
+
+/* ─── Step card ────────────────────────────────────────────────────────── */
+.pgaf-wizard-step-card {
+	background: #fff;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	overflow: hidden;
+}
+.pgaf-wizard-step-header {
+	background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+	border-bottom: 1px solid #e5e7eb;
+	padding: 18px 24px 14px;
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+}
+.pgaf-step-icon {
+	width: 40px;
+	height: 40px;
+	border-radius: 10px;
+	background: #1d4ed8;
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 16px;
+	flex-shrink: 0;
+}
+.pgaf-step-header-text h2 {
+	font-size: 17px;
+	font-weight: 700;
+	color: #111827;
+	margin: 0 0 3px;
+}
+.pgaf-step-header-text p {
+	font-size: 13px;
+	color: #6b7280;
+	margin: 0;
+}
+.pgaf-step-counter {
+	margin-left: auto;
+	font-size: 12px;
+	color: #9ca3af;
+	white-space: nowrap;
+	padding-top: 4px;
+}
+
+/* ─── Validation errors ────────────────────────────────────────────────── */
+.pgaf-wizard-errors {
+	background: #fef2f2;
+	border: 1px solid #fca5a5;
+	border-radius: 8px;
+	padding: 12px 16px;
+	margin: 16px 24px 0;
+}
+.pgaf-wizard-errors ul {
+	margin: 0;
+	padding-left: 18px;
+}
+.pgaf-wizard-errors li {
+	font-size: 13px;
+	color: #b91c1c;
+}
+
+/* ─── Help text block ──────────────────────────────────────────────────── */
+.pgaf-step-help {
+	background: #eff6ff;
+	border-left: 3px solid #3b82f6;
+	border-radius: 0 6px 6px 0;
+	padding: 10px 14px;
+	margin: 0 24px 0;
+	font-size: 13px;
+	color: #1e40af;
+}
+
+/* ─── Step form body ───────────────────────────────────────────────────── */
+.pgaf-wizard-step-form {
+	padding: 20px 24px;
+}
+.pgaf-wizard-step-form .form-group { margin-bottom: 18px; }
+.pgaf-wizard-step-form label {
+	font-weight: 600;
+	font-size: 13px;
+	color: #374151;
+	margin-bottom: 5px;
+	display: block;
+}
+.pgaf-wizard-step-form .form-control {
+	border-radius: 7px;
+	border-color: #d1d5db;
+	font-size: 14px;
+	height: 38px;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pgaf-wizard-step-form .form-control:focus {
+	border-color: #2563eb;
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.pgaf-wizard-step-form textarea.form-control { height: auto; }
+.pgaf-wizard-step-form .form-text { font-size: 12px; margin-top: 4px; }
+
+/* Checkbox style */
+.pgaf-checkbox { margin-top: 4px; }
+.pgaf-checkbox input[type="checkbox"] { margin-right: 8px; }
+.pgaf-checkbox-label { font-size: 14px; color: #374151; }
+
+/* ─── Navigation bar ───────────────────────────────────────────────────── */
+.pgaf-wizard-nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 24px;
+	border-top: 1px solid #f3f4f6;
+	background: #fafafa;
+	border-radius: 0 0 12px 12px;
+}
+.pgaf-wizard-nav-left,
+.pgaf-wizard-nav-right {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.pgaf-wizard-nav-center {
+	font-size: 12px;
+	color: #9ca3af;
+	text-align: center;
+}
+.btn-pgaf-back {
+	padding: 8px 18px;
+	border-radius: 7px;
+	border: 1px solid #d1d5db;
+	background: #fff;
+	color: #374151;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	transition: background 0.15s;
+	text-decoration: none;
+}
+.btn-pgaf-back:hover { background: #f9fafb; color: #111827; text-decoration: none; }
+.btn-pgaf-cancel {
+	padding: 8px 14px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: #9ca3af;
+	font-size: 13px;
+	cursor: pointer;
+	text-decoration: none;
+}
+.btn-pgaf-cancel:hover { color: #ef4444; text-decoration: none; }
+.btn-pgaf-next {
+	padding: 9px 22px;
+	border-radius: 7px;
+	border: none;
+	background: #1d4ed8;
+	color: #fff;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	transition: background 0.15s, transform 0.12s;
+}
+.btn-pgaf-next:hover { background: #1e40af; transform: translateX(1px); }
+.btn-pgaf-submit {
+	padding: 9px 22px;
+	border-radius: 7px;
+	border: none;
+	background: #059669;
+	color: #fff;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	transition: background 0.15s;
+}
+.btn-pgaf-submit:hover { background: #047857; }
+
+/* ─── Custom step template area ────────────────────────────────────────── */
+.pgaf-step-template-body {
+	padding: 20px 24px;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+	.pgaf-wizard-shell { padding: 0 0 40px; }
+	.pgaf-wizard-step-form { padding: 16px; }
+	.pgaf-wizard-nav { padding: 12px 16px; flex-wrap: wrap; gap: 10px; }
+	.pgaf-wizard-nav-center { order: 3; width: 100%; }
+	.wizard-step-label { display: none; }
+}
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="pgaf-wizard-header">
+	<div class="pgaf-wizard-header-icon" aria-hidden="true">
+		<i class="fa {{ wizard.icon }}"></i>
+	</div>
+	<div class="pgaf-wizard-header-text">
+		<h1>{{ wizard.title }}</h1>
+		{% if wizard.description %}
+		<p>{{ wizard.description }}</p>
+		{% endif %}
+	</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="pgaf-wizard-shell">
+
+	{# ── Progress indicator ───────────────────────────────────────────── #}
+	{{ progress_html | safe }}
+
+	{# ── Step card ────────────────────────────────────────────────────── #}
+	<div class="pgaf-wizard-step-card" id="pgafStepCard">
+
+		{# Step header #}
+		<div class="pgaf-wizard-step-header">
+			<div class="pgaf-step-icon" aria-hidden="true">
+				<i class="fa {{ step.icon }}"></i>
+			</div>
+			<div class="pgaf-step-header-text">
+				<h2>{{ step.title }}</h2>
+				{% if step.description %}
+				<p>{{ step.description }}</p>
+				{% endif %}
+			</div>
+			<div class="pgaf-step-counter" aria-label="Step {{ step_index + 1 }} of {{ total_steps }}">
+				{{ step_index + 1 }} / {{ total_steps }}
+			</div>
+		</div>
+
+		{# Validation errors #}
+		{% if errors %}
+		<div class="pgaf-wizard-errors" role="alert" aria-live="assertive">
+			<strong><i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+			Please fix the following errors:</strong>
+			<ul>
+				{% for err in errors %}
+				<li>{{ err }}</li>
+				{% endfor %}
+			</ul>
+		</div>
+		{% endif %}
+
+		{# Optional help text #}
+		{% if step.help_text %}
+		<div class="pgaf-step-help" role="note">
+			<i class="fa fa-info-circle" aria-hidden="true"></i>
+			{{ step.help_text }}
+		</div>
+		{% endif %}
+
+		{# ── Step content form ─────────────────────────────────────────── #}
+		<form
+			id="pgafWizardForm"
+			method="POST"
+			action="{{ post_url }}"
+			enctype="multipart/form-data"
+			novalidate
+		>
+			{# CSRF token if Flask-WTF is present #}
+			{% if csrf_token is defined %}
+			<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+			{% endif %}
+
+			{# Auto-generated field form or custom template #}
+			{% if step.template %}
+			<div class="pgaf-step-template-body">
+				{% include step.template ignore missing %}
+			</div>
+			{% elif step_form_html %}
+			{{ step_form_html | safe }}
+			{% else %}
+			{# Review step — show summary of all collected data #}
+			<div class="pgaf-wizard-step-form">
+				<p class="text-muted" style="font-size:14px;">
+					<i class="fa fa-eye" aria-hidden="true"></i>
+					Review your answers before submitting.
+				</p>
+				{% for other_step in wizard.steps if not other_step.id == step.id %}
+				{% if other_step.fields %}
+				<h5 style="margin-top:16px;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">
+					{{ other_step.title }}
+				</h5>
+				<dl class="dl-horizontal" style="font-size:13px;">
+					{% for f in other_step.fields %}
+					<dt style="width:180px;color:#374151;font-weight:600;">{{ f.label or f.name }}</dt>
+					<dd style="margin-left:196px;color:#111827;">
+						{{ session.get('wizard_' ~ wizard.id ~ '_' ~ other_step.id, {}).get(f.name, '—') }}
+					</dd>
+					{% endfor %}
+				</dl>
+				{% endif %}
+				{% endfor %}
+			</div>
+			{% endif %}
+
+			{# ── Navigation footer ─────────────────────────────────────── #}
+			<div class="pgaf-wizard-nav">
+				<div class="pgaf-wizard-nav-left">
+					{# Back button #}
+					{% if prev_url %}
+					<a
+						href="{{ prev_url }}"
+						class="btn-pgaf-back"
+						id="pgafBackBtn"
+					>
+						<i class="fa fa-arrow-left" aria-hidden="true"></i> Back
+					</a>
+					{% endif %}
+					{# Cancel #}
+					<a href="{{ cancel_url }}" class="btn-pgaf-cancel">
+						<i class="fa fa-times" aria-hidden="true"></i> Cancel
+					</a>
+				</div>
+
+				<div class="pgaf-wizard-nav-center">
+					Step {{ step_index + 1 }} of {{ total_steps }}
+					{% if step.is_optional %}
+					<span class="text-muted">&nbsp;(optional)</span>
+					{% endif %}
+				</div>
+
+				<div class="pgaf-wizard-nav-right">
+					{% if is_last %}
+					<button type="submit" class="btn-pgaf-submit" id="pgafSubmitBtn">
+						<i class="fa fa-check" aria-hidden="true"></i>
+						{{ submit_label }}
+					</button>
+					{% else %}
+					<button type="submit" class="btn-pgaf-next" id="pgafNextBtn">
+						Next <i class="fa fa-arrow-right" aria-hidden="true"></i>
+					</button>
+					{% endif %}
+				</div>
+			</div>
+
+		</form>
+	</div>{# /step-card #}
+
+</div>{# /wizard-shell #}
+{% endblock %}
+
+{% block extra_js %}
+{# Select2 CDN — loaded only when the page has FK selects #}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css"
+	integrity="sha512-nMNlpuaDPrqlEls3IX/Q56H36qvBASwb3ipyUAmgPgQQlHXXd0o5M4MoO5F3E2GqnFNPbz18R2eXNxiTd2F2A=="
+	crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2-bootstrap-theme/0.1.0-beta.10/select2-bootstrap.min.css"
+	integrity="sha512-kq3FESFfGxMFEFkRNbBHOoGQWB0YiKnM8zjkVQGPbAlGHVT8Sp8jUPNF5j8JaCWK5gxv+5ovClMMSUFWt7pRQ=="
+	crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.full.min.js"
+	integrity="sha512-R/YbbgiqwB2sLCiYZJpAVt4HVSGqaV0HiI9U3kSF1KnFPUTIFZDUQUEFRYRc6GaJvkY0OzHJxEn7CgFhMKnA=="
+	crossorigin="anonymous" referrerpolicy="no-referrer"
+	defer></script>
+
+<script>
+(function () {
+	'use strict';
+
+	/* ── sessionStorage persistence for back navigation ─────────────── */
+	var STORE_KEY = 'pgafWizard_{{ wizard.id }}_{{ step.id }}';
+
+	var form = document.getElementById('pgafWizardForm');
+	if (!form) return;
+
+	/* Restore previously typed values from sessionStorage */
+	try {
+		var saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
+		if (saved) {
+			Object.keys(saved).forEach(function (name) {
+				var el = form.elements[name];
+				if (!el) return;
+				if (el.type === 'checkbox') {
+					el.checked = Boolean(saved[name]);
+				} else if (el.tagName === 'SELECT' || el.type !== 'file') {
+					el.value = saved[name];
+				}
+			});
+		}
+	} catch (e) { /* ignore */ }
+
+	/* Save form data to sessionStorage on input */
+	form.addEventListener('input', function () {
+		var data = {};
+		Array.from(form.elements).forEach(function (el) {
+			if (!el.name || el.type === 'file') return;
+			data[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+		});
+		try { sessionStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) { }
+	});
+
+	/* Clear storage on successful submit */
+	form.addEventListener('submit', function () {
+		try { sessionStorage.removeItem(STORE_KEY); } catch (e) { }
+		/* Disable submit button to prevent double-submission */
+		var btn = document.getElementById('pgafNextBtn') || document.getElementById('pgafSubmitBtn');
+		if (btn) {
+			btn.disabled = true;
+			btn.style.opacity = '0.7';
+		}
+	});
+
+	/* ── Initialise Select2 on .pgaf-select2 elements once script loads ── */
+	document.addEventListener('DOMContentLoaded', function () {
+		if (window.$ && $.fn && $.fn.select2) {
+			$('.pgaf-select2').each(function () {
+				$(this).select2({
+					theme: 'bootstrap',
+					width: '100%',
+					placeholder: $(this).data('placeholder') || 'Select...',
+					allowClear: true,
+				});
+			});
+		}
+	});
+
+	/* Wait for deferred Select2 script */
+	window.addEventListener('load', function () {
+		if (window.$ && $.fn && $.fn.select2) {
+			$('.pgaf-select2:not(.select2-hidden-accessible)').each(function () {
+				$(this).select2({
+					theme: 'bootstrap',
+					width: '100%',
+					placeholder: $(this).data('placeholder') || 'Select...',
+					allowClear: true,
+				});
+			});
+		}
+	});
+
+	/* ── Scroll to first error on re-render ──────────────────────────── */
+	var errBox = document.querySelector('.pgaf-wizard-errors');
+	if (errBox) {
+		errBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+}());
+</script>
+{% endblock %}

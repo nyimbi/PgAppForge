@@ -1,0 +1,411 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}{{ page_title }} — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ─── Launcher shell ───────────────────────────────────────────────────── */
+.pgaf-launcher {
+	padding: 0 0 48px;
+}
+
+/* ─── Hero header ──────────────────────────────────────────────────────── */
+.pgaf-launcher-hero {
+	background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+	border-radius: 12px;
+	padding: 36px 32px 28px;
+	margin-bottom: 32px;
+	color: #fff;
+}
+.pgaf-launcher-hero h1 {
+	margin: 0 0 6px;
+	font-size: 26px;
+	font-weight: 700;
+	letter-spacing: -0.3px;
+}
+.pgaf-launcher-hero p {
+	margin: 0;
+	opacity: 0.85;
+	font-size: 15px;
+}
+
+/* ─── Search bar ───────────────────────────────────────────────────────── */
+.pgaf-search-wrap {
+	position: relative;
+	margin-top: 20px;
+}
+.pgaf-search-wrap i {
+	position: absolute;
+	left: 14px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: rgba(255,255,255,0.65);
+	font-size: 15px;
+}
+.pgaf-search-input {
+	width: 100%;
+	max-width: 480px;
+	padding: 10px 14px 10px 40px;
+	border-radius: 8px;
+	border: 1px solid rgba(255,255,255,0.3);
+	background: rgba(255,255,255,0.15);
+	color: #fff;
+	font-size: 14px;
+	outline: none;
+	transition: background 0.2s, border-color 0.2s;
+}
+.pgaf-search-input::placeholder { color: rgba(255,255,255,0.6); }
+.pgaf-search-input:focus {
+	background: rgba(255,255,255,0.22);
+	border-color: rgba(255,255,255,0.6);
+}
+
+/* ─── Domain tabs ──────────────────────────────────────────────────────── */
+.pgaf-domain-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 24px;
+}
+.pgaf-tab-btn {
+	padding: 6px 16px;
+	border-radius: 20px;
+	border: 1px solid #d1d5db;
+	background: #fff;
+	color: #374151;
+	font-size: 13px;
+	cursor: pointer;
+	transition: all 0.15s;
+	font-weight: 500;
+}
+.pgaf-tab-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+.pgaf-tab-btn.active {
+	background: #1d4ed8;
+	color: #fff;
+	border-color: #1d4ed8;
+}
+
+/* ─── Count badge ──────────────────────────────────────────────────────── */
+.pgaf-result-count {
+	font-size: 13px;
+	color: #6b7280;
+	margin-bottom: 16px;
+}
+
+/* ─── Card grid ────────────────────────────────────────────────────────── */
+.pgaf-workflow-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 20px;
+}
+
+/* ─── Individual card ──────────────────────────────────────────────────── */
+.pgaf-workflow-card {
+	background: #fff;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	padding: 22px 20px 18px;
+	display: flex;
+	flex-direction: column;
+	transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+	position: relative;
+	overflow: hidden;
+	cursor: pointer;
+}
+.pgaf-workflow-card::before {
+	content: '';
+	position: absolute;
+	top: 0; left: 0; right: 0;
+	height: 4px;
+	background: var(--card-color, #1d4ed8);
+	border-radius: 12px 12px 0 0;
+}
+.pgaf-workflow-card:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 10px 32px rgba(0,0,0,0.10);
+	border-color: var(--card-color, #1d4ed8);
+}
+.pgaf-workflow-card.hidden { display: none; }
+
+/* Card icon + domain badge row */
+.pgaf-card-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	margin-bottom: 14px;
+}
+.pgaf-card-icon {
+	width: 44px;
+	height: 44px;
+	border-radius: 10px;
+	background: var(--card-color, #1d4ed8);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+	font-size: 18px;
+	flex-shrink: 0;
+}
+.pgaf-domain-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 10px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+	background: color-mix(in srgb, var(--card-color, #1d4ed8) 12%, white);
+	color: var(--card-color, #1d4ed8);
+}
+
+/* Card body */
+.pgaf-card-title {
+	font-size: 16px;
+	font-weight: 700;
+	color: #111827;
+	margin: 0 0 6px;
+	line-height: 1.3;
+}
+.pgaf-card-desc {
+	font-size: 13px;
+	color: #6b7280;
+	line-height: 1.5;
+	flex: 1;
+	margin-bottom: 16px;
+}
+
+/* Card footer */
+.pgaf-card-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	border-top: 1px solid #f3f4f6;
+	padding-top: 12px;
+	margin-top: auto;
+}
+.pgaf-card-meta {
+	display: flex;
+	gap: 14px;
+	font-size: 12px;
+	color: #9ca3af;
+}
+.pgaf-card-meta span { display: flex; align-items: center; gap: 4px; }
+.pgaf-start-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 16px;
+	border-radius: 7px;
+	background: var(--card-color, #1d4ed8);
+	color: #fff !important;
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+	transition: opacity 0.15s, transform 0.15s;
+	border: none;
+}
+.pgaf-start-btn:hover { opacity: 0.88; transform: translateX(2px); }
+.pgaf-start-btn .arrow { transition: transform 0.15s; }
+.pgaf-workflow-card:hover .pgaf-start-btn .arrow { transform: translateX(3px); }
+
+/* Empty state */
+.pgaf-empty-state {
+	text-align: center;
+	padding: 64px 24px;
+	color: #9ca3af;
+	grid-column: 1 / -1;
+}
+.pgaf-empty-state i { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
+.pgaf-empty-state p { font-size: 15px; margin: 0; }
+
+/* ─── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+	.pgaf-launcher-hero { padding: 24px 16px 20px; }
+	.pgaf-workflow-grid { grid-template-columns: 1fr; }
+	.pgaf-search-input { max-width: 100%; }
+}
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="pgaf-launcher-hero">
+	<h1><i class="fa fa-magic" aria-hidden="true"></i>&nbsp; Workflow Launcher</h1>
+	<p>Discover and start guided workflows for any business process.</p>
+	<div class="pgaf-search-wrap">
+		<i class="fa fa-search" aria-hidden="true"></i>
+		<input
+			type="search"
+			id="pgafWorkflowSearch"
+			class="pgaf-search-input"
+			placeholder="Search workflows…"
+			autocomplete="off"
+			aria-label="Search workflows"
+		>
+	</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="pgaf-launcher" data-island="workflowLauncher">
+
+	{# ── Domain filter tabs ──────────────────────────────────────────── #}
+	{% if domains %}
+	<div class="pgaf-domain-tabs" role="tablist" aria-label="Filter by domain">
+		<button class="pgaf-tab-btn active" data-domain="all" role="tab" aria-selected="true">
+			All
+		</button>
+		{% for domain in domains %}
+		<button class="pgaf-tab-btn" data-domain="{{ domain }}" role="tab" aria-selected="false">
+			{{ domain }}
+		</button>
+		{% endfor %}
+	</div>
+	{% endif %}
+
+	{# ── Result count ────────────────────────────────────────────────── #}
+	<p class="pgaf-result-count" id="pgafResultCount">
+		{{ cards | length }} workflow{{ 's' if cards | length != 1 else '' }}
+	</p>
+
+	{# ── Card grid ───────────────────────────────────────────────────── #}
+	<div class="pgaf-workflow-grid" id="pgafWorkflowGrid" role="list">
+
+		{% for card in cards %}
+		<div
+			class="pgaf-workflow-card"
+			role="listitem"
+			data-title="{{ card.title | lower }}"
+			data-desc="{{ card.description | lower }}"
+			data-domain="{{ card.domain }}"
+			style="--card-color: {{ card.color }};"
+			tabindex="0"
+			aria-label="{{ card.title }}"
+			onclick="window.location.href='{{ card.launch_url }}';"
+			onkeydown="if(event.key==='Enter'||event.key===' '){window.location.href='{{ card.launch_url }}'}"
+		>
+			{# Header: icon + domain badge #}
+			<div class="pgaf-card-header">
+				<div class="pgaf-card-icon" aria-hidden="true">
+					<i class="fa {{ card.icon }}"></i>
+				</div>
+				<span class="pgaf-domain-badge" style="--card-color: {{ card.color }};">
+					<i class="fa {{ card.domain_icon }}" aria-hidden="true"></i>
+					{{ card.domain }}
+				</span>
+			</div>
+
+			{# Title + description #}
+			<h3 class="pgaf-card-title">{{ card.title }}</h3>
+			<p class="pgaf-card-desc">{{ card.description }}</p>
+
+			{# Footer: meta + start button #}
+			<div class="pgaf-card-footer">
+				<div class="pgaf-card-meta">
+					{% if card.step_count %}
+					<span>
+						<i class="fa fa-list-ol" aria-hidden="true"></i>
+						{{ card.step_count }} step{{ 's' if card.step_count != 1 else '' }}
+					</span>
+					{% endif %}
+					{% if card.time_label %}
+					<span>
+						<i class="fa fa-clock-o" aria-hidden="true"></i>
+						{{ card.time_label }}
+					</span>
+					{% endif %}
+				</div>
+				<a
+					href="{{ card.launch_url }}"
+					class="pgaf-start-btn"
+					onclick="event.stopPropagation();"
+					aria-label="Start {{ card.title }}"
+				>
+					Start <i class="fa fa-arrow-right arrow" aria-hidden="true"></i>
+				</a>
+			</div>
+		</div>
+		{% else %}
+		<div class="pgaf-empty-state">
+			<i class="fa fa-inbox" aria-hidden="true"></i>
+			<p>No workflows registered yet.</p>
+		</div>
+		{% endfor %}
+
+		{# Shown when search/filter yields no matches #}
+		<div class="pgaf-empty-state" id="pgafNoResults" style="display:none;">
+			<i class="fa fa-search" aria-hidden="true"></i>
+			<p>No workflows match your search.</p>
+		</div>
+
+	</div>{# /grid #}
+</div>{# /launcher #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+	'use strict';
+
+	var grid     = document.getElementById('pgafWorkflowGrid');
+	var searchEl = document.getElementById('pgafWorkflowSearch');
+	var countEl  = document.getElementById('pgafResultCount');
+	var noRes    = document.getElementById('pgafNoResults');
+	var tabBtns  = document.querySelectorAll('.pgaf-tab-btn');
+	var cards    = grid ? Array.from(grid.querySelectorAll('.pgaf-workflow-card')) : [];
+
+	var currentDomain = 'all';
+	var currentQuery  = '';
+
+	function plural(n) { return n + ' workflow' + (n === 1 ? '' : 's'); }
+
+	function applyFilter() {
+		var visible = 0;
+		cards.forEach(function (card) {
+			var matchDomain = currentDomain === 'all' || card.dataset.domain === currentDomain;
+			var matchQuery  = !currentQuery ||
+				card.dataset.title.indexOf(currentQuery) !== -1 ||
+				card.dataset.desc.indexOf(currentQuery) !== -1;
+			var show = matchDomain && matchQuery;
+			card.classList.toggle('hidden', !show);
+			if (show) visible++;
+		});
+		if (countEl) countEl.textContent = plural(visible);
+		if (noRes) noRes.style.display = visible === 0 ? 'block' : 'none';
+	}
+
+	/* Search */
+	if (searchEl) {
+		searchEl.addEventListener('input', function () {
+			currentQuery = (this.value || '').toLowerCase().trim();
+			applyFilter();
+		});
+	}
+
+	/* Domain tabs */
+	tabBtns.forEach(function (btn) {
+		btn.addEventListener('click', function () {
+			tabBtns.forEach(function (b) {
+				b.classList.remove('active');
+				b.setAttribute('aria-selected', 'false');
+			});
+			btn.classList.add('active');
+			btn.setAttribute('aria-selected', 'true');
+			currentDomain = btn.dataset.domain;
+			applyFilter();
+		});
+	});
+
+	/* Keyboard: Enter on card (already handled via onkeydown attr, but keep for screen readers) */
+	cards.forEach(function (card) {
+		card.addEventListener('keydown', function (e) {
+			if (e.key === 'Enter' || e.key === ' ') {
+				var link = card.querySelector('.pgaf-start-btn');
+				if (link) link.click();
+			}
+		});
+	});
+}());
+</script>
+{% endblock %}
