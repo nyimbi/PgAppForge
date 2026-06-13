@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<!--
+	PgAppForge — Embedded Layout
+	Standalone HTML document for iframe embedding in third-party portals.
+	No nav, no sidebar, no footer — just content + Bootstrap + erp_islands.css.
+
+	Usage (in a view method):
+		return render_template(
+		    "appbuilder/embedded/base_embedded.html",
+		    content=rendered_content,
+		    page_title="Loan Application",
+		)
+
+	Or extend in a child template:
+		{% extends "appbuilder/embedded/base_embedded.html" %}
+		{% block content %}...{% endblock %}
+
+	JWT auth:
+		Parent frames pass ?_token=<jwt> in the src URL.
+		JavaScript here stores it in sessionStorage and appends it to every
+		fetch() call, keeping the embedded session alive.
+-->
+<html lang="{{ request.accept_languages.best_match(['en', 'sw', 'fr']) or 'en' }}">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="robots" content="noindex, nofollow">
+	<title>{% block page_title %}{% if page_title %}{{ page_title }}{% elif appbuilder %}{{ appbuilder.app_name }}{% else %}App{% endif %}{% endblock %}</title>
+
+	{% block head_css %}
+	<!-- Bootstrap -->
+	<link rel="stylesheet"
+		href="{{ url_for('appbuilder.static', filename='css/bootstrap.min.css') }}">
+	<!-- FontAwesome icons -->
+	<link rel="stylesheet"
+		href="{{ url_for('appbuilder.static', filename='css/fontawesome/fontawesome.min.css') }}">
+	<link rel="stylesheet"
+		href="{{ url_for('appbuilder.static', filename='css/fontawesome/solid.min.css') }}">
+	<!-- ERP Islands design system -->
+	<link rel="stylesheet"
+		href="{{ url_for('appbuilder.static', filename='css/erp_islands.css') }}">
+	{% endblock %}
+
+	{% block head_extra %}{% endblock %}
+
+	<style>
+		/* ── Embedded reset ─────────────────────────────────────────────────── */
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: transparent;  /* let the parent portal control bg */
+			font-family: var(--bs-font-sans-serif, system-ui, sans-serif);
+		}
+
+		/* ── Loading overlay ────────────────────────────────────────────────── */
+		#fab-embedded-loading {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: rgba(255, 255, 255, 0.7);
+			z-index: 9999;
+			align-items: center;
+			justify-content: center;
+		}
+		#fab-embedded-loading.active {
+			display: flex;
+		}
+
+		/* ── Flash messages ─────────────────────────────────────────────────── */
+		.fab-embedded-flash {
+			margin: 0.5rem 1rem;
+		}
+
+		/* ── Content wrapper ────────────────────────────────────────────────── */
+		.fab-embedded-content {
+			padding: 1rem;
+		}
+
+		{% block extra_css %}{% endblock %}
+	</style>
+</head>
+<body>
+
+	<!-- Loading spinner (shown during async operations) -->
+	<div id="fab-embedded-loading" role="status" aria-label="Loading">
+		<div class="spinner-border text-primary" style="width: 2.5rem; height: 2.5rem;">
+			<span class="visually-hidden">Loading…</span>
+		</div>
+	</div>
+
+	<!-- Flash messages -->
+	{% block messages %}
+	{% with messages = get_flashed_messages(with_categories=True) %}
+	{% if messages %}
+	<div class="fab-embedded-flash">
+		{% for category, message in messages %}
+		<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show"
+			role="alert">
+			{{ message }}
+			<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+		</div>
+		{% endfor %}
+	</div>
+	{% endif %}
+	{% endwith %}
+	{% endblock %}
+
+	<!-- Main content area -->
+	<main class="fab-embedded-content" id="fab-embedded-main">
+		{% block content %}
+		{% if content %}{{ content | safe }}{% endif %}
+		{% endblock %}
+	</main>
+
+	{% block tail_js %}
+	<!-- Bootstrap JS (required for alerts, modals, etc.) -->
+	<script src="{{ url_for('appbuilder.static', filename='js/bootstrap.min.js') }}"></script>
+	{% endblock %}
+
+	{% block embedded_auth_js %}
+	<!--
+		Embedded Auth — JWT token management.
+		Reads ?_token from the page URL, stores in sessionStorage, and
+		appends to every fetch() and XMLHttpRequest automatically.
+		This keeps the embedded session alive across SPA-style navigations
+		without relying on cookies (which may be blocked cross-origin).
+	-->
+	<script>
+	(function () {
+		'use strict';
+
+		var TOKEN_KEY = '_fab_embedded_token';
+
+		// ── Extract token from URL ──────────────────────────────────────────
+		function getUrlToken() {
+			try {
+				return new URLSearchParams(window.location.search).get('_token');
+			} catch (e) {
+				return null;
+			}
+		}
+
+		// ── Persist token for the lifetime of this embedded session ────────
+		var urlToken = getUrlToken();
+		if (urlToken) {
+			try {
+				sessionStorage.setItem(TOKEN_KEY, urlToken);
+				// Clean the token from the URL bar (cosmetic — no reload)
+				var cleanUrl = window.location.href.replace(/[?&]_token=[^&]*/, '').replace(/[?&]$/, '');
+				history.replaceState(null, '', cleanUrl || window.location.pathname);
+			} catch (e) { /* sessionStorage blocked — token stays in URL */ }
+		}
+
+		function getToken() {
+			return urlToken || (function () {
+				try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+			})();
+		}
+
+		// ── Patch fetch() ──────────────────────────────────────────────────
+		var _nativeFetch = window.fetch;
+		window.fetch = function (resource, init) {
+			var token = getToken();
+			if (token) {
+				init = init || {};
+				init.headers = init.headers || {};
+				if (!init.headers['Authorization'] && !init.headers['authorization']) {
+					init.headers['Authorization'] = 'Bearer ' + token;
+				}
+			}
+			return _nativeFetch.call(this, resource, init);
+		};
+
+		// ── Patch XMLHttpRequest ───────────────────────────────────────────
+		var _nativeOpen = XMLHttpRequest.prototype.open;
+		var _nativeSend = XMLHttpRequest.prototype.send;
+		XMLHttpRequest.prototype.open = function (method, url, async, user, pass) {
+			this._fabEmbedUrl = url;
+			return _nativeOpen.apply(this, arguments);
+		};
+		XMLHttpRequest.prototype.send = function () {
+			var token = getToken();
+			if (token) {
+				try {
+					if (!this.getResponseHeader || true) {
+						this.setRequestHeader('Authorization', 'Bearer ' + token);
+					}
+				} catch (e) { /* header already sent */ }
+			}
+			return _nativeSend.apply(this, arguments);
+		};
+
+		// ── Loading overlay helpers (exported to window) ───────────────────
+		window.fabEmbedded = {
+			showLoading: function () {
+				var el = document.getElementById('fab-embedded-loading');
+				if (el) el.classList.add('active');
+			},
+			hideLoading: function () {
+				var el = document.getElementById('fab-embedded-loading');
+				if (el) el.classList.remove('active');
+			},
+			getToken: getToken,
+			/**
+			 * Post a message to the parent frame.
+			 * Usage: fabEmbedded.postToParent({ type: 'fab:resize', height: 600 });
+			 */
+			postToParent: function (data) {
+				try {
+					window.parent.postMessage(data, '*');
+				} catch (e) {}
+			},
+		};
+
+		// ── Auto-resize: notify parent of content height changes ──────────
+		if (window.ResizeObserver) {
+			var main = document.getElementById('fab-embedded-main');
+			if (main) {
+				var ro = new ResizeObserver(function (entries) {
+					for (var i = 0; i < entries.length; i++) {
+						window.fabEmbedded.postToParent({
+							type: 'fab:resize',
+							height: entries[i].contentRect.height + 32,  // +padding
+						});
+					}
+				});
+				ro.observe(main);
+			}
+		}
+
+		// ── Signal to parent that the frame is ready ───────────────────────
+		window.addEventListener('DOMContentLoaded', function () {
+			window.fabEmbedded.postToParent({ type: 'fab:ready' });
+		});
+
+	})();
+	</script>
+	{% endblock %}
+
+	{% block add_tail_js %}{% endblock %}
+
+</body>
+</html>

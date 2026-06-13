@@ -1,0 +1,558 @@
+"""
+pgappforge/workflow/engine.py
+
+PgAppForgeWorkflowEngine — YAML-defined workflow engine.
+
+Phase 1: YAML DSL with sequential steps, user tasks, and service tasks.
+Phase 3 (future): Full BPMN 2.0 via SpiffWorkflow import.
+
+Usage::
+
+    engine = PgAppForgeWorkflowEngine()
+    engine.load_yaml("workflows/sacco_loan_approval.yaml")
+    instance = engine.start(
+        "sacco_loan_approval",
+        {"application_id": "app-123"},
+        tenant_id="t1",
+    )
+    engine.complete_step(instance.id, "loan_officer_review", {"recommendation": "APPROVE"})
+    pending = engine.get_pending_tasks("t1", role="Loan Officer")
+"""
+from __future__ import annotations
+
+import json
+import logging
+import sqlalchemy as sa
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from .models import WorkflowDefinition, WorkflowInstance
+
+log = logging.getLogger(__name__)
+
+
+class PgAppForgeWorkflowEngine:
+	"""YAML-defined sequential workflow engine.
+
+	Instance is designed to be used as a singleton per application — call
+	``load_yaml`` / ``load_dict`` at startup, then ``start`` / ``complete_step``
+	at runtime.
+
+	Thread safety: _definitions is write-once at startup; _instances is an
+	in-process cache.  For multi-process deployments, rely on the DB-backed
+	methods (pass ``session=`` to every call).
+	"""
+
+	def __init__(self) -> None:
+		# name → WorkflowDefinition
+		self._definitions: dict[str, WorkflowDefinition] = {}
+		# instance_id → WorkflowInstance (in-process cache)
+		self._instances: dict[str, WorkflowInstance] = {}
+
+	# ------------------------------------------------------------------
+	# Loading definitions
+	# ------------------------------------------------------------------
+
+	def load_yaml(self, yaml_path: str | Path) -> WorkflowDefinition:
+		"""Load a YAML workflow definition from a file."""
+		from .yaml_dsl import parse_yaml_file
+		data = parse_yaml_file(yaml_path)
+		return self._load_data(data, source=str(yaml_path))
+
+	def load_yaml_string(self, yaml_text: str, source: str = "<string>") -> WorkflowDefinition:
+		"""Load a workflow definition from a YAML string."""
+		from .yaml_dsl import parse_yaml_string
+		data = parse_yaml_string(yaml_text, source=source)
+		return self._load_data(data, source=source)
+
+	def load_dict(self, data: dict) -> WorkflowDefinition:
+		"""Load a workflow from an already-parsed dict."""
+		return self._load_data(data)
+
+	def load_all_from_directory(self, directory: str | Path) -> int:
+		"""Load all *.yaml workflow files from a directory (non-recursive).
+
+		Returns the number of successfully loaded definitions.
+		"""
+		from .yaml_dsl import load_directory
+		count = 0
+		for workflow_data in load_directory(directory):
+			try:
+				self._load_data(workflow_data, source=str(directory))
+				count += 1
+			except Exception as exc:
+				log.warning("load_all_from_directory: skipping %r: %s", workflow_data.get("name"), exc)
+		return count
+
+	def _load_data(self, data: dict, source: str = "") -> WorkflowDefinition:
+		definition = WorkflowDefinition(
+			name=data["name"],
+			steps=data.get("steps", []),
+			trigger=data.get("trigger") or {},
+			description=data.get("description", ""),
+			yaml_source=source,
+			on_complete=data.get("on_complete") or {},
+			on_decline=data.get("on_decline") or {},
+			on_error=data.get("on_error") or {},
+		)
+		self._definitions[definition.name] = definition
+		log.info("Workflow loaded: %s (%d steps)", definition.name, len(definition.steps))
+		return definition
+
+	# ------------------------------------------------------------------
+	# Runtime
+	# ------------------------------------------------------------------
+
+	def start(
+		self,
+		workflow_name: str,
+		data: dict,
+		tenant_id: str,
+		session=None,
+	) -> WorkflowInstance:
+		"""Start a new workflow instance.
+
+		Args:
+			workflow_name: Name of a previously loaded workflow definition.
+			data: Initial context data dict (merged with step outputs as the
+			      workflow progresses).
+			tenant_id: Tenant identifier for multi-tenant isolation.
+			session: Optional SQLAlchemy session for DB persistence.
+
+		Returns:
+			WorkflowInstance with status RUNNING or WAITING (if first step
+			is a UserTask) or COMPLETED (if all steps are automated).
+
+		Raises:
+			ValueError: If workflow_name is not loaded.
+		"""
+		if workflow_name not in self._definitions:
+			loaded = sorted(self._definitions.keys())
+			raise ValueError(
+				f"Workflow {workflow_name!r} not found. Loaded: {loaded}"
+			)
+
+		definition = self._definitions[workflow_name]
+		instance = WorkflowInstance(
+			definition=definition,
+			data=dict(data),
+			tenant_id=tenant_id,
+		)
+		self._instances[instance.id] = instance
+
+		if session:
+			self._persist_instance(instance, session)
+
+		log.info("Workflow started: %s instance=%s", workflow_name, instance.id[:8])
+
+		# Auto-advance through automated steps
+		self._advance(instance, session)
+
+		return instance
+
+	def complete_step(
+		self,
+		instance_id: str,
+		step_id: str,
+		form_data: dict,
+		completed_by: str = "",
+		session=None,
+	) -> WorkflowInstance:
+		"""Mark a UserTask step as complete with form data.
+
+		Args:
+			instance_id: Workflow instance ID.
+			step_id: The step being completed (must match the current waiting step).
+			form_data: Form field values submitted by the user.
+			completed_by: Username or user ID of the actor.
+			session: Optional SQLAlchemy session.
+
+		Raises:
+			ValueError: If instance not found or step_id does not match current step.
+		"""
+		instance = self._get_instance(instance_id, session)
+
+		current = self._get_current_step(instance)
+		if current and current.get("id") != step_id:
+			raise ValueError(
+				f"Current step is {current['id']!r}, not {step_id!r}"
+			)
+
+		# Record step completion
+		instance.step_history.append({
+			"step_id": step_id,
+			"completed_by": completed_by,
+			"form_data": form_data,
+			"completed_at": datetime.now(timezone.utc).isoformat(),
+		})
+
+		# Merge form data into instance data
+		instance.data.update(form_data)
+		# Also key by step_id so conditions like "loan_officer_review.recommendation" work
+		instance.data[step_id] = form_data
+
+		# Mark task record complete in DB
+		if session:
+			try:
+				session.execute(sa.text("""
+					UPDATE pgaf_workflow_task
+					SET status = 'COMPLETED', completed_at = NOW(), completed_by = :by
+					WHERE instance_id = :iid AND current_step_id = :sid AND status = 'PENDING'
+				"""), {"iid": instance_id, "sid": step_id, "by": completed_by})
+			except Exception as exc:
+				log.debug("complete_step task update failed: %s", exc)
+
+		# Advance to next step
+		instance.current_step_index += 1
+		self._advance(instance, session)
+
+		if session:
+			self._update_instance(instance, session)
+
+		return instance
+
+	def cancel(self, instance_id: str, reason: str = "", session=None) -> WorkflowInstance:
+		"""Cancel a running workflow instance."""
+		instance = self._get_instance(instance_id, session)
+		instance.status = "CANCELLED"
+		instance.data["_cancel_reason"] = reason
+		if session:
+			self._update_instance(instance, session)
+		return instance
+
+	def get_pending_tasks(
+		self,
+		tenant_id: str,
+		role: str = "",
+		session=None,
+	) -> list[dict[str, Any]]:
+		"""Get all workflow steps waiting for user action.
+
+		Queries the DB first (for multi-process correctness), then supplements
+		with any in-memory instances not yet persisted.
+		"""
+		results: list[dict[str, Any]] = []
+		seen_instances: set[str] = set()
+
+		if session:
+			try:
+				rows = session.execute(sa.text("""
+					SELECT instance_id, workflow_name, current_step_id,
+					       step_label, assigned_role, data, created_at
+					FROM pgaf_workflow_task
+					WHERE tenant_id = :tid AND status = 'PENDING'
+					  AND (:role = '' OR assigned_role = :role)
+					ORDER BY created_at ASC
+				"""), {"tid": tenant_id, "role": role}).fetchall()
+				for r in rows:
+					row_dict = dict(zip(r.keys(), r))
+					results.append(row_dict)
+					seen_instances.add(row_dict["instance_id"])
+			except Exception as exc:
+				log.debug("get_pending_tasks DB query failed: %s", exc)
+
+		# Supplement with in-memory instances
+		for instance in self._instances.values():
+			if instance.tenant_id != tenant_id:
+				continue
+			if instance.id in seen_instances:
+				continue
+			step = self._get_current_step(instance)
+			if step and step.get("type") == "UserTask":
+				if not role or step.get("assignee_role") == role:
+					results.append({
+						"instance_id": instance.id,
+						"workflow_name": instance.definition.name,
+						"current_step_id": step["id"],
+						"step_label": step.get("label", step["id"]),
+						"assigned_role": step.get("assignee_role", ""),
+						"data": instance.data,
+					})
+
+		return results
+
+	def list_definitions(self) -> list[str]:
+		"""Return names of all loaded workflow definitions."""
+		return sorted(self._definitions.keys())
+
+	def get_definition(self, name: str) -> WorkflowDefinition | None:
+		return self._definitions.get(name)
+
+	# ------------------------------------------------------------------
+	# Internal step execution
+	# ------------------------------------------------------------------
+
+	def _get_current_step(self, instance: WorkflowInstance) -> dict[str, Any] | None:
+		"""Return current step, skipping steps whose condition is False."""
+		while instance.current_step_index < len(instance.definition.steps):
+			step = instance.definition.steps[instance.current_step_index]
+			condition = step.get("condition", "")
+			if condition and not self._evaluate_condition(condition, instance.data):
+				log.debug(
+					"Skipping step %r (condition False): %s",
+					step.get("id"), condition,
+				)
+				instance.current_step_index += 1
+				continue
+			return step
+		return None
+
+	def _advance(self, instance: WorkflowInstance, session=None) -> None:
+		"""Advance through automated steps until a UserTask or end."""
+		while True:
+			step = self._get_current_step(instance)
+			if step is None:
+				instance.status = "COMPLETED"
+				self._emit_completion_events(instance, session)
+				break
+
+			step_type = step.get("type", "UserTask")
+
+			if step_type == "UserTask":
+				instance.status = "WAITING"
+				if session:
+					self._create_task_record(instance, step, session)
+				break
+
+			elif step_type == "ServiceTask":
+				self._execute_service_task(step, instance, session)
+				instance.current_step_index += 1
+
+			elif step_type == "ScriptTask":
+				self._execute_script_task(step, instance)
+				instance.current_step_index += 1
+
+			else:
+				# Unknown / gateway — advance past it
+				log.debug("Skipping unhandled step type %r for step %r", step_type, step.get("id"))
+				instance.current_step_index += 1
+
+	def _evaluate_condition(self, condition: str, data: dict) -> bool:
+		"""Evaluate a simple Python-like condition string safely.
+
+		The expression has access to all keys in ``data``.  Dot-access on
+		nested dicts (e.g. ``loan_officer_review.recommendation``) is
+		resolved by flattening nested dicts into the eval namespace.
+		"""
+		namespace: dict[str, Any] = {}
+		for key, val in data.items():
+			namespace[key] = val
+			# Expose nested dicts as attribute-accessible proxies
+			if isinstance(val, dict):
+				namespace[key] = _AttrDict(val)
+		try:
+			return bool(eval(condition, {"__builtins__": {}}, namespace))  # noqa: S307
+		except Exception as exc:
+			log.debug("Condition eval error (%r): %s — defaulting to True", condition, exc)
+			return True
+
+	def _execute_service_task(
+		self, step: dict, instance: WorkflowInstance, session=None
+	) -> None:
+		service = step.get("service", "")
+		log.info("Workflow service task: %r for instance %s", service, instance.id[:8])
+		try:
+			from pgappforge.plugins.workflow.engine import BPMActionRegistry
+			input_map = step.get("input_map", {})
+			resolved = self._resolve_input_map(input_map, instance)
+			result = BPMActionRegistry.execute(service, resolved, session)
+			instance.data[step["id"]] = result
+		except Exception as exc:
+			log.warning("Service task %r failed: %s", service, exc)
+			instance.data[step["id"]] = {"status": "error", "message": str(exc)}
+
+	def _execute_script_task(self, step: dict, instance: WorkflowInstance) -> None:
+		script = step.get("script", "")
+		if not script:
+			return
+		try:
+			exec(script, {"__builtins__": {}}, instance.data)  # noqa: S102
+		except Exception as exc:
+			log.warning("ScriptTask %r failed: %s", step.get("id"), exc)
+
+	def _resolve_input_map(
+		self, input_map: dict[str, str], instance: WorkflowInstance
+	) -> dict[str, Any]:
+		"""Resolve input_map values like 'application.phone_number' from instance.data."""
+		resolved: dict[str, Any] = {}
+		for out_key, src_expr in input_map.items():
+			if isinstance(src_expr, str) and "." in src_expr:
+				parts = src_expr.split(".", 1)
+				root = instance.data.get(parts[0], {})
+				if isinstance(root, dict):
+					resolved[out_key] = root.get(parts[1], src_expr)
+				else:
+					resolved[out_key] = src_expr
+			else:
+				resolved[out_key] = instance.data.get(str(src_expr), src_expr)
+		return resolved
+
+	def _emit_completion_events(
+		self, instance: WorkflowInstance, session=None
+	) -> None:
+		event_name = (
+			instance.definition.on_complete.get("emit_event")
+			or f"workflow.{instance.definition.name}.completed"
+		)
+		try:
+			from pgappforge.plugins.erp.foundation.events import emit_event
+			emit_event(event_name, instance.data)
+			log.debug("Emitted completion event %r for instance %s", event_name, instance.id[:8])
+		except Exception:
+			log.debug("emit_completion_events skipped (event bus unavailable)")
+
+	# ------------------------------------------------------------------
+	# Persistence helpers
+	# ------------------------------------------------------------------
+
+	def _get_instance(self, instance_id: str, session=None) -> WorkflowInstance:
+		if instance_id in self._instances:
+			return self._instances[instance_id]
+
+		if session:
+			try:
+				row = session.execute(sa.text(
+					"SELECT * FROM pgaf_workflow_instance WHERE id = :id"
+				), {"id": instance_id}).fetchone()
+				if row:
+					rdict = dict(zip(row.keys(), row))
+					defn = self._definitions.get(rdict["workflow_name"])
+					if defn:
+						inst = WorkflowInstance(
+							definition=defn,
+							data=json.loads(rdict.get("data") or "{}"),
+							tenant_id=rdict["tenant_id"],
+						)
+						inst.id = instance_id
+						inst.status = rdict["status"]
+						inst.current_step_index = int(rdict.get("current_step_index") or 0)
+						self._instances[instance_id] = inst
+						return inst
+			except Exception as exc:
+				log.debug("Load instance from DB failed: %s", exc)
+
+		raise ValueError(f"Workflow instance {instance_id!r} not found")
+
+	def _persist_instance(self, instance: WorkflowInstance, session) -> None:
+		try:
+			session.execute(sa.text("""
+				INSERT INTO pgaf_workflow_instance
+				(id, workflow_name, tenant_id, status, data, current_step_index, created_at)
+				VALUES (:id, :name, :tid, :status, :data::jsonb, :step_idx, :now)
+			"""), {
+				"id": instance.id,
+				"name": instance.definition.name,
+				"tid": instance.tenant_id,
+				"status": instance.status,
+				"data": json.dumps(instance.data),
+				"step_idx": instance.current_step_index,
+				"now": instance.created_at,
+			})
+		except Exception as exc:
+			log.debug("_persist_instance failed: %s", exc)
+
+	def _update_instance(self, instance: WorkflowInstance, session) -> None:
+		try:
+			session.execute(sa.text("""
+				UPDATE pgaf_workflow_instance
+				SET status = :status, data = :data::jsonb,
+				    current_step_index = :step_idx, updated_at = NOW()
+				WHERE id = :id
+			"""), {
+				"id": instance.id,
+				"status": instance.status,
+				"data": json.dumps(instance.data),
+				"step_idx": instance.current_step_index,
+			})
+		except Exception as exc:
+			log.debug("_update_instance failed: %s", exc)
+
+	def _create_task_record(
+		self, instance: WorkflowInstance, step: dict, session
+	) -> None:
+		try:
+			from uuid6 import uuid7
+			session.execute(sa.text("""
+				INSERT INTO pgaf_workflow_task
+				(id, instance_id, workflow_name, tenant_id, current_step_id,
+				 step_label, assigned_role, data, status, created_at)
+				VALUES (:id, :inst_id, :wf_name, :tid, :step_id,
+				        :label, :role, :data::jsonb, 'PENDING', NOW())
+				ON CONFLICT (instance_id, current_step_id) DO NOTHING
+			"""), {
+				"id": str(uuid7()),
+				"inst_id": instance.id,
+				"wf_name": instance.definition.name,
+				"tid": instance.tenant_id,
+				"step_id": step["id"],
+				"label": step.get("label", step["id"]),
+				"role": step.get("assignee_role", ""),
+				"data": json.dumps(instance.data),
+			})
+		except Exception as exc:
+			log.debug("_create_task_record failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# DDL
+# ---------------------------------------------------------------------------
+
+def create_workflow_tables(engine) -> None:
+	"""Create workflow persistence tables (idempotent)."""
+	with engine.begin() as conn:
+		conn.execute(sa.text("""
+		CREATE TABLE IF NOT EXISTS pgaf_workflow_instance (
+			id                  VARCHAR(36)  PRIMARY KEY,
+			workflow_name       VARCHAR(100) NOT NULL,
+			tenant_id           VARCHAR(36)  NOT NULL,
+			status              VARCHAR(15)  NOT NULL DEFAULT 'RUNNING',
+			data                JSONB        NOT NULL DEFAULT '{}',
+			current_step_index  INTEGER      NOT NULL DEFAULT 0,
+			created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+			updated_at          TIMESTAMPTZ
+		);
+		CREATE TABLE IF NOT EXISTS pgaf_workflow_task (
+			id              VARCHAR(36)  PRIMARY KEY,
+			instance_id     VARCHAR(36)  NOT NULL REFERENCES pgaf_workflow_instance(id),
+			workflow_name   VARCHAR(100) NOT NULL,
+			tenant_id       VARCHAR(36)  NOT NULL,
+			current_step_id VARCHAR(100) NOT NULL,
+			step_label      VARCHAR(200),
+			assigned_role   VARCHAR(100),
+			data            JSONB        NOT NULL DEFAULT '{}',
+			status          VARCHAR(15)  NOT NULL DEFAULT 'PENDING',
+			created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+			completed_at    TIMESTAMPTZ,
+			completed_by    VARCHAR(255),
+			UNIQUE(instance_id, current_step_id)
+		);
+		CREATE INDEX IF NOT EXISTS ix_pgaf_wf_instance_tenant
+			ON pgaf_workflow_instance(tenant_id, status);
+		CREATE INDEX IF NOT EXISTS ix_pgaf_wf_task_tenant
+			ON pgaf_workflow_task(tenant_id, status);
+		CREATE INDEX IF NOT EXISTS ix_pgaf_wf_task_role
+			ON pgaf_workflow_task(assigned_role, status);
+		"""))
+
+
+# ---------------------------------------------------------------------------
+# Attribute-dict helper for condition evaluation
+# ---------------------------------------------------------------------------
+
+class _AttrDict(dict):
+	"""Dict subclass that allows attribute-style access for condition eval."""
+
+	def __getattr__(self, item: str) -> Any:
+		try:
+			return self[item]
+		except KeyError:
+			raise AttributeError(item)
+
+
+__all__ = [
+	"PgAppForgeWorkflowEngine",
+	"WorkflowDefinition",
+	"WorkflowInstance",
+	"create_workflow_tables",
+]

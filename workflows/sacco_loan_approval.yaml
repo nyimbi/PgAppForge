@@ -1,0 +1,63 @@
+name: sacco_loan_approval
+description: "SACCO loan application approval workflow"
+
+trigger:
+  event: "sacco.loan.application.created"
+  condition: "amount_cents > 0"
+
+steps:
+  - id: loan_officer_review
+    type: UserTask
+    label: "Loan Officer Review"
+    assignee_role: "Loan Officer"
+    form_fields:
+      - name: recommendation
+        type: choice
+        choices: [APPROVE, DECLINE, REQUEST_MORE_INFO]
+      - name: notes
+        type: text
+    sla_hours: 48
+
+  - id: credit_committee_vote
+    type: UserTask
+    label: "Credit Committee Vote"
+    condition: "loan_officer_review['recommendation'] == 'APPROVE'"
+    assignee_role: "Credit Committee"
+    form_fields:
+      - name: vote
+        type: choice
+        choices: [APPROVED, DECLINED]
+      - name: conditions
+        type: text
+        label: "Conditions (if any)"
+    sla_hours: 72
+
+  - id: ceo_approval
+    type: UserTask
+    label: "CEO Approval"
+    condition: "amount_cents > 50000000 and credit_committee_vote.get('vote') == 'APPROVED'"
+    assignee_role: "CEO"
+    form_fields:
+      - name: decision
+        type: choice
+        choices: [APPROVED, DECLINED]
+      - name: remarks
+        type: text
+    sla_hours: 24
+
+  - id: disburse
+    type: ServiceTask
+    label: "Disburse via M-Pesa"
+    service: "mpesa.disburse"
+    input_map:
+      msisdn: "application.phone_number"
+      amount_cents: "application.amount_cents"
+      reference: "workflow.instance_id"
+
+on_complete:
+  emit_event: "sacco.loan.disbursed"
+  notify_applicant: true
+
+on_decline:
+  emit_event: "sacco.loan.declined"
+  notify_applicant: true

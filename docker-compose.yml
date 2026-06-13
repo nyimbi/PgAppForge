@@ -21,17 +21,22 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app
-      FLASK_ENV: development
+      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app"
+      SECRET_KEY: "change-this-to-a-random-32-char-key-in-production"
+      FLASK_APP: "app"
+      FLASK_ENV: "development"
       FLASK_DEBUG: "1"
+      OTEL_ENABLED: "false"
     ports:
       - "8080:8080"
     depends_on:
       - postgres
     volumes:
       - .:/app            # mount source for hot-reload in dev
-    command: >
-      flask run --host=0.0.0.0 --port=8080 --reload
+      - /app/__pycache__  # exclude pycache from host mount
+    command: flask run --host=0.0.0.0 --port=8080 --reload
+    profiles:
+      - app
 
   # ── Worker (batch scheduler) ──────────────────────────────────────────────────
   worker:

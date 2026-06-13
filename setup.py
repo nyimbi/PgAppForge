@@ -72,6 +72,7 @@ setup(
         "inflect>=7.0.0, <8",
         "bleach>=6.0.0",  # XSS sanitisation for widgets
         "psycopg2-binary>=2.9.0",  # PostgreSQL only
+        "uuid6>=2022.10.25",        # UUID v7 (time-sortable) for audit log IDs
     ],
     extras_require={
         "jmespath": ["jmespath>=0.9.5"],
@@ -158,6 +159,20 @@ setup(
             "pytest>=7.0.0, <8.0.0",          # Alternative testing framework
             "pytest-cov>=4.0.0, <5.0.0",      # Coverage reporting
             "pre-commit>=3.0.0, <4.0.0",      # Git hooks
+        ],
+        # OpenTelemetry auto-instrumentation (Flask + SQLAlchemy + OTLP exporter)
+        # pip install pgappforge[otel]
+        "otel": [
+            "opentelemetry-sdk>=1.24",
+            "opentelemetry-instrumentation-flask>=0.45b0",
+            "opentelemetry-instrumentation-sqlalchemy>=0.45b0",
+            "opentelemetry-exporter-otlp-proto-grpc>=1.24",
+        ],
+        # iframe embedding with JWT verification
+        # pip install pgappforge[embedding]
+        # (PyJWT is already in install_requires; listed here for discoverability)
+        "embedding": [
+            "PyJWT>=2.0.0, <3.0.0",
         ],
     },
     tests_require=["nose2==0.14.0", "mockldap>=0.3.0", "hiro>=0.5.1"],

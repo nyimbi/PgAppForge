@@ -1,0 +1,196 @@
+# pgappforge/plugins/erp/hcm/payroll/semantic.yaml
+# Semantic definitions for the HCM Payroll module.
+# Loaded automatically by SemanticRegistry at startup.
+
+domain: erp
+module: payroll
+
+glossary:
+  gross pay:              "Total employee pay before any deductions (statutory or voluntary)"
+  net pay:                "Take-home pay after all deductions; gross pay minus total deductions"
+  paye:                   "Pay As You Earn — Kenyan income tax withheld from salary at source per KRA bands"
+  nhif:                   "National Hospital Insurance Fund — mandatory Kenyan health insurance deduction"
+  nssf:                   "National Social Security Fund — mandatory Kenyan pension deduction (Tier I + II)"
+  housing levy:           "Affordable Housing Levy — 1.5% of gross pay deducted from Feb 2024 per Kenya Finance Act"
+  payroll run:            "A batch pay calculation covering all eligible employees for one pay period"
+  payslip:                "Individual employee pay statement generated for one payroll run"
+  payroll period:         "Calendar month (or custom interval) covered by a single payroll run"
+  basic salary:           "Fixed monthly salary component before allowances or deductions"
+  allowance:              "Supplementary pay component (housing, transport, commuter, medical)"
+  overtime:               "Additional pay for hours worked beyond the standard work week"
+  off-cycle payroll:      "A payroll run outside the normal schedule (e.g. termination settlement)"
+  headcount:              "Count of active employees on the payroll as of a given date"
+  attrition:              "Rate at which employees leave the organisation (voluntary + involuntary)"
+  cost per hire:          "Total recruitment spend divided by number of new hires in a period"
+
+metrics:
+  - name:        headcount
+    label:       Headcount
+    description: Active employee count at the current date
+    sql:         >
+      SELECT COUNT(*) AS headcount
+      FROM pgaf_employee
+      WHERE employment_status = 'ACTIVE'
+    unit:        count
+    table:       pgaf_employee
+    aggregation: COUNT
+
+  - name:        total_payroll_cost
+    label:       Total Payroll Cost
+    description: Total gross pay disbursed in the most recently completed payroll run
+    sql:         >
+      SELECT SUM(ps.gross_pay_cents) / 100.0 AS total_payroll_cost_kes
+      FROM pgaf_payslip ps
+      JOIN pgaf_payroll_run pr ON pr.id = ps.payroll_run_id
+      WHERE pr.status     = 'PAID'
+        AND pr.period_end = (
+          SELECT MAX(period_end) FROM pgaf_payroll_run WHERE status = 'PAID'
+        )
+    unit:        KES
+    table:       pgaf_payslip
+    aggregation: SUM
+
+  - name:        avg_gross_pay
+    label:       Average Gross Pay
+    description: Average employee gross pay in the most recently completed payroll run
+    sql:         >
+      SELECT AVG(ps.gross_pay_cents) / 100.0 AS avg_gross_pay_kes
+      FROM pgaf_payslip ps
+      JOIN pgaf_payroll_run pr ON pr.id = ps.payroll_run_id
+      WHERE pr.status     = 'PAID'
+        AND pr.period_end = (
+          SELECT MAX(period_end) FROM pgaf_payroll_run WHERE status = 'PAID'
+        )
+    unit:        KES
+    table:       pgaf_payslip
+    aggregation: AVG
+
+  - name:        total_paye
+    label:       Total PAYE
+    description: Total PAYE (income tax) withheld in the last completed payroll run
+    sql:         >
+      SELECT SUM(ps.paye_cents) / 100.0 AS total_paye_kes
+      FROM pgaf_payslip ps
+      JOIN pgaf_payroll_run pr ON pr.id = ps.payroll_run_id
+      WHERE pr.status     = 'PAID'
+        AND pr.period_end = (
+          SELECT MAX(period_end) FROM pgaf_payroll_run WHERE status = 'PAID'
+        )
+    unit:        KES
+    table:       pgaf_payslip
+    aggregation: SUM
+
+  - name:        total_statutory_deductions
+    label:       Total Statutory Deductions
+    description: "Sum of PAYE + NHIF + NSSF + Housing Levy in the last completed payroll run"
+    sql:         >
+      SELECT SUM(
+        COALESCE(ps.paye_cents, 0)
+        + COALESCE(ps.nhif_cents, 0)
+        + COALESCE(ps.nssf_cents, 0)
+        + COALESCE(ps.housing_levy_cents, 0)
+      ) / 100.0 AS total_statutory_kes
+      FROM pgaf_payslip ps
+      JOIN pgaf_payroll_run pr ON pr.id = ps.payroll_run_id
+      WHERE pr.status     = 'PAID'
+        AND pr.period_end = (
+          SELECT MAX(period_end) FROM pgaf_payroll_run WHERE status = 'PAID'
+        )
+    unit:        KES
+    table:       pgaf_payslip
+    aggregation: SUM
+
+  - name:        payroll_cost_trend_6m
+    label:       Payroll Cost Trend (6 months)
+    description: Monthly total gross payroll for the past 6 completed payroll runs
+    sql:         >
+      SELECT
+        pr.period_end                           AS month,
+        SUM(ps.gross_pay_cents) / 100.0         AS total_payroll_kes,
+        COUNT(ps.id)                            AS employee_count
+      FROM pgaf_payslip ps
+      JOIN pgaf_payroll_run pr ON pr.id = ps.payroll_run_id
+      WHERE pr.status = 'PAID'
+        AND pr.period_end >= CURRENT_DATE - INTERVAL '6 months'
+      GROUP BY pr.period_end
+      ORDER BY pr.period_end
+    unit:        KES
+    table:       pgaf_payslip
+    aggregation: CUSTOM
+
+  - name:        new_hires_this_month
+    label:       New Hires (This Month)
+    description: Count of employees whose hire date falls in the current calendar month
+    sql:         >
+      SELECT COUNT(*) AS new_hires
+      FROM pgaf_employee
+      WHERE DATE_TRUNC('month', hire_date) = DATE_TRUNC('month', CURRENT_DATE)
+    unit:        count
+    table:       pgaf_employee
+    aggregation: COUNT
+
+  - name:        terminations_this_month
+    label:       Terminations (This Month)
+    description: Count of employees terminated in the current calendar month
+    sql:         >
+      SELECT COUNT(*) AS terminations
+      FROM pgaf_employee
+      WHERE employment_status IN ('TERMINATED', 'RESIGNED')
+        AND DATE_TRUNC('month', termination_date) = DATE_TRUNC('month', CURRENT_DATE)
+    unit:        count
+    table:       pgaf_employee
+    aggregation: COUNT
+
+dimensions:
+  - name:         department
+    label:        Department
+    table:        pgaf_department
+    key_column:   id
+    label_column: name
+    description:  Organisational department for payroll cost allocation
+    related_metrics:
+      - headcount
+      - total_payroll_cost
+      - avg_gross_pay
+      - total_statutory_deductions
+
+  - name:         pay_grade
+    label:        Pay Grade
+    table:        pgaf_pay_grade
+    key_column:   code
+    label_column: name
+    description:  Salary band / job grade (e.g. G1–G12)
+    related_metrics:
+      - headcount
+      - avg_gross_pay
+
+  - name:         location
+    label:        Work Location
+    table:        pgaf_work_location
+    key_column:   id
+    label_column: name
+    description:  Physical or remote work location for headcount reporting
+    related_metrics:
+      - headcount
+      - total_payroll_cost
+
+  - name:         employment_type
+    label:        Employment Type
+    table:        pgaf_employee
+    key_column:   employment_type
+    label_column: employment_type
+    description:  PERMANENT / CONTRACT / CASUAL / INTERN
+    related_metrics:
+      - headcount
+      - avg_gross_pay
+
+  - name:         payroll_period
+    label:        Payroll Period
+    table:        pgaf_payroll_run
+    key_column:   id
+    label_column: name
+    description:  Calendar month payroll run for trend analysis
+    related_metrics:
+      - total_payroll_cost
+      - avg_gross_pay
+      - total_statutory_deductions

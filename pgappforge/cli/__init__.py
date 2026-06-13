@@ -354,6 +354,32 @@ try:
 except ImportError:
     pass
 
+# Register 'gen module' — AI-powered NL-to-module codegen
+try:
+    import click as _click
+    from pgappforge.ai.codegen import codegen_cli_command as _codegen_fn
+
+    @gen.command("module")
+    @_click.option("--description", "-d", required=True,
+                   help="Natural language description of the business entity to generate")
+    @_click.option("--domain", default="platform", show_default=True,
+                   help="ERP domain: finance, hcm, crm, operations, platform")
+    @_click.option("--output", "-o", default="./generated/", show_default=True,
+                   help="Output directory for generated files")
+    def gen_module(description: str, domain: str, output: str) -> None:
+        """Generate a complete PgAppForge module from a natural language description.
+
+        \b
+        Example:
+          flask forge gen module \\
+            --description "Supplier invoice with vendor, amount in KES, M-Pesa ref" \\
+            --domain finance \\
+            --output pgappforge/plugins/erp/finance/supplier_invoice/
+        """
+        _codegen_fn(description, domain=domain, output=output)
+except Exception:
+    pass
+
 # Import and register deploy commands
 try:
     from .deploy.commands import deploy
@@ -409,5 +435,12 @@ except ImportError:
 try:
     from .template_commands import templates
     forge.add_command(templates)
+except ImportError:
+    pass
+
+# Environment pipeline commands (dev/staging/production)
+try:
+    from pgappforge.env_pipeline.cli import env
+    forge.add_command(env)
 except ImportError:
     pass

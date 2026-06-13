@@ -1,0 +1,77 @@
+name: leave_request
+description: "HR leave request approval workflow"
+
+trigger:
+  event: "hr.leave_request.submitted"
+  condition: "days_requested > 0"
+
+steps:
+  - id: line_manager_approval
+    type: UserTask
+    label: "Line Manager Approval"
+    assignee_role: "Line Manager"
+    form_fields:
+      - name: decision
+        type: choice
+        choices: [APPROVED, REJECTED, DEFERRED]
+      - name: cover_arrangement
+        type: text
+        label: "Cover Arrangement"
+      - name: notes
+        type: text
+    sla_hours: 48
+
+  - id: hr_review
+    type: UserTask
+    label: "HR Review"
+    condition: "line_manager_approval['decision'] == 'APPROVED'"
+    assignee_role: "HR Officer"
+    form_fields:
+      - name: leave_balance_confirmed
+        type: choice
+        choices: [YES, NO]
+      - name: hr_notes
+        type: text
+    sla_hours: 24
+
+  - id: hr_director_approval
+    type: UserTask
+    label: "HR Director Approval"
+    condition: "days_requested > 14 and hr_review.get('leave_balance_confirmed') == 'YES'"
+    assignee_role: "HR Director"
+    form_fields:
+      - name: decision
+        type: choice
+        choices: [APPROVED, REJECTED]
+      - name: remarks
+        type: text
+    sla_hours: 24
+
+  - id: update_leave_records
+    type: ServiceTask
+    label: "Update Leave Records"
+    service: "hr.update_leave_balance"
+    input_map:
+      employee_id: "leave_request.employee_id"
+      leave_type: "leave_request.leave_type"
+      days_taken: "leave_request.days_requested"
+      start_date: "leave_request.start_date"
+      end_date: "leave_request.end_date"
+
+  - id: notify_payroll
+    type: ServiceTask
+    label: "Notify Payroll"
+    service: "hr.notify_payroll_leave"
+    input_map:
+      employee_id: "leave_request.employee_id"
+      start_date: "leave_request.start_date"
+      end_date: "leave_request.end_date"
+      leave_type: "leave_request.leave_type"
+
+on_complete:
+  emit_event: "hr.leave_request.approved"
+  notify_applicant: true
+
+on_decline:
+  emit_event: "hr.leave_request.rejected"
+  notify_applicant: true

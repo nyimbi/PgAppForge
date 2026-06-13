@@ -132,7 +132,19 @@
       "WebFetch",
       "Grep",
       "Glob",
-      "LS"
+      "LS",
+      "Bash(tsc *)",
+      "Bash(psql *)",
+      "Bash(journalctl *)",
+      "Bash(systemctl is-active *)",
+      "Bash(systemctl status *)",
+      "Bash(flake8 *)",
+      "Bash(mypy *)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_click"
     ]
   }
 }

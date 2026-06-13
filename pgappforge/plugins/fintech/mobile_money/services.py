@@ -1754,6 +1754,54 @@ class MobileMoneyService:
 		self._session.flush()
 		self._try_post_gl(txn)
 
+		# ------------------------------------------------------------------
+		# SACCO contribution routing
+		# If BillRefNumber matches membership number pattern M-NNNNN (5+ digits),
+		# route the payment as a SACCO monthly contribution.
+		# Pattern is case-insensitive; matching is non-fatal.
+		# ------------------------------------------------------------------
+		import re as _re
+		_bill_ref = str(callback_data.get("BillRefNumber", "")).strip().upper()
+		if _re.match(r'^M-\d{5,}$', _bill_ref):
+			try:
+				from pgappforge.plugins.fintech.sacco.services import SACCOService
+				from pgappforge.plugins.fintech.sacco.models import Member
+				from sqlalchemy import select as _select
+				from datetime import datetime as _dt
+
+				_member = self._session.execute(
+					_select(Member).where(
+						Member.member_number == _bill_ref,
+						Member.tenant_id == self._tenant_id,
+					)
+				).scalar_one_or_none()
+
+				if _member and _member.membership_status == "ACTIVE":
+					_period = _dt.now().strftime("%Y-%m")
+					_contribution_cents = int(float(callback_data.get("TransAmount", 0)) * 100)
+					if _contribution_cents > 0:
+						_svc = SACCOService()
+						_contrib_date = _dt.now().date()
+						_svc.process_monthly_contribution(
+							session=self._session,
+							member_id=str(_member.id),
+							amount_cents=_contribution_cents,
+							contribution_date=_contrib_date,
+						)
+						log.info(
+							"SACCO: M-Pesa C2B contribution processed for member %s, amount=%sc period=%s",
+							_bill_ref, _contribution_cents, _period,
+						)
+				elif _member:
+					log.debug(
+						"SACCO C2B: member %s found but status=%s — contribution skipped",
+						_bill_ref, _member.membership_status,
+					)
+				else:
+					log.debug("SACCO C2B: no member found for BillRefNumber %s", _bill_ref)
+			except Exception as exc:
+				log.debug("SACCO M-Pesa contribution routing failed (non-fatal): %s", exc)
+
 		emit_mm_event(
 			C2BNotificationEvent(
 				aggregate_id=txn.id,

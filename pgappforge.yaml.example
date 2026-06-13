@@ -1,0 +1,58 @@
+# pgappforge.yaml.example
+#
+# Reference configuration for the PgAppForge environment pipeline.
+# Copy to pgappforge.yaml and customise for your project.
+#
+# ${VAR} syntax resolves OS environment variables at load time.
+# Values that are not set fall back to the literal "${VAR}" string.
+#
+# Usage:
+#   flask forge env list
+#   flask forge env diff development production
+#   flask forge env deploy staging --dry-run
+#   flask forge env promote staging production --confirm
+
+# Which environment is used when no explicit environment is passed
+default_environment: development
+
+environments:
+
+  # ── Development ────────────────────────────────────────────────────────────
+  development:
+    database_uri: "${SQLALCHEMY_DATABASE_URI}"   # e.g. postgresql://localhost/myapp_dev
+    debug: true
+    ai_features: true
+    mock_mpesa: true          # never hit real M-Pesa in dev
+    require_mfa: false
+    extra_plugins:
+      - pgappforge.plugins.devtools
+    env_vars:
+      LOG_LEVEL: DEBUG
+      FLASK_ENV: development
+
+  # ── Staging ────────────────────────────────────────────────────────────────
+  staging:
+    database_uri: "${STAGING_DATABASE_URI}"
+    debug: false
+    ai_features: true
+    mock_mpesa: false         # test against M-Pesa sandbox
+    require_mfa: false
+    extra_plugins: []
+    env_vars:
+      LOG_LEVEL: INFO
+      FLASK_ENV: staging
+      MPESA_ENV: sandbox
+
+  # ── Production ─────────────────────────────────────────────────────────────
+  production:
+    database_uri: "${PROD_DATABASE_URI}"
+    debug: false
+    ai_features: true
+    mock_mpesa: false
+    require_mfa: true         # enforced by pre-flight check
+    extra_plugins: []
+    env_vars:
+      LOG_LEVEL: WARNING
+      FLASK_ENV: production
+      MPESA_ENV: production
+      SENTRY_DSN: "${SENTRY_DSN}"

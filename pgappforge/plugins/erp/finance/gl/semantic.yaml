@@ -1,0 +1,170 @@
+# pgappforge/plugins/erp/finance/gl/semantic.yaml
+# Semantic definitions for the General Ledger (GL) module.
+# Loaded automatically by SemanticRegistry at startup.
+
+domain: erp
+module: gl
+
+glossary:
+  chart of accounts:  "Hierarchical list of GL accounts used to classify all financial transactions"
+  journal entry:      "A balanced double-entry record where total debits always equal total credits"
+  journal line:       "A single debit or credit line within a journal entry"
+  posting:            "The act of marking a journal batch as final and immutable"
+  period close:       "Month-end process that locks a GL period against further posting"
+  cost center:        "Organisational unit used to track departmental P&L; enables segment reporting"
+  fiscal year:        "12-month accounting period defined per organisation (need not follow calendar year)"
+  account type:       "Classification of a GL account: ASSET, LIABILITY, EQUITY, REVENUE, or EXPENSE"
+  trial balance:      "Summary listing every GL account with its debit and credit totals for a period"
+  balance sheet:      "Financial statement showing assets, liabilities, and equity at a point in time"
+  income statement:   "Financial statement showing revenue, expenses, and net income for a period"
+  ifrs:               "International Financial Reporting Standards — accounting rules used in Kenya"
+  accrual accounting: "Revenue and expenses recognised when earned/incurred, not when cash moves"
+  suspense account:   "Temporary holding account for transactions pending proper classification"
+
+metrics:
+  - name:        total_revenue
+    label:       Total Revenue
+    description: Sum of all revenue account credits for the current fiscal year to date
+    sql:         >
+      SELECT SUM(jl.amount_cents) / 100.0 AS total_revenue_kes
+      FROM pgaf_gl_journal_line jl
+      JOIN pgaf_gl_account a ON a.account_code = jl.account_code
+      WHERE a.account_type = 'REVENUE'
+        AND jl.entry_type   = 'CREDIT'
+        AND jl.posted_at   >= DATE_TRUNC('year', CURRENT_DATE)
+    unit:        KES
+    table:       pgaf_gl_journal_line
+    aggregation: SUM
+
+  - name:        total_expenses
+    label:       Total Expenses
+    description: Sum of all expense account debits for the current fiscal year to date
+    sql:         >
+      SELECT SUM(jl.amount_cents) / 100.0 AS total_expenses_kes
+      FROM pgaf_gl_journal_line jl
+      JOIN pgaf_gl_account a ON a.account_code = jl.account_code
+      WHERE a.account_type = 'EXPENSE'
+        AND jl.entry_type   = 'DEBIT'
+        AND jl.posted_at   >= DATE_TRUNC('year', CURRENT_DATE)
+    unit:        KES
+    table:       pgaf_gl_journal_line
+    aggregation: SUM
+
+  - name:        net_income
+    label:       Net Income
+    description: Revenue minus expenses (YTD); negative value indicates a net loss
+    sql:         >
+      SELECT
+        (SUM(CASE WHEN a.account_type = 'REVENUE' AND jl.entry_type = 'CREDIT'
+                  THEN jl.amount_cents ELSE 0 END)
+        - SUM(CASE WHEN a.account_type = 'EXPENSE' AND jl.entry_type = 'DEBIT'
+                   THEN jl.amount_cents ELSE 0 END)
+        ) / 100.0 AS net_income_kes
+      FROM pgaf_gl_journal_line jl
+      JOIN pgaf_gl_account a ON a.account_code = jl.account_code
+      WHERE jl.posted_at >= DATE_TRUNC('year', CURRENT_DATE)
+    unit:        KES
+    table:       pgaf_gl_journal_line
+    aggregation: CUSTOM
+
+  - name:        total_assets
+    label:       Total Assets
+    description: Sum of all asset account debit balances (balance sheet snapshot)
+    sql:         >
+      SELECT SUM(balance_cents) / 100.0 AS total_assets_kes
+      FROM pgaf_gl_account_balance ab
+      JOIN pgaf_gl_account a ON a.account_code = ab.account_code
+      WHERE a.account_type = 'ASSET'
+        AND ab.period_id = (
+          SELECT id FROM pgaf_gl_period
+          WHERE status = 'CLOSED'
+          ORDER BY end_date DESC LIMIT 1
+        )
+    unit:        KES
+    table:       pgaf_gl_account_balance
+    aggregation: SUM
+
+  - name:        total_liabilities
+    label:       Total Liabilities
+    description: Sum of all liability account credit balances (balance sheet snapshot)
+    sql:         >
+      SELECT SUM(balance_cents) / 100.0 AS total_liabilities_kes
+      FROM pgaf_gl_account_balance ab
+      JOIN pgaf_gl_account a ON a.account_code = ab.account_code
+      WHERE a.account_type = 'LIABILITY'
+        AND ab.period_id = (
+          SELECT id FROM pgaf_gl_period
+          WHERE status = 'CLOSED'
+          ORDER BY end_date DESC LIMIT 1
+        )
+    unit:        KES
+    table:       pgaf_gl_account_balance
+    aggregation: SUM
+
+  - name:        budget_variance
+    label:       Budget Variance (YTD)
+    description: Actual expenses vs budget for the current fiscal year (positive = over budget)
+    sql:         >
+      SELECT
+        SUM(jl.amount_cents - COALESCE(b.budget_cents, 0)) / 100.0 AS budget_variance_kes
+      FROM pgaf_gl_journal_line jl
+      JOIN pgaf_gl_account a ON a.account_code = jl.account_code
+      LEFT JOIN pgaf_gl_budget b
+        ON b.account_code = jl.account_code
+       AND b.fiscal_year_id = (
+         SELECT id FROM pgaf_gl_fiscal_year WHERE is_current = true LIMIT 1
+       )
+      WHERE a.account_type = 'EXPENSE'
+        AND jl.entry_type  = 'DEBIT'
+        AND jl.posted_at  >= DATE_TRUNC('year', CURRENT_DATE)
+    unit:        KES
+    table:       pgaf_gl_journal_line
+    aggregation: CUSTOM
+
+dimensions:
+  - name:         cost_center
+    label:        Cost Center
+    table:        pgaf_gl_cost_center
+    key_column:   code
+    label_column: name
+    description:  Departmental cost center for P&L segmentation
+    related_metrics:
+      - total_revenue
+      - total_expenses
+      - net_income
+      - budget_variance
+
+  - name:         account_type
+    label:        Account Type
+    table:        pgaf_gl_account
+    key_column:   account_type
+    label_column: account_type
+    description:  GL account classification (ASSET / LIABILITY / EQUITY / REVENUE / EXPENSE)
+    related_metrics:
+      - total_revenue
+      - total_expenses
+      - total_assets
+      - total_liabilities
+
+  - name:         period
+    label:        Accounting Period
+    table:        pgaf_gl_period
+    key_column:   id
+    label_column: name
+    description:  Monthly accounting period within a fiscal year
+    related_metrics:
+      - total_revenue
+      - total_expenses
+      - net_income
+
+  - name:         fiscal_year
+    label:        Fiscal Year
+    table:        pgaf_gl_fiscal_year
+    key_column:   id
+    label_column: name
+    description:  12-month fiscal year for year-over-year comparisons
+    related_metrics:
+      - total_revenue
+      - total_expenses
+      - net_income
+      - budget_variance

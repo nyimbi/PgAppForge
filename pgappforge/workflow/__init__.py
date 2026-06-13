@@ -1,41 +1,132 @@
 """
-PgForge Workflow Core Integration
+pgappforge/workflow — PgAppForge workflow subsystem.
 
-This module provides comprehensive workflow capabilities integrated directly into PgForge,
-enabling every ModelView and form to be part of an orchestrated business process with form ordering,
-state management, and intelligent routing.
+Two engines coexist in this package:
 
-Key Features:
-- Workflow-aware ModelViews with form sequencing
-- Dynamic CRUD operations based on workflow state
-- Real-time collaborative workflows
-- AI-powered workflow optimization
-- Automatic workflow generation from model relationships
+1. **YAML/BPMN engine** (new, Phase 1) — ``PgAppForgeWorkflowEngine`` backed by
+   sequential YAML definitions. Import from ``pgappforge.workflow.engine``:
+
+       from pgappforge.workflow import yaml_engine, init_yaml_engine
+       yaml_engine.load_all_from_directory("workflows/")
+       instance = yaml_engine.start("sacco_loan_approval", data, tenant_id="t1")
+
+2. **Form-sequencing engine** (original) — ``WorkflowEngine`` / ``WorkflowMixin``
+   for ModelView form orchestration. Import as before:
+
+       from pgappforge.workflow import WorkflowEngine, WorkflowMixin
+
+Both engines are independent; they share only this package namespace.
 """
 
-__version__ = "1.0.0"
-__author__ = "PgForge Workflow Team"
+__version__ = "2.0.0"
+__author__ = "PgAppForge Contributors"
 
-from .core import WorkflowEngine, WorkflowState, WorkflowStepDefinition
-from .views import WorkflowModelView, WorkflowFormView
-from .mixins import WorkflowMixin, WorkflowStateMixin
-from .security import WorkflowPermission, DynamicRoleManager
-from .widgets import WorkflowFormWidget, WorkflowProgressWidget, ConditionalFieldWidget
-from .forms import WorkflowFormSequence, FormOrchestrator
+import logging
+
+log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Original form-sequencing engine (unchanged)
+# Guarded: optional deps (redis, etc.) may not be installed in all envs.
+# ---------------------------------------------------------------------------
+try:
+	from .core import WorkflowEngine, WorkflowState, WorkflowStepDefinition
+	from .views import WorkflowModelView, WorkflowFormView
+	from .mixins import WorkflowMixin, WorkflowStateMixin
+	from .security import WorkflowPermission, DynamicRoleManager
+	from .widgets import WorkflowFormWidget, WorkflowProgressWidget, ConditionalFieldWidget
+	from .forms import WorkflowFormSequence, FormOrchestrator
+except Exception as _legacy_exc:  # noqa: BLE001
+	log.debug("Legacy workflow engine unavailable (missing optional deps): %s", _legacy_exc)
+	WorkflowEngine = None  # type: ignore[assignment,misc]
+	WorkflowState = None  # type: ignore[assignment,misc]
+	WorkflowStepDefinition = None  # type: ignore[assignment,misc]
+	WorkflowModelView = None  # type: ignore[assignment,misc]
+	WorkflowFormView = None  # type: ignore[assignment,misc]
+	WorkflowMixin = None  # type: ignore[assignment,misc]
+	WorkflowStateMixin = None  # type: ignore[assignment,misc]
+	WorkflowPermission = None  # type: ignore[assignment,misc]
+	DynamicRoleManager = None  # type: ignore[assignment,misc]
+	WorkflowFormWidget = None  # type: ignore[assignment,misc]
+	WorkflowProgressWidget = None  # type: ignore[assignment,misc]
+	ConditionalFieldWidget = None  # type: ignore[assignment,misc]
+	WorkflowFormSequence = None  # type: ignore[assignment,misc]
+	FormOrchestrator = None  # type: ignore[assignment,misc]
+
+# ---------------------------------------------------------------------------
+# New YAML/BPMN engine (Phase 1)
+# ---------------------------------------------------------------------------
+from .engine import (
+	PgAppForgeWorkflowEngine,
+	create_workflow_tables,
+)
+from .models import WorkflowDefinition, WorkflowInstance
+from .yaml_dsl import (
+	WorkflowDSLError,
+	parse_yaml_file,
+	parse_yaml_string,
+)
+
+# Module-level singleton — use directly or call init_yaml_engine() from app factory
+yaml_engine = PgAppForgeWorkflowEngine()
+
+
+def init_yaml_engine(app, db=None) -> None:
+	"""Integrate the YAML workflow engine with a Flask app.
+
+	Call once from your application factory after ``appbuilder.init_app(app)``.
+
+	- Creates ``pgaf_workflow_instance`` and ``pgaf_workflow_task`` tables.
+	- Auto-loads all ``*.yaml`` definitions from ``WORKFLOW_DIRECTORY`` config
+	  (defaults to ``"workflows/"`` relative to CWD).
+
+	Args:
+		app: Flask application instance.
+		db:  Optional SQLAlchemy ``db`` object (Flask-SQLAlchemy) or raw Engine.
+	"""
+	from pathlib import Path
+	with app.app_context():
+		if db is not None:
+			try:
+				raw_engine = getattr(db, "engine", db)
+				create_workflow_tables(raw_engine)
+				log.info("Workflow YAML-engine tables ready")
+			except Exception as exc:
+				log.warning("Workflow table setup failed (non-fatal): %s", exc)
+
+		workflow_dir = app.config.get("WORKFLOW_DIRECTORY", "workflows")
+		wf_path = Path(workflow_dir)
+		if wf_path.is_dir():
+			count = yaml_engine.load_all_from_directory(wf_path)
+			log.info("Loaded %d YAML workflow definition(s) from %s", count, wf_path)
+		else:
+			log.debug("WORKFLOW_DIRECTORY %r not found — no definitions auto-loaded", str(wf_path))
+
 
 __all__ = [
-    'WorkflowEngine',
-    'WorkflowState',
-    'WorkflowStepDefinition',
-    'WorkflowModelView',
-    'WorkflowFormView',
-    'WorkflowMixin',
-    'WorkflowStateMixin',
-    'WorkflowPermission',
-    'DynamicRoleManager',
-    'WorkflowFormWidget',
-    'WorkflowProgressWidget',
-    'ConditionalFieldWidget',
-    'WorkflowFormSequence',
-    'FormOrchestrator'
+	# ---- original form-sequencing engine ----
+	"WorkflowEngine",
+	"WorkflowState",
+	"WorkflowStepDefinition",
+	"WorkflowModelView",
+	"WorkflowFormView",
+	"WorkflowMixin",
+	"WorkflowStateMixin",
+	"WorkflowPermission",
+	"DynamicRoleManager",
+	"WorkflowFormWidget",
+	"WorkflowProgressWidget",
+	"ConditionalFieldWidget",
+	"WorkflowFormSequence",
+	"FormOrchestrator",
+	# ---- new YAML/BPMN engine ----
+	"yaml_engine",
+	"init_yaml_engine",
+	"PgAppForgeWorkflowEngine",
+	"WorkflowDefinition",
+	"WorkflowInstance",
+	"WorkflowDSLError",
+	"create_workflow_tables",
+	"parse_yaml_file",
+	"parse_yaml_string",
 ]

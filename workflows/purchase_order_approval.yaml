@@ -1,0 +1,80 @@
+name: purchase_order_approval
+description: "Purchase order approval workflow with tiered authorisation limits"
+
+trigger:
+  event: "procurement.purchase_order.submitted"
+  condition: "total_amount_cents > 0"
+
+steps:
+  - id: department_head_review
+    type: UserTask
+    label: "Department Head Review"
+    assignee_role: "Department Head"
+    form_fields:
+      - name: decision
+        type: choice
+        choices: [APPROVE, REJECT, REQUEST_REVISION]
+      - name: budget_code
+        type: text
+        label: "Budget Code"
+      - name: notes
+        type: text
+    sla_hours: 24
+
+  - id: finance_review
+    type: UserTask
+    label: "Finance Review"
+    condition: "department_head_review['decision'] == 'APPROVE'"
+    assignee_role: "Finance Officer"
+    form_fields:
+      - name: budget_available
+        type: choice
+        choices: [YES, NO]
+      - name: finance_notes
+        type: text
+    sla_hours: 24
+
+  - id: procurement_manager_approval
+    type: UserTask
+    label: "Procurement Manager Approval"
+    condition: "total_amount_cents > 5000000 and finance_review.get('budget_available') == 'YES'"
+    assignee_role: "Procurement Manager"
+    form_fields:
+      - name: decision
+        type: choice
+        choices: [APPROVED, REJECTED]
+      - name: preferred_supplier
+        type: text
+      - name: remarks
+        type: text
+    sla_hours: 48
+
+  - id: cfo_approval
+    type: UserTask
+    label: "CFO Approval"
+    condition: "total_amount_cents > 50000000 and procurement_manager_approval.get('decision') == 'APPROVED'"
+    assignee_role: "CFO"
+    form_fields:
+      - name: decision
+        type: choice
+        choices: [APPROVED, REJECTED]
+      - name: remarks
+        type: text
+    sla_hours: 24
+
+  - id: issue_lpo
+    type: ServiceTask
+    label: "Issue Local Purchase Order"
+    service: "procurement.issue_lpo"
+    input_map:
+      po_id: "purchase_order.id"
+      approved_by: "procurement_manager_approval.completed_by"
+      amount_cents: "purchase_order.total_amount_cents"
+
+on_complete:
+  emit_event: "procurement.purchase_order.approved"
+  notify_applicant: true
+
+on_decline:
+  emit_event: "procurement.purchase_order.rejected"
+  notify_applicant: true

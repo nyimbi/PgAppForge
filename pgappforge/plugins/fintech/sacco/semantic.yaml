@@ -1,0 +1,172 @@
+# pgappforge/plugins/fintech/sacco/semantic.yaml
+# Semantic definitions for the SACCO (Savings and Credit Co-operative) module.
+# Loaded automatically by SemanticRegistry at startup.
+
+domain: fintech
+module: sacco
+
+glossary:
+  par30:          "Portfolio at Risk 30 days — % of loan book 30+ days overdue. SASRA prudential limit: 10%"
+  par60:          "Portfolio at Risk 60 days — % of loan book 60+ days overdue. SASRA prudential limit: 5%"
+  fosa:           "Front Office Service Activity — deposit-taking arm of a SACCO (like a mini-bank)"
+  bosa:           "Back Office Service Activity — core savings and credit arm of a SACCO"
+  sasra:          "Sacco Societies Regulatory Authority — Kenya regulator for deposit-taking SACCOs"
+  shares:         "Member equity (share capital) in a SACCO, distinct from savings/deposit accounts"
+  dividend:       "Annual return paid to members proportional to their share capital"
+  rebate:         "Refund of interest charged, distributed to borrowers proportional to interest paid"
+  loan disbursement: "Transfer of approved loan principal to member's account"
+  arrears:        "Loans where a scheduled repayment has been missed (days_past_due > 0)"
+  write-off:      "Removal of an unrecoverable loan from the active book (still tracked off-balance-sheet)"
+  npa:            "Non-Performing Asset — loan 90+ days overdue requiring full provision"
+  provision:      "Reserve for expected credit losses, usually a % of outstanding balance per aging bucket"
+  member joining fee: "One-time fee paid when a new member joins the SACCO"
+
+metrics:
+  - name:        total_loan_book
+    label:       Total Loan Book
+    description: Sum of all outstanding loan balances in KES (ACTIVE + ARREARS status)
+    sql:         >
+      SELECT SUM(outstanding_balance_cents) / 100.0 AS total_loan_book_kes
+      FROM pgaf_loan
+      WHERE status IN ('ACTIVE', 'ARREARS')
+    unit:        KES
+    table:       pgaf_loan
+    aggregation: SUM
+
+  - name:        active_members
+    label:       Active Members
+    description: Count of SACCO members with ACTIVE status
+    sql:         >
+      SELECT COUNT(*) AS active_members
+      FROM pgaf_sacco_member
+      WHERE status = 'ACTIVE'
+    unit:        count
+    table:       pgaf_sacco_member
+    aggregation: COUNT
+
+  - name:        par30
+    label:       PAR 30
+    description: "Portfolio at risk: % of loan book 30+ days past due (SASRA limit 10%)"
+    sql:         >
+      SELECT ROUND(
+        100.0 *
+        SUM(CASE WHEN days_past_due >= 30 THEN outstanding_balance_cents ELSE 0 END)
+        / NULLIF(SUM(outstanding_balance_cents), 0),
+        2
+      ) AS par30_pct
+      FROM pgaf_loan
+      WHERE status IN ('ACTIVE', 'ARREARS', 'NPA')
+    unit:        "%"
+    table:       pgaf_loan
+    aggregation: CUSTOM
+
+  - name:        par60
+    label:       PAR 60
+    description: "Portfolio at risk: % of loan book 60+ days past due (SASRA limit 5%)"
+    sql:         >
+      SELECT ROUND(
+        100.0 *
+        SUM(CASE WHEN days_past_due >= 60 THEN outstanding_balance_cents ELSE 0 END)
+        / NULLIF(SUM(outstanding_balance_cents), 0),
+        2
+      ) AS par60_pct
+      FROM pgaf_loan
+      WHERE status IN ('ACTIVE', 'ARREARS', 'NPA')
+    unit:        "%"
+    table:       pgaf_loan
+    aggregation: CUSTOM
+
+  - name:        total_member_savings
+    label:       Total Member Savings
+    description: Sum of all member savings account balances in KES
+    sql:         >
+      SELECT SUM(balance_cents) / 100.0 AS total_savings_kes
+      FROM pgaf_sacco_account
+      WHERE account_type = 'SAVINGS' AND status = 'ACTIVE'
+    unit:        KES
+    table:       pgaf_sacco_account
+    aggregation: SUM
+
+  - name:        total_share_capital
+    label:       Total Share Capital
+    description: Sum of all member share capital balances in KES
+    sql:         >
+      SELECT SUM(balance_cents) / 100.0 AS total_share_capital_kes
+      FROM pgaf_sacco_account
+      WHERE account_type = 'SHARES' AND status = 'ACTIVE'
+    unit:        KES
+    table:       pgaf_sacco_account
+    aggregation: SUM
+
+  - name:        monthly_loan_disbursements
+    label:       Monthly Loan Disbursements
+    description: Total loan principal disbursed in the current calendar month
+    sql:         >
+      SELECT SUM(principal_cents) / 100.0 AS monthly_disbursements_kes
+      FROM pgaf_loan
+      WHERE DATE_TRUNC('month', disbursement_date) = DATE_TRUNC('month', CURRENT_DATE)
+    unit:        KES
+    table:       pgaf_loan
+    aggregation: SUM
+
+  - name:        loan_to_deposit_ratio
+    label:       Loan-to-Deposit Ratio
+    description: "Outstanding loans as % of total deposits (SASRA prudential limit: 70%)"
+    sql:         >
+      SELECT ROUND(
+        100.0 *
+        (SELECT SUM(outstanding_balance_cents) FROM pgaf_loan WHERE status IN ('ACTIVE','ARREARS'))
+        / NULLIF(
+          (SELECT SUM(balance_cents) FROM pgaf_sacco_account WHERE account_type='SAVINGS' AND status='ACTIVE'),
+          0
+        ),
+        2
+      ) AS ldr_pct
+    unit:        "%"
+    table:       pgaf_loan
+    aggregation: CUSTOM
+
+dimensions:
+  - name:         branch
+    label:        Branch
+    table:        pgaf_branch
+    key_column:   code
+    label_column: name
+    description:  Physical or virtual branch of the SACCO
+    related_metrics:
+      - total_loan_book
+      - active_members
+      - par30
+      - monthly_loan_disbursements
+
+  - name:         loan_product
+    label:        Loan Product
+    table:        pgaf_sacco_loan_product
+    key_column:   id
+    label_column: name
+    description:  Loan product type (e.g. Development, Emergency, Business)
+    related_metrics:
+      - total_loan_book
+      - par30
+      - par60
+      - monthly_loan_disbursements
+
+  - name:         member_type
+    label:        Member Type
+    table:        pgaf_sacco_member
+    key_column:   member_type
+    label_column: member_type
+    description:  Member category (INDIVIDUAL, CORPORATE, STAFF)
+    related_metrics:
+      - active_members
+      - total_member_savings
+
+  - name:         period_month
+    label:        Month
+    table:        pgaf_sacco_transaction
+    key_column:   DATE_TRUNC('month', transaction_date)
+    label_column: TO_CHAR(transaction_date, 'YYYY-Mon')
+    description:  Calendar month for time-series analysis
+    related_metrics:
+      - monthly_loan_disbursements
+      - total_loan_book

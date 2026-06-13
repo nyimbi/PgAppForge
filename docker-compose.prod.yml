@@ -1,205 +1,130 @@
-version: '3.8'
+version: "3.7"
+
+# ── PgAppForge production overlay ─────────────────────────────────────────────
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Differences from dev:
+#   • gunicorn instead of flask run (multi-worker, pre-fork)
+#   • No source volume mount — uses the image built from Dockerfile
+#   • OTEL_ENABLED=true — traces exported to your OTLP collector
+#   • Health checks on the app container
+#   • Nginx reverse proxy with TLS termination
+#   • Resource limits on app and worker containers
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
-  # PostgreSQL with Apache AGE extension
-  postgres-age:
-    image: apache/age:latest
-    container_name: fab-ext-postgres-age
-    environment:
-      POSTGRES_DB: graph_analytics_db
-      POSTGRES_USER: graph_admin
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
-    networks:
-      - graph-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U graph_admin -d graph_analytics_db"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Redis for caching and session storage
-  redis:
-    image: redis:7-alpine
-    container_name: fab-ext-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 512mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
-    networks:
-      - graph-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Flask-AppBuilder application
-  webapp:
+  app:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    container_name: fab-ext-webapp
+    container_name: pgappforge-app
+    restart: unless-stopped
+    env_file: .env
     environment:
-      # Database configuration
-      DATABASE_URI: postgresql://graph_admin:${POSTGRES_PASSWORD}@postgres-age:5432/graph_analytics_db
-      
-      # Redis configuration
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      
-      # Security configuration
-      SECRET_KEY: ${SECRET_KEY}
-      SECURITY_PASSWORD_SALT: ${SECURITY_PASSWORD_SALT}
-      
-      # Application configuration
-      FLASK_ENV: production
-      FLASK_DEBUG: "False"
-      FAB_SECURITY_MANAGER_CLASS: flask_appbuilder.security.manager.SecurityManager
-      
-      # Logging configuration
-      LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/application.log
-      
-      # Performance configuration
-      WORKERS: 4
-      TIMEOUT: 300
-      MAX_REQUESTS: 1000
-      MAX_REQUESTS_JITTER: 100
-      
-      # Feature flags
-      ENABLE_AI_ASSISTANT: ${ENABLE_AI_ASSISTANT:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ENABLE_FEDERATED_ANALYTICS: ${ENABLE_FEDERATED_ANALYTICS:-true}
-      ENABLE_MULTIMODAL_PROCESSING: ${ENABLE_MULTIMODAL_PROCESSING:-true}
-      
-      # Enterprise features
-      ENABLE_SSO: ${ENABLE_SSO:-false}
-      LDAP_SERVER: ${LDAP_SERVER}
-      LDAP_BIND_DN: ${LDAP_BIND_DN}
-      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
-      
-      # Monitoring
-      ENABLE_METRICS: "true"
-      METRICS_PORT: 9090
-      
+      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app"
+      FLASK_ENV: "production"
+      FLASK_DEBUG: "0"
+      OTEL_ENABLED: "true"
+      # Override OTEL_EXPORTER_ENDPOINT in .env with your collector address
     volumes:
+      # No source mount in prod — baked into image
       - app_logs:/app/logs
       - app_uploads:/app/uploads
-      - app_cache:/app/cache
-    ports:
-      - "8080:8080"
-      - "9090:9090"  # Metrics port
-    depends_on:
-      postgres-age:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - graph-network
-    restart: unless-stopped
+    # gunicorn: 4 sync workers, 120-s timeout, access log to stdout
+    command: >
+      gunicorn
+        --bind 0.0.0.0:8080
+        --workers 4
+        --timeout 120
+        --access-logfile -
+        --error-logfile -
+        --log-level info
+        "app:create_app()"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    profiles:
+      - prod
 
-  # Nginx reverse proxy
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: pgappforge-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app"
+      FLASK_ENV: "production"
+      OTEL_ENABLED: "true"
+    volumes:
+      - app_logs:/app/logs
+    command: flask fab run-scheduler
+    healthcheck:
+      test: ["CMD", "flask", "fab", "worker-status"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    profiles:
+      - prod
+      - worker
+
+  # ── Nginx TLS termination ─────────────────────────────────────────────────
   nginx:
-    image: nginx:alpine
-    container_name: fab-ext-nginx
+    image: nginx:1.25-alpine
+    container_name: pgappforge-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-      - static_files:/var/www/static:ro
     depends_on:
-      - webapp
-    networks:
-      - graph-network
-    restart: unless-stopped
+      - app
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    profiles:
+      - prod
 
-  # Prometheus for monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: fab-ext-prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=15d'
-      - '--web.enable-lifecycle'
-    ports:
-      - "9091:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    networks:
-      - graph-network
+  # ── Jaeger all-in-one (optional OTel backend — swap for Tempo/Datadog) ────
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: pgappforge-jaeger
     restart: unless-stopped
-
-  # Grafana for visualization
-  grafana:
-    image: grafana/grafana:latest
-    container_name: fab-ext-grafana
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+      COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    networks:
-      - graph-network
-    restart: unless-stopped
-
-  # Log aggregation
-  fluentd:
-    build: ./logging/fluentd
-    container_name: fab-ext-fluentd
-    volumes:
-      - app_logs:/fluentd/log/app:ro
-      - ./logging/fluentd/conf:/fluentd/etc:ro
-    ports:
-      - "24224:24224"
-    networks:
-      - graph-network
-    restart: unless-stopped
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC ingest
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - otel
 
 volumes:
-  postgres_data:
-    driver: local
   app_logs:
     driver: local
   app_uploads:
     driver: local
-  app_cache:
-    driver: local
-  static_files:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
-
-networks:
-  graph-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

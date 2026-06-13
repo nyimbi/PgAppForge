@@ -1,0 +1,521 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Audit Log | {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+	/* ── Audit Log page styles ───────────────────────────────────────────── */
+	.audit-header {
+		display: flex;
+		align-items: center;
+		gap: .6rem;
+		margin-bottom: 1.25rem;
+	}
+	.audit-header h2 {
+		margin: 0;
+		font-size: 1.4rem;
+		font-weight: 600;
+	}
+	.audit-header .compliance-badge {
+		font-size: .7rem;
+		background: #1a56db;
+		color: #fff;
+		border-radius: 3px;
+		padding: 2px 7px;
+		vertical-align: middle;
+	}
+
+	/* ── Search form ─────────────────────────────────────────────────────── */
+	#audit-search-form .form-group {
+		margin-bottom: .5rem;
+	}
+	#audit-search-form label {
+		font-weight: 600;
+		font-size: .8rem;
+		margin-bottom: 2px;
+	}
+
+	/* ── Results table ───────────────────────────────────────────────────── */
+	#audit-table-wrap {
+		overflow-x: auto;
+		margin-top: 1rem;
+	}
+	#audit-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: .83rem;
+	}
+	#audit-table th {
+		background: #f4f5f7;
+		border-bottom: 2px solid #ddd;
+		padding: 7px 10px;
+		text-align: left;
+		white-space: nowrap;
+		font-weight: 600;
+	}
+	#audit-table td {
+		padding: 6px 10px;
+		border-bottom: 1px solid #eee;
+		vertical-align: top;
+	}
+	#audit-table tr:hover > td {
+		background: #f9f9fb;
+	}
+
+	/* Operation badges */
+	.op-badge {
+		display: inline-block;
+		border-radius: 3px;
+		padding: 2px 8px;
+		font-size: .75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: .04em;
+	}
+	.op-INSERT { background: #d1fae5; color: #065f46; }
+	.op-UPDATE { background: #fef3c7; color: #92400e; }
+	.op-DELETE { background: #fee2e2; color: #991b1b; }
+
+	/* Changed-fields chips */
+	.field-chip {
+		display: inline-block;
+		background: #e5e7eb;
+		color: #374151;
+		border-radius: 3px;
+		padding: 1px 6px;
+		font-size: .72rem;
+		margin: 1px 2px 1px 0;
+	}
+
+	/* Expandable diff row */
+	.diff-row {
+		display: none;
+		background: #fafafa;
+	}
+	.diff-row.open {
+		display: table-row;
+	}
+	.diff-cell {
+		padding: 8px 12px 12px 12px;
+	}
+	.diff-panels {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+	}
+	.diff-panels h6 {
+		font-size: .75rem;
+		font-weight: 700;
+		margin-bottom: 4px;
+		text-transform: uppercase;
+		letter-spacing: .05em;
+		color: #6b7280;
+	}
+	.diff-json {
+		background: #1e293b;
+		color: #e2e8f0;
+		border-radius: 4px;
+		padding: 8px 10px;
+		font-family: "SFMono-Regular", Consolas, monospace;
+		font-size: .75rem;
+		max-height: 260px;
+		overflow-y: auto;
+		white-space: pre-wrap;
+		word-break: break-all;
+	}
+	.diff-json .added   { color: #86efac; }
+	.diff-json .removed { color: #fca5a5; }
+	.diff-json .neutral { color: #e2e8f0; }
+
+	/* Expand toggle */
+	.expand-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: #6b7280;
+		padding: 0 4px;
+		font-size: .85rem;
+	}
+	.expand-btn:hover { color: #1a56db; }
+
+	/* Status bar */
+	#audit-status {
+		font-size: .8rem;
+		color: #6b7280;
+		margin-top: .5rem;
+	}
+	#audit-loading {
+		display: none;
+		color: #6b7280;
+		font-size: .85rem;
+	}
+	#audit-error {
+		display: none;
+		margin-top: .5rem;
+	}
+
+	/* Empty state */
+	#audit-empty {
+		display: none;
+		text-align: center;
+		padding: 2.5rem 0;
+		color: #9ca3af;
+	}
+	#audit-empty i {
+		font-size: 2.5rem;
+		display: block;
+		margin-bottom: .5rem;
+	}
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="audit-header">
+	<i class="fa fa-shield" style="font-size:1.4rem; color:#1a56db;"></i>
+	<h2>Audit Log</h2>
+	<span class="compliance-badge">SOC2 · ISO 27001 · GDPR</span>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Search / filter form ───────────────────────────────────────────────── #}
+<div class="panel panel-default">
+	<div class="panel-heading" style="font-weight:600; font-size:.9rem;">
+		<i class="fa fa-search"></i> Filter
+	</div>
+	<div class="panel-body">
+		<form id="audit-search-form" onsubmit="return false;">
+			<div class="row">
+				<div class="col-sm-3">
+					<div class="form-group">
+						<label for="af-table">Table Name</label>
+						<input
+							type="text" id="af-table" name="table"
+							class="form-control input-sm"
+							placeholder="e.g. fin_invoice"
+							autocomplete="off"
+						>
+					</div>
+				</div>
+				<div class="col-sm-2">
+					<div class="form-group">
+						<label for="af-record">Record ID</label>
+						<input
+							type="text" id="af-record" name="record_id"
+							class="form-control input-sm"
+							placeholder="UUID or PK"
+							autocomplete="off"
+						>
+					</div>
+				</div>
+				<div class="col-sm-3">
+					<div class="form-group">
+						<label for="af-user">User ID</label>
+						<input
+							type="text" id="af-user" name="user_id"
+							class="form-control input-sm"
+							placeholder="User UUID"
+							autocomplete="off"
+						>
+					</div>
+				</div>
+				<div class="col-sm-2">
+					<div class="form-group">
+						<label for="af-limit">Limit</label>
+						<select id="af-limit" name="limit" class="form-control input-sm">
+							<option value="50">50</option>
+							<option value="100" selected>100</option>
+							<option value="250">250</option>
+							<option value="500">500</option>
+						</select>
+					</div>
+				</div>
+				<div class="col-sm-2" style="display:flex; align-items:flex-end; padding-bottom:1px;">
+					<button
+						type="button" id="audit-search-btn"
+						class="btn btn-primary btn-sm"
+						style="width:100%"
+					>
+						<i class="fa fa-search"></i> Search
+					</button>
+				</div>
+			</div>
+
+			<div class="row" style="margin-top:.25rem;">
+				<div class="col-sm-12">
+					<button
+						type="button" id="audit-clear-btn"
+						class="btn btn-default btn-xs"
+					>
+						<i class="fa fa-times"></i> Clear filters
+					</button>
+					<span id="audit-loading" style="margin-left:.75rem;">
+						<i class="fa fa-spinner fa-spin"></i> Loading…
+					</span>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>
+
+{# ── Error alert ────────────────────────────────────────────────────────── #}
+<div id="audit-error" class="alert alert-danger alert-dismissible" role="alert">
+	<button type="button" class="close" onclick="document.getElementById('audit-error').style.display='none';">
+		<span aria-hidden="true">&times;</span>
+	</button>
+	<span id="audit-error-msg">An error occurred while fetching audit data.</span>
+</div>
+
+{# ── Results ────────────────────────────────────────────────────────────── #}
+<div id="audit-status"></div>
+
+<div id="audit-empty">
+	<i class="fa fa-inbox"></i>
+	No audit records found. Try adjusting the filters.
+</div>
+
+<div id="audit-table-wrap" style="display:none;">
+	<table id="audit-table">
+		<thead>
+			<tr>
+				<th style="width:28px;"></th>
+				<th>Table</th>
+				<th>Record ID</th>
+				<th>Operation</th>
+				<th>User</th>
+				<th>Changed Fields</th>
+				<th>Timestamp (UTC)</th>
+				<th>Module</th>
+				<th>IP</th>
+			</tr>
+		</thead>
+		<tbody id="audit-tbody"></tbody>
+	</table>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+	"use strict";
+
+	/* ── Helpers ──────────────────────────────────────────────────────── */
+
+	function esc(s) {
+		if (s == null) return "";
+		return String(s)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;");
+	}
+
+	function opBadge(op) {
+		var cls = "op-" + op;
+		return '<span class="op-badge ' + cls + '">' + esc(op) + "</span>";
+	}
+
+	function fieldChips(fields) {
+		if (!fields || !fields.length) return '<span style="color:#9ca3af">—</span>';
+		return fields.map(function (f) {
+			return '<span class="field-chip">' + esc(f) + "</span>";
+		}).join("");
+	}
+
+	function fmtTs(iso) {
+		if (!iso) return "—";
+		try {
+			var d = new Date(iso);
+			return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " Z");
+		} catch (e) {
+			return esc(iso);
+		}
+	}
+
+	/**
+	 * Render a JSON diff between before and after objects.
+	 * Highlights added/changed keys green, removed keys red.
+	 */
+	function renderDiff(beforeObj, afterObj) {
+		if (!beforeObj && !afterObj) return '<span style="color:#9ca3af">No data captured.</span>';
+
+		var b = beforeObj || {};
+		var a = afterObj  || {};
+		var allKeys = Array.from(new Set(Object.keys(b).concat(Object.keys(a)))).sort();
+
+		var lines = [];
+		allKeys.forEach(function (k) {
+			var bv = JSON.stringify(b[k]);
+			var av = JSON.stringify(a[k]);
+			if (!(k in b)) {
+				lines.push('<span class="added">+ ' + esc(k) + ': ' + esc(av) + '</span>');
+			} else if (!(k in a)) {
+				lines.push('<span class="removed">- ' + esc(k) + ': ' + esc(bv) + '</span>');
+			} else if (bv !== av) {
+				lines.push('<span class="removed">- ' + esc(k) + ': ' + esc(bv) + '</span>');
+				lines.push('<span class="added">+ ' + esc(k) + ': ' + esc(av) + '</span>');
+			} else {
+				lines.push('<span class="neutral">  ' + esc(k) + ': ' + esc(bv) + '</span>');
+			}
+		});
+		return lines.join("\n");
+	}
+
+	/* ── Render rows ──────────────────────────────────────────────────── */
+
+	function renderRows(rows) {
+		var tbody = document.getElementById("audit-tbody");
+		tbody.innerHTML = "";
+
+		rows.forEach(function (r, idx) {
+			var expandId = "diff-" + idx;
+
+			/* Main data row */
+			var tr = document.createElement("tr");
+			tr.innerHTML = [
+				'<td>',
+				  '<button class="expand-btn" data-target="' + expandId + '" title="Show diff">',
+				    '<i class="fa fa-chevron-right"></i>',
+				  '</button>',
+				'</td>',
+				'<td><code style="font-size:.78rem;">' + esc(r.table_name) + '</code></td>',
+				'<td><code style="font-size:.75rem; word-break:break-all;">' + esc(r.record_id) + '</code></td>',
+				'<td>' + opBadge(r.operation) + '</td>',
+				'<td style="font-size:.8rem;">' + esc(r.user_email || r.user_id || '—') + '</td>',
+				'<td>' + fieldChips(r.changed_fields) + '</td>',
+				'<td style="white-space:nowrap; font-size:.78rem;">' + esc(fmtTs(r.created_at)) + '</td>',
+				'<td>' + esc(r.module || '—') + '</td>',
+				'<td style="font-size:.78rem;">' + esc(r.ip_address || '—') + '</td>',
+			].join("");
+			tbody.appendChild(tr);
+
+			/* Expandable diff row */
+			var diffTr = document.createElement("tr");
+			diffTr.id = expandId;
+			diffTr.className = "diff-row";
+
+			var before = r.before_json;
+			var after  = r.after_json;
+
+			diffTr.innerHTML = [
+				'<td colspan="9" class="diff-cell">',
+				  '<div class="diff-panels">',
+				    '<div>',
+				      '<h6>Before</h6>',
+				      '<div class="diff-json">',
+				        before ? esc(JSON.stringify(before, null, 2)) : '<span style="color:#9ca3af">none</span>',
+				      '</div>',
+				    '</div>',
+				    '<div>',
+				      '<h6>After</h6>',
+				      '<div class="diff-json">',
+				        after ? esc(JSON.stringify(after, null, 2)) : '<span style="color:#9ca3af">none</span>',
+				      '</div>',
+				    '</div>',
+				  '</div>',
+				  '<div style="margin-top:.75rem;">',
+				    '<h6>Diff</h6>',
+				    '<div class="diff-json">' + renderDiff(before, after) + '</div>',
+				  '</div>',
+				'</td>',
+			].join("");
+			tbody.appendChild(diffTr);
+		});
+
+		/* Wire expand buttons */
+		tbody.querySelectorAll(".expand-btn").forEach(function (btn) {
+			btn.addEventListener("click", function () {
+				var target = document.getElementById(btn.dataset.target);
+				var icon   = btn.querySelector("i");
+				if (target.classList.contains("open")) {
+					target.classList.remove("open");
+					icon.className = "fa fa-chevron-right";
+				} else {
+					target.classList.add("open");
+					icon.className = "fa fa-chevron-down";
+				}
+			});
+		});
+	}
+
+	/* ── Fetch ────────────────────────────────────────────────────────── */
+
+	function fetchAudit() {
+		var params = new URLSearchParams();
+
+		var table    = document.getElementById("af-table").value.trim();
+		var recordId = document.getElementById("af-record").value.trim();
+		var userId   = document.getElementById("af-user").value.trim();
+		var limit    = document.getElementById("af-limit").value;
+
+		if (table)    params.set("table",     table);
+		if (recordId) params.set("record_id", recordId);
+		if (userId)   params.set("user_id",   userId);
+		params.set("limit", limit);
+
+		/* UI state: loading */
+		document.getElementById("audit-loading").style.display = "inline";
+		document.getElementById("audit-error").style.display   = "none";
+		document.getElementById("audit-empty").style.display   = "none";
+		document.getElementById("audit-table-wrap").style.display = "none";
+		document.getElementById("audit-status").textContent    = "";
+
+		fetch("/platform/audit/api/query?" + params.toString(), {
+			credentials: "same-origin",
+			headers: { "Accept": "application/json" },
+		})
+		.then(function (resp) {
+			if (!resp.ok) throw new Error("HTTP " + resp.status + " " + resp.statusText);
+			return resp.json();
+		})
+		.then(function (data) {
+			document.getElementById("audit-loading").style.display = "none";
+
+			var rows = data.rows || [];
+			if (!rows.length) {
+				document.getElementById("audit-empty").style.display = "block";
+				return;
+			}
+
+			renderRows(rows);
+			document.getElementById("audit-table-wrap").style.display = "block";
+			document.getElementById("audit-status").textContent =
+				"Showing " + rows.length + " record" + (rows.length === 1 ? "" : "s")
+				+ (rows.length >= parseInt(limit) ? " (limit reached)" : "");
+		})
+		.catch(function (err) {
+			document.getElementById("audit-loading").style.display = "none";
+			document.getElementById("audit-error-msg").textContent = String(err);
+			document.getElementById("audit-error").style.display   = "block";
+		});
+	}
+
+	/* ── Wire controls ────────────────────────────────────────────────── */
+
+	document.addEventListener("DOMContentLoaded", function () {
+		document.getElementById("audit-search-btn").addEventListener("click", fetchAudit);
+
+		document.getElementById("audit-clear-btn").addEventListener("click", function () {
+			document.getElementById("af-table").value    = "";
+			document.getElementById("af-record").value   = "";
+			document.getElementById("af-user").value     = "";
+			document.getElementById("af-limit").value    = "100";
+			fetchAudit();
+		});
+
+		/* Allow Enter key in input fields */
+		["af-table", "af-record", "af-user"].forEach(function (id) {
+			document.getElementById(id).addEventListener("keydown", function (e) {
+				if (e.key === "Enter") fetchAudit();
+			});
+		});
+
+		/* Initial load — fetch all recent entries */
+		fetchAudit();
+	});
+
+}());
+</script>
+{% endblock %}

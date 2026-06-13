@@ -2,6 +2,11 @@
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
+# Optional extras are declared in setup.py extras_require.
+# Install with: pip install pgappforge[otel]
+#               pip install pgappforge[embedding]
+# See setup.py for the full list.
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
