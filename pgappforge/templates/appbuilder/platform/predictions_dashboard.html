@@ -1,0 +1,366 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Predictions Dashboard — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Prediction badge (reused in list views via JS) ──────────────── */
+  .pred-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .pred-badge-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+  }
+  .pred-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--erp-neutral-lt);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .pred-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s ease;
+  }
+  .pred-score-pct {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--erp-text-muted);
+    min-width: 32px;
+    text-align: right;
+  }
+
+  /* ── Recent-alerts table ─────────────────────────────────────────── */
+  #recent-table tbody tr:hover { background: var(--erp-primary-lt); }
+
+  /* ── API demo panel ──────────────────────────────────────────────── */
+  .api-demo {
+    background: #0f172a;
+    border-radius: var(--erp-radius);
+    padding: 14px 16px;
+    margin-top: 12px;
+  }
+  .api-demo pre {
+    color: #e2e8f0;
+    font-size: 12px;
+    margin: 0;
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  }
+  .api-demo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .api-demo-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #94a3b8;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header"
+     style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title"><i class="fa fa-magic"></i> Predictions Dashboard</h1>
+    <p class="erp-page-subtitle">
+      ML-powered inline predictions: SACCO credit scores, AP duplicate detection,
+      CRM lead scoring. Displayed as badge columns directly in list views.
+    </p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+    <button type="button"
+            class="btn btn-primary btn-sm"
+            data-toggle="modal"
+            data-target="#try-api-modal">
+      <i class="fa fa-play"></i> Try API
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI tiles ─────────────────────────────────────────────────────── #}
+{{ kpi_html | safe }}
+
+<div class="row">
+
+  {# ── Type distribution chart ─────────────────────────────────────── #}
+  <div class="col-md-5">
+    {% if type_chart_html %}
+    <div class="erp-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title">
+        <i class="fa fa-pie-chart"></i> By Prediction Type
+      </h4>
+      {{ type_chart_html | safe }}
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Label distribution chart ────────────────────────────────────── #}
+  <div class="col-md-7">
+    {% if label_chart_html %}
+    <div class="erp-chart-wrap erp-mb-24">
+      <h4 class="erp-chart-title">
+        <i class="fa fa-bar-chart"></i> By Outcome Label
+      </h4>
+      {{ label_chart_html | safe }}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Recent high-risk / flagged predictions ─────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);
+              display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-exclamation-triangle" style="color:var(--erp-danger);"></i>
+      Recent High-Risk Flags
+    </h4>
+    <span style="font-size:12px;color:var(--erp-text-muted);">Last 10</span>
+  </div>
+
+  {% if recent_high %}
+  <table class="erp-table" id="recent-table">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Record ID</th>
+        <th>Outcome</th>
+        <th>Score</th>
+        <th>Detected</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent_high %}
+      <tr>
+        <td style="font-size:12px;font-weight:600;">{{ r.type }}</td>
+        <td style="font-family:monospace;font-size:12px;">{{ r.reference_id }}</td>
+        <td>
+          <span class="pred-badge"
+                style="background:{{ r.color | default('#6b7280') }}22;
+                       color:{{ r.color | default('#6b7280') }};
+                       border:1px solid {{ r.color | default('#6b7280') }}44;">
+            {{ r.label }}
+          </span>
+        </td>
+        <td>
+          <div class="pred-badge-bar">
+            <div class="pred-bar-track">
+              <div class="pred-bar-fill"
+                   style="width:{{ r.score_pct }}%;background:{{ r.color | default('#6b7280') }};"></div>
+            </div>
+            <span class="pred-score-pct">{{ r.score_pct }}%</span>
+          </div>
+        </td>
+        <td style="font-size:12px;white-space:nowrap;">{{ r.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% else %}
+  <div style="padding:40px 24px;text-align:center;color:var(--erp-text-muted);">
+    <i class="fa fa-check-circle" style="font-size:36px;opacity:.25;display:block;margin-bottom:10px;"></i>
+    No high-risk predictions yet.
+    {% if total == 0 %}
+    <br>
+    <span style="font-size:12px;">Run predictions on records to populate this dashboard.</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{# ── Embedding guide ──────────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-code"></i> Embed in List Views
+    </h4>
+  </div>
+  <div style="padding:16px;">
+    <p style="font-size:13px;color:var(--erp-text-muted);margin-bottom:12px;">
+      Add inline prediction badges to any ERP list view using the
+      <code>/api/predict</code> endpoint or the bulk pre-load endpoint.
+    </p>
+
+    <div class="row">
+      <div class="col-md-6">
+        <p style="font-size:12px;font-weight:700;margin-bottom:6px;">
+          Single record badge (GET)
+        </p>
+        <div class="api-demo">
+          <pre>GET /platform/predictions/api/predict
+    ?type=credit_score
+    &amp;id=&lt;application_id&gt;
+
+→ {
+    "score_pct": 72,
+    "label":     "HIGH",
+    "color":     "#e02424",
+    "tooltip":   "Short tenure; Low rating",
+    "from_cache": false
+  }</pre>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <p style="font-size:12px;font-weight:700;margin-bottom:6px;">
+          List-view bulk pre-load (POST)
+        </p>
+        <div class="api-demo">
+          <pre>POST /platform/predictions/api/bulk
+Content-Type: application/json
+
+{
+  "type": "duplicate_invoice",
+  "ids": ["inv-1","inv-2","inv-3"]
+}
+
+→ {
+    "results": {
+      "inv-1": {"score_pct":92,"label":"DUPLICATE",...},
+      "inv-2": {"score_pct":8, "label":"UNIQUE",...}
+    }
+  }</pre>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:var(--erp-text-muted);margin-top:14px;">
+      <i class="fa fa-info-circle"></i>
+      Results are cached in <code>plat_ml_prediction</code> for 24 hours.
+      Bulk requests are capped at 20 fresh computations per call to bound latency.
+    </p>
+  </div>
+</div>
+
+{# ── Try-API modal ─────────────────────────────────────────────────────── #}
+<div class="modal fade" id="try-api-modal" tabindex="-1" role="dialog"
+     aria-labelledby="try-api-modal-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content" style="border-radius:var(--erp-radius);">
+      <div class="modal-header" style="border-bottom:1px solid var(--erp-border);">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="try-api-modal-label">
+          <i class="fa fa-play"></i> Try Predictions API
+        </h4>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:600;">Prediction Type</label>
+          <select id="try-type" class="form-control input-sm">
+            <option value="credit_score">Credit Score (SACCO Loan)</option>
+            <option value="duplicate_invoice">Invoice Duplicate Risk</option>
+            <option value="lead_score">CRM Lead Score</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:600;">Record ID</label>
+          <input id="try-id" type="text" class="form-control"
+                 placeholder="Enter a record ID to predict on">
+        </div>
+        <div id="try-result" style="display:none;margin-top:12px;">
+          <div class="api-demo">
+            <div class="api-demo-header">
+              <span class="api-demo-title">Response</span>
+            </div>
+            <pre id="try-result-json"></pre>
+          </div>
+          <div style="margin-top:10px;text-align:center;" id="try-badge-wrap"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button id="btn-try-predict" type="button" class="btn btn-primary">
+          <i class="fa fa-magic"></i> Predict
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Try-API modal ──────────────────────────────────────────────── */
+  document.getElementById('btn-try-predict').addEventListener('click', function () {
+    var type    = document.getElementById('try-type').value;
+    var id      = document.getElementById('try-id').value.trim();
+    var resultEl = document.getElementById('try-result');
+    var jsonEl   = document.getElementById('try-result-json');
+    var badgeEl  = document.getElementById('try-badge-wrap');
+
+    if (!id) {
+      jsonEl.textContent = 'Enter a Record ID first.';
+      resultEl.style.display = '';
+      return;
+    }
+
+    var btn = document.getElementById('btn-try-predict');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/platform/predictions/api/predict?type=' +
+          encodeURIComponent(type) + '&id=' + encodeURIComponent(id))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        jsonEl.textContent = JSON.stringify(data, null, 2);
+        resultEl.style.display = '';
+        /* Render live badge */
+        if (data.score_pct !== undefined) {
+          badgeEl.innerHTML =
+            '<span class="pred-badge" ' +
+                  'style="background:' + data.color + '22;' +
+                         'color:' + data.color + ';' +
+                         'border:1px solid ' + data.color + '44;' +
+                         'font-size:14px;padding:6px 14px;" ' +
+                  'title="' + escHtml(data.tooltip || '') + '">' +
+              data.label + ' — ' + data.score_pct + '%' +
+            '</span>';
+        } else {
+          badgeEl.innerHTML = '';
+        }
+      })
+      .catch(function (e) {
+        jsonEl.textContent = 'Error: ' + e;
+        resultEl.style.display = '';
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-magic"></i> Predict';
+      });
+  });
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+}());
+</script>
+{% endblock %}

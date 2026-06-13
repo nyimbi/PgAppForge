@@ -1,0 +1,522 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}My Workflow Tasks — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── SLA status colours ──────────────────────────────────────────── */
+  .sla-ok      { color: var(--erp-success); }
+  .sla-warning { color: var(--erp-warning); }
+  .sla-overdue { color: var(--erp-danger);  font-weight: 700; }
+
+  .sla-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .sla-dot.ok      { background: var(--erp-success); }
+  .sla-dot.warning { background: var(--erp-warning); }
+  .sla-dot.overdue { background: var(--erp-danger); }
+
+  /* ── Task row hover ──────────────────────────────────────────────── */
+  #inbox-table tbody tr { transition: background var(--erp-transition); }
+  #inbox-table tbody tr:hover { background: var(--erp-primary-lt); }
+
+  /* ── Data context modal ──────────────────────────────────────────── */
+  #ctx-modal pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: var(--erp-radius);
+    font-size: 12px;
+    padding: 14px 16px;
+    max-height: 380px;
+    overflow-y: auto;
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  }
+
+  /* ── Action form inline ──────────────────────────────────────────── */
+  .task-action-form {
+    display: inline-block;
+    margin: 0;
+  }
+
+  /* ── Empty state ─────────────────────────────────────────────────── */
+  .inbox-empty {
+    padding: 60px 24px;
+    text-align: center;
+    color: var(--erp-text-muted);
+  }
+  .inbox-empty-icon {
+    font-size: 52px;
+    opacity: .2;
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  /* ── Live-refresh indicator ──────────────────────────────────────── */
+  #refresh-indicator {
+    font-size: 11px;
+    color: var(--erp-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  #refresh-indicator .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--erp-success);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .3; }
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header"
+     style="display:flex;align-items:flex-start;justify-content:space-between;
+            flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 class="erp-page-title">
+      <i class="fa fa-inbox"></i> My Workflow Tasks
+      {% if tasks %}
+      <span class="erp-badge erp-badge-red" style="font-size:14px;vertical-align:middle;margin-left:6px;">
+        {{ tasks | length }}
+      </span>
+      {% endif %}
+    </h1>
+    <p class="erp-page-subtitle">
+      Pending approvals and actions assigned to your role
+      {% if user_role %}<strong>{{ user_role }}</strong>{% endif %}.
+      <a href="/platform/workflow/" style="margin-left:10px;">
+        <i class="fa fa-sitemap"></i> Workflow Designer
+      </a>
+    </p>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+    <div id="refresh-indicator">
+      <span class="dot"></span> Live — refreshes every 30s
+    </div>
+    <button id="btn-manual-refresh" class="btn btn-default btn-sm">
+      <i class="fa fa-refresh"></i> Refresh
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI summary strip ───────────────────────────────────────────── #}
+{% set total    = tasks | length %}
+{% set overdue  = tasks | selectattr('sla_status', 'equalto', 'overdue')  | list | length %}
+{% set warning  = tasks | selectattr('sla_status', 'equalto', 'warning')  | list | length %}
+{% set ok_count = tasks | selectattr('sla_status', 'equalto', 'ok')       | list | length %}
+
+<div class="erp-kpi-grid erp-mb-24" style="grid-template-columns:repeat(4,1fr);">
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-primary"></div>
+    <div class="erp-card-icon"><i class="fa fa-inbox"></i></div>
+    <p class="erp-card-title">Total Pending</p>
+    <p class="erp-card-value">{{ total }}</p>
+    <p class="erp-card-sub">Awaiting action</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-danger"></div>
+    <div class="erp-card-icon"><i class="fa fa-exclamation-circle"></i></div>
+    <p class="erp-card-title">Overdue</p>
+    <p class="erp-card-value" style="color:var(--erp-danger);">{{ overdue }}</p>
+    <p class="erp-card-sub">Past SLA &gt;48h</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-warning"></div>
+    <div class="erp-card-icon"><i class="fa fa-clock-o"></i></div>
+    <p class="erp-card-title">Near SLA</p>
+    <p class="erp-card-value" style="color:var(--erp-warning);">{{ warning }}</p>
+    <p class="erp-card-sub">24–48h elapsed</p>
+  </div>
+  <div class="erp-card">
+    <div class="erp-card-accent erp-card-accent-success"></div>
+    <div class="erp-card-icon"><i class="fa fa-check-circle"></i></div>
+    <p class="erp-card-title">Within SLA</p>
+    <p class="erp-card-value" style="color:var(--erp-success);">{{ ok_count }}</p>
+    <p class="erp-card-sub">Under 24h</p>
+  </div>
+</div>
+
+{# ── Filter bar ───────────────────────────────────────────────────── #}
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+  <select id="filter-sla" class="form-control input-sm" style="width:auto;">
+    <option value="">All SLA statuses</option>
+    <option value="overdue">Overdue</option>
+    <option value="warning">Near SLA</option>
+    <option value="ok">Within SLA</option>
+  </select>
+  <input id="filter-search" type="text" class="form-control input-sm"
+         placeholder="Search workflow or step…" style="max-width:260px;">
+  <span id="filter-count" style="font-size:12px;color:var(--erp-text-muted);"></span>
+</div>
+
+{# ── Tasks table ──────────────────────────────────────────────────── #}
+<div class="erp-table-wrap erp-mb-24" data-island="taskInbox">
+  {% if tasks %}
+  <table class="erp-table" id="inbox-table">
+    <thead>
+      <tr>
+        <th>Workflow</th>
+        <th>Step</th>
+        <th>Role</th>
+        <th>Submitted</th>
+        <th>SLA Status</th>
+        <th>Context</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in tasks %}
+      {% set sla = task.sla_status | default('ok') %}
+      <tr data-sla="{{ sla }}"
+          data-search="{{ task.workflow_name | lower }} {{ task.step_label | lower }}">
+        <td>
+          <span style="font-weight:600;color:var(--erp-primary);">
+            <i class="fa fa-sitemap" style="opacity:.6;margin-right:4px;"></i>
+            {{ task.workflow_name | replace('_', ' ') | title }}
+          </span>
+        </td>
+        <td>
+          <span style="font-size:13px;font-weight:600;">
+            {{ task.step_label | default(task.current_step_id) }}
+          </span>
+          <br>
+          <span style="font-size:11px;font-family:monospace;color:var(--erp-text-muted);">
+            {{ task.current_step_id }}
+          </span>
+        </td>
+        <td>
+          {% if task.assigned_role %}
+          <span class="erp-badge erp-badge-blue">
+            <i class="fa fa-users"></i> {{ task.assigned_role }}
+          </span>
+          {% else %}
+          <span style="color:var(--erp-text-muted);font-size:12px;">—</span>
+          {% endif %}
+        </td>
+        <td style="white-space:nowrap;font-size:12px;">
+          {{ task.created_at | default('—') }}
+        </td>
+        <td>
+          <span class="sla-dot {{ sla }}"></span>
+          <span class="sla-{{ sla }}">{{ task.sla_label | default('—') }}</span>
+        </td>
+        <td>
+          {% if task.data_preview %}
+          <button type="button"
+                  class="btn btn-xs btn-default btn-view-ctx"
+                  data-instance="{{ task.instance_id }}"
+                  data-ctx="{{ task.data_preview | tojson | e }}"
+                  title="View workflow context data">
+            <i class="fa fa-info-circle"></i> View
+          </button>
+          {% else %}
+          <span style="color:var(--erp-text-muted);font-size:12px;">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            {# Approve / Advance #}
+            <button type="button"
+                    class="btn btn-success btn-xs btn-complete-task"
+                    data-instance="{{ task.instance_id }}"
+                    data-step="{{ task.current_step_id }}"
+                    data-action="approve"
+                    title="Approve and advance workflow">
+              <i class="fa fa-check"></i> Approve
+            </button>
+            {# Decline / Reject #}
+            <button type="button"
+                    class="btn btn-danger btn-xs btn-complete-task"
+                    data-instance="{{ task.instance_id }}"
+                    data-step="{{ task.current_step_id }}"
+                    data-action="decline"
+                    title="Decline and reject workflow">
+              <i class="fa fa-times"></i> Decline
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% else %}
+  <div class="inbox-empty">
+    <i class="fa fa-check-circle inbox-empty-icon" style="color:var(--erp-success);"></i>
+    <p style="font-size:16px;font-weight:600;margin:0 0 8px;">All clear!</p>
+    <p style="font-size:13px;margin:0 0 20px;">
+      No pending tasks assigned to your role
+      {% if user_role %}<strong>{{ user_role }}</strong>{% endif %}.
+    </p>
+    <a href="/platform/workflow/" class="btn btn-primary">
+      <i class="fa fa-sitemap"></i> View Workflows
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Task-complete confirmation modal ──────────────────────────────── #}
+<div class="modal fade" id="complete-task-modal" tabindex="-1" role="dialog"
+     aria-labelledby="complete-task-modal-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content" style="border-radius:var(--erp-radius);">
+      <div class="modal-header" style="border-bottom:1px solid var(--erp-border);">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="complete-task-modal-label">
+          <i id="modal-action-icon" class="fa fa-check"></i>
+          <span id="modal-action-title">Complete Task</span>
+        </h4>
+      </div>
+      <div class="modal-body">
+        <p id="modal-action-desc" style="margin-bottom:14px;"></p>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px;font-weight:600;">Comment <small>(optional)</small></label>
+          <textarea id="modal-comment" class="form-control" rows="3"
+                    placeholder="Add a note about this decision…"></textarea>
+        </div>
+        <div id="modal-extra-fields">
+          {# Dynamic fields injected by JS for decline #}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button id="btn-confirm-complete" type="button" class="btn btn-primary">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Context data modal ────────────────────────────────────────────── #}
+<div class="modal fade" id="ctx-modal" tabindex="-1" role="dialog"
+     aria-labelledby="ctx-modal-label">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content" style="border-radius:var(--erp-radius);">
+      <div class="modal-header" style="border-bottom:1px solid var(--erp-border);">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="ctx-modal-label">
+          <i class="fa fa-database"></i> Workflow Context Data
+        </h4>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:var(--erp-text-muted);margin-bottom:10px;">
+          Instance: <code id="ctx-instance-id"></code>
+        </p>
+        <pre id="ctx-json"></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button id="btn-copy-ctx" type="button" class="btn btn-default btn-sm">
+          <i class="fa fa-copy"></i> Copy JSON
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Utility ─────────────────────────────────────────────────────── */
+  function showAlert(type, msg) {
+    var wrap = document.querySelector('.container-fluid');
+    if (!wrap) return;
+    var div = document.createElement('div');
+    div.className = 'alert alert-' + type + ' alert-dismissible';
+    div.role = 'alert';
+    div.innerHTML =
+      '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+      '<span aria-hidden="true">&times;</span></button>' + msg;
+    wrap.insertBefore(div, wrap.firstElementChild);
+    setTimeout(function () { if (div.parentNode) $(div).alert('close'); }, 6000);
+  }
+
+  /* ── Inline filter ───────────────────────────────────────────────── */
+  function applyFilters() {
+    var slaVal    = document.getElementById('filter-sla').value;
+    var searchVal = (document.getElementById('filter-search').value || '').toLowerCase();
+    var rows      = document.querySelectorAll('#inbox-table tbody tr[data-sla]');
+    var visible   = 0;
+    rows.forEach(function (tr) {
+      var slaOk    = !slaVal    || tr.getAttribute('data-sla') === slaVal;
+      var srchOk   = !searchVal || (tr.getAttribute('data-search') || '').includes(searchVal);
+      tr.style.display = (slaOk && srchOk) ? '' : 'none';
+      if (slaOk && srchOk) visible++;
+    });
+    var countEl = document.getElementById('filter-count');
+    if (countEl) countEl.textContent = visible + ' of ' + rows.length + ' tasks';
+  }
+
+  ['filter-sla', 'filter-search'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener(id === 'filter-search' ? 'input' : 'change', applyFilters);
+  });
+  applyFilters();  /* run once to initialise counter */
+
+  /* ── Context (data) modal ────────────────────────────────────────── */
+  document.querySelectorAll('.btn-view-ctx').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ctxRaw    = btn.getAttribute('data-ctx') || '{}';
+      var instanceId = btn.getAttribute('data-instance') || '';
+      var ctxParsed;
+      try { ctxParsed = JSON.parse(ctxRaw); } catch (e) { ctxParsed = ctxRaw; }
+      document.getElementById('ctx-instance-id').textContent = instanceId;
+      document.getElementById('ctx-json').textContent =
+        JSON.stringify(ctxParsed, null, 2);
+      $('#ctx-modal').modal('show');
+    });
+  });
+
+  document.getElementById('btn-copy-ctx').addEventListener('click', function () {
+    var txt = document.getElementById('ctx-json').textContent;
+    navigator.clipboard.writeText(txt)
+      .then(function () { showAlert('info', 'JSON copied to clipboard.'); })
+      .catch(function () {});
+  });
+
+  /* ── Complete / Approve / Decline modal ─────────────────────────── */
+  var pendingAction = null;  /* {instanceId, stepId, action} */
+
+  document.querySelectorAll('.btn-complete-task').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var instanceId = btn.getAttribute('data-instance');
+      var stepId     = btn.getAttribute('data-step');
+      var action     = btn.getAttribute('data-action') || 'approve';
+
+      pendingAction = {instanceId: instanceId, stepId: stepId, action: action};
+
+      var isDecline  = (action === 'decline');
+      var icon       = document.getElementById('modal-action-icon');
+      var title      = document.getElementById('modal-action-title');
+      var desc       = document.getElementById('modal-action-desc');
+      var confirmBtn = document.getElementById('btn-confirm-complete');
+      var extraFlds  = document.getElementById('modal-extra-fields');
+      var commentEl  = document.getElementById('modal-comment');
+
+      icon.className    = 'fa ' + (isDecline ? 'fa-times' : 'fa-check');
+      title.textContent = isDecline ? 'Decline Task' : 'Approve Task';
+      desc.innerHTML    = isDecline
+        ? 'You are about to <strong>decline</strong> step <code>' + escHtml(stepId) + '</code>. This will advance the workflow to its decline branch.'
+        : 'You are about to <strong>approve</strong> step <code>' + escHtml(stepId) + '</code>. The workflow will advance to the next step.';
+      confirmBtn.className = 'btn btn-' + (isDecline ? 'danger' : 'success');
+      confirmBtn.innerHTML = '<i class="fa ' + (isDecline ? 'fa-times' : 'fa-check') + '"></i> ' +
+                             (isDecline ? 'Decline' : 'Approve');
+
+      extraFlds.innerHTML = isDecline
+        ? '<div class="form-group">' +
+            '<label style="font-size:12px;font-weight:600;">Decline Reason</label>' +
+            '<input id="modal-decline-reason" type="text" class="form-control" ' +
+                   'placeholder="e.g. Missing documents">' +
+          '</div>'
+        : '';
+      commentEl.value = '';
+      $('#complete-task-modal').modal('show');
+    });
+  });
+
+  document.getElementById('btn-confirm-complete').addEventListener('click', function () {
+    if (!pendingAction) return;
+    var {instanceId, stepId, action} = pendingAction;
+    var comment   = document.getElementById('modal-comment').value.trim();
+    var reasonEl  = document.getElementById('modal-decline-reason');
+    var reason    = reasonEl ? reasonEl.value.trim() : '';
+
+    var payload   = {action: action, comment: comment};
+    if (reason)   payload.decline_reason = reason;
+
+    var confirmBtn = document.getElementById('btn-confirm-complete');
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+    fetch('/platform/workflow/complete/' + encodeURIComponent(instanceId) +
+          '/' + encodeURIComponent(stepId), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      $('#complete-task-modal').modal('hide');
+      if (data.success) {
+        showAlert('success',
+          'Task completed. Workflow status: <strong>' + (data.new_status || '—') + '</strong>');
+        /* Remove the completed row immediately */
+        var rows = document.querySelectorAll(
+          '#inbox-table tbody tr[data-search*="' + stepId + '"]');
+        /* Better: find by instance_id data attr — search both btns in this row */
+        document.querySelectorAll(
+          '.btn-complete-task[data-instance="' + instanceId + '"]'
+        ).forEach(function (b) {
+          var row = b.closest('tr');
+          if (row) row.style.opacity = '0.4';
+        });
+        setTimeout(function () {
+          document.querySelectorAll(
+            '.btn-complete-task[data-instance="' + instanceId + '"]'
+          ).forEach(function (b) {
+            var row = b.closest('tr');
+            if (row) row.remove();
+          });
+          applyFilters();
+        }, 600);
+      } else {
+        showAlert('danger', 'Failed: ' + (data.error || 'unknown error'));
+      }
+    })
+    .catch(function (e) { showAlert('danger', 'Network error: ' + e); })
+    .finally(function () {
+      pendingAction    = null;
+      confirmBtn.disabled = false;
+    });
+  });
+
+  /* ── Manual refresh ──────────────────────────────────────────────── */
+  document.getElementById('btn-manual-refresh').addEventListener('click', function () {
+    location.reload();
+  });
+
+  /* ── Auto-refresh every 30s ──────────────────────────────────────── */
+  var autoRefreshTimer = setInterval(function () {
+    location.reload();
+  }, 30000);
+
+  /* Cancel auto-refresh while a modal is open (prevents mid-action reload) */
+  ['#complete-task-modal', '#ctx-modal'].forEach(function (sel) {
+    var el = document.querySelector(sel);
+    if (!el) return;
+    $(el).on('show.bs.modal',  function () { clearInterval(autoRefreshTimer); });
+    $(el).on('hidden.bs.modal', function () {
+      autoRefreshTimer = setInterval(function () { location.reload(); }, 30000);
+    });
+  });
+
+  /* ── Escape helper ───────────────────────────────────────────────── */
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+}());
+</script>
+{% endblock %}

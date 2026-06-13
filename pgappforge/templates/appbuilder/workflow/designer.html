@@ -1,543 +1,783 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>BPMN Designer — {{ definition.name }}</title>
+{% extends "appbuilder/erp/base_erp.html" %}
 
-	<!-- Bootstrap 3 (matches FAB base) -->
-	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+{% block title %}
+  {% if design_mode %}
+    {% if workflow_name %}Edit Workflow — {{ workflow_name }}{% else %}New Workflow{% endif %}
+  {% else %}
+    Workflow Designer
+  {% endif %}
+  — {{ appbuilder.app_name }}
+{% endblock %}
 
-	<!-- bpmn-js styles -->
-	<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
-	<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
-	<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn.css">
+{% block extra_css %}
+{% if design_mode %}
+<link rel="stylesheet" href="https://unpkg.com/drawflow@0.0.59/dist/drawflow.min.css">
+{% endif %}
+<style>
+  /* ── Node colours ──────────────────────────────────────────────── */
+  .node-usertask    { background:#eff6ff; border:1.5px solid #3b82f6; }
+  .node-servicetask { background:#f0fdf4; border:1.5px solid #22c55e; }
+  .node-gateway     { background:#fff7ed; border:1.5px solid #f97316; }
 
-	<style>
-		body { padding-top: 50px; overflow: hidden; }
+  .drawflow .drawflow-node {
+    border-radius: var(--erp-radius);
+    box-shadow: var(--erp-shadow-sm);
+    min-width: 160px;
+  }
+  .drawflow .drawflow-node.selected {
+    box-shadow: 0 0 0 2px var(--erp-primary), var(--erp-shadow);
+  }
+  .node-type-tag {
+    font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .06em; text-align: center; padding: 4px 0 2px;
+  }
+  .node-type-tag.ut { color: #1d4ed8; }
+  .node-type-tag.st { color: #15803d; }
+  .node-type-tag.gw { color: #c2410c; }
+  .node-label {
+    font-size: 12px; font-weight: 700; text-align: center;
+    padding: 2px 8px 2px; color: var(--erp-text);
+  }
+  .node-role-badge {
+    font-size: 10px; text-align: center;
+    padding: 0 8px 6px; color: var(--erp-text-muted);
+  }
 
-		#designer-toolbar {
-			position: fixed;
-			top: 50px;
-			left: 0;
-			right: 0;
-			z-index: 1000;
-			background: #fff;
-			border-bottom: 1px solid #ddd;
-			padding: 6px 12px;
-			display: flex;
-			align-items: center;
-			gap: 6px;
-		}
+  /* ── Palette ───────────────────────────────────────────────────── */
+  .node-palette {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    padding: 10px 14px;
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    margin-bottom: 10px;
+  }
+  .palette-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: var(--erp-radius);
+    font-size: 12px; font-weight: 600;
+    cursor: grab; user-select: none; border: 1.5px solid;
+    transition: opacity 120ms;
+  }
+  .palette-item:active { cursor: grabbing; opacity: .7; }
+  .palette-ut { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+  .palette-st { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
+  .palette-gw { background: #fff7ed; border-color: #f97316; color: #c2410c; }
 
-		#designer-toolbar .toolbar-sep {
-			width: 1px;
-			height: 24px;
-			background: #ddd;
-			margin: 0 4px;
-		}
+  /* ── Toolbar ───────────────────────────────────────────────────── */
+  .designer-toolbar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px;
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    margin-bottom: 10px;
+  }
+  .designer-toolbar .sep { width:1px; height:22px; background:var(--erp-border); margin:0 2px; }
 
-		#designer-toolbar .def-name {
-			font-weight: 600;
-			color: #333;
-			margin-right: 8px;
-			font-size: 14px;
-		}
+  /* ── Canvas wrap ───────────────────────────────────────────────── */
+  #designer-canvas-wrap {
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    overflow: hidden; position: relative;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 23px, #e5e7eb 23px, #e5e7eb 24px
+    ),
+    repeating-linear-gradient(
+      90deg, transparent, transparent 23px, #e5e7eb 23px, #e5e7eb 24px
+    );
+  }
+  #drawflow { width: 100%; height: 560px; }
 
-		#canvas-container {
-			position: fixed;
-			top: 96px;   /* navbar(50) + toolbar(46) */
-			left: 0;
-			bottom: 0;
-			/* leave room for properties panel */
-			right: 280px;
-			background: #f8f8f8;
-		}
+  /* ── Properties panel ──────────────────────────────────────────── */
+  #props-panel {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    padding: 16px;
+  }
+  #props-panel h5 {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--erp-text-muted); margin: 0 0 12px;
+  }
+  #props-no-selection {
+    color: var(--erp-text-muted); font-size: 13px;
+    text-align: center; padding: 24px 0;
+  }
 
-		#properties-panel {
-			position: fixed;
-			top: 96px;
-			right: 0;
-			bottom: 0;
-			width: 280px;
-			background: #fff;
-			border-left: 1px solid #ddd;
-			overflow-y: auto;
-			padding: 12px;
-			font-size: 12px;
-		}
+  /* ── YAML preview panel ────────────────────────────────────────── */
+  #yaml-preview-wrap {
+    background: #0f172a;
+    border-radius: var(--erp-radius);
+    overflow: hidden; margin-top: 10px;
+  }
+  #yaml-preview-wrap pre {
+    color: #e2e8f0; font-size: 12px; padding: 14px 16px; margin: 0;
+    max-height: 240px; overflow-y: auto;
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  }
 
-		#properties-panel h5 {
-			margin-top: 0;
-			border-bottom: 1px solid #eee;
-			padding-bottom: 6px;
-			font-size: 13px;
-			font-weight: 600;
-		}
+  /* ── WF definition list ────────────────────────────────────────── */
+  .wf-def-card {
+    background: var(--erp-surface);
+    border: 1px solid var(--erp-border);
+    border-radius: var(--erp-radius);
+    box-shadow: var(--erp-shadow-sm);
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px;
+    transition: box-shadow var(--erp-transition);
+  }
+  .wf-def-card:hover { box-shadow: var(--erp-shadow); }
+  .wf-def-meta { flex: 1; min-width: 0; }
+  .wf-def-name {
+    font-size: 15px; font-weight: 700; color: var(--erp-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wf-def-desc {
+    font-size: 12px; color: var(--erp-text-muted); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wf-steps-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600;
+    color: var(--erp-primary); background: var(--erp-primary-lt);
+    border-radius: 10px; padding: 2px 8px; flex-shrink: 0;
+  }
+  .wf-empty-state { padding: 56px 24px; text-align: center; color: var(--erp-text-muted); }
+  .wf-empty-icon { font-size: 48px; opacity: .2; display: block; margin-bottom: 12px; }
+</style>
+{% endblock %}
 
-		#properties-panel .prop-group {
-			margin-bottom: 10px;
-		}
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    {% if design_mode %}
+      <h1 class="erp-page-title">
+        <i class="fa fa-sitemap"></i>
+        {% if workflow_name %}Edit: <em>{{ workflow_name }}</em>{% else %}New Workflow{% endif %}
+      </h1>
+      <p class="erp-page-subtitle">
+        Drag node types from the palette onto the canvas, connect them, then save.
+        <a href="/platform/workflow/" style="margin-left:10px;">
+          <i class="fa fa-arrow-left"></i> Back to list
+        </a>
+      </p>
+    {% else %}
+      <h1 class="erp-page-title"><i class="fa fa-sitemap"></i> Workflow Designer</h1>
+      <p class="erp-page-subtitle">Define, visualise and run your business process workflows.</p>
+    {% endif %}
+  </div>
+  {% if not design_mode %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+    <a href="/platform/workflow/design" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> New Workflow
+    </a>
+    <a href="/platform/workflow/inbox" class="btn btn-default btn-sm">
+      <i class="fa fa-inbox"></i> My Tasks
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
 
-		#properties-panel label {
-			font-weight: 600;
-			display: block;
-			margin-bottom: 2px;
-			color: #555;
-		}
+{% block content %}
 
-		#properties-panel input,
-		#properties-panel select,
-		#properties-panel textarea {
-			width: 100%;
-			padding: 4px 6px;
-			font-size: 12px;
-			border: 1px solid #ccc;
-			border-radius: 3px;
-			box-sizing: border-box;
-		}
+{% if not design_mode %}
+{# ═══════════════════ LIST MODE ═══════════════════════════════════════ #}
 
-		#properties-panel textarea { resize: vertical; min-height: 60px; }
+{{ kpi_html | safe }}
 
-		#status-bar {
-			position: fixed;
-			bottom: 0;
-			left: 0;
-			right: 280px;
-			height: 24px;
-			background: #333;
-			color: #ccc;
-			font-size: 11px;
-			line-height: 24px;
-			padding: 0 10px;
-			z-index: 900;
-		}
+<div class="erp-table-wrap erp-mb-24">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--erp-border);
+              display:flex;align-items:center;justify-content:space-between;">
+    <h4 class="erp-chart-title erp-mb-0">
+      <i class="fa fa-list"></i> Workflow Definitions
+    </h4>
+    <a href="/platform/workflow/design" class="btn btn-primary btn-xs">
+      <i class="fa fa-plus"></i> Create New
+    </a>
+  </div>
 
-		.btn-toolbar-action {
-			padding: 3px 10px;
-			font-size: 12px;
-		}
+  {% if definitions %}
+  <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">
+    {% for wf in definitions %}
+    <div class="wf-def-card">
+      <i class="fa fa-sitemap" style="font-size:26px;color:var(--erp-primary);opacity:.55;flex-shrink:0;"></i>
+      <div class="wf-def-meta">
+        <div class="wf-def-name">{{ wf.name }}</div>
+        {% if wf.description %}<div class="wf-def-desc">{{ wf.description }}</div>{% endif %}
+      </div>
+      <span class="wf-steps-badge">
+        <i class="fa fa-tasks"></i>
+        {{ wf.steps }} step{{ 's' if wf.steps != 1 else '' }}
+      </span>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <a href="/platform/workflow/design/{{ wf.slug }}" class="btn btn-default btn-xs">
+          <i class="fa fa-pencil"></i> Design
+        </a>
+        <button class="btn btn-success btn-xs"
+                data-start-wf="{{ wf.slug }}"
+                type="button">
+          <i class="fa fa-play"></i> Start
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 
-		#save-indicator {
-			font-size: 11px;
-			color: #5cb85c;
-			margin-left: 6px;
-			display: none;
-		}
-
-		.djs-container { background: #fafafa; }
-
-		/* bpmn-js zoom controls look fine against light bg */
-	</style>
-</head>
-<body>
-
-<!-- FAB Navbar shim -->
-<nav class="navbar navbar-default navbar-fixed-top">
-	<div class="container-fluid">
-		<div class="navbar-header">
-			<a class="navbar-brand" href="{{ url_for('ProcessDashboardView.index') }}">BPM</a>
-		</div>
-		<ul class="nav navbar-nav">
-			<li><a href="{{ url_for('ProcessDefinitionView.list') }}">Definitions</a></li>
-			<li class="active"><a href="#">Designer</a></li>
-		</ul>
-	</div>
-</nav>
-
-<!-- Toolbar -->
-<div id="designer-toolbar">
-	<span class="def-name">{{ definition.name }} <small class="text-muted">v{{ definition.version }}</small></span>
-	<div class="toolbar-sep"></div>
-
-	<button class="btn btn-sm btn-primary btn-toolbar-action" id="btn-save" title="Save BPMN XML to definition">
-		<span class="glyphicon glyphicon-floppy-disk"></span> Save
-	</button>
-	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-load" title="Reload saved XML">
-		<span class="glyphicon glyphicon-refresh"></span> Load
-	</button>
-	<button class="btn btn-sm btn-info btn-toolbar-action" id="btn-sync" title="Parse BPMN and sync process steps">
-		<span class="glyphicon glyphicon-cog"></span> Sync Steps
-	</button>
-	<button class="btn btn-sm btn-warning btn-toolbar-action" id="btn-export-png" title="Export diagram as PNG">
-		<span class="glyphicon glyphicon-picture"></span> Export PNG
-	</button>
-	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-new" title="Create a new blank process diagram">
-		<span class="glyphicon glyphicon-file"></span> New
-	</button>
-
-	<div class="toolbar-sep"></div>
-	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-zoom-in" title="Zoom in">+</button>
-	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-zoom-reset" title="Fit diagram">⊙</button>
-	<button class="btn btn-sm btn-default btn-toolbar-action" id="btn-zoom-out" title="Zoom out">−</button>
-
-	<span id="save-indicator"><span class="glyphicon glyphicon-ok"></span> Saved</span>
+  {% else %}
+  <div class="wf-empty-state">
+    <i class="fa fa-sitemap wf-empty-icon"></i>
+    <p style="font-size:15px;font-weight:600;margin:0 0 8px;">No workflows yet</p>
+    <p style="font-size:13px;margin:0 0 20px;">
+      Create your first workflow to automate approvals and business processes.
+    </p>
+    <a href="/platform/workflow/design" class="btn btn-primary">
+      <i class="fa fa-plus"></i> Create First Workflow
+    </a>
+  </div>
+  {% endif %}
 </div>
 
-<!-- Canvas -->
-<div id="canvas-container">
-	<div id="bpmn-canvas" style="width:100%;height:100%;"></div>
+{% else %}
+{# ═══════════════════ DESIGN MODE ════════════════════════════════════ #}
+
+<div class="row">
+
+  {# ── Canvas column ─────────────────────────────────────────────── #}
+  <div class="col-md-9">
+
+    {# Workflow name + description ──────────────────────────────── #}
+    <div style="background:var(--erp-surface);border:1px solid var(--erp-border);
+                border-radius:var(--erp-radius);padding:12px 14px;margin-bottom:10px;
+                display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:180px;">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">
+          Workflow Name <span style="color:var(--erp-danger);">*</span>
+        </label>
+        <input id="wf-name" type="text" class="form-control input-sm"
+               placeholder="e.g. loan_approval"
+               value="{{ workflow_name }}"
+               style="font-family:monospace;">
+      </div>
+      <div style="flex:2;min-width:220px;">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Description</label>
+        <input id="wf-desc" type="text" class="form-control input-sm"
+               placeholder="What does this workflow do?"
+               value="{{ workflow_data.description | default('') }}">
+      </div>
+    </div>
+
+    {# Node palette ───────────────────────────────────────────── #}
+    <div class="node-palette" id="node-palette">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;
+                   letter-spacing:.06em;color:var(--erp-text-muted);margin-right:4px;">
+        Nodes:
+      </span>
+      <div class="palette-item palette-ut" draggable="true" data-node-type="UserTask">
+        <i class="fa fa-user"></i> User Task
+      </div>
+      <div class="palette-item palette-st" draggable="true" data-node-type="ServiceTask">
+        <i class="fa fa-cog"></i> Service Task
+      </div>
+      <div class="palette-item palette-gw" draggable="true" data-node-type="Gateway">
+        <i class="fa fa-code-fork"></i> Gateway
+      </div>
+    </div>
+
+    {# Toolbar ─────────────────────────────────────────────────── #}
+    <div class="designer-toolbar">
+      <button id="btn-save" class="btn btn-primary btn-sm">
+        <i class="fa fa-save"></i> Save YAML
+      </button>
+      <button id="btn-del-node" class="btn btn-default btn-sm" title="Delete selected node (Del)">
+        <i class="fa fa-trash-o"></i>
+      </button>
+      <div class="sep"></div>
+      <button id="btn-zoom-in"    class="btn btn-default btn-sm" title="Zoom in">
+        <i class="fa fa-search-plus"></i>
+      </button>
+      <button id="btn-zoom-out"   class="btn btn-default btn-sm" title="Zoom out">
+        <i class="fa fa-search-minus"></i>
+      </button>
+      <button id="btn-zoom-reset" class="btn btn-default btn-sm" title="Fit canvas">
+        <i class="fa fa-expand"></i>
+      </button>
+      <div class="sep"></div>
+      <button id="btn-toggle-yaml" class="btn btn-default btn-sm">
+        <i class="fa fa-code"></i> YAML
+      </button>
+      <label class="btn btn-default btn-sm" style="margin:0;cursor:pointer;" title="Import YAML">
+        <i class="fa fa-upload"></i> Import
+        <input id="yaml-import-file" type="file" accept=".yaml,.yml" style="display:none;">
+      </label>
+    </div>
+
+    {# Drawflow canvas ─────────────────────────────────────────── #}
+    <div id="designer-canvas-wrap">
+      <div id="drawflow"></div>
+    </div>
+
+    {# YAML preview (hidden by default) ────────────────────────── #}
+    <div id="yaml-preview-wrap" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:7px 14px;background:#1e293b;">
+        <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">
+          YAML Preview
+        </span>
+        <button id="btn-copy-yaml" class="btn btn-xs"
+                style="background:#334155;color:#94a3b8;border:none;font-size:11px;">
+          <i class="fa fa-copy"></i> Copy
+        </button>
+      </div>
+      <pre id="yaml-preview-content">— click YAML to generate —</pre>
+    </div>
+
+  </div>
+
+  {# ── Properties panel ──────────────────────────────────────── #}
+  <div class="col-md-3">
+
+    <div id="props-panel">
+      <h5><i class="fa fa-sliders"></i> Node Properties</h5>
+      <div id="props-no-selection">
+        <i class="fa fa-mouse-pointer" style="font-size:28px;opacity:.3;display:block;margin-bottom:8px;"></i>
+        Click a node to edit
+      </div>
+      <div id="props-form" style="display:none;">
+        <input type="hidden" id="prop-node-id">
+        <div class="form-group" style="margin-bottom:9px;">
+          <label style="font-size:12px;font-weight:600;">Step ID</label>
+          <input id="prop-step-id" type="text" class="form-control input-sm"
+                 placeholder="unique_id">
+        </div>
+        <div class="form-group" style="margin-bottom:9px;">
+          <label style="font-size:12px;font-weight:600;">Label</label>
+          <input id="prop-label" type="text" class="form-control input-sm"
+                 placeholder="Display label">
+        </div>
+        <div class="form-group" style="margin-bottom:9px;">
+          <label style="font-size:12px;font-weight:600;">Type</label>
+          <select id="prop-type" class="form-control input-sm">
+            <option value="UserTask">UserTask</option>
+            <option value="ServiceTask">ServiceTask</option>
+            <option value="Gateway">Gateway</option>
+          </select>
+        </div>
+        <div id="prop-role-group" class="form-group" style="margin-bottom:9px;">
+          <label style="font-size:12px;font-weight:600;">Assignee Role</label>
+          <input id="prop-role" type="text" class="form-control input-sm"
+                 placeholder="e.g. Loan Officer">
+        </div>
+        <div id="prop-svc-group" class="form-group" style="margin-bottom:9px;display:none;">
+          <label style="font-size:12px;font-weight:600;">Service Name</label>
+          <input id="prop-service" type="text" class="form-control input-sm"
+                 placeholder="e.g. notify_applicant">
+        </div>
+        <div class="form-group" style="margin-bottom:9px;">
+          <label style="font-size:12px;font-weight:600;">Condition <small>(Python)</small></label>
+          <input id="prop-condition" type="text" class="form-control input-sm"
+                 placeholder="decision == 'APPROVE'">
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:12px;font-weight:600;">SLA Hours</label>
+          <input id="prop-sla" type="number" class="form-control input-sm"
+                 placeholder="48" min="1">
+        </div>
+        <button id="btn-apply-props" class="btn btn-primary btn-sm btn-block">
+          <i class="fa fa-check"></i> Apply
+        </button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding:12px;background:var(--erp-surface);
+                border:1px solid var(--erp-border);border-radius:var(--erp-radius);">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;
+                letter-spacing:.06em;color:var(--erp-text-muted);margin:0 0 8px;">Legend</p>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:14px;height:14px;border-radius:3px;
+                       background:#eff6ff;border:1.5px solid #3b82f6;flex-shrink:0;"></span>
+          <span style="font-size:12px;">User Task — human</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:14px;height:14px;border-radius:3px;
+                       background:#f0fdf4;border:1.5px solid #22c55e;flex-shrink:0;"></span>
+          <span style="font-size:12px;">Service Task — automated</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:14px;height:14px;border-radius:3px;
+                       background:#fff7ed;border:1.5px solid #f97316;flex-shrink:0;"></span>
+          <span style="font-size:12px;">Gateway — conditional</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>{# /row #}
+{% endif %}{# /design_mode #}
+
+{# ── Start-workflow modal ────────────────────────────────────────── #}
+<div class="modal fade" id="start-wf-modal" tabindex="-1" role="dialog"
+     aria-labelledby="start-wf-modal-label">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content" style="border-radius:var(--erp-radius);">
+      <div class="modal-header" style="border-bottom:1px solid var(--erp-border);">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="modal-title" id="start-wf-modal-label">
+          <i class="fa fa-play"></i> Start Workflow
+        </h4>
+      </div>
+      <div class="modal-body">
+        <p>Start a new instance of <strong id="start-wf-name"></strong>?</p>
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:600;">
+            Initial Data <span style="font-weight:400;">(JSON, optional)</span>
+          </label>
+          <textarea id="start-wf-data" class="form-control" rows="4"
+                    placeholder='{"applicant_id": "APP-001"}'
+                    style="font-family:monospace;font-size:12px;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button id="btn-confirm-start" type="button" class="btn btn-success">
+          <i class="fa fa-play"></i> Start Instance
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- Properties panel -->
-<div id="properties-panel">
-	<h5>Properties</h5>
-	<div id="prop-placeholder" class="text-muted" style="font-size:12px;padding:8px 0">
-		Select an element to edit its properties.
-	</div>
-	<div id="prop-form" style="display:none">
-		<div class="prop-group">
-			<label>ID</label>
-			<input type="text" id="prop-id" readonly style="background:#f5f5f5">
-		</div>
-		<div class="prop-group">
-			<label>Name</label>
-			<input type="text" id="prop-name" placeholder="Element name">
-		</div>
-		<div class="prop-group" id="prop-role-group">
-			<label>Assigned Role</label>
-			<input type="text" id="prop-role" placeholder="FAB role name">
-		</div>
-		<div class="prop-group" id="prop-timeout-group">
-			<label>Timeout (hours)</label>
-			<input type="number" id="prop-timeout" min="0" placeholder="24">
-		</div>
-		<div class="prop-group" id="prop-conditions-group">
-			<label>Conditions (JSON)</label>
-			<textarea id="prop-conditions" placeholder='[{"field":"amount","op":">","value":1000}]'></textarea>
-		</div>
-		<div class="prop-group" id="prop-type-group">
-			<label>Element Type</label>
-			<input type="text" id="prop-type" readonly style="background:#f5f5f5">
-		</div>
-		<button class="btn btn-xs btn-primary" id="btn-apply-props" style="margin-top:4px">Apply</button>
-	</div>
-</div>
+{% endblock %}
 
-<!-- Status bar -->
-<div id="status-bar">Ready — {{ definition.name }}</div>
-
-<!-- bpmn-js modeler -->
-<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-modeler.development.js"></script>
-<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
-
+{% block extra_js %}
+{% if design_mode %}
+<script src="https://unpkg.com/drawflow@0.0.59/dist/drawflow.min.js"></script>
+{% endif %}
 <script>
 (function () {
-	'use strict';
+  'use strict';
 
-	/* ------------------------------------------------------------------ */
-	/* Config injected from Flask                                          */
-	/* ------------------------------------------------------------------ */
-	var DEF_ID     = {{ definition.id }};
-	var SAVE_URL   = {{ url_for('BPMNDesignerView.save') | tojson }};
-	var SYNC_URL   = {{ url_for('BPMNDesignerView.sync_steps') | tojson }};
-	var LOAD_URL   = {{ url_for('BPMNDesignerView.designer', definition_id=definition.id) | tojson }};
-	var SAVED_XML  = {{ saved_xml | tojson }};
-	var CSRF_TOKEN = {{ csrf_token() | tojson if csrf_token is defined else 'null' }};
+  /* ── Shared: flash alert helper ─────────────────────────────────── */
+  function showAlert(type, msg) {
+    var wrap = document.querySelector('.container-fluid');
+    if (!wrap) return;
+    var div = document.createElement('div');
+    div.className = 'alert alert-' + type + ' alert-dismissible';
+    div.role = 'alert';
+    div.innerHTML =
+      '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+      '<span aria-hidden="true">&times;</span></button>' + msg;
+    var firstChild = wrap.firstElementChild;
+    wrap.insertBefore(div, firstChild);
+    setTimeout(function () { if (div.parentNode) { $(div).alert('close'); } }, 5000);
+  }
 
-	/* ------------------------------------------------------------------ */
-	/* Default empty diagram used for "New"                                */
-	/* ------------------------------------------------------------------ */
-	var EMPTY_DIAGRAM = [
-		'<?xml version="1.0" encoding="UTF-8"?>',
-		'<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"',
-		'  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"',
-		'  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"',
-		'  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"',
-		'  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">',
-		'  <bpmn:process id="Process_1" isExecutable="false">',
-		'    <bpmn:startEvent id="StartEvent_1" name="Start">',
-		'      <bpmn:outgoing>Flow_1</bpmn:outgoing>',
-		'    </bpmn:startEvent>',
-		'    <bpmn:userTask id="Task_1" name="Review">',
-		'      <bpmn:incoming>Flow_1</bpmn:incoming>',
-		'      <bpmn:outgoing>Flow_2</bpmn:outgoing>',
-		'    </bpmn:userTask>',
-		'    <bpmn:endEvent id="EndEvent_1" name="End">',
-		'      <bpmn:incoming>Flow_2</bpmn:incoming>',
-		'    </bpmn:endEvent>',
-		'    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1"/>',
-		'    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="EndEvent_1"/>',
-		'  </bpmn:process>',
-		'  <bpmndi:BPMNDiagram id="BPMNDiagram_1">',
-		'    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">',
-		'      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">',
-		'        <dc:Bounds x="152" y="82" width="36" height="36"/>',
-		'        <bpmndi:BPMNLabel><dc:Bounds x="145" y="125" width="50" height="14"/></bpmndi:BPMNLabel>',
-		'      </bpmndi:BPMNShape>',
-		'      <bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1">',
-		'        <dc:Bounds x="250" y="60" width="100" height="80"/>',
-		'      </bpmndi:BPMNShape>',
-		'      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">',
-		'        <dc:Bounds x="412" y="82" width="36" height="36"/>',
-		'        <bpmndi:BPMNLabel><dc:Bounds x="408" y="125" width="44" height="14"/></bpmndi:BPMNLabel>',
-		'      </bpmndi:BPMNShape>',
-		'      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">',
-		'        <di:waypoint x="188" y="100"/><di:waypoint x="250" y="100"/>',
-		'      </bpmndi:BPMNEdge>',
-		'      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">',
-		'        <di:waypoint x="350" y="100"/><di:waypoint x="412" y="100"/>',
-		'      </bpmndi:BPMNEdge>',
-		'    </bpmndi:BPMNPlane>',
-		'  </bpmndi:BPMNDiagram>',
-		'</bpmn:definitions>'
-	].join('\n');
+  /* ══════════════════════════════════════════════════════════════════
+     LIST MODE — Start workflow modal
+  ══════════════════════════════════════════════════════════════════ */
+  document.querySelectorAll('[data-start-wf]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var wfSlug = btn.getAttribute('data-start-wf');
+      document.getElementById('start-wf-name').textContent = wfSlug;
+      document.getElementById('start-wf-data').value = '';
+      document.getElementById('btn-confirm-start').dataset.wf = wfSlug;
+      $('#start-wf-modal').modal('show');
+    });
+  });
 
-	/* ------------------------------------------------------------------ */
-	/* In-memory extension data keyed by BPMN element ID                  */
-	/* {elementId: {role, timeout, conditions}}                            */
-	/* ------------------------------------------------------------------ */
-	var extData = {};
+  var confirmBtn = document.getElementById('btn-confirm-start');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function () {
+      var wfName   = confirmBtn.dataset.wf || '';
+      var rawData  = document.getElementById('start-wf-data').value.trim();
+      var initData = {};
+      if (rawData) {
+        try { initData = JSON.parse(rawData); }
+        catch (e) { showAlert('warning', 'Invalid JSON: ' + e.message); return; }
+      }
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Starting…';
+      fetch('/platform/workflow/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({workflow_name: wfName, data: initData})
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        $('#start-wf-modal').modal('hide');
+        if (data.success) {
+          showAlert('success',
+            'Workflow started — instance <code>' + data.instance_id.slice(0, 8) + '…</code>' +
+            ' (' + data.status + ')');
+        } else {
+          showAlert('danger', 'Failed: ' + (data.error || 'unknown'));
+        }
+      })
+      .catch(function (e) { showAlert('danger', 'Network error: ' + e); })
+      .finally(function () {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = '<i class="fa fa-play"></i> Start Instance';
+      });
+    });
+  }
 
-	/* ------------------------------------------------------------------ */
-	/* Modeler init                                                        */
-	/* ------------------------------------------------------------------ */
-	var modeler = new BpmnJS({
-		container: '#bpmn-canvas',
-		keyboard: { bindTo: document }
-	});
+{% if design_mode %}
+  /* ══════════════════════════════════════════════════════════════════
+     DESIGN MODE — Drawflow canvas
+  ══════════════════════════════════════════════════════════════════ */
 
-	function setStatus(msg) {
-		document.getElementById('status-bar').textContent = msg;
-	}
+  var nodeSeq      = 0;
+  var selectedId   = null;
 
-	function flashSaved() {
-		var el = document.getElementById('save-indicator');
-		el.style.display = 'inline';
-		setTimeout(function () { el.style.display = 'none'; }, 2500);
-	}
+  /* Init Drawflow ─────────────────────────────────────────────────── */
+  var container = document.getElementById('drawflow');
+  var editor    = new Drawflow(container);
+  editor.reroute               = true;
+  editor.reroute_fix_curvature = true;
+  editor.start();
 
-	function loadXml(xml) {
-		modeler.importXML(xml).then(function (result) {
-			if (result.warnings && result.warnings.length) {
-				console.warn('bpmn-js import warnings:', result.warnings);
-			}
-			modeler.get('canvas').zoom('fit-viewport');
-			setStatus('Diagram loaded — ' + document.title.split('—')[1].trim());
-		}).catch(function (err) {
-			setStatus('ERROR loading diagram: ' + err.message);
-			console.error(err);
-		});
-	}
+  /* ── Node HTML template ─────────────────────────────────────────── */
+  function nodeHtml(nodeType, label, role) {
+    var tc  = nodeType === 'UserTask' ? 'ut' : nodeType === 'ServiceTask' ? 'st' : 'gw';
+    var bgC = 'node-' + nodeType.toLowerCase();
+    return (
+      '<div class="' + bgC + '" style="padding:3px 0;">' +
+        '<div class="node-type-tag ' + tc + '">' + nodeType + '</div>' +
+        '<div class="node-label">' + escHtml(label || nodeType) + '</div>' +
+        (role ? '<div class="node-role-badge"><i class="fa fa-user-o"></i> ' + escHtml(role) + '</div>' : '') +
+      '</div>'
+    );
+  }
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 
-	/* ------------------------------------------------------------------ */
-	/* Initial load                                                        */
-	/* ------------------------------------------------------------------ */
-	if (SAVED_XML && SAVED_XML.length > 10) {
-		loadXml(SAVED_XML);
-	} else {
-		loadXml(EMPTY_DIAGRAM);
-	}
+  /* ── Add node at position ───────────────────────────────────────── */
+  function addNode(nodeType, posX, posY) {
+    nodeSeq += 1;
+    var stepId = nodeType.toLowerCase() + '_' + nodeSeq;
+    var label  = nodeType + ' ' + nodeSeq;
+    var data   = {id: stepId, label: label, type: nodeType,
+                  role: '', service: '', condition: '', sla_hours: ''};
+    editor.addNode(nodeType, 1, 1, posX, posY,
+      'node-' + nodeType.toLowerCase(), data, nodeHtml(nodeType, label, ''));
+  }
 
-	/* ------------------------------------------------------------------ */
-	/* Selection → properties panel                                        */
-	/* ------------------------------------------------------------------ */
-	var eventBus = modeler.get('eventBus');
-	var modeling  = modeler.get('modeling');
-	var elementRegistry = modeler.get('elementRegistry');
+  /* ── Load existing workflow steps ───────────────────────────────── */
+  var existingSteps = {{ workflow_data.steps | tojson if workflow_data and workflow_data.steps else '[]' }};
+  if (existingSteps && existingSteps.length > 0) {
+    var xBase = 80, yBase = 80, xGap = 220;
+    existingSteps.forEach(function (step, idx) {
+      var nt  = step.type || 'UserTask';
+      var px  = xBase + idx * xGap;
+      var py  = yBase + (idx % 2 === 1 ? 70 : 0);
+      nodeSeq += 1;
+      var data = {
+        id: step.id, label: step.label || step.id, type: nt,
+        role: step.assignee_role || '', service: step.service || '',
+        condition: step.condition || '', sla_hours: step.sla_hours || ''
+      };
+      editor.addNode(nt, 1, 1, px, py,
+        'node-' + nt.toLowerCase(), data, nodeHtml(nt, step.label || step.id, step.assignee_role || ''));
+    });
+    /* Sequential connections */
+    var ids = Object.keys(editor.drawflow.drawflow.Home.data);
+    for (var i = 0; i < ids.length - 1; i++) {
+      try { editor.addConnection(parseInt(ids[i]), parseInt(ids[i + 1]), 'output_1', 'input_1'); }
+      catch (e) {}
+    }
+  }
 
-	var _selectedElement = null;
+  /* ── Drag from palette ──────────────────────────────────────────── */
+  document.querySelectorAll('.palette-item').forEach(function (el) {
+    el.addEventListener('dragstart', function (ev) {
+      ev.dataTransfer.setData('node_type', el.getAttribute('data-node-type'));
+    });
+  });
+  container.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+  container.addEventListener('drop', function (ev) {
+    ev.preventDefault();
+    var nt = ev.dataTransfer.getData('node_type');
+    if (!nt) return;
+    var rect = container.getBoundingClientRect();
+    var z    = editor.zoom_last_value || 1;
+    var cx   = editor.canvas_x || 0;
+    var cy   = editor.canvas_y || 0;
+    var px   = (ev.clientX - rect.left) / z - cx / z;
+    var py   = (ev.clientY - rect.top)  / z - cy / z;
+    addNode(nt, px, py);
+  });
 
-	eventBus.on('selection.changed', function (e) {
-		var selected = e.newSelection;
-		if (!selected || selected.length === 0) {
-			_selectedElement = null;
-			document.getElementById('prop-placeholder').style.display = 'block';
-			document.getElementById('prop-form').style.display = 'none';
-			return;
-		}
+  /* ── Properties panel ────────────────────────────────────────────── */
+  function refreshPropsVisibility() {
+    var t = document.getElementById('prop-type').value;
+    document.getElementById('prop-role-group').style.display =
+      (t === 'ServiceTask') ? 'none' : '';
+    document.getElementById('prop-svc-group').style.display =
+      (t === 'ServiceTask') ? '' : 'none';
+  }
+  document.getElementById('prop-type').addEventListener('change', refreshPropsVisibility);
 
-		_selectedElement = selected[0];
-		var el = _selectedElement;
-		var bo = el.businessObject;
+  editor.on('nodeSelected', function (id) {
+    selectedId = id;
+    var node   = editor.getNodeFromId(id);
+    if (!node) return;
+    var d = node.data || {};
+    document.getElementById('prop-node-id').value    = id;
+    document.getElementById('prop-step-id').value    = d.id        || '';
+    document.getElementById('prop-label').value      = d.label     || '';
+    document.getElementById('prop-type').value       = d.type      || 'UserTask';
+    document.getElementById('prop-role').value       = d.role      || '';
+    document.getElementById('prop-service').value    = d.service   || '';
+    document.getElementById('prop-condition').value  = d.condition || '';
+    document.getElementById('prop-sla').value        = d.sla_hours || '';
+    document.getElementById('props-no-selection').style.display = 'none';
+    document.getElementById('props-form').style.display         = '';
+    refreshPropsVisibility();
+  });
+  editor.on('nodeUnselected', function () {
+    selectedId = null;
+    document.getElementById('props-no-selection').style.display = '';
+    document.getElementById('props-form').style.display         = 'none';
+  });
 
-		document.getElementById('prop-placeholder').style.display = 'none';
-		document.getElementById('prop-form').style.display = 'block';
+  document.getElementById('btn-apply-props').addEventListener('click', function () {
+    if (!selectedId) return;
+    var id    = document.getElementById('prop-step-id').value.trim()  || 'step_' + selectedId;
+    var label = document.getElementById('prop-label').value.trim()    || id;
+    var type  = document.getElementById('prop-type').value;
+    var role  = document.getElementById('prop-role').value.trim();
+    var svc   = document.getElementById('prop-service').value.trim();
+    var cond  = document.getElementById('prop-condition').value.trim();
+    var sla   = document.getElementById('prop-sla').value.trim();
+    var nodeData = {id: id, label: label, type: type, role: role,
+                    service: svc, condition: cond, sla_hours: sla};
+    editor.updateNodeDataFromId(selectedId, nodeData);
+    /* Refresh rendered HTML */
+    var contentEl = document.querySelector(
+      '.drawflow-node[id="node-' + selectedId + '"] .drawflow_content_node');
+    if (contentEl) contentEl.innerHTML = nodeHtml(type, label, role);
+  });
 
-		document.getElementById('prop-id').value   = bo.id || '';
-		document.getElementById('prop-name').value = bo.name || '';
-		document.getElementById('prop-type').value = bo.$type || '';
+  /* ── Delete selected node ───────────────────────────────────────── */
+  document.getElementById('btn-del-node').addEventListener('click', function () {
+    if (selectedId) { editor.removeNodeId('node-' + selectedId); selectedId = null; }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && selectedId &&
+        !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+      editor.removeNodeId('node-' + selectedId);
+      selectedId = null;
+    }
+  });
 
-		var ext = extData[bo.id] || {};
-		document.getElementById('prop-role').value       = ext.role || '';
-		document.getElementById('prop-timeout').value    = ext.timeout != null ? ext.timeout : '';
-		document.getElementById('prop-conditions').value = ext.conditions || '';
+  /* ── Zoom controls ──────────────────────────────────────────────── */
+  document.getElementById('btn-zoom-in').addEventListener('click',    function () { editor.zoom_in(); });
+  document.getElementById('btn-zoom-out').addEventListener('click',   function () { editor.zoom_out(); });
+  document.getElementById('btn-zoom-reset').addEventListener('click', function () { editor.zoom_reset(); });
 
-		/* Show/hide fields by element type */
-		var isFlow = bo.$type === 'bpmn:SequenceFlow';
-		document.getElementById('prop-role-group').style.display      = isFlow ? 'none' : 'block';
-		document.getElementById('prop-timeout-group').style.display   = isFlow ? 'none' : 'block';
-		document.getElementById('prop-conditions-group').style.display = isFlow ? 'block' : 'none';
-	});
+  /* ── YAML preview ───────────────────────────────────────────────── */
+  function buildYaml() {
+    var name = document.getElementById('wf-name').value.trim() || 'workflow';
+    var desc = document.getElementById('wf-desc').value.trim();
+    var exp  = editor.export();
+    var nodes = (exp.drawflow && exp.drawflow.Home && exp.drawflow.Home.data) || {};
+    var lines = ['name: ' + name];
+    if (desc) lines.push('description: "' + desc.replace(/"/g, '\\"') + '"');
+    lines.push('steps:');
+    Object.values(nodes).forEach(function (n) {
+      var d  = n.data || {};
+      var sid = d.id || 'step_' + n.id;
+      lines.push('  - id: ' + sid);
+      lines.push('    type: ' + (d.type || 'UserTask'));
+      lines.push('    label: "' + (d.label || sid).replace(/"/g, '\\"') + '"');
+      if (d.role)      lines.push('    assignee_role: "' + d.role.replace(/"/g, '\\"') + '"');
+      if (d.service)   lines.push('    service: ' + d.service);
+      if (d.condition) lines.push('    condition: "' + d.condition.replace(/"/g, '\\"') + '"');
+      if (d.sla_hours) lines.push('    sla_hours: ' + d.sla_hours);
+    });
+    return lines.join('\n');
+  }
 
-	/* Apply button */
-	document.getElementById('btn-apply-props').addEventListener('click', function () {
-		if (!_selectedElement) return;
-		var bo = _selectedElement.businessObject;
+  var yamlWrap = document.getElementById('yaml-preview-wrap');
+  var yamlPre  = document.getElementById('yaml-preview-content');
+  document.getElementById('btn-toggle-yaml').addEventListener('click', function () {
+    if (yamlWrap.style.display === 'none') {
+      yamlPre.textContent = buildYaml();
+      yamlWrap.style.display = '';
+    } else {
+      yamlWrap.style.display = 'none';
+    }
+  });
+  document.getElementById('btn-copy-yaml').addEventListener('click', function () {
+    navigator.clipboard.writeText(yamlPre.textContent)
+      .then(function () { showAlert('info', 'YAML copied to clipboard.'); })
+      .catch(function () {});
+  });
 
-		var newName = document.getElementById('prop-name').value.trim();
-		if (newName !== (bo.name || '')) {
-			modeling.updateLabel(_selectedElement, newName);
-		}
+  /* ── Import YAML ────────────────────────────────────────────────── */
+  document.getElementById('yaml-import-file').addEventListener('change', function () {
+    var file = this.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var raw = ev.target.result;
+      var nameMatch = raw.match(/^name:\s*(.+)/m);
+      if (nameMatch) document.getElementById('wf-name').value = nameMatch[1].trim().replace(/["']/g, '');
+      var descMatch = raw.match(/^description:\s*"?(.+?)"?\s*$/m);
+      if (descMatch) document.getElementById('wf-desc').value = descMatch[1];
+      showAlert('info', 'Name imported from YAML. Save to persist node graph.');
+    };
+    reader.readAsText(file);
+    this.value = '';
+  });
 
-		extData[bo.id] = {
-			role:       document.getElementById('prop-role').value.trim(),
-			timeout:    document.getElementById('prop-timeout').value.trim(),
-			conditions: document.getElementById('prop-conditions').value.trim(),
-		};
+  /* ── Save ───────────────────────────────────────────────────────── */
+  document.getElementById('btn-save').addEventListener('click', function () {
+    var name = document.getElementById('wf-name').value.trim();
+    if (!name) {
+      showAlert('warning', 'Enter a workflow name before saving.');
+      document.getElementById('wf-name').focus();
+      return;
+    }
+    var desc    = document.getElementById('wf-desc').value.trim();
+    var payload = {
+      name: name,
+      description: desc,
+      drawflow: editor.export().drawflow
+    };
+    var btn = document.getElementById('btn-save');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving…';
+    fetch('/platform/workflow/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showAlert('success',
+          'Saved to <code>' + data.file + '</code> — ' + (data.steps || 0) + ' steps.');
+        if (yamlWrap.style.display !== 'none') yamlPre.textContent = buildYaml();
+      } else {
+        showAlert('danger', 'Save failed: ' + (data.error || 'unknown'));
+      }
+    })
+    .catch(function (e) { showAlert('danger', 'Network error: ' + e); })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa fa-save"></i> Save YAML';
+    });
+  });
 
-		setStatus('Properties applied for ' + (newName || bo.id));
-	});
+{% endif %}{# /design_mode JS #}
 
-	/* ------------------------------------------------------------------ */
-	/* Toolbar actions                                                     */
-	/* ------------------------------------------------------------------ */
-
-	/* Save */
-	document.getElementById('btn-save').addEventListener('click', function () {
-		modeler.saveXML({ format: true }).then(function (result) {
-			var xml = result.xml;
-			setStatus('Saving…');
-
-			var payload = {
-				definition_id: DEF_ID,
-				bpmn_xml: xml,
-				ext_data: extData
-			};
-			if (CSRF_TOKEN) payload.csrf_token = CSRF_TOKEN;
-
-			fetch(SAVE_URL, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload)
-			})
-			.then(function (r) { return r.json(); })
-			.then(function (data) {
-				if (data.ok) {
-					setStatus('Saved successfully.');
-					flashSaved();
-				} else {
-					setStatus('Save failed: ' + (data.error || 'unknown error'));
-				}
-			})
-			.catch(function (err) {
-				setStatus('Save error: ' + err.message);
-			});
-		}).catch(function (err) {
-			setStatus('XML export error: ' + err.message);
-		});
-	});
-
-	/* Load / reload */
-	document.getElementById('btn-load').addEventListener('click', function () {
-		if (!confirm('Reload saved XML? Unsaved changes will be lost.')) return;
-		setStatus('Reloading…');
-		fetch(LOAD_URL + '?xml_only=1')
-			.then(function (r) { return r.json(); })
-			.then(function (data) {
-				if (data.bpmn_xml) {
-					loadXml(data.bpmn_xml);
-					setStatus('Reloaded from saved XML.');
-				} else {
-					setStatus('No saved XML found — using current diagram.');
-				}
-			})
-			.catch(function (err) {
-				setStatus('Load error: ' + err.message);
-			});
-	});
-
-	/* Sync Steps */
-	document.getElementById('btn-sync').addEventListener('click', function () {
-		modeler.saveXML({ format: true }).then(function (result) {
-			var xml = result.xml;
-			setStatus('Syncing steps…');
-
-			var payload = {
-				definition_id: DEF_ID,
-				bpmn_xml: xml,
-				ext_data: extData
-			};
-			if (CSRF_TOKEN) payload.csrf_token = CSRF_TOKEN;
-
-			fetch(SYNC_URL, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload)
-			})
-			.then(function (r) { return r.json(); })
-			.then(function (data) {
-				if (data.ok) {
-					setStatus('Steps synced: ' + data.steps_upserted + ' upserted, ' + data.transitions_upserted + ' transitions.');
-				} else {
-					setStatus('Sync failed: ' + (data.error || 'unknown'));
-				}
-			})
-			.catch(function (err) {
-				setStatus('Sync error: ' + err.message);
-			});
-		});
-	});
-
-	/* Export PNG (via SVG → canvas → PNG) */
-	document.getElementById('btn-export-png').addEventListener('click', function () {
-		modeler.saveSVG().then(function (result) {
-			var svgStr = result.svg;
-			/* Render SVG to canvas then download as PNG */
-			var img = new Image();
-			var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-			var url  = URL.createObjectURL(blob);
-			img.onload = function () {
-				var canvas = document.createElement('canvas');
-				canvas.width  = img.naturalWidth  || 1200;
-				canvas.height = img.naturalHeight || 800;
-				var ctx2d = canvas.getContext('2d');
-				ctx2d.fillStyle = '#ffffff';
-				ctx2d.fillRect(0, 0, canvas.width, canvas.height);
-				ctx2d.drawImage(img, 0, 0);
-				URL.revokeObjectURL(url);
-
-				canvas.toBlob(function (pngBlob) {
-					var a = document.createElement('a');
-					a.download = 'bpmn-diagram.png';
-					a.href = URL.createObjectURL(pngBlob);
-					document.body.appendChild(a);
-					a.click();
-					document.body.removeChild(a);
-					setStatus('PNG exported.');
-				});
-			};
-			img.onerror = function () {
-				setStatus('PNG export failed — SVG could not be rasterized.');
-				URL.revokeObjectURL(url);
-			};
-			img.src = url;
-		}).catch(function (err) {
-			setStatus('SVG export error: ' + err.message);
-		});
-	});
-
-	/* New process */
-	document.getElementById('btn-new').addEventListener('click', function () {
-		if (!confirm('Create a new blank process? Current diagram will be replaced.')) return;
-		loadXml(EMPTY_DIAGRAM);
-		extData = {};
-		setStatus('New blank diagram created.');
-	});
-
-	/* Zoom controls */
-	document.getElementById('btn-zoom-in').addEventListener('click', function () {
-		modeler.get('zoomScroll').stepZoom(1);
-	});
-	document.getElementById('btn-zoom-out').addEventListener('click', function () {
-		modeler.get('zoomScroll').stepZoom(-1);
-	});
-	document.getElementById('btn-zoom-reset').addEventListener('click', function () {
-		modeler.get('canvas').zoom('fit-viewport');
-	});
-
-})();
+}());
 </script>
-</body>
-</html>
+{% endblock %}
