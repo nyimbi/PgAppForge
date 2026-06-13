@@ -1,0 +1,72 @@
+version: "1.0"
+namespace: "pgappforge.plugins.erp.finance.supplier_invoice"
+
+entities:
+  - name: SupplierInvoice
+    table: fin_supplier_invoice
+    description: "AP supplier invoice with eTIMS submission tracking"
+    include_tenant_id: true
+    include_uuid_pk: true
+    include_audit_timestamps: true
+    generate: [model, migration, view, api, tests]
+    workflows:
+      - supplier_invoice_capture
+
+    fields:
+      - name: vendor_id
+        type: uuid
+        fk: "Vendor.id"
+        required: true
+        label: "Vendor"
+
+      - name: invoice_number
+        type: string
+        max_length: 50
+        required: true
+        unique: true
+        indexed: true
+        label: "Invoice Number"
+
+      - name: invoice_date
+        type: date
+        required: true
+        nullable: false
+
+      - name: due_date
+        type: date
+        required: true
+        nullable: false
+
+      - name: total_amount_cents
+        type: money
+        required: true
+        nullable: false
+        label: "Total Amount (KES cents)"
+
+      - name: tax_amount_cents
+        type: money
+        default: "0"
+        label: "Tax Amount (KES cents)"
+
+      - name: status
+        type: enum
+        choices: [PENDING, APPROVED, REJECTED, PAID, CANCELLED]
+        default: PENDING
+        indexed: true
+
+      - name: etims_submitted
+        type: boolean
+        default: "False"
+        label: "Submitted to eTIMS"
+
+      - name: etims_invoice_number
+        type: string
+        max_length: 50
+        nullable: true
+        label: "eTIMS Control Unit Number"
+
+      - name: line_items
+        type: jsonb
+        label: "Line Items"
+        help_text: >
+          JSON array of {description, quantity, unit_price_cents, vat_rate_pct}

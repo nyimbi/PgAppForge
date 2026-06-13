@@ -354,6 +354,13 @@ try:
 except ImportError:
     pass
 
+# Register 'gen pdl' — deterministic YAML-schema → code generator
+try:
+    from pgappforge.pdl.cli import gen_pdl as _gen_pdl
+    gen.add_command(_gen_pdl)
+except Exception:
+    pass
+
 # Register 'gen module' — AI-powered NL-to-module codegen
 try:
     import click as _click
