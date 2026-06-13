@@ -20,6 +20,7 @@ import logging
 from flask import current_app, jsonify, render_template, request
 from markupsafe import Markup
 
+from pgappforge import expose
 from pgappforge.baseviews import BaseView
 from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
