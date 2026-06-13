@@ -188,7 +188,4 @@ class VersioningDashboardView(BaseERPView):
 		), 500
 
 
-# expose is imported from pgappforge higher up — need explicit import for BaseView subclasses
-from pgappforge import expose  # noqa: E402  (must come after class definition)
-
 __all__ = ["VersioningDashboardView"]
