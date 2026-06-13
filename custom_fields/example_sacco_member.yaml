@@ -1,0 +1,104 @@
+# custom_fields/example_sacco_member.yaml
+#
+# Citizen-developer customization: adds extra fields and filters to the
+# SACCO Member model without writing any Python.
+#
+# How it works
+# ------------
+# Drop this file (and others) into the custom_fields/ directory at your
+# project root.  On the next application boot, PgAppForge calls:
+#
+#   ALTER TABLE sc_member ADD COLUMN IF NOT EXISTS custom_employer_code VARCHAR(20)
+#   … etc.
+#
+# Field names are automatically prefixed with "custom_" to avoid collisions
+# with built-in model columns.
+#
+# Supported field types
+# ---------------------
+# string, text, integer, float, boolean, date, datetime, decimal,
+# select, multiselect, email, phone, url, jsonb, uuid, money
+#
+# "money" stores INTEGER cents — use currency_code on the model for display.
+
+module_path: pgappforge.plugins.fintech.sacco
+model_name: Member
+
+extra_fields:
+  - name: employer_code
+    type: string
+    label: "Employer Code"
+    max_length: 20
+    required: false
+    nullable: true
+    visible_on: [list, detail, form]
+    validators:
+      - type: regex
+        pattern: "^[A-Z0-9]{3,10}$"
+        message: "Employer code must be 3-10 uppercase alphanumeric characters"
+
+  - name: employer_name
+    type: string
+    label: "Employer Name"
+    max_length: 200
+    visible_on: [detail, form]
+
+  - name: nearest_branch
+    type: select
+    label: "Nearest Branch"
+    choices:
+      - NAIROBI_CBD
+      - WESTLANDS
+      - MOMBASA
+      - KISUMU
+      - NAKURU
+      - OTHER
+    visible_on: [detail, form]
+
+  - name: monthly_net_salary_kes
+    type: money
+    label: "Monthly Net Salary (KES cents)"
+    nullable: true
+    visible_on: [detail, form]
+
+  - name: payroll_number
+    type: string
+    label: "Payroll Number"
+    max_length: 30
+    nullable: true
+    visible_on: [detail, form]
+
+  - name: is_staff_member
+    type: boolean
+    label: "Is Staff Member"
+    default: false
+    visible_on: [list, detail, form]
+
+  - name: kyc_notes
+    type: text
+    label: "KYC Notes"
+    nullable: true
+    visible_on: [detail, form]
+
+# These column names (already prefixed) will be appended to the list view
+extra_list_columns:
+  - custom_employer_code
+  - custom_nearest_branch
+  - custom_is_staff_member
+
+# Optional: hide noisy built-in columns from the default list view
+hide_list_columns: []
+
+extra_filters:
+  - field: custom_employer_code
+    label: "Filter by Employer Code"
+    type: string
+
+  - field: custom_nearest_branch
+    label: "Filter by Branch"
+    type: select
+    choices_from: null   # static choices defined on the field itself
+
+  - field: custom_is_staff_member
+    label: "Staff Members Only"
+    type: string
