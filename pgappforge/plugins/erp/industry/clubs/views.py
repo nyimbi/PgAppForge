@@ -25,7 +25,9 @@ from typing import Any
 import sqlalchemy as sa
 from flask import make_response, request
 
+from pgappforge import expose
 from pgappforge.plugins.erp.base_view import BaseERPView, BaseERPModelView
+from pgappforge.security.decorators import has_access
 from pgappforge.plugins.erp.industry.clubs.models import (
 	ClubMembershipType,
 	ClubMember,
@@ -282,10 +284,10 @@ class ClubsDashboardView(BaseERPView):
 	route_base = "/industry/clubs"
 	default_view = "index"
 
+	@expose("/")
+	@has_access
 	def index(self):
 		"""GET /industry/clubs/ — KPI overview with tabbed breakdown."""
-		from pgappforge import expose
-		from pgappforge.security.decorators import has_access
 
 		# Live counts — scoped to current tenant
 		sess = self._session()
@@ -573,12 +575,6 @@ class ClubsDashboardView(BaseERPView):
 		)
 
 
-# Attach FAB expose + has_access decorators to the dashboard index after class definition
-# (avoids circular import with pgappforge.expose at module top level)
-from pgappforge import expose as _expose  # noqa: E402
-from pgappforge.security.decorators import has_access as _has_access  # noqa: E402
-
-ClubsDashboardView.index = _expose("/")(_has_access(ClubsDashboardView.index))
 
 
 __all__ = [
