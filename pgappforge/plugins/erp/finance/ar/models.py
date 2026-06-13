@@ -343,6 +343,10 @@ class ARInvoice(RulesMixin, AuditMixin, Model):
 		comment="DRAFT|ISSUED|PARTIAL|PAID|OVERDUE|DISPUTED|WRITTEN_OFF|CANCELLED",
 	)
 
+	# Tax compliance (eTIMS/EFRIS/ZRA)
+	customer_pin = Column(String(20), nullable=True, comment="Customer KRA PIN (Kenya) or TIN (Uganda/Zambia)")
+	tax_control_number = Column(String(100), nullable=True, comment="Control unit number from eTIMS/EFRIS/ZRA")
+
 	# GL coding
 	gl_revenue_account = Column(String(20), nullable=True, comment="Revenue GL account")
 	gl_ar_account = Column(String(20), nullable=True, comment="AR control account")

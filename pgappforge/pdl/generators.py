@@ -291,7 +291,7 @@ class {entity.name}DashboardView(BaseERPView):
 \t\t\t}},
 \t\t])
 \t\treturn render_template(
-\t\t\t"appbuilder/general/list.html",
+\t\t\t"appbuilder/erp/home_dashboard.html",
 \t\t\tkpi_html=kpi_html,
 \t\t\tappbuilder=self.appbuilder,
 \t\t)
