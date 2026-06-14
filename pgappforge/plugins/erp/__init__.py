@@ -117,6 +117,12 @@ ERP_GROUPS: dict[str, dict[str, Any]] = {
 				"class_name": "PlatformEventsPlugin",
 				"description": "Event subscriptions, delivery tracking, dead-letter queue, replay.",
 			},
+			{
+				"key": "platform.pdl_designer",
+				"module": "pgappforge.pdl",
+				"class_name": "PDLPlugin",
+				"description": "Visual PDL entity designer — draw schemas, import capabilities, generate code.",
+			},
 		],
 	},
 
