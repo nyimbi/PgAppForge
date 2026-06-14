@@ -3,445 +3,680 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PDL Entity Designer — PgAppForge</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<title>PDL Entity Designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 :root {
-  --c-finance:#1a56db;--c-grc:#d97706;--c-hcm:#059669;--c-crm:#7c3aed;
-  --c-operations:#dc2626;--c-procurement:#ea580c;--c-platform:#4b5563;
-  --c-fintech:#047857;--c-custom:#374151;
+  /* Accent palette — light, readable */
+  --finance:  #2563eb; --finance-bg:  #eff6ff;
+  --grc:      #d97706; --grc-bg:      #fffbeb;
+  --hcm:      #059669; --hcm-bg:      #ecfdf5;
+  --crm:      #7c3aed; --crm-bg:      #f5f3ff;
+  --ops:      #e11d48; --ops-bg:      #fff1f2;
+  --proc:     #ea580c; --proc-bg:     #fff7ed;
+  --platform: #475569; --platform-bg: #f8fafc;
+  --fintech:  #0d9488; --fintech-bg:  #f0fdfa;
+  --custom:   #64748b; --custom-bg:   #f8fafc;
+
+  --canvas-bg: #f8fafc;
+  --dot-color: #e2e8f0;
+  --card-shadow: 0 1px 3px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.06);
+  --card-shadow-hover: 0 4px 12px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.07);
+  --card-shadow-selected: 0 0 0 2.5px #3b82f6, 0 4px 16px rgba(59,130,246,.2);
+  --sel-multi: 0 0 0 2px #8b5cf6, 0 4px 12px rgba(139,92,246,.15);
+  --radius: 12px;
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
-*{box-sizing:border-box}
-body{background:#f3f4f6;font-family:system-ui,sans-serif;overflow:hidden;margin:0}
-#viewport{position:relative;overflow:hidden;background:radial-gradient(circle,#d1d5db 1px,transparent 1px) 0 0/24px 24px;cursor:default}
-#canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
-#svg-layer{position:absolute;top:0;left:0;width:20000px;height:20000px;pointer-events:none;overflow:visible}
-.entity-box{position:absolute;background:#fff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.12);min-width:210px;max-width:270px;border:2px solid #e5e7eb;transition:box-shadow .15s}
-.entity-box:hover{box-shadow:0 4px 16px rgba(0,0,0,.18)}
-.entity-box.selected{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25),0 4px 16px rgba(0,0,0,.18)}
-.entity-box.multi-selected{border-color:#8b5cf6;box-shadow:0 0 0 2px rgba(139,92,246,.3)}
-.entity-header{padding:8px 10px;border-radius:6px 6px 0 0;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:move;user-select:none}
-.entity-header span.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.entity-meta{padding:1px 10px 3px;font-size:10px;color:#9ca3af;font-family:monospace}
-.entity-auto-cols{padding:0 10px 3px;font-size:10px;color:#d1d5db;font-style:italic}
-.entity-field{padding:3px 10px;font-size:11.5px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:6px;cursor:pointer;min-height:24px}
-.entity-field:hover{background:#f9fafb}
-.entity-field.selected-field{background:#eff6ff}
-.field-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.type-badge{font-size:9px;color:#6b7280;background:#f3f4f6;padding:1px 4px;border-radius:3px;margin-left:auto;white-space:nowrap}
-.entity-footer{padding:5px 10px}
-.add-field-btn{width:100%;font-size:11px;color:#9ca3af;border:1px dashed #e5e7eb;background:none;border-radius:4px;padding:3px;cursor:pointer}
-.add-field-btn:hover{color:#374151;border-color:#9ca3af;background:#fafafa}
-.del-btn{opacity:.55;cursor:pointer;font-size:14px;flex-shrink:0;line-height:1;padding:0 2px}
-.del-btn:hover{opacity:1}
-.conn-handle{position:absolute;right:-8px;top:50%;transform:translateY(-50%);width:14px;height:14px;background:#7c3aed;border-radius:50%;border:2px solid #fff;cursor:crosshair;display:none;z-index:5;box-shadow:0 1px 3px rgba(0,0,0,.3)}
-.entity-box:hover .conn-handle,.entity-box.selected .conn-handle{display:block}
-.import-badge{font-size:9px;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:8px;white-space:nowrap}
-.arrow-path{stroke:#94a3b8;stroke-width:1.8;fill:none;marker-end:url(#arrowhead)}
-.arrow-label{font-size:10px;fill:#6b7280;font-family:monospace;pointer-events:none}
-.prop-label{font-size:11px;font-weight:600;color:#374151;margin-bottom:2px;display:block}
-.prop-input{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;outline:none;background:#fafafa}
-.prop-input:focus{border-color:#3b82f6;background:#fff;box-shadow:0 0 0 2px rgba(59,130,246,.1)}
-.prop-select{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;background:#fafafa}
-.prop-check{display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:2px 0}
-.btn-tool{background:#f9fafb;color:#374151;font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer;border:1px solid #e5e7eb;white-space:nowrap;display:flex;align-items:center;gap:4px}
-.btn-tool:hover{background:#f3f4f6;border-color:#d1d5db}
-.btn-tool.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
-.btn-primary{background:#1a56db;color:#fff;font-size:12px;font-weight:600;padding:6px 13px;border-radius:6px;cursor:pointer;border:none;display:flex;align-items:center;gap:4px}
-.btn-primary:hover{background:#1e40af}
-.btn-danger{background:#dc2626;color:#fff;font-size:12px;padding:4px 9px;border-radius:4px;cursor:pointer;border:none}
-.btn-danger:hover{background:#b91c1c}
-.tab-btn{padding:7px 12px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
-.tab-btn.active{color:#1a56db;border-color:#1a56db}
-.plugin-domain-hdr{font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af;padding:7px 12px 3px;letter-spacing:.05em}
-.plugin-row{padding:3px 12px 3px 22px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
-.plugin-row:hover{background:#eff6ff;color:#1d4ed8}
-.zoom-ctrl{position:absolute;bottom:16px;right:16px;display:flex;flex-direction:column;gap:3px;z-index:20}
-.zoom-btn{width:28px;height:28px;background:#fff;border:1px solid #e5e7eb;border-radius:5px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.zoom-btn:hover{background:#f3f4f6}
-#zoom-pct{background:#fff;border:1px solid #e5e7eb;border-radius:5px;font-size:11px;text-align:center;padding:3px 0;font-weight:600;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-#rel-indicator{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:600;display:none;z-index:20;pointer-events:none;box-shadow:0 2px 8px rgba(124,58,237,.4)}
-#minimap{position:absolute;bottom:16px;left:16px;width:140px;height:100px;background:rgba(255,255,255,.92);border:1px solid #e5e7eb;border-radius:6px;z-index:20;box-shadow:0 2px 8px rgba(0,0,0,.1);cursor:pointer}
-.select-rect{position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,.06);pointer-events:none;display:none;z-index:30}
-.notification{position:fixed;bottom:20px;right:20px;background:#065f46;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-.notification.show{opacity:1}
-kbd{background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;padding:1px 4px;font-size:10px}
+
+html, body { height: 100%; overflow: hidden; }
+body { font-family: var(--font); background: var(--canvas-bg); color: #1e293b; }
+
+/* ── Toolbar ── */
+#toolbar {
+  height: 48px; display: flex; align-items: center; gap: 6px;
+  padding: 0 16px; background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 0 #f1f5f9;
+  flex-shrink: 0; z-index: 100;
+}
+.tb-logo { display: flex; align-items: center; gap: 8px; margin-right: 12px; }
+.tb-logo svg { width: 20px; height: 20px; color: #2563eb; }
+.tb-logo-name { font-size: 13px; font-weight: 700; color: #0f172a; letter-spacing: -.01em; }
+.tb-logo-sub  { font-size: 11px; color: #94a3b8; }
+.tb-sep { width: 1px; height: 20px; background: #e2e8f0; margin: 0 4px; flex-shrink: 0; }
+.tb-btn {
+  display: flex; align-items: center; gap: 5px;
+  height: 32px; padding: 0 11px; border-radius: 7px;
+  font-size: 12.5px; font-weight: 500; color: #475569;
+  background: transparent; border: 1px solid transparent;
+  cursor: pointer; white-space: nowrap; transition: all .12s;
+}
+.tb-btn:hover { background: #f1f5f9; border-color: #e2e8f0; color: #1e293b; }
+.tb-btn.primary { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+.tb-btn.primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+.tb-btn.active { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
+.tb-btn:disabled { opacity: .38; cursor: not-allowed; pointer-events: none; }
+.tb-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.tb-spacer { flex: 1; }
+#entity-count { font-size: 11.5px; color: #94a3b8; font-weight: 500; }
+#zoom-pct-tb { font-size: 11.5px; color: #64748b; font-weight: 600; min-width: 38px; text-align: center; }
+
+/* ── Layout ── */
+#app { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 48px); }
+
+/* ── Left sidebar ── */
+#sidebar {
+  width: 260px; min-width: 260px; background: #fff;
+  border-right: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.side-tabs { display: flex; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+.side-tab {
+  flex: 1; padding: 10px 12px; font-size: 12px; font-weight: 600;
+  color: #64748b; cursor: pointer; border-bottom: 2px solid transparent;
+  text-align: center; transition: all .15s;
+}
+.side-tab:hover { color: #1e293b; }
+.side-tab.active { color: #2563eb; border-color: #2563eb; }
+
+#panel-schema { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.side-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+.type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.type-pill { font-family: var(--mono); font-size: 10.5px; color: #475569; background: #f1f5f9; border-radius: 5px; padding: 4px 7px; }
+.key-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #64748b; }
+kbd { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: var(--mono); }
+
+#panel-caps { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+#cap-search { width: calc(100% - 24px); margin: 10px 12px; padding: 7px 10px; font-size: 12px; font-family: var(--font); border: 1px solid #e2e8f0; border-radius: 7px; outline: none; color: #1e293b; }
+#cap-search:focus { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+#cap-list { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+.cap-domain { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 8px 14px 3px; }
+.cap-row {
+  display: flex; align-items: center; gap: 7px; padding: 5px 14px 5px 20px;
+  font-size: 12px; color: #475569; cursor: pointer; transition: background .1s;
+}
+.cap-row:hover { background: #f0f9ff; color: #1e293b; }
+.cap-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.cap-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #dbeafe; color: #1d4ed8; white-space: nowrap; }
+.cap-badge.added { background: #dcfce7; color: #166534; }
+
+/* ── Canvas viewport ── */
+#viewport {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--canvas-bg);
+  background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+  background-size: 24px 24px;
+  cursor: default;
+}
+#canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+#svg-layer { position: absolute; top: 0; left: 0; width: 20000px; height: 20000px; pointer-events: none; overflow: visible; }
+
+/* ── Entity cards ── */
+.entity-card {
+  position: absolute; background: #fff; border-radius: var(--radius);
+  box-shadow: var(--card-shadow); min-width: 220px; max-width: 280px;
+  border: 1.5px solid #e2e8f0; transition: box-shadow .15s, border-color .15s;
+  user-select: none;
+}
+.entity-card:hover { box-shadow: var(--card-shadow-hover); border-color: #cbd5e1; }
+.entity-card.selected { box-shadow: var(--card-shadow-selected); border-color: #93c5fd; }
+.entity-card.multi-sel { box-shadow: var(--sel-multi); border-color: #c4b5fd; }
+
+.card-header {
+  padding: 10px 12px 8px; border-radius: calc(var(--radius) - 1.5px) calc(var(--radius) - 1.5px) 0 0;
+  cursor: move; display: flex; align-items: flex-start; gap: 8px;
+  border-left: 4px solid var(--accent, #94a3b8);
+}
+.card-header-body { flex: 1; min-width: 0; }
+.card-name { font-size: 13.5px; font-weight: 700; color: var(--accent, #475569); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-table { font-size: 10px; font-family: var(--mono); color: #94a3b8; margin-top: 1px; }
+.card-domain-badge { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: var(--accent, #94a3b8); padding: 1px 6px; border-radius: 6px; flex-shrink: 0; margin-top: 1px; opacity: .85; }
+.card-del { width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #cbd5e1; cursor: pointer; flex-shrink: 0; transition: all .1s; }
+.card-del:hover { background: #fee2e2; color: #dc2626; }
+
+.card-auto { padding: 3px 12px 3px 16px; font-size: 10px; font-family: var(--mono); color: #cbd5e1; border-bottom: 1px solid #f8fafc; font-style: italic; }
+
+.card-field {
+  display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 16px;
+  font-size: 12px; color: #475569; border-bottom: 1px solid #f8fafc;
+  cursor: pointer; transition: background .1s; min-height: 28px;
+}
+.card-field:hover { background: #fafafa; }
+.card-field.sel-field { background: #eff6ff; }
+.field-bullet { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.field-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.field-type { font-family: var(--mono); font-size: 10px; color: #94a3b8; background: #f8fafc; padding: 1px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+
+.card-footer { padding: 6px 10px; }
+.add-field-btn {
+  width: 100%; padding: 4px; font-size: 11.5px; color: #94a3b8;
+  background: none; border: 1.5px dashed #e2e8f0; border-radius: 6px; cursor: pointer;
+  transition: all .12s; font-family: var(--font);
+}
+.add-field-btn:hover { border-color: #93c5fd; color: #2563eb; background: #f0f9ff; }
+
+.conn-handle {
+  position: absolute; right: -8px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; background: #7c3aed; border-radius: 50%;
+  border: 2px solid #fff; cursor: crosshair; display: none; z-index: 5;
+  box-shadow: 0 1px 4px rgba(124,58,237,.35);
+}
+.entity-card:hover .conn-handle, .entity-card.selected .conn-handle { display: block; }
+
+/* ── Arrows ── */
+.arrow-path { stroke: #cbd5e1; stroke-width: 1.5; fill: none; marker-end: url(#arrow-tip); }
+.arrow-label { font-size: 10px; fill: #94a3b8; font-family: var(--mono); }
+
+/* ── Zoom controls ── */
+#zoom-controls {
+  position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column;
+  gap: 3px; z-index: 30;
+}
+.zc-btn {
+  width: 30px; height: 30px; background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 7px; font-size: 16px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  color: #64748b; transition: all .1s;
+}
+.zc-btn:hover { background: #f8fafc; border-color: #cbd5e1; color: #1e293b; }
+.zc-pct {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 11px;
+  text-align: center; padding: 4px 0; font-weight: 600; color: #475569;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06); font-family: var(--mono);
+}
+
+/* ── Relation indicator ── */
+#rel-band {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  background: #ede9fe; color: #7c3aed; border: 1px solid #c4b5fd;
+  padding: 6px 18px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  display: none; z-index: 30; pointer-events: none; box-shadow: 0 2px 8px rgba(124,58,237,.12);
+}
+
+/* ── Minimap ── */
+#minimap {
+  position: absolute; bottom: 20px; left: 20px; width: 150px; height: 96px;
+  background: rgba(255,255,255,.95); border: 1px solid #e2e8f0; border-radius: 10px;
+  z-index: 30; box-shadow: 0 1px 4px rgba(0,0,0,.06); cursor: pointer;
+}
+
+/* ── Rectangle select ── */
+#sel-rect {
+  position: absolute; border: 1.5px solid #3b82f6; background: rgba(59,130,246,.05);
+  border-radius: 4px; pointer-events: none; display: none; z-index: 20;
+}
+
+/* ── Properties panel ── */
+#props-panel {
+  width: 256px; min-width: 256px; background: #fff;
+  border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow-y: auto;
+}
+.props-header { padding: 14px 16px 10px; border-bottom: 1px solid #f1f5f9; flex-shrink: 0; }
+.props-header-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+#props-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; font-size: 12.5px; }
+.prop-group { display: flex; flex-direction: column; gap: 4px; }
+.prop-label { font-size: 11px; font-weight: 600; color: #64748b; }
+.prop-input {
+  width: 100%; padding: 6px 9px; font-size: 12.5px; font-family: var(--font);
+  border: 1px solid #e2e8f0; border-radius: 7px; outline: none; color: #1e293b;
+  background: #fafafa; transition: all .12s;
+}
+.prop-input:focus { border-color: #93c5fd; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,.08); }
+.prop-select { width: 100%; padding: 6px 9px; font-size: 12.5px; font-family: var(--font); border: 1px solid #e2e8f0; border-radius: 7px; background: #fafafa; color: #1e293b; outline: none; }
+.prop-select:focus { border-color: #93c5fd; }
+.prop-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #475569; cursor: pointer; padding: 2px 0; }
+.prop-check input { accent-color: #2563eb; width: 14px; height: 14px; }
+.prop-divider { height: 1px; background: #f1f5f9; margin: 2px 0; }
+.prop-meta { font-size: 11px; color: #94a3b8; }
+.btn-del { width: 100%; padding: 7px; background: #fff5f5; color: #e11d48; border: 1px solid #fecdd3; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all .12s; }
+.btn-del:hover { background: #fee2e2; border-color: #fca5a5; }
+.props-empty { padding: 20px 16px; font-size: 12px; color: #94a3b8; line-height: 1.6; }
+
+/* ── Code modal ── */
+#code-modal {
+  position: fixed; inset: 0; background: rgba(15,23,42,.4);
+  display: none; align-items: center; justify-content: center; padding: 24px; z-index: 9000;
+  backdrop-filter: blur(2px);
+}
+.modal-box {
+  background: #fff; border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18); width: 100%; max-width: 940px;
+  display: flex; flex-direction: column; max-height: 90vh; overflow: hidden;
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #f1f5f9; flex-shrink: 0; }
+.modal-title { font-size: 15px; font-weight: 700; color: #0f172a; }
+.modal-close { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 7px; cursor: pointer; color: #94a3b8; font-size: 18px; transition: all .1s; }
+.modal-close:hover { background: #f1f5f9; color: #1e293b; }
+#code-tabs { display: flex; overflow-x: auto; border-bottom: 1px solid #f1f5f9; flex-shrink: 0; padding: 0 4px; }
+.code-tab { padding: 8px 12px; font-size: 11.5px; font-weight: 500; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.code-tab.active { color: #2563eb; border-color: #2563eb; }
+#code-content { flex: 1; overflow: auto; margin: 0; padding: 20px; background: #f8fafc; font-family: var(--mono); font-size: 12px; line-height: 1.6; color: #1e293b; white-space: pre; }
+.modal-footer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #f1f5f9; flex-shrink: 0; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 20px; right: 20px; background: #0f172a; color: #f8fafc;
+  padding: 10px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 500;
+  z-index: 9999; opacity: 0; transition: opacity .2s; pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: 280px;
+}
+#toast.show { opacity: 1; }
+#toast.warn { background: #92400e; }
+#toast.error { background: #991b1b; }
+#toast.ok { background: #065f46; }
 </style>
 </head>
-<body class="flex flex-col h-screen">
+<body>
 
 <!-- Toolbar -->
-<div class="flex items-center gap-1 px-3 py-1.5 bg-white border-b border-gray-200 shadow-sm z-10 flex-shrink-0">
-  <div class="flex items-center gap-2 mr-3">
-    <svg class="w-5 h-5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+<div id="toolbar">
+  <div class="tb-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
     </svg>
-    <span class="font-bold text-gray-800 text-sm">PDL Entity Designer</span>
-    <span class="text-xs text-gray-400">PgAppForge</span>
+    <div>
+      <div class="tb-logo-name">PDL Designer</div>
+    </div>
   </div>
-  <div class="w-px h-5 bg-gray-200 mx-1"></div>
-  <button class="btn-tool" onclick="DS.addEntity()" title="Add new entity (N)">+ Entity</button>
-  <button id="rel-btn" class="btn-tool" onclick="DS.toggleRelMode()" title="Draw FK relationship (R)">&#x1F517; Relate</button>
-  <div class="w-px h-5 bg-gray-200 mx-1"></div>
-  <button class="btn-tool" onclick="DS.autoLayout()" title="Auto-arrange entities">&#9680; Layout</button>
-  <button class="btn-tool" onclick="DS.fitToScreen()" title="Fit all to screen (F)">&#x26F6; Fit</button>
-  <button class="btn-tool" onclick="DS.undo()" id="undo-btn" title="Undo (Ctrl+Z)" style="opacity:.4" disabled>&#x21A9; Undo</button>
-  <div class="flex-1"></div>
-  <span id="entity-count" class="text-xs text-gray-400 mr-2">0 entities</span>
-  <button class="btn-tool" onclick="DS.clearAll()">&#x1F5D1; Clear</button>
-  <button class="btn-tool" onclick="DS.downloadYaml()">&#x2B07; PDL YAML</button>
-  <button class="btn-primary" onclick="DS.generateCode()">&#9881; Generate Code</button>
+  <div class="tb-sep"></div>
+
+  <!-- Add -->
+  <button class="tb-btn" onclick="D.addEntity()" title="Add entity  N">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="8" y1="4" x2="8" y2="12"/><line x1="4" y1="8" x2="12" y2="8"/></svg>
+    Entity
+  </button>
+  <button class="tb-btn" id="rel-btn" onclick="D.toggleRel()" title="Relate  R">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><path d="M5 8h6"/><path d="M9 6l2 2-2 2"/></svg>
+    Relate
+  </button>
+
+  <div class="tb-sep"></div>
+
+  <button class="tb-btn" onclick="D.autoLayout()" title="Auto-layout  L">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="6" height="4" rx="1"/><rect x="9" y="1" width="6" height="4" rx="1"/><rect x="5" y="11" width="6" height="4" rx="1"/><line x1="4" y1="5" x2="8" y2="11"/><line x1="12" y1="5" x2="8" y2="11"/></svg>
+    Layout
+  </button>
+  <button class="tb-btn" onclick="D.fit()" title="Fit to screen  F">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 5V1h4M15 5V1h-4M1 11v4h4M15 11v4h-4"/></svg>
+    Fit
+  </button>
+  <button class="tb-btn" id="undo-btn" onclick="D.undo()" title="Undo  ⌘Z" disabled>
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6H9a4 4 0 010 8H5"/><path d="M3 6L6 3M3 6l3 3"/></svg>
+    Undo
+  </button>
+
+  <div class="tb-sep"></div>
+  <span id="entity-count" style="font-size:11.5px;color:#94a3b8;font-weight:500">0 entities</span>
+  <span id="zoom-pct-tb" style="font-size:11.5px;color:#94a3b8;font-family:var(--mono)">100%</span>
+
+  <div class="tb-spacer"></div>
+  <button class="tb-btn" onclick="D.clearAll()" title="Clear canvas">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/></svg>
+    Clear
+  </button>
+  <button class="tb-btn" onclick="D.dlYaml()" title="Export PDL YAML">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v10M4 7l4 4 4-4"/><path d="M2 13h12"/></svg>
+    PDL YAML
+  </button>
+  <button class="tb-btn primary" onclick="D.generate()" title="Generate code  ⌘↵">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4 6 2 8 4 10"/><polyline points="12 6 14 8 12 10"/><line x1="9" y1="3" x2="7" y2="13"/></svg>
+    Generate
+  </button>
 </div>
 
-<!-- Main layout -->
-<div class="flex flex-1 overflow-hidden">
+<!-- App body -->
+<div id="app">
 
   <!-- Left sidebar -->
-  <div style="width:268px;min-width:268px;background:white;border-right:1px solid #e5e7eb;display:flex;flex-direction:column">
-    <div class="flex border-b border-gray-200 flex-shrink-0">
-      <div class="tab-btn active" id="tab-new" onclick="DS.switchTab('new')">Schema</div>
-      <div class="tab-btn" id="tab-plugins" onclick="DS.switchTab('plugins')">&#128279; Capabilities</div>
+  <div id="sidebar">
+    <div class="side-tabs">
+      <div class="side-tab active" id="tab-schema" onclick="D.tab('schema')">Schema</div>
+      <div class="side-tab" id="tab-caps" onclick="D.tab('caps')">⚡ Capabilities</div>
     </div>
-    <!-- Schema tab -->
-    <div id="panel-new" class="p-3 flex flex-col gap-2 overflow-y-auto text-xs">
-      <p class="text-gray-500">Draw entity schemas visually. Drag to move, connect with <strong>Relate</strong>.</p>
-      <div class="font-semibold text-gray-500 uppercase tracking-wide mt-1">Field Types</div>
-      <div class="grid grid-cols-2 gap-1">
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">string</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">integer</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">decimal</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">boolean</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">date</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">datetime</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">text</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">jsonb</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">email</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">money</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">phone</div>
-        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">uuid</div>
+
+    <div id="panel-schema">
+      <div>
+        <div class="side-section-title" style="margin-bottom:6px">Field Types</div>
+        <div class="type-grid">
+          <div class="type-pill">string</div><div class="type-pill">integer</div>
+          <div class="type-pill">decimal</div><div class="type-pill">boolean</div>
+          <div class="type-pill">date</div><div class="type-pill">datetime</div>
+          <div class="type-pill">text</div><div class="type-pill">jsonb</div>
+          <div class="type-pill">email</div><div class="type-pill">money</div>
+          <div class="type-pill">phone</div><div class="type-pill">uuid</div>
+        </div>
       </div>
-      <div class="font-semibold text-gray-500 uppercase tracking-wide mt-1">Auto-included</div>
-      <div class="text-gray-400 leading-relaxed">Every entity gets <code>id</code> (UUID7), <code>tenant_id</code>, <code>created_at</code>, <code>updated_at</code>.</div>
-      <div class="font-semibold text-gray-500 uppercase tracking-wide mt-1">Shortcuts</div>
-      <div class="text-gray-400 leading-relaxed space-y-1">
-        <div><kbd>N</kbd> new entity &nbsp; <kbd>R</kbd> relate</div>
-        <div><kbd>F</kbd> fit screen &nbsp; <kbd>L</kbd> auto-layout</div>
-        <div><kbd>Del</kbd>/<kbd>Bksp</kbd> delete selected</div>
-        <div><kbd>Ctrl Z</kbd> undo &nbsp; <kbd>Ctrl ↵</kbd> generate</div>
-        <div><kbd>Scroll</kbd> zoom &nbsp; <kbd>Space+drag</kbd> pan</div>
+      <div>
+        <div class="side-section-title" style="margin-bottom:6px">Auto-included</div>
+        <div style="font-size:11.5px;color:#64748b;line-height:1.6">Every entity automatically gets <code style="font-family:var(--mono);background:#f1f5f9;padding:1px 4px;border-radius:3px">id</code>, <code style="font-family:var(--mono);background:#f1f5f9;padding:1px 4px;border-radius:3px">tenant_id</code>, <code style="font-family:var(--mono);background:#f1f5f9;padding:1px 4px;border-radius:3px">created_at</code>, <code style="font-family:var(--mono);background:#f1f5f9;padding:1px 4px;border-radius:3px">updated_at</code>.</div>
+      </div>
+      <div>
+        <div class="side-section-title" style="margin-bottom:8px">Shortcuts</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div class="key-row"><kbd>N</kbd> new entity &nbsp; <kbd>R</kbd> relate</div>
+          <div class="key-row"><kbd>F</kbd> fit &nbsp; <kbd>L</kbd> auto-layout</div>
+          <div class="key-row"><kbd>Del</kbd> delete selected</div>
+          <div class="key-row"><kbd>⌘Z</kbd> undo &nbsp; <kbd>⌘↵</kbd> generate</div>
+          <div class="key-row"><kbd>Scroll</kbd> zoom &nbsp; <kbd>Space</kbd>+drag pan</div>
+          <div class="key-row"><kbd>Shift</kbd>+click multi-select</div>
+        </div>
       </div>
     </div>
-    <!-- Capabilities tab -->
-    <div id="panel-plugins" class="hidden flex-1 flex flex-col overflow-hidden">
-      <div class="p-2 flex-shrink-0">
-        <input id="plugin-search" type="text" placeholder="Search 500+ capability models…" class="prop-input text-xs" oninput="DS.filterPlugins(this.value)">
-      </div>
-      <div id="plugin-list" class="flex-1 overflow-y-auto pb-4 text-xs">
-        <div class="text-gray-400 px-3 py-2">Click <strong>Capabilities</strong> to load…</div>
-      </div>
+
+    <div id="panel-caps">
+      <input id="cap-search" type="text" placeholder="Search 500+ models…" oninput="D.filterCaps(this.value)">
+      <div id="cap-list"><div style="padding:12px 14px;font-size:12px;color:#94a3b8">Loading…</div></div>
     </div>
   </div>
 
   <!-- Canvas viewport -->
-  <div class="flex-1 relative" id="viewport">
+  <div id="viewport">
     <div id="canvas">
       <svg id="svg-layer">
         <defs>
-          <marker id="arrowhead" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
-            <polygon points="0 0,9 3,0 6" fill="#94a3b8"/>
+          <marker id="arrow-tip" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0 0 L8 3 L0 6 L1.5 3 Z" fill="#94a3b8"/>
           </marker>
         </defs>
       </svg>
     </div>
-    <div id="rel-indicator">&#x1F517; Click source entity, then target to create FK</div>
-    <div class="zoom-ctrl">
-      <button class="zoom-btn" onclick="DS.zoom(1.2)" title="Zoom in">+</button>
-      <div id="zoom-pct">100%</div>
-      <button class="zoom-btn" onclick="DS.zoom(0.8)" title="Zoom out">−</button>
-      <button class="zoom-btn" onclick="DS.fitToScreen()" title="Fit to screen" style="font-size:12px">&#x26F6;</button>
+    <div id="rel-band">Click source entity, then target entity</div>
+    <div id="zoom-controls">
+      <button class="zc-btn" onclick="D.zoom(1.2)" title="Zoom in  +">+</button>
+      <div class="zc-pct" id="zc-pct">100%</div>
+      <button class="zc-btn" onclick="D.zoom(0.8)" title="Zoom out  −">−</button>
+      <button class="zc-btn" onclick="D.fit()" title="Fit to screen" style="font-size:13px">⊡</button>
     </div>
-    <canvas id="minimap" width="140" height="100" title="Click to fit screen" onclick="DS.fitToScreen()"></canvas>
-    <div class="select-rect" id="select-rect"></div>
+    <canvas id="minimap" width="150" height="96" onclick="D.fit()" title="Overview — click to fit screen"></canvas>
+    <div id="sel-rect"></div>
   </div>
 
   <!-- Properties panel -->
-  <div style="width:252px;min-width:252px;background:white;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;overflow-y:auto">
-    <div class="p-3 border-b border-gray-200 flex-shrink-0">
-      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Properties</div>
+  <div id="props-panel">
+    <div class="props-header">
+      <div class="props-header-title">Properties</div>
     </div>
-    <div id="props-content" class="p-3 text-xs text-gray-400">Select an entity or field to edit.</div>
+    <div id="props-body"><div class="props-empty">Select an entity or field to inspect and edit its properties.</div></div>
   </div>
 </div>
 
 <!-- Code modal -->
-<div id="code-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-6">
-  <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col" style="max-height:92vh">
-    <div class="flex items-center justify-between p-4 border-b flex-shrink-0">
-      <span class="font-bold text-gray-800">Generated Code</span>
-      <div class="flex items-center gap-2">
-        <button class="btn-tool text-xs" onclick="DS.copyCode()">Copy</button>
-        <button onclick="document.getElementById('code-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-      </div>
+<div id="code-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Generated Code</div>
+      <div class="modal-close" onclick="document.getElementById('code-modal').style.display='none'">×</div>
     </div>
-    <div class="flex border-b overflow-x-auto flex-shrink-0" id="code-tabs"></div>
-    <div class="flex-1 overflow-auto">
-      <pre id="code-content" class="text-xs font-mono bg-gray-50 p-4 overflow-auto whitespace-pre min-h-64"></pre>
+    <div id="code-tabs"></div>
+    <pre id="code-content"></pre>
+    <div class="modal-footer">
+      <button class="tb-btn" onclick="D.copyCode()">Copy</button>
+      <div style="flex:1"></div>
+      <button class="tb-btn primary" onclick="document.getElementById('code-modal').style.display='none'">Done</button>
     </div>
   </div>
 </div>
 
-<div id="notification" class="notification"></div>
+<div id="toast"></div>
 
 <script>
-const DS = (() => {
-  // ══════════════════════════════════════════════════════════
-  // Constants
-  // ══════════════════════════════════════════════════════════
-  const FIELD_TYPES = ['string','integer','decimal','float','boolean','date','datetime','text','jsonb','email','phone','money','uuid'];
-  const DOMAIN_COLORS = {
-    finance:'#1a56db',grc:'#d97706',hcm:'#059669',crm:'#7c3aed',
-    operations:'#dc2626',procurement:'#ea580c',platform:'#4b5563',
-    fintech:'#047857',custom:'#374151',
-  };
-  const GRID = 16;
-  const MAX_HISTORY = 30;
+const D = (() => {
+  // ═══════════════════════════════════════════
+  //  Constants & domain config
+  // ═══════════════════════════════════════════
+  const TYPES = ['string','integer','decimal','float','boolean','date','datetime','text','jsonb','email','phone','money','uuid'];
 
-  // ══════════════════════════════════════════════════════════
-  // State
-  // ══════════════════════════════════════════════════════════
+  const DOMAINS = {
+    finance:    { accent: '#2563eb', bg: '#eff6ff' },
+    grc:        { accent: '#d97706', bg: '#fffbeb' },
+    hcm:        { accent: '#059669', bg: '#ecfdf5' },
+    crm:        { accent: '#7c3aed', bg: '#f5f3ff' },
+    operations: { accent: '#e11d48', bg: '#fff1f2' },
+    procurement:{ accent: '#ea580c', bg: '#fff7ed' },
+    platform:   { accent: '#475569', bg: '#f8fafc' },
+    fintech:    { accent: '#0d9488', bg: '#f0fdfa' },
+    custom:     { accent: '#64748b', bg: '#f8fafc' },
+  };
+
+  const GRID = 16;
+  const MAX_HIST = 30;
+
+  // ═══════════════════════════════════════════
+  //  State
+  // ═══════════════════════════════════════════
   let entities = {};
   let relations = [];
-  let selected = null;       // {type:'entity'|'field', id, fieldIdx?}
-  let multiSel = new Set();  // entity ids
-  let transform = {x:80, y:80, scale:1};
-  let relMode = false, relSource = null;
-  let nextId = 1;
-  let pluginsData = null;
-  let _pluginEntryCache = [];
-  let generatedFiles = {}, activeCodeFile = null;
-  let history = [], historyIdx = -1;
-  let entityCount = 0;
+  let sel = null;          // {type:'entity'|'field', id, fi?}
+  let multiSel = new Set();
+  let tf = { x: 80, y: 80, scale: 1 };
+  let relMode = false, relSrc = null;
+  let nid = 1;
+  let eCnt = 0;
+  let capsData = null, _capCache = [];
+  let genFiles = {}, activeFile = null;
+  let hist = [], hIdx = -1;
   let spaceDown = false;
-  let isPanning = false;
-  let panStart = null;
-  let isSelectDragging = false;
-  let selectStart = null;
 
-  // ══════════════════════════════════════════════════════════
-  // Helpers
-  // ══════════════════════════════════════════════════════════
-  const uid = () => 'e' + (nextId++);
+  const VP   = document.getElementById('viewport');
+  const CVS  = document.getElementById('canvas');
+  const SVG  = document.getElementById('svg-layer');
+
+  // ═══════════════════════════════════════════
+  //  Helpers
+  // ═══════════════════════════════════════════
+  const uid  = () => 'e' + (nid++);
   const snap = v => Math.round(v / GRID) * GRID;
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  function vpToCanvas(vpX, vpY) {
-    const vp = VP.getBoundingClientRect();
-    return {
-      x: (vpX - vp.left - transform.x) / transform.scale,
-      y: (vpY - vp.top - transform.y) / transform.scale,
-    };
+  function domClr(domain) { return (DOMAINS[domain] || DOMAINS.custom).accent; }
+  function domBg(domain)  { return (DOMAINS[domain] || DOMAINS.custom).bg; }
+
+  function vpToCanvas(vx, vy) {
+    const r = VP.getBoundingClientRect();
+    return { x: (vx - r.left - tf.x) / tf.scale, y: (vy - r.top - tf.y) / tf.scale };
   }
 
-  function applyTransform() {
-    CANVAS.style.transform = `translate(${transform.x}px,${transform.y}px) scale(${transform.scale})`;
-    document.getElementById('zoom-pct').textContent = Math.round(transform.scale * 100) + '%';
+  function applyTF() {
+    CVS.style.transform = `translate(${tf.x}px,${tf.y}px) scale(${tf.scale})`;
+    const pct = Math.round(tf.scale * 100) + '%';
+    document.getElementById('zc-pct').textContent = pct;
+    document.getElementById('zoom-pct-tb').textContent = pct;
     updateMinimap();
   }
 
-  const VP = document.getElementById('viewport');
-  const CANVAS = document.getElementById('canvas');
-  const SVG = document.getElementById('svg-layer');
-
-  // ══════════════════════════════════════════════════════════
-  // History (undo)
-  // ══════════════════════════════════════════════════════════
-  function pushHistory() {
+  // ═══════════════════════════════════════════
+  //  History
+  // ═══════════════════════════════════════════
+  function push() {
     const snap = JSON.stringify({ entities, relations });
-    if (historyIdx < history.length - 1) history = history.slice(0, historyIdx + 1);
-    history.push(snap);
-    if (history.length > MAX_HISTORY) history.shift();
-    historyIdx = history.length - 1;
-    updateUndoBtn();
+    if (hIdx < hist.length - 1) hist = hist.slice(0, hIdx + 1);
+    hist.push(snap);
+    if (hist.length > MAX_HIST) hist.shift();
+    hIdx = hist.length - 1;
+    syncUndoBtn();
   }
 
   function undo() {
-    if (historyIdx <= 0) return;
-    historyIdx--;
-    const state = JSON.parse(history[historyIdx]);
-    entities = state.entities;
-    relations = state.relations;
-    selected = null; multiSel.clear();
+    if (hIdx <= 0) return;
+    hIdx--;
+    const s = JSON.parse(hist[hIdx]);
+    entities = s.entities; relations = s.relations;
+    sel = null; multiSel.clear();
     rebuildCanvas();
-    updateUndoBtn();
-    updateEntityCount();
+    syncUndoBtn();
+    syncCount();
   }
 
-  function updateUndoBtn() {
-    const btn = document.getElementById('undo-btn');
-    const can = historyIdx > 0;
-    btn.disabled = !can;
-    btn.style.opacity = can ? '1' : '.4';
+  function syncUndoBtn() {
+    const b = document.getElementById('undo-btn');
+    const can = hIdx > 0;
+    b.disabled = !can;
+    b.style.opacity = can ? '1' : '';
   }
 
   function rebuildCanvas() {
-    CANVAS.querySelectorAll('.entity-box').forEach(n => n.remove());
+    CVS.querySelectorAll('.entity-card').forEach(n => n.remove());
     SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
-    Object.keys(entities).forEach(renderEntity);
-    redrawArrows();
+    Object.keys(entities).forEach(renderCard);
+    drawArrows();
     renderProps();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Entities
-  // ══════════════════════════════════════════════════════════
-  function addEntity(overrides = {}) {
-    pushHistory();
+  // ═══════════════════════════════════════════
+  //  Entities
+  // ═══════════════════════════════════════════
+  function addEntity(o = {}) {
+    push();
     const id = uid();
-    const col = entityCount % 4, row = Math.floor(entityCount / 4);
-    entityCount++;
+    const col = eCnt % 4, row = Math.floor(eCnt / 4);
+    eCnt++;
     entities[id] = {
       id,
-      name: overrides.name || 'Entity' + nextId,
-      table: overrides.table || 'entity' + nextId,
-      domain: overrides.domain || 'custom',
-      description: overrides.description || '',
-      fields: overrides.fields ? overrides.fields.map(f => ({...f})) : [],
-      x: overrides.x ?? snap(80 + col * 240),
-      y: overrides.y ?? snap(80 + row * 200),
-      imported: overrides.imported || false,
-      module_path: overrides.module_path || null,
+      name:  o.name  || 'Entity' + nid,
+      table: o.table || 'entity' + nid,
+      domain: o.domain || 'custom',
+      description: o.description || '',
+      fields: o.fields ? o.fields.map(f => ({...f})) : [],
+      x: o.x ?? snap(80 + col * 250),
+      y: o.y ?? snap(80 + row * 210),
+      imported: o.imported || false,
+      module_path: o.module_path || null,
     };
-    renderEntity(id);
-    selectEntity(id);
-    redrawArrows();
-    updateEntityCount();
+    renderCard(id);
+    selectEnt(id);
+    drawArrows();
+    syncCount();
     return id;
   }
 
-  function updateEntityCount() {
+  function syncCount() {
     const n = Object.keys(entities).length;
-    document.getElementById('entity-count').textContent = n + ' entr' + (n === 1 ? 'y' : 'ities');
+    document.getElementById('entity-count').textContent = n + ' entit' + (n === 1 ? 'y' : 'ies');
   }
 
-  function renderEntity(id) {
-    document.getElementById('entity-' + id)?.remove();
+  function renderCard(id) {
+    document.getElementById('card-' + id)?.remove();
     const e = entities[id];
     if (!e) return;
-    const color = DOMAIN_COLORS[e.domain] || DOMAIN_COLORS.custom;
+    const acc = domClr(e.domain), bg = domBg(e.domain);
 
     const div = document.createElement('div');
-    div.className = 'entity-box';
-    div.id = 'entity-' + id;
+    div.className = 'entity-card' + (sel?.id===id?' selected':'') + (multiSel.has(id)?' multi-sel':'');
+    div.id = 'card-' + id;
     div.style.cssText = `left:${e.x}px;top:${e.y}px`;
-    if (selected?.id === id) div.classList.add('selected');
-    if (multiSel.has(id)) div.classList.add('multi-selected');
 
     const fieldsHtml = e.fields.map((f, i) => {
-      const dot = f.fk ? '#7c3aed' : '#d1d5db';
-      const sel = selected?.type === 'field' && selected.id === id && selected.fieldIdx === i;
-      return `<div class="entity-field${sel ? ' selected-field' : ''}" onclick="DS._clickField(event,'${id}',${i})">
-        <div class="field-dot" style="background:${dot}"></div>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
-        <span class="type-badge">${f.type||'string'}${f.nullable===false?'!':''}</span>
+      const dot = f.fk ? '#7c3aed' : '#e2e8f0';
+      const isSel = sel?.type==='field' && sel.id===id && sel.fi===i;
+      return `<div class="card-field${isSel?' sel-field':''}" onclick="D._selF(event,'${id}',${i})">
+        <div class="field-bullet" style="background:${dot}"></div>
+        <span class="field-name">${esc(f.name)}</span>
+        <span class="field-type">${esc(f.type||'string')}${f.nullable===false?'!':''}</span>
       </div>`;
     }).join('');
 
     div.innerHTML = `
-      <div class="entity-header" style="background:${color}" data-id="${id}">
-        <span class="name" title="${e.name}">${e.name}</span>
-        ${e.imported ? '<span style="font-size:9px;background:rgba(255,255,255,.2);padding:1px 5px;border-radius:8px;flex-shrink:0">⬇</span>' : ''}
-        <span class="del-btn" onclick="DS._delEntity(event,'${id}')" title="Delete">✕</span>
+      <div class="card-header" style="--accent:${acc};background:${bg}" data-id="${id}">
+        <div class="card-header-body">
+          <div class="card-name" title="${esc(e.name)}">${esc(e.name)}</div>
+          <div class="card-table">${esc(e.table)}</div>
+        </div>
+        <span class="card-domain-badge" style="background:${acc}">${e.domain}</span>
+        ${e.imported ? '<span style="font-size:9px;background:rgba(0,0,0,.06);color:'+acc+';padding:1px 5px;border-radius:5px;flex-shrink:0">⬇</span>' : ''}
+        <div class="card-del" onclick="D._delE(event,'${id}')" title="Delete entity">✕</div>
       </div>
-      <div class="entity-meta">${e.table}</div>
-      <div class="entity-auto-cols">id · tenant_id · timestamps</div>
+      <div class="card-auto">id · tenant_id · created_at · updated_at</div>
       ${fieldsHtml}
-      <div class="entity-footer">
-        <button class="add-field-btn" onclick="DS._addField(event,'${id}')">+ field</button>
+      <div class="card-footer">
+        <button class="add-field-btn" onclick="D._addF(event,'${id}')">+ Add field</button>
       </div>
-      <div class="conn-handle" onmousedown="DS._startRel(event,'${id}')"></div>`;
+      <div class="conn-handle" onmousedown="D._startRel(event,'${id}')"></div>`;
 
-    makeDraggable(div, div.querySelector('.entity-header'), id);
-    CANVAS.appendChild(div);
-  }
-
-  function _delEntity(ev, id) {
-    ev.stopPropagation();
-    pushHistory();
-    document.getElementById('entity-' + id)?.remove();
-    relations = relations.filter(r => r.from !== id && r.to !== id);
-    delete entities[id];
-    if (selected?.id === id) { selected = null; renderProps(); }
-    multiSel.delete(id);
-    redrawArrows();
-    updateEntityCount();
-  }
-
-  // ══════════════════════════════════════════════════════════
-  // Drag (with grid snap and multi-select support)
-  // ══════════════════════════════════════════════════════════
-  function makeDraggable(box, handle, id) {
-    handle.addEventListener('mousedown', ev => {
+    // Drag on header
+    const hdr = div.querySelector('.card-header');
+    hdr.addEventListener('mousedown', ev => {
       if (ev.button !== 0 || relMode || spaceDown) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-
-      // Select on mousedown; shift = toggle multi
+      ev.preventDefault(); ev.stopPropagation();
       if (ev.shiftKey) {
         multiSel.has(id) ? multiSel.delete(id) : multiSel.add(id);
-        document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('multi-selected'));
-        multiSel.forEach(mid => document.getElementById('entity-' + mid)?.classList.add('multi-selected'));
+        refreshMultiSel();
       } else {
-        if (!multiSel.has(id)) { multiSel.clear(); selectEntity(id); }
+        if (!multiSel.has(id)) { multiSel.clear(); selectEnt(id); }
       }
-
-      const startPositions = {};
       const dragIds = multiSel.size > 0 ? [...multiSel] : [id];
-      dragIds.forEach(did => startPositions[did] = { x: entities[did].x, y: entities[did].y });
-      const startMX = ev.clientX, startMY = ev.clientY;
-
-      const move = ev2 => {
-        const dx = (ev2.clientX - startMX) / transform.scale;
-        const dy = (ev2.clientY - startMY) / transform.scale;
-        dragIds.forEach(did => {
-          entities[did].x = snap(startPositions[did].x + dx);
-          entities[did].y = snap(startPositions[did].y + dy);
-          const b = document.getElementById('entity-' + did);
-          if (b) { b.style.left = entities[did].x + 'px'; b.style.top = entities[did].y + 'px'; }
+      const starts = Object.fromEntries(dragIds.map(d => [d, {x:entities[d].x, y:entities[d].y}]));
+      const mx0 = ev.clientX, my0 = ev.clientY;
+      let moved = false;
+      const mv = ev2 => {
+        const dx = (ev2.clientX - mx0) / tf.scale, dy = (ev2.clientY - my0) / tf.scale;
+        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+        dragIds.forEach(d => {
+          entities[d].x = snap(starts[d].x + dx);
+          entities[d].y = snap(starts[d].y + dy);
+          const b = document.getElementById('card-' + d);
+          if (b) { b.style.left = entities[d].x+'px'; b.style.top = entities[d].y+'px'; }
         });
-        redrawArrows();
-        updateMinimap();
+        drawArrows(); updateMinimap();
       };
       const up = () => {
-        document.removeEventListener('mousemove', move);
+        if (moved) push();
+        document.removeEventListener('mousemove', mv);
         document.removeEventListener('mouseup', up);
-        pushHistory();
       };
-      document.addEventListener('mousemove', move);
+      document.addEventListener('mousemove', mv);
       document.addEventListener('mouseup', up);
     });
 
-    box.addEventListener('click', ev => {
-      if (relMode) { ev.stopPropagation(); handleRelClick(id); }
-      else if (!ev.shiftKey && !ev.target.closest('.entity-field, .add-field-btn, .del-btn, .conn-handle')) {
-        selectEntity(id);
+    div.addEventListener('click', ev => {
+      if (relMode && !ev.target.closest('.conn-handle')) { ev.stopPropagation(); handleRelClick(id); }
+      else if (!ev.shiftKey && !ev.target.closest('.card-field,.add-field-btn,.card-del,.conn-handle')) {
+        selectEnt(id);
       }
     });
+
+    CVS.appendChild(div);
   }
 
-  function selectEntity(id) {
-    document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected', 'multi-selected'));
+  function selectEnt(id) {
+    CVS.querySelectorAll('.entity-card').forEach(c => c.classList.remove('selected','multi-sel'));
     multiSel.clear();
-    document.getElementById('entity-' + id)?.classList.add('selected');
-    selected = { type: 'entity', id };
+    document.getElementById('card-' + id)?.classList.add('selected');
+    sel = { type: 'entity', id };
     renderProps();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Relations (FK arrows)
-  // ══════════════════════════════════════════════════════════
-  function toggleRelMode() {
-    relMode = !relMode; relSource = null;
-    document.getElementById('rel-indicator').style.display = relMode ? 'block' : 'none';
+  function refreshMultiSel() {
+    CVS.querySelectorAll('.entity-card').forEach(c => {
+      const bid = c.id.replace('card-','');
+      c.classList.toggle('multi-sel', multiSel.has(bid));
+      c.classList.remove('selected');
+    });
+  }
+
+  function _delE(ev, id) {
+    ev.stopPropagation();
+    push();
+    document.getElementById('card-' + id)?.remove();
+    relations = relations.filter(r => r.from !== id && r.to !== id);
+    delete entities[id];
+    if (sel?.id === id) { sel = null; renderProps(); }
+    multiSel.delete(id);
+    drawArrows(); syncCount();
+  }
+
+  // ═══════════════════════════════════════════
+  //  Relations
+  // ═══════════════════════════════════════════
+  function toggleRel() {
+    relMode = !relMode; relSrc = null;
+    document.getElementById('rel-band').style.display = relMode ? 'block' : 'none';
     const btn = document.getElementById('rel-btn');
     btn.classList.toggle('active', relMode);
     VP.style.cursor = relMode ? 'crosshair' : 'default';
@@ -449,624 +684,547 @@ const DS = (() => {
 
   function _startRel(ev, id) {
     ev.stopPropagation();
-    if (!relMode) toggleRelMode();
-    relSource = id;
+    if (!relMode) toggleRel();
+    relSrc = id;
   }
 
-  function handleRelClick(targetId) {
+  function handleRelClick(tgt) {
     if (!relMode) return;
-    if (!relSource) { relSource = targetId; return; }
-    if (relSource === targetId) { relSource = null; return; }
-    pushHistory();
-    const srcE = entities[relSource], tgtE = entities[targetId];
-    const fieldName = tgtE.name.charAt(0).toLowerCase() + tgtE.name.slice(1) + '_id';
-    if (!srcE.fields.find(f => f.name === fieldName)) {
-      srcE.fields.push({ name: fieldName, type: 'string', nullable: true, indexed: true, fk: tgtE.name + '.id', label: tgtE.name });
+    if (!relSrc) { relSrc = tgt; return; }
+    if (relSrc === tgt) { relSrc = null; return; }
+    push();
+    const src = entities[relSrc], te = entities[tgt];
+    const fname = te.name.charAt(0).toLowerCase() + te.name.slice(1) + '_id';
+    if (!src.fields.find(f => f.name === fname)) {
+      src.fields.push({ name: fname, type: 'string', nullable: true, indexed: true, fk: te.name+'.id', label: te.name });
     }
-    relations.push({ id: uid(), from: relSource, to: targetId, fromField: fieldName });
-    renderEntity(relSource);
-    redrawArrows();
-    relSource = null;
-    toggleRelMode();
-    notify('FK relationship added');
+    relations.push({ id: uid(), from: relSrc, to: tgt, fromField: fname });
+    renderCard(relSrc);
+    drawArrows();
+    relSrc = null;
+    toggleRel();
+    toast('FK added: ' + fname);
   }
 
-  // ══════════════════════════════════════════════════════════
-  // SVG Arrows (canvas-space coordinates)
-  // ══════════════════════════════════════════════════════════
-  function boxEdge(fromId, toId) {
-    const fb = document.getElementById('entity-' + fromId);
-    const tb = document.getElementById('entity-' + toId);
-    if (!fb || !tb) return [null, null];
-    const fe = entities[fromId], te = entities[toId];
-    const fR = fe.x + fb.offsetWidth, fMY = fe.y + fb.offsetHeight / 2;
-    const tL = te.x, tMY = te.y + tb.offsetHeight / 2;
-    // Prefer left-to-right; if overlapping, use different edges
-    if (fR < te.x + 10) return [{x:fR,y:fMY},{x:tL,y:tMY}];
-    if (fe.x > te.x + tb.offsetWidth - 10) return [{x:fe.x,y:fMY},{x:te.x+tb.offsetWidth,y:tMY}];
-    return [{x:fR,y:fMY},{x:tL,y:tMY}];
+  // ═══════════════════════════════════════════
+  //  Arrows (smart edge selection)
+  // ═══════════════════════════════════════════
+  function smartEdge(fid, tid) {
+    const fb = document.getElementById('card-' + fid);
+    const tb = document.getElementById('card-' + tid);
+    if (!fb || !tb) return [null,null];
+    const fe = entities[fid], te = entities[tid];
+    const fw = fb.offsetWidth, fh = fb.offsetHeight;
+    const tw = tb.offsetWidth, th = tb.offsetHeight;
+    const fcx = fe.x+fw/2, fcy = fe.y+fh/2;
+    const tcx = te.x+tw/2, tcy = te.y+th/2;
+    const dx = tcx-fcx, dy = tcy-fcy;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx > 0
+        ? [{x:fe.x+fw, y:fcy}, {x:te.x, y:tcy}]
+        : [{x:fe.x,    y:fcy}, {x:te.x+tw, y:tcy}];
+    } else {
+      return dy > 0
+        ? [{x:fcx, y:fe.y+fh}, {x:tcx, y:te.y}]
+        : [{x:fcx, y:fe.y},    {x:tcx, y:te.y+th}];
+    }
   }
 
-  function redrawArrows() {
+  function drawArrows() {
     SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
-    relations.forEach(rel => {
-      const [p1, p2] = boxEdge(rel.from, rel.to);
+    relations.forEach(r => {
+      const [p1,p2] = smartEdge(r.from, r.to);
       if (!p1) return;
-      const dx = p2.x - p1.x, dy = p2.y - p1.y;
-      const cpx1 = p1.x + Math.abs(dx) * .4, cpy1 = p1.y;
-      const cpx2 = p2.x - Math.abs(dx) * .4, cpy2 = p2.y;
+      const dx = p2.x-p1.x, dy = p2.y-p1.y;
+      const absDx = Math.abs(dx), absDy = Math.abs(dy);
+      // Smooth bezier — control points perpendicular to edge direction
+      const cp1x = p1.x + dx*0.45, cp1y = p1.y + dy*0.05;
+      const cp2x = p2.x - dx*0.45, cp2y = p2.y - dy*0.05;
       const path = document.createElementNS('http://www.w3.org/2000/svg','path');
       path.setAttribute('class','arrow-path');
-      path.setAttribute('d',`M${p1.x} ${p1.y} C${cpx1} ${cpy1},${cpx2} ${cpy2},${p2.x} ${p2.y}`);
+      path.setAttribute('d',`M${p1.x} ${p1.y} C${cp1x} ${cp1y},${cp2x} ${cp2y},${p2.x} ${p2.y}`);
       SVG.appendChild(path);
-      const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2 - 5;
-      const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
-      txt.setAttribute('class','arrow-label');
-      txt.setAttribute('x',mx); txt.setAttribute('y',my);
-      txt.setAttribute('text-anchor','middle');
-      txt.textContent = rel.fromField || 'fk';
-      SVG.appendChild(txt);
+      const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2 - 6;
+      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('class','arrow-label');
+      lbl.setAttribute('x',mx); lbl.setAttribute('y',my);
+      lbl.setAttribute('text-anchor','middle');
+      lbl.textContent = r.fromField || 'fk';
+      SVG.appendChild(lbl);
     });
     updateMinimap();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Zoom & Pan
-  // ══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  Zoom + Pan
+  // ═══════════════════════════════════════════
   function zoom(factor, cx, cy) {
-    const newScale = clamp(transform.scale * factor, 0.12, 4);
+    const ns = clamp(tf.scale * factor, 0.1, 4);
     const vp = VP.getBoundingClientRect();
-    const pivotX = cx ?? vp.width / 2, pivotY = cy ?? vp.height / 2;
-    const cpx = (pivotX - transform.x) / transform.scale;
-    const cpy = (pivotY - transform.y) / transform.scale;
-    transform.x = pivotX - cpx * newScale;
-    transform.y = pivotY - cpy * newScale;
-    transform.scale = newScale;
-    applyTransform();
+    const px = cx ?? vp.width/2, py = cy ?? vp.height/2;
+    const cpx = (px - tf.x) / tf.scale, cpy = (py - tf.y) / tf.scale;
+    tf.x = px - cpx*ns; tf.y = py - cpy*ns; tf.scale = ns;
+    applyTF();
   }
 
-  function fitToScreen() {
+  function fit() {
     const ids = Object.keys(entities);
     if (!ids.length) return;
-    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
     ids.forEach(id => {
-      const e = entities[id];
-      const b = document.getElementById('entity-' + id);
-      const w = b?.offsetWidth || 220, h = b?.offsetHeight || 160;
-      minX=Math.min(minX,e.x); minY=Math.min(minY,e.y);
-      maxX=Math.max(maxX,e.x+w); maxY=Math.max(maxY,e.y+h);
+      const e=entities[id], b=document.getElementById('card-'+id);
+      const w=b?.offsetWidth||230, h=b?.offsetHeight||160;
+      x0=Math.min(x0,e.x); y0=Math.min(y0,e.y);
+      x1=Math.max(x1,e.x+w); y1=Math.max(y1,e.y+h);
     });
-    const vp = VP.getBoundingClientRect();
-    const PAD = 60;
-    const scaleX = (vp.width - PAD*2) / (maxX - minX || 1);
-    const scaleY = (vp.height - PAD*2) / (maxY - minY || 1);
-    transform.scale = clamp(Math.min(scaleX, scaleY), 0.12, 2);
-    transform.x = PAD - minX * transform.scale;
-    transform.y = PAD - minY * transform.scale;
-    applyTransform();
+    const vp=VP.getBoundingClientRect(), P=60;
+    const sx=(vp.width-P*2)/(x1-x0||1), sy=(vp.height-P*2)/(y1-y0||1);
+    tf.scale = clamp(Math.min(sx,sy), 0.1, 1.5);
+    tf.x = P - x0*tf.scale; tf.y = P - y0*tf.scale;
+    applyTF();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Auto-layout (topological + hierarchical)
-  // ══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  Auto-layout (topological + hierarchical)
+  // ═══════════════════════════════════════════
   function autoLayout() {
     const ids = Object.keys(entities);
-    if (ids.length < 2) { notify('Need at least 2 entities to layout'); return; }
-    pushHistory();
-
+    if (ids.length < 2) { toast('Need at least 2 entities','warn'); return; }
+    push();
     const nameToId = {};
     ids.forEach(id => nameToId[entities[id].name] = id);
-
-    // Build directed edges: referencing → referenced
     const edges = [];
     ids.forEach(id => {
       entities[id].fields.forEach(f => {
         if (f.fk) {
-          const tgtName = f.fk.split('.')[0];
-          const tgtId = nameToId[tgtName];
-          if (tgtId && tgtId !== id) edges.push([id, tgtId]);
+          const tn = f.fk.split('.')[0], tid = nameToId[tn];
+          if (tid && tid !== id) edges.push([id, tid]);
         }
       });
     });
-    // Also from relations
     relations.forEach(r => { if (r.from !== r.to) edges.push([r.from, r.to]); });
-
-    // Compute levels: entities at level = max(level of things they reference) + 1
-    // "Referenced" entities are the foundations → place at level 0
-    const inDegree = {}; ids.forEach(id => inDegree[id] = 0);
-    edges.forEach(([, to]) => inDegree[to] = (inDegree[to]||0) + 1);
+    const inDeg = {}; ids.forEach(id => inDeg[id] = 0);
+    edges.forEach(([,t]) => inDeg[t] = (inDeg[t]||0)+1);
     const level = {}; ids.forEach(id => level[id] = 0);
-
-    // Kahn's BFS-based level assignment
-    let queue = ids.filter(id => inDegree[id] === 0);
-    const tmpDeg = {...inDegree};
-    while (queue.length) {
+    const tmpDeg = {...inDeg};
+    let q = ids.filter(id => inDeg[id] === 0);
+    while (q.length) {
       const nxt = [];
-      queue.forEach(id => {
-        edges.filter(([f]) => f === id).forEach(([,to]) => {
-          level[to] = Math.max(level[to]||0, (level[id]||0) + 1);
-          tmpDeg[to]--;
-          if (tmpDeg[to] <= 0) nxt.push(to);
+      q.forEach(id => {
+        edges.filter(([f])=>f===id).forEach(([,t]) => {
+          level[t] = Math.max(level[t]||0, (level[id]||0)+1);
+          tmpDeg[t]--;
+          if (tmpDeg[t] <= 0) nxt.push(t);
         });
       });
-      queue = nxt;
+      q = nxt;
     }
-    // Handle cycles: unleveled nodes get assigned to max+1
-    const maxLevel = Math.max(0, ...Object.values(level));
-    ids.forEach(id => { if (level[id] === undefined) level[id] = maxLevel + 1; });
-
-    // Group by level and place
-    const byLevel = {};
-    ids.forEach(id => { const l = level[id]; byLevel[l] = (byLevel[l]||[]); byLevel[l].push(id); });
-    const levelNums = Object.keys(byLevel).map(Number).sort((a,b)=>a-b);
-    const maxLvl = Math.max(...levelNums);
-    const H_GAP = 260, V_GAP = 220, MARGIN = 80;
-
-    levelNums.forEach(lvl => {
-      const rowIds = byLevel[lvl];
-      // Referenced entities (low FK in-degree in this group) go top — invert level
-      const y = MARGIN + (maxLvl - lvl) * V_GAP;
-      const totalW = (rowIds.length - 1) * H_GAP;
-      const startX = Math.max(MARGIN, 500 - totalW / 2);
-      rowIds.forEach((id, i) => {
-        entities[id].x = snap(startX + i * H_GAP);
+    const maxLv = Math.max(0,...Object.values(level));
+    const byLv = {};
+    ids.forEach(id => { const l=level[id]||0; (byLv[l]=byLv[l]||[]).push(id); });
+    const lvNums = Object.keys(byLv).map(Number).sort((a,b)=>a-b);
+    const HG = 270, VG = 230, MX = 80, MY = 80;
+    lvNums.forEach(lv => {
+      const row = byLv[lv];
+      const y = MY + (maxLv - lv) * VG;
+      const startX = Math.max(MX, 600 - (row.length-1)*HG/2);
+      row.forEach((id,i) => {
+        entities[id].x = snap(startX + i*HG);
         entities[id].y = snap(y);
-        const box = document.getElementById('entity-' + id);
-        if (box) { box.style.left = entities[id].x + 'px'; box.style.top = entities[id].y + 'px'; }
+        const b = document.getElementById('card-'+id);
+        if (b) { b.style.left = entities[id].x+'px'; b.style.top = entities[id].y+'px'; }
       });
     });
-
-    redrawArrows();
-    setTimeout(fitToScreen, 50);
-    notify('Auto-layout applied');
+    drawArrows();
+    setTimeout(fit, 40);
+    toast('Layout applied');
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Minimap
-  // ══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  Minimap
+  // ═══════════════════════════════════════════
   function updateMinimap() {
     const mc = document.getElementById('minimap');
     if (!mc) return;
     const ctx = mc.getContext('2d');
-    const W = mc.width, H = mc.height;
+    const W=mc.width, H=mc.height;
     ctx.clearRect(0,0,W,H);
-
     const ids = Object.keys(entities);
     if (!ids.length) return;
-
-    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
     ids.forEach(id => {
-      const e = entities[id];
-      const b = document.getElementById('entity-' + id);
-      const w = b?.offsetWidth||220, h = b?.offsetHeight||160;
-      minX=Math.min(minX,e.x); minY=Math.min(minY,e.y);
-      maxX=Math.max(maxX,e.x+w); maxY=Math.max(maxY,e.y+h);
+      const e=entities[id], b=document.getElementById('card-'+id);
+      const w=b?.offsetWidth||230, h=b?.offsetHeight||160;
+      x0=Math.min(x0,e.x); y0=Math.min(y0,e.y);
+      x1=Math.max(x1,e.x+w); y1=Math.max(y1,e.y+h);
     });
-    const PAD=8;
-    const scaleX=(W-PAD*2)/(maxX-minX||1), scaleY=(H-PAD*2)/(maxY-minY||1);
-    const s=Math.min(scaleX,scaleY);
-    const offX=PAD-minX*s, offY=PAD-minY*s;
-
+    const P=8, sx=(W-P*2)/(x1-x0||1), sy=(H-P*2)/(y1-y0||1);
+    const s=Math.min(sx,sy), offX=P-x0*s, offY=P-y0*s;
     ids.forEach(id => {
-      const e = entities[id];
-      const b = document.getElementById('entity-' + id);
-      const w=(b?.offsetWidth||220)*s, h=(b?.offsetHeight||160)*s;
-      ctx.fillStyle = DOMAIN_COLORS[e.domain]||DOMAIN_COLORS.custom;
-      ctx.globalAlpha=0.7;
-      ctx.fillRect(e.x*s+offX, e.y*s+offY, Math.max(w,4), Math.max(h,3));
+      const e=entities[id], b=document.getElementById('card-'+id);
+      const w=(b?.offsetWidth||230)*s, h=(b?.offsetHeight||160)*s;
+      ctx.fillStyle = domClr(e.domain);
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.roundRect(e.x*s+offX, e.y*s+offY, Math.max(w,4), Math.max(h,3), 2);
+      ctx.fill();
     });
-    ctx.globalAlpha=1;
-
+    ctx.globalAlpha = 1;
     // Viewport rect
-    const vp = VP.getBoundingClientRect();
-    const vx = (-transform.x/transform.scale)*s+offX;
-    const vy = (-transform.y/transform.scale)*s+offY;
-    const vw = (vp.width/transform.scale)*s;
-    const vh = (vp.height/transform.scale)*s;
-    ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5;
-    ctx.strokeRect(vx,vy,vw,vh);
+    const vp=VP.getBoundingClientRect();
+    const vx=(-tf.x/tf.scale)*s+offX, vy=(-tf.y/tf.scale)*s+offY;
+    const vw=(vp.width/tf.scale)*s, vh=(vp.height/tf.scale)*s;
+    ctx.strokeStyle='#2563eb'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.roundRect(vx,vy,vw,vh,2); ctx.stroke();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Fields
-  // ══════════════════════════════════════════════════════════
-  function _clickField(ev, entityId, idx) {
+  // ═══════════════════════════════════════════
+  //  Fields
+  // ═══════════════════════════════════════════
+  function _selF(ev, eid, fi) {
     ev.stopPropagation();
-    selected = { type: 'field', id: entityId, fieldIdx: idx };
-    document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected'));
-    document.getElementById('entity-' + entityId)?.classList.add('selected');
+    sel = { type:'field', id:eid, fi };
+    CVS.querySelectorAll('.entity-card').forEach(c=>c.classList.remove('selected'));
+    document.getElementById('card-'+eid)?.classList.add('selected');
     renderProps();
   }
 
-  function _addField(ev, entityId) {
-    ev.stopPropagation();
-    pushHistory();
-    const e = entities[entityId];
-    e.fields.push({ name: 'field' + (e.fields.length + 1), type: 'string', nullable: true });
-    renderEntity(entityId);
-    selected = { type: 'field', id: entityId, fieldIdx: e.fields.length - 1 };
+  function _addF(ev, eid) {
+    ev.stopPropagation(); push();
+    const e = entities[eid];
+    e.fields.push({ name:'field'+(e.fields.length+1), type:'string', nullable:true });
+    renderCard(eid);
+    sel = { type:'field', id:eid, fi:e.fields.length-1 };
     renderProps();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Properties panel
-  // ══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  Properties panel
+  // ═══════════════════════════════════════════
   function renderProps() {
-    const panel = document.getElementById('props-content');
-    if (!selected) { panel.innerHTML = '<p class="text-gray-400">Select an entity or field.</p>'; return; }
+    const body = document.getElementById('props-body');
+    if (!sel) { body.innerHTML = '<div class="props-empty">Select an entity or field to inspect and edit its properties.</div>'; return; }
 
-    if (selected.type === 'entity') {
-      const e = entities[selected.id];
-      if (!e) return;
-      panel.innerHTML = `<div class="flex flex-col gap-3">
-        <div class="font-semibold text-blue-700 text-xs truncate">${e.name}</div>
-        <div><label class="prop-label">Entity Name</label><input class="prop-input" value="${esc(e.name)}" oninput="DS._upE('${e.id}','name',this.value)"></div>
-        <div><label class="prop-label">Table</label><input class="prop-input" value="${esc(e.table)}" oninput="DS._upE('${e.id}','table',this.value)"></div>
-        <div><label class="prop-label">Description</label><input class="prop-input" value="${esc(e.description||'')}" oninput="DS._upE('${e.id}','description',this.value)"></div>
-        <div><label class="prop-label">Domain</label>
-          <select class="prop-select" onchange="DS._upE('${e.id}','domain',this.value)">
-            ${Object.keys(DOMAIN_COLORS).map(d=>`<option value="${d}"${d===e.domain?' selected':''}>${d}</option>`).join('')}
+    if (sel.type === 'entity') {
+      const e = entities[sel.id]; if (!e) return;
+      const acc = domClr(e.domain);
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding-bottom:4px;border-bottom:1px solid #f1f5f9;margin-bottom:2px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${acc};flex-shrink:0"></div>
+          <span style="font-size:13px;font-weight:700;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</span>
+        </div>
+        <div class="prop-group"><label class="prop-label">Entity Name</label><input class="prop-input" value="${esc(e.name)}" oninput="D._upE('${e.id}','name',this.value)"></div>
+        <div class="prop-group"><label class="prop-label">Table Name</label><input class="prop-input" style="font-family:var(--mono)" value="${esc(e.table)}" oninput="D._upE('${e.id}','table',this.value)"></div>
+        <div class="prop-group"><label class="prop-label">Description</label><input class="prop-input" value="${esc(e.description||'')}" placeholder="Optional description" oninput="D._upE('${e.id}','description',this.value)"></div>
+        <div class="prop-group"><label class="prop-label">Domain</label>
+          <select class="prop-select" onchange="D._upE('${e.id}','domain',this.value)">
+            ${Object.keys(DOMAINS).map(d=>`<option value="${d}"${d===e.domain?' selected':''}>${d}</option>`).join('')}
           </select>
         </div>
-        <div><label class="prop-label">Module Path</label><input class="prop-input" placeholder="pgappforge.plugins…" value="${esc(e.module_path||'')}" oninput="DS._upE('${e.id}','module_path',this.value||null)"></div>
-        <div class="text-gray-400">Fields: ${e.fields.length} &nbsp;·&nbsp; Relations: ${relations.filter(r=>r.from===e.id||r.to===e.id).length}</div>
-        <button class="btn-danger" onclick="DS._delEntity(event,'${e.id}')">Delete Entity</button>
-      </div>`;
-    } else if (selected.type === 'field') {
-      const e = entities[selected.id];
-      if (!e) return;
-      const f = e.fields[selected.fieldIdx];
-      const i = selected.fieldIdx;
-      panel.innerHTML = `<div class="flex flex-col gap-3">
-        <div class="font-semibold text-purple-700 text-xs truncate">${esc(e.name)} / ${esc(f.name)}</div>
-        <div><label class="prop-label">Name</label><input class="prop-input" value="${esc(f.name)}" oninput="DS._upF('${e.id}',${i},'name',this.value)"></div>
-        <div><label class="prop-label">Type</label>
-          <select class="prop-select" onchange="DS._upF('${e.id}',${i},'type',this.value)">
-            ${FIELD_TYPES.map(t=>`<option value="${t}"${t===f.type?' selected':''}>${t}</option>`).join('')}
+        <div class="prop-group"><label class="prop-label">Module Path</label><input class="prop-input" style="font-family:var(--mono);font-size:11px" value="${esc(e.module_path||'')}" placeholder="pgappforge.plugins.erp…" oninput="D._upE('${e.id}','module_path',this.value||null)"></div>
+        <div class="prop-divider"></div>
+        <div class="prop-meta">${e.fields.length} field${e.fields.length!==1?'s':''} &nbsp;·&nbsp; ${relations.filter(r=>r.from===e.id||r.to===e.id).length} relation${relations.filter(r=>r.from===e.id||r.to===e.id).length!==1?'s':''}</div>
+        <button class="btn-del" onclick="D._delE(event,'${e.id}')">Delete Entity</button>`;
+    } else {
+      const e = entities[sel.id]; if (!e) return;
+      const f = e.fields[sel.fi]; if (!f) return;
+      const acc = domClr(e.domain);
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9;margin-bottom:2px">
+          <div style="width:8px;height:8px;border-radius:50%;background:${f.fk?'#7c3aed':'#e2e8f0'};flex-shrink:0"></div>
+          <span style="font-size:12px;color:#7c3aed;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)} / ${esc(f.name)}</span>
+        </div>
+        <div class="prop-group"><label class="prop-label">Field Name</label><input class="prop-input" value="${esc(f.name)}" oninput="D._upF('${e.id}',${sel.fi},'name',this.value)"></div>
+        <div class="prop-group"><label class="prop-label">Type</label>
+          <select class="prop-select" onchange="D._upF('${e.id}',${sel.fi},'type',this.value)">
+            ${TYPES.map(t=>`<option value="${t}"${t===f.type?' selected':''}>${t}</option>`).join('')}
           </select>
         </div>
-        <div><label class="prop-label">FK Target</label><input class="prop-input" value="${esc(f.fk||'')}" placeholder="EntityName.id" oninput="DS._upF('${e.id}',${i},'fk',this.value||null)"></div>
-        <div><label class="prop-label">Label</label><input class="prop-input" value="${esc(f.label||'')}" oninput="DS._upF('${e.id}',${i},'label',this.value)"></div>
-        <div><label class="prop-label">Max Length</label><input class="prop-input" type="number" value="${f.max_length||''}" oninput="DS._upF('${e.id}',${i},'max_length',this.value?+this.value:null)"></div>
-        <label class="prop-check"><input type="checkbox"${f.nullable===false?' checked':''} onchange="DS._upF('${e.id}',${i},'nullable',!this.checked)"> Required</label>
-        <label class="prop-check"><input type="checkbox"${f.unique?' checked':''} onchange="DS._upF('${e.id}',${i},'unique',this.checked)"> Unique</label>
-        <label class="prop-check"><input type="checkbox"${f.indexed?' checked':''} onchange="DS._upF('${e.id}',${i},'indexed',this.checked)"> Indexed</label>
-        <button class="btn-danger" onclick="DS._delField('${e.id}',${i})">Delete Field</button>
-      </div>`;
+        <div class="prop-group"><label class="prop-label">FK Target</label><input class="prop-input" style="font-family:var(--mono);font-size:11px" value="${esc(f.fk||'')}" placeholder="EntityName.id" oninput="D._upF('${e.id}',${sel.fi},'fk',this.value||null)"></div>
+        <div class="prop-group"><label class="prop-label">Label</label><input class="prop-input" value="${esc(f.label||'')}" placeholder="Human-readable label" oninput="D._upF('${e.id}',${sel.fi},'label',this.value)"></div>
+        <div class="prop-group"><label class="prop-label">Max Length <span style="font-weight:400;color:#94a3b8">(string)</span></label><input class="prop-input" type="number" value="${f.max_length||''}" placeholder="255" oninput="D._upF('${e.id}',${sel.fi},'max_length',this.value?+this.value:null)"></div>
+        <div class="prop-divider"></div>
+        <label class="prop-check"><input type="checkbox"${f.nullable===false?' checked':''} onchange="D._upF('${e.id}',${sel.fi},'nullable',!this.checked)"> Required (NOT NULL)</label>
+        <label class="prop-check"><input type="checkbox"${f.unique?' checked':''} onchange="D._upF('${e.id}',${sel.fi},'unique',this.checked)"> Unique constraint</label>
+        <label class="prop-check"><input type="checkbox"${f.indexed?' checked':''} onchange="D._upF('${e.id}',${sel.fi},'indexed',this.checked)"> Add index</label>
+        <div class="prop-divider"></div>
+        <button class="btn-del" onclick="D._delF('${e.id}',${sel.fi})">Delete Field</button>`;
     }
-  }
-
-  function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   function _upE(id, key, val) {
-    pushHistory();
-    entities[id][key] = val;
-    if (['name','domain','table'].includes(key)) {
-      renderEntity(id); selectEntity(id); redrawArrows();
-    }
+    push(); entities[id][key] = val;
+    if (['name','domain','table'].includes(key)) { renderCard(id); selectEnt(id); drawArrows(); }
   }
 
-  function _upF(entityId, idx, key, val) {
-    pushHistory();
-    entities[entityId].fields[idx][key] = val;
-    renderEntity(entityId);
-    selected = { type: 'field', id: entityId, fieldIdx: idx };
+  function _upF(eid, fi, key, val) {
+    push(); entities[eid].fields[fi][key] = val;
+    renderCard(eid);
+    sel = { type:'field', id:eid, fi };
     renderProps();
-    redrawArrows();
+    drawArrows();
   }
 
-  function _delField(entityId, idx) {
-    pushHistory();
-    entities[entityId].fields.splice(idx, 1);
-    renderEntity(entityId);
-    selected = { type: 'entity', id: entityId };
-    renderProps();
-    redrawArrows();
+  function _delF(eid, fi) {
+    push(); entities[eid].fields.splice(fi,1);
+    renderCard(eid);
+    sel = { type:'entity', id:eid };
+    renderProps(); drawArrows();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Plugin import panel
-  // ══════════════════════════════════════════════════════════
-  function switchTab(tab) {
-    document.getElementById('panel-new').className = tab==='new' ? 'p-3 flex flex-col gap-2 overflow-y-auto text-xs' : 'hidden';
-    document.getElementById('panel-plugins').className = tab==='plugins' ? 'flex-1 flex flex-col overflow-hidden' : 'hidden';
-    document.getElementById('tab-new').className = 'tab-btn'+(tab==='new'?' active':'');
-    document.getElementById('tab-plugins').className = 'tab-btn'+(tab==='plugins'?' active':'');
-    if (tab==='plugins' && !pluginsData) loadPlugins();
+  // ═══════════════════════════════════════════
+  //  Capabilities import
+  // ═══════════════════════════════════════════
+  function tab(name) {
+    document.getElementById('panel-schema').style.display = name==='schema' ? 'flex' : 'none';
+    document.getElementById('panel-caps').style.display   = name==='caps'   ? 'flex' : 'none';
+    document.getElementById('tab-schema').className = 'side-tab'+(name==='schema'?' active':'');
+    document.getElementById('tab-caps').className   = 'side-tab'+(name==='caps'?' active':'');
+    if (name==='caps' && !capsData) loadCaps();
   }
 
-  async function loadPlugins() {
-    document.getElementById('plugin-list').innerHTML = '<div class="text-gray-400 px-3 py-2">Loading…</div>';
+  async function loadCaps() {
+    document.getElementById('cap-list').innerHTML = '<div style="padding:12px 14px;font-size:12px;color:#94a3b8">Loading capabilities…</div>';
     try {
       const r = await fetch('/pdl-designer/api/plugins');
       const d = await r.json();
-      pluginsData = d.domains || {};
-      renderPluginList(pluginsData);
+      capsData = d.domains || {};
+      renderCaps(capsData);
     } catch(e) {
-      document.getElementById('plugin-list').innerHTML = '<div class="text-red-500 px-3 py-2">Load failed: ' + e.message + '</div>';
+      document.getElementById('cap-list').innerHTML = '<div style="padding:12px 14px;font-size:12px;color:#e11d48">Failed: ' + e.message + '</div>';
     }
   }
 
-  function renderPluginList(domains) {
-    _pluginEntryCache = [];
+  function renderCaps(domains) {
+    _capCache = [];
+    const onCanvas = new Set(Object.values(entities).map(e=>e.table));
     let html = '';
-    const importedTables = new Set(Object.values(entities).map(e => e.table));
     for (const [domain, models] of Object.entries(domains)) {
-      const color = DOMAIN_COLORS[domain]||DOMAIN_COLORS.custom;
-      html += `<div class="plugin-domain-hdr" style="color:${color}">${domain} (${models.length})</div>`;
+      const acc = domClr(domain);
+      html += `<div class="cap-domain" style="color:${acc}">${domain} <span style="font-weight:400;color:#94a3b8">(${models.length})</span></div>`;
       models.forEach(entry => {
-        const idx = _pluginEntryCache.length;
-        _pluginEntryCache.push({domain, entry});
-        const onCanvas = importedTables.has(entry.model.table);
-        html += `<div class="plugin-row" onclick="DS._importModel(${idx})" title="${entry.model.description||entry.model.name}">
-          <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${entry.model.name}</span>
-          <span class="import-badge">${onCanvas?'✓ added':'+ add'}</span>
+        const idx = _capCache.length; _capCache.push({domain, entry});
+        const added = onCanvas.has(entry.model.table);
+        html += `<div class="cap-row" onclick="D._importCap(${idx})" title="${esc(entry.model.description||'')}">
+          <div class="cap-dot" style="background:${acc}"></div>
+          <span class="cap-name">${esc(entry.model.name)}</span>
+          <span class="cap-badge${added?' added':''}">${added?'✓ added':'+ add'}</span>
         </div>`;
       });
     }
-    document.getElementById('plugin-list').innerHTML = html || '<div class="text-gray-400 px-3 py-2">No models</div>';
+    document.getElementById('cap-list').innerHTML = html || '<div style="padding:12px 14px;font-size:12px;color:#94a3b8">No models found</div>';
   }
 
-  function filterPlugins(q) {
-    if (!pluginsData) return;
-    if (!q) { renderPluginList(pluginsData); return; }
+  function filterCaps(q) {
+    if (!capsData) return;
+    if (!q) { renderCaps(capsData); return; }
     const ql = q.toLowerCase();
     const f = {};
-    for (const [d,models] of Object.entries(pluginsData)) {
-      const m = models.filter(e => e.model.name.toLowerCase().includes(ql)||d.includes(ql)||
-        (e.model.description||'').toLowerCase().includes(ql));
+    for (const [d,models] of Object.entries(capsData)) {
+      const m = models.filter(e => e.model.name.toLowerCase().includes(ql)||d.includes(ql)||(e.model.description||'').toLowerCase().includes(ql));
       if (m.length) f[d] = m;
     }
-    renderPluginList(f);
+    renderCaps(f);
   }
 
-  function _importModel(idx) {
-    const cached = _pluginEntryCache[idx];
-    if (!cached) { notify('Refresh plugin list', 'warn'); return; }
-    const {domain, entry} = cached;
-    const m = entry.model;
-    if (Object.values(entities).some(e => e.table === m.table)) {
-      notify('Already on canvas: ' + m.name); return;
-    }
+  function _importCap(idx) {
+    const c = _capCache[idx]; if (!c) return;
+    const {domain, entry} = c, m = entry.model;
+    if (Object.values(entities).some(e=>e.table===m.table)) { toast('Already on canvas: '+m.name); return; }
     addEntity({name:m.name, table:m.table, domain, description:m.description||'', fields:m.fields||[], imported:true, module_path:entry.module});
-    // Refresh badge states
-    if (pluginsData) renderPluginList(
-      document.getElementById('plugin-search').value ? null : pluginsData
-    );
-    notify('Imported: ' + m.name + ' (' + (m.fields||[]).length + ' fields)');
+    if (capsData) renderCaps(document.getElementById('cap-search').value ? {} : capsData);
+    toast('Imported ' + m.name + ' — ' + (m.fields||[]).length + ' fields');
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Export / Generate
-  // ══════════════════════════════════════════════════════════
-  function buildPayload() {
+  // ═══════════════════════════════════════════
+  //  Export / generate
+  // ═══════════════════════════════════════════
+  function payload() {
     return {
-      entities: Object.values(entities).map(e => ({
-        name:e.name, table:e.table, description:e.description,
-        domain:e.domain, fields:e.fields, module_path:e.module_path,
-        generate:['model','migration','view','api','tests'],
-      })),
+      entities: Object.values(entities).map(e=>({name:e.name,table:e.table,description:e.description,domain:e.domain,fields:e.fields,module_path:e.module_path,generate:['model','migration','view','api','tests']})),
       relations,
     };
   }
 
-  function downloadYaml() {
-    const p = buildPayload();
-    window.location.href = '/pdl-designer/api/pdl-yaml?schema=' + encodeURIComponent(JSON.stringify(p));
+  function dlYaml() {
+    const p = payload();
+    window.location.href = '/pdl-designer/api/pdl-yaml?schema='+encodeURIComponent(JSON.stringify(p));
   }
 
-  async function generateCode() {
-    const p = buildPayload();
-    if (!p.entities.length) { notify('Add at least one entity', 'warn'); return; }
-    notify('Generating code…');
+  async function generate() {
+    const p = payload();
+    if (!p.entities.length) { toast('Add at least one entity first','warn'); return; }
+    toast('Generating…');
     try {
-      const r = await fetch('/pdl-designer/api/generate', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p),
-      });
+      const r = await fetch('/pdl-designer/api/generate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
       const d = await r.json();
-      if (!d.ok) { notify('Error: '+d.error,'error'); return; }
-      generatedFiles = d.files;
-      showCodeModal(d.files);
-      notify('Code generated — ' + Object.keys(d.files).length + ' files');
-    } catch(e) { notify('Network error','error'); }
+      if (!d.ok) { toast('Error: '+d.error,'error'); return; }
+      genFiles = d.files;
+      showModal(d.files);
+      toast(Object.keys(d.files).length + ' files generated');
+    } catch(e) { toast('Network error','error'); }
   }
 
-  function showCodeModal(files) {
+  function showModal(files) {
     const keys = Object.keys(files);
-    activeCodeFile = keys[0];
-    document.getElementById('code-tabs').innerHTML = keys.map(k =>
-      `<button class="tab-btn${k===activeCodeFile?' active':''}" onclick="DS._codeTab('${k}')">${k}</button>`
-    ).join('');
-    document.getElementById('code-content').textContent = files[activeCodeFile]||'';
-    document.getElementById('code-modal').classList.remove('hidden');
+    activeFile = keys[0];
+    document.getElementById('code-tabs').innerHTML = keys.map(k=>`<div class="code-tab${k===activeFile?' active':''}" onclick="D._codeTab('${k}')">${k}</div>`).join('');
+    document.getElementById('code-content').textContent = files[activeFile]||'';
+    document.getElementById('code-modal').style.display = 'flex';
   }
 
-  function _codeTab(key) {
-    activeCodeFile = key;
-    document.querySelectorAll('#code-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.textContent===key));
-    document.getElementById('code-content').textContent = generatedFiles[key]||'';
+  function _codeTab(k) {
+    activeFile = k;
+    document.querySelectorAll('.code-tab').forEach(b=>b.classList.toggle('active', b.textContent===k));
+    document.getElementById('code-content').textContent = genFiles[k]||'';
   }
 
   function copyCode() {
-    navigator.clipboard.writeText(document.getElementById('code-content').textContent)
-      .then(()=>notify('Copied to clipboard'));
+    navigator.clipboard.writeText(document.getElementById('code-content').textContent).then(()=>toast('Copied'));
   }
 
   function clearAll() {
     if (!Object.keys(entities).length) return;
     if (!confirm('Clear all entities and relationships?')) return;
-    pushHistory();
-    CANVAS.querySelectorAll('.entity-box').forEach(n=>n.remove());
+    push();
+    CVS.querySelectorAll('.entity-card').forEach(n=>n.remove());
     SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n=>n.remove());
-    entities = {}; relations = []; selected = null; multiSel.clear(); entityCount = 0;
-    renderProps(); updateEntityCount(); updateMinimap();
+    entities={}; relations=[]; sel=null; multiSel.clear(); eCnt=0;
+    renderProps(); syncCount(); updateMinimap();
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Notifications
-  // ══════════════════════════════════════════════════════════
-  function notify(msg, type='success') {
-    const el = document.getElementById('notification');
-    el.textContent = msg;
-    el.style.background = type==='error'?'#dc2626':type==='warn'?'#d97706':'#065f46';
-    el.classList.add('show');
-    clearTimeout(el._t);
-    el._t = setTimeout(()=>el.classList.remove('show'), 2500);
+  // ═══════════════════════════════════════════
+  //  Toast
+  // ═══════════════════════════════════════════
+  function toast(msg, type='ok') {
+    const el = document.getElementById('toast');
+    el.textContent = msg; el.className = 'toast show ' + type;
+    clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), 2500);
   }
 
-  // ══════════════════════════════════════════════════════════
-  // Event wiring
-  // ══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  Events
+  // ═══════════════════════════════════════════
 
-  // Mouse wheel zoom (centered on cursor)
+  // Wheel zoom
   VP.addEventListener('wheel', ev => {
     ev.preventDefault();
-    const factor = ev.deltaY < 0 ? 1.12 : 0.88;
-    const vp = VP.getBoundingClientRect();
-    zoom(factor, ev.clientX - vp.left, ev.clientY - vp.top);
-  }, { passive: false });
+    const vp=VP.getBoundingClientRect();
+    zoom(ev.deltaY<0?1.12:0.88, ev.clientX-vp.left, ev.clientY-vp.top);
+  }, {passive:false});
 
-  // Pan: space+drag or middle-button drag
+  // Space+drag pan / middle-button pan
   document.addEventListener('keydown', ev => {
-    if (ev.key === ' ' && ev.target === document.body) { ev.preventDefault(); spaceDown = true; VP.style.cursor='grab'; }
+    if (ev.key===' ' && ev.target.tagName !== 'INPUT' && ev.target.tagName !== 'TEXTAREA') {
+      ev.preventDefault(); spaceDown=true; VP.style.cursor='grab';
+    }
   });
   document.addEventListener('keyup', ev => {
-    if (ev.key === ' ') { spaceDown = false; VP.style.cursor = relMode ? 'crosshair' : 'default'; }
+    if (ev.key===' ') { spaceDown=false; VP.style.cursor=relMode?'crosshair':'default'; }
   });
 
   VP.addEventListener('mousedown', ev => {
-    // Middle-button or space+left = pan
-    if (ev.button === 1 || (ev.button === 0 && spaceDown)) {
+    if (ev.button===1 || (ev.button===0 && spaceDown)) {
       ev.preventDefault();
-      isPanning = true;
-      panStart = { x: ev.clientX - transform.x, y: ev.clientY - transform.y };
-      VP.style.cursor = 'grabbing';
-      const move = ev2 => {
-        if (!isPanning) return;
-        transform.x = ev2.clientX - panStart.x;
-        transform.y = ev2.clientY - panStart.y;
-        applyTransform();
-      };
-      const up = () => {
-        isPanning = false;
-        VP.style.cursor = spaceDown ? 'grab' : relMode ? 'crosshair' : 'default';
-        document.removeEventListener('mousemove', move);
-        document.removeEventListener('mouseup', up);
-      };
-      document.addEventListener('mousemove', move);
-      document.addEventListener('mouseup', up);
+      VP.style.cursor='grabbing';
+      const sx=ev.clientX-tf.x, sy=ev.clientY-tf.y;
+      const mv = ev2 => { tf.x=ev2.clientX-sx; tf.y=ev2.clientY-sy; applyTF(); };
+      const up = () => { VP.style.cursor=spaceDown?'grab':'default'; document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+      document.addEventListener('mousemove',mv);
+      document.addEventListener('mouseup',up);
       return;
     }
-    // Left-click on empty canvas = deselect + rectangle selection
-    if (ev.button === 0 && !spaceDown && ev.target === VP || ev.target === CANVAS || ev.target.id === 'svg-layer') {
-      if (relMode) return;
-      selected = null; multiSel.clear();
-      document.querySelectorAll('.entity-box').forEach(b=>b.classList.remove('selected','multi-selected'));
-      renderProps();
-
-      // Rectangle select drag
-      const vp = VP.getBoundingClientRect();
-      const sx = ev.clientX - vp.left, sy = ev.clientY - vp.top;
-      isSelectDragging = false;
-      selectStart = {x:sx, y:sy};
-      const rect = document.getElementById('select-rect');
-      const move = ev2 => {
-        const cx = ev2.clientX - vp.left, cy = ev2.clientY - vp.top;
-        if (!isSelectDragging && (Math.abs(cx-sx)>5||Math.abs(cy-sy)>5)) isSelectDragging = true;
-        if (!isSelectDragging) return;
-        const l=Math.min(sx,cx), t=Math.min(sy,cy), w=Math.abs(cx-sx), h=Math.abs(cy-sy);
-        rect.style.cssText=`display:block;left:${l}px;top:${t}px;width:${w}px;height:${h}px`;
-        // Highlight entities within rect (canvas coords)
-        const cl = vpToCanvas(l+vp.left, t+vp.top), cr = vpToCanvas(l+w+vp.left, t+h+vp.top);
-        multiSel.clear();
-        Object.keys(entities).forEach(id => {
-          const e=entities[id], b=document.getElementById('entity-'+id);
-          const ew=b?.offsetWidth||220, eh=b?.offsetHeight||160;
-          if (e.x<cr.x&&e.x+ew>cl.x&&e.y<cr.y&&e.y+eh>cl.y) multiSel.add(id);
-        });
-        document.querySelectorAll('.entity-box').forEach(b=>{
-          const bid=b.id.replace('entity-','');
-          b.classList.toggle('multi-selected', multiSel.has(bid));
-        });
-      };
-      const up = () => {
-        rect.style.display='none'; isSelectDragging=false;
-        document.removeEventListener('mousemove', move);
-        document.removeEventListener('mouseup', up);
-      };
-      document.addEventListener('mousemove', move);
-      document.addEventListener('mouseup', up);
+    if (ev.button===0 && !spaceDown) {
+      const target = ev.target;
+      if (target===VP || target===CVS || target.id==='svg-layer') {
+        if (relMode) return;
+        sel=null; multiSel.clear();
+        CVS.querySelectorAll('.entity-card').forEach(c=>c.classList.remove('selected','multi-sel'));
+        renderProps();
+        // Rectangle select
+        const vp=VP.getBoundingClientRect();
+        const sx=ev.clientX-vp.left, sy=ev.clientY-vp.top;
+        const rect=document.getElementById('sel-rect');
+        let dragging=false;
+        const mv=ev2=>{
+          const cx=ev2.clientX-vp.left, cy=ev2.clientY-vp.top;
+          if (!dragging&&(Math.abs(cx-sx)>4||Math.abs(cy-sy)>4)) dragging=true;
+          if (!dragging) return;
+          const l=Math.min(sx,cx),t=Math.min(sy,cy),w=Math.abs(cx-sx),h=Math.abs(cy-sy);
+          rect.style.cssText=`display:block;left:${l}px;top:${t}px;width:${w}px;height:${h}px`;
+          const cl=vpToCanvas(l+vp.left,t+vp.top), cr=vpToCanvas(l+w+vp.left,t+h+vp.top);
+          multiSel.clear();
+          Object.keys(entities).forEach(id=>{
+            const e=entities[id],b=document.getElementById('card-'+id);
+            const ew=b?.offsetWidth||230,eh=b?.offsetHeight||160;
+            if(e.x<cr.x&&e.x+ew>cl.x&&e.y<cr.y&&e.y+eh>cl.y) multiSel.add(id);
+          });
+          refreshMultiSel();
+        };
+        const up=()=>{rect.style.display='none'; document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up);};
+        document.addEventListener('mousemove',mv);
+        document.addEventListener('mouseup',up);
+      }
     }
   });
 
-  // Keyboard shortcuts
+  // Keyboard
   document.addEventListener('keydown', ev => {
-    const tag = document.activeElement?.tagName;
-    const inInput = tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT';
-    if (inInput) return;
-
-    if (ev.key==='Escape') {
-      if (relMode) toggleRelMode();
-      document.getElementById('code-modal').classList.add('hidden');
-    }
-    if ((ev.metaKey||ev.ctrlKey) && ev.key==='z') { ev.preventDefault(); undo(); }
-    if ((ev.metaKey||ev.ctrlKey) && ev.key==='Enter') generateCode();
+    const inInp = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+    if (inInp) return;
+    if (ev.key==='Escape') { if(relMode)toggleRel(); document.getElementById('code-modal').style.display='none'; }
+    if ((ev.metaKey||ev.ctrlKey)&&ev.key==='z') { ev.preventDefault(); undo(); }
+    if ((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter') { ev.preventDefault(); generate(); }
     if (ev.key==='n'||ev.key==='N') addEntity();
-    if (ev.key==='r'||ev.key==='R') toggleRelMode();
-    if (ev.key==='f'||ev.key==='F') fitToScreen();
+    if (ev.key==='r'||ev.key==='R') toggleRel();
+    if (ev.key==='f'||ev.key==='F') fit();
     if (ev.key==='l'||ev.key==='L') autoLayout();
-    if ((ev.key==='Delete'||ev.key==='Backspace') && selected?.type==='entity') {
-      ev.preventDefault();
-      _delEntity({stopPropagation:()=>{}}, selected.id);
-    }
     if (ev.key==='='||ev.key==='+') zoom(1.2);
     if (ev.key==='-') zoom(0.8);
+    if ((ev.key==='Delete'||ev.key==='Backspace')&&sel?.type==='entity') {
+      ev.preventDefault(); _delE({stopPropagation:()=>{}}, sel.id);
+    }
   });
 
-  // Canvas click-to-deselect (if clicked outside any entity)
-  CANVAS.addEventListener('click', ev => {
-    if (relMode && !ev.target.closest('.entity-box')) return;
-    if (!ev.target.closest('.entity-box') && !ev.target.closest('.entity-header')) {
-      selected=null; multiSel.clear();
-      document.querySelectorAll('.entity-box').forEach(b=>b.classList.remove('selected','multi-selected'));
+  // Deselect on canvas click
+  CVS.addEventListener('click', ev => {
+    if (!ev.target.closest('.entity-card,.card-header')) {
+      if (relMode) return;
+      sel=null; multiSel.clear();
+      CVS.querySelectorAll('.entity-card').forEach(c=>c.classList.remove('selected','multi-sel'));
       renderProps();
     }
   });
 
-  // ══════════════════════════════════════════════════════════
-  // Public API
-  // ══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  Public
+  // ═══════════════════════════════════════════
   return {
-    addEntity, toggleRelMode, autoLayout, fitToScreen, zoom, undo,
-    switchTab, filterPlugins, downloadYaml, generateCode, clearAll,
-    _delEntity, _clickField, _addField, _upE, _upF, _delField, _importModel, _startRel, _codeTab, copyCode,
+    addEntity, toggleRel, autoLayout, fit, zoom, undo, clearAll,
+    tab, filterCaps, dlYaml, generate, copyCode,
+    _delE, _selF, _addF, _upE, _upF, _delF, _importCap, _startRel, _codeTab,
   };
 })();
 
-// ── Initial state ──────────────────────────────────────────
-DS.addEntity({
-  name:'Customer', table:'customer', domain:'crm',
-  x:80, y:80,
-  fields:[
-    {name:'name', type:'string', nullable:false, label:'Full Name'},
-    {name:'email', type:'email', nullable:true, unique:true},
-    {name:'phone', type:'phone', nullable:true},
-    {name:'country_code', type:'string', nullable:true, max_length:3},
-  ],
-});
-DS.addEntity({
-  name:'Order', table:'order', domain:'crm',
-  x:380, y:80,
-  fields:[
-    {name:'customer_id', type:'string', nullable:false, indexed:true, fk:'Customer.id'},
-    {name:'status', type:'string', nullable:false},
-    {name:'total_cents', type:'money', nullable:false},
-    {name:'order_date', type:'date', nullable:false},
-  ],
-});
+// ── Welcome demo ──────────────────────────────────────────────
+D.addEntity({name:'Customer',table:'customer',domain:'crm',x:80,y:80,fields:[
+  {name:'name',type:'string',nullable:false,label:'Full Name'},
+  {name:'email',type:'email',nullable:true,unique:true},
+  {name:'phone',type:'phone',nullable:true},
+  {name:'country_code',type:'string',nullable:true,max_length:3},
+]});
+D.addEntity({name:'Order',table:'order',domain:'crm',x:380,y:80,fields:[
+  {name:'customer_id',type:'string',nullable:false,indexed:true,fk:'Customer.id'},
+  {name:'status',type:'string',nullable:false},
+  {name:'total_cents',type:'money',nullable:false},
+  {name:'order_date',type:'date',nullable:false},
+]});
+D.addEntity({name:'OrderLine',table:'order_line',domain:'crm',x:680,y:80,fields:[
+  {name:'order_id',type:'string',nullable:false,indexed:true,fk:'Order.id'},
+  {name:'product_name',type:'string',nullable:false},
+  {name:'quantity',type:'integer',nullable:false},
+  {name:'unit_price_cents',type:'money',nullable:false},
+]});
 </script>
 </body>
 </html>
