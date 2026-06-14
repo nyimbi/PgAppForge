@@ -6,61 +6,90 @@
 <title>PDL Entity Designer — PgAppForge</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  body{background:#f3f4f6;font-family:system-ui,sans-serif;overflow:hidden}
-  #canvas-container{position:relative;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle,#e5e7eb 1px,transparent 1px) 0 0/24px 24px}
-  #svg-layer{position:absolute;inset:0;pointer-events:none}
-  .entity-box{position:absolute;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.15);min-width:200px;cursor:move;user-select:none;border:2px solid #e5e7eb}
-  .entity-box.selected{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.2)}
-  .entity-header{padding:8px 12px;border-radius:6px 6px 0 0;color:white;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between}
-  .entity-field{padding:4px 12px;font-size:12px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:8px;cursor:pointer}
-  .entity-field:hover{background:#f9fafb}
-  .type-badge{font-size:10px;color:#6b7280;background:#f3f4f6;padding:1px 5px;border-radius:4px}
-  .field-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-  .entity-footer{padding:6px 12px}
-  .add-field-btn{width:100%;font-size:11px;color:#6b7280;border:1px dashed #d1d5db;background:none;border-radius:4px;padding:3px;cursor:pointer}
-  .add-field-btn:hover{color:#374151;border-color:#9ca3af;background:#f9fafb}
-  #sidebar{width:272px;min-width:272px;background:white;border-right:1px solid #e5e7eb;display:flex;flex-direction:column}
-  #props-panel{width:256px;min-width:256px;background:white;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;overflow-y:auto}
-  .tab-btn{padding:8px 12px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
-  .tab-btn.active{color:#1a56db;border-color:#1a56db}
-  .plugin-domain{font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;padding:8px 12px 4px}
-  .plugin-model-row{padding:4px 12px 4px 20px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
-  .plugin-model-row:hover{background:#eff6ff;color:#1a56db}
-  .import-badge{font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;margin-left:auto}
-  .arrow-path{stroke:#94a3b8;stroke-width:2;fill:none;marker-end:url(#arrowhead)}
-  .prop-label{font-size:11px;font-weight:600;color:#374151;margin-bottom:2px}
-  .prop-input{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;outline:none;background:#fafafa}
-  .prop-input:focus{border-color:#3b82f6;background:white}
-  .prop-select{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;background:#fafafa}
-  .prop-check{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer}
-  .btn-primary{background:#1a56db;color:white;font-size:12px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;border:none}
-  .btn-primary:hover{background:#1e40af}
-  .btn-danger{background:#dc2626;color:white;font-size:12px;padding:5px 10px;border-radius:4px;cursor:pointer;border:none}
-  .btn-secondary{background:#f3f4f6;color:#374151;font-size:12px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;border:1px solid #d1d5db}
-  .btn-secondary:hover{background:#e5e7eb}
-  .notification{position:fixed;bottom:20px;right:20px;background:#065f46;color:white;padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
-  .notification.show{opacity:1}
-  #rel-indicator{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#7e3af2;color:white;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;display:none;z-index:10}
-  .conn-handle{position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:14px;height:14px;background:#7e3af2;border-radius:50%;border:2px solid white;cursor:crosshair;display:none;z-index:5}
-  .entity-box:hover .conn-handle,.entity-box.selected .conn-handle{display:block}
+:root {
+  --c-finance:#1a56db;--c-grc:#d97706;--c-hcm:#059669;--c-crm:#7c3aed;
+  --c-operations:#dc2626;--c-procurement:#ea580c;--c-platform:#4b5563;
+  --c-fintech:#047857;--c-custom:#374151;
+}
+*{box-sizing:border-box}
+body{background:#f3f4f6;font-family:system-ui,sans-serif;overflow:hidden;margin:0}
+#viewport{position:relative;overflow:hidden;background:radial-gradient(circle,#d1d5db 1px,transparent 1px) 0 0/24px 24px;cursor:default}
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+#svg-layer{position:absolute;top:0;left:0;width:20000px;height:20000px;pointer-events:none;overflow:visible}
+.entity-box{position:absolute;background:#fff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.12);min-width:210px;max-width:270px;border:2px solid #e5e7eb;transition:box-shadow .15s}
+.entity-box:hover{box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.entity-box.selected{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25),0 4px 16px rgba(0,0,0,.18)}
+.entity-box.multi-selected{border-color:#8b5cf6;box-shadow:0 0 0 2px rgba(139,92,246,.3)}
+.entity-header{padding:8px 10px;border-radius:6px 6px 0 0;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:move;user-select:none}
+.entity-header span.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.entity-meta{padding:1px 10px 3px;font-size:10px;color:#9ca3af;font-family:monospace}
+.entity-auto-cols{padding:0 10px 3px;font-size:10px;color:#d1d5db;font-style:italic}
+.entity-field{padding:3px 10px;font-size:11.5px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:6px;cursor:pointer;min-height:24px}
+.entity-field:hover{background:#f9fafb}
+.entity-field.selected-field{background:#eff6ff}
+.field-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.type-badge{font-size:9px;color:#6b7280;background:#f3f4f6;padding:1px 4px;border-radius:3px;margin-left:auto;white-space:nowrap}
+.entity-footer{padding:5px 10px}
+.add-field-btn{width:100%;font-size:11px;color:#9ca3af;border:1px dashed #e5e7eb;background:none;border-radius:4px;padding:3px;cursor:pointer}
+.add-field-btn:hover{color:#374151;border-color:#9ca3af;background:#fafafa}
+.del-btn{opacity:.55;cursor:pointer;font-size:14px;flex-shrink:0;line-height:1;padding:0 2px}
+.del-btn:hover{opacity:1}
+.conn-handle{position:absolute;right:-8px;top:50%;transform:translateY(-50%);width:14px;height:14px;background:#7c3aed;border-radius:50%;border:2px solid #fff;cursor:crosshair;display:none;z-index:5;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.entity-box:hover .conn-handle,.entity-box.selected .conn-handle{display:block}
+.import-badge{font-size:9px;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:8px;white-space:nowrap}
+.arrow-path{stroke:#94a3b8;stroke-width:1.8;fill:none;marker-end:url(#arrowhead)}
+.arrow-label{font-size:10px;fill:#6b7280;font-family:monospace;pointer-events:none}
+.prop-label{font-size:11px;font-weight:600;color:#374151;margin-bottom:2px;display:block}
+.prop-input{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;outline:none;background:#fafafa}
+.prop-input:focus{border-color:#3b82f6;background:#fff;box-shadow:0 0 0 2px rgba(59,130,246,.1)}
+.prop-select{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;background:#fafafa}
+.prop-check{display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:2px 0}
+.btn-tool{background:#f9fafb;color:#374151;font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer;border:1px solid #e5e7eb;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.btn-tool:hover{background:#f3f4f6;border-color:#d1d5db}
+.btn-tool.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.btn-primary{background:#1a56db;color:#fff;font-size:12px;font-weight:600;padding:6px 13px;border-radius:6px;cursor:pointer;border:none;display:flex;align-items:center;gap:4px}
+.btn-primary:hover{background:#1e40af}
+.btn-danger{background:#dc2626;color:#fff;font-size:12px;padding:4px 9px;border-radius:4px;cursor:pointer;border:none}
+.btn-danger:hover{background:#b91c1c}
+.tab-btn{padding:7px 12px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab-btn.active{color:#1a56db;border-color:#1a56db}
+.plugin-domain-hdr{font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af;padding:7px 12px 3px;letter-spacing:.05em}
+.plugin-row{padding:3px 12px 3px 22px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.plugin-row:hover{background:#eff6ff;color:#1d4ed8}
+.zoom-ctrl{position:absolute;bottom:16px;right:16px;display:flex;flex-direction:column;gap:3px;z-index:20}
+.zoom-btn{width:28px;height:28px;background:#fff;border:1px solid #e5e7eb;border-radius:5px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.zoom-btn:hover{background:#f3f4f6}
+#zoom-pct{background:#fff;border:1px solid #e5e7eb;border-radius:5px;font-size:11px;text-align:center;padding:3px 0;font-weight:600;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+#rel-indicator{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:600;display:none;z-index:20;pointer-events:none;box-shadow:0 2px 8px rgba(124,58,237,.4)}
+#minimap{position:absolute;bottom:16px;left:16px;width:140px;height:100px;background:rgba(255,255,255,.92);border:1px solid #e5e7eb;border-radius:6px;z-index:20;box-shadow:0 2px 8px rgba(0,0,0,.1);cursor:pointer}
+.select-rect{position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,.06);pointer-events:none;display:none;z-index:30}
+.notification{position:fixed;bottom:20px;right:20px;background:#065f46;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.notification.show{opacity:1}
+kbd{background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;padding:1px 4px;font-size:10px}
 </style>
 </head>
 <body class="flex flex-col h-screen">
 
 <!-- Toolbar -->
-<div class="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 shadow-sm z-10 flex-shrink-0">
-  <div class="flex items-center gap-2 mr-4">
+<div class="flex items-center gap-1 px-3 py-1.5 bg-white border-b border-gray-200 shadow-sm z-10 flex-shrink-0">
+  <div class="flex items-center gap-2 mr-3">
     <svg class="w-5 h-5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
     </svg>
     <span class="font-bold text-gray-800 text-sm">PDL Entity Designer</span>
     <span class="text-xs text-gray-400">PgAppForge</span>
   </div>
-  <button class="btn-primary" onclick="DS.addEntity()">+ Entity</button>
-  <button id="rel-btn" class="btn-secondary" onclick="DS.toggleRelMode()" title="Draw FK relationship">&#x1F517; Relationship</button>
+  <div class="w-px h-5 bg-gray-200 mx-1"></div>
+  <button class="btn-tool" onclick="DS.addEntity()" title="Add new entity (N)">+ Entity</button>
+  <button id="rel-btn" class="btn-tool" onclick="DS.toggleRelMode()" title="Draw FK relationship (R)">&#x1F517; Relate</button>
+  <div class="w-px h-5 bg-gray-200 mx-1"></div>
+  <button class="btn-tool" onclick="DS.autoLayout()" title="Auto-arrange entities">&#9680; Layout</button>
+  <button class="btn-tool" onclick="DS.fitToScreen()" title="Fit all to screen (F)">&#x26F6; Fit</button>
+  <button class="btn-tool" onclick="DS.undo()" id="undo-btn" title="Undo (Ctrl+Z)" style="opacity:.4" disabled>&#x21A9; Undo</button>
   <div class="flex-1"></div>
-  <button class="btn-secondary" onclick="DS.clearAll()">Clear</button>
-  <button class="btn-secondary" onclick="DS.downloadYaml()">&#x2B07; PDL YAML</button>
+  <span id="entity-count" class="text-xs text-gray-400 mr-2">0 entities</span>
+  <button class="btn-tool" onclick="DS.clearAll()">&#x1F5D1; Clear</button>
+  <button class="btn-tool" onclick="DS.downloadYaml()">&#x2B07; PDL YAML</button>
   <button class="btn-primary" onclick="DS.generateCode()">&#9881; Generate Code</button>
 </div>
 
@@ -68,57 +97,75 @@
 <div class="flex flex-1 overflow-hidden">
 
   <!-- Left sidebar -->
-  <div id="sidebar">
+  <div style="width:268px;min-width:268px;background:white;border-right:1px solid #e5e7eb;display:flex;flex-direction:column">
     <div class="flex border-b border-gray-200 flex-shrink-0">
-      <div class="tab-btn active" id="tab-new" onclick="DS.switchTab('new')">New</div>
-      <div class="tab-btn" id="tab-plugins" onclick="DS.switchTab('plugins')">&#128279; Import Capability</div>
+      <div class="tab-btn active" id="tab-new" onclick="DS.switchTab('new')">Schema</div>
+      <div class="tab-btn" id="tab-plugins" onclick="DS.switchTab('plugins')">&#128279; Capabilities</div>
     </div>
-    <!-- New tab -->
-    <div id="panel-new" class="p-3 flex flex-col gap-2 overflow-y-auto">
-      <p class="text-xs text-gray-500">Drag entities on the canvas. Use <strong>+ Entity</strong> to add, <strong>Relationship</strong> to connect.</p>
-      <div class="text-xs font-semibold text-gray-500 uppercase mt-2">Field Types</div>
+    <!-- Schema tab -->
+    <div id="panel-new" class="p-3 flex flex-col gap-2 overflow-y-auto text-xs">
+      <p class="text-gray-500">Draw entity schemas visually. Drag to move, connect with <strong>Relate</strong>.</p>
+      <div class="font-semibold text-gray-500 uppercase tracking-wide mt-1">Field Types</div>
       <div class="grid grid-cols-2 gap-1">
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">string</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">integer</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">decimal</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">boolean</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">date / datetime</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">text / jsonb</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">email / phone</div>
-        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">money / uuid</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">string</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">integer</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">decimal</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">boolean</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">date</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">datetime</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">text</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">jsonb</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">email</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">money</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">phone</div>
+        <div class="bg-gray-50 rounded px-2 py-1 text-gray-600 font-mono">uuid</div>
       </div>
-      <div class="text-xs font-semibold text-gray-500 uppercase mt-3">Auto-included</div>
-      <div class="text-xs text-gray-400 leading-relaxed">Every entity automatically gets <code>id</code> (UUID7), <code>tenant_id</code>, <code>created_at</code>, <code>updated_at</code>.</div>
-      <div class="text-xs font-semibold text-gray-500 uppercase mt-3">Keyboard</div>
-      <div class="text-xs text-gray-400 leading-relaxed"><kbd class="bg-gray-100 px-1 rounded">Esc</kbd> cancel mode &nbsp; <kbd class="bg-gray-100 px-1 rounded">⌘↵</kbd> generate</div>
+      <div class="font-semibold text-gray-500 uppercase tracking-wide mt-1">Auto-included</div>
+      <div class="text-gray-400 leading-relaxed">Every entity gets <code>id</code> (UUID7), <code>tenant_id</code>, <code>created_at</code>, <code>updated_at</code>.</div>
+      <div class="font-semibold text-gray-500 uppercase tracking-wide mt-1">Shortcuts</div>
+      <div class="text-gray-400 leading-relaxed space-y-1">
+        <div><kbd>N</kbd> new entity &nbsp; <kbd>R</kbd> relate</div>
+        <div><kbd>F</kbd> fit screen &nbsp; <kbd>L</kbd> auto-layout</div>
+        <div><kbd>Del</kbd>/<kbd>Bksp</kbd> delete selected</div>
+        <div><kbd>Ctrl Z</kbd> undo &nbsp; <kbd>Ctrl ↵</kbd> generate</div>
+        <div><kbd>Scroll</kbd> zoom &nbsp; <kbd>Space+drag</kbd> pan</div>
+      </div>
     </div>
-    <!-- Plugins tab -->
+    <!-- Capabilities tab -->
     <div id="panel-plugins" class="hidden flex-1 flex flex-col overflow-hidden">
-      <div class="p-3 flex-shrink-0">
-        <input id="plugin-search" type="text" placeholder="Search models..." class="prop-input" oninput="DS.filterPlugins(this.value)">
+      <div class="p-2 flex-shrink-0">
+        <input id="plugin-search" type="text" placeholder="Search 500+ capability models…" class="prop-input text-xs" oninput="DS.filterPlugins(this.value)">
       </div>
-      <div id="plugin-list" class="flex-1 overflow-y-auto pb-4">
-        <div class="text-xs text-gray-400 px-3 py-2">Loading capability models...</div>
+      <div id="plugin-list" class="flex-1 overflow-y-auto pb-4 text-xs">
+        <div class="text-gray-400 px-3 py-2">Click <strong>Capabilities</strong> to load…</div>
       </div>
     </div>
   </div>
 
-  <!-- Canvas -->
-  <div class="flex-1 relative overflow-hidden">
-    <div id="canvas-container">
-      <div id="rel-indicator">&#x1F517; Click source entity, then target to create FK</div>
+  <!-- Canvas viewport -->
+  <div class="flex-1 relative" id="viewport">
+    <div id="canvas">
       <svg id="svg-layer">
         <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0,10 3.5,0 7" fill="#94a3b8"/>
+          <marker id="arrowhead" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0,9 3,0 6" fill="#94a3b8"/>
           </marker>
         </defs>
       </svg>
     </div>
+    <div id="rel-indicator">&#x1F517; Click source entity, then target to create FK</div>
+    <div class="zoom-ctrl">
+      <button class="zoom-btn" onclick="DS.zoom(1.2)" title="Zoom in">+</button>
+      <div id="zoom-pct">100%</div>
+      <button class="zoom-btn" onclick="DS.zoom(0.8)" title="Zoom out">−</button>
+      <button class="zoom-btn" onclick="DS.fitToScreen()" title="Fit to screen" style="font-size:12px">&#x26F6;</button>
+    </div>
+    <canvas id="minimap" width="140" height="100" title="Click to fit screen" onclick="DS.fitToScreen()"></canvas>
+    <div class="select-rect" id="select-rect"></div>
   </div>
 
-  <!-- Right: properties -->
-  <div id="props-panel">
+  <!-- Properties panel -->
+  <div style="width:252px;min-width:252px;background:white;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;overflow-y:auto">
     <div class="p-3 border-b border-gray-200 flex-shrink-0">
       <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Properties</div>
     </div>
@@ -128,19 +175,17 @@
 
 <!-- Code modal -->
 <div id="code-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-6">
-  <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col" style="max-height:90vh">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col" style="max-height:92vh">
     <div class="flex items-center justify-between p-4 border-b flex-shrink-0">
       <span class="font-bold text-gray-800">Generated Code</span>
-      <button onclick="document.getElementById('code-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+      <div class="flex items-center gap-2">
+        <button class="btn-tool text-xs" onclick="DS.copyCode()">Copy</button>
+        <button onclick="document.getElementById('code-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+      </div>
     </div>
     <div class="flex border-b overflow-x-auto flex-shrink-0" id="code-tabs"></div>
-    <div class="flex-1 overflow-auto p-4">
-      <pre id="code-content" class="text-xs font-mono bg-gray-50 rounded p-3 overflow-auto whitespace-pre-wrap min-h-32"></pre>
-    </div>
-    <div class="p-3 border-t flex-shrink-0 flex gap-2">
-      <button class="btn-secondary text-xs" onclick="DS.copyCode()">Copy</button>
-      <div class="flex-1"></div>
-      <button class="btn-primary text-xs" onclick="document.getElementById('code-modal').classList.add('hidden')">Close</button>
+    <div class="flex-1 overflow-auto">
+      <pre id="code-content" class="text-xs font-mono bg-gray-50 p-4 overflow-auto whitespace-pre min-h-64"></pre>
     </div>
   </div>
 </div>
@@ -149,140 +194,257 @@
 
 <script>
 const DS = (() => {
-  // ── Constants ──────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // Constants
+  // ══════════════════════════════════════════════════════════
   const FIELD_TYPES = ['string','integer','decimal','float','boolean','date','datetime','text','jsonb','email','phone','money','uuid'];
   const DOMAIN_COLORS = {
-    finance:'#1a56db', grc:'#d97706', hcm:'#059669', crm:'#7c3aed',
-    operations:'#dc2626', procurement:'#ea580c', platform:'#4b5563',
-    fintech:'#047857', custom:'#374151',
+    finance:'#1a56db',grc:'#d97706',hcm:'#059669',crm:'#7c3aed',
+    operations:'#dc2626',procurement:'#ea580c',platform:'#4b5563',
+    fintech:'#047857',custom:'#374151',
   };
+  const GRID = 16;
+  const MAX_HISTORY = 30;
 
-  // ── State ──────────────────────────────────────────────────
-  let entities = {};   // id → entity obj
-  let relations = [];  // [{id, from, to, fromField}]
-  let selected = null; // {type, id, fieldIdx?}
-  let relMode = false;
-  let relSource = null;
+  // ══════════════════════════════════════════════════════════
+  // State
+  // ══════════════════════════════════════════════════════════
+  let entities = {};
+  let relations = [];
+  let selected = null;       // {type:'entity'|'field', id, fieldIdx?}
+  let multiSel = new Set();  // entity ids
+  let transform = {x:80, y:80, scale:1};
+  let relMode = false, relSource = null;
   let nextId = 1;
   let pluginsData = null;
-  let generatedFiles = {};
-  let activeCodeFile = null;
-  let entityCount = 0; // for deterministic placement
+  let _pluginEntryCache = [];
+  let generatedFiles = {}, activeCodeFile = null;
+  let history = [], historyIdx = -1;
+  let entityCount = 0;
+  let spaceDown = false;
+  let isPanning = false;
+  let panStart = null;
+  let isSelectDragging = false;
+  let selectStart = null;
 
-  // ── ID ─────────────────────────────────────────────────────
-  function uid() { return 'e' + (nextId++); }
+  // ══════════════════════════════════════════════════════════
+  // Helpers
+  // ══════════════════════════════════════════════════════════
+  const uid = () => 'e' + (nextId++);
+  const snap = v => Math.round(v / GRID) * GRID;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // ── Position (deterministic, no Math.random) ───────────────
-  function nextPosition() {
-    const col = entityCount % 3;
-    const row = Math.floor(entityCount / 3);
-    entityCount++;
-    return { x: 80 + col * 250, y: 80 + row * 200 };
+  function vpToCanvas(vpX, vpY) {
+    const vp = VP.getBoundingClientRect();
+    return {
+      x: (vpX - vp.left - transform.x) / transform.scale,
+      y: (vpY - vp.top - transform.y) / transform.scale,
+    };
   }
 
-  // ── Entity ─────────────────────────────────────────────────
+  function applyTransform() {
+    CANVAS.style.transform = `translate(${transform.x}px,${transform.y}px) scale(${transform.scale})`;
+    document.getElementById('zoom-pct').textContent = Math.round(transform.scale * 100) + '%';
+    updateMinimap();
+  }
+
+  const VP = document.getElementById('viewport');
+  const CANVAS = document.getElementById('canvas');
+  const SVG = document.getElementById('svg-layer');
+
+  // ══════════════════════════════════════════════════════════
+  // History (undo)
+  // ══════════════════════════════════════════════════════════
+  function pushHistory() {
+    const snap = JSON.stringify({ entities, relations });
+    if (historyIdx < history.length - 1) history = history.slice(0, historyIdx + 1);
+    history.push(snap);
+    if (history.length > MAX_HISTORY) history.shift();
+    historyIdx = history.length - 1;
+    updateUndoBtn();
+  }
+
+  function undo() {
+    if (historyIdx <= 0) return;
+    historyIdx--;
+    const state = JSON.parse(history[historyIdx]);
+    entities = state.entities;
+    relations = state.relations;
+    selected = null; multiSel.clear();
+    rebuildCanvas();
+    updateUndoBtn();
+    updateEntityCount();
+  }
+
+  function updateUndoBtn() {
+    const btn = document.getElementById('undo-btn');
+    const can = historyIdx > 0;
+    btn.disabled = !can;
+    btn.style.opacity = can ? '1' : '.4';
+  }
+
+  function rebuildCanvas() {
+    CANVAS.querySelectorAll('.entity-box').forEach(n => n.remove());
+    SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
+    Object.keys(entities).forEach(renderEntity);
+    redrawArrows();
+    renderProps();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Entities
+  // ══════════════════════════════════════════════════════════
   function addEntity(overrides = {}) {
+    pushHistory();
     const id = uid();
-    const pos = overrides.x !== undefined ? {x: overrides.x, y: overrides.y} : nextPosition();
+    const col = entityCount % 4, row = Math.floor(entityCount / 4);
+    entityCount++;
     entities[id] = {
-      id, name: overrides.name || 'NewEntity',
-      table: overrides.table || 'new_entity',
+      id,
+      name: overrides.name || 'Entity' + nextId,
+      table: overrides.table || 'entity' + nextId,
       domain: overrides.domain || 'custom',
       description: overrides.description || '',
       fields: overrides.fields ? overrides.fields.map(f => ({...f})) : [],
-      x: pos.x, y: pos.y,
+      x: overrides.x ?? snap(80 + col * 240),
+      y: overrides.y ?? snap(80 + row * 200),
       imported: overrides.imported || false,
       module_path: overrides.module_path || null,
     };
     renderEntity(id);
     selectEntity(id);
     redrawArrows();
+    updateEntityCount();
     return id;
   }
 
+  function updateEntityCount() {
+    const n = Object.keys(entities).length;
+    document.getElementById('entity-count').textContent = n + ' entr' + (n === 1 ? 'y' : 'ities');
+  }
+
   function renderEntity(id) {
-    const e = entities[id];
     document.getElementById('entity-' + id)?.remove();
+    const e = entities[id];
+    if (!e) return;
     const color = DOMAIN_COLORS[e.domain] || DOMAIN_COLORS.custom;
+
     const div = document.createElement('div');
     div.className = 'entity-box';
     div.id = 'entity-' + id;
     div.style.cssText = `left:${e.x}px;top:${e.y}px`;
+    if (selected?.id === id) div.classList.add('selected');
+    if (multiSel.has(id)) div.classList.add('multi-selected');
 
     const fieldsHtml = e.fields.map((f, i) => {
-      const dotColor = f.fk ? '#7c3aed' : '#d1d5db';
-      return `<div class="entity-field" onclick="DS._selectField('${id}',${i})">
-        <div class="field-dot" style="background:${dotColor}"></div>
+      const dot = f.fk ? '#7c3aed' : '#d1d5db';
+      const sel = selected?.type === 'field' && selected.id === id && selected.fieldIdx === i;
+      return `<div class="entity-field${sel ? ' selected-field' : ''}" onclick="DS._clickField(event,'${id}',${i})">
+        <div class="field-dot" style="background:${dot}"></div>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
         <span class="type-badge">${f.type||'string'}${f.nullable===false?'!':''}</span>
       </div>`;
     }).join('');
 
     div.innerHTML = `
-      <div class="entity-header" style="background:${color}">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${e.name}</span>
-        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-          ${e.imported ? '<span style="font-size:9px;background:rgba(255,255,255,.2);padding:1px 5px;border-radius:8px">⬇ imported</span>' : ''}
-          <span onclick="DS._delEntity('${id}')" style="cursor:pointer;font-size:15px;opacity:.7;padding:0 2px" title="Delete">✕</span>
-        </div>
+      <div class="entity-header" style="background:${color}" data-id="${id}">
+        <span class="name" title="${e.name}">${e.name}</span>
+        ${e.imported ? '<span style="font-size:9px;background:rgba(255,255,255,.2);padding:1px 5px;border-radius:8px;flex-shrink:0">⬇</span>' : ''}
+        <span class="del-btn" onclick="DS._delEntity(event,'${id}')" title="Delete">✕</span>
       </div>
-      <div style="padding:2px 12px 0;font-size:10px;color:#9ca3af">${e.table}</div>
-      <div style="padding:0 12px 4px;font-size:10px;color:#d1d5db;font-style:italic">id · tenant_id · timestamps</div>
+      <div class="entity-meta">${e.table}</div>
+      <div class="entity-auto-cols">id · tenant_id · timestamps</div>
       ${fieldsHtml}
       <div class="entity-footer">
-        <button class="add-field-btn" onclick="DS._addField('${id}')">+ Add field</button>
+        <button class="add-field-btn" onclick="DS._addField(event,'${id}')">+ field</button>
       </div>
       <div class="conn-handle" onmousedown="DS._startRel(event,'${id}')"></div>`;
 
     makeDraggable(div, div.querySelector('.entity-header'), id);
-    div.addEventListener('click', ev => {
-      if (relMode && !ev.target.closest('.conn-handle') && !ev.target.closest('.entity-field')) {
-        handleRelClick(id);
-      }
-    });
-    document.getElementById('canvas-container').appendChild(div);
+    CANVAS.appendChild(div);
   }
 
-  function _delEntity(id) {
+  function _delEntity(ev, id) {
+    ev.stopPropagation();
+    pushHistory();
     document.getElementById('entity-' + id)?.remove();
     relations = relations.filter(r => r.from !== id && r.to !== id);
     delete entities[id];
     if (selected?.id === id) { selected = null; renderProps(); }
+    multiSel.delete(id);
     redrawArrows();
+    updateEntityCount();
   }
 
-  // ── Drag ───────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // Drag (with grid snap and multi-select support)
+  // ══════════════════════════════════════════════════════════
   function makeDraggable(box, handle, id) {
-    let ox, oy;
     handle.addEventListener('mousedown', ev => {
-      if (relMode) return;
+      if (ev.button !== 0 || relMode || spaceDown) return;
       ev.preventDefault();
-      selectEntity(id);
-      ox = ev.clientX - entities[id].x;
-      oy = ev.clientY - entities[id].y;
+      ev.stopPropagation();
+
+      // Select on mousedown; shift = toggle multi
+      if (ev.shiftKey) {
+        multiSel.has(id) ? multiSel.delete(id) : multiSel.add(id);
+        document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('multi-selected'));
+        multiSel.forEach(mid => document.getElementById('entity-' + mid)?.classList.add('multi-selected'));
+      } else {
+        if (!multiSel.has(id)) { multiSel.clear(); selectEntity(id); }
+      }
+
+      const startPositions = {};
+      const dragIds = multiSel.size > 0 ? [...multiSel] : [id];
+      dragIds.forEach(did => startPositions[did] = { x: entities[did].x, y: entities[did].y });
+      const startMX = ev.clientX, startMY = ev.clientY;
+
       const move = ev2 => {
-        entities[id].x = ev2.clientX - ox;
-        entities[id].y = ev2.clientY - oy;
-        box.style.left = entities[id].x + 'px';
-        box.style.top = entities[id].y + 'px';
+        const dx = (ev2.clientX - startMX) / transform.scale;
+        const dy = (ev2.clientY - startMY) / transform.scale;
+        dragIds.forEach(did => {
+          entities[did].x = snap(startPositions[did].x + dx);
+          entities[did].y = snap(startPositions[did].y + dy);
+          const b = document.getElementById('entity-' + did);
+          if (b) { b.style.left = entities[did].x + 'px'; b.style.top = entities[did].y + 'px'; }
+        });
         redrawArrows();
+        updateMinimap();
       };
       const up = () => {
         document.removeEventListener('mousemove', move);
         document.removeEventListener('mouseup', up);
+        pushHistory();
       };
       document.addEventListener('mousemove', move);
       document.addEventListener('mouseup', up);
     });
+
+    box.addEventListener('click', ev => {
+      if (relMode) { ev.stopPropagation(); handleRelClick(id); }
+      else if (!ev.shiftKey && !ev.target.closest('.entity-field, .add-field-btn, .del-btn, .conn-handle')) {
+        selectEntity(id);
+      }
+    });
   }
 
-  // ── Relations ──────────────────────────────────────────────
+  function selectEntity(id) {
+    document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected', 'multi-selected'));
+    multiSel.clear();
+    document.getElementById('entity-' + id)?.classList.add('selected');
+    selected = { type: 'entity', id };
+    renderProps();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Relations (FK arrows)
+  // ══════════════════════════════════════════════════════════
   function toggleRelMode() {
     relMode = !relMode; relSource = null;
     document.getElementById('rel-indicator').style.display = relMode ? 'block' : 'none';
     const btn = document.getElementById('rel-btn');
-    btn.style.background = relMode ? '#7c3af2' : '';
-    btn.style.color = relMode ? 'white' : '';
+    btn.classList.toggle('active', relMode);
+    VP.style.cursor = relMode ? 'crosshair' : 'default';
   }
 
   function _startRel(ev, id) {
@@ -295,8 +457,8 @@ const DS = (() => {
     if (!relMode) return;
     if (!relSource) { relSource = targetId; return; }
     if (relSource === targetId) { relSource = null; return; }
-    const srcE = entities[relSource];
-    const tgtE = entities[targetId];
+    pushHistory();
+    const srcE = entities[relSource], tgtE = entities[targetId];
     const fieldName = tgtE.name.charAt(0).toLowerCase() + tgtE.name.slice(1) + '_id';
     if (!srcE.fields.find(f => f.name === fieldName)) {
       srcE.fields.push({ name: fieldName, type: 'string', nullable: true, indexed: true, fk: tgtE.name + '.id', label: tgtE.name });
@@ -306,99 +468,267 @@ const DS = (() => {
     redrawArrows();
     relSource = null;
     toggleRelMode();
+    notify('FK relationship added');
   }
 
-  // ── Arrows ─────────────────────────────────────────────────
-  function getBoxEdge(fromId, toId) {
+  // ══════════════════════════════════════════════════════════
+  // SVG Arrows (canvas-space coordinates)
+  // ══════════════════════════════════════════════════════════
+  function boxEdge(fromId, toId) {
     const fb = document.getElementById('entity-' + fromId);
     const tb = document.getElementById('entity-' + toId);
     if (!fb || !tb) return [null, null];
     const fe = entities[fromId], te = entities[toId];
-    return [
-      { x: fe.x + fb.offsetWidth, y: fe.y + fb.offsetHeight / 2 },
-      { x: te.x, y: te.y + tb.offsetHeight / 2 },
-    ];
+    const fR = fe.x + fb.offsetWidth, fMY = fe.y + fb.offsetHeight / 2;
+    const tL = te.x, tMY = te.y + tb.offsetHeight / 2;
+    // Prefer left-to-right; if overlapping, use different edges
+    if (fR < te.x + 10) return [{x:fR,y:fMY},{x:tL,y:tMY}];
+    if (fe.x > te.x + tb.offsetWidth - 10) return [{x:fe.x,y:fMY},{x:te.x+tb.offsetWidth,y:tMY}];
+    return [{x:fR,y:fMY},{x:tL,y:tMY}];
   }
 
   function redrawArrows() {
-    const svg = document.getElementById('svg-layer');
-    svg.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
+    SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
     relations.forEach(rel => {
-      const [p1, p2] = getBoxEdge(rel.from, rel.to);
+      const [p1, p2] = boxEdge(rel.from, rel.to);
       if (!p1) return;
-      const dx = p2.x - p1.x;
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('class', 'arrow-path');
-      path.setAttribute('d', `M ${p1.x} ${p1.y} C ${p1.x + dx*.4} ${p1.y}, ${p2.x - dx*.4} ${p2.y}, ${p2.x} ${p2.y}`);
-      svg.appendChild(path);
-      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      txt.setAttribute('class', 'arrow-label');
-      txt.setAttribute('x', (p1.x + p2.x) / 2);
-      txt.setAttribute('y', (p1.y + p2.y) / 2 - 6);
-      txt.setAttribute('text-anchor', 'middle');
-      txt.setAttribute('font-size', '10');
-      txt.setAttribute('fill', '#6b7280');
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const cpx1 = p1.x + Math.abs(dx) * .4, cpy1 = p1.y;
+      const cpx2 = p2.x - Math.abs(dx) * .4, cpy2 = p2.y;
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('class','arrow-path');
+      path.setAttribute('d',`M${p1.x} ${p1.y} C${cpx1} ${cpy1},${cpx2} ${cpy2},${p2.x} ${p2.y}`);
+      SVG.appendChild(path);
+      const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2 - 5;
+      const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('class','arrow-label');
+      txt.setAttribute('x',mx); txt.setAttribute('y',my);
+      txt.setAttribute('text-anchor','middle');
       txt.textContent = rel.fromField || 'fk';
-      svg.appendChild(txt);
+      SVG.appendChild(txt);
     });
+    updateMinimap();
   }
 
-  // ── Fields ─────────────────────────────────────────────────
-  function _addField(entityId) {
+  // ══════════════════════════════════════════════════════════
+  // Zoom & Pan
+  // ══════════════════════════════════════════════════════════
+  function zoom(factor, cx, cy) {
+    const newScale = clamp(transform.scale * factor, 0.12, 4);
+    const vp = VP.getBoundingClientRect();
+    const pivotX = cx ?? vp.width / 2, pivotY = cy ?? vp.height / 2;
+    const cpx = (pivotX - transform.x) / transform.scale;
+    const cpy = (pivotY - transform.y) / transform.scale;
+    transform.x = pivotX - cpx * newScale;
+    transform.y = pivotY - cpy * newScale;
+    transform.scale = newScale;
+    applyTransform();
+  }
+
+  function fitToScreen() {
+    const ids = Object.keys(entities);
+    if (!ids.length) return;
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    ids.forEach(id => {
+      const e = entities[id];
+      const b = document.getElementById('entity-' + id);
+      const w = b?.offsetWidth || 220, h = b?.offsetHeight || 160;
+      minX=Math.min(minX,e.x); minY=Math.min(minY,e.y);
+      maxX=Math.max(maxX,e.x+w); maxY=Math.max(maxY,e.y+h);
+    });
+    const vp = VP.getBoundingClientRect();
+    const PAD = 60;
+    const scaleX = (vp.width - PAD*2) / (maxX - minX || 1);
+    const scaleY = (vp.height - PAD*2) / (maxY - minY || 1);
+    transform.scale = clamp(Math.min(scaleX, scaleY), 0.12, 2);
+    transform.x = PAD - minX * transform.scale;
+    transform.y = PAD - minY * transform.scale;
+    applyTransform();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Auto-layout (topological + hierarchical)
+  // ══════════════════════════════════════════════════════════
+  function autoLayout() {
+    const ids = Object.keys(entities);
+    if (ids.length < 2) { notify('Need at least 2 entities to layout'); return; }
+    pushHistory();
+
+    const nameToId = {};
+    ids.forEach(id => nameToId[entities[id].name] = id);
+
+    // Build directed edges: referencing → referenced
+    const edges = [];
+    ids.forEach(id => {
+      entities[id].fields.forEach(f => {
+        if (f.fk) {
+          const tgtName = f.fk.split('.')[0];
+          const tgtId = nameToId[tgtName];
+          if (tgtId && tgtId !== id) edges.push([id, tgtId]);
+        }
+      });
+    });
+    // Also from relations
+    relations.forEach(r => { if (r.from !== r.to) edges.push([r.from, r.to]); });
+
+    // Compute levels: entities at level = max(level of things they reference) + 1
+    // "Referenced" entities are the foundations → place at level 0
+    const inDegree = {}; ids.forEach(id => inDegree[id] = 0);
+    edges.forEach(([, to]) => inDegree[to] = (inDegree[to]||0) + 1);
+    const level = {}; ids.forEach(id => level[id] = 0);
+
+    // Kahn's BFS-based level assignment
+    let queue = ids.filter(id => inDegree[id] === 0);
+    const tmpDeg = {...inDegree};
+    while (queue.length) {
+      const nxt = [];
+      queue.forEach(id => {
+        edges.filter(([f]) => f === id).forEach(([,to]) => {
+          level[to] = Math.max(level[to]||0, (level[id]||0) + 1);
+          tmpDeg[to]--;
+          if (tmpDeg[to] <= 0) nxt.push(to);
+        });
+      });
+      queue = nxt;
+    }
+    // Handle cycles: unleveled nodes get assigned to max+1
+    const maxLevel = Math.max(0, ...Object.values(level));
+    ids.forEach(id => { if (level[id] === undefined) level[id] = maxLevel + 1; });
+
+    // Group by level and place
+    const byLevel = {};
+    ids.forEach(id => { const l = level[id]; byLevel[l] = (byLevel[l]||[]); byLevel[l].push(id); });
+    const levelNums = Object.keys(byLevel).map(Number).sort((a,b)=>a-b);
+    const maxLvl = Math.max(...levelNums);
+    const H_GAP = 260, V_GAP = 220, MARGIN = 80;
+
+    levelNums.forEach(lvl => {
+      const rowIds = byLevel[lvl];
+      // Referenced entities (low FK in-degree in this group) go top — invert level
+      const y = MARGIN + (maxLvl - lvl) * V_GAP;
+      const totalW = (rowIds.length - 1) * H_GAP;
+      const startX = Math.max(MARGIN, 500 - totalW / 2);
+      rowIds.forEach((id, i) => {
+        entities[id].x = snap(startX + i * H_GAP);
+        entities[id].y = snap(y);
+        const box = document.getElementById('entity-' + id);
+        if (box) { box.style.left = entities[id].x + 'px'; box.style.top = entities[id].y + 'px'; }
+      });
+    });
+
+    redrawArrows();
+    setTimeout(fitToScreen, 50);
+    notify('Auto-layout applied');
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Minimap
+  // ══════════════════════════════════════════════════════════
+  function updateMinimap() {
+    const mc = document.getElementById('minimap');
+    if (!mc) return;
+    const ctx = mc.getContext('2d');
+    const W = mc.width, H = mc.height;
+    ctx.clearRect(0,0,W,H);
+
+    const ids = Object.keys(entities);
+    if (!ids.length) return;
+
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    ids.forEach(id => {
+      const e = entities[id];
+      const b = document.getElementById('entity-' + id);
+      const w = b?.offsetWidth||220, h = b?.offsetHeight||160;
+      minX=Math.min(minX,e.x); minY=Math.min(minY,e.y);
+      maxX=Math.max(maxX,e.x+w); maxY=Math.max(maxY,e.y+h);
+    });
+    const PAD=8;
+    const scaleX=(W-PAD*2)/(maxX-minX||1), scaleY=(H-PAD*2)/(maxY-minY||1);
+    const s=Math.min(scaleX,scaleY);
+    const offX=PAD-minX*s, offY=PAD-minY*s;
+
+    ids.forEach(id => {
+      const e = entities[id];
+      const b = document.getElementById('entity-' + id);
+      const w=(b?.offsetWidth||220)*s, h=(b?.offsetHeight||160)*s;
+      ctx.fillStyle = DOMAIN_COLORS[e.domain]||DOMAIN_COLORS.custom;
+      ctx.globalAlpha=0.7;
+      ctx.fillRect(e.x*s+offX, e.y*s+offY, Math.max(w,4), Math.max(h,3));
+    });
+    ctx.globalAlpha=1;
+
+    // Viewport rect
+    const vp = VP.getBoundingClientRect();
+    const vx = (-transform.x/transform.scale)*s+offX;
+    const vy = (-transform.y/transform.scale)*s+offY;
+    const vw = (vp.width/transform.scale)*s;
+    const vh = (vp.height/transform.scale)*s;
+    ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5;
+    ctx.strokeRect(vx,vy,vw,vh);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Fields
+  // ══════════════════════════════════════════════════════════
+  function _clickField(ev, entityId, idx) {
+    ev.stopPropagation();
+    selected = { type: 'field', id: entityId, fieldIdx: idx };
+    document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected'));
+    document.getElementById('entity-' + entityId)?.classList.add('selected');
+    renderProps();
+  }
+
+  function _addField(ev, entityId) {
+    ev.stopPropagation();
+    pushHistory();
     const e = entities[entityId];
     e.fields.push({ name: 'field' + (e.fields.length + 1), type: 'string', nullable: true });
     renderEntity(entityId);
-    _selectField(entityId, e.fields.length - 1);
-    redrawArrows();
-  }
-
-  function _selectField(entityId, idx) {
-    selected = { type: 'field', id: entityId, fieldIdx: idx };
+    selected = { type: 'field', id: entityId, fieldIdx: e.fields.length - 1 };
     renderProps();
   }
 
-  function selectEntity(id) {
-    document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected'));
-    document.getElementById('entity-' + id)?.classList.add('selected');
-    selected = { type: 'entity', id };
-    renderProps();
-  }
-
-  // ── Properties ─────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // Properties panel
+  // ══════════════════════════════════════════════════════════
   function renderProps() {
     const panel = document.getElementById('props-content');
-    if (!selected) { panel.innerHTML = '<p class="text-xs text-gray-400">Select an entity or field.</p>'; return; }
+    if (!selected) { panel.innerHTML = '<p class="text-gray-400">Select an entity or field.</p>'; return; }
+
     if (selected.type === 'entity') {
       const e = entities[selected.id];
+      if (!e) return;
       panel.innerHTML = `<div class="flex flex-col gap-3">
-        <div><div class="prop-label">Entity Name</div><input class="prop-input" value="${e.name}" oninput="DS._upE('${e.id}','name',this.value)"></div>
-        <div><div class="prop-label">Table</div><input class="prop-input" value="${e.table}" oninput="DS._upE('${e.id}','table',this.value)"></div>
-        <div><div class="prop-label">Description</div><input class="prop-input" value="${e.description||''}" oninput="DS._upE('${e.id}','description',this.value)"></div>
-        <div><div class="prop-label">Domain</div>
+        <div class="font-semibold text-blue-700 text-xs truncate">${e.name}</div>
+        <div><label class="prop-label">Entity Name</label><input class="prop-input" value="${esc(e.name)}" oninput="DS._upE('${e.id}','name',this.value)"></div>
+        <div><label class="prop-label">Table</label><input class="prop-input" value="${esc(e.table)}" oninput="DS._upE('${e.id}','table',this.value)"></div>
+        <div><label class="prop-label">Description</label><input class="prop-input" value="${esc(e.description||'')}" oninput="DS._upE('${e.id}','description',this.value)"></div>
+        <div><label class="prop-label">Domain</label>
           <select class="prop-select" onchange="DS._upE('${e.id}','domain',this.value)">
             ${Object.keys(DOMAIN_COLORS).map(d=>`<option value="${d}"${d===e.domain?' selected':''}>${d}</option>`).join('')}
           </select>
         </div>
-        <div><div class="prop-label">Module Path</div><input class="prop-input" placeholder="pgappforge.plugins.erp…" value="${e.module_path||''}" oninput="DS._upE('${e.id}','module_path',this.value)"></div>
-        <div class="text-xs text-gray-400">Fields: ${e.fields.length} &nbsp;|&nbsp; FKs: ${relations.filter(r=>r.from===e.id||r.to===e.id).length}</div>
-        <button class="btn-danger" onclick="DS._delEntity('${e.id}')">Delete Entity</button>
+        <div><label class="prop-label">Module Path</label><input class="prop-input" placeholder="pgappforge.plugins…" value="${esc(e.module_path||'')}" oninput="DS._upE('${e.id}','module_path',this.value||null)"></div>
+        <div class="text-gray-400">Fields: ${e.fields.length} &nbsp;·&nbsp; Relations: ${relations.filter(r=>r.from===e.id||r.to===e.id).length}</div>
+        <button class="btn-danger" onclick="DS._delEntity(event,'${e.id}')">Delete Entity</button>
       </div>`;
     } else if (selected.type === 'field') {
       const e = entities[selected.id];
+      if (!e) return;
       const f = e.fields[selected.fieldIdx];
       const i = selected.fieldIdx;
       panel.innerHTML = `<div class="flex flex-col gap-3">
-        <div class="text-xs font-semibold text-purple-700 truncate">${e.name} / field</div>
-        <div><div class="prop-label">Name</div><input class="prop-input" value="${f.name}" oninput="DS._upF('${e.id}',${i},'name',this.value)"></div>
-        <div><div class="prop-label">Type</div>
+        <div class="font-semibold text-purple-700 text-xs truncate">${esc(e.name)} / ${esc(f.name)}</div>
+        <div><label class="prop-label">Name</label><input class="prop-input" value="${esc(f.name)}" oninput="DS._upF('${e.id}',${i},'name',this.value)"></div>
+        <div><label class="prop-label">Type</label>
           <select class="prop-select" onchange="DS._upF('${e.id}',${i},'type',this.value)">
             ${FIELD_TYPES.map(t=>`<option value="${t}"${t===f.type?' selected':''}>${t}</option>`).join('')}
           </select>
         </div>
-        <div><div class="prop-label">FK Target (e.g. Order.id)</div><input class="prop-input" value="${f.fk||''}" placeholder="EntityName.id" oninput="DS._upF('${e.id}',${i},'fk',this.value||null)"></div>
-        <div><div class="prop-label">Label</div><input class="prop-input" value="${f.label||''}" oninput="DS._upF('${e.id}',${i},'label',this.value)"></div>
-        <div><div class="prop-label">Max Length</div><input class="prop-input" type="number" value="${f.max_length||''}" oninput="DS._upF('${e.id}',${i},'max_length',this.value?+this.value:null)"></div>
-        <label class="prop-check"><input type="checkbox"${f.nullable===false?' checked':''} onchange="DS._upF('${e.id}',${i},'nullable',!this.checked)"> Required (not null)</label>
+        <div><label class="prop-label">FK Target</label><input class="prop-input" value="${esc(f.fk||'')}" placeholder="EntityName.id" oninput="DS._upF('${e.id}',${i},'fk',this.value||null)"></div>
+        <div><label class="prop-label">Label</label><input class="prop-input" value="${esc(f.label||'')}" oninput="DS._upF('${e.id}',${i},'label',this.value)"></div>
+        <div><label class="prop-label">Max Length</label><input class="prop-input" type="number" value="${f.max_length||''}" oninput="DS._upF('${e.id}',${i},'max_length',this.value?+this.value:null)"></div>
+        <label class="prop-check"><input type="checkbox"${f.nullable===false?' checked':''} onchange="DS._upF('${e.id}',${i},'nullable',!this.checked)"> Required</label>
         <label class="prop-check"><input type="checkbox"${f.unique?' checked':''} onchange="DS._upF('${e.id}',${i},'unique',this.checked)"> Unique</label>
         <label class="prop-check"><input type="checkbox"${f.indexed?' checked':''} onchange="DS._upF('${e.id}',${i},'indexed',this.checked)"> Indexed</label>
         <button class="btn-danger" onclick="DS._delField('${e.id}',${i})">Delete Field</button>
@@ -406,12 +736,20 @@ const DS = (() => {
     }
   }
 
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
   function _upE(id, key, val) {
+    pushHistory();
     entities[id][key] = val;
-    if (['name','domain','table'].includes(key)) { renderEntity(id); selectEntity(id); redrawArrows(); }
+    if (['name','domain','table'].includes(key)) {
+      renderEntity(id); selectEntity(id); redrawArrows();
+    }
   }
 
   function _upF(entityId, idx, key, val) {
+    pushHistory();
     entities[entityId].fields[idx][key] = val;
     renderEntity(entityId);
     selected = { type: 'field', id: entityId, fieldIdx: idx };
@@ -420,6 +758,7 @@ const DS = (() => {
   }
 
   function _delField(entityId, idx) {
+    pushHistory();
     entities[entityId].fields.splice(idx, 1);
     renderEntity(entityId);
     selected = { type: 'entity', id: entityId };
@@ -427,87 +766,94 @@ const DS = (() => {
     redrawArrows();
   }
 
-  // ── Plugin import ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // Plugin import panel
+  // ══════════════════════════════════════════════════════════
   function switchTab(tab) {
-    document.getElementById('panel-new').className = tab === 'new' ? 'p-3 flex flex-col gap-2 overflow-y-auto' : 'hidden';
-    document.getElementById('panel-plugins').className = tab === 'plugins' ? 'flex-1 flex flex-col overflow-hidden' : 'hidden';
-    document.getElementById('tab-new').className = 'tab-btn' + (tab === 'new' ? ' active' : '');
-    document.getElementById('tab-plugins').className = 'tab-btn' + (tab === 'plugins' ? ' active' : '');
-    if (tab === 'plugins' && !pluginsData) loadPlugins();
+    document.getElementById('panel-new').className = tab==='new' ? 'p-3 flex flex-col gap-2 overflow-y-auto text-xs' : 'hidden';
+    document.getElementById('panel-plugins').className = tab==='plugins' ? 'flex-1 flex flex-col overflow-hidden' : 'hidden';
+    document.getElementById('tab-new').className = 'tab-btn'+(tab==='new'?' active':'');
+    document.getElementById('tab-plugins').className = 'tab-btn'+(tab==='plugins'?' active':'');
+    if (tab==='plugins' && !pluginsData) loadPlugins();
   }
 
   async function loadPlugins() {
+    document.getElementById('plugin-list').innerHTML = '<div class="text-gray-400 px-3 py-2">Loading…</div>';
     try {
       const r = await fetch('/pdl-designer/api/plugins');
       const d = await r.json();
       pluginsData = d.domains || {};
       renderPluginList(pluginsData);
     } catch(e) {
-      document.getElementById('plugin-list').innerHTML = '<div class="text-xs text-red-500 px-3 py-2">Failed to load: ' + e.message + '</div>';
+      document.getElementById('plugin-list').innerHTML = '<div class="text-red-500 px-3 py-2">Load failed: ' + e.message + '</div>';
     }
   }
-
-  // Cache entries by index so onclick never embeds JSON in HTML attributes
-  let _pluginEntryCache = [];
 
   function renderPluginList(domains) {
     _pluginEntryCache = [];
     let html = '';
+    const importedTables = new Set(Object.values(entities).map(e => e.table));
     for (const [domain, models] of Object.entries(domains)) {
-      const color = DOMAIN_COLORS[domain] || DOMAIN_COLORS.custom;
-      html += `<div class="plugin-domain" style="color:${color}">${domain} (${models.length})</div>`;
+      const color = DOMAIN_COLORS[domain]||DOMAIN_COLORS.custom;
+      html += `<div class="plugin-domain-hdr" style="color:${color}">${domain} (${models.length})</div>`;
       models.forEach(entry => {
         const idx = _pluginEntryCache.length;
-        _pluginEntryCache.push({ domain, entry });
-        const imported = Object.values(entities).some(e => e.table === entry.model.table);
-        // Pass integer index only — no JSON in HTML attribute
-        html += `<div class="plugin-model-row" onclick="DS._importModel(${idx})">
-          <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+        _pluginEntryCache.push({domain, entry});
+        const onCanvas = importedTables.has(entry.model.table);
+        html += `<div class="plugin-row" onclick="DS._importModel(${idx})" title="${entry.model.description||entry.model.name}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${entry.model.name}</span>
-          <span class="import-badge">${imported ? '✓ added' : '+ import'}</span>
+          <span class="import-badge">${onCanvas?'✓ added':'+ add'}</span>
         </div>`;
       });
     }
-    document.getElementById('plugin-list').innerHTML = html || '<div class="text-xs text-gray-400 px-3 py-2">No models found</div>';
+    document.getElementById('plugin-list').innerHTML = html || '<div class="text-gray-400 px-3 py-2">No models</div>';
   }
 
   function filterPlugins(q) {
     if (!pluginsData) return;
     if (!q) { renderPluginList(pluginsData); return; }
     const ql = q.toLowerCase();
-    const filtered = {};
-    for (const [d, models] of Object.entries(pluginsData)) {
-      const m = models.filter(e => e.model.name.toLowerCase().includes(ql) || d.includes(ql));
-      if (m.length) filtered[d] = m;
+    const f = {};
+    for (const [d,models] of Object.entries(pluginsData)) {
+      const m = models.filter(e => e.model.name.toLowerCase().includes(ql)||d.includes(ql)||
+        (e.model.description||'').toLowerCase().includes(ql));
+      if (m.length) f[d] = m;
     }
-    renderPluginList(filtered);
+    renderPluginList(f);
   }
 
   function _importModel(idx) {
     const cached = _pluginEntryCache[idx];
-    if (!cached) { notify('Entry not found — refresh plugin list', 'error'); return; }
-    const { domain, entry } = cached;
+    if (!cached) { notify('Refresh plugin list', 'warn'); return; }
+    const {domain, entry} = cached;
     const m = entry.model;
     if (Object.values(entities).some(e => e.table === m.table)) {
       notify('Already on canvas: ' + m.name); return;
     }
-    addEntity({ name: m.name, table: m.table, domain, description: m.description || '', fields: m.fields || [], imported: true, module_path: entry.module });
-    notify('Imported: ' + m.name + ' (' + m.fields.length + ' fields)');
+    addEntity({name:m.name, table:m.table, domain, description:m.description||'', fields:m.fields||[], imported:true, module_path:entry.module});
+    // Refresh badge states
+    if (pluginsData) renderPluginList(
+      document.getElementById('plugin-search').value ? null : pluginsData
+    );
+    notify('Imported: ' + m.name + ' (' + (m.fields||[]).length + ' fields)');
   }
 
-  // ── Export ─────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // Export / Generate
+  // ══════════════════════════════════════════════════════════
   function buildPayload() {
     return {
       entities: Object.values(entities).map(e => ({
-        name: e.name, table: e.table, description: e.description,
-        domain: e.domain, fields: e.fields, module_path: e.module_path,
-        generate: ['model','migration','view','api','tests'],
+        name:e.name, table:e.table, description:e.description,
+        domain:e.domain, fields:e.fields, module_path:e.module_path,
+        generate:['model','migration','view','api','tests'],
       })),
       relations,
     };
   }
 
-  async function downloadYaml() {
+  function downloadYaml() {
     const p = buildPayload();
     window.location.href = '/pdl-designer/api/pdl-yaml?schema=' + encodeURIComponent(JSON.stringify(p));
   }
@@ -515,16 +861,17 @@ const DS = (() => {
   async function generateCode() {
     const p = buildPayload();
     if (!p.entities.length) { notify('Add at least one entity', 'warn'); return; }
-    notify('Generating…');
+    notify('Generating code…');
     try {
       const r = await fetch('/pdl-designer/api/generate', {
-        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(p),
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p),
       });
       const d = await r.json();
-      if (!d.ok) { notify('Error: ' + d.error, 'error'); return; }
+      if (!d.ok) { notify('Error: '+d.error,'error'); return; }
       generatedFiles = d.files;
       showCodeModal(d.files);
-    } catch(e) { notify('Network error', 'error'); }
+      notify('Code generated — ' + Object.keys(d.files).length + ' files');
+    } catch(e) { notify('Network error','error'); }
   }
 
   function showCodeModal(files) {
@@ -533,68 +880,191 @@ const DS = (() => {
     document.getElementById('code-tabs').innerHTML = keys.map(k =>
       `<button class="tab-btn${k===activeCodeFile?' active':''}" onclick="DS._codeTab('${k}')">${k}</button>`
     ).join('');
-    document.getElementById('code-content').textContent = files[activeCodeFile] || '';
+    document.getElementById('code-content').textContent = files[activeCodeFile]||'';
     document.getElementById('code-modal').classList.remove('hidden');
   }
 
   function _codeTab(key) {
     activeCodeFile = key;
-    document.querySelectorAll('#code-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.textContent === key));
-    document.getElementById('code-content').textContent = generatedFiles[key] || '';
+    document.querySelectorAll('#code-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.textContent===key));
+    document.getElementById('code-content').textContent = generatedFiles[key]||'';
   }
 
   function copyCode() {
-    const text = document.getElementById('code-content').textContent;
-    navigator.clipboard.writeText(text).then(() => notify('Copied!'));
+    navigator.clipboard.writeText(document.getElementById('code-content').textContent)
+      .then(()=>notify('Copied to clipboard'));
   }
 
   function clearAll() {
+    if (!Object.keys(entities).length) return;
     if (!confirm('Clear all entities and relationships?')) return;
-    Object.keys(entities).forEach(id => document.getElementById('entity-' + id)?.remove());
-    entities = {}; relations = []; selected = null; entityCount = 0;
-    document.getElementById('svg-layer').querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
-    renderProps();
+    pushHistory();
+    CANVAS.querySelectorAll('.entity-box').forEach(n=>n.remove());
+    SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n=>n.remove());
+    entities = {}; relations = []; selected = null; multiSel.clear(); entityCount = 0;
+    renderProps(); updateEntityCount(); updateMinimap();
   }
 
-  function notify(msg, type = 'success') {
+  // ══════════════════════════════════════════════════════════
+  // Notifications
+  // ══════════════════════════════════════════════════════════
+  function notify(msg, type='success') {
     const el = document.getElementById('notification');
     el.textContent = msg;
-    el.style.background = type === 'error' ? '#dc2626' : type === 'warn' ? '#d97706' : '#065f46';
+    el.style.background = type==='error'?'#dc2626':type==='warn'?'#d97706':'#065f46';
     el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2500);
+    clearTimeout(el._t);
+    el._t = setTimeout(()=>el.classList.remove('show'), 2500);
   }
 
-  // ── Canvas click deselect ──────────────────────────────────
-  document.getElementById('canvas-container').addEventListener('click', ev => {
-    if (ev.target.id === 'canvas-container' || ev.target.id === 'svg-layer') {
+  // ══════════════════════════════════════════════════════════
+  // Event wiring
+  // ══════════════════════════════════════════════════════════
+
+  // Mouse wheel zoom (centered on cursor)
+  VP.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const factor = ev.deltaY < 0 ? 1.12 : 0.88;
+    const vp = VP.getBoundingClientRect();
+    zoom(factor, ev.clientX - vp.left, ev.clientY - vp.top);
+  }, { passive: false });
+
+  // Pan: space+drag or middle-button drag
+  document.addEventListener('keydown', ev => {
+    if (ev.key === ' ' && ev.target === document.body) { ev.preventDefault(); spaceDown = true; VP.style.cursor='grab'; }
+  });
+  document.addEventListener('keyup', ev => {
+    if (ev.key === ' ') { spaceDown = false; VP.style.cursor = relMode ? 'crosshair' : 'default'; }
+  });
+
+  VP.addEventListener('mousedown', ev => {
+    // Middle-button or space+left = pan
+    if (ev.button === 1 || (ev.button === 0 && spaceDown)) {
+      ev.preventDefault();
+      isPanning = true;
+      panStart = { x: ev.clientX - transform.x, y: ev.clientY - transform.y };
+      VP.style.cursor = 'grabbing';
+      const move = ev2 => {
+        if (!isPanning) return;
+        transform.x = ev2.clientX - panStart.x;
+        transform.y = ev2.clientY - panStart.y;
+        applyTransform();
+      };
+      const up = () => {
+        isPanning = false;
+        VP.style.cursor = spaceDown ? 'grab' : relMode ? 'crosshair' : 'default';
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+      return;
+    }
+    // Left-click on empty canvas = deselect + rectangle selection
+    if (ev.button === 0 && !spaceDown && ev.target === VP || ev.target === CANVAS || ev.target.id === 'svg-layer') {
       if (relMode) return;
-      selected = null;
-      document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected'));
+      selected = null; multiSel.clear();
+      document.querySelectorAll('.entity-box').forEach(b=>b.classList.remove('selected','multi-selected'));
+      renderProps();
+
+      // Rectangle select drag
+      const vp = VP.getBoundingClientRect();
+      const sx = ev.clientX - vp.left, sy = ev.clientY - vp.top;
+      isSelectDragging = false;
+      selectStart = {x:sx, y:sy};
+      const rect = document.getElementById('select-rect');
+      const move = ev2 => {
+        const cx = ev2.clientX - vp.left, cy = ev2.clientY - vp.top;
+        if (!isSelectDragging && (Math.abs(cx-sx)>5||Math.abs(cy-sy)>5)) isSelectDragging = true;
+        if (!isSelectDragging) return;
+        const l=Math.min(sx,cx), t=Math.min(sy,cy), w=Math.abs(cx-sx), h=Math.abs(cy-sy);
+        rect.style.cssText=`display:block;left:${l}px;top:${t}px;width:${w}px;height:${h}px`;
+        // Highlight entities within rect (canvas coords)
+        const cl = vpToCanvas(l+vp.left, t+vp.top), cr = vpToCanvas(l+w+vp.left, t+h+vp.top);
+        multiSel.clear();
+        Object.keys(entities).forEach(id => {
+          const e=entities[id], b=document.getElementById('entity-'+id);
+          const ew=b?.offsetWidth||220, eh=b?.offsetHeight||160;
+          if (e.x<cr.x&&e.x+ew>cl.x&&e.y<cr.y&&e.y+eh>cl.y) multiSel.add(id);
+        });
+        document.querySelectorAll('.entity-box').forEach(b=>{
+          const bid=b.id.replace('entity-','');
+          b.classList.toggle('multi-selected', multiSel.has(bid));
+        });
+      };
+      const up = () => {
+        rect.style.display='none'; isSelectDragging=false;
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', ev => {
+    const tag = document.activeElement?.tagName;
+    const inInput = tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT';
+    if (inInput) return;
+
+    if (ev.key==='Escape') {
+      if (relMode) toggleRelMode();
+      document.getElementById('code-modal').classList.add('hidden');
+    }
+    if ((ev.metaKey||ev.ctrlKey) && ev.key==='z') { ev.preventDefault(); undo(); }
+    if ((ev.metaKey||ev.ctrlKey) && ev.key==='Enter') generateCode();
+    if (ev.key==='n'||ev.key==='N') addEntity();
+    if (ev.key==='r'||ev.key==='R') toggleRelMode();
+    if (ev.key==='f'||ev.key==='F') fitToScreen();
+    if (ev.key==='l'||ev.key==='L') autoLayout();
+    if ((ev.key==='Delete'||ev.key==='Backspace') && selected?.type==='entity') {
+      ev.preventDefault();
+      _delEntity({stopPropagation:()=>{}}, selected.id);
+    }
+    if (ev.key==='='||ev.key==='+') zoom(1.2);
+    if (ev.key==='-') zoom(0.8);
+  });
+
+  // Canvas click-to-deselect (if clicked outside any entity)
+  CANVAS.addEventListener('click', ev => {
+    if (relMode && !ev.target.closest('.entity-box')) return;
+    if (!ev.target.closest('.entity-box') && !ev.target.closest('.entity-header')) {
+      selected=null; multiSel.clear();
+      document.querySelectorAll('.entity-box').forEach(b=>b.classList.remove('selected','multi-selected'));
       renderProps();
     }
   });
 
-  // ── Keyboard ───────────────────────────────────────────────
-  document.addEventListener('keydown', ev => {
-    if (ev.key === 'Escape') { if (relMode) toggleRelMode(); document.getElementById('code-modal').classList.add('hidden'); }
-    if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') generateCode();
-  });
-
-  // ── Expose public API ──────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // Public API
+  // ══════════════════════════════════════════════════════════
   return {
-    addEntity, toggleRelMode, switchTab, filterPlugins, downloadYaml, generateCode, clearAll,
-    _selectField, _addField, _delEntity, _upE, _upF, _delField, _importModel, _startRel, _codeTab, copyCode,
+    addEntity, toggleRelMode, autoLayout, fitToScreen, zoom, undo,
+    switchTab, filterPlugins, downloadYaml, generateCode, clearAll,
+    _delEntity, _clickField, _addField, _upE, _upF, _delField, _importModel, _startRel, _codeTab, copyCode,
   };
 })();
 
-// Welcome entity on load
+// ── Initial state ──────────────────────────────────────────
 DS.addEntity({
-  name: 'Customer', table: 'customer', domain: 'crm', x: 80, y: 100,
-  fields: [
-    {name: 'name', type: 'string', nullable: false, label: 'Full Name'},
-    {name: 'email', type: 'email', nullable: true, unique: true},
-    {name: 'phone', type: 'phone', nullable: true},
-    {name: 'country_code', type: 'string', nullable: true, max_length: 3},
+  name:'Customer', table:'customer', domain:'crm',
+  x:80, y:80,
+  fields:[
+    {name:'name', type:'string', nullable:false, label:'Full Name'},
+    {name:'email', type:'email', nullable:true, unique:true},
+    {name:'phone', type:'phone', nullable:true},
+    {name:'country_code', type:'string', nullable:true, max_length:3},
+  ],
+});
+DS.addEntity({
+  name:'Order', table:'order', domain:'crm',
+  x:380, y:80,
+  fields:[
+    {name:'customer_id', type:'string', nullable:false, indexed:true, fk:'Customer.id'},
+    {name:'status', type:'string', nullable:false},
+    {name:'total_cents', type:'money', nullable:false},
+    {name:'order_date', type:'date', nullable:false},
   ],
 });
 </script>
