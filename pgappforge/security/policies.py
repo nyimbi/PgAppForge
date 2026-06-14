@@ -230,8 +230,11 @@ def require_policy(policy: Policy, context_fn: Callable | None = None) -> Callab
 			try:
 				from flask_login import current_user
 				from flask import abort, request
-			except ImportError:
-				return fn(*args, **kwargs)
+			except ImportError as exc:
+				# Fail closed: if Flask is missing, deny rather than silently allow
+				raise RuntimeError(
+					f"require_policy() requires Flask + Flask-Login: {exc}"
+				) from exc
 
 			ctx: dict[str, Any] = {}
 			if context_fn is not None:

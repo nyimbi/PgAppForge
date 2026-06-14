@@ -144,7 +144,8 @@ class ModelMixinRegistry:
 
 			if isinstance(attr_val, sa.Column):
 				# Copy the column so the same Column object isn't reused across tables
-				if attr_name not in target_cls.__mapper__.columns:
+				# Use __table__.columns (always available pre-mapper) not __mapper__.columns
+				if attr_name not in {c.name for c in target_cls.__table__.columns}:
 					col_copy = attr_val.copy()
 					col_copy.name = attr_name
 					table.append_column(col_copy)
