@@ -543,7 +543,7 @@ class RAGService:
 		client = LLMClient()
 		try:
 			return client.embed(chunks)  # type: ignore[return-value]
-		except LLMError as exc:
+		except Exception as exc:
 			log.debug("_embed_chunks failed: %s", exc)
 			return [None] * len(chunks)
 
