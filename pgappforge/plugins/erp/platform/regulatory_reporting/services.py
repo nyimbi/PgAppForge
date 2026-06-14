@@ -6,41 +6,51 @@ from typing import Any
 import sqlalchemy as sa
 
 
+_SAFT_NS = "urn:OECD:Standard:SAF-T:1.00"
+
+
 class SaftReportService:
 	def generate_saft_gl(self, tenant_id: str, fiscal_year: int, session: Any) -> str:
-		root = ET.Element("AuditFile", xmlns="urn:OECD:Standard:SAF-T:1.00")
-		header = ET.SubElement(root, "Header")
-		ET.SubElement(header, "AuditFileVersion").text = "1.00"
-		ET.SubElement(header, "CompanyID").text = tenant_id
-		ET.SubElement(header, "TaxRegistrationNumber").text = ""
-		ET.SubElement(header, "FiscalYear").text = str(fiscal_year)
-		master = ET.SubElement(root, "MasterFiles")
-		gl_accounts = ET.SubElement(master, "GeneralLedgerAccounts")
+		# Register namespace so ET produces proper xmlns declaration, not ns0: prefix
+		ET.register_namespace("", _SAFT_NS)
+		ns = f"{{{_SAFT_NS}}}"
+
+		root = ET.Element(f"{ns}AuditFile")
+		header = ET.SubElement(root, f"{ns}Header")
+		ET.SubElement(header, f"{ns}AuditFileVersion").text = "1.00"
+		ET.SubElement(header, f"{ns}CompanyID").text = tenant_id
+		ET.SubElement(header, f"{ns}TaxRegistrationNumber").text = ""
+		ET.SubElement(header, f"{ns}FiscalYear").text = str(fiscal_year)
+		master = ET.SubElement(root, f"{ns}MasterFiles")
+		gl_accounts = ET.SubElement(master, f"{ns}GeneralLedgerAccounts")
 		try:
 			from pgappforge.plugins.erp.finance.gl.models import GLAccount
 			accounts = session.execute(
 				sa.select(GLAccount).where(GLAccount.tenant_id == tenant_id)
 			).scalars().all()
 			for acct in accounts:
-				acct_el = ET.SubElement(gl_accounts, "Account")
-				ET.SubElement(acct_el, "AccountID").text = str(acct.id)
-				ET.SubElement(acct_el, "AccountDescription").text = getattr(acct, "name", "")
-				ET.SubElement(acct_el, "AccountType").text = getattr(acct, "account_type", "")
-		except Exception:
-			pass
-		transactions = ET.SubElement(root, "GeneralLedgerEntries")
+				acct_el = ET.SubElement(gl_accounts, f"{ns}Account")
+				ET.SubElement(acct_el, f"{ns}AccountID").text = str(acct.id)
+				ET.SubElement(acct_el, f"{ns}AccountDescription").text = getattr(acct, "name", "")
+				ET.SubElement(acct_el, f"{ns}AccountType").text = getattr(acct, "account_type", "")
+		except ImportError:
+			pass  # GL plugin not installed — accounts section empty but schema valid
+		transactions = ET.SubElement(root, f"{ns}GeneralLedgerEntries")
 		try:
 			from pgappforge.plugins.erp.finance.gl.models import GLJournalEntry
 			entries = session.execute(
 				sa.select(GLJournalEntry).where(GLJournalEntry.tenant_id == tenant_id)
 			).scalars().all()
 			for e in entries:
-				entry_el = ET.SubElement(transactions, "Journal")
-				ET.SubElement(entry_el, "JournalID").text = str(e.id)
-				ET.SubElement(entry_el, "Description").text = getattr(e, "description", "")
-		except Exception:
+				entry_el = ET.SubElement(transactions, f"{ns}Journal")
+				ET.SubElement(entry_el, f"{ns}JournalID").text = str(e.id)
+				ET.SubElement(entry_el, f"{ns}Description").text = getattr(e, "description", "")
+		except ImportError:
 			pass
-		return ET.tostring(root, encoding="unicode", xml_declaration=False)
+		# xml_declaration=True produces the required <?xml version='1.0' encoding='us-ascii'?>
+		# Use tostring with encoding='unicode' for a str return, prepend declaration manually
+		body = ET.tostring(root, encoding="unicode")
+		return '<?xml version="1.0" encoding="UTF-8"?>\n' + body
 
 
 class CsrdReportService:
@@ -71,9 +81,19 @@ class CsrdReportService:
 				sa.text("SELECT COUNT(*) FROM hcm_employee WHERE tenant_id = :tid AND status = 'ACTIVE'"),
 				{"tid": tenant_id},
 			).scalar() or 0
+			female = session.execute(
+				sa.text("SELECT COUNT(*) FROM hcm_employee WHERE tenant_id = :tid AND status = 'ACTIVE' AND gender = 'F'"),
+				{"tid": tenant_id},
+			).scalar() or 0
+			gender_ratio_f = round(female / count, 4) if count else None
 		except Exception:
 			count = 0
-		return {"headcount": count, "gender_ratio_f": None, "pay_gap_ratio": None}
+			gender_ratio_f = None
+		return {
+			"headcount": count,
+			"gender_ratio_f": gender_ratio_f,
+			"pay_gap_ratio": None,  # requires payroll integration — ESRS S1-16 not yet computable
+		}
 
 	def _esrs_g1(self, tenant_id: str, session: Any) -> dict[str, Any]:
 		try:

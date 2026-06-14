@@ -103,6 +103,8 @@ class RecruitingService:
 
 	def accept_offer(self, offer_id: str, session: Any) -> None:
 		offer = session.get(OfferLetter, offer_id)
+		if offer is None:
+			raise ValueError(f"OfferLetter {offer_id!r} not found")
 		session.execute(
 			sa.update(OfferLetter).where(OfferLetter.id == offer_id)
 			.values(status="ACCEPTED", responded_at=datetime.now(timezone.utc))

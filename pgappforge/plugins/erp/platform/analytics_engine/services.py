@@ -45,6 +45,10 @@ class AnalyticsEngineService:
 		params: dict[str, Any] = {}
 		wheres = []
 		if filters:
+			allowed = {d["field"] for d in cube.dimensions} | {m["field"] for m in cube.measures}
+			for field in filters:
+				if field not in allowed:
+					raise ValueError(f"Unknown filter field {field!r}; allowed: {sorted(allowed)}")
 			for i, (field, value) in enumerate(filters.items()):
 				param_key = f"f{i}"
 				wheres.append(f"{field} = :{param_key}")
@@ -52,17 +56,18 @@ class AnalyticsEngineService:
 		if wheres:
 			sql = f"SELECT * FROM ({sql}) _cube WHERE " + " AND ".join(wheres)
 		if group_by:
+			allowed_gb = {d["field"] for d in cube.dimensions}
+			for field in group_by:
+				if field not in allowed_gb:
+					raise ValueError(f"Unknown group_by field {field!r}")
 			cols = ", ".join(group_by)
 			aggs = ", ".join(
 				f"{m['agg']}({m['field']}) AS {m['name']}"
 				for m in cube.measures
 			)
 			sql = f"SELECT {cols}, {aggs} FROM ({sql}) _cube GROUP BY {cols}"
-		try:
-			result = session.execute(sa.text(sql), params)
-			return [dict(zip(result.keys(), row)) for row in result.fetchmany(1000)]
-		except Exception:
-			return []
+		result = session.execute(sa.text(sql), params)
+		return [dict(zip(result.keys(), row)) for row in result.fetchmany(1000)]
 
 	def get_financial_dashboard(self, tenant_id: str, session: Any) -> dict[str, Any]:
 		widgets: dict[str, Any] = {}

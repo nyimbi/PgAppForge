@@ -16,6 +16,9 @@ class SpendAnalyticsService:
 	) -> dict[str, Any]:
 		try:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice
+		except ImportError as exc:
+			raise ImportError("spend_analytics requires the 'ap' plugin") from exc
+		try:
 			rows = session.execute(
 				sa.select(APInvoice).where(
 					APInvoice.tenant_id == tenant_id,
@@ -23,8 +26,8 @@ class SpendAnalyticsService:
 					APInvoice.invoice_date <= to_period,
 				)
 			).scalars().all()
-		except Exception:
-			rows = []
+		except Exception as exc:
+			raise RuntimeError(f"spend_cube query failed for tenant {tenant_id}") from exc
 		total = sum(getattr(r, "total_amount_cents", 0) for r in rows)
 		by_supplier: dict[str, int] = {}
 		for r in rows:
