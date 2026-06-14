@@ -45,6 +45,7 @@ class PDLCodeGenerator:
 				results[key] = code
 				if output_base and artifact in entity.generate:
 					self._write(output_base, entity, artifact, code)
+		results.update(self.generate_schema_files(schema))
 		return results
 
 	def generate_entity(self, entity: PDLEntity, schema: PDLSchema) -> dict[str, str]:
@@ -387,6 +388,118 @@ def test_{snake_name}_api_imports():
 \tfrom {entity.module_path}.api import {entity.name}APIView
 \tassert callable({entity.name}APIView.list)
 '''
+
+	def generate_docker_compose(self, schema: PDLSchema) -> str:
+		"""Return a docker-compose.yml for local development."""
+		service_name = _snake(schema.namespace) if schema.namespace else "app"
+		return f"""\
+version: "3.9"
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: {service_name}_dev
+      POSTGRES_USER: pgaf
+      POSTGRES_PASSWORD: pgaf
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pgaf"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql://pgaf:pgaf@db/{service_name}_dev
+      SECRET_KEY: change-me-in-production-minimum-20-chars
+      FLASK_ENV: development
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: flask run --host=0.0.0.0 --port=8080
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+"""
+
+	def generate_github_actions(self, schema: PDLSchema) -> str:
+		"""Return a GitHub Actions CI workflow YAML."""
+		service_name = _snake(schema.namespace) if schema.namespace else "app"
+		project_label = schema.namespace or "App"
+		return f"""\
+name: CI — {project_label}
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: {service_name}_test
+          POSTGRES_USER: pgaf
+          POSTGRES_PASSWORD: pgaf
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      SQLALCHEMY_DATABASE_URI: postgresql://pgaf:pgaf@localhost/{service_name}_test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv sync
+      - name: Run tests
+        run: uv run pytest tests/ci/ -q --tb=short
+      - name: Type check
+        run: uv run pyright pgappforge/ || true
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv && uv sync
+      - run: uv run ruff check pgappforge/ || true
+"""
+
+	def generate_schema_files(self, schema: PDLSchema) -> dict[str, str]:
+		"""Generate schema-level files (one per project, not per entity)."""
+		return {
+			"docker-compose.yml": self.generate_docker_compose(schema),
+			".github/workflows/ci.yml": self.generate_github_actions(schema),
+		}
 
 	# ------------------------------------------------------------------
 	# File I/O helper

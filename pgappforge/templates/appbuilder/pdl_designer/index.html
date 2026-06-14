@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDL Entity Designer — PgAppForge</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{background:#f3f4f6;font-family:system-ui,sans-serif;overflow:hidden}
+  #canvas-container{position:relative;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle,#e5e7eb 1px,transparent 1px) 0 0/24px 24px}
+  #svg-layer{position:absolute;inset:0;pointer-events:none}
+  .entity-box{position:absolute;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.15);min-width:200px;cursor:move;user-select:none;border:2px solid #e5e7eb}
+  .entity-box.selected{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+  .entity-header{padding:8px 12px;border-radius:6px 6px 0 0;color:white;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between}
+  .entity-field{padding:4px 12px;font-size:12px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:8px;cursor:pointer}
+  .entity-field:hover{background:#f9fafb}
+  .type-badge{font-size:10px;color:#6b7280;background:#f3f4f6;padding:1px 5px;border-radius:4px}
+  .field-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .entity-footer{padding:6px 12px}
+  .add-field-btn{width:100%;font-size:11px;color:#6b7280;border:1px dashed #d1d5db;background:none;border-radius:4px;padding:3px;cursor:pointer}
+  .add-field-btn:hover{color:#374151;border-color:#9ca3af;background:#f9fafb}
+  #sidebar{width:272px;min-width:272px;background:white;border-right:1px solid #e5e7eb;display:flex;flex-direction:column}
+  #props-panel{width:256px;min-width:256px;background:white;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;overflow-y:auto}
+  .tab-btn{padding:8px 12px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+  .tab-btn.active{color:#1a56db;border-color:#1a56db}
+  .plugin-domain{font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;padding:8px 12px 4px}
+  .plugin-model-row{padding:4px 12px 4px 20px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .plugin-model-row:hover{background:#eff6ff;color:#1a56db}
+  .import-badge{font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;margin-left:auto}
+  .arrow-path{stroke:#94a3b8;stroke-width:2;fill:none;marker-end:url(#arrowhead)}
+  .prop-label{font-size:11px;font-weight:600;color:#374151;margin-bottom:2px}
+  .prop-input{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;outline:none;background:#fafafa}
+  .prop-input:focus{border-color:#3b82f6;background:white}
+  .prop-select{width:100%;font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;background:#fafafa}
+  .prop-check{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer}
+  .btn-primary{background:#1a56db;color:white;font-size:12px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;border:none}
+  .btn-primary:hover{background:#1e40af}
+  .btn-danger{background:#dc2626;color:white;font-size:12px;padding:5px 10px;border-radius:4px;cursor:pointer;border:none}
+  .btn-secondary{background:#f3f4f6;color:#374151;font-size:12px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;border:1px solid #d1d5db}
+  .btn-secondary:hover{background:#e5e7eb}
+  .notification{position:fixed;bottom:20px;right:20px;background:#065f46;color:white;padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
+  .notification.show{opacity:1}
+  #rel-indicator{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#7e3af2;color:white;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;display:none;z-index:10}
+  .conn-handle{position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:14px;height:14px;background:#7e3af2;border-radius:50%;border:2px solid white;cursor:crosshair;display:none;z-index:5}
+  .entity-box:hover .conn-handle,.entity-box.selected .conn-handle{display:block}
+</style>
+</head>
+<body class="flex flex-col h-screen">
+
+<!-- Toolbar -->
+<div class="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 shadow-sm z-10 flex-shrink-0">
+  <div class="flex items-center gap-2 mr-4">
+    <svg class="w-5 h-5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+    </svg>
+    <span class="font-bold text-gray-800 text-sm">PDL Entity Designer</span>
+    <span class="text-xs text-gray-400">PgAppForge</span>
+  </div>
+  <button class="btn-primary" onclick="DS.addEntity()">+ Entity</button>
+  <button id="rel-btn" class="btn-secondary" onclick="DS.toggleRelMode()" title="Draw FK relationship">&#x1F517; Relationship</button>
+  <div class="flex-1"></div>
+  <button class="btn-secondary" onclick="DS.clearAll()">Clear</button>
+  <button class="btn-secondary" onclick="DS.downloadYaml()">&#x2B07; PDL YAML</button>
+  <button class="btn-primary" onclick="DS.generateCode()">&#9881; Generate Code</button>
+</div>
+
+<!-- Main layout -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- Left sidebar -->
+  <div id="sidebar">
+    <div class="flex border-b border-gray-200 flex-shrink-0">
+      <div class="tab-btn active" id="tab-new" onclick="DS.switchTab('new')">New</div>
+      <div class="tab-btn" id="tab-plugins" onclick="DS.switchTab('plugins')">&#128279; Import Capability</div>
+    </div>
+    <!-- New tab -->
+    <div id="panel-new" class="p-3 flex flex-col gap-2 overflow-y-auto">
+      <p class="text-xs text-gray-500">Drag entities on the canvas. Use <strong>+ Entity</strong> to add, <strong>Relationship</strong> to connect.</p>
+      <div class="text-xs font-semibold text-gray-500 uppercase mt-2">Field Types</div>
+      <div class="grid grid-cols-2 gap-1">
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">string</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">integer</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">decimal</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">boolean</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">date / datetime</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">text / jsonb</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">email / phone</div>
+        <div class="text-xs bg-gray-100 rounded px-2 py-1 text-gray-600">money / uuid</div>
+      </div>
+      <div class="text-xs font-semibold text-gray-500 uppercase mt-3">Auto-included</div>
+      <div class="text-xs text-gray-400 leading-relaxed">Every entity automatically gets <code>id</code> (UUID7), <code>tenant_id</code>, <code>created_at</code>, <code>updated_at</code>.</div>
+      <div class="text-xs font-semibold text-gray-500 uppercase mt-3">Keyboard</div>
+      <div class="text-xs text-gray-400 leading-relaxed"><kbd class="bg-gray-100 px-1 rounded">Esc</kbd> cancel mode &nbsp; <kbd class="bg-gray-100 px-1 rounded">⌘↵</kbd> generate</div>
+    </div>
+    <!-- Plugins tab -->
+    <div id="panel-plugins" class="hidden flex-1 flex flex-col overflow-hidden">
+      <div class="p-3 flex-shrink-0">
+        <input id="plugin-search" type="text" placeholder="Search models..." class="prop-input" oninput="DS.filterPlugins(this.value)">
+      </div>
+      <div id="plugin-list" class="flex-1 overflow-y-auto pb-4">
+        <div class="text-xs text-gray-400 px-3 py-2">Loading capability models...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="flex-1 relative overflow-hidden">
+    <div id="canvas-container">
+      <div id="rel-indicator">&#x1F517; Click source entity, then target to create FK</div>
+      <svg id="svg-layer">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0,10 3.5,0 7" fill="#94a3b8"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Right: properties -->
+  <div id="props-panel">
+    <div class="p-3 border-b border-gray-200 flex-shrink-0">
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Properties</div>
+    </div>
+    <div id="props-content" class="p-3 text-xs text-gray-400">Select an entity or field to edit.</div>
+  </div>
+</div>
+
+<!-- Code modal -->
+<div id="code-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-6">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col" style="max-height:90vh">
+    <div class="flex items-center justify-between p-4 border-b flex-shrink-0">
+      <span class="font-bold text-gray-800">Generated Code</span>
+      <button onclick="document.getElementById('code-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="flex border-b overflow-x-auto flex-shrink-0" id="code-tabs"></div>
+    <div class="flex-1 overflow-auto p-4">
+      <pre id="code-content" class="text-xs font-mono bg-gray-50 rounded p-3 overflow-auto whitespace-pre-wrap min-h-32"></pre>
+    </div>
+    <div class="p-3 border-t flex-shrink-0 flex gap-2">
+      <button class="btn-secondary text-xs" onclick="DS.copyCode()">Copy</button>
+      <div class="flex-1"></div>
+      <button class="btn-primary text-xs" onclick="document.getElementById('code-modal').classList.add('hidden')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="notification" class="notification"></div>
+
+<script>
+const DS = (() => {
+  // ── Constants ──────────────────────────────────────────────
+  const FIELD_TYPES = ['string','integer','decimal','float','boolean','date','datetime','text','jsonb','email','phone','money','uuid'];
+  const DOMAIN_COLORS = {
+    finance:'#1a56db', grc:'#d97706', hcm:'#059669', crm:'#7c3aed',
+    operations:'#dc2626', procurement:'#ea580c', platform:'#4b5563',
+    fintech:'#047857', custom:'#374151',
+  };
+
+  // ── State ──────────────────────────────────────────────────
+  let entities = {};   // id → entity obj
+  let relations = [];  // [{id, from, to, fromField}]
+  let selected = null; // {type, id, fieldIdx?}
+  let relMode = false;
+  let relSource = null;
+  let nextId = 1;
+  let pluginsData = null;
+  let generatedFiles = {};
+  let activeCodeFile = null;
+  let entityCount = 0; // for deterministic placement
+
+  // ── ID ─────────────────────────────────────────────────────
+  function uid() { return 'e' + (nextId++); }
+
+  // ── Position (deterministic, no Math.random) ───────────────
+  function nextPosition() {
+    const col = entityCount % 3;
+    const row = Math.floor(entityCount / 3);
+    entityCount++;
+    return { x: 80 + col * 250, y: 80 + row * 200 };
+  }
+
+  // ── Entity ─────────────────────────────────────────────────
+  function addEntity(overrides = {}) {
+    const id = uid();
+    const pos = overrides.x !== undefined ? {x: overrides.x, y: overrides.y} : nextPosition();
+    entities[id] = {
+      id, name: overrides.name || 'NewEntity',
+      table: overrides.table || 'new_entity',
+      domain: overrides.domain || 'custom',
+      description: overrides.description || '',
+      fields: overrides.fields ? overrides.fields.map(f => ({...f})) : [],
+      x: pos.x, y: pos.y,
+      imported: overrides.imported || false,
+      module_path: overrides.module_path || null,
+    };
+    renderEntity(id);
+    selectEntity(id);
+    redrawArrows();
+    return id;
+  }
+
+  function renderEntity(id) {
+    const e = entities[id];
+    document.getElementById('entity-' + id)?.remove();
+    const color = DOMAIN_COLORS[e.domain] || DOMAIN_COLORS.custom;
+    const div = document.createElement('div');
+    div.className = 'entity-box';
+    div.id = 'entity-' + id;
+    div.style.cssText = `left:${e.x}px;top:${e.y}px`;
+
+    const fieldsHtml = e.fields.map((f, i) => {
+      const dotColor = f.fk ? '#7c3aed' : '#d1d5db';
+      return `<div class="entity-field" onclick="DS._selectField('${id}',${i})">
+        <div class="field-dot" style="background:${dotColor}"></div>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+        <span class="type-badge">${f.type||'string'}${f.nullable===false?'!':''}</span>
+      </div>`;
+    }).join('');
+
+    div.innerHTML = `
+      <div class="entity-header" style="background:${color}">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${e.name}</span>
+        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
+          ${e.imported ? '<span style="font-size:9px;background:rgba(255,255,255,.2);padding:1px 5px;border-radius:8px">⬇ imported</span>' : ''}
+          <span onclick="DS._delEntity('${id}')" style="cursor:pointer;font-size:15px;opacity:.7;padding:0 2px" title="Delete">✕</span>
+        </div>
+      </div>
+      <div style="padding:2px 12px 0;font-size:10px;color:#9ca3af">${e.table}</div>
+      <div style="padding:0 12px 4px;font-size:10px;color:#d1d5db;font-style:italic">id · tenant_id · timestamps</div>
+      ${fieldsHtml}
+      <div class="entity-footer">
+        <button class="add-field-btn" onclick="DS._addField('${id}')">+ Add field</button>
+      </div>
+      <div class="conn-handle" onmousedown="DS._startRel(event,'${id}')"></div>`;
+
+    makeDraggable(div, div.querySelector('.entity-header'), id);
+    div.addEventListener('click', ev => {
+      if (relMode && !ev.target.closest('.conn-handle') && !ev.target.closest('.entity-field')) {
+        handleRelClick(id);
+      }
+    });
+    document.getElementById('canvas-container').appendChild(div);
+  }
+
+  function _delEntity(id) {
+    document.getElementById('entity-' + id)?.remove();
+    relations = relations.filter(r => r.from !== id && r.to !== id);
+    delete entities[id];
+    if (selected?.id === id) { selected = null; renderProps(); }
+    redrawArrows();
+  }
+
+  // ── Drag ───────────────────────────────────────────────────
+  function makeDraggable(box, handle, id) {
+    let ox, oy;
+    handle.addEventListener('mousedown', ev => {
+      if (relMode) return;
+      ev.preventDefault();
+      selectEntity(id);
+      ox = ev.clientX - entities[id].x;
+      oy = ev.clientY - entities[id].y;
+      const move = ev2 => {
+        entities[id].x = ev2.clientX - ox;
+        entities[id].y = ev2.clientY - oy;
+        box.style.left = entities[id].x + 'px';
+        box.style.top = entities[id].y + 'px';
+        redrawArrows();
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  }
+
+  // ── Relations ──────────────────────────────────────────────
+  function toggleRelMode() {
+    relMode = !relMode; relSource = null;
+    document.getElementById('rel-indicator').style.display = relMode ? 'block' : 'none';
+    const btn = document.getElementById('rel-btn');
+    btn.style.background = relMode ? '#7c3af2' : '';
+    btn.style.color = relMode ? 'white' : '';
+  }
+
+  function _startRel(ev, id) {
+    ev.stopPropagation();
+    if (!relMode) toggleRelMode();
+    relSource = id;
+  }
+
+  function handleRelClick(targetId) {
+    if (!relMode) return;
+    if (!relSource) { relSource = targetId; return; }
+    if (relSource === targetId) { relSource = null; return; }
+    const srcE = entities[relSource];
+    const tgtE = entities[targetId];
+    const fieldName = tgtE.name.charAt(0).toLowerCase() + tgtE.name.slice(1) + '_id';
+    if (!srcE.fields.find(f => f.name === fieldName)) {
+      srcE.fields.push({ name: fieldName, type: 'string', nullable: true, indexed: true, fk: tgtE.name + '.id', label: tgtE.name });
+    }
+    relations.push({ id: uid(), from: relSource, to: targetId, fromField: fieldName });
+    renderEntity(relSource);
+    redrawArrows();
+    relSource = null;
+    toggleRelMode();
+  }
+
+  // ── Arrows ─────────────────────────────────────────────────
+  function getBoxEdge(fromId, toId) {
+    const fb = document.getElementById('entity-' + fromId);
+    const tb = document.getElementById('entity-' + toId);
+    if (!fb || !tb) return [null, null];
+    const fe = entities[fromId], te = entities[toId];
+    return [
+      { x: fe.x + fb.offsetWidth, y: fe.y + fb.offsetHeight / 2 },
+      { x: te.x, y: te.y + tb.offsetHeight / 2 },
+    ];
+  }
+
+  function redrawArrows() {
+    const svg = document.getElementById('svg-layer');
+    svg.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
+    relations.forEach(rel => {
+      const [p1, p2] = getBoxEdge(rel.from, rel.to);
+      if (!p1) return;
+      const dx = p2.x - p1.x;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'arrow-path');
+      path.setAttribute('d', `M ${p1.x} ${p1.y} C ${p1.x + dx*.4} ${p1.y}, ${p2.x - dx*.4} ${p2.y}, ${p2.x} ${p2.y}`);
+      svg.appendChild(path);
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('class', 'arrow-label');
+      txt.setAttribute('x', (p1.x + p2.x) / 2);
+      txt.setAttribute('y', (p1.y + p2.y) / 2 - 6);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('font-size', '10');
+      txt.setAttribute('fill', '#6b7280');
+      txt.textContent = rel.fromField || 'fk';
+      svg.appendChild(txt);
+    });
+  }
+
+  // ── Fields ─────────────────────────────────────────────────
+  function _addField(entityId) {
+    const e = entities[entityId];
+    e.fields.push({ name: 'field' + (e.fields.length + 1), type: 'string', nullable: true });
+    renderEntity(entityId);
+    _selectField(entityId, e.fields.length - 1);
+    redrawArrows();
+  }
+
+  function _selectField(entityId, idx) {
+    selected = { type: 'field', id: entityId, fieldIdx: idx };
+    renderProps();
+  }
+
+  function selectEntity(id) {
+    document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected'));
+    document.getElementById('entity-' + id)?.classList.add('selected');
+    selected = { type: 'entity', id };
+    renderProps();
+  }
+
+  // ── Properties ─────────────────────────────────────────────
+  function renderProps() {
+    const panel = document.getElementById('props-content');
+    if (!selected) { panel.innerHTML = '<p class="text-xs text-gray-400">Select an entity or field.</p>'; return; }
+    if (selected.type === 'entity') {
+      const e = entities[selected.id];
+      panel.innerHTML = `<div class="flex flex-col gap-3">
+        <div><div class="prop-label">Entity Name</div><input class="prop-input" value="${e.name}" oninput="DS._upE('${e.id}','name',this.value)"></div>
+        <div><div class="prop-label">Table</div><input class="prop-input" value="${e.table}" oninput="DS._upE('${e.id}','table',this.value)"></div>
+        <div><div class="prop-label">Description</div><input class="prop-input" value="${e.description||''}" oninput="DS._upE('${e.id}','description',this.value)"></div>
+        <div><div class="prop-label">Domain</div>
+          <select class="prop-select" onchange="DS._upE('${e.id}','domain',this.value)">
+            ${Object.keys(DOMAIN_COLORS).map(d=>`<option value="${d}"${d===e.domain?' selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div><div class="prop-label">Module Path</div><input class="prop-input" placeholder="pgappforge.plugins.erp…" value="${e.module_path||''}" oninput="DS._upE('${e.id}','module_path',this.value)"></div>
+        <div class="text-xs text-gray-400">Fields: ${e.fields.length} &nbsp;|&nbsp; FKs: ${relations.filter(r=>r.from===e.id||r.to===e.id).length}</div>
+        <button class="btn-danger" onclick="DS._delEntity('${e.id}')">Delete Entity</button>
+      </div>`;
+    } else if (selected.type === 'field') {
+      const e = entities[selected.id];
+      const f = e.fields[selected.fieldIdx];
+      const i = selected.fieldIdx;
+      panel.innerHTML = `<div class="flex flex-col gap-3">
+        <div class="text-xs font-semibold text-purple-700 truncate">${e.name} / field</div>
+        <div><div class="prop-label">Name</div><input class="prop-input" value="${f.name}" oninput="DS._upF('${e.id}',${i},'name',this.value)"></div>
+        <div><div class="prop-label">Type</div>
+          <select class="prop-select" onchange="DS._upF('${e.id}',${i},'type',this.value)">
+            ${FIELD_TYPES.map(t=>`<option value="${t}"${t===f.type?' selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div><div class="prop-label">FK Target (e.g. Order.id)</div><input class="prop-input" value="${f.fk||''}" placeholder="EntityName.id" oninput="DS._upF('${e.id}',${i},'fk',this.value||null)"></div>
+        <div><div class="prop-label">Label</div><input class="prop-input" value="${f.label||''}" oninput="DS._upF('${e.id}',${i},'label',this.value)"></div>
+        <div><div class="prop-label">Max Length</div><input class="prop-input" type="number" value="${f.max_length||''}" oninput="DS._upF('${e.id}',${i},'max_length',this.value?+this.value:null)"></div>
+        <label class="prop-check"><input type="checkbox"${f.nullable===false?' checked':''} onchange="DS._upF('${e.id}',${i},'nullable',!this.checked)"> Required (not null)</label>
+        <label class="prop-check"><input type="checkbox"${f.unique?' checked':''} onchange="DS._upF('${e.id}',${i},'unique',this.checked)"> Unique</label>
+        <label class="prop-check"><input type="checkbox"${f.indexed?' checked':''} onchange="DS._upF('${e.id}',${i},'indexed',this.checked)"> Indexed</label>
+        <button class="btn-danger" onclick="DS._delField('${e.id}',${i})">Delete Field</button>
+      </div>`;
+    }
+  }
+
+  function _upE(id, key, val) {
+    entities[id][key] = val;
+    if (['name','domain','table'].includes(key)) { renderEntity(id); selectEntity(id); redrawArrows(); }
+  }
+
+  function _upF(entityId, idx, key, val) {
+    entities[entityId].fields[idx][key] = val;
+    renderEntity(entityId);
+    selected = { type: 'field', id: entityId, fieldIdx: idx };
+    renderProps();
+    redrawArrows();
+  }
+
+  function _delField(entityId, idx) {
+    entities[entityId].fields.splice(idx, 1);
+    renderEntity(entityId);
+    selected = { type: 'entity', id: entityId };
+    renderProps();
+    redrawArrows();
+  }
+
+  // ── Plugin import ──────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('panel-new').className = tab === 'new' ? 'p-3 flex flex-col gap-2 overflow-y-auto' : 'hidden';
+    document.getElementById('panel-plugins').className = tab === 'plugins' ? 'flex-1 flex flex-col overflow-hidden' : 'hidden';
+    document.getElementById('tab-new').className = 'tab-btn' + (tab === 'new' ? ' active' : '');
+    document.getElementById('tab-plugins').className = 'tab-btn' + (tab === 'plugins' ? ' active' : '');
+    if (tab === 'plugins' && !pluginsData) loadPlugins();
+  }
+
+  async function loadPlugins() {
+    try {
+      const r = await fetch('/pdl-designer/api/plugins');
+      const d = await r.json();
+      pluginsData = d.domains || {};
+      renderPluginList(pluginsData);
+    } catch(e) {
+      document.getElementById('plugin-list').innerHTML = '<div class="text-xs text-red-500 px-3 py-2">Failed to load: ' + e.message + '</div>';
+    }
+  }
+
+  function renderPluginList(domains) {
+    let html = '';
+    for (const [domain, models] of Object.entries(domains)) {
+      const color = DOMAIN_COLORS[domain] || DOMAIN_COLORS.custom;
+      html += `<div class="plugin-domain" style="color:${color}">${domain} (${models.length})</div>`;
+      models.forEach(entry => {
+        const imported = Object.values(entities).some(e => e.table === entry.model.table);
+        html += `<div class="plugin-model-row" onclick="DS._importModel('${domain}',${JSON.stringify(JSON.stringify(entry))})">
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+          <span style="flex:1;truncate">${entry.model.name}</span>
+          <span class="import-badge">${imported ? '✓ added' : '+ import'}</span>
+        </div>`;
+      });
+    }
+    document.getElementById('plugin-list').innerHTML = html || '<div class="text-xs text-gray-400 px-3 py-2">No models found</div>';
+  }
+
+  function filterPlugins(q) {
+    if (!pluginsData) return;
+    if (!q) { renderPluginList(pluginsData); return; }
+    const ql = q.toLowerCase();
+    const filtered = {};
+    for (const [d, models] of Object.entries(pluginsData)) {
+      const m = models.filter(e => e.model.name.toLowerCase().includes(ql) || d.includes(ql));
+      if (m.length) filtered[d] = m;
+    }
+    renderPluginList(filtered);
+  }
+
+  function _importModel(domain, entryJson) {
+    const entry = JSON.parse(entryJson);
+    const m = entry.model;
+    if (Object.values(entities).some(e => e.table === m.table)) {
+      notify('Already on canvas: ' + m.name); return;
+    }
+    addEntity({ name: m.name, table: m.table, domain, description: m.description || '', fields: m.fields || [], imported: true, module_path: entry.module });
+    notify('Imported: ' + m.name + ' (' + m.fields.length + ' fields)');
+  }
+
+  // ── Export ─────────────────────────────────────────────────
+  function buildPayload() {
+    return {
+      entities: Object.values(entities).map(e => ({
+        name: e.name, table: e.table, description: e.description,
+        domain: e.domain, fields: e.fields, module_path: e.module_path,
+        generate: ['model','migration','view','api','tests'],
+      })),
+      relations,
+    };
+  }
+
+  async function downloadYaml() {
+    const p = buildPayload();
+    window.location.href = '/pdl-designer/api/pdl-yaml?schema=' + encodeURIComponent(JSON.stringify(p));
+  }
+
+  async function generateCode() {
+    const p = buildPayload();
+    if (!p.entities.length) { notify('Add at least one entity', 'warn'); return; }
+    notify('Generating…');
+    try {
+      const r = await fetch('/pdl-designer/api/generate', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(p),
+      });
+      const d = await r.json();
+      if (!d.ok) { notify('Error: ' + d.error, 'error'); return; }
+      generatedFiles = d.files;
+      showCodeModal(d.files);
+    } catch(e) { notify('Network error', 'error'); }
+  }
+
+  function showCodeModal(files) {
+    const keys = Object.keys(files);
+    activeCodeFile = keys[0];
+    document.getElementById('code-tabs').innerHTML = keys.map(k =>
+      `<button class="tab-btn${k===activeCodeFile?' active':''}" onclick="DS._codeTab('${k}')">${k}</button>`
+    ).join('');
+    document.getElementById('code-content').textContent = files[activeCodeFile] || '';
+    document.getElementById('code-modal').classList.remove('hidden');
+  }
+
+  function _codeTab(key) {
+    activeCodeFile = key;
+    document.querySelectorAll('#code-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.textContent === key));
+    document.getElementById('code-content').textContent = generatedFiles[key] || '';
+  }
+
+  function copyCode() {
+    const text = document.getElementById('code-content').textContent;
+    navigator.clipboard.writeText(text).then(() => notify('Copied!'));
+  }
+
+  function clearAll() {
+    if (!confirm('Clear all entities and relationships?')) return;
+    Object.keys(entities).forEach(id => document.getElementById('entity-' + id)?.remove());
+    entities = {}; relations = []; selected = null; entityCount = 0;
+    document.getElementById('svg-layer').querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
+    renderProps();
+  }
+
+  function notify(msg, type = 'success') {
+    const el = document.getElementById('notification');
+    el.textContent = msg;
+    el.style.background = type === 'error' ? '#dc2626' : type === 'warn' ? '#d97706' : '#065f46';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  // ── Canvas click deselect ──────────────────────────────────
+  document.getElementById('canvas-container').addEventListener('click', ev => {
+    if (ev.target.id === 'canvas-container' || ev.target.id === 'svg-layer') {
+      if (relMode) return;
+      selected = null;
+      document.querySelectorAll('.entity-box').forEach(b => b.classList.remove('selected'));
+      renderProps();
+    }
+  });
+
+  // ── Keyboard ───────────────────────────────────────────────
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') { if (relMode) toggleRelMode(); document.getElementById('code-modal').classList.add('hidden'); }
+    if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') generateCode();
+  });
+
+  // ── Expose public API ──────────────────────────────────────
+  return {
+    addEntity, toggleRelMode, switchTab, filterPlugins, downloadYaml, generateCode, clearAll,
+    _selectField, _addField, _delEntity, _upE, _upF, _delField, _importModel, _startRel, _codeTab, copyCode,
+  };
+})();
+
+// Welcome entity on load
+DS.addEntity({
+  name: 'Customer', table: 'customer', domain: 'crm', x: 80, y: 100,
+  fields: [
+    {name: 'name', type: 'string', nullable: false, label: 'Full Name'},
+    {name: 'email', type: 'email', nullable: true, unique: true},
+    {name: 'phone', type: 'phone', nullable: true},
+    {name: 'country_code', type: 'string', nullable: true, max_length: 3},
+  ],
+});
+</script>
+</body>
+</html>
