@@ -110,6 +110,7 @@ class PgAppForgeWorkflowEngine:
 		data: dict,
 		tenant_id: str,
 		session=None,
+		parent_instance_id: str | None = None,
 	) -> WorkflowInstance:
 		"""Start a new workflow instance.
 
@@ -139,6 +140,8 @@ class PgAppForgeWorkflowEngine:
 			data=dict(data),
 			tenant_id=tenant_id,
 		)
+		if parent_instance_id:
+			instance.data["_parent_instance_id"] = parent_instance_id
 		self._instances[instance.id] = instance
 
 		if session:
@@ -323,6 +326,20 @@ class PgAppForgeWorkflowEngine:
 				self._execute_script_task(step, instance)
 				instance.current_step_index += 1
 
+			elif step_type == "call_workflow":
+				sub_instance = self._execute_call_workflow(step, instance, session)
+				step_id = step.get("id", f"step_{instance.current_step_index}")
+				instance.data[f"_sub_instance_{step_id}"] = sub_instance.id
+				# Map declared outputs from the sub-instance data into this instance
+				for out_key, src_path in (step.get("outputs") or {}).items():
+					# src_path like "kyc_result.status" — resolve from sub-instance data
+					parts = src_path.split(".", 1) if isinstance(src_path, str) and "." in src_path else [src_path]
+					val = sub_instance.data.get(parts[0])
+					if isinstance(val, dict) and len(parts) == 2:
+						val = val.get(parts[1])
+					instance.data[out_key] = val
+				instance.current_step_index += 1
+
 			else:
 				# Unknown / gateway — advance past it
 				log.debug("Skipping unhandled step type %r for step %r", step_type, step.get("id"))
@@ -370,6 +387,54 @@ class PgAppForgeWorkflowEngine:
 			exec(script, {"__builtins__": {}}, instance.data)  # noqa: S102
 		except Exception as exc:
 			log.warning("ScriptTask %r failed: %s", step.get("id"), exc)
+
+	def _execute_call_workflow(
+		self, step: dict, instance: WorkflowInstance, session=None
+	) -> "WorkflowInstance":
+		"""Execute a call_workflow step — start a named sub-workflow.
+
+		Resolves ``inputs`` values using ``{{variable}}`` template substitution
+		against the current instance's data, then calls ``start()`` with
+		``parent_instance_id`` set to the calling instance's ID.
+
+		The sub-instance is returned; the caller is responsible for storing its
+		ID and mapping declared ``outputs`` back into the parent instance data.
+		"""
+		workflow_name = step.get("workflow", "")
+		if not workflow_name:
+			raise ValueError(
+				f"call_workflow step {step.get('id')!r} missing 'workflow' field"
+			)
+
+		# Resolve inputs: support $field and {{field}} notation
+		raw_inputs: dict[str, Any] = step.get("inputs") or {}
+		resolved_inputs: dict[str, Any] = {}
+		import re as _re_local
+		for key, val in raw_inputs.items():
+			if isinstance(val, str):
+				if val.startswith("$"):
+					resolved_inputs[key] = instance.data.get(val[1:])
+				elif "{{" in val:
+					def _sub(m: Any, _data: dict = instance.data) -> str:
+						return str(_data.get(m.group(1), ""))
+					resolved_inputs[key] = _re_local.sub(r"\{\{(\w+)\}\}", _sub, val)
+				else:
+					resolved_inputs[key] = val
+			else:
+				resolved_inputs[key] = val
+
+		log.info(
+			"call_workflow: launching %r from parent=%s step=%r",
+			workflow_name, instance.id[:8], step.get("id"),
+		)
+		sub_instance = self.start(
+			workflow_name,
+			resolved_inputs,
+			instance.tenant_id,
+			session=session,
+			parent_instance_id=instance.id,
+		)
+		return sub_instance
 
 	def _resolve_input_map(
 		self, input_map: dict[str, str], instance: WorkflowInstance

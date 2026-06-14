@@ -288,6 +288,20 @@ class AppBuilder:
         if not hasattr(app, "extensions"):
             app.extensions = {}
         app.extensions["appbuilder"] = self
+        # Apply any queued model mixins (must run before db.create_all / first mapper access)
+        try:
+            from pgappforge.composition.mixins import apply_all_mixins
+            apply_all_mixins()
+        except Exception as _e:
+            import logging as _log
+            _log.getLogger(__name__).debug("ModelMixinRegistry: %s", _e)
+        # Register render_slot() as a Jinja2 global for view templates
+        try:
+            from pgappforge.ui.slots import register_slot_extension
+            register_slot_extension(app.jinja_env)
+        except Exception as _e:
+            import logging as _log
+            _log.getLogger(__name__).debug("SlotRegistry: %s", _e)
 
     def post_init(self) -> None:
         """

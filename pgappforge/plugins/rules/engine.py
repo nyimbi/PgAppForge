@@ -234,6 +234,7 @@ class RulesEngine:
 			"would_call_webhooks": [],
 			"would_create_records": [],
 			"would_start_workflows": [],
+			"would_emit_events": [],
 			"rules_matched": [],
 		}
 
@@ -273,6 +274,8 @@ class RulesEngine:
 					result["would_create_records"].append(dict(action))
 				elif atype == "start_workflow":
 					result["would_start_workflows"].append(dict(action))
+				elif atype == "emit_event":
+					result["would_emit_events"].append(dict(action))
 
 			if getattr(getattr(rule, "ruleset", None), "stop_on_match", False):
 				break
@@ -480,6 +483,29 @@ class RulesEngine:
 				except Exception as exc:
 					log.warning("Rules engine: webhook refused url=%r err=%s", url, exc)
 					outcome = "webhook_error"
+
+			elif atype == "emit_event":
+				event_type = action.get("event", "")
+				if not event_type:
+					log.warning("Rules engine: emit_event action missing 'event' field — skipping")
+					continue
+				raw_payload: dict[str, Any] = action.get("payload") or {}
+				resolved_payload: dict[str, Any] = {
+					k: _resolve_value(v, ctx) for k, v in raw_payload.items()
+				}
+				tenant_id: str = ctx.get("tenant_id") or ""
+				_session = ctx.get("_session")
+				log.debug(
+					"Rules engine: emit_event %r tenant=%r payload_keys=%s",
+					event_type, tenant_id, list(resolved_payload.keys()),
+				)
+				try:
+					from pgappforge.events import emit as _emit
+					_emit(event_type, resolved_payload, tenant_id=tenant_id, session=_session)
+				except ImportError:
+					log.debug("Rules engine: emit_event skipped — pgappforge.events not available")
+				except Exception as exc:
+					log.warning("Rules engine: emit_event %r failed: %s", event_type, exc)
 
 			else:
 				log.warning("Rules engine: unknown action type %r — skipping", atype)
