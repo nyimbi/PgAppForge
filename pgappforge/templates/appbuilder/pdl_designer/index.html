@@ -447,16 +447,23 @@ const DS = (() => {
     }
   }
 
+  // Cache entries by index so onclick never embeds JSON in HTML attributes
+  let _pluginEntryCache = [];
+
   function renderPluginList(domains) {
+    _pluginEntryCache = [];
     let html = '';
     for (const [domain, models] of Object.entries(domains)) {
       const color = DOMAIN_COLORS[domain] || DOMAIN_COLORS.custom;
       html += `<div class="plugin-domain" style="color:${color}">${domain} (${models.length})</div>`;
       models.forEach(entry => {
+        const idx = _pluginEntryCache.length;
+        _pluginEntryCache.push({ domain, entry });
         const imported = Object.values(entities).some(e => e.table === entry.model.table);
-        html += `<div class="plugin-model-row" onclick="DS._importModel('${domain}',${JSON.stringify(JSON.stringify(entry))})">
+        // Pass integer index only — no JSON in HTML attribute
+        html += `<div class="plugin-model-row" onclick="DS._importModel(${idx})">
           <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
-          <span style="flex:1;truncate">${entry.model.name}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${entry.model.name}</span>
           <span class="import-badge">${imported ? '✓ added' : '+ import'}</span>
         </div>`;
       });
@@ -476,8 +483,10 @@ const DS = (() => {
     renderPluginList(filtered);
   }
 
-  function _importModel(domain, entryJson) {
-    const entry = JSON.parse(entryJson);
+  function _importModel(idx) {
+    const cached = _pluginEntryCache[idx];
+    if (!cached) { notify('Entry not found — refresh plugin list', 'error'); return; }
+    const { domain, entry } = cached;
     const m = entry.model;
     if (Object.values(entities).some(e => e.table === m.table)) {
       notify('Already on canvas: ' + m.name); return;

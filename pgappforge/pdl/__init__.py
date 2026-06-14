@@ -71,3 +71,8 @@ __all__ = [
 	"FIELD_TYPES",
 	"PDLCodeGenerator",
 ]
+
+from .designer_view import PDLDesignerView  # noqa: E402
+from .plugin import PDLPlugin               # noqa: E402
+
+__all__ += ["PDLDesignerView", "PDLPlugin"]
