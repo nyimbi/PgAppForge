@@ -734,59 +734,53 @@ const D = (() => {
   // ── Port stacking helpers ────────────────────────────────────────────────
   // For each (entity, edge-direction) pair that has multiple arrows, spread
   // attachment points proportionally so arrows fan out without overlapping.
-  function computePorts() {
-    // portMap: `${entityId}:${dir}` → [{relId, otherEntityId, isFrom}]
+  // computePortOffsets takes pre-computed edge geometry to avoid calling
+  // smartEdge() twice per relation.  edgeData: [{r, p1, p2, exitDir, enterDir}]
+  function computePortOffsets(edgeData) {
+    // portMap: `${entityId}::${dir}` → [{relId, otherEntityId, isFrom}]
+    // Double-colon separator avoids collision since entity ids never contain ':'
     const portMap = {};
-    relations.forEach(r => {
-      const [, , exitDir, enterDir] = smartEdge(r.from, r.to);
-      if (!exitDir) return;
-      const fk = `${r.from}:${exitDir}`;
-      const tk = `${r.to}:${enterDir}`;
+    edgeData.forEach(({ r, exitDir, enterDir }) => {
+      const fk = `${r.from}::${exitDir}`;
+      const tk = `${r.to}::${enterDir}`;
       (portMap[fk] = portMap[fk] || []).push({ relId: r.id, other: r.to,   isFrom: true  });
       (portMap[tk] = portMap[tk] || []).push({ relId: r.id, other: r.from, isFrom: false });
     });
 
-    // portOffset: `${relId}:from` or `${relId}:to` → {dy, dx}
     const offsets = {};
     Object.entries(portMap).forEach(([key, group]) => {
-      if (group.length < 2) return;
-      const [entityId, dir] = [key.slice(0, key.lastIndexOf(':')), key.slice(key.lastIndexOf(':') + 1)];
+      if (group.length < 2) return; // single arrow on this port — no stacking needed
+      const sepIdx = key.indexOf('::');
+      const entityId = key.slice(0, sepIdx);
+      const dir      = key.slice(sepIdx + 2);
       const box = document.getElementById('card-' + entityId);
       if (!box) return;
 
       if (dir === 'R' || dir === 'L') {
-        // Horizontal exit/entry — spread vertically along the edge
+        // Horizontal edge — spread attachment points vertically
         const h = box.offsetHeight;
-        // Sort by the other end's centre y so adjacent ports go to adjacent targets
         group.sort((a, b) => {
           const ba = document.getElementById('card-' + a.other);
           const bb = document.getElementById('card-' + b.other);
-          const ya = ba ? entities[a.other].y + ba.offsetHeight/2 : 0;
-          const yb = bb ? entities[b.other].y + bb.offsetHeight/2 : 0;
-          return ya - yb;
+          return (ba ? entities[a.other].y + ba.offsetHeight/2 : 0)
+               - (bb ? entities[b.other].y + bb.offsetHeight/2 : 0);
         });
         group.forEach((item, i) => {
-          // Port y relative to entity top; distribute across middle 60% of edge
           const portY = h * 0.2 + (h * 0.6) * (i + 1) / (group.length + 1);
-          const dy = portY - h / 2; // offset from centre
-          const side = item.isFrom ? 'from' : 'to';
-          offsets[`${item.relId}:${side}`] = { dy, dx: 0 };
+          offsets[`${item.relId}:${item.isFrom ? 'from' : 'to'}`] = { dy: portY - h/2, dx: 0 };
         });
       } else {
-        // Vertical exit/entry (T/B) — spread horizontally
+        // Vertical edge — spread attachment points horizontally
         const w = box.offsetWidth;
         group.sort((a, b) => {
           const ba = document.getElementById('card-' + a.other);
           const bb = document.getElementById('card-' + b.other);
-          const xa = ba ? entities[a.other].x + ba.offsetWidth/2 : 0;
-          const xb = bb ? entities[b.other].x + bb.offsetWidth/2 : 0;
-          return xa - xb;
+          return (ba ? entities[a.other].x + ba.offsetWidth/2 : 0)
+               - (bb ? entities[b.other].x + bb.offsetWidth/2 : 0);
         });
         group.forEach((item, i) => {
           const portX = w * 0.2 + (w * 0.6) * (i + 1) / (group.length + 1);
-          const dx = portX - w / 2;
-          const side = item.isFrom ? 'from' : 'to';
-          offsets[`${item.relId}:${side}`] = { dy: 0, dx };
+          offsets[`${item.relId}:${item.isFrom ? 'from' : 'to'}`] = { dy: 0, dx: portX - w/2 };
         });
       }
     });
@@ -797,20 +791,22 @@ const D = (() => {
     SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
     if (!relations.length) { updateMinimap(); return; }
 
-    const portOffsets = computePorts();
+    // Single pass: compute geometry for all relations; passes result to port stacker
+    const edgeData = relations
+      .map(r => { const [p1,p2,exitDir,enterDir] = smartEdge(r.from, r.to); return {r,p1,p2,exitDir,enterDir}; })
+      .filter(d => d.p1);
 
-    relations.forEach(r => {
-      const [p1, p2, exitDir, enterDir] = smartEdge(r.from, r.to);
-      if (!p1) return;
+    const portOffsets = computePortOffsets(edgeData);
 
+    edgeData.forEach(({ r, p1, p2, exitDir, enterDir }) => {
       // Apply port stacking offsets
       const fo = portOffsets[`${r.id}:from`] || { dy: 0, dx: 0 };
-      const to = portOffsets[`${r.id}:to`]   || { dy: 0, dx: 0 };
+      const eo = portOffsets[`${r.id}:to`]   || { dy: 0, dx: 0 };
       const ap1 = { x: p1.x + fo.dx, y: p1.y + fo.dy };
-      const ap2 = { x: p2.x + to.dx, y: p2.y + to.dy };
+      const ap2 = { x: p2.x + eo.dx, y: p2.y + eo.dy };
 
       const dx = ap2.x - ap1.x, dy = ap2.y - ap1.y;
-      // Bezier control points: pull strongly in the exit direction for S-curves
+      // Direction-aware bezier control points for smooth S-curves
       const tension = Math.max(Math.abs(dx) * 0.45, 40);
       const cp1x = ap1.x + (exitDir === 'R' ? tension : exitDir === 'L' ? -tension : 0);
       const cp1y = ap1.y + (exitDir === 'B' ? tension : exitDir === 'T' ? -tension : 0);
