@@ -1,25 +1,4 @@
-"""
-PgForge Analytics Package
+"""PgAppForge analytics layer — named metrics, semantic composition."""
+from pgappforge.analytics.metrics import Metric, MetricRegistry, register_metric, query_metrics, get_metric_registry
 
-Advanced analytics and reporting system for wizard forms.
-"""
-
-from .wizard_analytics import (
-    WizardAnalyticsEngine,
-    WizardAnalyticsEvent,
-    WizardCompletionStats,
-    WizardFieldAnalytics,
-    WizardUserJourney,
-    wizard_analytics,
-    track_wizard_event
-)
-
-__all__ = [
-    'WizardAnalyticsEngine',
-    'WizardAnalyticsEvent', 
-    'WizardCompletionStats',
-    'WizardFieldAnalytics',
-    'WizardUserJourney',
-    'wizard_analytics',
-    'track_wizard_event'
-]
+__all__ = ['Metric', 'MetricRegistry', 'register_metric', 'query_metrics', 'get_metric_registry']

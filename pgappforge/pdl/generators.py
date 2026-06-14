@@ -69,8 +69,9 @@ class PDLCodeGenerator:
 
 	def generate_model(self, entity: PDLEntity) -> str:
 		"""Return a complete SQLAlchemy 2.x model class as a source string."""
+		all_fields = entity.all_fields()
 		cols: list[str] = []
-		needs_jsonb = any(f.type == "jsonb" for f in entity.fields)
+		needs_jsonb = any(f.type == "jsonb" for f in all_fields)
 
 		if entity.include_uuid_pk:
 			cols.append(
@@ -81,7 +82,7 @@ class PDLCodeGenerator:
 		if entity.include_tenant_id:
 			cols.append('\ttenant_id = sa.Column(sa.String(36), nullable=False, index=True)')
 
-		for f in entity.fields:
+		for f in all_fields:
 			cols.append(f'\t{self._field_to_column(f)}')
 
 		if entity.include_audit_timestamps:
@@ -183,7 +184,7 @@ class {entity.name}(AuditMixin, Model):
 		parts: list[str] = []
 		if entity.include_tenant_id:
 			parts.append(f'sa.Index("ix_{entity.table}_tenant", "tenant_id"),')
-		for f in entity.fields:
+		for f in entity.all_fields():
 			if f.indexed and not f.fk:
 				parts.append(f'sa.Index("ix_{entity.table}_{f.name}", "{f.name}"),')
 			if f.unique and not f.fk:
@@ -205,7 +206,7 @@ class {entity.name}(AuditMixin, Model):
 		if entity.include_tenant_id:
 			col_defs.append('\t\t\tsa.Column("tenant_id", sa.String(36), nullable=False),')
 
-		for f in entity.fields:
+		for f in entity.all_fields():
 			_, sa_type = FIELD_TYPES.get(f.type, ("String(255)", "sa.String(255)"))
 			if f.type == "jsonb":
 				sa_type = "postgresql.JSONB"
@@ -250,9 +251,10 @@ def downgrade() -> None:
 
 	def generate_view(self, entity: PDLEntity) -> str:
 		"""Return a FAB ModelView + BaseERPView dashboard source string."""
-		list_cols   = [f'"{f.name}"' for f in entity.fields[:6] if not f.fk]
+		all_fields  = entity.all_fields()
+		list_cols   = [f'"{f.name}"' for f in all_fields[:6] if not f.fk]
 		search_cols = [
-			f'"{f.name}"' for f in entity.fields
+			f'"{f.name}"' for f in all_fields
 			if f.type in ("string", "text", "email", "phone") and not f.fk
 		]
 		route_slug = _snake(entity.name).replace("_", "-")
@@ -309,7 +311,7 @@ __all__ = ["{entity.name}View", "{entity.name}DashboardView"]
 		route_slug  = snake_name.replace("_", "-")
 		field_reprs = ", ".join(
 			f'"{f.name}": str(getattr(item, "{f.name}", ""))'
-			for f in entity.fields[:5]
+			for f in entity.all_fields()[:5]
 		)
 
 		return f'''\

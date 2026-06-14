@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import importlib
 import re
 import logging
 
@@ -83,6 +84,7 @@ class PDLEntity:
 	include_uuid_pk:          bool = True
 	generate: list[str]            = field(default_factory=lambda: ["model", "migration", "view", "api", "tests"])
 	workflows: list[str]           = field(default_factory=list)
+	extends:   str | None          = None   # dotted import path or plain entity name
 
 	def __post_init__(self) -> None:
 		if not _VALID_ENTITY_NAME.match(self.name):
@@ -95,6 +97,90 @@ class PDLEntity:
 				f"Table name must be snake_case (got '{self.table}'). "
 				"Example: 'fin_supplier_invoice'."
 			)
+
+	def resolve_parent_fields(self) -> list[PDLField]:
+		"""Return PDLField objects for columns inherited from the parent class.
+
+		- If ``extends`` is None, returns ``[]``.
+		- If ``extends`` is a dotted path (contains "."), imports the module,
+		  loads the class, and introspects ``__table__.columns`` using the same
+		  logic as :func:`pgappforge.pdl.inspector._inspect_model`.
+		- If ``extends`` is a plain name (no dot), returns ``[]``; the caller
+		  is responsible for resolving the name within the same PDLSchema.
+		"""
+		if not self.extends:
+			return []
+		if "." not in self.extends:
+			# plain name — intra-schema resolution is the caller's job
+			return []
+
+		module_path, class_name = self.extends.rsplit(".", 1)
+		try:
+			mod = importlib.import_module(module_path)
+		except ImportError as exc:
+			log.warning("PDLEntity.resolve_parent_fields: cannot import %r: %s", module_path, exc)
+			return []
+
+		model_cls = getattr(mod, class_name, None)
+		if model_cls is None:
+			log.warning("PDLEntity.resolve_parent_fields: %r not found in %r", class_name, module_path)
+			return []
+
+		table = getattr(model_cls, "__table__", None)
+		if table is None:
+			log.warning("PDLEntity.resolve_parent_fields: %r has no __table__", class_name)
+			return []
+
+		_SA_TYPE_MAP: dict[str, str] = {
+			"String": "string", "Text": "text", "Integer": "integer",
+			"BigInteger": "integer", "Numeric": "decimal", "Float": "float",
+			"Boolean": "boolean", "Date": "date", "DateTime": "datetime",
+			"JSONB": "jsonb", "JSON": "jsonb",
+		}
+
+		_SKIP = {"id", "tenant_id", "created_at", "updated_at"}
+
+		parent_fields: list[PDLField] = []
+		for col in table.columns:
+			if col.name in _SKIP:
+				continue
+			sa_type_name = type(col.type).__name__
+			pdl_type = _SA_TYPE_MAP.get(sa_type_name, "string")
+
+			fk_target: str | None = None
+			if col.foreign_keys:
+				fk = next(iter(col.foreign_keys))
+				fk_target = fk.target_fullname
+
+			max_len: int | None = getattr(col.type, "length", None)
+
+			try:
+				pf = PDLField(
+					name=col.name,
+					type=pdl_type,
+					nullable=bool(col.nullable),
+					unique=bool(col.unique),
+					indexed=bool(col.index),
+					fk=fk_target,
+					max_length=max_len,
+				)
+				parent_fields.append(pf)
+			except ValueError as exc:
+				log.warning("PDLEntity.resolve_parent_fields: skipping column %r: %s", col.name, exc)
+
+		return parent_fields
+
+	def all_fields(self) -> list[PDLField]:
+		"""Return parent fields merged with local fields.
+
+		Local fields shadow parent fields with the same name, allowing selective
+		overrides without repeating unchanged columns.
+		"""
+		parent = self.resolve_parent_fields()
+		local_names = {f.name for f in self.fields}
+		merged = [pf for pf in parent if pf.name not in local_names]
+		merged.extend(self.fields)
+		return merged
 
 
 @dataclass
@@ -151,6 +237,7 @@ class PDLSchema:
 				include_uuid_pk=ent_data.get("include_uuid_pk", True),
 				generate=ent_data.get("generate", ["model", "migration", "view", "api", "tests"]),
 				workflows=ent_data.get("workflows", []),
+				extends=ent_data.get("extends", None),
 			)
 			schema.entities.append(entity)
 
