@@ -107,34 +107,56 @@ def _exec_pg(uri: str, statements: list[str], retries: int = 3) -> None:
 
 
 def _exec_pg_locked(uri: str, statements: list[str]) -> None:
-    """Execute statements while holding a session-level advisory lock.
+    """Execute statements while holding a session-level advisory lock on ONE
+    pinned connection. Serializes concurrent schema resets across pytest workers.
 
-    Serializes concurrent schema resets across multiple pytest processes
-    sharing the same PostgreSQL database.
+    Key constraint: pg_advisory_lock is session-scoped — the lock must be
+    acquired, used, and released on the same connection. NullPool prevents
+    SQLAlchemy from recycling the connection mid-flight.
     """
     import time
     from sqlalchemy import create_engine, text
-    engine = create_engine(uri, isolation_level="AUTOCOMMIT")
+    from sqlalchemy.pool import NullPool
+
+    engine = create_engine(uri, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+    conn = engine.connect()
     acquired = False
-    for _ in range(20):  # wait up to 10 s
-        with engine.connect() as conn:
-            acquired = conn.execute(
-                text(f"SELECT pg_try_advisory_lock({_ADVISORY_LOCK_ID})")
-            ).scalar()
-        if acquired:
-            break
-        time.sleep(0.5)
     try:
-        with engine.connect() as conn:
-            for sql in statements:
-                try:
-                    conn.execute(text(sql))
-                except Exception:
-                    pass  # ignore individual statement errors (e.g. extension already exists)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            acquired = bool(
+                conn.execute(
+                    text("SELECT pg_try_advisory_lock(:k)"),
+                    {"k": _ADVISORY_LOCK_ID},
+                ).scalar()
+            )
+            if acquired:
+                break
+            time.sleep(0.25)
+
+        if not acquired:
+            raise TimeoutError(
+                f"could not acquire pg advisory lock {_ADVISORY_LOCK_ID} within 10s"
+            )
+
+        for sql in statements:
+            try:
+                conn.execute(text(sql))
+            except Exception as exc:
+                msg = str(exc).lower()
+                if "already exists" in msg or "duplicate" in msg:
+                    continue
+                raise
     finally:
         if acquired:
-            with engine.connect() as conn:
-                conn.execute(text(f"SELECT pg_advisory_unlock({_ADVISORY_LOCK_ID})"))
+            try:
+                conn.execute(
+                    text("SELECT pg_advisory_unlock(:k)"),
+                    {"k": _ADVISORY_LOCK_ID},
+                )
+            except Exception:
+                pass  # connection already dead — lock dies with the session anyway
+        conn.close()
         engine.dispose()
 
 
