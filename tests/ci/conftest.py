@@ -84,13 +84,58 @@ _SCHEMA_RESET_SQL = [
 ]
 
 
-def _exec_pg(uri: str, statements: list[str]) -> None:
+_ADVISORY_LOCK_ID = 0x706761665F636900  # hex of "pgaf_ci\0" — unique per DB
+
+
+def _exec_pg(uri: str, statements: list[str], retries: int = 3) -> None:
+    import time
     from sqlalchemy import create_engine, text
     engine = create_engine(uri, isolation_level="AUTOCOMMIT")
-    with engine.connect() as conn:
-        for sql in statements:
-            conn.execute(text(sql))
+    for attempt in range(retries):
+        try:
+            with engine.connect() as conn:
+                for sql in statements:
+                    conn.execute(text(sql))
+            break
+        except Exception as exc:
+            is_deadlock = "deadlock" in str(exc).lower() or "40P01" in str(exc)
+            if is_deadlock and attempt < retries - 1:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise
     engine.dispose()
+
+
+def _exec_pg_locked(uri: str, statements: list[str]) -> None:
+    """Execute statements while holding a session-level advisory lock.
+
+    Serializes concurrent schema resets across multiple pytest processes
+    sharing the same PostgreSQL database.
+    """
+    import time
+    from sqlalchemy import create_engine, text
+    engine = create_engine(uri, isolation_level="AUTOCOMMIT")
+    acquired = False
+    for _ in range(20):  # wait up to 10 s
+        with engine.connect() as conn:
+            acquired = conn.execute(
+                text(f"SELECT pg_try_advisory_lock({_ADVISORY_LOCK_ID})")
+            ).scalar()
+        if acquired:
+            break
+        time.sleep(0.5)
+    try:
+        with engine.connect() as conn:
+            for sql in statements:
+                try:
+                    conn.execute(text(sql))
+                except Exception:
+                    pass  # ignore individual statement errors (e.g. extension already exists)
+    finally:
+        if acquired:
+            with engine.connect() as conn:
+                conn.execute(text(f"SELECT pg_advisory_unlock({_ADVISORY_LOCK_ID})"))
+        engine.dispose()
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +151,7 @@ def pg_isolation(request):
         # New test class: nuclear reset (handles duplicate indexes from re-imports)
         _last_class[0] = cls_name
         try:
-            _exec_pg(_PG_URI, _SCHEMA_RESET_SQL)
+            _exec_pg_locked(_PG_URI, _SCHEMA_RESET_SQL)
         except Exception as exc:
             import warnings
             warnings.warn(f"pg schema reset failed: {exc}")
