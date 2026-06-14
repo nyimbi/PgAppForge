@@ -1,21 +1,21 @@
-"""Spend analytics plugin — mine AP/PO data for consolidation opportunities."""
+"""Regulatory reporting — SAF-T, CSRD/ESG, Peppol BIS3 export."""
 from __future__ import annotations
 from pgappforge.plugins.base_plugin import BasePlugin, PluginMetadata, PluginPriority
 
 
-class SpendAnalyticsPlugin(BasePlugin):
-	name = "spend_analytics"
-	domain = "procurement"
-	depends_on: list[str] = ["foundation", "ap"]
+class RegulatoryReportingPlugin(BasePlugin):
+	name = "regulatory_reporting"
+	domain = "platform"
+	depends_on: list[str] = ["foundation", "gl"]
 
 	@property
 	def metadata(self) -> PluginMetadata:
 		return PluginMetadata(
-			name="spend_analytics",
+			name="regulatory_reporting",
 			version="1.0.0",
-			description="Spend analytics — supplier concentration, tail spend, savings opportunities",
+			description="Regulatory reporting — SAF-T/OECD GL export, CSRD/ESRS sustainability, Peppol",
 			author="PgAppForge Contributors",
-			tags=["procurement", "spend", "analytics", "sourcing"],
+			tags=["platform", "compliance", "saft", "csrd", "esg", "peppol"],
 			priority=PluginPriority.NORMAL,
 		)
 
@@ -26,4 +26,4 @@ class SpendAnalyticsPlugin(BasePlugin):
 	def register_views(self) -> None: pass
 
 
-__all__ = ["SpendAnalyticsPlugin"]
+__all__ = ["RegulatoryReportingPlugin"]

@@ -1,33 +1,9 @@
-"""
-pgappforge/plugins/erp/crm/territory_management/__init__.py
-
-TerritoryPlugin — Sales Territory Management.
-
-Domain:    crm
-Depends:   foundation
-
-Events emitted
---------------
-  crm.territory.defined
-  crm.territory.assigned
-"""
+"""Territory management — rule-based assignment."""
 from __future__ import annotations
-
-import logging
-from typing import Any
-
 from pgappforge.plugins.base_plugin import BasePlugin, PluginMetadata, PluginPriority
 
-log = logging.getLogger(__name__)
 
-
-class TerritoryPlugin(BasePlugin):
-	"""Sales Territory Management plugin.
-
-	Covers territory definition with JSONB rule sets, salesperson assignments
-	with date-range validity, bulk reassignment, and account-coverage queries.
-	"""
-
+class TerritoryManagementPlugin(BasePlugin):
 	name = "territory_management"
 	domain = "crm"
 	depends_on: list[str] = ["foundation"]
@@ -37,82 +13,17 @@ class TerritoryPlugin(BasePlugin):
 		return PluginMetadata(
 			name="territory_management",
 			version="1.0.0",
-			description=(
-				"Sales Territory Management — rule-based territory definition, "
-				"salesperson assignments, and account coverage queries."
-			),
+			description="Sales territory management — rule-based assignment, rep reassignment",
 			author="PgAppForge Contributors",
-			tags=["crm", "territory", "sales", "assignment"],
+			tags=["crm", "territory", "sales"],
 			priority=PluginPriority.NORMAL,
-			permissions=[
-				"can_ter_territory_read",
-				"can_ter_territory_write",
-				"can_ter_territory_delete",
-				"can_ter_assignment_read",
-				"can_ter_assignment_write",
-				"can_ter_reassign",
-			],
-			safe_mode_compatible=True,
 		)
 
-	def get_events(self) -> list[str]:
-		return [
-			"crm.territory.defined",
-			"crm.territory.assigned",
-		]
-
-	def subscribe_to(self) -> list[str]:
-		return []
-
-	def activate(self) -> None:
-		self.initialize()
-
-	def initialize(self) -> None:
-		log.info("TerritoryPlugin initialised")
-
-	def register_views(self) -> None:
-		from pgappforge.plugins.erp.crm.territory_management.views import (
-			SalesTerritoryView,
-			TerritoryAssignmentView,
-		)
-		cat = self.config.get("TERRITORY_MENU_CATEGORY", "Sales Territories")
-		self.add_view(SalesTerritoryView, "Territories", icon="fa-map-marker", category=cat)
-		self.add_view(TerritoryAssignmentView, "Assignments", icon="fa-user-plus", category=cat)
-		log.info("TerritoryPlugin: views registered under %r", cat)
-
-	def register_models(self) -> list:
-		from pgappforge.plugins.erp.crm.territory_management.models import (
-			SalesTerritory,
-			TerritoryAssignment,
-		)
-		return [SalesTerritory, TerritoryAssignment]
+	def initialize(self) -> None: pass
+	def get_events(self) -> list[str]: return []
+	def subscribe_to(self) -> list[str]: return []
+	def register_models(self) -> list: from pgappforge.plugins.erp.crm.territory_management import models; return [models.SalesTerritory, models.TerritoryAssignment]
+	def register_views(self) -> None: pass
 
 
-def create_plugin(
-	appbuilder: Any,
-	config: dict[str, Any] | None = None,
-) -> TerritoryPlugin:
-	return TerritoryPlugin(appbuilder, config=config or {})
-
-
-from pgappforge.plugins.erp.crm.territory_management.models import (  # noqa: E402
-	SalesTerritory,
-	TerritoryAssignment,
-)
-from pgappforge.plugins.erp.crm.territory_management.events import (  # noqa: E402
-	TerritoryDefinedEvent,
-	TerritoryAssignedEvent,
-)
-from pgappforge.plugins.erp.crm.territory_management.services import (  # noqa: E402
-	TerritoryService,
-)
-
-__all__ = [
-	"TerritoryPlugin",
-	"create_plugin",
-	"SalesTerritory",
-	"TerritoryAssignment",
-	"TerritoryDefinedEvent",
-	"TerritoryAssignedEvent",
-	"TerritoryService",
-]
+__all__ = ["TerritoryManagementPlugin"]

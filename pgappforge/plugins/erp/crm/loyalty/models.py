@@ -1,169 +1,45 @@
-"""
-pgappforge/plugins/erp/crm/loyalty/models.py
-
-SQLAlchemy models for the Loyalty Engine plugin.
-
-Table prefix: loy_
-PostgreSQL ONLY — BigInteger cents, JSONB config.
-"""
+"""Loyalty engine models."""
 from __future__ import annotations
-
-import uuid
-from datetime import datetime, timezone
-from typing import Any
-
 import sqlalchemy as sa
-from sqlalchemy import (
-	BigInteger,
-	Boolean,
-	Column,
-	DateTime,
-	ForeignKey,
-	Index,
-	Integer,
-	Numeric,
-	String,
-	Text,
-	UniqueConstraint,
-)
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
-
 from pgappforge.models.sqla import Model
-from pgappforge.plugins.audit import AuditMixin
 
 
-def _uuid4() -> str:
-	return str(uuid.uuid4())
+class LoyaltyProgram(Model):
+	__tablename__ = "crm_loyalty_program"
+	__table_args__ = ({"extend_existing": True},)
+
+	id = sa.Column(sa.String(36), primary_key=True)
+	tenant_id = sa.Column(sa.String(36), nullable=False, index=True)
+	name = sa.Column(sa.String(200), nullable=False)
+	program_type = sa.Column(sa.String(20), nullable=False, default="POINTS", comment="POINTS, CASHBACK, TIER")
+	points_per_cent = sa.Column(sa.Numeric(8, 4), nullable=False, default=1)
+	redemption_rate_pct = sa.Column(sa.Numeric(6, 4), nullable=False, default=1)
+	tiers = sa.Column(JSONB, nullable=True, comment="[{name, min_points, benefits:[]}]")
+	is_active = sa.Column(sa.Boolean, nullable=False, default=True)
 
 
-def _now() -> datetime:
-	return datetime.now(timezone.utc)
+class LoyaltyAccount(Model):
+	__tablename__ = "crm_loyalty_account"
+	__table_args__ = ({"extend_existing": True},)
+
+	id = sa.Column(sa.String(36), primary_key=True)
+	customer_id = sa.Column(sa.String(36), nullable=False, index=True)
+	program_id = sa.Column(sa.String(36), sa.ForeignKey("crm_loyalty_program.id"), nullable=False, index=True)
+	tenant_id = sa.Column(sa.String(36), nullable=False, index=True)
+	tier = sa.Column(sa.String(50), nullable=True)
+	points_balance = sa.Column(sa.BigInteger, nullable=False, default=0)
+	lifetime_points = sa.Column(sa.BigInteger, nullable=False, default=0)
+	last_activity_at = sa.Column(sa.DateTime(timezone=True), server_default=sa.text("NOW()"))
 
 
-# ---------------------------------------------------------------------------
-# Enum constants
-# ---------------------------------------------------------------------------
+class LoyaltyTransaction(Model):
+	__tablename__ = "crm_loyalty_transaction"
+	__table_args__ = ({"extend_existing": True},)
 
-LOYALTY_TIER = ("BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND")
-TRANSACTION_TYPE = ("EARN", "REDEEM", "EXPIRE", "ADJUST", "BONUS")
-ACCOUNT_STATUS = ("ACTIVE", "SUSPENDED", "CLOSED")
-
-
-# ---------------------------------------------------------------------------
-# Models
-# ---------------------------------------------------------------------------
-
-class LoyaltyProgram(AuditMixin, Model):
-	"""Defines a loyalty program with tier thresholds and earn/redeem rules."""
-
-	__tablename__ = "loy_program"
-
-	id = Column(String(36), primary_key=True, default=_uuid4)
-	tenant_id = Column(String(36), nullable=False, index=True)
-
-	name = Column(String(200), nullable=False)
-	description = Column(Text, nullable=True)
-
-	# Points-per-currency-unit earned on qualifying transactions
-	earn_rate = Column(Numeric(10, 4), nullable=False, default=1.0)
-
-	# Cents value of one redeemed point
-	redemption_rate_cents = Column(BigInteger, nullable=False, default=1)
-
-	# Points expiry in days (0 = never expire)
-	expiry_days = Column(Integer, nullable=False, default=365)
-
-	# Tier thresholds: {"SILVER": 1000, "GOLD": 5000, "PLATINUM": 20000}
-	tier_thresholds = Column(JSONB, nullable=False, default=dict)
-
-	is_active = Column(Boolean, nullable=False, default=True)
-
-	# Relationships
-	accounts = relationship("LoyaltyAccount", back_populates="program", lazy="select")
-
-	__table_args__ = (
-		UniqueConstraint("tenant_id", "name", name="uq_loy_program_name_tenant"),
-	)
-
-	def __repr__(self) -> str:
-		return f"<LoyaltyProgram {self.name!r}>"
-
-
-class LoyaltyAccount(AuditMixin, Model):
-	"""A customer's membership account within a loyalty program."""
-
-	__tablename__ = "loy_account"
-
-	id = Column(String(36), primary_key=True, default=_uuid4)
-	tenant_id = Column(String(36), nullable=False, index=True)
-
-	program_id = Column(
-		String(36),
-		ForeignKey("loy_program.id", ondelete="CASCADE"),
-		nullable=False,
-	)
-	customer_id = Column(String(36), nullable=False)
-
-	tier = Column(String(20), nullable=False, default="BRONZE")
-	status = Column(String(20), nullable=False, default="ACTIVE")
-
-	points_balance = Column(BigInteger, nullable=False, default=0)
-	lifetime_points = Column(BigInteger, nullable=False, default=0)
-
-	enrolled_at = Column(DateTime(timezone=True), nullable=False, default=_now)
-	last_activity_at = Column(DateTime(timezone=True), nullable=True)
-
-	# Relationships
-	program = relationship("LoyaltyProgram", back_populates="accounts", lazy="select")
-	transactions = relationship("LoyaltyTransaction", back_populates="account", lazy="select")
-
-	__table_args__ = (
-		UniqueConstraint("program_id", "customer_id", name="uq_loy_account_program_customer"),
-		Index("ix_loy_account_customer", "tenant_id", "customer_id"),
-		Index("ix_loy_account_tier", "tenant_id", "tier", "status"),
-	)
-
-	def __repr__(self) -> str:
-		return f"<LoyaltyAccount {self.id} customer={self.customer_id} [{self.tier}]>"
-
-
-class LoyaltyTransaction(AuditMixin, Model):
-	"""Ledger row for each points earn, redeem, expire, or adjustment."""
-
-	__tablename__ = "loy_transaction"
-
-	id = Column(String(36), primary_key=True, default=_uuid4)
-	tenant_id = Column(String(36), nullable=False, index=True)
-
-	account_id = Column(
-		String(36),
-		ForeignKey("loy_account.id", ondelete="CASCADE"),
-		nullable=False,
-	)
-
-	transaction_type = Column(String(20), nullable=False)  # EARN/REDEEM/EXPIRE/ADJUST/BONUS
-	points = Column(BigInteger, nullable=False)            # positive=earn/bonus, negative=redeem/expire
-	balance_after = Column(BigInteger, nullable=False)
-
-	# Source reference: order_id, invoice_id, etc.
-	reference_id = Column(String(100), nullable=True)
-	reference_type = Column(String(50), nullable=True)
-
-	notes = Column(Text, nullable=True)
-	occurred_at = Column(DateTime(timezone=True), nullable=False, default=_now)
-
-	# Expiry for EARN transactions
-	expires_at = Column(DateTime(timezone=True), nullable=True)
-	is_expired = Column(Boolean, nullable=False, default=False)
-
-	# Relationships
-	account = relationship("LoyaltyAccount", back_populates="transactions", lazy="select")
-
-	__table_args__ = (
-		Index("ix_loy_txn_account_type", "account_id", "transaction_type"),
-		Index("ix_loy_txn_expires", "expires_at", "is_expired"),
-	)
-
-	def __repr__(self) -> str:
-		return f"<LoyaltyTransaction {self.transaction_type} {self.points:+d}>"
+	id = sa.Column(sa.String(36), primary_key=True)
+	account_id = sa.Column(sa.String(36), sa.ForeignKey("crm_loyalty_account.id"), nullable=False, index=True)
+	transaction_type = sa.Column(sa.String(15), nullable=False, comment="EARN, REDEEM, EXPIRE, ADJUSTMENT")
+	points = sa.Column(sa.BigInteger, nullable=False)
+	reference_order_id = sa.Column(sa.String(36), nullable=True)
+	created_at = sa.Column(sa.DateTime(timezone=True), server_default=sa.text("NOW()"))

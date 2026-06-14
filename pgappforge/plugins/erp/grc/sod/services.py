@@ -36,172 +36,33 @@ def _emit(event: Any, session: Any = None) -> None:
 # Default conflict catalogue
 # ---------------------------------------------------------------------------
 
-_DEFAULT_CONFLICTS: list[dict] = [
+# Each row: (name, function_a, function_b, risk_level, control_category)
+_DEFAULT_CONFLICTS: list[tuple[str, str, str, str, str]] = [
 	# PROCURE_TO_PAY
-	{
-		"name": "P2P-01",
-		"function_a": "Create Purchase Requisition",
-		"function_b": "Approve Purchase Requisition",
-		"risk_level": "HIGH",
-		"control_category": "PROCURE_TO_PAY",
-		"description": "Creating and approving one's own purchase requisition bypasses budgetary controls.",
-	},
-	{
-		"name": "P2P-02",
-		"function_a": "Create Purchase Order",
-		"function_b": "Approve Purchase Order",
-		"risk_level": "CRITICAL",
-		"control_category": "PROCURE_TO_PAY",
-		"description": "Authorising purchases one has initiated removes independent review.",
-	},
-	{
-		"name": "P2P-03",
-		"function_a": "Create Purchase Order",
-		"function_b": "Receive Goods (GRN)",
-		"risk_level": "HIGH",
-		"control_category": "PROCURE_TO_PAY",
-		"description": "Ordering and receiving goods enables fictitious receipt fraud.",
-	},
-	{
-		"name": "P2P-04",
-		"function_a": "Approve Purchase Order",
-		"function_b": "Process Supplier Invoice",
-		"risk_level": "CRITICAL",
-		"control_category": "PROCURE_TO_PAY",
-		"description": "Approving orders and processing invoices allows fraudulent payments.",
-	},
-	{
-		"name": "P2P-05",
-		"function_a": "Create Supplier Record",
-		"function_b": "Approve Supplier Payment",
-		"risk_level": "CRITICAL",
-		"control_category": "PROCURE_TO_PAY",
-		"description": "Creating fictitious suppliers and paying them is a classic fraud vector.",
-	},
+	("P2P-01", "Create Purchase Requisition", "Approve Purchase Requisition", "HIGH",     "PROCURE_TO_PAY"),
+	("P2P-02", "Create Purchase Order",       "Approve Purchase Order",       "CRITICAL", "PROCURE_TO_PAY"),
+	("P2P-03", "Create Purchase Order",       "Receive Goods (GRN)",          "HIGH",     "PROCURE_TO_PAY"),
+	("P2P-04", "Approve Purchase Order",      "Process Supplier Invoice",     "CRITICAL", "PROCURE_TO_PAY"),
+	("P2P-05", "Create Supplier Record",      "Approve Supplier Payment",     "CRITICAL", "PROCURE_TO_PAY"),
 	# RECORD_TO_REPORT
-	{
-		"name": "R2R-01",
-		"function_a": "Create GL Journal",
-		"function_b": "Approve GL Journal",
-		"risk_level": "CRITICAL",
-		"control_category": "RECORD_TO_REPORT",
-		"description": "Self-approving journal entries circumvents the four-eyes principle.",
-	},
-	{
-		"name": "R2R-02",
-		"function_a": "Create GL Journal",
-		"function_b": "Post GL Journal",
-		"risk_level": "HIGH",
-		"control_category": "RECORD_TO_REPORT",
-		"description": "Creating and posting journals without approval allows unreviewed entries.",
-	},
-	{
-		"name": "R2R-03",
-		"function_a": "Create Bank Account",
-		"function_b": "Authorize Bank Payment",
-		"risk_level": "CRITICAL",
-		"control_category": "RECORD_TO_REPORT",
-		"description": "Setting up bank accounts and authorising payments enables diversion of funds.",
-	},
-	{
-		"name": "R2R-04",
-		"function_a": "Manage Chart of Accounts",
-		"function_b": "Post Journal Entries",
-		"risk_level": "HIGH",
-		"control_category": "RECORD_TO_REPORT",
-		"description": "Creating accounts and posting to them allows concealment of transactions.",
-	},
+	("R2R-01", "Create GL Journal",           "Approve GL Journal",           "CRITICAL", "RECORD_TO_REPORT"),
+	("R2R-02", "Create GL Journal",           "Post GL Journal",              "HIGH",     "RECORD_TO_REPORT"),
+	("R2R-03", "Create Bank Account",         "Authorize Bank Payment",       "CRITICAL", "RECORD_TO_REPORT"),
+	("R2R-04", "Manage Chart of Accounts",    "Post Journal Entries",         "HIGH",     "RECORD_TO_REPORT"),
 	# ORDER_TO_CASH
-	{
-		"name": "O2C-01",
-		"function_a": "Create Customer Record",
-		"function_b": "Create Sales Invoice",
-		"risk_level": "HIGH",
-		"control_category": "ORDER_TO_CASH",
-		"description": "Creating fictitious customers and invoices them enables revenue fraud.",
-	},
-	{
-		"name": "O2C-02",
-		"function_a": "Create Sales Invoice",
-		"function_b": "Apply Customer Payment",
-		"risk_level": "CRITICAL",
-		"control_category": "ORDER_TO_CASH",
-		"description": "Raising invoices and applying cash enables lapping/teeming fraud.",
-	},
-	{
-		"name": "O2C-03",
-		"function_a": "Create Credit Note",
-		"function_b": "Approve Credit Note",
-		"risk_level": "HIGH",
-		"control_category": "ORDER_TO_CASH",
-		"description": "Self-approving credit notes can reverse legitimate revenue.",
-	},
-	{
-		"name": "O2C-04",
-		"function_a": "Approve Customer Credit Limit",
-		"function_b": "Create Sales Order",
-		"risk_level": "MEDIUM",
-		"control_category": "ORDER_TO_CASH",
-		"description": "Setting one's own credit limits and creating orders bypasses credit controls.",
-	},
+	("O2C-01", "Create Customer Record",      "Create Sales Invoice",         "HIGH",     "ORDER_TO_CASH"),
+	("O2C-02", "Create Sales Invoice",        "Apply Customer Payment",       "CRITICAL", "ORDER_TO_CASH"),
+	("O2C-03", "Create Credit Note",          "Approve Credit Note",          "HIGH",     "ORDER_TO_CASH"),
+	("O2C-04", "Approve Customer Credit Limit", "Create Sales Order",         "MEDIUM",   "ORDER_TO_CASH"),
 	# PAYROLL
-	{
-		"name": "PAY-01",
-		"function_a": "Create Employee Record",
-		"function_b": "Approve Payroll Run",
-		"risk_level": "CRITICAL",
-		"control_category": "PAYROLL",
-		"description": "Creating ghost employees and approving their payroll is a classic payroll fraud.",
-	},
-	{
-		"name": "PAY-02",
-		"function_a": "Approve Payroll Run",
-		"function_b": "Process Payroll Payment",
-		"risk_level": "CRITICAL",
-		"control_category": "PAYROLL",
-		"description": "Approving and disbursing payroll removes segregation over cash outflows.",
-	},
-	{
-		"name": "PAY-03",
-		"function_a": "Modify Salary/Pay Rate",
-		"function_b": "Approve Payroll Run",
-		"risk_level": "CRITICAL",
-		"control_category": "PAYROLL",
-		"description": "Inflating salaries and approving payroll allows self-enrichment.",
-	},
-	{
-		"name": "PAY-04",
-		"function_a": "Create Employee Record",
-		"function_b": "Modify Salary/Pay Rate",
-		"risk_level": "HIGH",
-		"control_category": "PAYROLL",
-		"description": "Creating employees and setting their pay removes compensation controls.",
-	},
+	("PAY-01", "Create Employee Record",      "Approve Payroll Run",          "CRITICAL", "PAYROLL"),
+	("PAY-02", "Approve Payroll Run",         "Process Payroll Payment",      "CRITICAL", "PAYROLL"),
+	("PAY-03", "Modify Salary/Pay Rate",      "Approve Payroll Run",          "CRITICAL", "PAYROLL"),
+	("PAY-04", "Create Employee Record",      "Modify Salary/Pay Rate",       "HIGH",     "PAYROLL"),
 	# ACCESS
-	{
-		"name": "ACC-01",
-		"function_a": "Create User Account",
-		"function_b": "Assign User Roles",
-		"risk_level": "HIGH",
-		"control_category": "ACCESS",
-		"description": "Creating accounts and assigning privileged roles enables privilege escalation.",
-	},
-	{
-		"name": "ACC-02",
-		"function_a": "Reset User Password",
-		"function_b": "Assign User Roles",
-		"risk_level": "MEDIUM",
-		"control_category": "ACCESS",
-		"description": "Resetting passwords and assigning roles together enables account takeover.",
-	},
-	{
-		"name": "ACC-03",
-		"function_a": "Create System Configuration",
-		"function_b": "Approve System Changes",
-		"risk_level": "HIGH",
-		"control_category": "ACCESS",
-		"description": "Self-approving configuration changes removes change-management controls.",
-	},
+	("ACC-01", "Create User Account",         "Assign User Roles",            "HIGH",     "ACCESS"),
+	("ACC-02", "Reset User Password",         "Assign User Roles",            "MEDIUM",   "ACCESS"),
+	("ACC-03", "Create System Configuration", "Approve System Changes",       "HIGH",     "ACCESS"),
 ]
 
 
@@ -226,22 +87,23 @@ class SodAnalyzerService:
 
 		created = 0
 		for defn in _DEFAULT_CONFLICTS:
+			name, func_a, func_b, risk, category = defn
 			existing = session.execute(
 				select(SodConflict).where(
 					SodConflict.tenant_id == tenant_id,
-					SodConflict.name == defn["name"],
+					SodConflict.name == name,
 				)
 			).scalar_one_or_none()
 			if existing is not None:
 				continue
 			session.add(SodConflict(
 				tenant_id=tenant_id,
-				name=defn["name"],
-				function_a=defn["function_a"],
-				function_b=defn["function_b"],
-				risk_level=defn["risk_level"],
-				control_category=defn["control_category"],
-				description=defn["description"],
+				name=name,
+				function_a=func_a,
+				function_b=func_b,
+				risk_level=risk,
+				control_category=category,
+				description=f"{func_a} + {func_b} — {risk} risk",
 				is_active=True,
 			))
 			created += 1

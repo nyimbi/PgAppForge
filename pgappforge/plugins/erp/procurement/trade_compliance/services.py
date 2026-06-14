@@ -31,6 +31,12 @@ from pgappforge.plugins.workflow.engine import BPMActionRegistry
 log = logging.getLogger(__name__)
 
 
+def _jaro_winkler(s1: str, s2: str) -> float:
+	"""Module-level Jaro-Winkler — delegates to foundation.commons."""
+	from pgappforge.plugins.erp.foundation.commons import jaro_winkler
+	return jaro_winkler(s1, s2)
+
+
 def _emit(event: Any, session: Any = None) -> None:
 	try:
 		from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
