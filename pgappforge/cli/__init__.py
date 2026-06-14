@@ -356,8 +356,9 @@ except ImportError:
 
 # Register 'gen pdl' — deterministic YAML-schema → code generator
 try:
-    from pgappforge.pdl.cli import gen_pdl as _gen_pdl
+    from pgappforge.pdl.cli import gen_pdl as _gen_pdl, designer_cmd as _designer_cmd
     gen.add_command(_gen_pdl)
+    forge.add_command(_designer_cmd, name="designer")
 except Exception:
     pass
 
