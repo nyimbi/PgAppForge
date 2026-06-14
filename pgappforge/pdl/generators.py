@@ -516,8 +516,11 @@ RUN useradd -m -u 1000 appuser && chown -R appuser /app
 USER appuser
 
 EXPOSE 8080
-ENV FLASK_APP=pgappforge
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "pgappforge:create_app()"]
+# FLASK_APP should point to your app factory, e.g. "app:create_app()"
+ENV FLASK_APP=app
+ENV FLASK_ENV=production
+# Replace app:create_app() with your actual WSGI entry point
+CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "app:create_app()"]
 '''
 
 	def generate_k8s(self, schema: PDLSchema) -> dict[str, str]:

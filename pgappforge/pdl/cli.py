@@ -100,23 +100,21 @@ def gen_pdl(
 			if "migration" in artifact_name:
 				migration_files.append(out_file)
 
-	# ── Schema-level files ────────────────────────────────────────────────
+	# ── Schema-level files (only generate what was requested) ────────────
 	if not dry_run and (with_docker or with_k8s or with_ci):
 		click.echo("\n  Schema-level files:")
 		schema_files: dict[str, str] = {}
-		if with_docker or with_ci:
-			schema_files.update(gen.generate_schema_files(schema))
+		if with_docker:
+			sf = gen.generate_schema_files(schema)
+			schema_files["Dockerfile"] = sf["Dockerfile"]
+			schema_files["docker-compose.yml"] = sf["docker-compose.yml"]
+		if with_ci:
+			sf = gen.generate_schema_files(schema)
+			schema_files[".github/workflows/ci.yml"] = sf[".github/workflows/ci.yml"]
 		if with_k8s:
 			schema_files.update(gen.generate_k8s(schema))
 
 		for fname, content in schema_files.items():
-			skip = (
-				(not with_docker and fname in ("Dockerfile", "docker-compose.yml"))
-				or (not with_ci and fname == ".github/workflows/ci.yml")
-				or (not with_k8s and fname.startswith("k8s/"))
-			)
-			if skip:
-				continue
 			out_file = output_dir / fname
 			out_file.parent.mkdir(parents=True, exist_ok=True)
 			out_file.write_text(content, encoding="utf-8")
