@@ -709,10 +709,11 @@ const D = (() => {
   // ═══════════════════════════════════════════
   //  Arrows (smart edge selection)
   // ═══════════════════════════════════════════
+  // Returns [p1, p2, exitDir, enterDir] — dir ∈ {R, L, T, B}
   function smartEdge(fid, tid) {
     const fb = document.getElementById('card-' + fid);
     const tb = document.getElementById('card-' + tid);
-    if (!fb || !tb) return [null,null];
+    if (!fb || !tb) return [null, null, null, null];
     const fe = entities[fid], te = entities[tid];
     const fw = fb.offsetWidth, fh = fb.offsetHeight;
     const tw = tb.offsetWidth, th = tb.offsetHeight;
@@ -721,34 +722,112 @@ const D = (() => {
     const dx = tcx-fcx, dy = tcy-fcy;
     if (Math.abs(dx) >= Math.abs(dy)) {
       return dx > 0
-        ? [{x:fe.x+fw, y:fcy}, {x:te.x, y:tcy}]
-        : [{x:fe.x,    y:fcy}, {x:te.x+tw, y:tcy}];
+        ? [{x:fe.x+fw, y:fcy}, {x:te.x,    y:tcy}, 'R', 'L']
+        : [{x:fe.x,    y:fcy}, {x:te.x+tw, y:tcy}, 'L', 'R'];
     } else {
       return dy > 0
-        ? [{x:fcx, y:fe.y+fh}, {x:tcx, y:te.y}]
-        : [{x:fcx, y:fe.y},    {x:tcx, y:te.y+th}];
+        ? [{x:fcx, y:fe.y+fh}, {x:tcx, y:te.y},    'B', 'T']
+        : [{x:fcx, y:fe.y},    {x:tcx, y:te.y+th},  'T', 'B'];
     }
+  }
+
+  // ── Port stacking helpers ────────────────────────────────────────────────
+  // For each (entity, edge-direction) pair that has multiple arrows, spread
+  // attachment points proportionally so arrows fan out without overlapping.
+  function computePorts() {
+    // portMap: `${entityId}:${dir}` → [{relId, otherEntityId, isFrom}]
+    const portMap = {};
+    relations.forEach(r => {
+      const [, , exitDir, enterDir] = smartEdge(r.from, r.to);
+      if (!exitDir) return;
+      const fk = `${r.from}:${exitDir}`;
+      const tk = `${r.to}:${enterDir}`;
+      (portMap[fk] = portMap[fk] || []).push({ relId: r.id, other: r.to,   isFrom: true  });
+      (portMap[tk] = portMap[tk] || []).push({ relId: r.id, other: r.from, isFrom: false });
+    });
+
+    // portOffset: `${relId}:from` or `${relId}:to` → {dy, dx}
+    const offsets = {};
+    Object.entries(portMap).forEach(([key, group]) => {
+      if (group.length < 2) return;
+      const [entityId, dir] = [key.slice(0, key.lastIndexOf(':')), key.slice(key.lastIndexOf(':') + 1)];
+      const box = document.getElementById('card-' + entityId);
+      if (!box) return;
+
+      if (dir === 'R' || dir === 'L') {
+        // Horizontal exit/entry — spread vertically along the edge
+        const h = box.offsetHeight;
+        // Sort by the other end's centre y so adjacent ports go to adjacent targets
+        group.sort((a, b) => {
+          const ba = document.getElementById('card-' + a.other);
+          const bb = document.getElementById('card-' + b.other);
+          const ya = ba ? entities[a.other].y + ba.offsetHeight/2 : 0;
+          const yb = bb ? entities[b.other].y + bb.offsetHeight/2 : 0;
+          return ya - yb;
+        });
+        group.forEach((item, i) => {
+          // Port y relative to entity top; distribute across middle 60% of edge
+          const portY = h * 0.2 + (h * 0.6) * (i + 1) / (group.length + 1);
+          const dy = portY - h / 2; // offset from centre
+          const side = item.isFrom ? 'from' : 'to';
+          offsets[`${item.relId}:${side}`] = { dy, dx: 0 };
+        });
+      } else {
+        // Vertical exit/entry (T/B) — spread horizontally
+        const w = box.offsetWidth;
+        group.sort((a, b) => {
+          const ba = document.getElementById('card-' + a.other);
+          const bb = document.getElementById('card-' + b.other);
+          const xa = ba ? entities[a.other].x + ba.offsetWidth/2 : 0;
+          const xb = bb ? entities[b.other].x + bb.offsetWidth/2 : 0;
+          return xa - xb;
+        });
+        group.forEach((item, i) => {
+          const portX = w * 0.2 + (w * 0.6) * (i + 1) / (group.length + 1);
+          const dx = portX - w / 2;
+          const side = item.isFrom ? 'from' : 'to';
+          offsets[`${item.relId}:${side}`] = { dy: 0, dx };
+        });
+      }
+    });
+    return offsets;
   }
 
   function drawArrows() {
     SVG.querySelectorAll('.arrow-path,.arrow-label').forEach(n => n.remove());
+    if (!relations.length) { updateMinimap(); return; }
+
+    const portOffsets = computePorts();
+
     relations.forEach(r => {
-      const [p1,p2] = smartEdge(r.from, r.to);
+      const [p1, p2, exitDir, enterDir] = smartEdge(r.from, r.to);
       if (!p1) return;
-      const dx = p2.x-p1.x, dy = p2.y-p1.y;
-      const absDx = Math.abs(dx), absDy = Math.abs(dy);
-      // Smooth bezier — control points perpendicular to edge direction
-      const cp1x = p1.x + dx*0.45, cp1y = p1.y + dy*0.05;
-      const cp2x = p2.x - dx*0.45, cp2y = p2.y - dy*0.05;
-      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-      path.setAttribute('class','arrow-path');
-      path.setAttribute('d',`M${p1.x} ${p1.y} C${cp1x} ${cp1y},${cp2x} ${cp2y},${p2.x} ${p2.y}`);
+
+      // Apply port stacking offsets
+      const fo = portOffsets[`${r.id}:from`] || { dy: 0, dx: 0 };
+      const to = portOffsets[`${r.id}:to`]   || { dy: 0, dx: 0 };
+      const ap1 = { x: p1.x + fo.dx, y: p1.y + fo.dy };
+      const ap2 = { x: p2.x + to.dx, y: p2.y + to.dy };
+
+      const dx = ap2.x - ap1.x, dy = ap2.y - ap1.y;
+      // Bezier control points: pull strongly in the exit direction for S-curves
+      const tension = Math.max(Math.abs(dx) * 0.45, 40);
+      const cp1x = ap1.x + (exitDir === 'R' ? tension : exitDir === 'L' ? -tension : 0);
+      const cp1y = ap1.y + (exitDir === 'B' ? tension : exitDir === 'T' ? -tension : 0);
+      const cp2x = ap2.x - (enterDir === 'L' ? -tension : enterDir === 'R' ? tension : 0);
+      const cp2y = ap2.y - (enterDir === 'T' ? -tension : enterDir === 'B' ? tension : 0);
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'arrow-path');
+      path.setAttribute('d', `M${ap1.x} ${ap1.y} C${cp1x} ${cp1y},${cp2x} ${cp2y},${ap2.x} ${ap2.y}`);
       SVG.appendChild(path);
-      const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2 - 6;
-      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-      lbl.setAttribute('class','arrow-label');
-      lbl.setAttribute('x',mx); lbl.setAttribute('y',my);
-      lbl.setAttribute('text-anchor','middle');
+
+      // Label at curve midpoint
+      const mx = (ap1.x+ap2.x)/2, my = (ap1.y+ap2.y)/2 - 6;
+      const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      lbl.setAttribute('class', 'arrow-label');
+      lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
+      lbl.setAttribute('text-anchor', 'middle');
       lbl.textContent = r.fromField || 'fk';
       SVG.appendChild(lbl);
     });
@@ -823,6 +902,43 @@ const D = (() => {
     const byLv = {};
     ids.forEach(id => { const l=level[id]||0; (byLv[l]=byLv[l]||[]).push(id); });
     const lvNums = Object.keys(byLv).map(Number).sort((a,b)=>a-b);
+
+    // ── Barycenter crossing-minimisation (4 alternating passes) ────────────
+    // Each pass sorts nodes in a level by the average column-position of their
+    // neighbours in the adjacent level.  Alternating forward/backward passes
+    // converge in O(passes × edges) with typically 50-70% fewer crossings.
+    function barycentreSort() {
+      // Current column index of every node
+      const pos = {};
+      lvNums.forEach(lv => byLv[lv].forEach((id, i) => { pos[id] = i; }));
+
+      for (let pass = 0; pass < 4; pass++) {
+        const forward = pass % 2 === 0;
+        const order = forward ? lvNums.slice() : lvNums.slice().reverse();
+        order.forEach(lv => {
+          const row = byLv[lv];
+          const bc = row.map(id => {
+            let sum = 0, cnt = 0;
+            edges.forEach(([f, t]) => {
+              // Forward pass: look at parents (lower level index)
+              if (forward && t === id && pos[f] !== undefined) { sum += pos[f]; cnt++; }
+              // Backward pass: look at children (higher level index)
+              if (!forward && f === id && pos[t] !== undefined) { sum += pos[t]; cnt++; }
+            });
+            // Nodes with no neighbours in the reference level keep their position
+            return { id, bc: cnt > 0 ? sum / cnt : pos[id] };
+          });
+          // Stable sort by barycenter value
+          bc.sort((a, b) => a.bc - b.bc);
+          byLv[lv] = bc.map(b => b.id);
+          // Update position index after each level is sorted
+          byLv[lv].forEach((id, i) => { pos[id] = i; });
+        });
+      }
+    }
+    barycentreSort();
+    // ── End barycenter ────────────────────────────────────────────────────
+
     const HG = 270, VG = 230, MX = 80, MY = 80;
     lvNums.forEach(lv => {
       const row = byLv[lv];
