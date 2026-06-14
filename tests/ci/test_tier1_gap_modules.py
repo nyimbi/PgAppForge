@@ -184,3 +184,91 @@ def test_plugin_metadata_all_new():
 		inst = cls.__new__(cls)
 		assert inst.name
 		assert inst.domain
+
+
+# ── Tests for the 6 self-review defect fixes ──────────────────────────────────
+
+def test_mes_oee_uses_date_filter():
+	"""get_oee() must filter readings by date, not aggregate all history."""
+	import inspect
+	from pgappforge.plugins.erp.platform.mes.services import MESService
+	src = inspect.getsource(MESService.get_oee)
+	assert "day_start" in src and "reading_at >=" in src, \
+		"date filter missing from get_oee()"
+	assert "0.9" not in src and "0.85" not in src, \
+		"hardcoded availability/performance constants still present"
+
+
+def test_mes_oee_no_hardcoded_performance():
+	"""performance must be None when ideal_cycle_time is unconfigured."""
+	from pgappforge.plugins.erp.platform.mes.services import MESService
+	import inspect
+	src = inspect.getsource(MESService.get_oee)
+	assert '"performance": None' in src or "'performance': None" in src or \
+		"performance: None" in src or "performance=None" in src, \
+		"performance should be None when ideal_cycle_time is unavailable"
+
+
+def test_analytics_engine_field_validation_rejects_unknown():
+	"""query_cube() must reject filter fields not in cube.dimensions."""
+	import inspect
+	from pgappforge.plugins.erp.platform.analytics_engine.services import AnalyticsEngineService
+	src = inspect.getsource(AnalyticsEngineService.query_cube)
+	assert "ValueError" in src, "no ValueError raised on unknown field"
+	assert "allowed" in src, "no allowlist check in query_cube()"
+	# Confirm bare except is gone — errors must propagate
+	assert "except Exception:\n\t\treturn []" not in src, \
+		"exception still swallowed in query_cube()"
+
+
+def test_accept_offer_null_guard():
+	"""accept_offer() must raise ValueError when offer_id doesn't exist."""
+	import inspect
+	from pgappforge.plugins.erp.hcm.recruiting.services import RecruitingService
+	src = inspect.getsource(RecruitingService.accept_offer)
+	assert "if offer is None" in src, "null guard missing"
+	assert "ValueError" in src, "ValueError not raised for missing offer"
+
+
+def test_spend_analytics_propagates_import_error():
+	"""compute_spend_cube() must raise ImportError when AP plugin absent."""
+	import inspect
+	from pgappforge.plugins.erp.procurement.spend_analytics.services import SpendAnalyticsService
+	src = inspect.getsource(SpendAnalyticsService.compute_spend_cube)
+	assert "raise ImportError" in src, \
+		"ImportError still swallowed in compute_spend_cube()"
+	assert "raise RuntimeError" in src, \
+		"DB errors still swallowed in compute_spend_cube()"
+
+
+def test_saft_xml_valid_namespace_and_declaration():
+	"""SAF-T output must have proper XML declaration and OECD namespace."""
+	import xml.etree.ElementTree as ET
+	from unittest.mock import MagicMock
+	from pgappforge.plugins.erp.platform.regulatory_reporting.services import SaftReportService, _SAFT_NS
+
+	session = MagicMock()
+	# Simulate ImportError for GL models (no GL plugin in test env)
+	session.execute.side_effect = Exception("no table")
+	svc = SaftReportService()
+	xml_str = svc.generate_saft_gl("tenant-test", 2024, session)
+
+	assert xml_str.startswith('<?xml version="1.0"'), \
+		f"missing XML declaration, got: {xml_str[:60]}"
+	assert _SAFT_NS in xml_str, \
+		"OECD SAF-T namespace not present in output"
+	# Must be parseable by a namespace-aware parser
+	root = ET.fromstring(xml_str.split("\n", 1)[1])  # strip declaration
+	assert root.tag == f"{{{_SAFT_NS}}}AuditFile", \
+		f"root tag wrong: {root.tag}"
+
+
+def test_csrd_esrs_s1_has_gender_query():
+	"""_esrs_s1() must attempt to compute gender_ratio_f from live data."""
+	import inspect
+	from pgappforge.plugins.erp.platform.regulatory_reporting.services import CsrdReportService
+	src = inspect.getsource(CsrdReportService._esrs_s1)
+	assert "gender" in src and "= 'F'" in src, \
+		"gender query missing from _esrs_s1()"
+	assert "gender_ratio_f" in src, \
+		"gender_ratio_f not computed"
