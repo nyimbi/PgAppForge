@@ -494,11 +494,202 @@ jobs:
       - run: uv run ruff check pgappforge/ || true
 """
 
+	def generate_dockerfile(self, schema: PDLSchema) -> str:
+		"""Return a production-ready Dockerfile using uv."""
+		service_name = _snake(schema.namespace or "app")
+		return f'''\
+FROM python:3.12-slim AS base
+WORKDIR /app
+
+# Install uv for fast dependency management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files first (layer caching)
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --frozen --no-dev
+
+# Copy application code
+COPY . .
+
+# Run as non-root
+RUN useradd -m -u 1000 appuser && chown -R appuser /app
+USER appuser
+
+EXPOSE 8080
+ENV FLASK_APP=pgappforge
+CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "pgappforge:create_app()"]
+'''
+
+	def generate_k8s(self, schema: PDLSchema) -> dict[str, str]:
+		"""Return Kubernetes manifests: Deployment, Service, ConfigMap, PostgreSQL StatefulSet."""
+		service_name = _snake(schema.namespace or "app")
+		return {
+			"k8s/configmap.yaml": f'''\
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {service_name}-config
+  labels:
+    app: {service_name}
+data:
+  FLASK_ENV: "production"
+  PGAPPFORGE_LOG_LEVEL: "INFO"
+''',
+			"k8s/deployment.yaml": f'''\
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {service_name}
+  labels:
+    app: {service_name}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: {service_name}
+  template:
+    metadata:
+      labels:
+        app: {service_name}
+    spec:
+      containers:
+        - name: {service_name}
+          image: {service_name}:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {service_name}-config
+            - secretRef:
+                name: {service_name}-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+# Secret template — populate with real values before applying
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {service_name}-secrets
+type: Opaque
+stringData:
+  SECRET_KEY: "change-me-minimum-20-chars"
+  SQLALCHEMY_DATABASE_URI: "postgresql://pgaf:pgaf@postgres/{service_name}"
+''',
+			"k8s/service.yaml": f'''\
+apiVersion: v1
+kind: Service
+metadata:
+  name: {service_name}
+  labels:
+    app: {service_name}
+spec:
+  selector:
+    app: {service_name}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {service_name}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - host: {service_name}.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {service_name}
+                port:
+                  number: 80
+''',
+			"k8s/postgres.yaml": f'''\
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {service_name}
+            - name: POSTGRES_USER
+              value: pgaf
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pgaf"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+  clusterIP: None
+''',
+		}
+
 	def generate_schema_files(self, schema: PDLSchema) -> dict[str, str]:
 		"""Generate schema-level files (one per project, not per entity)."""
 		return {
-			"docker-compose.yml": self.generate_docker_compose(schema),
-			".github/workflows/ci.yml": self.generate_github_actions(schema),
+			"Dockerfile":                    self.generate_dockerfile(schema),
+			"docker-compose.yml":            self.generate_docker_compose(schema),
+			".github/workflows/ci.yml":      self.generate_github_actions(schema),
 		}
 
 	# ------------------------------------------------------------------
