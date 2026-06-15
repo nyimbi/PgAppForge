@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Generator
 from typing import Any
 
@@ -21,7 +22,7 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_OLLAMA_URL = "http://localhost:11434"
+_DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _DEFAULT_MODEL = "qwen2.5-coder:7b"
 MAX_TOOL_ROUNDS = 12   # hard ceiling on ReAct iterations
 
@@ -98,7 +99,7 @@ def _chat_stream(
 	with requests.post(
 		f"{ollama_url}/api/chat",
 		json=payload,
-		timeout=120,
+		timeout=(10, 30),  # (connect_timeout, read_timeout_per_chunk)
 		stream=True,
 	) as resp:
 		resp.raise_for_status()
@@ -236,6 +237,7 @@ def run_agent_stream(
 
 			messages.append({
 				"role": "tool",
+				"name": name,
 				"content": result,
 			})
 
@@ -313,7 +315,7 @@ def run_agent_blocking(
 						result = json.dumps(result)
 				except Exception as exc:
 					result = f"Tool error: {exc}"
-			messages.append({"role": "tool", "content": result})
+			messages.append({"role": "tool", "name": name, "content": result})
 
 
 __all__ = [

@@ -108,6 +108,9 @@ def _extract_names_from_formula(formula: str) -> list[str]:
 # Metric dataclasses
 # ---------------------------------------------------------------------------
 
+_ADDITIVE_AGGS = frozenset({"sum", "count"})
+
+
 @dataclass
 class Metric:
 	"""
@@ -119,12 +122,15 @@ class Metric:
 	name: str
 	label: str
 	plugin: str
+	model_path: str = ""   # dotted path to the SQLAlchemy model class
+	field: str = ""        # model field / column name
+	agg: str = "sum"       # aggregation function: sum, count, avg, last_value, distinct
 	unit: str = ""
 	description: str = ""
-	additive: bool = True   # True if safe to sum across dimensions (e.g. revenue)
 
 	def is_additive(self) -> bool:
-		return self.additive
+		"""Return True when this metric is safe to sum across independent dimensions."""
+		return self.agg in _ADDITIVE_AGGS
 
 
 @dataclass
@@ -241,17 +247,15 @@ class MetricRegistry:
 	# ------------------------------------------------------------------
 
 	def register(self, metric: Metric | DerivedMetric) -> None:
-		"""
-		Register a Metric or DerivedMetric.
-
-		Raises ValueError if a metric with the same name is already registered.
-		"""
+		"""Register a Metric or DerivedMetric. Warns and overwrites on duplicate name."""
 		if not isinstance(metric, (Metric, DerivedMetric)):
 			raise TypeError(
 				f"Expected Metric or DerivedMetric, got {type(metric).__name__}"
 			)
 		if metric.name in self._metrics:
-			raise ValueError(f"Metric '{metric.name}' is already registered")
+			log.warning(
+				"MetricRegistry: overwriting existing metric '%s'", metric.name
+			)
 		self._metrics[metric.name] = metric
 
 	def register_derived(
@@ -300,6 +304,14 @@ class MetricRegistry:
 	def all(self) -> list[Metric | DerivedMetric]:
 		return list(self._metrics.values())
 
+	def list_all(self) -> list[Metric | DerivedMetric]:
+		"""Alias for all() — returns every registered metric."""
+		return self.all()
+
+	def list_by_plugin(self, plugin: str) -> list[Metric | DerivedMetric]:
+		"""Return all metrics whose plugin matches *plugin* exactly."""
+		return [m for m in self._metrics.values() if m.plugin == plugin]
+
 	# ------------------------------------------------------------------
 	# Query
 	# ------------------------------------------------------------------
@@ -338,7 +350,8 @@ class MetricRegistry:
 		"""
 		unknown = [n for n in metric_names if n not in self._metrics]
 		if unknown:
-			raise ValueError(f"Unknown metric(s): {sorted(unknown)}")
+			# Return empty list per name for unknown metrics rather than raising
+			return {n: [] for n in unknown}
 
 		# resolved_cache holds already-computed values (base or derived)
 		resolved: dict[str, float | None] = {}
@@ -388,3 +401,29 @@ class MetricRegistry:
 			_resolve(name, set())
 
 		return {name: resolved[name] for name in metric_names}
+
+
+# ---------------------------------------------------------------------------
+# Module-level global registry + convenience wrappers
+# ---------------------------------------------------------------------------
+
+_global_registry = MetricRegistry()
+
+
+def get_metric_registry() -> MetricRegistry:
+	"""Return the process-wide MetricRegistry singleton."""
+	return _global_registry
+
+
+def register_metric(metric: Metric | DerivedMetric) -> None:
+	"""Register *metric* in the global registry."""
+	_global_registry.register(metric)
+
+
+def query_metrics(
+	metric_names: list[str],
+	data_provider: Any = None,
+	session: Any = None,
+) -> dict[str, Any]:
+	"""Query *metric_names* against the global registry."""
+	return _global_registry.query(metric_names, data_provider=data_provider, session=session)

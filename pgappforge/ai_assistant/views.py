@@ -28,8 +28,11 @@ from .tools import build_tool_registry
 
 log = logging.getLogger(__name__)
 
-_PROJECT_ROOT = Path(os.environ.get("PGAF_DEV_ASSISTANT_ROOT", Path(__file__).resolve().parents[2]))
+_PROJECT_ROOT = Path(
+	os.environ.get("PGAF_DEV_ASSISTANT_ROOT", Path(__file__).resolve().parents[2])
+).resolve()
 _MAX_HISTORY_TURNS = 40
+_VALID_HISTORY_ROLES = frozenset({"user", "assistant"})
 
 
 def _get_user_roles() -> set[str]:
@@ -38,9 +41,25 @@ def _get_user_roles() -> set[str]:
 		from flask_login import current_user
 		if current_user and current_user.is_authenticated:
 			return {r.name for r in getattr(current_user, "roles", [])}
-	except Exception:
-		pass
+	except ImportError:
+		log.warning("dev_assistant: flask_login not installed — treating all users as read-only")
+	except Exception as exc:
+		log.warning("dev_assistant: could not determine user roles: %s", exc)
 	return set()
+
+
+def _sanitize_history(raw: list) -> list[dict]:
+	"""Reject system/tool injections; cap content length; limit turns."""
+	result = []
+	for entry in raw:
+		if not isinstance(entry, dict):
+			continue
+		role = entry.get("role", "")
+		content = entry.get("content", "")
+		if role not in _VALID_HISTORY_ROLES or not isinstance(content, str):
+			continue
+		result.append({"role": role, "content": content[:8000]})
+	return result[-_MAX_HISTORY_TURNS:]
 
 
 def _get_ollama_models(ollama_url: str) -> list[str]:
@@ -98,10 +117,7 @@ class DevAssistantView(BaseView):
 		model = str(body.get("model", os.environ.get("DEV_ASSISTANT_MODEL", _DEFAULT_MODEL)))
 		ollama_url = os.environ.get("OLLAMA_URL", _DEFAULT_OLLAMA_URL)
 
-		history: list[dict] = body.get("history", [])
-		if not isinstance(history, list):
-			history = []
-		history = history[-_MAX_HISTORY_TURNS:]
+		history = _sanitize_history(body.get("history", []) or [])
 
 		user_roles = _get_user_roles()
 		tool_schemas, tool_registry = build_tool_registry(user_roles)

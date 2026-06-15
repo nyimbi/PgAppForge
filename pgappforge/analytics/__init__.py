@@ -18,6 +18,9 @@ from .metrics import (
 	Metric,
 	DerivedMetric,
 	MetricRegistry,
+	get_metric_registry,
+	register_metric,
+	query_metrics,
 )
 
 __all__ = [
@@ -33,4 +36,7 @@ __all__ = [
 	'Metric',
 	'DerivedMetric',
 	'MetricRegistry',
+	'get_metric_registry',
+	'register_metric',
+	'query_metrics',
 ]

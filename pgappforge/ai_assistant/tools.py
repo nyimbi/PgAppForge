@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -200,9 +202,9 @@ def run_tests(test_path: str = "") -> str:
 		rel = str(p.relative_to(PROJECT_ROOT))
 		if not any(rel.startswith(d) for d in _ALLOWED_TEST_DIRS):
 			return f"Test path not in allowed directories: {test_path}"
-		cmd = [".venv/bin/python", "-m", "pytest", "-q", "--tb=short", str(p)]
+		cmd = [sys.executable, "-m", "pytest", "-q", "--tb=short", str(p)]
 	else:
-		cmd = [".venv/bin/python", "-m", "pytest", "-q", "--tb=short", "tests/ci"]
+		cmd = [sys.executable, "-m", "pytest", "-q", "--tb=short", "tests/ci"]
 	try:
 		result = subprocess.run(
 			cmd, capture_output=True, text=True,
@@ -235,6 +237,10 @@ _BLOCKED_PATTERNS = (
 	"ssh ", "scp ",
 	"; rm", "&&rm", "||rm",
 	"nohup", " &",
+	# find -exec spawns arbitrary processes outside the project — block explicitly
+	"-exec ", "-execdir ",
+	# guard against piping to interpreters
+	"| bash", "| sh", "| python",
 )
 
 
@@ -277,7 +283,11 @@ def run_command(command: str, timeout: int = 30) -> str:
 
 _SENSITIVE_KEY_FRAGMENTS = frozenset({
 	"secret", "password", "passwd", "token", "key", "private", "credential",
+	"uri", "url", "dsn", "connstr",
 })
+
+# Matches any connection string embedding credentials: proto://user:pass@host
+_CONNSTR_RE = re.compile(r"[a-z+]+://[^:@\s]+:[^@\s]+@", re.IGNORECASE)
 
 
 def get_env_vars() -> str:
@@ -298,6 +308,8 @@ def get_env_vars() -> str:
 		k_lower = k.lower()
 		if any(frag in k_lower for frag in _SENSITIVE_KEY_FRAGMENTS):
 			display = "***"
+		elif _CONNSTR_RE.search(v):
+			display = "***  (connection string masked)"
 		else:
 			display = v[:120] + ("…" if len(v) > 120 else "")
 		lines.append(f"  {k}={display}")
@@ -309,8 +321,9 @@ def get_route_list() -> str:
 	return search_code(r"@expose\(", glob="*.py", max_matches=100)
 
 
-def check_ollama_models(ollama_url: str = "http://localhost:11434") -> str:
+def check_ollama_models() -> str:
 	"""List models available in the local Ollama instance."""
+	ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 	try:
 		resp = _req.get(f"{ollama_url}/api/tags", timeout=3)
 		resp.raise_for_status()
@@ -482,6 +495,14 @@ TOOL_SCHEMAS: list[dict] = [
 			},
 		},
 	},
+	{
+		"type": "function",
+		"function": {
+			"name": "get_route_list",
+			"description": "Find all @expose-decorated view routes via static analysis of the codebase.",
+			"parameters": {"type": "object", "properties": {}, "required": []},
+		},
+	},
 ]
 
 # Read-only tool names — available to all roles
@@ -489,6 +510,7 @@ READ_TOOL_NAMES: frozenset[str] = frozenset({
 	"read_file", "list_directory", "search_code",
 	"get_git_diff", "get_git_log", "get_git_status",
 	"run_command", "check_ollama_models", "read_log", "get_env_vars",
+	"get_route_list",
 })
 
 # Write tool names — Developer + Admin only
@@ -513,6 +535,7 @@ _TOOL_FN_MAP: dict[str, Any] = {
 	"check_ollama_models": check_ollama_models,
 	"read_log": read_log,
 	"get_env_vars": get_env_vars,
+	"get_route_list": get_route_list,
 }
 
 
@@ -538,6 +561,7 @@ __all__ = [
 	"read_file", "write_file", "list_directory", "search_code",
 	"get_git_diff", "get_git_log", "get_git_status",
 	"run_tests", "run_command", "check_ollama_models", "read_log", "get_env_vars",
+	"get_route_list",
 	"TOOL_SCHEMAS", "READ_TOOL_NAMES", "WRITE_TOOL_NAMES",
 	"build_tool_registry",
 ]
