@@ -20,8 +20,10 @@ Usage::
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import threading
 import sqlalchemy as sa
 from datetime import datetime, timezone
 from pathlib import Path
@@ -340,6 +342,10 @@ class PgAppForgeWorkflowEngine:
 					instance.data[out_key] = val
 				instance.current_step_index += 1
 
+			elif step_type == "parallel":
+				self._execute_parallel_step(step, instance, session)
+				instance.current_step_index += 1
+
 			else:
 				# Unknown / gateway — advance past it
 				log.debug("Skipping unhandled step type %r for step %r", step_type, step.get("id"))
@@ -435,6 +441,153 @@ class PgAppForgeWorkflowEngine:
 			parent_instance_id=instance.id,
 		)
 		return sub_instance
+
+	def _execute_parallel_step(
+		self, step: dict, instance: WorkflowInstance, session=None
+	) -> None:
+		"""Execute a parallel step — run named branches concurrently.
+
+		Each branch gets a deep copy of ``instance.data`` to prevent data
+		races.  After all branches finish (join='all') or the first succeeds
+		(join='any'), branch results are merged back as
+		``instance.data[branch_name]``.
+
+		Step YAML shape::
+
+		    - type: parallel
+		      id: parallel_checks
+		      timeout_seconds: 60   # per-branch wall-clock limit (default 60)
+		      join: all             # 'all' or 'any' (default 'all')
+		      branches:
+		        credit_check:
+		          steps:
+		            - type: action
+		              action: crm.cpq.credit_check
+		        kyc_check:
+		          steps:
+		            - type: action
+		              action: grc.kyc.verify
+
+		On branch failure:
+		- join=all  → raises RuntimeError, marking the parallel step as failed
+		- join=any  → logs the failure and continues as long as one branch succeeds
+		"""
+		raw_branches = step.get("branches") or {}
+		# Accept list of step-lists [[steps_a], [steps_b]] or dict {name: {steps: [...]}}
+		if isinstance(raw_branches, list):
+			branches: dict[str, dict] = {
+				f"branch_{i}": {"steps": b if isinstance(b, list) else b.get("steps", [])}
+				for i, b in enumerate(raw_branches)
+			}
+		else:
+			branches = raw_branches
+		if not branches:
+			log.warning("parallel step %r has no branches — skipping", step.get("id"))
+			return
+
+		join_mode: str = step.get("join", "all")
+		timeout_seconds: int = int(step.get("timeout_seconds", 60))
+
+		branch_results: dict[str, Any] = {}
+		branch_errors: dict[str, str] = {}
+		lock = threading.Lock()
+
+		def _run_branch(branch_name: str, branch_def: dict) -> None:
+			"""Target for each worker thread."""
+			branch_data = copy.deepcopy(instance.data)
+			branch_steps: list[dict] = branch_def.get("steps") or []
+			try:
+				# Build a minimal WorkflowDefinition + WorkflowInstance for this branch
+				from .models import WorkflowDefinition, WorkflowInstance as _WFI
+				branch_defn = WorkflowDefinition(
+					name=f"{instance.definition.name}.__branch__.{branch_name}",
+					steps=branch_steps,
+				)
+				branch_inst = _WFI(
+					definition=branch_defn,
+					data=branch_data,
+					tenant_id=instance.tenant_id,
+				)
+				self._advance(branch_inst, session=None)  # no DB in branches
+				with lock:
+					branch_results[branch_name] = branch_inst.data
+				log.debug(
+					"parallel branch %r completed (parent=%s)",
+					branch_name, instance.id[:8],
+				)
+			except Exception as exc:
+				log.warning(
+					"parallel branch %r failed (parent=%s): %s",
+					branch_name, instance.id[:8], exc,
+				)
+				with lock:
+					branch_errors[branch_name] = str(exc)
+
+		threads = {
+			name: threading.Thread(
+				target=_run_branch,
+				args=(name, defn),
+				name=f"wf-branch-{name}",
+				daemon=True,
+			)
+			for name, defn in branches.items()
+		}
+
+		for t in threads.values():
+			t.start()
+
+		if join_mode == "any":
+			# Poll until one branch finishes successfully or all are done
+			import time as _time
+			deadline = _time.monotonic() + timeout_seconds
+			while _time.monotonic() < deadline:
+				with lock:
+					if branch_results:
+						break
+					all_done = all(not t.is_alive() for t in threads.values())
+					if all_done:
+						break
+				_time.sleep(0.05)
+			# Cancel remaining (daemon threads will die naturally)
+		else:
+			# join=all — wait for every branch up to timeout
+			for t in threads.values():
+				t.join(timeout=timeout_seconds)
+			# Check for timed-out threads
+			for name, t in threads.items():
+				if t.is_alive():
+					branch_errors[name] = f"timed out after {timeout_seconds}s"
+					log.warning(
+						"parallel branch %r timed out (parent=%s)",
+						name, instance.id[:8],
+					)
+
+		# Merge results back into instance data, keyed by the parallel step id
+		with lock:
+			step_output: dict[str, Any] = {}
+			for branch_name, result_data in branch_results.items():
+				step_output[branch_name] = result_data
+			instance.data[step["id"]] = step_output
+
+		# Error handling
+		if branch_errors:
+			if join_mode == "all":
+				failed = sorted(branch_errors)
+				detail = "; ".join(f"{n}: {e}" for n, e in branch_errors.items())
+				raise RuntimeError(
+					f"parallel step {step.get('id')!r}: branches failed: {failed} — {detail}"
+				)
+			else:
+				# join=any: succeed if at least one branch finished
+				if not branch_results:
+					detail = "; ".join(f"{n}: {e}" for n, e in branch_errors.items())
+					raise RuntimeError(
+						f"parallel step {step.get('id')!r}: all branches failed — {detail}"
+					)
+				log.info(
+					"parallel step %r: join=any — %d succeeded, %d failed",
+					step.get("id"), len(branch_results), len(branch_errors),
+				)
 
 	def _resolve_input_map(
 		self, input_map: dict[str, str], instance: WorkflowInstance

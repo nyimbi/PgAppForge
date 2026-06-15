@@ -129,49 +129,51 @@ DSPy:
 | Dimension | Status | Current Mechanism | Gap |
 |---|---|---|---|
 | **1. Plugin composition** | ✅ GOOD | `depends_on` list; `install_all()` topological sort; `subscribe_to()` + `_EVENT_BUS` | No version constraints on deps; no capability negotiation |
-| **2. Model composition** | ❌ MISSING | Each plugin owns its models; no cross-plugin field injection | Cannot add a field to Finance's `ARInvoice` from CRM without modifying Finance |
-| **3. View injection** | ❌ MISSING | `register_views()` adds only the plugin's own views | Cannot inject a KPI panel into another plugin's dashboard |
-| **4. Event composition** | ⚠️ PARTIAL | `DomainEventLog` (durable) + `_EVENT_BUS` (in-process); `subscribe_to()` naming convention | In-process only (dies under multi-worker); no filter/map pipeline; no retry; no saga |
-| **5. Workflow composition** | ⚠️ PARTIAL | YAML engine + BPM action registry | No sub-workflow calls; no event-triggered workflow starts; no saga/compensation |
-| **6. Rule composition** | ⚠️ PARTIAL | Rules engine per model via YAML DSL | Rules are model-scoped; cannot write rules that cross model/plugin boundaries |
-| **7. API composition** | ❌ MISSING | Each plugin registers independent REST endpoints | No GraphQL federation; no unified schema; no batched cross-plugin queries |
-| **8. Permission composition** | ❌ MISSING | FAB's flat RBAC (role → permission strings) | No AND conditions; no attribute-based access; no policy algebra |
-| **9. Schema composition** | ❌ MISSING | PDL schemas are standalone; no `extends` or `mixin` | Cannot build `LoyalCustomer = Customer + LoyaltyAccount` in PDL |
-| **10. Report composition** | ❌ MISSING | `AnalyticsEngine` defines cubes per tenant | No semantic layer; no named metrics; no cross-cube joins; no aggregation-type tracking |
-| **11. AI agent composition** | ❌ MISSING | LiteLLM gateway + `NLAnalyticsService` separately | No `Runnable` interface; no agent pipeline; no typed state between agents |
-| **12. Multi-tenant composition** | ⚠️ PARTIAL | PostgreSQL RLS + `TenantControlService` | Cross-tenant SaaS reports not composable; feature flags don't compose with capabilities |
+| **2. Model composition** | ✅ CLOSED | Each plugin owns its models; no cross-plugin field injection | CLOSED — ModelMixinRegistry (`pgappforge/composition/mixins.py`) |
+| **3. View injection** | ✅ CLOSED | `register_views()` adds only the plugin's own views | CLOSED — ViewSlotRegistry (`pgappforge/ui/slots.py`) |
+| **4. Event composition** | ✅ CLOSED | `DomainEventLog` (durable) + `_EVENT_BUS` (in-process); `subscribe_to()` naming convention | CLOSED — EventRouter + @on_event + EventWorker (durable, multi-worker safe) |
+| **5. Workflow composition** | ✅ CLOSED | YAML engine + BPM action registry | CLOSED — sub-workflow, event triggers, parallel branches |
+| **6. Rule composition** | ✅ CLOSED | Rules engine per model via YAML DSL | CLOSED — EventRuleEngine for cross-model event-triggered rules |
+| **7. API composition** | ✅ CLOSED | Each plugin registers independent REST endpoints | CLOSED — GraphQL federation (`pgappforge/graphql/federation.py`) |
+| **8. Permission composition** | ✅ CLOSED | FAB's flat RBAC (role → permission strings) | CLOSED — PolicyAlgebra with AND/OR/NOT + attribute conditions (`pgappforge/security/policies.py`) |
+| **9. Schema composition** | ✅ CLOSED | PDL schemas are standalone; no `extends` or `mixin` | CLOSED — PDL `extends` + mixin inheritance (`pgappforge/pdl/schema.py`) |
+| **10. Report composition** | ✅ CLOSED | `AnalyticsEngine` defines cubes per tenant | CLOSED — MetricRegistry + DerivedMetric + formula evaluator (`pgappforge/analytics/metrics.py`) |
+| **11. AI agent composition** | ✅ CLOSED | LiteLLM gateway + `NLAnalyticsService` separately | CLOSED — composable AI pipeline with typed state (`pgappforge/ai/pipeline.py`) |
+| **12. Multi-tenant composition** | ✅ CLOSED | PostgreSQL RLS + `TenantControlService` | CLOSED — CrossTenantAggregator + SystemSession |
 
 ---
 
 ## 4. Systems We Cannot Currently Compose
 
-1. **Loyalty + Mobile Money payout**: Cannot compose `LoyaltyService.redeem_points()` → `AirtelMoneyService.disburse()` without writing a one-off service. No reactive pipeline.
+**All 14 failure scenarios resolved as of 2026-06-15.**
 
-2. **SACCO loan + Insurance check**: Cannot write a rule "if member applies for loan, AND their insurance policy is lapsed, BLOCK". Rules are model-scoped; this crosses SACCO + Insurtech boundaries.
+~~1. **Loyalty + Mobile Money payout**: Cannot compose `LoyaltyService.redeem_points()` → `AirtelMoneyService.disburse()` without writing a one-off service. No reactive pipeline.~~
 
-3. **HCM payroll + Tax compliance**: Cannot auto-trigger eTIMS payslip submission when payroll is processed. Would need manual wiring; no event pipeline.
+~~2. **SACCO loan + Insurance check**: Cannot write a rule "if member applies for loan, AND their insurance policy is lapsed, BLOCK". Rules are model-scoped; this crosses SACCO + Insurtech boundaries.~~
 
-4. **CRM customer + AR invoice + Loyalty balance** in one API call: Three separate REST endpoints; no GraphQL federation or batch API.
+~~3. **HCM payroll + Tax compliance**: Cannot auto-trigger eTIMS payslip submission when payroll is processed. Would need manual wiring; no event pipeline.~~
 
-5. **Extended AR invoice from another plugin**: If Trade Finance wants to add `letter_of_credit_id` to `ARInvoice`, it must fork `ar/models.py` — no `_inherit` equivalent.
+~~4. **CRM customer + AR invoice + Loyalty balance** in one API call: Three separate REST endpoints; no GraphQL federation or batch API.~~
 
-6. **Cross-domain report**: "Show me total revenue (Finance) by sales rep (CRM) with their headcount cost (HCM)" — three cube sources; analytics engine cannot join across cubes.
+~~5. **Extended AR invoice from another plugin**: If Trade Finance wants to add `letter_of_credit_id` to `ARInvoice`, it must fork `ar/models.py` — no `_inherit` equivalent.~~
 
-7. **Permission: approve_loan AND (is_loan_officer OR has_credit_committee_role)**: FAB RBAC is flat; AND conditions on roles are impossible without code.
+~~6. **Cross-domain report**: "Show me total revenue (Finance) by sales rep (CRM) with their headcount cost (HCM)" — three cube sources; analytics engine cannot join across cubes.~~
 
-8. **Sub-workflow**: SACCO member onboarding workflow cannot call the KYC workflow as a sub-process; they must be two separate flat workflows.
+~~7. **Permission: approve_loan AND (is_loan_officer OR has_credit_committee_role)**: FAB RBAC is flat; AND conditions on roles are impossible without code.~~
 
-9. **Composed PDL schema**: Cannot `extend: finance.ar.ARInvoice` in a PDL schema to inherit its fields and add customs — every PDL entity is standalone.
+~~8. **Sub-workflow**: SACCO member onboarding workflow cannot call the KYC workflow as a sub-process; they must be two separate flat workflows.~~
 
-10. **Multi-tenant SaaS report**: Platform admin cannot aggregate "total revenue across all tenants" without bypassing RLS.
+~~9. **Composed PDL schema**: Cannot `extend: finance.ar.ARInvoice` in a PDL schema to inherit its fields and add customs — every PDL entity is standalone.~~
 
-11. **AI agent chain**: Cannot compose an "NL query → SQL → BI chart" agent with a "validate result → explain in business language" agent using a uniform interface.
+~~10. **Multi-tenant SaaS report**: Platform admin cannot aggregate "total revenue across all tenants" without bypassing RLS.~~
 
-12. **UI widget from plugin B in plugin A's dashboard**: `ERPPlugin_A.DashboardView` cannot embed `ERPPlugin_B.KPIWidget` — no slot/injection mechanism.
+~~11. **AI agent chain**: Cannot compose an "NL query → SQL → BI chart" agent with a "validate result → explain in business language" agent using a uniform interface.~~
 
-13. **Rule that fires a workflow**: Business rules cannot trigger a workflow instance start. The rules engine and workflow engine are disconnected.
+~~12. **UI widget from plugin B in plugin A's dashboard**: `ERPPlugin_A.DashboardView` cannot embed `ERPPlugin_B.KPIWidget` — no slot/injection mechanism.~~
 
-14. **Computed cross-plugin field**: Cannot define a computed field on `Customer` that reads from `LoyaltyAccount.points_balance` without modifying `Customer` directly.
+~~13. **Rule that fires a workflow**: Business rules cannot trigger a workflow instance start. The rules engine and workflow engine are disconnected.~~
+
+~~14. **Computed cross-plugin field**: Cannot define a computed field on `Customer` that reads from `LoyaltyAccount.points_balance` without modifying `Customer` directly.~~
 
 ---
 
@@ -303,9 +305,34 @@ These 5 features unlock all downstream composition:
 
 ---
 
+## 9. Implementation Status (as of 2026-06-15)
+
+All 12 composability dimensions are now ✅ CLOSED.
+
+| Feature | File | Status |
+|---|---|---|
+| P1.1 Cross-plugin EventRouter | pgappforge/events/router.py + decorators.py | ✅ |
+| P1.1+ Durable EventWorker | pgappforge/events/worker.py | ✅ |
+| P1.2 ModelMixinRegistry | pgappforge/composition/mixins.py | ✅ |
+| P1.3 Sub-workflow | pgappforge/workflow/engine.py (call_workflow step) | ✅ |
+| P1.3+ Workflow event triggers | pgappforge/workflow/triggers.py | ✅ |
+| P1.3+ Workflow parallel branches | pgappforge/workflow/engine.py (parallel step) | ✅ |
+| P1.4 Rule → event action | pgappforge/plugins/rules/engine.py | ✅ |
+| P1.5 Permission algebra | pgappforge/security/policies.py | ✅ |
+| P2.1 PDL extends | pgappforge/pdl/schema.py | ✅ |
+| P2.2 Semantic metric registry | pgappforge/analytics/metrics.py | ✅ |
+| P2.2+ Derived metrics | pgappforge/analytics/metrics.py (DerivedMetric) | ✅ |
+| P2.3 View slot injection | pgappforge/ui/slots.py | ✅ |
+| P3.1 AI composable pipeline | pgappforge/ai/pipeline.py | ✅ |
+| P3.2 Cross-tenant aggregation | pgappforge/multitenancy/aggregation.py | ✅ |
+| P3.3 GraphQL federation | pgappforge/graphql/federation.py | ✅ |
+| P4.4 Cross-model event rules | pgappforge/plugins/rules/event_rules.py | ✅ |
+
+---
+
 ## Open Questions
 
-1. Should the model mixin registry use SQLAlchemy events (`mapper_configured`) or modify `__table__` directly? The former is cleaner but may break Alembic autogenerate.
-2. Should the durable event router use a background thread, a Celery worker, or a FastAPI background task? Answer depends on deployment topology.
-3. Should permission policies be evaluated at the Python level (decorator) or pushed to PostgreSQL (RLS policy with additional conditions)?
-4. Should PDL `extends:` generate a new table (composition) or reuse the parent table with an INNER JOIN (inheritance)?
+1. ~~Should the model mixin registry use SQLAlchemy events (`mapper_configured`) or modify `__table__` directly?~~ **Resolved** — uses `__table__.append_column()` directly (before mapper config). Alembic note: call `apply_all_mixins()` before `db.init_app()` to ensure Alembic sees columns.
+2. ~~Should the durable event router use a background thread, a Celery worker, or a FastAPI background task?~~ **Resolved** — EventWorker uses a daemon thread polling `DomainEventLog` with `SELECT FOR UPDATE SKIP LOCKED`. For high-throughput deployments, swap the daemon thread for a Celery beat task by subclassing `EventWorker` and overriding `_drain()`.
+3. ~~Should permission policies be evaluated at the Python level (decorator) or pushed to PostgreSQL (RLS policy with additional conditions)?~~ **Resolved** — Python-level decorator (`@require_policy`). RLS pushdown deferred: would require Postgres function per policy, high complexity, low added security for the auth model used.
+4. ~~Should PDL `extends:` generate a new table (composition) or reuse the parent table with an INNER JOIN (inheritance)?~~ **Resolved** — field-level inheritance (fields merged into same table). True table inheritance (PostgreSQL `INHERITS`) deferred: Alembic support is poor and SQLAlchemy's concrete table inheritance is complex for PDL use cases.

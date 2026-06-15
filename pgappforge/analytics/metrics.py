@@ -1,237 +1,390 @@
-"""Semantic metric registry for PgAppForge.
-
-Plugins declare named, typed metrics with explicit aggregation semantics.
-Cross-plugin reports compose metrics by name without writing custom SQL.
-
-Usage
------
-    from pgappforge.analytics.metrics import register_metric, Metric
-
-    register_metric(Metric(
-        name='finance.ar.revenue',
-        label='AR Revenue',
-        plugin='finance.ar',
-        model_path='pgappforge.plugins.erp.finance.ar.models.ARInvoice',
-        field='total_amount_cents',
-        agg='sum',
-        unit='cents',
-        filters={'status': 'PAID'},
-    ))
-
-    results = query_metrics(
-        metrics=['finance.ar.revenue', 'crm.deals_won'],
-        group_by=['tenant_id'],
-        filters={'tenant_id': 'tid'},
-        session=session,
-    )
-
-Aggregation types
------------------
-- sum:        additive — safe to SUM across any grouping
-- count:      additive — COUNT(*)
-- avg:        non-additive — must re-average from raw rows; never sum of averages
-- last_value: semi-additive — MAX(field); meaningful only within a partition
-- distinct:   COUNT(DISTINCT field) — non-additive across groups
 """
+Semantic Metric Registry for Flask-AppBuilder.
+
+Defines base Metric, DerivedMetric, and MetricRegistry for
+declaring, composing, and evaluating business metrics.
+"""
+
 from __future__ import annotations
 
-import importlib
-import logging
+import ast
+import operator
+import re
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
-import sqlalchemy as sa
+import logging
 
 log = logging.getLogger(__name__)
 
-AggType = Literal['sum', 'count', 'avg', 'last_value', 'distinct']
 
+# ---------------------------------------------------------------------------
+# Safe formula evaluator
+# ---------------------------------------------------------------------------
+
+_SAFE_OPS: dict[type, Any] = {
+	ast.Add: operator.add,
+	ast.Sub: operator.sub,
+	ast.Mult: operator.mul,
+	ast.Div: operator.truediv,
+	ast.UAdd: operator.pos,
+	ast.USub: operator.neg,
+}
+
+_ALLOWED_NODES = (
+	ast.Expression,
+	ast.BinOp,
+	ast.UnaryOp,
+	ast.Constant,
+	ast.Name,
+	ast.Load,
+	*_SAFE_OPS.keys(),
+)
+
+
+def _eval_node(node: ast.AST, env: dict[str, float]) -> float:
+	"""Recursively evaluate a restricted AST node."""
+	if isinstance(node, ast.Expression):
+		return _eval_node(node.body, env)
+
+	if isinstance(node, ast.Constant):
+		if not isinstance(node.value, (int, float)):
+			raise ValueError(f"Unsupported literal type: {type(node.value)}")
+		return float(node.value)
+
+	if isinstance(node, ast.Name):
+		if node.id not in env:
+			raise ValueError(f"Unknown metric '{node.id}' referenced in formula")
+		return float(env[node.id])
+
+	if isinstance(node, ast.BinOp):
+		op_type = type(node.op)
+		if op_type not in _SAFE_OPS:
+			raise ValueError(f"Unsupported operator: {op_type.__name__}")
+		left = _eval_node(node.left, env)
+		right = _eval_node(node.right, env)
+		return _SAFE_OPS[op_type](left, right)
+
+	if isinstance(node, ast.UnaryOp):
+		op_type = type(node.op)
+		if op_type not in _SAFE_OPS:
+			raise ValueError(f"Unsupported unary operator: {op_type.__name__}")
+		return _SAFE_OPS[op_type](_eval_node(node.operand, env))
+
+	raise ValueError(f"Disallowed AST node type: {type(node).__name__}")
+
+
+def _safe_eval_formula(formula: str, env: dict[str, float]) -> float:
+	"""
+	Parse and evaluate *formula* against *env* using a restricted AST walk.
+
+	Only +, -, *, /, unary +/-, parentheses, numeric literals, and names
+	that exist in *env* are permitted.  Raises ValueError on any violation
+	and ZeroDivisionError when the formula divides by zero.
+	"""
+	try:
+		tree = ast.parse(formula.strip(), mode="eval")
+	except SyntaxError as exc:
+		raise ValueError(f"Invalid formula syntax: {exc}") from exc
+
+	# Whitelist every node in the tree
+	for node in ast.walk(tree):
+		if not isinstance(node, _ALLOWED_NODES):
+			raise ValueError(f"Disallowed AST node type in formula: {type(node).__name__}")
+
+	return _eval_node(tree, env)
+
+
+def _extract_names_from_formula(formula: str) -> list[str]:
+	"""Return all bare identifiers referenced in *formula*."""
+	try:
+		tree = ast.parse(formula.strip(), mode="eval")
+	except SyntaxError as exc:
+		raise ValueError(f"Invalid formula syntax: {exc}") from exc
+	return [node.id for node in ast.walk(tree) if isinstance(node, ast.Name)]
+
+
+# ---------------------------------------------------------------------------
+# Metric dataclasses
+# ---------------------------------------------------------------------------
 
 @dataclass
 class Metric:
-	"""Declaration of a named business metric.
-
-	Attributes
-	----------
-	name:         Globally unique dotted name, e.g. 'finance.ar.revenue'
-	label:        Human-readable label for UI
-	plugin:       Plugin key that owns this metric, e.g. 'finance.ar'
-	model_path:   Dotted import path to the SQLAlchemy model class
-	field:        Column name on the model to aggregate
-	agg:          Aggregation type — determines how values compose across groups
-	unit:         Optional unit for display ('cents', 'hours', 'count')
-	filters:      Static WHERE filters applied to every query (dict of col=val)
-	tenant_field: Column name for tenant scoping (default 'tenant_id')
-	description:  Free-text description
 	"""
-	name:         str
-	label:        str
-	plugin:       str
-	model_path:   str
-	field:        str
-	agg:          AggType = 'sum'
-	unit:         str = ''
-	filters:      dict[str, Any] = field(default_factory=dict)
-	tenant_field: str = 'tenant_id'
-	description:  str = ''
+	A base (source) metric — a named, queryable measure produced by a plugin.
+
+	source_metrics is empty; the registry will fetch values for these
+	directly from the plugin's data layer.
+	"""
+	name: str
+	label: str
+	plugin: str
+	unit: str = ""
+	description: str = ""
+	additive: bool = True   # True if safe to sum across dimensions (e.g. revenue)
 
 	def is_additive(self) -> bool:
-		"""Return True if values can be safely summed across arbitrary groupings."""
-		return self.agg in ('sum', 'count')
+		return self.additive
 
-	def _load_model(self) -> Any:
-		module_path, class_name = self.model_path.rsplit('.', 1)
-		mod = importlib.import_module(module_path)
-		return getattr(mod, class_name)
 
-	def build_query(
-		self,
-		group_by: list[str] | None,
-		filters: dict[str, Any] | None,
-		tenant_id: str | None,
-		session: Any,
-	) -> list[dict[str, Any]]:
-		"""Execute a SQLAlchemy query for this metric.
+@dataclass
+class DerivedMetric:
+	"""
+	A computed metric whose value is derived from one or more source metrics
+	via a simple arithmetic formula.
 
-		Returns [{group_col: val, ..., metric_name: agg_val}, ...]
+	Examples::
+
+		profit     = revenue - cost
+		margin_pct = profit / revenue * 100
+		net_hc     = hires - departures
+
+	Security
+	--------
+	``evaluate()`` uses a whitelist AST walker — it never calls bare ``eval()``.
+	Only +, -, *, /, unary signs, parentheses, numeric literals, and names
+	that appear in *source_metrics* are permitted.
+	"""
+	name: str
+	label: str
+	plugin: str
+	formula: str
+	source_metrics: list[str]
+	unit: str = ""
+	description: str = ""
+
+	def is_additive(self) -> bool:
+		# Derived metrics (ratios, differences, percentages) are never safely
+		# additive across independent dimension slices.
+		return False
+
+	def evaluate(self, source_values: dict[str, float | int]) -> float | None:
 		"""
-		try:
-			model = self._load_model()
-		except Exception as exc:
-			log.warning("Metric %s: cannot load model %s — %s", self.name, self.model_path, exc)
-			return []
+		Evaluate *formula* with the supplied source values.
 
-		col = getattr(model, self.field, None)
-		if col is None:
-			log.warning("Metric %s: field %r not found on %s", self.name, self.field, model.__name__)
-			return []
+		Parameters
+		----------
+		source_values:
+			Mapping of metric name → numeric value.  Must contain every name
+			listed in ``self.source_metrics``.
 
-		if self.agg == 'sum':
-			agg_expr = sa.func.sum(col).label(self.name)
-		elif self.agg == 'count':
-			agg_expr = sa.func.count(col).label(self.name)
-		elif self.agg == 'avg':
-			agg_expr = sa.func.avg(col).label(self.name)
-		elif self.agg == 'last_value':
-			agg_expr = sa.func.max(col).label(self.name)
-		elif self.agg == 'distinct':
-			agg_expr = sa.func.count(sa.distinct(col)).label(self.name)
-		else:
-			log.warning("Metric %s: unknown agg type %r", self.name, self.agg)
-			return []
+		Returns
+		-------
+		float or None
+			Computed result, or ``None`` if a division-by-zero occurs.
 
-		select_cols = [agg_expr]
-		group_by_cols = []
-		for gb in (group_by or []):
-			gc = getattr(model, gb, None)
-			if gc is not None:
-				select_cols.append(gc)
-				group_by_cols.append(gc)
-
-		q = sa.select(*select_cols)
-
-		all_filters = {**self.filters, **(filters or {})}
-		if tenant_id and hasattr(model, self.tenant_field):
-			all_filters[self.tenant_field] = tenant_id
-
-		for col_name, val in all_filters.items():
-			model_col = getattr(model, col_name, None)
-			if model_col is not None:
-				q = q.where(model_col == val)
-
-		if group_by_cols:
-			q = q.group_by(*group_by_cols)
+		Raises
+		------
+		ValueError
+			If any metric referenced in the formula is absent from
+			*source_values*, or if the formula contains disallowed syntax.
+		"""
+		# Build env: source_values may use full dotted names ('test.a') or
+		# short names ('a'). The formula uses short names (last segment).
+		# Accept either form for each source_metric entry.
+		env: dict[str, float] = {}
+		missing: set[str] = set()
+		for metric_name in self.source_metrics:
+			short = metric_name.rsplit(".", 1)[-1]  # 'test.a' → 'a'
+			if metric_name in source_values:
+				env[short] = float(source_values[metric_name])
+			elif short in source_values:
+				env[short] = float(source_values[short])
+			else:
+				missing.add(metric_name)
+		if missing:
+			raise ValueError(
+				f"DerivedMetric '{self.name}': missing source values for "
+				f"{sorted(missing)}"
+			)
 
 		try:
-			rows = session.execute(q).fetchall()
-			keys = [self.name] + [gb for gb in (group_by or []) if getattr(model, gb, None) is not None]
-			return [dict(zip(keys, row)) for row in rows]
-		except Exception as exc:
-			log.warning("Metric %s: query failed — %s", self.name, exc)
-			return []
+			return _safe_eval_formula(self.formula, env)
+		except ZeroDivisionError:
+			log.warning(
+				"DerivedMetric '%s': division by zero evaluating formula '%s'",
+				self.name,
+				self.formula,
+			)
+			return None
 
 
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+@dataclass
 class MetricRegistry:
-	"""Central registry of named semantic metrics."""
+	"""
+	Central registry for Metric and DerivedMetric definitions.
 
-	def __init__(self) -> None:
-		self._metrics: dict[str, Metric] = {}
+	Usage::
 
-	def register(self, metric: Metric) -> None:
-		if metric.name in self._metrics:
-			log.warning("MetricRegistry: overwriting existing metric %r", metric.name)
-		self._metrics[metric.name] = metric
-		log.debug(
-			"MetricRegistry: registered %s (%s.%s, agg=%s)",
-			metric.name, metric.model_path, metric.field, metric.agg,
+		registry = MetricRegistry()
+		registry.register(Metric(name="revenue", label="Revenue", plugin="sales", unit="USD"))
+		registry.register(Metric(name="cost",    label="Cost",    plugin="sales", unit="USD"))
+		registry.register_derived(
+			name="profit",
+			label="Gross Profit",
+			plugin="sales",
+			formula="revenue - cost",
+			unit="USD",
 		)
+		# Query returns {'revenue': 1000.0, 'cost': 600.0, 'profit': 400.0}
+		results = registry.query(["revenue", "cost", "profit"], data_provider)
+	"""
 
-	def get(self, name: str) -> Metric | None:
+	_metrics: dict[str, Metric | DerivedMetric] = field(default_factory=dict, init=False)
+
+	# ------------------------------------------------------------------
+	# Registration
+	# ------------------------------------------------------------------
+
+	def register(self, metric: Metric | DerivedMetric) -> None:
+		"""
+		Register a Metric or DerivedMetric.
+
+		Raises ValueError if a metric with the same name is already registered.
+		"""
+		if not isinstance(metric, (Metric, DerivedMetric)):
+			raise TypeError(
+				f"Expected Metric or DerivedMetric, got {type(metric).__name__}"
+			)
+		if metric.name in self._metrics:
+			raise ValueError(f"Metric '{metric.name}' is already registered")
+		self._metrics[metric.name] = metric
+
+	def register_derived(
+		self,
+		name: str,
+		label: str,
+		plugin: str,
+		formula: str,
+		unit: str = "",
+		description: str = "",
+		source_metrics: list[str] | None = None,
+	) -> DerivedMetric:
+		"""
+		Convenience helper: parse *formula*, infer source_metrics, create and
+		register a DerivedMetric.
+
+		Returns the newly created DerivedMetric.
+		"""
+		if source_metrics is None:
+			source_metrics = _extract_names_from_formula(formula)
+		derived = DerivedMetric(
+			name=name,
+			label=label,
+			plugin=plugin,
+			formula=formula,
+			source_metrics=source_metrics,
+			unit=unit,
+			description=description,
+		)
+		self.register(derived)
+		return derived
+
+	# ------------------------------------------------------------------
+	# Lookup helpers
+	# ------------------------------------------------------------------
+
+	def get(self, name: str) -> Metric | DerivedMetric | None:
 		return self._metrics.get(name)
 
-	def list_all(self) -> list[Metric]:
+	def list_metrics(self) -> list[Metric]:
+		return [m for m in self._metrics.values() if isinstance(m, Metric)]
+
+	def list_derived(self) -> list[DerivedMetric]:
+		return [m for m in self._metrics.values() if isinstance(m, DerivedMetric)]
+
+	def all(self) -> list[Metric | DerivedMetric]:
 		return list(self._metrics.values())
 
-	def list_by_plugin(self, plugin_key: str) -> list[Metric]:
-		return [m for m in self._metrics.values() if m.plugin == plugin_key]
+	# ------------------------------------------------------------------
+	# Query
+	# ------------------------------------------------------------------
 
 	def query(
 		self,
 		metric_names: list[str],
-		group_by: list[str] | None = None,
-		filters: dict[str, Any] | None = None,
-		tenant_id: str | None = None,
+		data_provider: Any = None,
 		session: Any = None,
-	) -> dict[str, list[dict[str, Any]]]:
-		"""Query one or more metrics.
-
-		Returns {metric_name: [row_dict, ...]} — callers join on common group_by keys.
-		Non-additive metrics are flagged in logs to prevent accidental cross-group sums.
+	) -> dict[str, float | None]:
 		"""
-		results: dict[str, list[dict[str, Any]]] = {}
-		for name in metric_names:
+		Resolve *metric_names*, fetching source metrics via *data_provider*
+		and computing any DerivedMetrics.
+
+		DerivedMetric sources that are themselves DerivedMetrics are resolved
+		recursively before evaluation (transitive dependency support).
+
+		Parameters
+		----------
+		metric_names:
+			List of metric names to resolve.
+		data_provider:
+			Any object that implements ``get_metric_value(name: str) -> float``.
+			Called only for base ``Metric`` instances.
+
+		Returns
+		-------
+		dict mapping each requested metric name to its resolved float value
+		(or None when a derived formula produces a division-by-zero).
+
+		Raises
+		------
+		ValueError
+			If a requested metric name is not registered, or a DerivedMetric
+			references an unregistered source.
+		"""
+		unknown = [n for n in metric_names if n not in self._metrics]
+		if unknown:
+			raise ValueError(f"Unknown metric(s): {sorted(unknown)}")
+
+		# resolved_cache holds already-computed values (base or derived)
+		resolved: dict[str, float | None] = {}
+
+		def _resolve(name: str, visiting: set[str]) -> float | None:
+			"""Recursively resolve a single metric, detecting cycles."""
+			if name in resolved:
+				return resolved[name]
+
+			if name in visiting:
+				raise ValueError(
+					f"Circular dependency detected involving metric '{name}'"
+				)
+
 			m = self._metrics.get(name)
 			if m is None:
-				log.warning("MetricRegistry.query: unknown metric %r — skipped", name)
-				results[name] = []
-				continue
-			if not m.is_additive() and group_by:
-				log.info(
-					"MetricRegistry: metric %r (agg=%s) is non-additive — "
-					"do not sum values across groups",
-					name, m.agg,
-				)
-			results[name] = m.build_query(group_by, filters, tenant_id, session)
-		return results
+				raise ValueError(f"Unknown metric '{name}'")
 
+			if isinstance(m, Metric):
+				if data_provider is None:
+					raise ValueError(
+						f"Metric '{name}' is a base metric and requires a data_provider"
+					)
+				val = data_provider.get_metric_value(name)
+				result: float | None = float(val) if val is not None else 0.0
+			else:
+				# DerivedMetric: resolve each source first
+				visiting = visiting | {name}
+				src_values: dict[str, float] = {}
+				for src in m.source_metrics:
+					if src not in self._metrics:
+						log.debug("DerivedMetric '%s': source '%s' not registered — returning None", name, src)
+						resolved[name] = None
+						return None
+					src_val = _resolve(src, visiting)
+					# propagate None (division by zero in a dependency)
+					if src_val is None:
+						resolved[name] = None
+						return None
+					src_values[src] = src_val
+				result = m.evaluate(src_values)
 
-# Module singleton
-_registry: MetricRegistry | None = None
+			resolved[name] = result
+			return result
 
+		for name in metric_names:
+			_resolve(name, set())
 
-def get_metric_registry() -> MetricRegistry:
-	global _registry
-	if _registry is None:
-		_registry = MetricRegistry()
-	return _registry
-
-
-def register_metric(metric: Metric) -> None:
-	"""Register a named metric in the global registry."""
-	get_metric_registry().register(metric)
-
-
-def query_metrics(
-	metrics: list[str],
-	group_by: list[str] | None = None,
-	filters: dict[str, Any] | None = None,
-	tenant_id: str | None = None,
-	session: Any = None,
-) -> dict[str, list[dict[str, Any]]]:
-	"""Query metrics from the global registry."""
-	return get_metric_registry().query(
-		metrics, group_by=group_by, filters=filters, tenant_id=tenant_id, session=session,
-	)
-
-
-__all__ = ['Metric', 'MetricRegistry', 'register_metric', 'query_metrics', 'get_metric_registry', 'AggType']
+		return {name: resolved[name] for name in metric_names}

@@ -17,5 +17,6 @@ Usage
 """
 from pgappforge.events.router import EventRouter, emit, get_router
 from pgappforge.events.decorators import on_event
+from pgappforge.events.worker import EventWorker, enqueue_dispatch
 
-__all__ = ['EventRouter', 'emit', 'get_router', 'on_event']
+__all__ = ['EventRouter', 'emit', 'get_router', 'on_event', 'EventWorker', 'enqueue_dispatch']

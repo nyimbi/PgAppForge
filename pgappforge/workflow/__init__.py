@@ -61,14 +61,26 @@ from .engine import (
 	create_workflow_tables,
 )
 from .models import WorkflowDefinition, WorkflowInstance
-from .yaml_dsl import (
-	WorkflowDSLError,
-	parse_yaml_file,
-	parse_yaml_string,
-)
+from .triggers import WorkflowTriggerRegistry, get_trigger_registry
+try:
+	from .yaml_dsl import (
+		WorkflowDSLError,
+		parse_yaml_file,
+		parse_yaml_string,
+	)
+except Exception as _yaml_exc:  # noqa: BLE001
+	log.debug("yaml_dsl unavailable: %s", _yaml_exc)
+	WorkflowDSLError = None  # type: ignore[assignment,misc]
+	parse_yaml_file = None  # type: ignore[assignment,misc]
+	parse_yaml_string = None  # type: ignore[assignment,misc]
 
 # Module-level singleton — use directly or call init_yaml_engine() from app factory
 yaml_engine = PgAppForgeWorkflowEngine()
+
+
+def get_yaml_engine() -> "PgAppForgeWorkflowEngine":
+	"""Return the process-wide YAML workflow engine singleton."""
+	return yaml_engine
 
 
 def init_yaml_engine(app, db=None) -> None:
@@ -121,6 +133,7 @@ __all__ = [
 	"FormOrchestrator",
 	# ---- new YAML/BPMN engine ----
 	"yaml_engine",
+	"get_yaml_engine",
 	"init_yaml_engine",
 	"PgAppForgeWorkflowEngine",
 	"WorkflowDefinition",
@@ -129,4 +142,7 @@ __all__ = [
 	"create_workflow_tables",
 	"parse_yaml_file",
 	"parse_yaml_string",
+	# ---- event triggers ----
+	"WorkflowTriggerRegistry",
+	"get_trigger_registry",
 ]
