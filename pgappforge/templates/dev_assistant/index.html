@@ -1,0 +1,764 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Dev Assistant — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .container-fluid { padding-top: 0 !important; padding-bottom: 0 !important; }
+
+  .da-wrap {
+    display: flex;
+    height: calc(100vh - 52px);
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  .da-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: #0f172a;
+    color: #94a3b8;
+    display: flex;
+    flex-direction: column;
+    border-radius: 6px 0 0 6px;
+    overflow: hidden;
+  }
+  .da-brand {
+    padding: 16px 18px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #f1f5f9;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .da-brand i { color: #818cf8; }
+
+  .da-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #475569;
+    padding: 14px 18px 4px;
+  }
+
+  .da-model-select {
+    margin: 4px 12px 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    color: #e2e8f0;
+    font-size: 12px;
+    padding: 6px 8px;
+    width: calc(100% - 24px);
+    cursor: pointer;
+  }
+  .da-model-select:focus { outline: none; border-color: #818cf8; }
+
+  .da-info-block {
+    padding: 10px 18px;
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.6;
+  }
+  .da-info-block strong { color: #94a3b8; }
+
+  .da-tools-list {
+    padding: 0 12px;
+    list-style: none;
+    margin: 0;
+    font-size: 11px;
+  }
+  .da-tools-list li {
+    padding: 4px 6px;
+    border-radius: 3px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .da-tools-list li i { color: #818cf8; width: 12px; text-align: center; }
+  .da-tools-list li.write-tool { color: #4ade80; }
+  .da-tools-list li.write-tool i { color: #4ade80; }
+
+  .da-sidebar-footer {
+    margin-top: auto;
+    padding: 12px 18px;
+    border-top: 1px solid rgba(255,255,255,.06);
+    font-size: 11px;
+    color: #475569;
+  }
+  .da-clear-btn {
+    width: 100%;
+    background: rgba(239,68,68,.15);
+    border: 1px solid rgba(239,68,68,.25);
+    color: #f87171;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .da-clear-btn:hover { background: rgba(239,68,68,.28); }
+
+  /* ── Main panel ─────────────────────────────────────────── */
+  .da-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: #fafbfc;
+  }
+
+  .da-header {
+    padding: 14px 22px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .da-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .da-header h4 i { color: #818cf8; }
+  .da-header-meta { font-size: 12px; color: #94a3b8; }
+  {% if has_write %}
+  .role-badge { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  {% else %}
+  .role-badge { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  {% endif %}
+  .role-badge {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 2px 8px;
+  }
+
+  /* ── Messages ─────────────────────────────────────────────── */
+  .da-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+  .da-messages::-webkit-scrollbar { width: 5px; }
+  .da-messages::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+  .da-msg {
+    display: flex;
+    gap: 12px;
+    max-width: 100%;
+    animation: msgIn .15s ease-out;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .da-msg.user-msg { flex-direction: row-reverse; }
+
+  .da-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
+  .user-msg .da-avatar { background: #4f46e5; }
+  .assistant-msg .da-avatar { background: #0f172a; }
+
+  .da-bubble {
+    max-width: calc(100% - 56px);
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+  .user-msg .da-bubble {
+    background: #4f46e5;
+    color: #fff;
+    border-radius: 12px 4px 12px 12px;
+  }
+  .assistant-msg .da-bubble {
+    background: #fff;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px 12px 12px 12px;
+  }
+
+  /* tool call events inside assistant bubble */
+  .tool-event {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+    margin: 6px 0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: monospace;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+  }
+  .tool-event i { flex-shrink: 0; margin-top: 1px; }
+  .tool-event.call i { color: #818cf8; }
+  .tool-event.result i { color: #22c55e; }
+  .tool-event .tool-name { color: #4f46e5; font-weight: 700; }
+  .tool-event .tool-content { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
+
+  /* streaming cursor */
+  .typing-cursor::after {
+    content: '▋';
+    animation: blink .7s step-start infinite;
+    color: #818cf8;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* markdown-ish code blocks */
+  .da-bubble pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin: 8px 0;
+  }
+  .da-bubble code {
+    background: #f1f5f9;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 12px;
+    color: #4f46e5;
+  }
+  .user-msg .da-bubble code { background: rgba(255,255,255,.2); color: #c7d2fe; }
+  .user-msg .da-bubble pre  { background: rgba(0,0,0,.3); }
+
+  .da-bubble p:last-child { margin-bottom: 0; }
+  .da-bubble ul, .da-bubble ol { padding-left: 20px; }
+
+  /* empty state */
+  .da-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    text-align: center;
+    padding: 40px;
+  }
+  .da-empty i { font-size: 52px; color: #e2e8f0; margin-bottom: 18px; }
+  .da-empty h5 { font-size: 18px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+  .da-empty .suggestion-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 18px;
+    max-width: 480px;
+  }
+  .suggestion-chip {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color .15s, box-shadow .15s;
+    line-height: 1.4;
+  }
+  .suggestion-chip:hover {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129,140,248,.1);
+    color: #4f46e5;
+  }
+
+  /* ── Composer ─────────────────────────────────────────────── */
+  .da-composer {
+    padding: 14px 22px 16px;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+    flex-shrink: 0;
+  }
+  .da-compose-box {
+    border: 1.5px solid #d1d5db;
+    border-radius: 10px;
+    background: #f9fafb;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 14px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .da-compose-box:focus-within {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129,140,248,.12);
+    background: #fff;
+  }
+  .da-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-size: 14px;
+    color: #111827;
+    line-height: 1.5;
+    max-height: 140px;
+    overflow-y: auto;
+    outline: none;
+    padding: 0;
+  }
+  .da-input::placeholder { color: #9ca3af; }
+  .da-send-btn {
+    flex-shrink: 0;
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .da-send-btn:hover { background: #4338ca; }
+  .da-send-btn:disabled { background: #c7d2fe; cursor: default; }
+  .da-send-btn.streaming { background: #ef4444; }
+  .da-send-btn.streaming:hover { background: #dc2626; }
+
+  .da-composer-hint {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}{% endblock %}
+
+{% block content %}
+<div class="da-wrap">
+
+  {# ── Sidebar ──────────────────────────────────────────────── #}
+  <div class="da-sidebar">
+    <div class="da-brand">
+      <i class="fa fa-robot"></i>
+      Dev Assistant
+    </div>
+
+    <div class="da-section-label">Model</div>
+    <select class="da-model-select" id="model-select">
+      <option value="{{ default_model }}" selected>{{ default_model }}</option>
+    </select>
+
+    <div class="da-section-label">Tools Available</div>
+    <ul class="da-tools-list">
+      <li><i class="fa fa-file-text-o"></i> read_file</li>
+      <li><i class="fa fa-folder-open-o"></i> list_directory</li>
+      <li><i class="fa fa-search"></i> search_code</li>
+      <li><i class="fa fa-code-fork"></i> get_git_diff</li>
+      <li><i class="fa fa-history"></i> get_git_log</li>
+      <li><i class="fa fa-terminal"></i> run_command</li>
+      {% if has_write %}
+      <li class="write-tool"><i class="fa fa-pencil"></i> write_file</li>
+      <li class="write-tool"><i class="fa fa-flask"></i> run_tests</li>
+      {% endif %}
+    </ul>
+
+    <div class="da-info-block">
+      <strong>Project root:</strong><br>
+      <span style="font-size:10px; word-break:break-all;">
+        {{ appbuilder.app_name }}
+      </span>
+    </div>
+
+    <div class="da-sidebar-footer">
+      <button class="da-clear-btn" id="clear-btn">
+        <i class="fa fa-trash-o"></i>&nbsp; Clear chat
+      </button>
+    </div>
+  </div>
+
+  {# ── Main panel ───────────────────────────────────────────── #}
+  <div class="da-main">
+    <div class="da-header">
+      <h4>
+        <i class="fa fa-robot"></i>
+        Ollama Dev Assistant
+      </h4>
+      <div class="da-header-meta">
+        <span class="role-badge">
+          {% if has_write %}Developer{% else %}Viewer{% endif %}
+        </span>
+        &nbsp;
+        <span id="status-indicator" style="font-size:11px;">
+          <i class="fa fa-circle" style="color:#22c55e; font-size:8px;"></i> Ready
+        </span>
+      </div>
+    </div>
+
+    {# ── Message area ─────────────────────────────────────────── #}
+    <div class="da-messages" id="da-messages">
+      <div class="da-empty" id="da-empty">
+        <i class="fa fa-terminal"></i>
+        <h5>Ask me anything about this codebase</h5>
+        <p style="font-size:13px; max-width:360px;">
+          I can read files, search code, inspect git history{% if has_write %}, write files, and run tests{% endif %}.
+        </p>
+        <div class="suggestion-grid">
+          <button class="suggestion-chip" data-msg="What is the overall architecture of this project?">
+            <i class="fa fa-sitemap" style="color:#818cf8;"></i>&nbsp; Project architecture overview
+          </button>
+          <button class="suggestion-chip" data-msg="Show me how to add a new ModelView with CRUD operations.">
+            <i class="fa fa-table" style="color:#22c55e;"></i>&nbsp; How to add a ModelView
+          </button>
+          <button class="suggestion-chip" data-msg="What tests are currently failing? Run the CI suite.">
+            <i class="fa fa-flask" style="color:#f59e0b;"></i>&nbsp; Run tests and check failures
+          </button>
+          <button class="suggestion-chip" data-msg="Show me all recent git changes and summarize them.">
+            <i class="fa fa-code-fork" style="color:#4f46e5;"></i>&nbsp; Summarize recent changes
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# ── Composer ─────────────────────────────────────────────── #}
+    <div class="da-composer">
+      <div class="da-compose-box">
+        <textarea class="da-input" id="da-input" rows="1"
+          placeholder="Ask about the codebase, request changes, run tests…"></textarea>
+        <button class="da-send-btn" id="da-send" disabled>
+          <i class="fa fa-paper-plane" id="send-icon"></i>
+          <span id="send-label">Send</span>
+        </button>
+      </div>
+      <div class="da-composer-hint">
+        <span>Enter to send &nbsp;·&nbsp; Shift+Enter for newline</span>
+        <span id="token-counter" style="display:none; color:#818cf8;">Streaming…</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+
+  // ── State ─────────────────────────────────────────────────────────────
+  var history = [];      // [{role, content}, ...] kept client-side
+  var streaming = false;
+  var currentModel = "{{ default_model }}";
+  var abortController = null;
+
+  // ── DOM ───────────────────────────────────────────────────────────────
+  var $messages   = $("#da-messages");
+  var $empty      = $("#da-empty");
+  var $input      = $("#da-input");
+  var $sendBtn    = $("#da-send");
+  var $sendIcon   = $("#send-icon");
+  var $sendLabel  = $("#send-label");
+  var $status     = $("#status-indicator");
+  var $tokenCount = $("#token-counter");
+  var $modelSel   = $("#model-select");
+
+  // ── Load models via /dev-assistant/models ─────────────────────────────
+  $.getJSON("/dev-assistant/models", function (data) {
+    if (!data.models || !data.models.length) return;
+    $modelSel.empty();
+    data.models.forEach(function (m) {
+      var selected = m === currentModel ? " selected" : "";
+      $modelSel.append('<option value="' + m + '"' + selected + '>' + m + '</option>');
+    });
+    currentModel = $modelSel.val();
+  });
+
+  $modelSel.on("change", function () { currentModel = $(this).val(); });
+
+  // ── Input behaviour ───────────────────────────────────────────────────
+  $input.on("input", function () {
+    $sendBtn.prop("disabled", !$.trim($input.val()) || streaming);
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 140) + "px";
+  });
+
+  $input.on("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!$sendBtn.prop("disabled")) $sendBtn.trigger("click");
+    }
+  });
+
+  // ── Clear chat ────────────────────────────────────────────────────────
+  $("#clear-btn").on("click", function () {
+    history = [];
+    $messages.empty().append($empty);
+    $empty.show();
+    setStatus("ready");
+  });
+
+  // ── Suggestion chips ──────────────────────────────────────────────────
+  $messages.on("click", ".suggestion-chip", function () {
+    $input.val($(this).data("msg")).trigger("input");
+    $input.focus();
+  });
+
+  // ── Send ──────────────────────────────────────────────────────────────
+  $sendBtn.on("click", function () {
+    if (streaming) { stopStream(); return; }
+    var text = $.trim($input.val());
+    if (!text) return;
+    $input.val("").trigger("input");
+    sendMessage(text);
+  });
+
+  function sendMessage(text) {
+    $empty.hide();
+    appendUserMsg(text);
+    history.push({ role: "user", content: text });
+
+    // keep history at max 40 turns
+    if (history.length > 40) history = history.slice(history.length - 40);
+
+    startStreaming(text);
+  }
+
+  // ── Streaming ─────────────────────────────────────────────────────────
+  function startStreaming(text) {
+    streaming = true;
+    setStatus("thinking");
+    $sendBtn.addClass("streaming").prop("disabled", false);
+    $sendIcon.attr("class", "fa fa-stop");
+    $sendLabel.text("Stop");
+    $tokenCount.show().text("Streaming…");
+
+    var $bubble = appendAssistantBubble();
+    var $textNode = $bubble.find(".da-text");
+    var tokenCount = 0;
+
+    abortController = new AbortController();
+
+    fetch("/dev-assistant/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        model: currentModel,
+        history: history.slice(0, -1)  // exclude the just-added user turn
+      }),
+      signal: abortController.signal
+    })
+    .then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = "";
+      var fullContent = "";
+
+      function read() {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) {
+            finishStream($bubble, $textNode, fullContent, tokenCount);
+            return;
+          }
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var lines = buffer.split("\n");
+          buffer = lines.pop();  // incomplete line stays in buffer
+
+          lines.forEach(function (line) {
+            line = line.trim();
+            if (!line.startsWith("data:")) return;
+            var raw = line.slice(5).trim();
+            if (!raw) return;
+            try {
+              var evt = JSON.parse(raw);
+              handleEvent(evt, $bubble, $textNode);
+              if (evt.event === "token") {
+                fullContent += evt.data;
+                tokenCount++;
+                $tokenCount.text(tokenCount + " tokens");
+              }
+              if (evt.event === "done" || evt.event === "error") {
+                finishStream($bubble, $textNode, fullContent, tokenCount);
+                return;
+              }
+            } catch (e) { /* skip malformed */ }
+          });
+
+          return read();
+        });
+      }
+
+      return read();
+    })
+    .catch(function (err) {
+      if (err.name !== "AbortError") {
+        $textNode.html($textNode.html() + '<div class="tool-event" style="color:#ef4444;">' +
+          '<i class="fa fa-exclamation-circle"></i> Connection error: ' + err.message + '</div>');
+      }
+      finishStream($bubble, $textNode, fullContent || "", tokenCount);
+    });
+  }
+
+  function handleEvent(evt, $bubble, $textNode) {
+    if (evt.event === "token") {
+      var current = $textNode.data("raw") || "";
+      current += evt.data;
+      $textNode.data("raw", current);
+      $textNode.html(renderMarkdown(current));
+      $textNode.addClass("typing-cursor");
+      scrollToBottom();
+    } else if (evt.event === "tool_call") {
+      var argsStr = JSON.stringify(evt.args || {});
+      if (argsStr.length > 60) argsStr = argsStr.slice(0, 57) + "…";
+      $bubble.find(".da-tool-events").append(
+        '<div class="tool-event call">' +
+        '<i class="fa fa-cog fa-spin"></i>' +
+        '<span><span class="tool-name">' + escHtml(evt.tool) + '</span>' +
+        '<span class="tool-content"> ' + escHtml(argsStr) + '</span></span>' +
+        '</div>'
+      );
+      scrollToBottom();
+    } else if (evt.event === "tool_result") {
+      // update the last tool_call event to stop spinning + show result
+      var $last = $bubble.find(".tool-event.call").last();
+      $last.removeClass("call").addClass("result");
+      $last.find(".fa-spin").removeClass("fa-spin fa-cog").addClass("fa-check-circle");
+      scrollToBottom();
+    } else if (evt.event === "error") {
+      $bubble.find(".da-tool-events").append(
+        '<div class="tool-event" style="color:#ef4444;">' +
+        '<i class="fa fa-exclamation-circle"></i>' +
+        escHtml(evt.message) + '</div>'
+      );
+      scrollToBottom();
+    }
+  }
+
+  function finishStream($bubble, $textNode, fullContent, tokenCount) {
+    $textNode.removeClass("typing-cursor");
+    streaming = false;
+    abortController = null;
+    $sendBtn.removeClass("streaming").prop("disabled", !$.trim($input.val()));
+    $sendIcon.attr("class", "fa fa-paper-plane");
+    $sendLabel.text("Send");
+    $tokenCount.hide();
+    setStatus("ready");
+
+    if (fullContent) {
+      history.push({ role: "assistant", content: fullContent });
+    }
+  }
+
+  function stopStream() {
+    if (abortController) abortController.abort();
+  }
+
+  // ── Message rendering ─────────────────────────────────────────────────
+  function appendUserMsg(text) {
+    var html = '<div class="da-msg user-msg">' +
+      '<div class="da-avatar">U</div>' +
+      '<div class="da-bubble">' + escHtml(text) + '</div>' +
+      '</div>';
+    $messages.append(html);
+    scrollToBottom();
+  }
+
+  function appendAssistantBubble() {
+    var $msg = $('<div class="da-msg assistant-msg">' +
+      '<div class="da-avatar"><i class="fa fa-robot"></i></div>' +
+      '<div class="da-bubble">' +
+        '<div class="da-tool-events"></div>' +
+        '<div class="da-text typing-cursor"></div>' +
+      '</div>' +
+      '</div>');
+    $messages.append($msg);
+    scrollToBottom();
+    return $msg;
+  }
+
+  // ── Utilities ─────────────────────────────────────────────────────────
+  function scrollToBottom() {
+    var el = $messages[0];
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setStatus(state) {
+    var map = {
+      ready:    '<i class="fa fa-circle" style="color:#22c55e; font-size:8px;"></i> Ready',
+      thinking: '<i class="fa fa-circle" style="color:#f59e0b; font-size:8px;"></i> Thinking…',
+      error:    '<i class="fa fa-circle" style="color:#ef4444; font-size:8px;"></i> Error'
+    };
+    $status.html(map[state] || map.ready);
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // Minimal markdown: code blocks, inline code, bold, italic, headers, bullets
+  function renderMarkdown(text) {
+    // fenced code blocks
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
+      return '<pre><code>' + escHtml(code.trimEnd()) + '</code></pre>';
+    });
+    // inline code
+    text = text.replace(/`([^`]+)`/g, function (_, c) {
+      return '<code>' + escHtml(c) + '</code>';
+    });
+    // bold
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // italic
+    text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // headers
+    text = text.replace(/^(#{1,3}) (.+)$/gm, function (_, hashes, content) {
+      var level = hashes.length + 2;  // h3-h5 to not overpower FAB
+      return '<h' + level + ' style="margin:.5em 0;">' + content + '</h' + level + '>';
+    });
+    // bullets
+    text = text.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
+    text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    // line breaks
+    text = text.replace(/\n/g, '<br>');
+    return text;
+  }
+
+}());
+</script>
+{% endblock %}
