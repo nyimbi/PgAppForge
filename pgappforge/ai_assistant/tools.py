@@ -102,7 +102,10 @@ def list_directory(path: str = "") -> str:
 
 
 def read_log(path: str, last_n_lines: int = 150) -> str:
-	"""Read the last N lines of a log file inside the project."""
+	"""Read the last N lines of a project-local log file (must be inside PROJECT_ROOT).
+
+	System logs outside the project (e.g. /var/log/) are not accessible by design.
+	"""
 	p = safe_path(path)
 	if not p.exists():
 		return f"Log file not found: {path}"
@@ -272,6 +275,35 @@ def run_command(command: str, timeout: int = 30) -> str:
 # App introspection
 # ---------------------------------------------------------------------------
 
+_SENSITIVE_KEY_FRAGMENTS = frozenset({
+	"secret", "password", "passwd", "token", "key", "private", "credential",
+})
+
+
+def get_env_vars() -> str:
+	"""Return project-relevant environment variables with sensitive values masked.
+
+	Shows vars prefixed with PGAF_, FLASK_, SQLALCHEMY_, DATABASE_, REDIS_,
+	CELERY_, DEBUG, TESTING, APP_ — enough to confirm what config the live
+	process loaded without leaking credentials.
+	"""
+	_SHOW_PREFIXES = (
+		"PGAF_", "FLASK_", "SQLALCHEMY_", "DATABASE_", "REDIS_",
+		"CELERY_", "DEBUG", "TESTING", "APP_", "OLLAMA_", "DEV_ASSISTANT_",
+	)
+	lines: list[str] = []
+	for k, v in sorted(os.environ.items()):
+		if not any(k.startswith(p) or k == p.rstrip("_") for p in _SHOW_PREFIXES):
+			continue
+		k_lower = k.lower()
+		if any(frag in k_lower for frag in _SENSITIVE_KEY_FRAGMENTS):
+			display = "***"
+		else:
+			display = v[:120] + ("…" if len(v) > 120 else "")
+		lines.append(f"  {k}={display}")
+	return "\n".join(lines) or "(no matching environment variables found)"
+
+
 def get_route_list() -> str:
 	"""Find all @expose-decorated routes via static analysis."""
 	return search_code(r"@expose\(", glob="*.py", max_matches=100)
@@ -408,7 +440,7 @@ TOOL_SCHEMAS: list[dict] = [
 		"type": "function",
 		"function": {
 			"name": "run_command",
-			"description": "Execute a whitelisted shell command (git read-only, rg, grep, pytest, pyright).",
+			"description": "Execute a whitelisted shell command (git read-only, rg, grep, find, pytest, pyright, pip list/show).",
 			"parameters": {
 				"type": "object",
 				"properties": {
@@ -424,6 +456,14 @@ TOOL_SCHEMAS: list[dict] = [
 		"function": {
 			"name": "check_ollama_models",
 			"description": "List locally available Ollama models.",
+			"parameters": {"type": "object", "properties": {}, "required": []},
+		},
+	},
+	{
+		"type": "function",
+		"function": {
+			"name": "get_env_vars",
+			"description": "Show project-relevant environment variables (PGAF_, FLASK_, SQLALCHEMY_, etc.). Sensitive values are masked with ***.",
 			"parameters": {"type": "object", "properties": {}, "required": []},
 		},
 	},
@@ -448,7 +488,7 @@ TOOL_SCHEMAS: list[dict] = [
 READ_TOOL_NAMES: frozenset[str] = frozenset({
 	"read_file", "list_directory", "search_code",
 	"get_git_diff", "get_git_log", "get_git_status",
-	"run_command", "check_ollama_models", "read_log",
+	"run_command", "check_ollama_models", "read_log", "get_env_vars",
 })
 
 # Write tool names — Developer + Admin only
@@ -472,6 +512,7 @@ _TOOL_FN_MAP: dict[str, Any] = {
 	"run_command": run_command,
 	"check_ollama_models": check_ollama_models,
 	"read_log": read_log,
+	"get_env_vars": get_env_vars,
 }
 
 
@@ -496,7 +537,7 @@ __all__ = [
 	"safe_path", "PROJECT_ROOT",
 	"read_file", "write_file", "list_directory", "search_code",
 	"get_git_diff", "get_git_log", "get_git_status",
-	"run_tests", "run_command", "check_ollama_models", "read_log",
+	"run_tests", "run_command", "check_ollama_models", "read_log", "get_env_vars",
 	"TOOL_SCHEMAS", "READ_TOOL_NAMES", "WRITE_TOOL_NAMES",
 	"build_tool_registry",
 ]

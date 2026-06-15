@@ -173,6 +173,39 @@ class TestReadLog:
 		assert len(result.splitlines()) == 2000
 
 
+class TestGetEnvVars:
+	def test_masks_sensitive_keys(self, monkeypatch):
+		monkeypatch.setenv("FLASK_SECRET_KEY", "super-secret-value")
+		monkeypatch.setenv("FLASK_DEBUG", "1")
+		from pgappforge.ai_assistant.tools import get_env_vars
+		result = get_env_vars()
+		assert "***" in result
+		assert "super-secret-value" not in result
+
+	def test_shows_nonsensitive_value(self, monkeypatch):
+		monkeypatch.setenv("FLASK_DEBUG", "true")
+		from pgappforge.ai_assistant.tools import get_env_vars
+		result = get_env_vars()
+		assert "FLASK_DEBUG=true" in result
+
+	def test_filters_unrelated_vars(self, monkeypatch):
+		monkeypatch.setenv("PATH", "/usr/bin:/bin")
+		monkeypatch.setenv("HOME", "/root")
+		from pgappforge.ai_assistant.tools import get_env_vars
+		result = get_env_vars()
+		assert "PATH=" not in result
+		assert "HOME=" not in result
+
+	def test_registered_in_all_four_places(self):
+		from pgappforge.ai_assistant.tools import (
+			TOOL_SCHEMAS, READ_TOOL_NAMES, _TOOL_FN_MAP, get_env_vars,
+		)
+		assert "get_env_vars" in READ_TOOL_NAMES
+		assert any(s["function"]["name"] == "get_env_vars" for s in TOOL_SCHEMAS)
+		assert "get_env_vars" in _TOOL_FN_MAP
+		assert _TOOL_FN_MAP["get_env_vars"] is get_env_vars
+
+
 class TestBuildToolRegistry:
 	def test_admin_gets_write_tools(self):
 		from pgappforge.ai_assistant.tools import build_tool_registry, WRITE_TOOL_NAMES
