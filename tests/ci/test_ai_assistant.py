@@ -129,6 +129,50 @@ class TestListDirectory:
 		assert "not a directory" in result.lower()
 
 
+class TestReadLog:
+	def setup_method(self):
+		import pgappforge.ai_assistant.tools as t
+		self._orig_root = t.PROJECT_ROOT
+		self.tmp = Path(tempfile.mkdtemp()).resolve()
+		t.PROJECT_ROOT = self.tmp
+
+	def teardown_method(self):
+		import pgappforge.ai_assistant.tools as t
+		t.PROJECT_ROOT = self._orig_root
+
+	def test_read_last_n_lines(self):
+		(self.tmp / "app.log").write_text("\n".join(f"line {i}" for i in range(200)))
+		from pgappforge.ai_assistant.tools import read_log
+		result = read_log("app.log", last_n_lines=10)
+		lines = result.splitlines()
+		assert len(lines) == 10
+		assert lines[0] == "line 190"
+		assert lines[-1] == "line 199"
+
+	def test_read_log_missing_file(self):
+		from pgappforge.ai_assistant.tools import read_log
+		result = read_log("nope.log")
+		assert "not found" in result.lower()
+
+	def test_read_log_traversal_blocked(self):
+		from pgappforge.ai_assistant.tools import read_log
+		with pytest.raises(PermissionError):
+			read_log("../../etc/passwd")
+
+	def test_read_log_default_lines(self):
+		(self.tmp / "big.log").write_text("\n".join(f"L{i}" for i in range(500)))
+		from pgappforge.ai_assistant.tools import read_log
+		result = read_log("big.log")
+		lines = result.splitlines()
+		assert len(lines) == 150  # default
+
+	def test_read_log_cap_at_2000(self):
+		(self.tmp / "huge.log").write_text("\n".join(f"X{i}" for i in range(3000)))
+		from pgappforge.ai_assistant.tools import read_log
+		result = read_log("huge.log", last_n_lines=9999)
+		assert len(result.splitlines()) == 2000
+
+
 class TestBuildToolRegistry:
 	def test_admin_gets_write_tools(self):
 		from pgappforge.ai_assistant.tools import build_tool_registry, WRITE_TOOL_NAMES

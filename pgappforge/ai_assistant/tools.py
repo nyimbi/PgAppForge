@@ -100,6 +100,21 @@ def list_directory(path: str = "") -> str:
 			entries.append(f"  {rel}  ({child.stat().st_size:,} bytes)")
 	return "\n".join(entries) or "(empty directory)"
 
+
+def read_log(path: str, last_n_lines: int = 150) -> str:
+	"""Read the last N lines of a log file inside the project."""
+	p = safe_path(path)
+	if not p.exists():
+		return f"Log file not found: {path}"
+	if not p.is_file():
+		return f"Not a file: {path}"
+	try:
+		last_n_lines = max(1, min(int(last_n_lines), 2000))
+	except (TypeError, ValueError):
+		last_n_lines = 150
+	lines = p.read_text(errors="replace").splitlines()
+	return "\n".join(lines[-last_n_lines:]) or "(empty log)"
+
 # ---------------------------------------------------------------------------
 # Code search
 # ---------------------------------------------------------------------------
@@ -203,6 +218,8 @@ _ALLOWED_CMD_PREFIXES = (
 	"rg ", "grep ",
 	".venv/bin/python -m pytest",
 	".venv/bin/python -m pyright",
+	".venv/bin/python -m pip list",
+	".venv/bin/python -m pip show",
 	"find ",
 )
 
@@ -410,13 +427,28 @@ TOOL_SCHEMAS: list[dict] = [
 			"parameters": {"type": "object", "properties": {}, "required": []},
 		},
 	},
+	{
+		"type": "function",
+		"function": {
+			"name": "read_log",
+			"description": "Read the last N lines of a log file inside the project (app logs, test output logs, etc.).",
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"path": {"type": "string", "description": "Relative path to the log file"},
+					"last_n_lines": {"type": "integer", "description": "How many lines from the end to return (default 150, max 2000)"},
+				},
+				"required": ["path"],
+			},
+		},
+	},
 ]
 
 # Read-only tool names — available to all roles
 READ_TOOL_NAMES: frozenset[str] = frozenset({
 	"read_file", "list_directory", "search_code",
 	"get_git_diff", "get_git_log", "get_git_status",
-	"run_command", "check_ollama_models",
+	"run_command", "check_ollama_models", "read_log",
 })
 
 # Write tool names — Developer + Admin only
@@ -439,6 +471,7 @@ _TOOL_FN_MAP: dict[str, Any] = {
 	"run_tests": run_tests,
 	"run_command": run_command,
 	"check_ollama_models": check_ollama_models,
+	"read_log": read_log,
 }
 
 
@@ -463,7 +496,7 @@ __all__ = [
 	"safe_path", "PROJECT_ROOT",
 	"read_file", "write_file", "list_directory", "search_code",
 	"get_git_diff", "get_git_log", "get_git_status",
-	"run_tests", "run_command", "check_ollama_models",
+	"run_tests", "run_command", "check_ollama_models", "read_log",
 	"TOOL_SCHEMAS", "READ_TOOL_NAMES", "WRITE_TOOL_NAMES",
 	"build_tool_registry",
 ]
