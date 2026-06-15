@@ -187,10 +187,12 @@ def run_agent_stream(
 			yield _sse_done()
 			return
 
-		# Anti-loop: abort if the same combination of tool names repeats
-		call_fingerprint = "|".join(
-			sorted(tc.get("function", {}).get("name", "") for tc in accumulated_tool_calls)
-		)
+		# Anti-loop: abort if the exact same (name, args) combination repeats
+		def _tc_fp(tc: dict) -> str:
+			fn = tc.get("function", {})
+			return fn.get("name", "") + ":" + json.dumps(fn.get("arguments", {}), sort_keys=True)
+
+		call_fingerprint = "|".join(sorted(_tc_fp(tc) for tc in accumulated_tool_calls))
 		if call_fingerprint in seen_tool_calls:
 			yield _sse_error("Detected repeated tool call pattern — stopping to avoid loop.")
 			yield _sse_done()
@@ -281,7 +283,11 @@ def run_agent_blocking(
 		if tool_rounds > MAX_TOOL_ROUNDS:
 			return f"[Max tool rounds exceeded after {MAX_TOOL_ROUNDS} iterations]", messages[1:]
 
-		call_fp = "|".join(sorted(tc.get("function", {}).get("name", "") for tc in tool_calls))
+		def _fp(tc: dict) -> str:
+			fn = tc.get("function", {})
+			return fn.get("name", "") + ":" + json.dumps(fn.get("arguments", {}), sort_keys=True)
+
+		call_fp = "|".join(sorted(_fp(tc) for tc in tool_calls))
 		if call_fp in seen_tool_calls:
 			return "[Loop detected — aborting]", messages[1:]
 		seen_tool_calls.add(call_fp)

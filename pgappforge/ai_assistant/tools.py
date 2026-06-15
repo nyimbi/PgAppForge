@@ -9,16 +9,18 @@ All file-access tools enforce path confinement via safe_path():
 Tool tiers (matched to RBAC roles):
   READ_TOOLS   — Viewer, Developer, Admin
   WRITE_TOOLS  — Developer, Admin only
-  ADMIN_TOOLS  — Admin only
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
+
+import requests as _req
 
 log = logging.getLogger(__name__)
 
@@ -145,7 +147,11 @@ def get_git_diff(path: str = "") -> str:
 
 def get_git_log(n: int = 10, path: str = "") -> str:
 	"""Get the last *n* commit log lines, optionally filtered by *path*."""
-	args = ["git", "log", "--oneline", f"-{min(int(n), 50)}"]
+	try:
+		count = max(1, min(int(n), 50))
+	except (TypeError, ValueError):
+		count = 10
+	args = ["git", "log", "--oneline", f"-{count}"]
 	if path:
 		args += ["--", str(safe_path(path))]
 	result = subprocess.run(
@@ -228,8 +234,13 @@ def run_command(command: str, timeout: int = 30) -> str:
 		)
 
 	try:
+		args = shlex.split(command)
+	except ValueError as exc:
+		return f"Could not parse command: {exc}"
+
+	try:
 		result = subprocess.run(
-			command, shell=True,
+			args,
 			capture_output=True, text=True,
 			timeout=timeout,
 			cwd=str(PROJECT_ROOT),
@@ -245,27 +256,16 @@ def run_command(command: str, timeout: int = 30) -> str:
 # ---------------------------------------------------------------------------
 
 def get_route_list() -> str:
-	"""List all registered Flask routes (read from source, no app context needed)."""
-	try:
-		result = subprocess.run(
-			[".venv/bin/python", "-c",
-			 "from flask import Flask; "
-			 "app = Flask(__name__); "
-			 "print('Route listing requires a running Flask app — use search_code instead')"],
-			capture_output=True, text=True, timeout=10, cwd=str(PROJECT_ROOT),
-		)
-		return result.stdout or "Use search_code with pattern '@expose' to find all routes."
-	except Exception:
-		return "Use search_code with pattern '@expose' to find all routes."
+	"""Find all @expose-decorated routes via static analysis."""
+	return search_code(r"@expose\(", glob="*.py", max_matches=100)
 
 
 def check_ollama_models(ollama_url: str = "http://localhost:11434") -> str:
 	"""List models available in the local Ollama instance."""
 	try:
-		import urllib.request
-		with urllib.request.urlopen(f"{ollama_url}/api/tags", timeout=3) as resp:
-			data = json.loads(resp.read())
-		models = data.get("models", [])
+		resp = _req.get(f"{ollama_url}/api/tags", timeout=3)
+		resp.raise_for_status()
+		models = resp.json().get("models", [])
 		if not models:
 			return "No models found. Run: ollama pull qwen2.5-coder:7b"
 		lines = [f"  {m['name']}  ({m.get('size', 0)//1_000_000} MB)" for m in models]

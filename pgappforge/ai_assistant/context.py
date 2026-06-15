@@ -156,7 +156,7 @@ def build_system_prompt(
 	"""
 	prompt = _BASE_SYSTEM_PROMPT
 	if app_name != "PgAppForge":
-		prompt = prompt.replace("PgAppForge", app_name, 1)
+		prompt = prompt.replace("PgAppForge", app_name)
 
 	if include_repo_map:
 		try:

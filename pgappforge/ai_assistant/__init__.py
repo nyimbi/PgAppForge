@@ -7,7 +7,7 @@ Registration:
     from pgappforge.ai_assistant import DevAssistantPlugin
 
     # In your AppBuilder init:
-    appbuilder.add_view_no_menu(DevAssistantPlugin.view_class)
+    appbuilder.add_view_no_menu(DevAssistantView)
 
     # Or register as an addon in config:
     ADDON_MANAGERS = ["pgappforge.ai_assistant.DevAssistantPlugin"]
