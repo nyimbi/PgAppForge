@@ -25,7 +25,7 @@ from pgappforge.security.decorators import has_access
 
 from .agent import _DEFAULT_MODEL, _DEFAULT_OLLAMA_URL, run_agent_stream
 from .context import build_system_prompt
-from .tools import build_tool_registry
+from .tools import build_tool_registry, WRITE_ROLES
 
 log = logging.getLogger(__name__)
 
@@ -34,13 +34,6 @@ _PROJECT_ROOT = Path(
 ).resolve()
 _MAX_HISTORY_TURNS = 40
 _VALID_HISTORY_ROLES = frozenset({"user", "assistant"})
-# Role names that unlock write tools. Override via DEV_ASSISTANT_WRITE_ROLES env var
-# (comma-separated, e.g. "Admin,Developer,Power User").
-_WRITE_ROLES: frozenset[str] = frozenset(
-	r.strip()
-	for r in os.environ.get("DEV_ASSISTANT_WRITE_ROLES", "Admin,Developer").split(",")
-	if r.strip()
-)
 _MODEL_RE = re.compile(r"[^\w.\-:]")
 
 
@@ -98,7 +91,7 @@ class DevAssistantView(BaseView):
 		"""Render the main chat interface."""
 		default_model = os.environ.get("DEV_ASSISTANT_MODEL", _DEFAULT_MODEL)
 		user_roles = _get_user_roles()
-		has_write = bool(user_roles & _WRITE_ROLES)
+		has_write = bool(user_roles & WRITE_ROLES)
 
 		return self.render_template(
 			"dev_assistant/index.html",
