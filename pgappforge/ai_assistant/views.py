@@ -68,7 +68,8 @@ def _get_ollama_models(ollama_url: str) -> list[str]:
 		resp = _req.get(f"{ollama_url}/api/tags", timeout=3)
 		resp.raise_for_status()
 		return [m["name"] for m in resp.json().get("models", [])]
-	except Exception:
+	except Exception as exc:
+		log.debug("dev_assistant: could not fetch Ollama models from %s: %s", ollama_url, exc)
 		return []
 
 
@@ -95,6 +96,7 @@ class DevAssistantView(BaseView):
 			default_model=default_model,
 			has_write=has_write,
 			user_roles=sorted(user_roles),
+			project_root=str(_PROJECT_ROOT),
 		)
 
 	@expose("/chat", methods=["POST"])
@@ -114,7 +116,10 @@ class DevAssistantView(BaseView):
 		if not user_message:
 			return make_response("message is required", 400)
 
-		model = str(body.get("model", os.environ.get("DEV_ASSISTANT_MODEL", _DEFAULT_MODEL)))
+		# Sanitize model: allow only word chars, dots, hyphens, colons (e.g. qwen2.5-coder:7b)
+		import re as _re
+		raw_model = str(body.get("model", os.environ.get("DEV_ASSISTANT_MODEL", _DEFAULT_MODEL)))
+		model = _re.sub(r"[^\w.\-:]", "", raw_model) or _DEFAULT_MODEL
 		ollama_url = os.environ.get("OLLAMA_URL", _DEFAULT_OLLAMA_URL)
 
 		history = _sanitize_history(body.get("history", []) or [])

@@ -389,7 +389,12 @@
       <li><i class="fa fa-search"></i> search_code</li>
       <li><i class="fa fa-code-fork"></i> get_git_diff</li>
       <li><i class="fa fa-history"></i> get_git_log</li>
+      <li><i class="fa fa-check-square-o"></i> get_git_status</li>
       <li><i class="fa fa-terminal"></i> run_command</li>
+      <li><i class="fa fa-file-code-o"></i> read_log</li>
+      <li><i class="fa fa-list-alt"></i> get_env_vars</li>
+      <li><i class="fa fa-sitemap"></i> get_route_list</li>
+      <li><i class="fa fa-cube"></i> check_ollama_models</li>
       {% if has_write %}
       <li class="write-tool"><i class="fa fa-pencil"></i> write_file</li>
       <li class="write-tool"><i class="fa fa-flask"></i> run_tests</li>
@@ -399,7 +404,7 @@
     <div class="da-info-block">
       <strong>Project root:</strong><br>
       <span style="font-size:10px; word-break:break-all;">
-        {{ appbuilder.app_name }}
+        {{ project_root }}
       </span>
     </div>
 
@@ -753,7 +758,8 @@
     });
     // bullets
     text = text.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-    text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    // Wrap every contiguous run of <li> elements in a <ul>
+    text = text.replace(/(<li>[\s\S]*?<\/li>)(\s*<li>[\s\S]*?<\/li>)*/g, '<ul>$&</ul>');
     // line breaks
     text = text.replace(/\n/g, '<br>');
     return text;

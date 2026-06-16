@@ -218,9 +218,17 @@ def run_tests(test_path: str = "") -> str:
 # Whitelisted shell command runner
 # ---------------------------------------------------------------------------
 
+_PYTHON = sys.executable  # resolve once; used in allowlist and run_tests
+
 _ALLOWED_CMD_PREFIXES = (
 	"git diff", "git log", "git status", "git show", "git branch",
 	"rg ", "grep ",
+	# Canonical paths for the active interpreter
+	f"{_PYTHON} -m pytest",
+	f"{_PYTHON} -m pyright",
+	f"{_PYTHON} -m pip list",
+	f"{_PYTHON} -m pip show",
+	# Legacy relative path kept for backwards compat in local dev
 	".venv/bin/python -m pytest",
 	".venv/bin/python -m pyright",
 	".venv/bin/python -m pip list",

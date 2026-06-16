@@ -106,9 +106,18 @@ def _chat_stream(
 		for raw_line in resp.iter_lines():
 			if raw_line:
 				try:
-					yield json.loads(raw_line)
+					chunk = json.loads(raw_line)
 				except json.JSONDecodeError:
 					continue
+				# Ollama sends {"error": "..."} for model-not-found / OOM
+				if "error" in chunk and not chunk.get("done"):
+					log.warning("Ollama error: %s", chunk["error"])
+					yield {
+						"done": True, "done_reason": "stop",
+						"message": {"content": f"[Ollama error: {chunk['error']}]"},
+					}
+					return
+				yield chunk
 
 
 # ---------------------------------------------------------------------------
