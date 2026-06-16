@@ -192,6 +192,7 @@ def get_git_status() -> str:
 # Test runner
 # ---------------------------------------------------------------------------
 
+_PYTHON = sys.executable  # resolved once at import; used in run_tests and _ALLOWED_CMD_PREFIXES
 _ALLOWED_TEST_DIRS = ("tests/ci/", "tests/sqla/", "tests/security/", "tests/")
 
 
@@ -202,9 +203,9 @@ def run_tests(test_path: str = "") -> str:
 		rel = str(p.relative_to(PROJECT_ROOT))
 		if not any(rel.startswith(d) for d in _ALLOWED_TEST_DIRS):
 			return f"Test path not in allowed directories: {test_path}"
-		cmd = [sys.executable, "-m", "pytest", "-q", "--tb=short", str(p)]
+		cmd = [_PYTHON, "-m", "pytest", "-q", "--tb=short", str(p)]
 	else:
-		cmd = [sys.executable, "-m", "pytest", "-q", "--tb=short", "tests/ci"]
+		cmd = [_PYTHON, "-m", "pytest", "-q", "--tb=short", "tests/ci"]
 	try:
 		result = subprocess.run(
 			cmd, capture_output=True, text=True,
@@ -217,8 +218,6 @@ def run_tests(test_path: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Whitelisted shell command runner
 # ---------------------------------------------------------------------------
-
-_PYTHON = sys.executable  # resolve once; used in allowlist and run_tests
 
 _ALLOWED_CMD_PREFIXES = (
 	"git diff", "git log", "git status", "git show", "git branch",
