@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import requests as _req
@@ -33,6 +34,14 @@ _PROJECT_ROOT = Path(
 ).resolve()
 _MAX_HISTORY_TURNS = 40
 _VALID_HISTORY_ROLES = frozenset({"user", "assistant"})
+# Role names that unlock write tools. Override via DEV_ASSISTANT_WRITE_ROLES env var
+# (comma-separated, e.g. "Admin,Developer,Power User").
+_WRITE_ROLES: frozenset[str] = frozenset(
+	r.strip()
+	for r in os.environ.get("DEV_ASSISTANT_WRITE_ROLES", "Admin,Developer").split(",")
+	if r.strip()
+)
+_MODEL_RE = re.compile(r"[^\w.\-:]")
 
 
 def _get_user_roles() -> set[str]:
@@ -89,7 +98,7 @@ class DevAssistantView(BaseView):
 		"""Render the main chat interface."""
 		default_model = os.environ.get("DEV_ASSISTANT_MODEL", _DEFAULT_MODEL)
 		user_roles = _get_user_roles()
-		has_write = bool(user_roles & {"Admin", "Developer"})
+		has_write = bool(user_roles & _WRITE_ROLES)
 
 		return self.render_template(
 			"dev_assistant/index.html",
@@ -116,10 +125,8 @@ class DevAssistantView(BaseView):
 		if not user_message:
 			return make_response("message is required", 400)
 
-		# Sanitize model: allow only word chars, dots, hyphens, colons (e.g. qwen2.5-coder:7b)
-		import re as _re
 		raw_model = str(body.get("model", os.environ.get("DEV_ASSISTANT_MODEL", _DEFAULT_MODEL)))
-		model = _re.sub(r"[^\w.\-:]", "", raw_model) or _DEFAULT_MODEL
+		model = _MODEL_RE.sub("", raw_model) or _DEFAULT_MODEL
 		ollama_url = os.environ.get("OLLAMA_URL", _DEFAULT_OLLAMA_URL)
 
 		history = _sanitize_history(body.get("history", []) or [])

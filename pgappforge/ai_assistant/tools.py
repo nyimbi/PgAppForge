@@ -547,6 +547,14 @@ _TOOL_FN_MAP: dict[str, Any] = {
 }
 
 
+# Role names that unlock write tools. Mirrors views._WRITE_ROLES; both read the same env var.
+WRITE_ROLES: frozenset[str] = frozenset(
+	r.strip()
+	for r in os.environ.get("DEV_ASSISTANT_WRITE_ROLES", "Admin,Developer").split(",")
+	if r.strip()
+)
+
+
 def build_tool_registry(user_roles: set[str]) -> tuple[list[dict], dict[str, Any]]:
 	"""Return (tool_schemas, tool_fn_registry) filtered by user roles.
 
@@ -557,7 +565,7 @@ def build_tool_registry(user_roles: set[str]) -> tuple[list[dict], dict[str, Any
 		schemas: list of tool JSON Schema dicts to pass to Ollama
 		registry: name → callable for tool execution
 	"""
-	has_write = bool(user_roles & {"Admin", "Developer"})
+	has_write = bool(user_roles & WRITE_ROLES)
 	allowed_names = READ_TOOL_NAMES | (WRITE_TOOL_NAMES if has_write else frozenset())
 	schemas = [s for s in TOOL_SCHEMAS if s["function"]["name"] in allowed_names]
 	registry = {name: fn for name, fn in _TOOL_FN_MAP.items() if name in allowed_names}
@@ -570,6 +578,6 @@ __all__ = [
 	"get_git_diff", "get_git_log", "get_git_status",
 	"run_tests", "run_command", "check_ollama_models", "read_log", "get_env_vars",
 	"get_route_list",
-	"TOOL_SCHEMAS", "READ_TOOL_NAMES", "WRITE_TOOL_NAMES",
+	"TOOL_SCHEMAS", "READ_TOOL_NAMES", "WRITE_TOOL_NAMES", "WRITE_ROLES",
 	"build_tool_registry",
 ]
