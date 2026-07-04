@@ -13,7 +13,7 @@ Browser (SSE fetch)
        ├─ build_tool_registry()   → RBAC-filtered tool list
        └─ run_agent_stream()      → Ollama ReAct loop
             ├─ _chat_stream()     → POST /api/chat (NDJSON stream)
-            └─ tool dispatch      → 13 tool functions
+            └─ tool dispatch      → 27 tool functions
 ```
 
 ### Module layout
@@ -22,7 +22,7 @@ Browser (SSE fetch)
 pgappforge/
   ai_assistant/
     __init__.py      FAB plugin (DevAssistantPlugin)
-    tools.py         13 tool functions + RBAC registry
+    tools.py         27 tool functions + RBAC registry + audit log
     context.py       AST repo map + system prompt builder
     agent.py         Ollama ReAct loop (streaming + blocking)
     views.py         Flask views: GET /, POST /chat, GET /models
@@ -30,8 +30,11 @@ pgappforge/
 pgappforge/templates/dev_assistant/
     index.html       Chat UI (vanilla JS + SSE fetch)
 
+logs/
+    dev_assistant_audit.jsonl   Write-operation audit log (auto-created)
+
 tests/ci/
-    test_ai_assistant.py   45 tests
+    test_ai_assistant.py   90+ tests
 ```
 
 ---
@@ -68,6 +71,10 @@ All configuration is via environment variables (not `app.config`):
 | `DEV_ASSISTANT_MODEL` | `qwen2.5-coder:7b` | Default model (overridable per-request from UI) |
 | `PGAF_DEV_ASSISTANT_ROOT` | Parent of `pgappforge/` package | Project root for path confinement and repo map |
 | `DEV_ASSISTANT_WRITE_ROLES` | `Admin,Developer` | Comma-separated FAB role names that unlock write tools (`write_file`, `run_tests`) |
+| `SQLALCHEMY_DATABASE_URI` | — | PostgreSQL DSN. Enables session persistence and semantic search index. |
+| `DEV_ASSISTANT_EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model for `semantic_search`. Must be pulled: `ollama pull nomic-embed-text`. |
+| `DEV_ASSISTANT_EMBED_DIM` | `768` | Embedding dimension — change if using a different model. |
+| `SEARXNG_URL` | — | SearXNG base URL (e.g. `http://localhost:8888`). Enables `search_web` tool. |
 
 ```bash
 export OLLAMA_URL=http://ollama-host:11434
@@ -120,6 +127,11 @@ location /dev-assistant/chat {
 | `GET` | `/dev-assistant/` | `can_index` | Chat UI |
 | `POST` | `/dev-assistant/chat` | `can_chat` | SSE stream endpoint |
 | `GET` | `/dev-assistant/models` | `can_models` | JSON list of Ollama models |
+| `GET` | `/dev-assistant/sessions` | `can_index` | List saved sessions |
+| `POST` | `/dev-assistant/sessions` | `can_index` | Create a new session |
+| `GET` | `/dev-assistant/sessions/<id>` | `can_index` | Load session (history + metadata) |
+| `PUT` | `/dev-assistant/sessions/<id>` | `can_index` | Save/update session |
+| `DELETE` | `/dev-assistant/sessions/<id>` | `can_index` | Delete session |
 
 ---
 
@@ -184,13 +196,38 @@ data: {"event":"done"}
 | `get_env_vars` | Project-relevant env vars with credentials masked |
 | `get_route_list` | All `@expose()`-decorated routes via static analysis |
 | `check_ollama_models` | List available Ollama models |
+| `get_db_schema` | Live PostgreSQL schema introspection via SQLAlchemy reflection. No args: list all public tables. With `table_name`: columns, types, nullability, PKs, FKs, indexes. |
+| `alembic_status` | Current Alembic revision and available heads (`alembic current` + `alembic heads`). |
+| `get_project_deps` | Read requirements files (requirements/base.txt, requirements.txt, pyproject.toml) or fall back to `pip list`. |
+| `read_audit_log` | View the write-operation audit log (`logs/dev_assistant_audit.jsonl`). Every `write_file`, `patch_file`, `run_tests`, `git_commit`, `git_create_branch`, `rollback_changes`, and `reindex_codebase` call is recorded with a UTC timestamp. |
+| `semantic_search` | Find code by **meaning** using pgvector embeddings — "where is JWT auth handled?", "find the payment processing logic". Requires `pgvector` extension + Ollama `nomic-embed-text` model. Indexed incrementally at startup. |
+| `search_web` | Search the web via SearXNG (requires `SEARXNG_URL` env var). Useful for looking up library docs, error messages, or API references. |
+| `get_ci_status` | Show recent GitHub Actions CI/CD pipeline runs via `gh` CLI. Automatically fetches failure logs for the most recent failed run. |
+| `find_usages` | Find all usages of a function, class, or variable across Python files using ripgrep (falls back to grep). Returns file:line with context. |
+| `get_test_coverage` | Run pytest with `--cov=pgappforge --cov-report=term-missing` and return the missing-lines report. |
 
 ### Write tools (Admin and Developer roles only)
 
 | Tool | Description |
 |---|---|
-| `write_file` | Create or overwrite a file inside the project |
-| `run_tests` | Run pytest on `tests/ci/` or a specific test path |
+| `write_file` | Create or overwrite a file. Returns a unified diff of what changed. Audit-logged. |
+| `patch_file` | **Preferred over `write_file` for targeted edits.** Replaces an exact string in a file without rewriting the whole thing. Fails clearly if `old_str` appears 0 or ≥2 times. Returns a unified diff. Audit-logged. |
+| `run_tests` | Run pytest on `tests/ci/` or a specific test path. Audit-logged. |
+| `git_commit` | Stage tracked modified files (`git add -u`) and commit. Does NOT add untracked files — safe against committing `.env` or secrets. Audit-logged. |
+| `git_create_branch` | Create and checkout a new branch from current HEAD. Branch name is sanitised to safe characters. Audit-logged. |
+| `rollback_changes` | Stash all uncommitted tracked-file changes (`git stash push`). Recoverable via `git stash pop`. Requires `confirm='YES'` when changes exist. Audit-logged. |
+| `reindex_codebase` | Re-index Python source files into the pgvector semantic search store. Run after significant file changes when `semantic_search` results are stale. Requires pgvector + Ollama `nomic-embed-text`. |
+
+### patch_file vs write_file
+
+Prefer `patch_file` whenever changing specific lines in a large file:
+
+```
+write_file  — rewrite the entire file (loses context, hallucination risk for long files)
+patch_file  — surgical string replacement (only the changed region, requires exact match)
+```
+
+`patch_file` fails early with a helpful message when `old_str` is not found or appears multiple times, forcing the agent to re-read the file before retrying.
 
 ### run_command allowlist
 
@@ -325,7 +362,7 @@ No menu entry is created. The UI is accessible directly at `/dev-assistant/`.
 ## Running Tests
 
 ```bash
-# Full ai_assistant suite (45 tests, ~3 min)
+# Full ai_assistant suite (~3 min)
 .venv/bin/python -m pytest tests/ci/test_ai_assistant.py -v
 
 # Quick smoke test (import + tool registry)
@@ -353,6 +390,11 @@ print(f'System prompt: {len(prompt)} chars')
 - [ ] Roles granted the three permissions in FAB security admin
 - [ ] Roles named `Admin` / `Developer` exist for write-tool access (or edit `tools.py:_WRITE_ROLES`)
 - [ ] CSRF exemption configured if Flask-WTF CSRF is globally enabled
+- [ ] `SQLALCHEMY_DATABASE_URI` set (required for session persistence and semantic search index)
+- [ ] PostgreSQL `pgvector` extension installed: `CREATE EXTENSION IF NOT EXISTS vector;`
+- [ ] Ollama embedding model pulled: `ollama pull nomic-embed-text` (enables `semantic_search`)
+- [ ] GitHub CLI installed and authenticated: `gh auth login` (enables `get_ci_status`)
+- [ ] `SEARXNG_URL` set if web search is needed (e.g. `http://localhost:8888`)
 
 ---
 
@@ -360,9 +402,10 @@ print(f'System prompt: {len(prompt)} chars')
 
 | Area | Limitation | Workaround |
 |---|---|---|
-| Context window | No token counting — large `read_file` calls can exhaust model context | Use `search_code` to find specific content instead of reading whole files |
+| Context window | Tool results are capped at `MAX_TOOL_RESULT_CHARS = 16_000` chars before being appended to the message list. Very large files are still readable but only the first 16 KB reaches the model. | Use `search_code` to locate specific content first, then `read_file` for the relevant section |
 | History | Client-owned history: a crafted client can inject `assistant` role turns | Acceptable trust boundary for admin/developer tool |
 | Model validation | Model name sanitized but not validated against installed models | Ollama returns an error event if model is not found |
 | Streaming timeout | 30s per-chunk read timeout — may truncate very slow model responses | Set a longer timeout by patching `agent.py` or increasing Ollama's keep-alive |
-| Write tools | `write_file` has no diff preview or undo — writes are immediate | Review with `get_git_diff` after writes; use `get_git_status` to track changes |
-| Concurrent sessions | No server-side session storage — each request is stateless | History is client-owned; multiple tabs work independently |
+| Write tools | Both `write_file` and `patch_file` return a unified diff but do not support undo | Review with `get_git_diff` after writes; `git_commit` only stages tracked files |
+| Concurrent sessions | Sessions are persisted to PostgreSQL (server-side). Multiple tabs share the same session if they send the same `session_id`. History is auto-saved after each assistant turn. | — |
+| Semantic search index | Indexing runs at startup in a background thread. First query after a cold start may return empty results. Index is incremental (skips unchanged files). | Wait a few minutes after startup; check Ollama and pgvector setup if results stay empty. |

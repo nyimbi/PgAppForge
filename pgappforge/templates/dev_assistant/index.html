@@ -362,6 +362,57 @@
     display: flex;
     justify-content: space-between;
   }
+
+  /* ── Session list ─────────────────────────────────────────── */
+  .da-new-btn {
+    background: rgba(129,140,248,.2);
+    border: 1px solid rgba(129,140,248,.3);
+    color: #818cf8;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .da-new-btn:hover { background: rgba(129,140,248,.35); }
+  .da-sessions-list { max-height: 180px; overflow-y: auto; margin-bottom: 6px; }
+  .da-sessions-list::-webkit-scrollbar { width: 3px; }
+  .da-sessions-list::-webkit-scrollbar-thumb { background: #334155; }
+  .da-session-item {
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background .1s;
+  }
+  .da-session-item:hover { background: rgba(255,255,255,.07); color: #cbd5e1; }
+  .da-session-item.active { background: rgba(129,140,248,.18); color: #c7d2fe; }
+  .da-session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .da-session-del { background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px; flex-shrink: 0; }
+  .da-session-del:hover { color: #ef4444; }
+
+  /* ── Copy button on code blocks ─────────────────────────────── */
+  .code-block-wrap { position: relative; }
+  .copy-btn {
+    position: absolute; top: 6px; right: 8px;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.15);
+    color: #94a3b8; border-radius: 4px;
+    padding: 2px 7px; font-size: 11px; cursor: pointer;
+    transition: background .1s, color .1s;
+    z-index: 1;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,.22); color: #e2e8f0; }
+  .code-lang {
+    display: block; font-size: 10px; color: #64748b;
+    font-family: monospace; padding: 4px 14px 0;
+    background: #0f172a; border-radius: 6px 6px 0 0;
+    margin-bottom: -6px;
+  }
 </style>
 {% endblock %}
 
@@ -375,6 +426,16 @@
     <div class="da-brand">
       <i class="fa fa-robot"></i>
       Dev Assistant
+    </div>
+
+    <div class="da-section-label" style="display:flex;align-items:center;justify-content:space-between;">
+      Conversations
+      <button class="da-new-btn" id="new-session-btn" title="New conversation">
+        <i class="fa fa-plus"></i> New
+      </button>
+    </div>
+    <div class="da-sessions-list" id="da-sessions-list">
+      <div style="color:#475569;font-size:11px;padding:4px 6px;">Loading…</div>
     </div>
 
     <div class="da-section-label">Model</div>
@@ -395,9 +456,22 @@
       <li><i class="fa fa-list-alt"></i> get_env_vars</li>
       <li><i class="fa fa-sitemap"></i> get_route_list</li>
       <li><i class="fa fa-cube"></i> check_ollama_models</li>
+      <li><i class="fa fa-database"></i> get_db_schema</li>
+      <li><i class="fa fa-exchange"></i> alembic_status</li>
+      <li><i class="fa fa-cubes"></i> get_project_deps</li>
+      <li><i class="fa fa-shield"></i> read_audit_log</li>
+      <li><i class="fa fa-diamond"></i> semantic_search</li>
+      <li><i class="fa fa-globe"></i> search_web</li>
+      <li><i class="fa fa-cloud"></i> get_ci_status</li>
+      <li><i class="fa fa-crosshairs"></i> find_usages</li>
+      <li><i class="fa fa-bar-chart"></i> get_test_coverage</li>
       {% if has_write %}
       <li class="write-tool"><i class="fa fa-pencil"></i> write_file</li>
+      <li class="write-tool"><i class="fa fa-scissors"></i> patch_file</li>
       <li class="write-tool"><i class="fa fa-flask"></i> run_tests</li>
+      <li class="write-tool"><i class="fa fa-check-square"></i> git_commit</li>
+      <li class="write-tool"><i class="fa fa-code-fork"></i> git_create_branch</li>
+      <li class="write-tool"><i class="fa fa-undo"></i> rollback_changes</li>
       {% endif %}
     </ul>
 
@@ -487,6 +561,7 @@
   var streaming = false;
   var currentModel = "{{ default_model }}";
   var abortController = null;
+  var sessionId = null;  // active session ID (null = unsaved / in-memory only)
 
   // ── DOM ───────────────────────────────────────────────────────────────
   var $messages   = $("#da-messages");
@@ -510,6 +585,14 @@
     currentModel = $modelSel.val();
   });
 
+  // ── Load session list ─────────────────────────────────────────────────
+  loadSessions();
+
+  // ── New session button ────────────────────────────────────────────────
+  $("#new-session-btn").on("click", function () {
+    newSession();
+  });
+
   $modelSel.on("change", function () { currentModel = $(this).val(); });
 
   // ── Input behaviour ───────────────────────────────────────────────────
@@ -529,9 +612,12 @@
   // ── Clear chat ────────────────────────────────────────────────────────
   $("#clear-btn").on("click", function () {
     history = [];
+    sessionId = null;
     $messages.empty().append($empty);
     $empty.show();
     setStatus("ready");
+    renderSessionList([]);  // reload to deselect active
+    loadSessions();
   });
 
   // ── Suggestion chips ──────────────────────────────────────────────────
@@ -572,6 +658,7 @@
     var $bubble = appendAssistantBubble();
     var $textNode = $bubble.find(".da-text");
     var tokenCount = 0;
+    var fullContent = "";  // declared here so .catch can access partial content on error
 
     abortController = new AbortController();
 
@@ -581,7 +668,8 @@
       body: JSON.stringify({
         message: text,
         model: currentModel,
-        history: history.slice(0, -1)  // exclude the just-added user turn
+        history: history.slice(0, -1),  // exclude the just-added user turn
+        session_id: sessionId
       }),
       signal: abortController.signal
     })
@@ -590,7 +678,6 @@
       var reader = resp.body.getReader();
       var decoder = new TextDecoder();
       var buffer = "";
-      var fullContent = "";
 
       function read() {
         return reader.read().then(function (chunk) {
@@ -684,6 +771,8 @@
 
     if (fullContent) {
       history.push({ role: "assistant", content: fullContent });
+      // Auto-save session (fire-and-forget — session storage may not be configured)
+      saveSession();
     }
   }
 
@@ -737,11 +826,18 @@
       .replace(/"/g, "&quot;");
   }
 
-  // Minimal markdown: code blocks, inline code, bold, italic, headers, bullets
+  // Minimal markdown: code blocks (with copy button), inline code, bold, italic, headers, bullets
   function renderMarkdown(text) {
-    // fenced code blocks
+    // fenced code blocks — wrap in .code-block-wrap to host the copy button
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
-      return '<pre><code>' + escHtml(code.trimEnd()) + '</code></pre>';
+      var langLabel = lang ? '<span class="code-lang">' + escHtml(lang) + '</span>' : '';
+      return (
+        '<div class="code-block-wrap">' +
+        langLabel +
+        '<button class="copy-btn" onclick="window._daCopyCode(this)" title="Copy">⧉</button>' +
+        '<pre><code>' + escHtml(code.trimEnd()) + '</code></pre>' +
+        '</div>'
+      );
     });
     // inline code
     text = text.replace(/`([^`]+)`/g, function (_, c) {
@@ -753,17 +849,148 @@
     text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
     // headers
     text = text.replace(/^(#{1,3}) (.+)$/gm, function (_, hashes, content) {
-      var level = hashes.length + 2;  // h3-h5 to not overpower FAB
+      var level = hashes.length + 2;
       return '<h' + level + ' style="margin:.5em 0;">' + content + '</h' + level + '>';
     });
     // bullets
     text = text.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-    // Wrap every contiguous run of <li> elements in a <ul>
     text = text.replace(/(<li>[\s\S]*?<\/li>)(\s*<li>[\s\S]*?<\/li>)*/g, '<ul>$&</ul>');
     // line breaks
     text = text.replace(/\n/g, '<br>');
     return text;
   }
+
+  // Copy button handler (attached to window so onclick= in injected HTML can reach it)
+  window._daCopyCode = function (btn) {
+    var code = btn.parentNode.querySelector("code");
+    var text = code ? (code.innerText || code.textContent) : "";
+    if (!navigator.clipboard) { btn.textContent = "!"; return; }
+    navigator.clipboard.writeText(text).then(function () {
+      btn.textContent = "✓";
+      setTimeout(function () { btn.textContent = "⧉"; }, 1600);
+    }).catch(function () { btn.textContent = "!"; });
+  };
+
+  // ── Session management ────────────────────────────────────────────────
+
+  function loadSessions() {
+    $.getJSON("/dev-assistant/sessions", function (data) {
+      renderSessionList(data.sessions || []);
+    }).fail(function () {
+      $("#da-sessions-list").html(
+        '<div style="color:#475569;font-size:11px;padding:4px 6px;">Sessions unavailable</div>'
+      );
+    });
+  }
+
+  function renderSessionList(sessions) {
+    var $list = $("#da-sessions-list");
+    if (!sessions.length) {
+      $list.html('<div style="color:#475569;font-size:11px;padding:4px 6px;">No saved sessions</div>');
+      return;
+    }
+    var html = sessions.map(function (s) {
+      var active = s.id === sessionId ? " active" : "";
+      var title = escHtml(s.title || "Untitled");
+      var ts = s.updated_at ? s.updated_at.slice(0, 16).replace("T", " ") : "";
+      return (
+        '<div class="da-session-item' + active + '" data-id="' + escHtml(s.id) + '" title="' + ts + '">' +
+        '<span class="da-session-title">' + title + '</span>' +
+        '<button class="da-session-del" title="Delete" onclick="window._daDelSession(event,\'' + escHtml(s.id) + '\')">✕</button>' +
+        '</div>'
+      );
+    }).join("");
+    $list.html(html);
+    $list.find(".da-session-item").on("click", function () {
+      switchSession($(this).data("id"));
+    });
+  }
+
+  function newSession() {
+    if (streaming) return;
+    history = [];
+    sessionId = null;
+    $messages.empty().append($empty);
+    $empty.show();
+    setStatus("ready");
+    $(".da-session-item").removeClass("active");
+  }
+
+  function switchSession(id) {
+    if (streaming || id === sessionId) return;
+    $.getJSON("/dev-assistant/sessions/" + id, function (data) {
+      history = (data.messages || []).filter(function (m) {
+        return m.role === "user" || m.role === "assistant";
+      });
+      sessionId = data.id;
+      // Rebuild message UI from history
+      $messages.empty().append($empty);
+      $empty.hide();
+      history.forEach(function (m) {
+        if (m.role === "user") {
+          appendUserMsg(m.content);
+        } else if (m.role === "assistant") {
+          var $bubble = appendAssistantBubble();
+          var $textNode = $bubble.find(".da-text");
+          $textNode.removeClass("typing-cursor");
+          $textNode.data("raw", m.content);
+          $textNode.html(renderMarkdown(m.content));
+        }
+      });
+      scrollToBottom();
+      $(".da-session-item").removeClass("active");
+      $(".da-session-item[data-id='" + id + "']").addClass("active");
+    }).fail(function () {
+      alert("Could not load session.");
+    });
+  }
+
+  function saveSession() {
+    var title = history.length > 0
+      ? (history[0].content || "").slice(0, 80)
+      : "Untitled";
+    var body = JSON.stringify({ messages: history, title: title });
+    var url = sessionId
+      ? "/dev-assistant/sessions/" + sessionId
+      : "/dev-assistant/sessions";
+    var method = sessionId ? "PUT" : "POST";
+    $.ajax({
+      url: url, method: method,
+      contentType: "application/json", data: body,
+      success: function (data) {
+        if (!sessionId && data.session_id) {
+          sessionId = data.session_id;
+        }
+        loadSessions();
+      },
+      statusCode: {
+        404: function () {
+          // Session was deleted externally — create a new one
+          sessionId = null;
+          $.ajax({
+            url: "/dev-assistant/sessions", method: "POST",
+            contentType: "application/json", data: body,
+            success: function (data) {
+              if (data.session_id) { sessionId = data.session_id; }
+              loadSessions();
+            }
+          });
+        }
+      }
+    });
+  }
+
+  window._daDelSession = function (evt, id) {
+    evt.stopPropagation();
+    $.ajax({
+      url: "/dev-assistant/sessions/" + id,
+      method: "DELETE",
+      success: function () {
+        if (id === sessionId) { newSession(); }
+        loadSessions();
+      }
+    });
+  };
 
 }());
 </script>

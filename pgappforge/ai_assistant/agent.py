@@ -24,17 +24,42 @@ log = logging.getLogger(__name__)
 
 _DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _DEFAULT_MODEL = "qwen2.5-coder:7b"
-MAX_TOOL_ROUNDS = 12   # hard ceiling on ReAct iterations
+MAX_TOOL_ROUNDS = 12          # hard ceiling on ReAct iterations
+MAX_TOOL_RESULT_CHARS = 16_000  # truncate before appending to context window
+
+
+def _tool_call_fp(tc: dict) -> str:
+	"""Stable fingerprint for a tool call — used for loop detection."""
+	fn = tc.get("function", {})
+	return fn.get("name", "") + ":" + json.dumps(fn.get("arguments", {}), sort_keys=True)
+
+
+def _execute_tool(tc: dict, tool_registry: dict[str, Any]) -> tuple[str, Any, str]:
+	"""Parse and execute one tool call. Returns (name, parsed_args, result_str)."""
+	fn_info = tc.get("function", {})
+	name = fn_info.get("name", "")
+	raw_args = fn_info.get("arguments", {})
+	# Ollama sometimes gives args as a JSON string
+	if isinstance(raw_args, str):
+		try:
+			raw_args = json.loads(raw_args)
+		except json.JSONDecodeError:
+			raw_args = {}
+	fn = tool_registry.get(name)
+	if fn is None:
+		return name, raw_args, f"Tool '{name}' not available (not in your permission set or unknown)."
+	try:
+		result = fn(**raw_args) if isinstance(raw_args, dict) else fn(raw_args)
+		if not isinstance(result, str):
+			result = json.dumps(result)
+	except Exception as exc:
+		result = f"Tool '{name}' raised an error: {exc}"
+	return name, raw_args, result
 
 
 # ---------------------------------------------------------------------------
 # SSE helpers
 # ---------------------------------------------------------------------------
-
-def _sse(event: str, data: Any) -> bytes:
-	payload = json.dumps({"event": event, "data": data}, ensure_ascii=False)
-	return f"data: {payload}\n\n".encode()
-
 
 def _sse_token(text: str) -> bytes:
 	return f"data: {json.dumps({'event': 'token', 'data': text})}\n\n".encode()
@@ -198,11 +223,7 @@ def run_agent_stream(
 			return
 
 		# Anti-loop: abort if the exact same (name, args) combination repeats
-		def _tc_fp(tc: dict) -> str:
-			fn = tc.get("function", {})
-			return fn.get("name", "") + ":" + json.dumps(fn.get("arguments", {}), sort_keys=True)
-
-		call_fingerprint = "|".join(sorted(_tc_fp(tc) for tc in accumulated_tool_calls))
+		call_fingerprint = "|".join(sorted(_tool_call_fp(tc) for tc in accumulated_tool_calls))
 		if call_fingerprint in seen_tool_calls:
 			yield _sse_error("Detected repeated tool call pattern — stopping to avoid loop.")
 			yield _sse_done()
@@ -218,37 +239,10 @@ def run_agent_stream(
 
 		# Execute each tool and append results
 		for tc in accumulated_tool_calls:
-			fn_info = tc.get("function", {})
-			name = fn_info.get("name", "")
-			raw_args = fn_info.get("arguments", {})
-
-			# Ollama sometimes gives args as JSON string
-			if isinstance(raw_args, str):
-				try:
-					raw_args = json.loads(raw_args)
-				except json.JSONDecodeError:
-					raw_args = {}
-
+			name, raw_args, result = _execute_tool(tc, tool_registry)
 			yield _sse_tool_call(name, raw_args)
-
-			fn = tool_registry.get(name)
-			if fn is None:
-				result = f"Tool '{name}' not available (not in your permission set or unknown)."
-			else:
-				try:
-					result = fn(**raw_args) if isinstance(raw_args, dict) else fn(raw_args)
-					if not isinstance(result, str):
-						result = json.dumps(result)
-				except Exception as exc:
-					result = f"Tool '{name}' raised an error: {exc}"
-
 			yield _sse_tool_result(name, result)
-
-			messages.append({
-				"role": "tool",
-				"name": name,
-				"content": result,
-			})
+			messages.append({"role": "tool", "name": name, "content": result[:MAX_TOOL_RESULT_CHARS]})
 
 		# Continue the loop to get the next assistant response
 
@@ -294,11 +288,7 @@ def run_agent_blocking(
 		if tool_rounds > MAX_TOOL_ROUNDS:
 			return f"[Max tool rounds exceeded after {MAX_TOOL_ROUNDS} iterations]", messages[1:]
 
-		def _fp(tc: dict) -> str:
-			fn = tc.get("function", {})
-			return fn.get("name", "") + ":" + json.dumps(fn.get("arguments", {}), sort_keys=True)
-
-		call_fp = "|".join(sorted(_fp(tc) for tc in tool_calls))
+		call_fp = "|".join(sorted(_tool_call_fp(tc) for tc in tool_calls))
 		if call_fp in seen_tool_calls:
 			return "[Loop detected — aborting]", messages[1:]
 		seen_tool_calls.add(call_fp)
@@ -306,31 +296,15 @@ def run_agent_blocking(
 		messages.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
 
 		for tc in tool_calls:
-			fn_info = tc.get("function", {})
-			name = fn_info.get("name", "")
-			raw_args = fn_info.get("arguments", {})
-			if isinstance(raw_args, str):
-				try:
-					raw_args = json.loads(raw_args)
-				except json.JSONDecodeError:
-					raw_args = {}
-			fn = tool_registry.get(name)
-			if fn is None:
-				result = f"Tool '{name}' not available."
-			else:
-				try:
-					result = fn(**raw_args) if isinstance(raw_args, dict) else fn(raw_args)
-					if not isinstance(result, str):
-						result = json.dumps(result)
-				except Exception as exc:
-					result = f"Tool error: {exc}"
-			messages.append({"role": "tool", "name": name, "content": result})
+			name, _args, result = _execute_tool(tc, tool_registry)
+			messages.append({"role": "tool", "name": name, "content": result[:MAX_TOOL_RESULT_CHARS]})
 
 
 __all__ = [
 	"run_agent_stream",
 	"run_agent_blocking",
 	"MAX_TOOL_ROUNDS",
+	"MAX_TOOL_RESULT_CHARS",
 	"_DEFAULT_MODEL",
 	"_DEFAULT_OLLAMA_URL",
 ]

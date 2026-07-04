@@ -4,9 +4,14 @@ pgappforge/ai_assistant/views.py
 Flask views for the Ollama-backed dev assistant.
 
 Routes:
-  GET  /dev-assistant/       — main chat UI
-  POST /dev-assistant/chat   — SSE stream (text/event-stream)
-  GET  /dev-assistant/models — JSON list of available Ollama models
+  GET    /dev-assistant/               — main chat UI
+  POST   /dev-assistant/chat           — SSE stream (text/event-stream)
+  GET    /dev-assistant/models         — JSON list of available Ollama models
+  GET    /dev-assistant/sessions       — list user's saved sessions
+  POST   /dev-assistant/sessions       — create a new session
+  GET    /dev-assistant/sessions/<id>  — load a session (history + metadata)
+  PUT    /dev-assistant/sessions/<id>  — save / update a session
+  DELETE /dev-assistant/sessions/<id>  — delete a session
 """
 from __future__ import annotations
 
@@ -26,6 +31,7 @@ from pgappforge.security.decorators import has_access
 from .agent import _DEFAULT_MODEL, _DEFAULT_OLLAMA_URL, run_agent_stream
 from .context import build_system_prompt
 from .tools import build_tool_registry, WRITE_ROLES
+from . import session_service
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +54,23 @@ def _get_user_roles() -> set[str]:
 	except Exception as exc:
 		log.warning("dev_assistant: could not determine user roles: %s", exc)
 	return set()
+
+
+_SESSION_ID_RE = re.compile(
+	r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+
+
+def _get_user_id() -> str | None:
+	"""Return a stable string identifier for the current user, or None if unauthenticated."""
+	try:
+		from flask_login import current_user
+		if current_user and current_user.is_authenticated:
+			uid = getattr(current_user, "id", None)
+			return str(uid) if uid is not None else None
+	except Exception:
+		pass
+	return None
 
 
 def _sanitize_history(raw: list) -> list[dict]:
@@ -75,6 +98,10 @@ def _get_ollama_models(ollama_url: str) -> list[str]:
 		return []
 
 
+def _json_resp(data: dict, status: int = 200) -> Response:
+	return make_response(json.dumps(data), status, {"Content-Type": "application/json"})
+
+
 class DevAssistantView(BaseView):
 	"""Developer / Admin AI assistant powered by a local Ollama model.
 
@@ -84,6 +111,10 @@ class DevAssistantView(BaseView):
 
 	route_base = "/dev-assistant"
 	default_view = "index"
+
+	# ------------------------------------------------------------------
+	# UI
+	# ------------------------------------------------------------------
 
 	@expose("/")
 	@has_access
@@ -101,14 +132,14 @@ class DevAssistantView(BaseView):
 			project_root=str(_PROJECT_ROOT),
 		)
 
+	# ------------------------------------------------------------------
+	# Chat (SSE stream)
+	# ------------------------------------------------------------------
+
 	@expose("/chat", methods=["POST"])
 	@has_access
 	def chat(self):
-		"""SSE endpoint: POST JSON {message, model?, history?} → text/event-stream.
-
-		History is client-owned (sent in the request body) to support multi-tab
-		and stateless deployments. Trimmed to _MAX_HISTORY_TURNS server-side.
-		"""
+		"""SSE endpoint: POST JSON {message, model?, history?} → text/event-stream."""
 		try:
 			body = request.get_json(force=True) or {}
 		except Exception:
@@ -153,17 +184,95 @@ class DevAssistantView(BaseView):
 		resp.headers["Connection"] = "keep-alive"
 		return resp
 
+	# ------------------------------------------------------------------
+	# Models
+	# ------------------------------------------------------------------
+
 	@expose("/models")
 	@has_access
 	def models(self):
 		"""Return JSON list of available Ollama models."""
 		ollama_url = os.environ.get("OLLAMA_URL", _DEFAULT_OLLAMA_URL)
 		model_names = _get_ollama_models(ollama_url)
-		return make_response(
-			json.dumps({"models": model_names}),
-			200,
-			{"Content-Type": "application/json"},
-		)
+		return _json_resp({"models": model_names})
+
+	# ------------------------------------------------------------------
+	# Session persistence
+	# ------------------------------------------------------------------
+
+	@expose("/sessions")
+	@has_access
+	def sessions_list(self):
+		"""List the current user's saved sessions (most recent first)."""
+		user_id = _get_user_id()
+		if user_id is None:
+			return _json_resp({"error": "Authentication required"}, 401)
+		sessions = session_service.list_sessions(user_id)
+		return _json_resp({"sessions": sessions})
+
+	@expose("/sessions", methods=["POST"])
+	@has_access
+	def session_create(self):
+		"""Create a new session. Returns {session_id}."""
+		user_id = _get_user_id()
+		if user_id is None:
+			return _json_resp({"error": "Authentication required"}, 401)
+		body = request.get_json(force=True) or {}
+		title = str(body.get("title", ""))[:200]
+		messages = body.get("messages") or []
+		if not isinstance(messages, list):
+			messages = []
+		session_id = session_service.create_session(user_id, title, messages)
+		if session_id is None:
+			return _json_resp({"error": "Session storage unavailable (DB not configured)"}, 503)
+		return _json_resp({"session_id": session_id}, 201)
+
+	@expose("/sessions/<string:session_id>")
+	@has_access
+	def session_load(self, session_id):
+		"""Load a session by ID. Returns {id, title, messages, ...}."""
+		user_id = _get_user_id()
+		if user_id is None:
+			return _json_resp({"error": "Authentication required"}, 401)
+		if not _SESSION_ID_RE.match(session_id):
+			return _json_resp({"error": "Invalid session ID"}, 400)
+		sess = session_service.load_session(session_id, user_id)
+		if sess is None:
+			return _json_resp({"error": "Session not found"}, 404)
+		return _json_resp(sess)
+
+	@expose("/sessions/<string:session_id>", methods=["PUT"])
+	@has_access
+	def session_save(self, session_id):
+		"""Save an existing session. Returns 404 if session does not exist."""
+		user_id = _get_user_id()
+		if user_id is None:
+			return _json_resp({"error": "Authentication required"}, 401)
+		if not _SESSION_ID_RE.match(session_id):
+			return _json_resp({"error": "Invalid session ID"}, 400)
+		body = request.get_json(force=True) or {}
+		messages = body.get("messages") or []
+		if not isinstance(messages, list):
+			messages = []
+		title = str(body.get("title", ""))[:200]
+		ok = session_service.save_session(session_id, user_id, messages, title)
+		if not ok:
+			return _json_resp({"error": "Session not found"}, 404)
+		return _json_resp({"ok": True})
+
+	@expose("/sessions/<string:session_id>", methods=["DELETE"])
+	@has_access
+	def session_delete(self, session_id):
+		"""Delete a session."""
+		user_id = _get_user_id()
+		if user_id is None:
+			return _json_resp({"error": "Authentication required"}, 401)
+		if not _SESSION_ID_RE.match(session_id):
+			return _json_resp({"error": "Invalid session ID"}, 400)
+		deleted = session_service.delete_session(session_id, user_id)
+		if not deleted:
+			return _json_resp({"error": "Session not found"}, 404)
+		return _json_resp({"deleted": True})
 
 
 __all__ = ["DevAssistantView"]
