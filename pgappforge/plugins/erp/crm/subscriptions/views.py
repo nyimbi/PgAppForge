@@ -25,6 +25,14 @@ log = logging.getLogger(__name__)
 class SubscriptionPlanView(ModelView):
 	datamodel = SQLAInterface(SubscriptionPlan)
 	list_columns = ['name', 'plan_code', 'billing_interval', 'base_price_cents', 'currency_code', 'is_active']
+	label_columns = {
+		'name': 'Name',
+		'plan_code': 'Plan Code',
+		'billing_interval': 'Billing Interval',
+		'base_price_cents': 'Base Price Cents',
+		'currency_code': 'Currency Code',
+		'is_active': 'Active',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
@@ -32,6 +40,12 @@ class SubscriptionPlanView(ModelView):
 class SubscriptionView(ModelView):
 	datamodel = SQLAInterface(Subscription)
 	list_columns = ['customer_id', 'plan_id', 'status', 'current_period_start']
+	label_columns = {
+		'customer_id': 'Customer',
+		'plan_id': 'Plan',
+		'status': 'Status',
+		'current_period_start': 'Current Period Start',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
@@ -39,6 +53,13 @@ class SubscriptionView(ModelView):
 class SubscriptionInvoiceView(ModelView):
 	datamodel = SQLAInterface(SubscriptionInvoice)
 	list_columns = ['subscription_id', 'status', 'amount_cents', 'currency_code', 'due_date']
+	label_columns = {
+		'subscription_id': 'Subscription',
+		'status': 'Status',
+		'amount_cents': 'Amount Cents',
+		'currency_code': 'Currency Code',
+		'due_date': 'Due Date',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

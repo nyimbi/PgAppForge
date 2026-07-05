@@ -21,6 +21,14 @@ log = logging.getLogger(__name__)
 class AppointmentServiceView(ModelView):
 	datamodel = SQLAInterface(AppointmentService)
 	list_columns = ['name', 'category', 'duration_minutes', 'price_cents', 'currency_code', 'is_active']
+	label_columns = {
+		'name': 'Name',
+		'category': 'Category',
+		'duration_minutes': 'Duration Minutes',
+		'price_cents': 'Price Cents',
+		'currency_code': 'Currency Code',
+		'is_active': 'Active',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 
@@ -28,6 +36,15 @@ class AppointmentServiceView(ModelView):
 class AppointmentView(ModelView):
 	datamodel = SQLAInterface(Appointment)
 	list_columns = ['booking_ref', 'customer_name', 'staff_id', 'start_at', 'end_at', 'status', 'amount_cents']
+	label_columns = {
+		'booking_ref': 'Booking Ref',
+		'customer_name': 'Customer Name',
+		'staff_id': 'Staff',
+		'start_at': 'Start At',
+		'end_at': 'End At',
+		'status': 'Status',
+		'amount_cents': 'Amount Cents',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 

@@ -19,7 +19,13 @@ log = logging.getLogger(__name__)
 
 class SalesTerritoryView(ModelView):
 	datamodel = SQLAInterface(SalesTerritory)
-	list_columns = ['name', 'region', 'country_codes', 'is_active']
+	list_columns = ['name', 'region', 'rules', 'is_active']
+	label_columns = {
+		'name': 'Name',
+		'region': 'Region',
+		'rules': 'Rules',
+		'is_active': 'Active',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
@@ -27,6 +33,12 @@ class SalesTerritoryView(ModelView):
 class TerritoryAssignmentView(ModelView):
 	datamodel = SQLAInterface(TerritoryAssignment)
 	list_columns = ['territory_id', 'salesperson_id', 'effective_from', 'effective_to']
+	label_columns = {
+		'territory_id': 'Territory',
+		'salesperson_id': 'Salesperson',
+		'effective_from': 'Effective From',
+		'effective_to': 'Effective To',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

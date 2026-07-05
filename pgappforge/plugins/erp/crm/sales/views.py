@@ -21,7 +21,7 @@ import logging
 from datetime import date, datetime, timezone
 
 import sqlalchemy as sa
-from flask import abort, jsonify, make_response, request
+from flask import abort, jsonify, make_response, render_template, request
 
 from pgappforge import expose
 from pgappforge.plugins.erp.base_view import BaseERPView
@@ -617,6 +617,46 @@ class OpportunityView(BaseERPView):
 <th>Probability</th><th>Close Date</th><th></th></tr></thead>
 <tbody>{rows}</tbody></table></body></html>"""
 		return make_response(html, 200)
+
+	@expose("/pipeline/")
+	@has_access
+	def pipeline_board(self):
+		session = _get_session()
+		from pgappforge.plugins.erp.crm.sales.models import OPP_STAGE, Opportunity
+
+		opps = session.execute(
+			sa.select(Opportunity)
+			.order_by(Opportunity.stage, sa.desc(Opportunity.amount_cents), Opportunity.expected_close_date)
+			.limit(1000)
+		).scalars().all()
+
+		stage_order = list(OPP_STAGE)
+		seen_stages = {opp.stage or "UNSPECIFIED" for opp in opps}
+		stages = stage_order + sorted(seen_stages.difference(stage_order))
+		columns = []
+
+		for stage in stages:
+			stage_opps = [opp for opp in opps if (opp.stage or "UNSPECIFIED") == stage]
+			if not stage_opps and stage not in seen_stages:
+				continue
+			columns.append({
+				"stage": stage,
+				"count": len(stage_opps),
+				"total_value_cents": sum(opp.amount_cents or 0 for opp in stage_opps),
+				"opportunities": [
+					{
+						"id": opp.id,
+						"name": opp.opportunity_name,
+						"customer_name": getattr(opp.account, "name", None),
+						"expected_value_cents": opp.amount_cents,
+						"probability": opp.probability,
+						"close_date": opp.expected_close_date,
+					}
+					for opp in stage_opps
+				],
+			})
+
+		return render_template("crm/pipeline_board.html", columns=columns)
 
 	@expose("/<string:opp_id>")
 	@has_access

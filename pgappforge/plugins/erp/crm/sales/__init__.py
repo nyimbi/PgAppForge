@@ -160,6 +160,7 @@ class SalesPlugin(BasePlugin):
 		self.add_view(SalesContactView, "Contacts", icon="fa-address-book", category=cat)
 		self.add_view(LeadView, "Leads", icon="fa-user-plus", category=cat)
 		self.add_view(OpportunityView, "Opportunities", icon="fa-handshake-o", category=cat)
+		self.appbuilder.add_link("Pipeline Board", href="/crm/opportunities/pipeline/", icon="fa-columns", category=cat)
 		self.add_view(ActivityView, "Activities", icon="fa-calendar-check-o", category=cat)
 		self.add_view(SalesReportView, "Sales Reports", icon="fa-chart-line", category=cat)
 

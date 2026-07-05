@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Opportunity Pipeline Board</title>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+	<style>
+		body {
+			background: #f5f7fa;
+			padding: 24px;
+		}
+		.pipeline-board {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+			gap: 16px;
+			align-items: start;
+		}
+		.pipeline-column {
+			background: #ffffff;
+			border: 1px solid #d7dde5;
+			border-radius: 6px;
+			min-height: 220px;
+		}
+		.pipeline-column-header {
+			border-bottom: 1px solid #e5e9ef;
+			padding: 12px 14px;
+		}
+		.pipeline-column-title {
+			font-size: 13px;
+			font-weight: 700;
+			letter-spacing: .04em;
+			margin: 0 0 4px;
+			text-transform: uppercase;
+		}
+		.pipeline-column-meta {
+			color: #5f6b7a;
+			font-size: 12px;
+			margin: 0;
+		}
+		.pipeline-column-body {
+			padding: 12px;
+		}
+		.opportunity-card {
+			background: #fbfcfe;
+			border: 1px solid #dfe5ec;
+			border-radius: 6px;
+			margin-bottom: 10px;
+			padding: 10px;
+		}
+		.opportunity-card:last-child {
+			margin-bottom: 0;
+		}
+		.opportunity-name {
+			font-size: 14px;
+			font-weight: 700;
+			margin: 0 0 4px;
+		}
+		.opportunity-customer {
+			color: #5f6b7a;
+			font-size: 12px;
+			margin: 0 0 10px;
+		}
+		.opportunity-meta {
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			font-size: 12px;
+		}
+		.opportunity-value {
+			font-weight: 700;
+		}
+		.empty-column {
+			color: #7b8794;
+			font-size: 13px;
+			margin: 0;
+			padding: 8px 0;
+			text-align: center;
+		}
+	</style>
+</head>
+<body>
+	<div class="container-fluid">
+		<div class="page-header">
+			<h3>Opportunity Pipeline Board</h3>
+		</div>
+		<div class="pipeline-board">
+			{% for column in columns %}
+				<div class="pipeline-column">
+					<div class="pipeline-column-header">
+						<p class="pipeline-column-title">{{ column.stage|replace('_', ' ') }}</p>
+						<p class="pipeline-column-meta">
+							{{ column.count }} opportunities &middot; {{ "{:,.2f}".format((column.total_value_cents or 0) / 100) }}
+						</p>
+					</div>
+					<div class="pipeline-column-body">
+						{% if column.opportunities %}
+							{% for opportunity in column.opportunities %}
+								<div class="opportunity-card">
+									<p class="opportunity-name">
+										<a href="/crm/opportunities/{{ opportunity.id }}">{{ opportunity.name }}</a>
+									</p>
+									<p class="opportunity-customer">{{ opportunity.customer_name or "No customer" }}</p>
+									<div class="opportunity-meta">
+										<span class="opportunity-value">
+											{{ "{:,.2f}".format((opportunity.expected_value_cents or 0) / 100) }}
+										</span>
+										<span>{{ opportunity.probability or 0 }}%</span>
+									</div>
+									<div class="opportunity-meta">
+										<span>Close date</span>
+										<span>{{ opportunity.close_date or "Not set" }}</span>
+									</div>
+								</div>
+							{% endfor %}
+						{% else %}
+							<p class="empty-column">No opportunities</p>
+						{% endif %}
+					</div>
+				</div>
+			{% endfor %}
+		</div>
+	</div>
+</body>
+</html>

@@ -21,6 +21,13 @@ log = logging.getLogger(__name__)
 class SignatureRequestView(ModelView):
 	datamodel = SQLAInterface(SignatureRequest)
 	list_columns = ['document_title', 'initiator_id', 'status', 'signing_order', 'expires_at']
+	label_columns = {
+		'document_title': 'Document Title',
+		'initiator_id': 'Initiator',
+		'status': 'Status',
+		'signing_order': 'Signing Order',
+		'expires_at': 'Expires At',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 
@@ -28,6 +35,14 @@ class SignatureRequestView(ModelView):
 class SignatureSignatoryView(ModelView):
 	datamodel = SQLAInterface(SignatureSignatory)
 	list_columns = ['signer_name', 'signer_email', 'signer_role', 'order_number', 'status', 'signed_at']
+	label_columns = {
+		'signer_name': 'Signer Name',
+		'signer_email': 'Signer Email',
+		'signer_role': 'Signer Role',
+		'order_number': 'Order Number',
+		'status': 'Status',
+		'signed_at': 'Signed At',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at', 'access_token', 'signature_image_base64']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at', 'access_token', 'signature_image_base64']
 

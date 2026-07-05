@@ -21,6 +21,13 @@ log = logging.getLogger(__name__)
 class CustomerPortalUserView(ModelView):
 	datamodel = SQLAInterface(CustomerPortalUser)
 	list_columns = ['customer_id', 'email', 'is_active', 'last_login_at', 'failed_login_count']
+	label_columns = {
+		'customer_id': 'Customer',
+		'email': 'Email',
+		'is_active': 'Active',
+		'last_login_at': 'Last Login At',
+		'failed_login_count': 'Failed Login Count',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'password_hash']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'password_hash']
 
@@ -28,6 +35,14 @@ class CustomerPortalUserView(ModelView):
 class PortalPaymentView(ModelView):
 	datamodel = SQLAInterface(PortalPayment)
 	list_columns = ['customer_id', 'amount_cents', 'payment_method', 'reference', 'status', 'initiated_at']
+	label_columns = {
+		'customer_id': 'Customer',
+		'amount_cents': 'Amount Cents',
+		'payment_method': 'Payment Method',
+		'reference': 'Reference',
+		'status': 'Status',
+		'initiated_at': 'Initiated At',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
