@@ -57,14 +57,15 @@ class ErmDashboardView(BaseERPView):
 
 		risks = []
 		kris = []
+		heatmap_data = {}
 
 		try:
-			from pgappforge.plugins.erp.grc.erm.models import RiskRegisterEntry
+			from pgappforge.plugins.erp.grc.erm.models import RiskRegister
 			session = _get_session()
 			q = (
-				sa.select(RiskRegisterEntry)
-				.where(RiskRegisterEntry.tenant_id == _tenant_id())
-				.order_by(sa.desc(RiskRegisterEntry.residual_score))
+				sa.select(RiskRegister)
+				.where(RiskRegister.tenant_id == _tenant_id())
+				.order_by(sa.desc(RiskRegister.risk_score))
 				.limit(200)
 			)
 			risks = session.execute(q).scalars().all()
@@ -73,12 +74,13 @@ class ErmDashboardView(BaseERPView):
 			risks = []
 
 		try:
-			from pgappforge.plugins.erp.grc.erm.models import KeyRiskIndicator
+			from pgappforge.plugins.erp.grc.erm.models import KRI, RiskRegister
 			session = _get_session()
 			q = (
-				sa.select(KeyRiskIndicator)
-				.where(KeyRiskIndicator.tenant_id == _tenant_id())
-				.order_by(KeyRiskIndicator.name)
+				sa.select(KRI)
+				.join(RiskRegister, KRI.risk_id == RiskRegister.id)
+				.where(RiskRegister.tenant_id == _tenant_id())
+				.order_by(KRI.metric_name)
 				.limit(200)
 			)
 			kris = session.execute(q).scalars().all()
@@ -86,19 +88,27 @@ class ErmDashboardView(BaseERPView):
 			log.exception("ErmDashboardView.dashboard: failed to load KRIs")
 			kris = []
 
+		try:
+			from pgappforge.plugins.erp.grc.erm.services import ERMService
+			session = _get_session()
+			heatmap_data = ERMService().get_heat_map(_tenant_id(), session)
+		except Exception:
+			log.exception("ErmDashboardView.dashboard: failed to build heat map")
+			heatmap_data = {}
+
 		# ── KPI summary ──────────────────────────────────────────────────
 		total_risks = len(risks)
 		critical_count = sum(
-			1 for r in risks if (getattr(r, "residual_score", 0) or 0) >= 20
+			1 for r in risks if (getattr(r, "risk_score", 0) or 0) >= 20
 		)
 		high_count = sum(
 			1 for r in risks
-			if 10 <= (getattr(r, "residual_score", 0) or 0) < 20
+			if 10 <= (getattr(r, "risk_score", 0) or 0) < 20
 		)
 		kri_breach_count = sum(
 			1 for k in kris
-			if (getattr(k, "threshold", None) is not None
-				and (getattr(k, "current_value", 0) or 0) > k.threshold)
+			if (getattr(k, "threshold_value", None) is not None
+				and (getattr(k, "current_value", 0) or 0) > k.threshold_value)
 		)
 
 		kpi_html = self.kpi_cards([
@@ -156,10 +166,12 @@ class ErmDashboardView(BaseERPView):
 			risks=risks,
 			kris=kris,
 			kri_breach_count=kri_breach_count,
-			heatmap_data={},
+			heatmap_data=heatmap_data,
 			kpi_html=kpi_html,
 			chart_html=chart_html,
 		)
 
 
-__all__ = ["ErmDashboardView"]
+ERMDashboardView = ErmDashboardView
+
+__all__ = ["ErmDashboardView", "ERMDashboardView"]

@@ -23,14 +23,14 @@ log = logging.getLogger(__name__)
 
 class GiftEntertainmentLogView(ModelView):
 	datamodel = SQLAInterface(GiftEntertainmentLog)
-	list_columns = ['given_to_name', 'given_to_organization', 'gift_type', 'value_cents', 'given_date', 'direction', 'status', 'is_government_official']
+	list_columns = ['given_to_name', 'given_to_organization', 'gift_type', 'value_cents', 'gift_date', 'status', 'is_government_official']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
 
 class ConflictOfInterestDeclarationView(ModelView):
 	datamodel = SQLAInterface(ConflictOfInterestDeclaration)
-	list_columns = ['employee_id', 'conflict_type', 'description', 'status', 'declared_at']
+	list_columns = ['employee_id', 'description', 'declaration_date', 'status', 'reviewed_at']
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

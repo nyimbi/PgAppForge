@@ -20,18 +20,18 @@ log = logging.getLogger(__name__)
 
 class EthicsReportView(ModelView):
 	datamodel = SQLAInterface(EthicsReport)
-	list_columns = ['category', 'severity', 'status', 'is_anonymous', 'occurred_at', 'location']
-	add_exclude_columns    = ['id', 'created_on', 'changed_on', 'anonymous_token', 'reporter_contact']
-	edit_exclude_columns   = ['id', 'created_on', 'changed_on', 'anonymous_token', 'reporter_contact']
-	show_exclude_columns   = ['anonymous_token', 'reporter_contact', 'ip_address', 'user_agent']
-	search_exclude_columns = ['anonymous_token', 'reporter_contact']
+	list_columns = ['category', 'severity', 'status', 'submitted_at']
+	add_exclude_columns = ['id', 'submitted_at']
+	edit_exclude_columns = ['id', 'submitted_at']
+	show_exclude_columns = ['anonymous_token_hash']
+	search_exclude_columns = ['anonymous_token_hash']
 
 
 class EthicsCaseView(ModelView):
 	datamodel = SQLAInterface(EthicsCase)
-	list_columns         = ['case_ref', 'status', 'assigned_to', 'opened_at', 'closed_at']
-	add_exclude_columns  = ['id', 'created_on', 'changed_on']
-	edit_exclude_columns = ['id', 'created_on', 'changed_on']
+	list_columns = ['report_id', 'status', 'assigned_to', 'opened_at', 'closed_at']
+	add_exclude_columns = ['id', 'opened_at']
+	edit_exclude_columns = ['id', 'opened_at']
 	show_exclude_columns = ['id']
 
 

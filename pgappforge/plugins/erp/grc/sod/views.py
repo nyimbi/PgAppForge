@@ -57,24 +57,24 @@ class SodAnalyzerView(BaseERPView):
 		from flask import render_template
 		conflicts = []
 		try:
-			from pgappforge.plugins.erp.grc.sod.models import SodConflict
+			from pgappforge.plugins.erp.grc.sod.models import SodViolation
 			session = _get_session()
 			q = (
-				sa.select(SodConflict)
-				.where(SodConflict.tenant_id == _tenant_id())
-				.order_by(sa.desc(SodConflict.detected_at))
+				sa.select(SodViolation)
+				.where(SodViolation.tenant_id == _tenant_id())
+				.order_by(sa.desc(SodViolation.detected_at))
 				.limit(500)
 			)
 			conflicts = session.execute(q).scalars().all()
 		except Exception:
-			log.exception("SodAnalyzerView.dashboard: failed to load conflicts")
+			log.exception("SodAnalyzerView.dashboard: failed to load violations")
 			conflicts = []
 
 		# ── Compute violation summary stats ─────────────────────────────
 		total_violations = len(conflicts)
-		critical_count = sum(1 for c in conflicts if getattr(c, "severity", "").lower() == "critical")
-		high_count = sum(1 for c in conflicts if getattr(c, "severity", "").lower() == "high")
-		resolved = sum(1 for c in conflicts if getattr(c, "status", "").lower() in ("resolved", "closed"))
+		critical_count = sum(1 for c in conflicts if getattr(c, "risk_level", "").lower() == "critical")
+		high_count = sum(1 for c in conflicts if getattr(c, "risk_level", "").lower() == "high")
+		resolved = sum(1 for c in conflicts if getattr(c, "status", "").lower() in ("remediated", "accepted", "risk_accepted"))
 
 		kpi_html = self.kpi_cards([
 			{
@@ -108,7 +108,7 @@ class SodAnalyzerView(BaseERPView):
 		])
 
 		# ── Risk distribution doughnut ───────────────────────────────────
-		medium_count = sum(1 for c in conflicts if getattr(c, "severity", "").lower() == "medium")
+		medium_count = sum(1 for c in conflicts if getattr(c, "risk_level", "").lower() == "medium")
 		low_count = max(0, total_violations - critical_count - high_count - medium_count)
 		risk_data = [
 			{"risk_level": "Critical", "count": critical_count},
@@ -146,4 +146,6 @@ class SodAnalyzerView(BaseERPView):
 			return jsonify({"ok": False, "error": str(exc)}), 500
 
 
-__all__ = ["SodAnalyzerView"]
+SodAnalyzerDashboardView = SodAnalyzerView
+
+__all__ = ["SodAnalyzerView", "SodAnalyzerDashboardView"]
