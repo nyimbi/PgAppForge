@@ -86,6 +86,7 @@ class TradeCompliancePlugin(BasePlugin):
 	def register_views(self) -> None:
 		try:
 			from pgappforge.plugins.erp.procurement.trade_compliance.views import (
+				CustomsDeclarationView,
 				TradeRestrictionListView,
 				TradeScreeningResultView,
 				HSCodeMappingView,
@@ -97,15 +98,17 @@ class TradeCompliancePlugin(BasePlugin):
 		self.add_view(TradeRestrictionListView, "Restriction Lists", icon="fa-ban", category=cat)
 		self.add_view(TradeScreeningResultView, "Screening Results", icon="fa-search", category=cat)
 		self.add_view(HSCodeMappingView, "HS Codes", icon="fa-barcode", category=cat)
+		self.add_view(CustomsDeclarationView, "Customs Declarations", icon="fa-file-text-o", category=cat)
 		log.info("TradeCompliancePlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.procurement.trade_compliance.models import (
+			CustomsDeclaration,
 			TradeRestrictionList,
 			TradeScreeningResult,
 			HSCodeMapping,
 		)
-		return [TradeRestrictionList, TradeScreeningResult, HSCodeMapping]
+		return [TradeRestrictionList, TradeScreeningResult, HSCodeMapping, CustomsDeclaration]
 
 
 def create_plugin(
@@ -115,6 +118,7 @@ def create_plugin(
 
 
 from pgappforge.plugins.erp.procurement.trade_compliance.models import (  # noqa: E402
+	CustomsDeclaration,
 	TradeRestrictionList,
 	TradeScreeningResult,
 	HSCodeMapping,
@@ -129,5 +133,6 @@ __all__ = [
 	"TradeRestrictionList",
 	"TradeScreeningResult",
 	"HSCodeMapping",
+	"CustomsDeclaration",
 	"TradeComplianceService",
 ]

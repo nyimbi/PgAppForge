@@ -39,7 +39,7 @@ Public API:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -88,6 +88,14 @@ def _dec(value: Any) -> Decimal:
 
 def _now_utc() -> datetime:
 	return datetime.now(timezone.utc)
+
+
+def _pct(numerator: int, denominator: int) -> Decimal:
+	if denominator <= 0:
+		return Decimal("0")
+	return (Decimal(str(numerator)) / Decimal(str(denominator)) * Decimal("100")).quantize(
+		Decimal("0.01"), rounding=ROUND_HALF_UP
+	)
 
 
 def _emit(event: Any, session: Any = None) -> None:
@@ -588,6 +596,229 @@ class SourcingService:
 
 		log.info("RFQ %s cancelled: %s", rfq.rfq_ref, reason)
 		return rfq
+
+	# ------------------------------------------------------------------
+	# 7. start_reverse_auction
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def start_reverse_auction(
+		cls,
+		rfq_id: str,
+		duration_minutes: int,
+		reserve_price_cents: int,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Enable reverse-auction bidding for an RFQ."""
+		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
+
+		if duration_minutes <= 0:
+			raise ValueError("duration_minutes must be positive")
+		if reserve_price_cents <= 0:
+			raise ValueError("reserve_price_cents must be positive")
+
+		rfq = session.get(RFQ, rfq_id)
+		if rfq is None:
+			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
+
+		now = _now_utc()
+		rfq.auction_mode = True
+		rfq.reserve_price_cents = int(reserve_price_cents)
+		rfq.current_best_bid_cents = None
+		rfq.auction_bids = []
+		rfq.auction_end_time = now + timedelta(minutes=duration_minutes)
+		session.flush()
+
+		return {
+			"rfq_id": rfq.id,
+			"auction_mode": bool(rfq.auction_mode),
+			"reserve_price_cents": rfq.reserve_price_cents,
+			"current_best_bid_cents": rfq.current_best_bid_cents,
+			"auction_start_time": now.isoformat(),
+			"auction_end_time": rfq.auction_end_time.isoformat(),
+			"status": rfq.status,
+		}
+
+	# ------------------------------------------------------------------
+	# 8. place_auction_bid
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def place_auction_bid(
+		cls,
+		rfq_id: str,
+		supplier_id: str,
+		bid_cents: int,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Place a lower reverse-auction bid without going below the reserve floor."""
+		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
+
+		rfq = session.get(RFQ, rfq_id)
+		if rfq is None:
+			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
+		if not rfq.auction_mode:
+			raise ValueError("RFQ is not in auction mode")
+		if rfq.auction_end_time is not None and _now_utc() > rfq.auction_end_time:
+			raise ValueError("Auction has expired")
+
+		bid = int(bid_cents)
+		reserve = int(rfq.reserve_price_cents or 0)
+		if bid <= 0:
+			raise ValueError("bid_cents must be positive")
+		if reserve and bid < reserve:
+			raise ValueError("Bid is below reserve_price_cents")
+		if rfq.current_best_bid_cents is not None and bid >= int(rfq.current_best_bid_cents):
+			raise ValueError("Bid must be lower than the current best bid")
+
+		entry = {
+			"supplier_id": str(supplier_id),
+			"bid_cents": bid,
+			"ts": _now_utc().isoformat(),
+		}
+		rfq.current_best_bid_cents = bid
+		rfq.auction_bids = [*(rfq.auction_bids or []), entry]
+		session.flush()
+
+		return {
+			"rfq_id": rfq.id,
+			"current_best_bid_cents": rfq.current_best_bid_cents,
+			"bid_count": len(rfq.auction_bids or []),
+			"auction_end_time": rfq.auction_end_time.isoformat() if rfq.auction_end_time else None,
+			"leader_supplier_id": supplier_id,
+		}
+
+	# ------------------------------------------------------------------
+	# 9. close_auction
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def close_auction(cls, rfq_id: str, session: Any) -> dict[str, Any]:
+		"""Close an auction, mark the RFQ awarded, and return the lowest bid."""
+		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
+
+		rfq = session.get(RFQ, rfq_id)
+		if rfq is None:
+			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
+
+		bids = list(rfq.auction_bids or [])
+		if not bids:
+			raise ValueError("Auction has no bids")
+
+		winning = min(bids, key=lambda b: int(b.get("bid_cents", 0) or 0))
+		winning_bid = int(winning.get("bid_cents", 0) or 0)
+		winner_supplier_id = str(winning.get("supplier_id", ""))
+		rfq.current_best_bid_cents = winning_bid
+		rfq.status = "AWARDED"
+		rfq.auction_mode = False
+
+		# TODO: create an RFQAward row here if a future sourcing model provides one.
+		session.flush()
+
+		reserve = int(rfq.reserve_price_cents or 0)
+		savings_pct = _pct(max(reserve - winning_bid, 0), reserve) if reserve else Decimal("0")
+		return {
+			"rfq_id": rfq.id,
+			"winner_supplier_id": winner_supplier_id,
+			"winning_bid_cents": winning_bid,
+			"savings_pct": savings_pct,
+		}
+
+	# ------------------------------------------------------------------
+	# 10. record_savings
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def record_savings(
+		cls,
+		rfq_id: str,
+		baseline_price_cents: int,
+		awarded_price_cents: int,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Persist savings achieved on an RFQ award."""
+		from pgappforge.plugins.erp.procurement.sourcing.models import ProcurementSavings, RFQ
+
+		rfq = session.get(RFQ, rfq_id)
+		if rfq is None:
+			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
+		if baseline_price_cents <= 0:
+			raise ValueError("baseline_price_cents must be positive")
+
+		savings_cents = int(baseline_price_cents) - int(awarded_price_cents)
+		savings_pct = _pct(savings_cents, int(baseline_price_cents))
+		record = ProcurementSavings(
+			tenant_id=rfq.tenant_id,
+			rfq_id=rfq.id,
+			baseline_price_cents=int(baseline_price_cents),
+			awarded_price_cents=int(awarded_price_cents),
+			savings_cents=savings_cents,
+			savings_pct=savings_pct,
+			category=getattr(rfq, "category", None),
+			recorded_at=_now_utc(),
+		)
+		session.add(record)
+		session.flush()
+
+		return {
+			"id": record.id,
+			"rfq_id": record.rfq_id,
+			"tenant_id": record.tenant_id,
+			"baseline_price_cents": record.baseline_price_cents,
+			"awarded_price_cents": record.awarded_price_cents,
+			"savings_cents": record.savings_cents,
+			"savings_pct": record.savings_pct,
+			"category": record.category,
+			"recorded_at": record.recorded_at,
+		}
+
+	# ------------------------------------------------------------------
+	# 11. get_savings_report
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def get_savings_report(
+		cls,
+		tenant_id: str,
+		from_date: datetime,
+		to_date: datetime,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Aggregate procurement savings for a tenant/date window."""
+		from pgappforge.plugins.erp.procurement.sourcing.models import ProcurementSavings
+
+		rows = list(session.execute(
+			sa.select(ProcurementSavings).where(
+				ProcurementSavings.tenant_id == tenant_id,
+				ProcurementSavings.recorded_at >= from_date,
+				ProcurementSavings.recorded_at <= to_date,
+			)
+		).scalars().all())
+
+		total_savings = sum(int(row.savings_cents or 0) for row in rows)
+		by_category: dict[str, int] = {}
+		for row in rows:
+			category = row.category or "UNCATEGORIZED"
+			by_category[category] = by_category.get(category, 0) + int(row.savings_cents or 0)
+
+		top = sorted(rows, key=lambda row: int(row.savings_cents or 0), reverse=True)[:10]
+		return {
+			"tenant_id": tenant_id,
+			"from_date": from_date,
+			"to_date": to_date,
+			"total_savings_cents": total_savings,
+			"savings_by_category": by_category,
+			"top_10_rfqs_by_savings": [
+				{
+					"rfq_id": row.rfq_id,
+					"savings_cents": row.savings_cents,
+					"savings_pct": row.savings_pct,
+					"category": row.category,
+					"recorded_at": row.recorded_at,
+				}
+				for row in top
+			],
+		}
 
 
 # ---------------------------------------------------------------------------

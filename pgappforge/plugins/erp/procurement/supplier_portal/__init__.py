@@ -129,8 +129,10 @@ class SupplierPortalPlugin(BasePlugin):
 	def register_views(self) -> None:
 		try:
 			from pgappforge.plugins.erp.procurement.supplier_portal.views import (
-				SupplierProfileView,
 				SupplierPerformanceCardView,
+				SupplierProfileView,
+				SupplierRiskView,
+				SupplierScorecardView,
 			)
 		except ImportError:
 			log.warning("SupplierPortalPlugin.register_views: views module not available — skipping.")
@@ -138,14 +140,18 @@ class SupplierPortalPlugin(BasePlugin):
 		cat = self.config.get("SUPPLIER_PORTAL_MENU_CATEGORY", "Procurement")
 		self.add_view(SupplierProfileView, "Suppliers", icon="fa-truck", category=cat)
 		self.add_view(SupplierPerformanceCardView, "Performance", icon="fa-star", category=cat)
+		self.add_view(SupplierScorecardView, "Scorecards", icon="fa-dashboard", category=cat)
+		self.add_view(SupplierRiskView, "Supplier Risks", icon="fa-warning", category=cat)
 		log.info("SupplierPortalPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
-			SupplierProfile,
 			SupplierPerformanceCard,
+			SupplierProfile,
+			SupplierRisk,
+			SupplierScorecard,
 		)
-		return [SupplierProfile, SupplierPerformanceCard]
+		return [SupplierProfile, SupplierPerformanceCard, SupplierScorecard, SupplierRisk]
 
 	def activate(self) -> None:
 		self.initialize()
@@ -170,10 +176,13 @@ def create_plugin(
 # ---------------------------------------------------------------------------
 
 from pgappforge.plugins.erp.procurement.supplier_portal.models import (  # noqa: E402
-	SupplierProfile,
-	SupplierPerformanceCard,
 	KYC_STATUSES,
 	PRIMARY_CATEGORIES,
+	RISK_TYPES,
+	SupplierPerformanceCard,
+	SupplierProfile,
+	SupplierRisk,
+	SupplierScorecard,
 )
 from pgappforge.plugins.erp.procurement.supplier_portal.events import (  # noqa: E402
 	SupplierRegisteredEvent,
@@ -197,9 +206,12 @@ __all__ = [
 	# models
 	"SupplierProfile",
 	"SupplierPerformanceCard",
+	"SupplierScorecard",
+	"SupplierRisk",
 	# enum sets
 	"KYC_STATUSES",
 	"PRIMARY_CATEGORIES",
+	"RISK_TYPES",
 	# events
 	"SupplierRegisteredEvent",
 	"KYCApprovedEvent",

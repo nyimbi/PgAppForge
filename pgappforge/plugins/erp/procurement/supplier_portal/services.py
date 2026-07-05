@@ -114,6 +114,22 @@ def _compute_overall_score(supplier_id: str, session: Any) -> Decimal:
 	return _dec(avg).quantize(_dec("0.01"), rounding=ROUND_HALF_UP)
 
 
+def _scorecard_dict(card: Any) -> dict[str, Any]:
+	return {
+		"id": card.id,
+		"supplier_id": card.supplier_id,
+		"period": card.period,
+		"on_time_delivery_pct": card.on_time_delivery_pct,
+		"quality_score": card.quality_score,
+		"price_competitiveness": card.price_competitiveness,
+		"responsiveness_score": card.responsiveness_score,
+		"overall_score": card.overall_score,
+		"notes": card.notes,
+		"scored_by": card.scored_by,
+		"scored_at": card.scored_at,
+	}
+
+
 # ---------------------------------------------------------------------------
 # SupplierPortalService
 # ---------------------------------------------------------------------------
@@ -512,6 +528,202 @@ class SupplierPortalService:
 			stmt = stmt.where(SupplierProfile.primary_category == category)
 
 		return list(session.execute(stmt).scalars().all())
+
+	# ------------------------------------------------------------------
+	# 8. score_supplier
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def score_supplier(
+		cls,
+		supplier_id: str,
+		period: str,
+		metrics: dict[str, Any],
+		session: Any,
+	) -> Any:
+		"""Create a monthly SupplierScorecard using the requested weighted average."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
+			SupplierProfile,
+			SupplierScorecard,
+		)
+
+		supplier = session.get(SupplierProfile, supplier_id)
+		if supplier is None:
+			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
+		if len(period) != 7 or period[4] != "-":
+			raise SupplierPortalServiceError("period must use YYYY-MM format")
+
+		otd = _dec(metrics.get("on_time_delivery_pct", 0))
+		quality = _dec(metrics.get("quality_score_1_5", metrics.get("quality_score", 0)))
+		price = _dec(metrics.get("price_competitiveness_1_5", metrics.get("price_competitiveness", 0)))
+		responsiveness = _dec(metrics.get("responsiveness_1_5", metrics.get("responsiveness_score", 0)))
+		for name, value in (
+			("quality_score_1_5", quality),
+			("price_competitiveness_1_5", price),
+			("responsiveness_1_5", responsiveness),
+		):
+			if value < 1 or value > 5:
+				raise SupplierPortalServiceError(f"{name} must be between 1 and 5")
+		if otd < 0 or otd > 100:
+			raise SupplierPortalServiceError("on_time_delivery_pct must be between 0 and 100")
+
+		overall = (
+			otd * _dec("0.4")
+			+ quality * _dec("0.3")
+			+ price * _dec("0.2")
+			+ responsiveness * _dec("0.1")
+		).quantize(_dec("0.01"), rounding=ROUND_HALF_UP)
+
+		card = SupplierScorecard(
+			tenant_id=supplier.tenant_id,
+			supplier_id=supplier.id,
+			period=period,
+			on_time_delivery_pct=otd,
+			quality_score=quality,
+			price_competitiveness=price,
+			responsiveness_score=responsiveness,
+			overall_score=overall,
+			notes=metrics.get("notes"),
+			scored_by=str(metrics.get("scored_by", "")),
+			scored_at=_now_utc(),
+		)
+		session.add(card)
+		session.flush()
+		return card
+
+	# ------------------------------------------------------------------
+	# 9. get_supplier_360
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def get_supplier_360(cls, supplier_id: str, session: Any) -> dict[str, Any]:
+		"""Return supplier profile, recent scorecards, PO count, spend, and compliance status."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
+			SupplierProfile,
+			SupplierScorecard,
+		)
+
+		supplier = session.get(SupplierProfile, supplier_id)
+		if supplier is None:
+			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
+
+		scorecards = session.execute(
+			sa.select(SupplierScorecard)
+			.where(SupplierScorecard.supplier_id == supplier_id)
+			.order_by(SupplierScorecard.period.desc())
+			.limit(3)
+		).scalars().all()
+
+		open_pos_count = 0
+		total_spend_cents = 0
+		try:
+			from pgappforge.plugins.erp.finance.ap.models import APInvoice, APPurchaseOrder
+			open_pos_count = int(session.execute(
+				sa.select(sa.func.count(APPurchaseOrder.id)).where(
+					APPurchaseOrder.supplier_id == supplier_id,
+					APPurchaseOrder.status.notin_(["CLOSED", "CANCELLED"]),
+				)
+			).scalar() or 0)
+			total_spend_cents = int(session.execute(
+				sa.select(sa.func.coalesce(sa.func.sum(APInvoice.total_cents), 0)).where(
+					APInvoice.supplier_id == supplier_id,
+				)
+			).scalar() or 0)
+		except Exception:
+			open_pos_count = 0
+			total_spend_cents = 0
+
+		return {
+			"supplier": {
+				"id": supplier.id,
+				"supplier_ref": supplier.supplier_ref,
+				"company_name": supplier.company_name,
+				"country_code": supplier.country_code,
+				"primary_category": supplier.primary_category,
+				"risk_level": supplier.risk_level,
+			},
+			"last_3_scorecards": [_scorecard_dict(card) for card in scorecards],
+			"open_pos_count": open_pos_count,
+			"total_spend_cents": total_spend_cents,
+			"compliance_status": supplier.kyc_status,
+		}
+
+	# ------------------------------------------------------------------
+	# 10. flag_supplier_risk
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def flag_supplier_risk(
+		cls,
+		supplier_id: str,
+		risk_type: str,
+		severity: str,
+		notes: str | None,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Create a risk flag and update SupplierProfile.risk_level."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
+			RISK_TYPES,
+			SupplierProfile,
+			SupplierRisk,
+		)
+
+		supplier = session.get(SupplierProfile, supplier_id)
+		if supplier is None:
+			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
+		normalized_type = risk_type.upper().strip()
+		if normalized_type not in RISK_TYPES:
+			raise SupplierPortalServiceError(f"Invalid risk_type {risk_type!r}. Choose from {RISK_TYPES}")
+
+		risk = SupplierRisk(
+			tenant_id=supplier.tenant_id,
+			supplier_id=supplier.id,
+			risk_type=normalized_type,
+			severity=severity,
+			notes=notes,
+			created_at=_now_utc(),
+		)
+		supplier.risk_level = severity
+		session.add(risk)
+		session.flush()
+
+		return {
+			"id": risk.id,
+			"tenant_id": risk.tenant_id,
+			"supplier_id": risk.supplier_id,
+			"risk_type": risk.risk_type,
+			"severity": risk.severity,
+			"notes": risk.notes,
+			"created_at": risk.created_at,
+		}
+
+	# ------------------------------------------------------------------
+	# 11. get_supplier_performance_trend
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def get_supplier_performance_trend(
+		cls,
+		supplier_id: str,
+		periods: int,
+		session: Any,
+	) -> list[dict[str, Any]]:
+		"""Return the last N scorecards ordered by newest period first."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
+			SupplierProfile,
+			SupplierScorecard,
+		)
+
+		if session.get(SupplierProfile, supplier_id) is None:
+			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
+		limit = max(int(periods), 0)
+		rows = session.execute(
+			sa.select(SupplierScorecard)
+			.where(SupplierScorecard.supplier_id == supplier_id)
+			.order_by(SupplierScorecard.period.desc())
+			.limit(limit)
+		).scalars().all()
+		return [_scorecard_dict(row) for row in rows]
 
 
 # ---------------------------------------------------------------------------

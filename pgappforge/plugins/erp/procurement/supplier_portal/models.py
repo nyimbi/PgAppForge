@@ -53,6 +53,7 @@ def _uuid4() -> str:
 
 KYC_STATUSES = {"PENDING", "APPROVED", "REJECTED", "SUSPENDED"}
 PRIMARY_CATEGORIES = {"GOODS", "SERVICES", "WORKS"}
+RISK_TYPES = {"FINANCIAL", "OPERATIONAL", "COMPLIANCE", "GEOPOLITICAL"}
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +128,7 @@ class SupplierProfile(AuditMixin, Model):
 		comment="Rolling average of SupplierPerformanceCard.composite_score (0-100)",
 	)
 	is_preferred = Column(Boolean, nullable=False, default=False)
+	risk_level = Column(String(20), nullable=True)
 
 	created_at = Column(
 		DateTime(timezone=True),
@@ -144,6 +146,18 @@ class SupplierProfile(AuditMixin, Model):
 
 	performance_cards: list[SupplierPerformanceCard] = relationship(
 		"SupplierPerformanceCard",
+		back_populates="supplier",
+		lazy="select",
+		cascade="all, delete-orphan",
+	)
+	scorecards: list[SupplierScorecard] = relationship(
+		"SupplierScorecard",
+		back_populates="supplier",
+		lazy="select",
+		cascade="all, delete-orphan",
+	)
+	risks: list[SupplierRisk] = relationship(
+		"SupplierRisk",
 		back_populates="supplier",
 		lazy="select",
 		cascade="all, delete-orphan",
@@ -230,10 +244,107 @@ class SupplierPerformanceCard(AuditMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# SupplierScorecard
+# ---------------------------------------------------------------------------
+
+class SupplierScorecard(AuditMixin, Model):
+	"""Monthly supplier scorecard with 1-5 qualitative dimensions."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sup_scorecard"
+	__table_args__ = (
+		UniqueConstraint("supplier_id", "period", name="uq_sup_score_supplier_period"),
+		Index("ix_sup_score_tenant_period", "tenant_id", "period"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	supplier_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sup_profile.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	period = Column(String(7), nullable=False, comment="YYYY-MM")
+	on_time_delivery_pct = Column(Numeric(6, 2), nullable=False, default=0)
+	quality_score = Column(Numeric(4, 2), nullable=False, default=0)
+	price_competitiveness = Column(Numeric(4, 2), nullable=False, default=0)
+	responsiveness_score = Column(Numeric(4, 2), nullable=False, default=0)
+	overall_score = Column(Numeric(8, 2), nullable=False, default=0)
+	notes = Column(Text, nullable=True)
+	scored_by = Column(String(50), nullable=False, default="")
+	scored_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	supplier: SupplierProfile = relationship("SupplierProfile", back_populates="scorecards", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<SupplierScorecard supplier={self.supplier_id} period={self.period} score={self.overall_score}>"
+
+
+# ---------------------------------------------------------------------------
+# SupplierRisk
+# ---------------------------------------------------------------------------
+
+class SupplierRisk(AuditMixin, Model):
+	"""Point-in-time supplier risk flag."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sup_risk"
+	__table_args__ = (
+		CheckConstraint(
+			"risk_type IN ('FINANCIAL','OPERATIONAL','COMPLIANCE','GEOPOLITICAL')",
+			name="ck_sup_risk_type",
+		),
+		Index("ix_sup_risk_tenant_supplier", "tenant_id", "supplier_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False)
+	supplier_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("sup_profile.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	risk_type = Column(String(20), nullable=False)
+	severity = Column(String(20), nullable=False)
+	notes = Column(Text, nullable=True)
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	supplier: SupplierProfile = relationship("SupplierProfile", back_populates="risks", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<SupplierRisk supplier={self.supplier_id} type={self.risk_type} severity={self.severity}>"
+
+
 __all__ = [
 	"SupplierProfile",
 	"SupplierPerformanceCard",
+	"SupplierScorecard",
+	"SupplierRisk",
 	# enum sets
 	"KYC_STATUSES",
 	"PRIMARY_CATEGORIES",
+	"RISK_TYPES",
 ]

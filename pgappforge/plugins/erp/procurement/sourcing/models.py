@@ -26,6 +26,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy import (
 	BigInteger,
+	Boolean,
 	CheckConstraint,
 	Column,
 	DateTime,
@@ -120,6 +121,16 @@ class RFQ(AuditMixin, Model):
 		server_default=sa.text("'[]'::jsonb"),
 		default=list,
 		comment="List of supplier_id strings",
+	)
+	auction_mode = Column(Boolean, nullable=False, default=False, server_default=sa.text("false"))
+	reserve_price_cents = Column(Integer, nullable=True)
+	current_best_bid_cents = Column(Integer, nullable=True)
+	auction_end_time = Column(DateTime(timezone=True), nullable=True)
+	auction_bids = Column(
+		JSONB, nullable=False,
+		server_default=sa.text("'[]'::jsonb"),
+		default=list,
+		comment="[{supplier_id, bid_cents, ts}]",
 	)
 	entity_id = Column(String(50), nullable=True, comment="Advisory FK to entity/company")
 	created_by = Column(String(50), nullable=True, comment="Advisory FK to user/employee who created the RFQ")
@@ -234,9 +245,55 @@ class SupplierBid(AuditMixin, Model):
 		)
 
 
+# ---------------------------------------------------------------------------
+# ProcurementSavings
+# ---------------------------------------------------------------------------
+
+class ProcurementSavings(AuditMixin, Model):
+	"""Savings record captured when an RFQ is awarded below baseline."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "src_procurement_savings"
+	__table_args__ = (
+		Index("ix_src_savings_tenant_date", "tenant_id", "recorded_at"),
+		Index("ix_src_savings_category", "tenant_id", "category"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	rfq_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("src_rfq.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	baseline_price_cents = Column(BigInteger, nullable=False)
+	awarded_price_cents = Column(BigInteger, nullable=False)
+	savings_cents = Column(BigInteger, nullable=False)
+	savings_pct = Column(Numeric(8, 4), nullable=False, default=0)
+	category = Column(String(100), nullable=True)
+	recorded_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	rfq: RFQ = relationship("RFQ", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<ProcurementSavings rfq={self.rfq_id} savings={self.savings_cents}¢>"
+
+
 __all__ = [
 	"RFQ",
 	"SupplierBid",
+	"ProcurementSavings",
 	# enum sets
 	"RFQ_TYPES",
 	"RFQ_STATUSES",

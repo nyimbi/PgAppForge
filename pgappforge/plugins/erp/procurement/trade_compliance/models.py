@@ -18,6 +18,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy import (
 	Boolean,
+	CheckConstraint,
 	Column,
 	DateTime,
 	Index,
@@ -240,4 +241,69 @@ class HSCodeMapping(AuditMixin, Model):
 		)
 
 
-__all__ = ["TradeRestrictionList", "TradeScreeningResult", "HSCodeMapping"]
+# ---------------------------------------------------------------------------
+# CustomsDeclaration
+# ---------------------------------------------------------------------------
+
+class CustomsDeclaration(AuditMixin, Model):
+	"""Customs declaration assembled from HS-code duty calculations."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "trd_customs_declaration"
+	__table_args__ = (
+		Index("ix_trd_decl_shipment", "shipment_id"),
+		Index("ix_trd_decl_tenant_status", "tenant_id", "status"),
+		CheckConstraint(
+			"status IN ('DRAFT','SUBMITTED','CLEARED','REJECTED')",
+			name="ck_trd_decl_status",
+		),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	shipment_id = Column(String(50), nullable=False, index=True)
+	export_country = Column(String(2), nullable=False)
+	import_country = Column(String(2), nullable=False)
+	total_value_cents = Column(Integer, nullable=False, default=0)
+	total_duty_cents = Column(Integer, nullable=False, default=0)
+	lines = Column(
+		JSONB,
+		nullable=False,
+		default=list,
+		comment="[{hs_code, description, value_cents, duty_cents, duty_rate_pct}]",
+	)
+	status = Column(String(20), nullable=False, default="DRAFT")
+	submitted_at = Column(DateTime(timezone=True), nullable=True)
+	cleared_at = Column(DateTime(timezone=True), nullable=True)
+	declaration_reference = Column(String(100), nullable=True)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return f"<CustomsDeclaration shipment={self.shipment_id!r} status={self.status!r}>"
+
+
+__all__ = [
+	"TradeRestrictionList",
+	"TradeScreeningResult",
+	"HSCodeMapping",
+	"CustomsDeclaration",
+]

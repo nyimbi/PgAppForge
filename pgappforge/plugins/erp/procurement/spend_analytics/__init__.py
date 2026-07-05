@@ -22,8 +22,13 @@ class SpendAnalyticsPlugin(BasePlugin):
 	def initialize(self) -> None: pass
 	def get_events(self) -> list[str]: return []
 	def subscribe_to(self) -> list[str]: return []
-	def register_models(self) -> list: return []
-	def register_views(self) -> None: pass
+	def register_models(self) -> list:
+		from pgappforge.plugins.erp.procurement.spend_analytics.models import SpendSnapshot
+		return [SpendSnapshot]
+
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.procurement.spend_analytics.views import SpendSnapshotView
+		self.add_view(SpendSnapshotView, "Spend Analytics", icon="fa-bar-chart", category="Procurement")
 
 
 __all__ = ["SpendAnalyticsPlugin"]

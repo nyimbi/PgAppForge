@@ -125,6 +125,7 @@ class SourcingPlugin(BasePlugin):
 	def register_views(self) -> None:
 		try:
 			from pgappforge.plugins.erp.procurement.sourcing.views import (
+				ProcurementSavingsView,
 				RFQView,
 				SupplierBidView,
 			)
@@ -134,11 +135,16 @@ class SourcingPlugin(BasePlugin):
 		cat = self.config.get("SOURCING_MENU_CATEGORY", "Procurement")
 		self.add_view(RFQView, "RFQs", icon="fa-bullhorn", category=cat)
 		self.add_view(SupplierBidView, "Supplier Bids", icon="fa-gavel", category=cat)
+		self.add_view(ProcurementSavingsView, "Procurement Savings", icon="fa-line-chart", category=cat)
 		log.info("SourcingPlugin: views registered under %r", cat)
 
 	def register_models(self) -> list:
-		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, SupplierBid
-		return [RFQ, SupplierBid]
+		from pgappforge.plugins.erp.procurement.sourcing.models import (
+			ProcurementSavings,
+			RFQ,
+			SupplierBid,
+		)
+		return [RFQ, SupplierBid, ProcurementSavings]
 
 	def activate(self) -> None:
 		self.initialize()
@@ -163,6 +169,7 @@ def create_plugin(
 # ---------------------------------------------------------------------------
 
 from pgappforge.plugins.erp.procurement.sourcing.models import (  # noqa: E402
+	ProcurementSavings,
 	RFQ,
 	SupplierBid,
 	RFQ_TYPES,
@@ -194,6 +201,7 @@ __all__ = [
 	# models
 	"RFQ",
 	"SupplierBid",
+	"ProcurementSavings",
 	# enum sets
 	"RFQ_TYPES",
 	"RFQ_STATUSES",

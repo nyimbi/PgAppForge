@@ -45,6 +45,38 @@ def _emit(event: Any, session: Any = None) -> None:
 		log.debug("TradeComplianceService: emit suppressed: %s", exc)
 
 
+def _resolve_declaration_tenant(shipment_id: str, hs_codes: list[Any], session: Any) -> str:
+	try:
+		from pgappforge.plugins.erp.operations.scm.models import ShipmentTracking
+		shipment = session.get(ShipmentTracking, shipment_id)
+		if shipment is not None and getattr(shipment, "tenant_id", None):
+			return str(shipment.tenant_id)
+	except Exception:
+		pass
+
+	for line in hs_codes:
+		if isinstance(line, dict) and line.get("tenant_id"):
+			return str(line["tenant_id"])
+	raise ValueError("tenant_id could not be inferred from shipment_id or hs_codes")
+
+
+def _declaration_dict(declaration: Any) -> dict[str, Any]:
+	return {
+		"id": declaration.id,
+		"tenant_id": declaration.tenant_id,
+		"shipment_id": declaration.shipment_id,
+		"export_country": declaration.export_country,
+		"import_country": declaration.import_country,
+		"total_value_cents": declaration.total_value_cents,
+		"total_duty_cents": declaration.total_duty_cents,
+		"lines": declaration.lines,
+		"status": declaration.status,
+		"submitted_at": declaration.submitted_at,
+		"cleared_at": declaration.cleared_at,
+		"declaration_reference": declaration.declaration_reference,
+	}
+
+
 # ---------------------------------------------------------------------------
 # TradeComplianceService
 # ---------------------------------------------------------------------------
@@ -212,7 +244,7 @@ class TradeComplianceService:
 					tenant_id=tenant_id,
 					product_code=product_code,
 					hs_code=row.hs_code,
-					duty_rate_pct=float(row.duty_rate_pct or 0),
+					duty_rate_pct=Decimal(str(row.duty_rate_pct or 0)),
 				),
 				session,
 			)
@@ -267,6 +299,148 @@ class TradeComplianceService:
 			"duty_cents": duty_cents,
 			"is_controlled": bool(row.is_controlled),
 			"found": True,
+		}
+
+	# ------------------------------------------------------------------
+	# create_customs_declaration
+	# ------------------------------------------------------------------
+
+	def create_customs_declaration(
+		self,
+		shipment_id: str,
+		export_country: str,
+		import_country: str,
+		hs_codes: list[Any],
+		total_value_cents: int,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Create a draft customs declaration with per-HS-code duties."""
+		from pgappforge.plugins.erp.procurement.trade_compliance.models import CustomsDeclaration
+
+		if total_value_cents <= 0:
+			raise ValueError("total_value_cents must be positive")
+		if not hs_codes:
+			raise ValueError("hs_codes must contain at least one line")
+
+		tenant_id = _resolve_declaration_tenant(shipment_id, hs_codes, session)
+		normalized_lines: list[dict[str, Any]] = []
+		explicit_value = sum(
+			int(line.get("value_cents", 0) or 0)
+			for line in hs_codes
+			if isinstance(line, dict)
+		)
+		default_value = int(Decimal(str(total_value_cents)) / Decimal(str(len(hs_codes))))
+
+		for index, raw_line in enumerate(hs_codes):
+			line = raw_line if isinstance(raw_line, dict) else {"hs_code": str(raw_line)}
+			hs_code = str(line.get("hs_code", "")).strip()
+			if not hs_code:
+				raise ValueError("Each customs line must include hs_code")
+			if explicit_value:
+				value_cents = int(line.get("value_cents", 0) or 0)
+			else:
+				value_cents = default_value
+				if index == len(hs_codes) - 1:
+					value_cents = int(total_value_cents) - default_value * (len(hs_codes) - 1)
+			duty = self.calculate_duty(
+				hs_code=hs_code,
+				country_origin=export_country,
+				country_dest=import_country,
+				value_cents=value_cents,
+				tenant_id=tenant_id,
+				session=session,
+			)
+			normalized_lines.append({
+				"hs_code": hs_code,
+				"description": line.get("description", ""),
+				"value_cents": value_cents,
+				"duty_cents": int(duty["duty_cents"]),
+				"duty_rate_pct": str(duty["duty_rate_pct"]),
+			})
+
+		total_duty_cents = sum(int(line["duty_cents"]) for line in normalized_lines)
+		declaration = CustomsDeclaration(
+			tenant_id=tenant_id,
+			shipment_id=shipment_id,
+			export_country=export_country.upper().strip(),
+			import_country=import_country.upper().strip(),
+			total_value_cents=int(total_value_cents),
+			total_duty_cents=total_duty_cents,
+			lines=normalized_lines,
+			status="DRAFT",
+		)
+		session.add(declaration)
+		session.flush()
+		return _declaration_dict(declaration)
+
+	# ------------------------------------------------------------------
+	# submit_declaration
+	# ------------------------------------------------------------------
+
+	def submit_declaration(self, declaration_id: str, session: Any) -> dict[str, Any]:
+		"""Submit a draft customs declaration after validating required values."""
+		from pgappforge.plugins.erp.procurement.trade_compliance.models import CustomsDeclaration
+
+		declaration = session.get(CustomsDeclaration, declaration_id)
+		if declaration is None:
+			raise ValueError(f"CustomsDeclaration {declaration_id!r} not found")
+		if declaration.status != "DRAFT":
+			raise ValueError("Only DRAFT declarations can be submitted")
+		if int(declaration.total_value_cents or 0) <= 0:
+			raise ValueError("total_value_cents must be positive")
+		for line in declaration.lines or []:
+			if not line.get("hs_code"):
+				raise ValueError("All declaration lines must include hs_code")
+
+		declaration.status = "SUBMITTED"
+		declaration.submitted_at = datetime.now(timezone.utc)
+		session.flush()
+		return {
+			"id": declaration.id,
+			"shipment_id": declaration.shipment_id,
+			"status": declaration.status,
+			"submitted_at": declaration.submitted_at,
+			"total_value_cents": declaration.total_value_cents,
+			"total_duty_cents": declaration.total_duty_cents,
+		}
+
+	# ------------------------------------------------------------------
+	# check_export_license_required
+	# ------------------------------------------------------------------
+
+	def check_export_license_required(
+		self,
+		hs_code: str,
+		dest_country: str,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Return whether an HS code is export-controlled for a destination."""
+		from pgappforge.plugins.erp.procurement.trade_compliance.models import HSCodeMapping
+
+		row = session.execute(
+			select(HSCodeMapping)
+			.where(
+				HSCodeMapping.hs_code == hs_code,
+				sa.or_(
+					HSCodeMapping.country_code == dest_country,
+					HSCodeMapping.country_code.is_(None),
+				),
+			)
+			.order_by(sa.desc(HSCodeMapping.country_code == dest_country))
+			.limit(1)
+		).scalar_one_or_none()
+		if row is None:
+			return {
+				"required": False,
+				"reason": "No HS code mapping found",
+				"applying_regulation": "",
+			}
+
+		required = bool(getattr(row, "export_control_flag", getattr(row, "is_controlled", False)))
+		return {
+			"required": required,
+			"reason": "HS code is export-controlled" if required else "No export control flag on HS code mapping",
+			"applying_regulation": f"HSCodeMapping:{row.hs_code}",
 		}
 
 	# ------------------------------------------------------------------
