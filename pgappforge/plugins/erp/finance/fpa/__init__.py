@@ -157,9 +157,10 @@ class FPAPlugin(BasePlugin):
 				BudgetDriverView,
 				BudgetLineView,
 				BudgetVersionView,
+				FPADashboardView,
 				ForecastSnapshotView,
 				KPITargetView,
-				ScenarioModelView,
+				ScenarioView,
 				FPAReportView,
 			)
 		except ImportError:
@@ -168,6 +169,12 @@ class FPAPlugin(BasePlugin):
 
 		cat = self.config.get("FPA_MENU_CATEGORY", "FP&A")
 
+		self.add_view(
+			FPADashboardView,
+			"FP&A Dashboard",
+			icon="fa-dashboard",
+			category=cat,
+		)
 		self.add_view(
 			BudgetCycleView,
 			"Budget Cycles",
@@ -193,7 +200,7 @@ class FPAPlugin(BasePlugin):
 			category=cat,
 		)
 		self.add_view(
-			ScenarioModelView,
+			ScenarioView,
 			"Scenarios",
 			icon="fa-random",
 			category=cat,

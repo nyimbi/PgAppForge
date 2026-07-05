@@ -1,0 +1,57 @@
+{% extends "appbuilder/base.html" %}
+
+{% block content %}
+<section class="fpa-dashboard">
+	<div class="row">
+		{% for tile in kpi_tiles %}
+		<div class="col-md-4">
+			<div class="panel panel-default">
+				<div class="panel-heading">{{ tile.label }}</div>
+				<div class="panel-body">
+					<strong>{{ tile.value }}</strong>
+				</div>
+			</div>
+		</div>
+		{% endfor %}
+	</div>
+
+	<div class="panel panel-default">
+		<div class="panel-heading">Plan vs Actual by Department</div>
+		<div class="panel-body">
+			<pre id="fpa-plan-actual-chart">{{ chart_config | tojson }}</pre>
+		</div>
+	</div>
+
+	<div class="panel panel-default">
+		<div class="panel-heading">Open Budget Cycles</div>
+		<table class="table table-striped table-hover">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Fiscal Year</th>
+					<th>Type</th>
+					<th>Status</th>
+					<th>Input Deadline</th>
+					<th>Approval Deadline</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for cycle in open_budget_cycles %}
+				<tr>
+					<td>{{ cycle.name }}</td>
+					<td>{{ cycle.fiscal_year }}</td>
+					<td>{{ cycle.cycle_type }}</td>
+					<td><span class="label label-{{ cycle.badge_class }}">{{ cycle.status }}</span></td>
+					<td>{{ cycle.input_deadline or "" }}</td>
+					<td>{{ cycle.approval_deadline or "" }}</td>
+				</tr>
+				{% else %}
+				<tr>
+					<td colspan="6">No open budget cycles.</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</section>
+{% endblock %}

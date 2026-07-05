@@ -12,9 +12,25 @@ from pgappforge.plugins.erp.finance.lease_accounting.models import (
 class LeaseView(ModelView):
 	datamodel = SQLAInterface(Lease)
 
-	list_columns = ['lease_reference', 'lessor_name', 'asset_class', 'standard',
-					'classification', 'status', 'commencement_date', 'lease_term_months',
-					'lease_liability_cents', 'rou_asset_cents']
+	list_columns = ['name', 'lease_type', 'counterparty', 'standard', 'status',
+					'start_date', 'end_date', 'lease_liability_cents', 'rou_asset_cents']
+	show_columns = ['id', 'name', 'lease_type', 'counterparty', 'start_date',
+					'end_date', 'discount_rate', 'currency_code', 'payment_schedule',
+					'rou_asset_cents', 'lease_liability_cents', 'status', 'standard']
+	label_columns = {
+		'name': 'Name',
+		'lease_type': 'Lease Type',
+		'counterparty': 'Counterparty',
+		'standard': 'Standard',
+		'status': 'Status',
+		'start_date': 'Start Date',
+		'end_date': 'End Date',
+		'lease_liability_cents': 'Lease Liability (cents)',
+		'rou_asset_cents': 'ROU Asset (cents)',
+		'discount_rate': 'Discount Rate',
+		'currency_code': 'Currency',
+		'payment_schedule': 'Payment Schedule',
+	}
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -22,9 +38,22 @@ class LeaseView(ModelView):
 class LeasePaymentScheduleView(ModelView):
 	datamodel = SQLAInterface(LeasePaymentSchedule)
 
-	list_columns = ['lease_id', 'period_number', 'due_date', 'opening_liability_cents',
-					'interest_expense_cents', 'payment_cents', 'principal_reduction_cents',
-					'closing_liability_cents', 'is_paid']
+	list_columns = ['lease_id', 'period', 'payment_cents', 'interest_cents',
+					'principal_cents', 'rou_balance_cents', 'liability_balance_cents',
+					'gl_posted']
+	show_columns = ['id', 'period', 'payment_cents', 'interest_cents',
+					'principal_cents', 'rou_balance_cents', 'liability_balance_cents',
+					'gl_posted']
+	label_columns = {
+		'lease_id': 'Lease',
+		'period': 'Period',
+		'payment_cents': 'Payment (cents)',
+		'interest_cents': 'Interest (cents)',
+		'principal_cents': 'Principal (cents)',
+		'rou_balance_cents': 'ROU Balance (cents)',
+		'liability_balance_cents': 'Liability Balance (cents)',
+		'gl_posted': 'GL Posted',
+	}
 	add_exclude_columns = ['id']
 	edit_exclude_columns = ['id']
 

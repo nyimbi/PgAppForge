@@ -5,34 +5,60 @@ from pgappforge.models.sqla.interface import SQLAInterface
 
 from pgappforge.plugins.erp.finance.joint_venture.models import (
 	JointVenture,
-	JvCashCall,
-	JvBillingStatement,
+	JVCashCall,
+	JVBilling,
 )
 
 
 class JointVentureView(ModelView):
 	datamodel = SQLAInterface(JointVenture)
 
-	list_columns = ['venture_code', 'venture_name', 'venture_type',
-					'accounting_method', 'status', 'currency_code', 'effective_date']
+	list_columns = ['name', 'operator_entity_id', 'status', 'created_at']
+	show_columns = ['id', 'name', 'operator_entity_id', 'partners', 'status',
+					'created_at']
+	label_columns = {
+		'name': 'Name',
+		'operator_entity_id': 'Operator Entity',
+		'status': 'Status',
+		'created_at': 'Created At',
+		'partners': 'Partners',
+	}
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
 
 class JVCashCallView(ModelView):
-	datamodel = SQLAInterface(JvCashCall)
+	datamodel = SQLAInterface(JVCashCall)
 
-	list_columns = ['venture_id', 'call_reference', 'call_date', 'due_date',
-					'total_amount_cents', 'status']
+	list_columns = ['jv_id', 'period', 'total_cents', 'due_date', 'status']
+	show_columns = ['id', 'period', 'total_cents', 'due_date', 'status',
+					'distribution', 'created_at']
+	label_columns = {
+		'jv_id': 'Joint Venture',
+		'period': 'Period',
+		'total_cents': 'Total (cents)',
+		'due_date': 'Due Date',
+		'status': 'Status',
+		'distribution': 'Distribution',
+		'created_at': 'Created At',
+	}
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 
 
 class JVBillingRecordView(ModelView):
-	datamodel = SQLAInterface(JvBillingStatement)
+	datamodel = SQLAInterface(JVBilling)
 
-	list_columns = ['venture_id', 'partner_id', 'billing_period',
-					'total_billed_cents', 'partner_share_cents', 'status']
+	list_columns = ['jv_id', 'expense_journal_id', 'period', 'created_at']
+	show_columns = ['id', 'expense_journal_id', 'period', 'distribution',
+					'created_at']
+	label_columns = {
+		'jv_id': 'Joint Venture',
+		'expense_journal_id': 'Expense Journal',
+		'period': 'Period',
+		'created_at': 'Created At',
+		'distribution': 'Distribution',
+	}
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 
