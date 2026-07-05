@@ -321,7 +321,7 @@ class WarehouseService:
 		"""
 		from pgappforge.plugins.erp.operations.warehouse.models import PutawayTask
 
-		suggested_loc = self.suggest_putaway_location(product_id, warehouse_id, session)
+		suggested_loc = self.suggest_putaway_location(product_id, warehouse_id, session, quantity)
 
 		task = PutawayTask(
 			tenant_id=tenant_id,
@@ -471,26 +471,118 @@ class WarehouseService:
 		product_id: str,
 		warehouse_id: str,
 		session: Any,
+		quantity: Any = Decimal("1"),
 	) -> str | None:
-		"""Return the best available BULK or PICK location for putaway.
+		"""Return the best WMS storage location for directed putaway.
 
-		Simple strategy: prefer PICK locations with available capacity,
-		fall back to BULK.  Returns location id or None if none found.
+		Uses ABC slotting when product metadata is available. A-items prefer
+		forward/low-sequence locations, C-items prefer rear/high-sequence bulk or
+		reserve locations. Returns location id or None if no active location has
+		enough open capacity.
 		"""
-		from pgappforge.plugins.erp.operations.inventory.models import WarehouseLocation
+		from pgappforge.plugins.erp.operations.inventory.models import Product
+		from pgappforge.plugins.erp.operations.warehouse.models import StorageLocation
 
-		for loc_type in ("PICK", "BULK"):
-			loc = session.execute(
-				sa.select(WarehouseLocation)
-				.where(WarehouseLocation.warehouse_id == warehouse_id)
-				.where(WarehouseLocation.location_type == loc_type)
-				.where(WarehouseLocation.is_active.is_(True))
-				.order_by(WarehouseLocation.aisle, WarehouseLocation.rack, WarehouseLocation.bin)
-				.limit(1)
-			).scalar_one_or_none()
-			if loc is not None:
-				return str(loc.id)
-		return None
+		qty = _d(quantity)
+		if qty <= 0:
+			return None
+
+		product = session.get(Product, product_id)
+		tenant_id = str(product.tenant_id) if product is not None else ""
+		abc_class = str(
+			getattr(product, "abc_class", None)
+			or getattr(product, "velocity_class", None)
+			or "B"
+		).upper()[:1]
+		if abc_class not in ("A", "B", "C"):
+			abc_class = "B"
+
+		needs_hazmat = bool(getattr(product, "is_hazardous", False))
+		needs_cold = bool(
+			getattr(product, "requires_cold_storage", False)
+			or getattr(product, "is_cold_chain", False)
+			or getattr(product, "cold_chain_required", False)
+		)
+		needs_bulk = bool(
+			getattr(product, "requires_bulk_storage", False)
+			or getattr(product, "is_bulk", False)
+		)
+
+		query = (
+			sa.select(StorageLocation)
+			.where(StorageLocation.warehouse_id == warehouse_id)
+			.where(StorageLocation.is_active.is_(True))
+			.where((StorageLocation.capacity_units - StorageLocation.current_units) >= qty)
+		)
+		if tenant_id:
+			query = query.where(StorageLocation.tenant_id == tenant_id)
+
+		locations = session.execute(query).scalars().all()
+		if not locations:
+			return None
+
+		def _sequence(loc: Any) -> int:
+			parts = [loc.aisle, loc.bay, loc.level, loc.bin]
+			total = 0
+			for idx, part in enumerate(parts):
+				text = str(part or "")
+				digits = "".join(ch for ch in text if ch.isdigit())
+				if digits:
+					value = int(digits)
+				elif text:
+					value = sum(ord(ch.upper()) - 64 for ch in text if ch.isalpha())
+				else:
+					value = 0
+				total += value * (100 ** (len(parts) - idx - 1))
+			return total
+
+		def _fits_flags(loc: Any) -> bool:
+			zone = str(loc.zone_code or "").upper()
+			loc_type = str(loc.location_type or "").upper()
+			if needs_hazmat and zone != "HAZMAT":
+				return False
+			if needs_cold and zone != "COLD":
+				return False
+			if needs_bulk and loc_type != "BULK":
+				return False
+			if loc_type in ("STAGING", "RECEIVING", "DESPATCH", "QUARANTINE"):
+				return False
+			return loc_type in ("BULK", "PICK_FACE", "RESERVE")
+
+		def _score(loc: Any) -> tuple[int, int, int, str]:
+			zone = str(loc.zone_code or "").upper()
+			loc_type = str(loc.location_type or "").upper()
+			seq = _sequence(loc)
+			open_capacity = _d(loc.capacity_units) - _d(loc.current_units)
+			score = 0
+
+			if abc_class == "A":
+				score += 1000 if zone == "A" else 0
+				score += 300 if loc_type == "PICK_FACE" else 0
+				score -= min(seq, 9999)
+			elif abc_class == "C":
+				score += 1000 if zone == "C" else 0
+				score += 250 if loc_type in ("BULK", "RESERVE") else 0
+				score += min(seq, 9999)
+			else:
+				score += 500 if zone == "B" else 0
+				score += 150 if loc_type in ("BULK", "PICK_FACE") else 0
+				score -= abs(5000 - min(seq, 9999))
+
+			if needs_hazmat and zone == "HAZMAT":
+				score += 400
+			if needs_cold and zone == "COLD":
+				score += 400
+			if needs_bulk and loc_type == "BULK":
+				score += 400
+
+			return (score, int(open_capacity), -seq, str(loc.location_code or ""))
+
+		scored = [loc for loc in locations if _fits_flags(loc)]
+		if not scored:
+			return None
+		best = max(scored, key=_score)
+		return str(best.id)
 
 	# ------------------------------------------------------------------
 	# Stock Count management
