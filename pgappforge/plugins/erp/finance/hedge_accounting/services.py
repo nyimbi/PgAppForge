@@ -1,7 +1,7 @@
 """Hedge accounting service — IFRS 9 effectiveness testing and recognition."""
 from __future__ import annotations
 import uuid
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Any
 
 import sqlalchemy as sa
