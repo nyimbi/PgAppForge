@@ -54,13 +54,14 @@ class HedgeAccountingService:
 			effective = 0
 			ineffective = instrument_change_cents
 		else:
-			ratio = Decimal(str(abs(instrument_change_cents))) / Decimal(str(abs(hedged_item_change_cents))) * 100
+			ratio = -(Decimal(str(instrument_change_cents)) / Decimal(str(hedged_item_change_cents))) * 100
 			lower = Decimal(str(hedge.effectiveness_lower))
 			upper = Decimal(str(hedge.effectiveness_upper))
 			is_effective = lower <= ratio <= upper
 			if is_effective:
-				effective = instrument_change_cents
-				ineffective = 0
+				effective_abs = min(abs(instrument_change_cents), abs(hedged_item_change_cents))
+				effective = effective_abs if instrument_change_cents >= 0 else -effective_abs
+				ineffective = instrument_change_cents - effective
 			else:
 				effective = 0
 				ineffective = instrument_change_cents
@@ -75,6 +76,7 @@ class HedgeAccountingService:
 			effective_gain_cents=effective,
 			ineffective_gain_cents=ineffective,
 			oci_cents=effective if hedge.hedged_item_type == "CASH_FLOW" else 0,
+			pl_cents=ineffective,
 		)
 		session.add(entry)
 		return entry

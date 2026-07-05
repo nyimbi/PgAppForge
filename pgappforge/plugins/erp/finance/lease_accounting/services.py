@@ -44,6 +44,7 @@ class LeaseService:
 		payments = [p["payment_cents"] for p in payment_schedule]
 		rate = Decimal(str(discount_rate))
 		pv = _npv(rate, payments)
+		initial_rou_cents = int(pv)
 		lease = Lease(
 			id=_uuid(),
 			tenant_id=tenant_id,
@@ -53,12 +54,45 @@ class LeaseService:
 			discount_rate=discount_rate,
 			currency_code=currency_code,
 			payment_schedule=payment_schedule,
-			rou_asset_cents=int(pv),
-			lease_liability_cents=int(pv),
+			rou_asset_cents=initial_rou_cents,
+			lease_liability_cents=initial_rou_cents,
 			standard=standard,
 		)
 		if session:
 			session.add(lease)
+			opening_liability_cents = initial_rou_cents
+			total_periods = len(payment_schedule)
+			depreciation_cents = int(
+				(Decimal(str(initial_rou_cents)) / Decimal(str(total_periods)))
+				.to_integral_value(ROUND_HALF_UP)
+			) if total_periods else 0
+			rou_balance_cents = initial_rou_cents
+			for index, payment in enumerate(payment_schedule, start=1):
+				payment_cents = payment["payment_cents"]
+				interest_cents = int(
+					(Decimal(str(opening_liability_cents)) * rate)
+					.to_integral_value(ROUND_HALF_UP)
+				)
+				principal_cents = payment_cents - interest_cents
+				closing_liability_cents = opening_liability_cents - principal_cents
+				if index == total_periods:
+					closing_liability_cents = 0
+					rou_balance_cents = 0
+				else:
+					rou_balance_cents = max(0, rou_balance_cents - depreciation_cents)
+				session.add(
+					LeasePaymentSchedule(
+						id=_uuid(),
+						lease_id=lease.id,
+						period=payment.get("period", str(index)),
+						payment_cents=payment_cents,
+						interest_cents=interest_cents,
+						principal_cents=principal_cents,
+						rou_balance_cents=rou_balance_cents,
+						liability_balance_cents=closing_liability_cents,
+					)
+				)
+				opening_liability_cents = closing_liability_cents
 		return lease
 
 	def get_schedule(self, lease_id: str, session: Any) -> list[LeasePaymentSchedule]:
@@ -97,8 +131,10 @@ class LeaseService:
 		session: Any,
 	) -> LeaseModification:
 		payments = [p["payment_cents"] for p in new_payments]
-		rate = Decimal(str(new_discount_rate)) if new_discount_rate else None
-		pv = _npv(rate, payments) if rate else None
+		lease = session.get(Lease, lease_id)
+		applied_discount_rate = new_discount_rate if new_discount_rate is not None else lease.discount_rate
+		rate = Decimal(str(applied_discount_rate))
+		pv = _npv(rate, payments)
 		mod = LeaseModification(
 			id=_uuid(),
 			lease_id=lease_id,
@@ -106,14 +142,13 @@ class LeaseService:
 			new_payments=new_payments,
 			new_discount_rate=new_discount_rate,
 			reason=reason,
-			remeasured_liability_cents=int(pv) if pv else None,
+			remeasured_liability_cents=int(pv),
 		)
 		session.add(mod)
-		if pv:
-			session.execute(
-				sa.update(Lease).where(Lease.id == lease_id)
-				.values(lease_liability_cents=int(pv), discount_rate=new_discount_rate)
-			)
+		session.execute(
+			sa.update(Lease).where(Lease.id == lease_id)
+			.values(lease_liability_cents=int(pv), discount_rate=applied_discount_rate)
+		)
 		return mod
 
 

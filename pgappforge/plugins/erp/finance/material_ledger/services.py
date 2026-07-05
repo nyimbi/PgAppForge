@@ -157,16 +157,19 @@ class MaterialLedgerService:
 			.values(costing_status="LOCKED")
 		)
 
-		# Compute total variance
-		result = session.execute(
-			sa.select(sa.func.sum(MaterialLedger.purchase_price_variance_cents))
+		ledgers = session.execute(
+			sa.select(MaterialLedger)
 			.where(MaterialLedger.period_id == period_id)
-		).scalar_one_or_none() or 0
-
-		materials_count = session.execute(
-			sa.select(sa.func.count(MaterialLedger.id))
-			.where(MaterialLedger.period_id == period_id)
-		).scalar_one()
+		).scalars().all()
+		result = sum(
+			(ledger.purchase_price_variance_cents or 0)
+			+ (ledger.exchange_rate_difference_cents or 0)
+			+ (ledger.production_variance_cents or 0)
+			+ (ledger.multilevel_variance_cents or 0)
+			+ (ledger.revaluation_cents or 0)
+			for ledger in ledgers
+		)
+		materials_count = len(ledgers)
 
 		period.status = "CLOSED"
 		period.closed_at = datetime.now(timezone.utc)
@@ -368,16 +371,23 @@ class MaterialLedgerService:
 					+ ledger.multilevel_variance_cents
 				)
 				closing_qty = Decimal(str(ledger.closing_qty))
+				actual_cost_qty = (
+					Decimal(str(ledger.opening_qty))
+					+ Decimal(str(ledger.receipts_qty))
+				)
 
-				if closing_qty > 0:
+				if actual_cost_qty > 0:
 					actual_price = int(
-						(Decimal(str(total_cost)) / closing_qty)
+						(Decimal(str(total_cost)) / actual_cost_qty)
 						.to_integral_value(ROUND_HALF_UP)
 					)
 				else:
 					actual_price = ledger.standard_price_cents
 
-				revaluation = (actual_price - ledger.standard_price_cents) * int(closing_qty)
+				revaluation = int(
+					(Decimal(str(actual_price - ledger.standard_price_cents)) * closing_qty)
+					.to_integral_value(ROUND_HALF_UP)
+				)
 
 				ledger.actual_price_cents = actual_price
 				ledger.revaluation_cents = revaluation

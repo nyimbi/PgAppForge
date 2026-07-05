@@ -35,5 +35,6 @@ class HedgeJournalEntry(Model):
 	effective_gain_cents = sa.Column(sa.BigInteger, nullable=False, default=0)
 	ineffective_gain_cents = sa.Column(sa.BigInteger, nullable=False, default=0)
 	oci_cents = sa.Column(sa.BigInteger, nullable=False, default=0, comment="Other Comprehensive Income")
+	pl_cents = sa.Column(sa.BigInteger, nullable=False, default=0, comment="Profit and loss recognition")
 	gl_posted = sa.Column(sa.Boolean, nullable=False, default=False)
 	created_at = sa.Column(sa.DateTime(timezone=True), server_default=sa.text("NOW()"))

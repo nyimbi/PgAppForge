@@ -1,7 +1,7 @@
 """Joint venture accounting service."""
 from __future__ import annotations
 import uuid
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_FLOOR
 from typing import Any
 
 import sqlalchemy as sa
@@ -11,6 +11,20 @@ from pgappforge.plugins.erp.finance.joint_venture.models import JointVenture, JV
 
 def _uuid() -> str:
 	return str(uuid.uuid4())
+
+
+def _allocate_cents(total_cents: int, partners: list[dict[str, Any]]) -> list[int]:
+	shares = []
+	for index, partner in enumerate(partners):
+		pct = Decimal(str(partner["ownership_pct"])) / 100
+		exact = Decimal(str(total_cents)) * pct
+		floor_amount = int(exact.to_integral_value(rounding=ROUND_FLOOR))
+		shares.append((index, floor_amount, exact - Decimal(floor_amount)))
+	remaining_cents = total_cents - sum(amount for _, amount, _ in shares)
+	allocations = [amount for _, amount, _ in shares]
+	for index, _, _ in sorted(shares, key=lambda row: (-row[2], row[0]))[:remaining_cents]:
+		allocations[index] += 1
+	return allocations
 
 
 class JointVentureService:
@@ -44,9 +58,8 @@ class JointVentureService:
 	) -> JVCashCall:
 		jv = session.get(JointVenture, jv_id)
 		distribution = []
-		for p in jv.partners:
-			pct = Decimal(str(p["ownership_pct"])) / 100
-			amount = int((Decimal(total_cents) * pct).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+		allocations = _allocate_cents(total_cents, jv.partners)
+		for p, amount in zip(jv.partners, allocations):
 			distribution.append({"entity_id": p["entity_id"], "amount_cents": amount})
 		call = JVCashCall(
 			id=_uuid(),
@@ -69,9 +82,8 @@ class JointVentureService:
 	) -> JVBilling:
 		jv = session.get(JointVenture, jv_id)
 		distribution = []
-		for p in jv.partners:
-			pct = Decimal(str(p["ownership_pct"])) / 100
-			amount = int((Decimal(total_cents) * pct).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+		allocations = _allocate_cents(total_cents, jv.partners)
+		for p, amount in zip(jv.partners, allocations):
 			distribution.append({
 				"entity_id": p["entity_id"],
 				"ownership_pct": p["ownership_pct"],
