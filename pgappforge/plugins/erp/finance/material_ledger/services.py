@@ -393,6 +393,7 @@ class MaterialLedgerService:
 				ledger.costing_status = "SETTLED"
 				ledger.updated_at = datetime.now(timezone.utc)
 
+				# Absolute value: measures settlement activity magnitude, not signed net (see close_period for signed net)
 				total_variance += abs(revaluation)
 				settled += 1
 
@@ -466,6 +467,7 @@ class MaterialLedgerService:
 				+ ledger.exchange_rate_difference_cents
 				+ ledger.production_variance_cents
 				+ ledger.multilevel_variance_cents
+				+ (ledger.revaluation_cents or 0)
 			),
 		}
 

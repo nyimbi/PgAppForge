@@ -73,12 +73,13 @@ class LeaseService:
 					(Decimal(str(opening_liability_cents)) * rate)
 					.to_integral_value(ROUND_HALF_UP)
 				)
-				principal_cents = payment_cents - interest_cents
-				closing_liability_cents = opening_liability_cents - principal_cents
 				if index == total_periods:
+					principal_cents = opening_liability_cents  # absorb rounding residual
 					closing_liability_cents = 0
 					rou_balance_cents = 0
 				else:
+					principal_cents = payment_cents - interest_cents
+					closing_liability_cents = opening_liability_cents - principal_cents
 					rou_balance_cents = max(0, rou_balance_cents - depreciation_cents)
 				session.add(
 					LeasePaymentSchedule(

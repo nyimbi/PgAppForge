@@ -14,6 +14,8 @@ def _uuid() -> str:
 
 
 def _allocate_cents(total_cents: int, partners: list[dict[str, Any]]) -> list[int]:
+	if not partners:
+		raise ValueError('partners list must be non-empty for allocation')
 	shares = []
 	for index, partner in enumerate(partners):
 		pct = Decimal(str(partner["ownership_pct"])) / 100
