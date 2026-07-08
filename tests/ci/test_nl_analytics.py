@@ -16,6 +16,55 @@ import datetime
 import decimal
 
 
+class _FakeNLResult:
+	def __init__(
+		self,
+		*,
+		row=None,
+		rows=None,
+		columns=None,
+		fetch_limits=None,
+	):
+		self.row = row
+		self.rows = rows or []
+		self.columns = columns or []
+		self.fetch_limits = fetch_limits
+
+	def fetchone(self):
+		return self.row
+
+	def keys(self):
+		return self.columns
+
+	def fetchmany(self, limit):
+		if self.fetch_limits is not None:
+			self.fetch_limits.append(limit)
+		return self.rows[:limit]
+
+
+class _FakeNLSession:
+	def __init__(self, *, cache_sql=None, rows=None, columns=None):
+		self.cache_sql = cache_sql
+		self.rows = rows or []
+		self.columns = columns or []
+		self.executed = []
+		self.fetch_limits = []
+
+	def execute(self, stmt, params=None):
+		sql_text = str(stmt)
+		self.executed.append((sql_text, params or {}))
+		if "SELECT cached_sql FROM pgaf_nl_query_cache" in sql_text:
+			row = (self.cache_sql,) if self.cache_sql is not None else None
+			return _FakeNLResult(row=row)
+		if sql_text.lstrip().upper().startswith("SELECT"):
+			return _FakeNLResult(
+				rows=self.rows,
+				columns=self.columns,
+				fetch_limits=self.fetch_limits,
+			)
+		return _FakeNLResult()
+
+
 # ---------------------------------------------------------------------------
 # Import smoke tests
 # ---------------------------------------------------------------------------
@@ -111,6 +160,7 @@ class TestNLAnalyticsServiceLogic:
 		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
 		assert NLAnalyticsService._is_safe_sql("SELECT COUNT(*) FROM members") is True
 		assert NLAnalyticsService._is_safe_sql("select id from foo LIMIT 10") is True
+		assert NLAnalyticsService._is_safe_sql("WITH rows AS (SELECT 1) SELECT * FROM rows") is True
 
 	def test_is_safe_sql_blocks_dml(self):
 		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
@@ -121,11 +171,15 @@ class TestNLAnalyticsServiceLogic:
 		assert NLAnalyticsService._is_safe_sql("CREATE TABLE foo (id int)") is False
 		assert NLAnalyticsService._is_safe_sql("ALTER TABLE foo ADD col text") is False
 		assert NLAnalyticsService._is_safe_sql("TRUNCATE TABLE foo") is False
+		assert NLAnalyticsService._is_safe_sql("SELECT * INTO TEMP export_table FROM foo") is False
+		assert NLAnalyticsService._is_safe_sql("SELECT pg_read_file('/etc/passwd')") is False
 
-	def test_is_safe_sql_blocks_comment_injection(self):
+	def test_safe_sql_normalization_strips_comments_not_literals(self):
 		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
-		# -- can be used to comment out safety checks
-		assert NLAnalyticsService._is_safe_sql("SELECT 1 -- DROP TABLE foo") is False
+		sql = NLAnalyticsService._normalize_safe_sql(
+			"SELECT '-- not a comment; UPDATE account' AS note -- DROP TABLE foo"
+		)
+		assert sql == "SELECT '-- not a comment; UPDATE account' AS note"
 
 	def test_is_safe_sql_rejects_empty(self):
 		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
@@ -195,6 +249,66 @@ class TestNLAnalyticsServiceLogic:
 		assert "error" in result
 		assert isinstance(result["error"], str)
 		assert result["results"] == []
+
+	def test_query_normalizes_generated_sql_and_clamps_row_limit(self, monkeypatch):
+		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
+
+		monkeypatch.setattr(
+			NLAnalyticsService,
+			"_config_int",
+			staticmethod(lambda key, default: 5000),
+		)
+		session = _FakeNLSession(
+			rows=[(index,) for index in range(1500)],
+			columns=["id"],
+		)
+		svc = NLAnalyticsService()
+		svc._generate_sql = lambda q, s: "SELECT id FROM members;"
+
+		result = svc.query("  list members  ", session, tenant_id=" tenant-1 ")
+
+		assert result["sql"] == "SELECT id FROM members"
+		assert result["row_count"] == 1000
+		assert session.fetch_limits == [1000]
+		cache_write = session.executed[-1]
+		assert cache_write[1]["q"] == "list members"
+		assert cache_write[1]["sql"] == "SELECT id FROM members"
+		assert cache_write[1]["t"] == "tenant-1"
+
+	def test_query_rejects_blank_question_before_cache_lookup(self):
+		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
+
+		session = _FakeNLSession()
+		result = NLAnalyticsService().query("  ", session)
+
+		assert result["error"] == "question is required"
+		assert result["results"] == []
+		assert session.executed == []
+
+	def test_check_cache_ignores_unsafe_cached_sql(self):
+		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
+
+		session = _FakeNLSession(cache_sql="SELECT pg_read_file('/etc/passwd')")
+		result = NLAnalyticsService()._check_cache("question", session, tenant_id="tenant-1")
+
+		assert result is None
+		assert len(session.executed) == 1
+
+	def test_cache_result_normalizes_sql_before_write(self):
+		from pgappforge.plugins.erp.platform.nl_analytics.services import NLAnalyticsService
+
+		session = _FakeNLSession()
+		NLAnalyticsService()._cache_result(
+			"  question  ",
+			"SELECT 1;",
+			session,
+			tenant_id=" tenant-1 ",
+		)
+
+		cache_write = session.executed[-1]
+		assert cache_write[1]["q"] == "question"
+		assert cache_write[1]["sql"] == "SELECT 1"
+		assert cache_write[1]["t"] == "tenant-1"
 
 
 # ---------------------------------------------------------------------------

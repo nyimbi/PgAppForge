@@ -8,7 +8,7 @@ Architecture
 1. ``get_schema_context()``   — introspect live DB + semantic layer → prompt context string
 2. ``query()``                — NL question → cache check → LLM SQL → validate → execute → cache
 3. ``_generate_sql()``        — LLM prompt via existing LLMClient (LiteLLM proxy)
-4. ``_is_safe_sql()``         — strict SELECT-only whitelist; blocks all DML/DDL
+4. ``_is_safe_sql()``         — shared read-only query guard
 5. ``_check_cache()``         — SHA-256 hash lookup in pgaf_nl_query_cache (1 h TTL)
 6. ``_cache_result()``        — upsert on query_hash
 
@@ -20,12 +20,17 @@ call ``ensure_cache_table()`` at plugin initialisation to auto-create it.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import re
 from typing import Any
 
+from pgappforge.plugins.erp.platform.query_guard import QueryGuardError, validate_read_only_sql
+
 log = logging.getLogger(__name__)
+
+_MAX_QUESTION_LENGTH = 1000
+_MAX_TENANT_ID_LENGTH = 64
+_MAX_ROWS_CAP = 1000
 
 # ---------------------------------------------------------------------------
 # DDL helpers
@@ -211,6 +216,19 @@ class NLAnalyticsService:
 			error      str | None  — error message if something went wrong
 			cached     bool        — True when result came from cache
 		"""
+		try:
+			question = self._normalize_question(question)
+			tenant_id = self._normalize_tenant_id(tenant_id)
+		except ValueError as exc:
+			return {
+				"sql": None,
+				"error": str(exc),
+				"results": [],
+				"columns": [],
+				"row_count": 0,
+				"cached": False,
+			}
+
 		# ── Cache check ──────────────────────────────────────────────
 		cached = self._check_cache(question, session, tenant_id=tenant_id)
 		if cached:
@@ -231,10 +249,12 @@ class NLAnalyticsService:
 			}
 
 		# ── Safety validation ────────────────────────────────────────
-		if not self._is_safe_sql(sql):
+		try:
+			sql = self._normalize_safe_sql(sql)
+		except QueryGuardError:
 			return {
 				"sql": sql,
-				"error": "Only SELECT queries are permitted.",
+				"error": "Only read-only SELECT or WITH queries are permitted.",
 				"results": [],
 				"columns": [],
 				"row_count": 0,
@@ -243,7 +263,7 @@ class NLAnalyticsService:
 
 		# ── Execute ───────────────────────────────────────────────────
 		try:
-			max_rows = self._config_int("NL_ANALYTICS_MAX_ROWS", 500)
+			max_rows = self._max_rows()
 			import sqlalchemy as sa
 			result_proxy = session.execute(sa.text(sql))
 			columns = list(result_proxy.keys())
@@ -316,20 +336,22 @@ class NLAnalyticsService:
 
 	@staticmethod
 	def _is_safe_sql(sql: str) -> bool:
-		"""Return True only for plain SELECT statements.
+		"""Return True only for read-only analytics SQL.
 
-		Blocks all DML (INSERT/UPDATE/DELETE), DDL (DROP/CREATE/ALTER/TRUNCATE),
-		and inline comments (--) which could mask injected keywords.
+		Delegates to the shared platform query guard so NL analytics and report
+		builder enforce the same read-only SQL boundary.
 		"""
-		sql_upper = sql.upper().strip()
-		if not sql_upper.startswith("SELECT"):
+		try:
+			NLAnalyticsService._normalize_safe_sql(sql)
+		except QueryGuardError:
 			return False
-		_BANNED = frozenset({
-			"INSERT", "UPDATE", "DELETE", "DROP", "CREATE",
-			"ALTER", "TRUNCATE", "EXEC", "EXECUTE", "GRANT",
-			"REVOKE", "COPY", "\\i", "--",
-		})
-		return not any(kw in sql_upper for kw in _BANNED)
+		return True
+
+	@staticmethod
+	def _normalize_safe_sql(sql: Any) -> str:
+		if not isinstance(sql, str):
+			raise QueryGuardError("SQL query must be a string")
+		return validate_read_only_sql(sql)
 
 	# ------------------------------------------------------------------
 	# Cache
@@ -352,6 +374,8 @@ class NLAnalyticsService:
 		with hit_count incremented.
 		"""
 		try:
+			question = self._normalize_question(question)
+			tenant_id = self._normalize_tenant_id(tenant_id)
 			import sqlalchemy as sa
 			q_hash = self._query_hash(question)
 			row = session.execute(
@@ -363,6 +387,11 @@ class NLAnalyticsService:
 				{"h": q_hash, "t": tenant_id},
 			).fetchone()
 			if row:
+				try:
+					cached_sql = self._normalize_safe_sql(row[0])
+				except QueryGuardError as exc:
+					log.warning("NLAnalytics: unsafe cached SQL ignored — %s", exc)
+					return None
 				# Bump hit count (best-effort, non-fatal)
 				try:
 					session.execute(
@@ -376,7 +405,7 @@ class NLAnalyticsService:
 				except Exception:
 					pass
 				return {
-					"sql": row[0],
+					"sql": cached_sql,
 					"results": [],
 					"columns": [],
 					"row_count": 0,
@@ -397,6 +426,9 @@ class NLAnalyticsService:
 	) -> None:
 		"""Upsert a successful NL→SQL result into the cache table."""
 		try:
+			question = self._normalize_question(question)
+			tenant_id = self._normalize_tenant_id(tenant_id)
+			sql = self._normalize_safe_sql(sql)
 			import sqlalchemy as sa
 			from uuid6 import uuid7
 			q_hash = self._query_hash(question)
@@ -432,6 +464,32 @@ class NLAnalyticsService:
 		except Exception:
 			return default
 
+	@classmethod
+	def _max_rows(cls) -> int:
+		return max(1, min(cls._config_int("NL_ANALYTICS_MAX_ROWS", 500), _MAX_ROWS_CAP))
+
+	@staticmethod
+	def _normalize_question(question: Any) -> str:
+		if not isinstance(question, str):
+			raise ValueError("question must be a string")
+		text = question.strip()
+		if not text:
+			raise ValueError("question is required")
+		if len(text) > _MAX_QUESTION_LENGTH:
+			raise ValueError(f"question cannot exceed {_MAX_QUESTION_LENGTH} characters")
+		return text
+
+	@staticmethod
+	def _normalize_tenant_id(tenant_id: Any) -> str:
+		if tenant_id is None:
+			return "default"
+		text = str(tenant_id).strip()
+		if not text:
+			return "default"
+		if len(text) > _MAX_TENANT_ID_LENGTH:
+			raise ValueError(f"tenant_id cannot exceed {_MAX_TENANT_ID_LENGTH} characters")
+		return text
+
 
 # ---------------------------------------------------------------------------
 # Utility
@@ -439,7 +497,9 @@ class NLAnalyticsService:
 
 def _jsonify_rows(rows: list[dict]) -> list[dict]:
 	"""Convert non-JSON-serialisable values (Decimal, date, etc.) to strings."""
-	import datetime, decimal
+	import datetime
+	import decimal
+
 	clean = []
 	for row in rows:
 		new_row = {}
