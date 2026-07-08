@@ -27,8 +27,11 @@ _APG_DEFAULT_BASE_URL = "http://localhost:5000"
 _APG_DEFAULT_MARKETPLACE_URL = "http://localhost:8000"
 _MAX_TIMEOUT_SECONDS = 120
 _MIN_TIMEOUT_SECONDS = 1
+_MAX_RESPONSE_BYTES = 1_000_000
+_MAX_REQUEST_BYTES = 1_000_000
 _SAFE_HEADER_VALUE_RE = re.compile(r"^[^\r\n]+$")
 _SAFE_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 _TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}
 _FALSE_VALUES = {"0", "false", "no", "off", "disabled", ""}
 
@@ -70,10 +73,22 @@ def _normalise_base_url(value: Any, default: str) -> str:
 		or not parsed.netloc
 		or parsed.username is not None
 		or parsed.password is not None
+		or parsed.query
+		or parsed.fragment
+		or (parsed.scheme == "http" and parsed.hostname not in _LOCAL_HOSTS)
 	):
 		log.warning("Invalid APG base URL %r; falling back to %s", text, default)
 		text = default
 		parsed = urllib.parse.urlsplit(text)
+	try:
+		parsed.port
+	except ValueError:
+		log.warning("Invalid APG base URL %r; falling back to %s", text, default)
+		parsed = urllib.parse.urlsplit(default)
+	path_parts = [part for part in parsed.path.split("/") if part]
+	if any(part in {".", ".."} for part in path_parts):
+		log.warning("Invalid APG base URL path %r; falling back to %s", text, default)
+		parsed = urllib.parse.urlsplit(default)
 	path = parsed.path.rstrip("/")
 	return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
 
@@ -91,6 +106,16 @@ def _safe_path_segment(value: Any, field_name: str) -> str | None:
 		log.debug("Invalid APG %s path segment: %r", field_name, value)
 		return None
 	return urllib.parse.quote(text, safe="_.:-")
+
+
+def _safe_query_value(value: Any, field_name: str, *, max_length: int) -> str | None:
+	text = str(value or "").strip()
+	if not text:
+		return None
+	if len(text) > max_length or "\r" in text or "\n" in text:
+		log.debug("Invalid APG %s query value: %r", field_name, value)
+		return None
+	return text
 
 
 class APGError(Exception):
@@ -187,7 +212,16 @@ class APGClient:
 			log.debug("APGClient rejected invalid path: %r", path)
 			return None
 		parsed = urllib.parse.urlsplit(path)
-		if parsed.scheme or parsed.netloc or "\\" in path or "\r" in path or "\n" in path:
+		path_parts = [part for part in parsed.path.split("/") if part]
+		if (
+			parsed.scheme
+			or parsed.netloc
+			or parsed.fragment
+			or "\\" in path
+			or "\r" in path
+			or "\n" in path
+			or any(part in {".", ".."} for part in path_parts)
+		):
 			log.debug("APGClient rejected unsafe path: %r", path)
 			return None
 		base = self._marketplace_url if marketplace else self._base_url
@@ -195,9 +229,12 @@ class APGClient:
 
 	@staticmethod
 	def _read_json_response(resp: Any) -> Any:
-		raw = resp.read()
+		raw = resp.read(_MAX_RESPONSE_BYTES + 1)
 		if not raw:
 			return {}
+		if len(raw) > _MAX_RESPONSE_BYTES:
+			log.debug("APGClient rejected oversized JSON response")
+			return None
 		try:
 			if isinstance(raw, bytes):
 				raw = raw.decode("utf-8")
@@ -230,6 +267,9 @@ class APGClient:
 			data = json.dumps(body).encode()
 		except (TypeError, ValueError) as exc:
 			log.debug("APGClient.POST %s rejected non-JSON body: %s", path, exc)
+			return None
+		if len(data) > _MAX_REQUEST_BYTES:
+			log.debug("APGClient.POST %s rejected oversized JSON body", path)
 			return None
 		req = urllib.request.Request(
 			url, data=data, method="POST", headers=self._headers()
@@ -274,6 +314,7 @@ class APGClient:
 
 	def list_capabilities(self, domain: str | None = None) -> list[dict]:
 		"""GET /capabilities[?domain=<domain>] — all available capabilities."""
+		domain = _safe_query_value(domain, "domain", max_length=100)
 		params = f"?{urllib.parse.urlencode({'domain': domain})}" if domain else ""
 		result = self._get(f"/capabilities{params}", marketplace=True)
 		if result is None:
@@ -286,7 +327,7 @@ class APGClient:
 
 	def search_capabilities(self, query: str) -> list[dict]:
 		"""POST /search — full-text search over capability registry."""
-		query = str(query or "").strip()
+		query = _safe_query_value(query, "query", max_length=200)
 		if not query:
 			return []
 		result = self._post("/search", {"query": query}, marketplace=True)

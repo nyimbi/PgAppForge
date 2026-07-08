@@ -15,7 +15,6 @@ Three integration modes
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -23,6 +22,17 @@ from pgappforge.plugins.erp.platform.apg_bridge.client import APGClient
 
 log = logging.getLogger(__name__)
 _client = APGClient()
+_MAX_ACTION_LENGTH = 128
+_MAX_TENANT_ID_LENGTH = 64
+
+
+def _required_text(value: Any, field_name: str, *, max_length: int) -> str:
+	text = str(value or "").strip()
+	if not text:
+		raise ValueError(f"{field_name} is required")
+	if len(text) > max_length:
+		raise ValueError(f"{field_name} cannot exceed {max_length} characters")
+	return text
 
 
 class APGBridgeService:
@@ -48,7 +58,18 @@ class APGBridgeService:
 		Returns:
 			{success: bool, result: dict|None, error: str|None}
 		"""
-		body = {"action": action, "tenant_id": tenant_id, **payload}
+		if not isinstance(payload, dict):
+			return {"success": False, "error": "payload must be an object", "result": None}
+		try:
+			action = _required_text(action, "action", max_length=_MAX_ACTION_LENGTH)
+			tenant_id = _required_text(
+				tenant_id,
+				"tenant_id",
+				max_length=_MAX_TENANT_ID_LENGTH,
+			)
+		except ValueError as exc:
+			return {"success": False, "error": str(exc), "result": None}
+		body = {**payload, "action": action, "tenant_id": tenant_id}
 		result = _client.evaluate(capability_prefix, body)
 		if result is None:
 			return {

@@ -46,6 +46,10 @@ def test_apg_client_config_parsing_and_url_hardening(monkeypatch):
 	values["APG_BASE_URL"] = "https://user:pass@example.com"
 	assert c._base_url == "http://localhost:5000"
 	values["APG_BASE_URL"] = "https://apg.example/api?debug=1#frag"
+	assert c._base_url == "http://localhost:5000"
+	values["APG_BASE_URL"] = "http://apg.example/api"
+	assert c._base_url == "http://localhost:5000"
+	values["APG_BASE_URL"] = "https://apg.example/api"
 	assert c._base_url == "https://apg.example/api"
 
 	values["APG_TIMEOUT"] = "bad"
@@ -89,8 +93,11 @@ def test_apg_client_safe_public_paths_and_query_encoding(monkeypatch):
 
 	assert c.list_capabilities("finance & ops") == [{"id": "cap-1"}]
 	assert calls[-1] == ("GET", "/capabilities?domain=finance+%26+ops", True)
+	assert c.list_capabilities("finance\r\nops") == [{"id": "cap-1"}]
+	assert calls[-1] == ("GET", "/capabilities", True)
 	assert c.search_capabilities(" risk ") == [{"id": "cap-2"}]
 	assert calls[-1] == ("POST", "/search", True, {"query": "risk"})
+	assert c.search_capabilities("x" * 201) == []
 	assert c.search_capabilities("   ") == []
 
 	assert c.emit_event("apg.fintech.remittance.lifecycle", "created", {}) is True
@@ -126,7 +133,7 @@ def test_apg_client_transport_rejects_unsafe_paths_and_bad_json(monkeypatch):
 		def __exit__(self, exc_type, exc, tb):
 			return False
 
-		def read(self):
+		def read(self, limit=-1):
 			return self.raw
 
 	def fake_urlopen(req, timeout):
@@ -141,6 +148,8 @@ def test_apg_client_transport_rejects_unsafe_paths_and_bad_json(monkeypatch):
 	assert captured == {"url": "https://apg.example/root/health", "timeout": 30}
 	assert c._get("https://evil.example/health") is None
 	assert c._get("//evil.example/health") is None
+	assert c._get("/../health") is None
+	assert c._get("/health#fragment") is None
 	assert c._post("/evaluate", {"bad": object()}) is None
 
 	def fake_bad_json(req, timeout):
@@ -148,6 +157,71 @@ def test_apg_client_transport_rejects_unsafe_paths_and_bad_json(monkeypatch):
 
 	monkeypatch.setattr(client_mod.urllib.request, "urlopen", fake_bad_json)
 	assert c._get("/health") is None
+
+def test_apg_client_transport_rejects_oversized_payloads(monkeypatch):
+	from pgappforge.plugins.erp.platform.apg_bridge import client as client_mod
+
+	values = {
+		"APG_ENABLED": True,
+		"APG_BASE_URL": "https://apg.example",
+	}
+	monkeypatch.setattr(client_mod, "_cfg", lambda key, default=None: values.get(key, default))
+
+	class LargeResponse:
+		def __enter__(self):
+			return self
+
+		def __exit__(self, exc_type, exc, tb):
+			return False
+
+		def read(self, limit=-1):
+			return b"x" * (client_mod._MAX_RESPONSE_BYTES + 1)
+
+	def fake_urlopen(req, timeout):
+		return LargeResponse()
+
+	monkeypatch.setattr(client_mod.urllib.request, "urlopen", fake_urlopen)
+	c = client_mod.APGClient()
+
+	assert c._get("/health") is None
+	assert c._post("/evaluate", {"payload": "x" * client_mod._MAX_REQUEST_BYTES}) is None
+
+def test_apg_service_payload_cannot_override_reserved_fields(monkeypatch):
+	from pgappforge.plugins.erp.platform.apg_bridge import services as service_mod
+
+	captured = {}
+
+	def fake_evaluate(prefix, body):
+		captured["prefix"] = prefix
+		captured["body"] = body
+		return {"accepted": True}
+
+	monkeypatch.setattr(service_mod._client, "evaluate", fake_evaluate)
+
+	result = service_mod.APGBridgeService().call_capability(
+		"fintech-remittance",
+		"trusted_action",
+		{"action": "attacker_action", "tenant_id": "other-tenant", "amount": 100},
+		"tenant-1",
+	)
+
+	assert result == {"success": True, "result": {"accepted": True}, "error": None}
+	assert captured == {
+		"prefix": "fintech-remittance",
+		"body": {"action": "trusted_action", "tenant_id": "tenant-1", "amount": 100},
+	}
+
+def test_apg_service_rejects_invalid_proxy_inputs():
+	from pgappforge.plugins.erp.platform.apg_bridge.services import APGBridgeService
+
+	svc = APGBridgeService()
+
+	assert svc.call_capability("cap", "", {}, "tenant-1")["success"] is False
+	assert svc.call_capability("cap", "action", [], "tenant-1") == {
+		"success": False,
+		"error": "payload must be an object",
+		"result": None,
+	}
 
 def test_apg_client_auth_priority():
 	from pgappforge.plugins.erp.platform.apg_bridge.client import APGClient
@@ -185,8 +259,10 @@ def test_apg_event_map_coverage():
 		assert event in src
 
 def test_apg_bpm_actions_registered():
+	import importlib
+
 	from pgappforge.plugins.workflow.engine import BPMActionRegistry
-	import pgappforge.plugins.erp.platform.apg_bridge.services  # trigger registration
+	importlib.import_module("pgappforge.plugins.erp.platform.apg_bridge.services")
 	actions = {c["name"] for c in BPMActionRegistry.list_capabilities()}
 	assert "apg.bridge.call_capability" in actions
 	assert "apg.bridge.sync_capabilities" in actions
