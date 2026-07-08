@@ -17,15 +17,19 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import sqlalchemy as sa
 from sqlalchemy import select, func
 
 log = logging.getLogger(__name__)
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +98,15 @@ class CredentialsService:
 		from pgappforge.plugins.erp.platform.credentials.events import CredentialIssuedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
+		tenant_id = self._require_non_empty(tenant_id, "tenant_id")
+		schema_id = self._require_non_empty(schema_id, "schema_id")
+		recipient_id = self._require_non_empty(recipient_id, "recipient_id")
+		recipient_email = self._validate_email(recipient_email, "recipient_email")
+		evidence = self._validate_mapping(evidence, "evidence")
+		base_url = self._validate_base_url(base_url)
+		if expires_at is not None:
+			self._validate_future_datetime(expires_at, "expires_at")
+
 		schema = session.get(CredentialSchema, schema_id)
 		if schema is None:
 			raise SchemaNotFoundError(f"CredentialSchema {schema_id!r} not found")
@@ -106,9 +119,9 @@ class CredentialsService:
 		year = now.year
 		credential_number = self._generate_credential_number(session, schema, year)
 		verification_token = secrets.token_urlsafe(32)
-		verification_url = f"{base_url.rstrip('/')}/verify/{verification_token}"
+		verification_url = f"{base_url}/verify/{verification_token}"
 		qr_code_url = (
-			f"{base_url.rstrip('/')}/qr/{verification_token}.png"
+			f"{base_url}/qr/{verification_token}.png"
 		)
 
 		# W3C VC JWT stub (unsigned; KMS layer signs in production)
@@ -119,7 +132,7 @@ class CredentialsService:
 			recipient_email=recipient_email,
 			issued_at=now,
 			expires_at=expires_at,
-			evidence=evidence or {},
+			evidence=evidence,
 			narrative=narrative or "",
 			verification_url=verification_url,
 		)
@@ -133,9 +146,9 @@ class CredentialsService:
 			recipient_email=recipient_email,
 			issued_at=now,
 			expires_at=expires_at,
-			evidence=evidence or {},
+			evidence=evidence,
 			narrative=narrative,
-			achievement_id=f"{base_url.rstrip('/')}/achievements/{schema.schema_id}",
+			achievement_id=f"{base_url}/achievements/{schema.schema_id}",
 			verification_url=verification_url,
 			qr_code_url=qr_code_url,
 			vc_jwt=vc_jwt_stub,
@@ -163,6 +176,46 @@ class CredentialsService:
 			credential_number, recipient_email,
 		)
 		return credential
+
+	@staticmethod
+	def _require_non_empty(value: Any, field_name: str) -> str:
+		text = str(value or "").strip()
+		if not text:
+			raise CredentialsServiceError(f"{field_name} is required")
+		return text
+
+	@staticmethod
+	def _validate_email(value: str, field_name: str) -> str:
+		text = CredentialsService._require_non_empty(value, field_name)
+		if not _EMAIL_RE.fullmatch(text):
+			raise CredentialsServiceError(f"{field_name} must be a valid email address")
+		return text
+
+	@staticmethod
+	def _validate_mapping(value: Any, field_name: str) -> dict:
+		if value is None:
+			return {}
+		if not isinstance(value, dict):
+			raise CredentialsServiceError(f"{field_name} must be a JSON object")
+		return dict(value)
+
+	@staticmethod
+	def _validate_base_url(value: str) -> str:
+		text = CredentialsService._require_non_empty(value, "base_url").rstrip("/")
+		parsed = urlparse(text)
+		if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+			raise CredentialsServiceError("base_url must be an absolute HTTP(S) URL")
+		return text
+
+	@staticmethod
+	def _validate_future_datetime(value: datetime, field_name: str) -> None:
+		if not isinstance(value, datetime):
+			raise CredentialsServiceError(f"{field_name} must be a datetime")
+		comparable = value
+		if comparable.tzinfo is None:
+			comparable = comparable.replace(tzinfo=timezone.utc)
+		if comparable <= datetime.now(timezone.utc):
+			raise CredentialsServiceError(f"{field_name} must be in the future")
 
 	def _generate_credential_number(
 		self,
@@ -369,6 +422,9 @@ class CredentialsService:
 		from pgappforge.plugins.erp.platform.credentials.events import CredentialRevokedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
+		credential_id = self._require_non_empty(credential_id, "credential_id")
+		reason = self._require_non_empty(reason, "reason")
+
 		credential = session.get(IssuedCredential, credential_id)
 		if credential is None:
 			raise CredentialNotFoundError(f"IssuedCredential {credential_id!r} not found")
@@ -425,6 +481,10 @@ class CredentialsService:
 		)
 		from pgappforge.plugins.erp.platform.credentials.events import CredentialSharedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
+
+		tenant_id = self._require_non_empty(tenant_id, "tenant_id")
+		credential_id = self._require_non_empty(credential_id, "credential_id")
+		access_token = self._require_non_empty(access_token, "access_token")
 
 		credential = session.get(IssuedCredential, credential_id)
 		if credential is None:
