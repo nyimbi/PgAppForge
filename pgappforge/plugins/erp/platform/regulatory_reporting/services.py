@@ -1,5 +1,7 @@
 """Regulatory reporting service — SAF-T GL, CSRD, Peppol."""
 from __future__ import annotations
+from datetime import date
+import logging
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -7,10 +9,17 @@ import sqlalchemy as sa
 
 
 _SAFT_NS = "urn:OECD:Standard:SAF-T:1.00"
+log = logging.getLogger(__name__)
+
+
+class RegulatoryReportingError(Exception):
+	"""Base error for regulatory reporting input violations."""
 
 
 class SaftReportService:
 	def generate_saft_gl(self, tenant_id: str, fiscal_year: int, session: Any) -> str:
+		tenant_id = self._validate_tenant_id(tenant_id)
+		fiscal_year = self._validate_fiscal_year(fiscal_year)
 		# Register namespace so ET produces proper xmlns declaration, not ns0: prefix
 		ET.register_namespace("", _SAFT_NS)
 		ns = f"{{{_SAFT_NS}}}"
@@ -23,34 +32,98 @@ class SaftReportService:
 		ET.SubElement(header, f"{ns}FiscalYear").text = str(fiscal_year)
 		master = ET.SubElement(root, f"{ns}MasterFiles")
 		gl_accounts = ET.SubElement(master, f"{ns}GeneralLedgerAccounts")
-		try:
-			from pgappforge.plugins.erp.finance.gl.models import GLAccount
-			accounts = session.execute(
-				sa.select(GLAccount).where(GLAccount.tenant_id == tenant_id)
-			).scalars().all()
-			for acct in accounts:
-				acct_el = ET.SubElement(gl_accounts, f"{ns}Account")
-				ET.SubElement(acct_el, f"{ns}AccountID").text = str(acct.id)
-				ET.SubElement(acct_el, f"{ns}AccountDescription").text = getattr(acct, "name", "")
-				ET.SubElement(acct_el, f"{ns}AccountType").text = getattr(acct, "account_type", "")
-		except ImportError:
-			pass  # GL plugin not installed — accounts section empty but schema valid
+		for acct in self._load_gl_accounts(tenant_id, session):
+			acct_el = ET.SubElement(gl_accounts, f"{ns}Account")
+			ET.SubElement(acct_el, f"{ns}AccountID").text = self._text_value(
+				acct,
+				"account_code",
+				"id",
+			)
+			ET.SubElement(acct_el, f"{ns}AccountDescription").text = self._text_value(
+				acct,
+				"account_name",
+				"name",
+			)
+			ET.SubElement(acct_el, f"{ns}AccountType").text = self._text_value(
+				acct,
+				"account_type",
+			)
 		transactions = ET.SubElement(root, f"{ns}GeneralLedgerEntries")
-		try:
-			from pgappforge.plugins.erp.finance.gl.models import GLJournalEntry
-			entries = session.execute(
-				sa.select(GLJournalEntry).where(GLJournalEntry.tenant_id == tenant_id)
-			).scalars().all()
-			for e in entries:
-				entry_el = ET.SubElement(transactions, f"{ns}Journal")
-				ET.SubElement(entry_el, f"{ns}JournalID").text = str(e.id)
-				ET.SubElement(entry_el, f"{ns}Description").text = getattr(e, "description", "")
-		except ImportError:
-			pass
+		for entry in self._load_gl_entries(tenant_id, fiscal_year, session):
+			entry_el = ET.SubElement(transactions, f"{ns}Journal")
+			ET.SubElement(entry_el, f"{ns}JournalID").text = self._text_value(entry, "id")
+			ET.SubElement(entry_el, f"{ns}Description").text = self._text_value(
+				entry,
+				"description",
+			)
 		# xml_declaration=True produces the required <?xml version='1.0' encoding='us-ascii'?>
 		# Use tostring with encoding='unicode' for a str return, prepend declaration manually
 		body = ET.tostring(root, encoding="unicode")
 		return '<?xml version="1.0" encoding="UTF-8"?>\n' + body
+
+	@staticmethod
+	def _validate_tenant_id(value: str) -> str:
+		if not isinstance(value, str) or not value.strip():
+			raise RegulatoryReportingError("tenant_id is required")
+		return value.strip()
+
+	@staticmethod
+	def _validate_fiscal_year(value: int) -> int:
+		if isinstance(value, bool):
+			raise RegulatoryReportingError("fiscal_year must be an integer year")
+		try:
+			year = int(value)
+		except (TypeError, ValueError) as exc:
+			raise RegulatoryReportingError("fiscal_year must be an integer year") from exc
+		if year < 1900 or year > 2200:
+			raise RegulatoryReportingError("fiscal_year must be between 1900 and 2200")
+		return year
+
+	def _load_gl_accounts(self, tenant_id: str, session: Any) -> list[Any]:
+		try:
+			from pgappforge.plugins.erp.finance.gl.models import GLAccount
+		except ImportError:
+			return []
+		stmt = (
+			sa.select(GLAccount)
+			.where(GLAccount.tenant_id == tenant_id)
+			.order_by(GLAccount.account_code)
+		)
+		return self._safe_scalars(stmt, session, "SAF-T GL account query")
+
+	def _load_gl_entries(self, tenant_id: str, fiscal_year: int, session: Any) -> list[Any]:
+		try:
+			from pgappforge.plugins.erp.finance.gl.models import GLJournalEntry
+		except ImportError:
+			return []
+		start = date(fiscal_year, 1, 1)
+		end = date(fiscal_year, 12, 31)
+		stmt = (
+			sa.select(GLJournalEntry)
+			.where(
+				GLJournalEntry.tenant_id == tenant_id,
+				GLJournalEntry.posting_date >= start,
+				GLJournalEntry.posting_date <= end,
+			)
+			.order_by(GLJournalEntry.posting_date, GLJournalEntry.id)
+		)
+		return self._safe_scalars(stmt, session, "SAF-T GL journal query")
+
+	@staticmethod
+	def _safe_scalars(stmt: Any, session: Any, context: str) -> list[Any]:
+		try:
+			return list(session.execute(stmt).scalars().all())
+		except Exception as exc:
+			log.warning("%s unavailable: %s", context, exc)
+			return []
+
+	@staticmethod
+	def _text_value(obj: Any, *field_names: str) -> str:
+		for field_name in field_names:
+			value = getattr(obj, field_name, None)
+			if value is not None:
+				return str(value)
+		return ""
 
 
 class CsrdReportService:
@@ -106,4 +179,4 @@ class CsrdReportService:
 		return {"whistleblower_system": True, "ethics_reports_received": ethics_count}
 
 
-__all__ = ["SaftReportService", "CsrdReportService"]
+__all__ = ["SaftReportService", "CsrdReportService", "RegulatoryReportingError"]
