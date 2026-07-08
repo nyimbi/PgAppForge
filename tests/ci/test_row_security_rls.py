@@ -17,6 +17,8 @@ import asyncio
 import importlib
 import inspect
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # 1. Import tests
@@ -191,6 +193,80 @@ def test_row_security_service_has_apply_scope_filters():
 	assert "user_id" in params
 	assert "tenant_id" in params
 	assert "session" in params
+
+
+def test_define_policy_rejects_unsafe_scope_field():
+	from pgappforge.plugins.erp.platform.row_security.services import (
+		InvalidRowSecurityPolicyError,
+		RowSecurityService,
+	)
+	svc = RowSecurityService()
+	with pytest.raises(InvalidRowSecurityPolicyError, match="scope"):
+		svc.define_policy(
+			role_id="Manager",
+			entity_type="EMPLOYEE",
+			scope_field="department_id; drop table users",
+			allowed_values=["HR"],
+			name="HR managers",
+			tenant_id="tenant-1",
+			session=object(),
+		)
+
+
+def test_define_policy_rejects_non_list_allowed_values():
+	from pgappforge.plugins.erp.platform.row_security.services import (
+		InvalidRowSecurityPolicyError,
+		RowSecurityService,
+	)
+	svc = RowSecurityService()
+	with pytest.raises(InvalidRowSecurityPolicyError, match="allowed_values"):
+		svc.define_policy(
+			role_id="Manager",
+			entity_type="EMPLOYEE",
+			scope_field="department_id",
+			allowed_values="HR",
+			name="HR managers",
+			tenant_id="tenant-1",
+			session=object(),
+		)
+
+
+def test_apply_scope_filters_rejects_unsafe_cached_scope_field():
+	from pgappforge.plugins.erp.platform.row_security.services import (
+		InvalidRowSecurityPolicyError,
+		RowSecurityService,
+	)
+	svc = RowSecurityService()
+	svc.get_user_scope = lambda *_args, **_kwargs: {
+		"department_id; drop table users": ["HR"],
+	}
+	with pytest.raises(InvalidRowSecurityPolicyError, match="scope"):
+		svc.apply_scope_filters(
+			object(),
+			"EMPLOYEE",
+			"user-1",
+			"tenant-1",
+			object(),
+		)
+
+
+def test_apply_scope_filters_normalizes_scalar_values():
+	import sqlalchemy as sa
+	from pgappforge.plugins.erp.platform.row_security.services import RowSecurityService
+	svc = RowSecurityService()
+	svc.get_user_scope = lambda *_args, **_kwargs: {"department_id": [123, " HR "]}
+	stmt = sa.select(sa.literal(1))
+
+	filtered = svc.apply_scope_filters(
+		stmt,
+		"EMPLOYEE",
+		"user-1",
+		"tenant-1",
+		object(),
+	)
+
+	sql = str(filtered)
+	assert "department_id" in sql
 
 
 # ---------------------------------------------------------------------------

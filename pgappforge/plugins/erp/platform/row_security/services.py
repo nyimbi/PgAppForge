@@ -25,6 +25,10 @@ from sqlalchemy import select
 
 from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
 from pgappforge.plugins.workflow.engine import BPMActionRegistry
+from pgappforge.plugins.erp.platform.query_guard import (
+	QueryGuardError,
+	validate_sql_identifier,
+)
 
 from .events import (
 	RowSecurityPolicyCreatedEvent,
@@ -33,9 +37,21 @@ from .events import (
 )
 from .models import RowSecurityPolicy, SecurityContext
 
-__all__ = ["RowSecurityService"]
+__all__ = [
+	"InvalidRowSecurityPolicyError",
+	"RowSecurityService",
+	"RowSecurityServiceError",
+]
 
 log = logging.getLogger(__name__)
+
+
+class RowSecurityServiceError(Exception):
+	"""Base error for row-security service violations."""
+
+
+class InvalidRowSecurityPolicyError(RowSecurityServiceError):
+	"""Policy or computed scope contains unsafe values."""
 
 
 def _uuid4() -> str:
@@ -85,10 +101,12 @@ class RowSecurityService:
 
 		Returns the RowSecurityPolicy instance.
 		"""
-		assert role_id, "role_id is required"
-		assert entity_type, "entity_type is required"
-		assert scope_field, "scope_field is required"
-		assert name, "name is required"
+		allowed_values = self._normalize_allowed_values(allowed_values)
+		role_id = self._require_non_empty(role_id, "role_id")
+		entity_type = self._require_non_empty(entity_type, "entity_type")
+		scope_field = self._validate_scope_field(scope_field)
+		name = self._require_non_empty(name, "name")
+		tenant_id = self._require_non_empty(tenant_id, "tenant_id")
 
 		existing = session.execute(
 			select(RowSecurityPolicy).where(
@@ -292,8 +310,10 @@ class RowSecurityService:
 			return stmt
 
 		for field, allowed_values in scope.items():
-			if allowed_values:
-				stmt = stmt.where(sa.literal_column(field).in_(allowed_values))
+			safe_field = self._validate_scope_field(field)
+			safe_values = self._normalize_allowed_values(allowed_values)
+			if safe_values:
+				stmt = stmt.where(sa.literal_column(safe_field).in_(safe_values))
 			# empty allowed_values means "deny all" — add impossible condition
 			else:
 				stmt = stmt.where(sa.false())
@@ -310,3 +330,39 @@ class RowSecurityService:
 			sa.delete(SecurityContext).where(SecurityContext.tenant_id == tenant_id)
 		)
 		log.debug("_invalidate_contexts: cleared SecurityContext cache for tenant %r", tenant_id)
+
+	@staticmethod
+	def _require_non_empty(value: Any, field_name: str) -> str:
+		text = str(value or "").strip()
+		if not text:
+			raise InvalidRowSecurityPolicyError(f"{field_name} is required")
+		return text
+
+	@staticmethod
+	def _validate_scope_field(scope_field: str) -> str:
+		try:
+			return validate_sql_identifier(scope_field, label="row-security scope")
+		except QueryGuardError as exc:
+			raise InvalidRowSecurityPolicyError(str(exc)) from exc
+
+	@staticmethod
+	def _normalize_allowed_values(values: Any) -> list[str]:
+		if values is None:
+			return []
+		if isinstance(values, (str, bytes)) or not isinstance(values, (list, tuple, set)):
+			raise InvalidRowSecurityPolicyError(
+				"allowed_values must be a list of scalar values"
+			)
+		normalized: list[str] = []
+		for value in values:
+			if value is None or isinstance(value, (dict, list, tuple, set)):
+				raise InvalidRowSecurityPolicyError(
+					"allowed_values must contain only scalar values"
+				)
+			text = str(value).strip()
+			if not text:
+				raise InvalidRowSecurityPolicyError(
+					"allowed_values cannot contain blank values"
+				)
+			normalized.append(text)
+		return normalized
