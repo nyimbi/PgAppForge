@@ -27,7 +27,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 
 from pgappforge.models.sqla import Model
-from pgappforge.models.mixins import AuditMixin
 from pgappforge.plugins.erp.foundation.commons import ImmutableRecordMixin
 
 
@@ -39,7 +38,7 @@ def _now() -> datetime:
 	return datetime.now(timezone.utc)
 
 
-class APGCapabilityCache(AuditMixin, Model):
+class APGCapabilityCache(Model):
 	"""Cached snapshot of an APG capability's marketplace metadata.
 
 	Refreshed by APGBridgeService.sync_capabilities_to_ipaas().
@@ -74,6 +73,15 @@ class APGCapabilityCache(AuditMixin, Model):
 		default=_now,
 		onupdate=_now,
 	)
+	created_on = Column(DateTime(timezone=True), nullable=False, default=_now)
+	changed_on = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=_now,
+		onupdate=_now,
+	)
+	created_by_fk = Column(sa.Integer, sa.ForeignKey("ab_user.id"), nullable=True)
+	changed_by_fk = Column(sa.Integer, sa.ForeignKey("ab_user.id"), nullable=True)
 
 	__table_args__ = (
 		UniqueConstraint("capability_id", name="uq_plat_apg_capability_id"),

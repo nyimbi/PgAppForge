@@ -29,6 +29,126 @@ def test_apg_client_default_urls():
 	assert "5000" in c._base_url
 	assert "8000" in c._marketplace_url
 
+def test_apg_client_config_parsing_and_url_hardening(monkeypatch):
+	from pgappforge.plugins.erp.platform.apg_bridge import client as client_mod
+
+	values = {}
+	monkeypatch.setattr(client_mod, "_cfg", lambda key, default=None: values.get(key, default))
+	c = client_mod.APGClient()
+
+	values["APG_ENABLED"] = "false"
+	assert not c._enabled
+	values["APG_ENABLED"] = "yes"
+	assert c._enabled
+
+	values["APG_BASE_URL"] = "file:///etc/passwd"
+	assert c._base_url == "http://localhost:5000"
+	values["APG_BASE_URL"] = "https://user:pass@example.com"
+	assert c._base_url == "http://localhost:5000"
+	values["APG_BASE_URL"] = "https://apg.example/api?debug=1#frag"
+	assert c._base_url == "https://apg.example/api"
+
+	values["APG_TIMEOUT"] = "bad"
+	assert c._timeout == 15
+	values["APG_TIMEOUT"] = "-5"
+	assert c._timeout == 1
+	values["APG_TIMEOUT"] = "999"
+	assert c._timeout == 120
+
+def test_apg_client_rejects_header_injection_in_static_token(monkeypatch):
+	from pgappforge.plugins.erp.platform.apg_bridge import client as client_mod
+
+	values = {"APG_STATIC_TOKEN": "abc\r\nInjected: yes"}
+	monkeypatch.setattr(client_mod, "_cfg", lambda key, default=None: values.get(key, default))
+	c = client_mod.APGClient()
+
+	assert c._get_token() is None
+	values["APG_STATIC_TOKEN"] = " safe-token "
+	assert c._headers()["Authorization"] == "Bearer safe-token"
+
+def test_apg_client_safe_public_paths_and_query_encoding(monkeypatch):
+	from pgappforge.plugins.erp.platform.apg_bridge import client as client_mod
+
+	calls = []
+
+	def fake_get(self, path, *, marketplace=False):
+		calls.append(("GET", path, marketplace))
+		return {"ok": True, "capabilities": [{"id": "cap-1"}]}
+
+	def fake_post(self, path, body, *, marketplace=False):
+		calls.append(("POST", path, marketplace, body))
+		return {"ok": True, "results": [{"id": "cap-2"}]}
+
+	monkeypatch.setattr(client_mod.APGClient, "_get", fake_get)
+	monkeypatch.setattr(client_mod.APGClient, "_post", fake_post)
+	c = client_mod.APGClient()
+
+	assert c.get_contract("fintech-remittance") == {"ok": True, "capabilities": [{"id": "cap-1"}]}
+	assert calls[-1] == ("GET", "/fintech-remittance/contract", False)
+	assert c.get_contract("../secret") is None
+
+	assert c.list_capabilities("finance & ops") == [{"id": "cap-1"}]
+	assert calls[-1] == ("GET", "/capabilities?domain=finance+%26+ops", True)
+	assert c.search_capabilities(" risk ") == [{"id": "cap-2"}]
+	assert calls[-1] == ("POST", "/search", True, {"query": "risk"})
+	assert c.search_capabilities("   ") == []
+
+	assert c.emit_event("apg.fintech.remittance.lifecycle", "created", {}) is True
+	assert calls[-1] == (
+		"POST",
+		"/fintech-remittance/events",
+		False,
+		{"event_type": "created", "stream": "apg.fintech.remittance.lifecycle", "payload": {}},
+	)
+	assert c.emit_event("bad stream", "created", {}) is False
+	assert c.emit_event("apg.fintech.remittance.lifecycle", "", {}) is False
+	assert c.emit_event("apg.fintech.remittance.lifecycle", "created", []) is False
+
+def test_apg_client_transport_rejects_unsafe_paths_and_bad_json(monkeypatch):
+	from pgappforge.plugins.erp.platform.apg_bridge import client as client_mod
+
+	values = {
+		"APG_ENABLED": True,
+		"APG_BASE_URL": "https://apg.example/root/",
+		"APG_TIMEOUT": "30",
+	}
+	monkeypatch.setattr(client_mod, "_cfg", lambda key, default=None: values.get(key, default))
+
+	captured = {}
+
+	class Response:
+		def __init__(self, raw):
+			self.raw = raw
+
+		def __enter__(self):
+			return self
+
+		def __exit__(self, exc_type, exc, tb):
+			return False
+
+		def read(self):
+			return self.raw
+
+	def fake_urlopen(req, timeout):
+		captured["url"] = req.full_url
+		captured["timeout"] = timeout
+		return Response(b'{"status": "ok"}')
+
+	monkeypatch.setattr(client_mod.urllib.request, "urlopen", fake_urlopen)
+	c = client_mod.APGClient()
+
+	assert c._get("/health") == {"status": "ok"}
+	assert captured == {"url": "https://apg.example/root/health", "timeout": 30}
+	assert c._get("https://evil.example/health") is None
+	assert c._get("//evil.example/health") is None
+	assert c._post("/evaluate", {"bad": object()}) is None
+
+	def fake_bad_json(req, timeout):
+		return Response(b"not-json")
+
+	monkeypatch.setattr(client_mod.urllib.request, "urlopen", fake_bad_json)
+	assert c._get("/health") is None
+
 def test_apg_client_auth_priority():
 	from pgappforge.plugins.erp.platform.apg_bridge.client import APGClient
 	src = inspect.getsource(APGClient._get_token)
@@ -75,6 +195,22 @@ def test_apg_models_import():
 	from pgappforge.plugins.erp.platform.apg_bridge.models import APGCapabilityCache, APGEventBridgeLog
 	assert APGCapabilityCache.__tablename__ == "plat_apg_capability"
 	assert APGEventBridgeLog.__tablename__ == "plat_apg_event_log"
+
+def test_apg_models_do_not_poison_shared_mapper_registry():
+	from pgappforge.plugins.erp.platform.apg_bridge.models import APGCapabilityCache
+	from pgappforge.plugins.erp.platform.ipaas.models import ConnectorDefinition
+
+	cache = APGCapabilityCache(capability_id="fintech-remittance")
+	definition = ConnectorDefinition(
+		id="def-1",
+		name="Customer API",
+		protocol="REST",
+		auth_type="NONE",
+	)
+
+	assert cache.capability_id == "fintech-remittance"
+	assert definition.name == "Customer API"
+	assert not hasattr(APGCapabilityCache, "created_by")
 
 def test_apg_event_log_immutable():
 	from pgappforge.plugins.erp.platform.apg_bridge.models import APGEventBridgeLog
@@ -186,4 +322,3 @@ def test_portal_template_extends_base_erp():
 		assert "base_erp.html" in content, (
 			f"{name} does not extend appbuilder/erp/base_erp.html"
 		)
-
