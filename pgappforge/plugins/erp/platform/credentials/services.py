@@ -15,6 +15,8 @@ All methods accept an explicit SQLAlchemy Session.  No Flask context assumed.
 """
 from __future__ import annotations
 
+import ipaddress
+import json
 import logging
 import re
 import secrets
@@ -29,6 +31,13 @@ log = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _VERIFICATION_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+_LINKEDIN_BEARER_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]{16,4096}$")
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
+_MAX_LINKEDIN_RESPONSE_BYTES = 64 * 1024
+_MAX_LINKEDIN_COMMENTARY_CHARS = 2800
+_MAX_LINKEDIN_TITLE_CHARS = 200
+_MAX_LINKEDIN_DESCRIPTION_CHARS = 200
+_MAX_SHARE_URL_CHARS = 2048
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +214,59 @@ class CredentialsService:
 		if parsed.scheme != "https" or not parsed.netloc:
 			raise CredentialsServiceError("base_url must be an absolute HTTPS URL")
 		return text
+
+	@staticmethod
+	def _validate_linkedin_access_token(value: Any) -> str:
+		token = CredentialsService._require_non_empty(value, "access_token")
+		if token.lower().startswith("bearer "):
+			raise CredentialsServiceError(
+				"access_token must be the raw OAuth bearer token without a prefix"
+			)
+		if not _LINKEDIN_BEARER_TOKEN_RE.fullmatch(token):
+			raise CredentialsServiceError(
+				"access_token contains unsupported bearer token characters"
+			)
+		return token
+
+	@staticmethod
+	def _validate_linkedin_share_url(value: Any) -> str:
+		url = CredentialsService._require_non_empty(value, "verification_url")
+		if len(url) > _MAX_SHARE_URL_CHARS:
+			raise CredentialsServiceError("verification_url is too long to share")
+		parsed = urlparse(url)
+		if parsed.scheme != "https" or not parsed.netloc:
+			raise CredentialsServiceError("verification_url must be an absolute HTTPS URL")
+		if parsed.username or parsed.password:
+			raise CredentialsServiceError("verification_url cannot include credentials")
+		if parsed.fragment:
+			raise CredentialsServiceError("verification_url cannot include a fragment")
+		hostname = (parsed.hostname or "").strip().lower()
+		if not hostname or hostname == "localhost" or hostname.endswith(".localhost"):
+			raise CredentialsServiceError("verification_url must use a public host")
+		try:
+			ipaddress.ip_address(hostname.strip("[]"))
+		except ValueError:
+			return url
+		raise CredentialsServiceError("verification_url cannot use an IP literal host")
+
+	@staticmethod
+	def _linkedin_text(value: Any, max_chars: int, *, default: str = "") -> str:
+		text = str(value if value is not None else default)
+		text = _CONTROL_CHAR_RE.sub(" ", text)
+		text = re.sub(r"\s+", " ", text).strip()
+		if not text:
+			text = default
+		return text[:max_chars]
+
+	@staticmethod
+	def _read_limited_json_object_response(resp: Any, context: str) -> dict[str, Any]:
+		payload = resp.read(_MAX_LINKEDIN_RESPONSE_BYTES + 1)
+		if len(payload) > _MAX_LINKEDIN_RESPONSE_BYTES:
+			raise CredentialsServiceError(f"{context} response is too large")
+		data = json.loads(payload or b"{}")
+		if not isinstance(data, dict):
+			raise CredentialsServiceError(f"{context} response must be a JSON object")
+		return data
 
 	@staticmethod
 	def _validate_future_datetime(value: datetime, field_name: str) -> None:
@@ -517,10 +579,12 @@ class CredentialsService:
 
 		tenant_id = self._require_non_empty(tenant_id, "tenant_id")
 		credential_id = self._require_non_empty(credential_id, "credential_id")
-		access_token = self._require_non_empty(access_token, "access_token")
+		access_token = self._validate_linkedin_access_token(access_token)
 
 		credential = session.get(IssuedCredential, credential_id)
 		if credential is None:
+			raise CredentialNotFoundError(f"IssuedCredential {credential_id!r} not found")
+		if str(credential.tenant_id) != tenant_id:
 			raise CredentialNotFoundError(f"IssuedCredential {credential_id!r} not found")
 		if credential.status != "ACTIVE":
 			raise CredentialsServiceError(
@@ -528,6 +592,20 @@ class CredentialsService:
 			)
 
 		schema = session.get(CredentialSchema, credential.schema_id)
+		share_url = self._validate_linkedin_share_url(credential.verification_url)
+		schema_name = self._linkedin_text(
+			schema.name if schema else "credential",
+			_MAX_LINKEDIN_TITLE_CHARS,
+			default="credential",
+		)
+		schema_description = self._linkedin_text(
+			schema.description if schema else "",
+			_MAX_LINKEDIN_DESCRIPTION_CHARS,
+		)
+		commentary = self._linkedin_text(
+			f"I earned the {schema_name}! Verify: {share_url}",
+			_MAX_LINKEDIN_COMMENTARY_CHARS,
+		)
 
 		share_token = secrets.token_hex(32)
 		share = CredentialShare(
@@ -544,26 +622,21 @@ class CredentialsService:
 		linkedin_post_id = ""
 		try:
 			import urllib.request
-			import json as _json
 
-			ugc_payload = _json.dumps({
+			ugc_payload = json.dumps({
 				"author": "urn:li:person:me",
 				"lifecycleState": "PUBLISHED",
 				"specificContent": {
 					"com.linkedin.ugc.ShareContent": {
 						"shareCommentary": {
-							"text": (
-								f"I earned the {schema.name if schema else 'credential'}! "
-								f"Verify: {credential.verification_url}"
-							)
+							"text": commentary
 						},
 						"shareMediaCategory": "ARTICLE",
 						"media": [{
 							"status": "READY",
-							"originalUrl": credential.verification_url,
-							"title": {"text": schema.name if schema else "Credential"},
-							"description": {"text": schema.description[:200]
-								if schema and schema.description else ""},
+							"originalUrl": share_url,
+							"title": {"text": schema_name},
+							"description": {"text": schema_description},
 						}],
 					}
 				},
@@ -583,8 +656,18 @@ class CredentialsService:
 				method="POST",
 			)
 			with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-				response_data = _json.loads(resp.read())
-				linkedin_post_id = response_data.get("id", "")
+				if getattr(resp, "status", 200) >= 300:
+					raise CredentialsServiceError(
+						f"LinkedIn share API returned HTTP {resp.status}"
+					)
+				response_data = self._read_limited_json_object_response(
+					resp,
+					"LinkedIn share API",
+				)
+				linkedin_post_id = self._linkedin_text(
+					response_data.get("id", ""),
+					128,
+				)
 		except Exception as exc:
 			log.warning(
 				"CredentialsService: LinkedIn share API call failed: %s", exc
@@ -603,7 +686,7 @@ class CredentialsService:
 			session,
 		)
 		return {
-			"share_url": credential.verification_url,
+			"share_url": share_url,
 			"share_id": share.id,
 			"share_token": share_token,
 			"linkedin_post_id": linkedin_post_id,
