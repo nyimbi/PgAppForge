@@ -467,6 +467,76 @@ def test_channel_and_message(session):
 	assert msg.parent_message_id is None
 
 
+def test_discuss_service_validates_public_inputs(session):
+	from pgappforge.plugins.erp.platform.discuss.services import (
+		DiscussService,
+		DiscussValidationError,
+	)
+
+	tenant = _uid()
+	svc = DiscussService()
+
+	with pytest.raises(DiscussValidationError, match="name"):
+		svc.create_channel("", "USER01", tenant, session)
+	with pytest.raises(DiscussValidationError, match="channel_type"):
+		svc.create_channel("ops", "USER01", tenant, session, channel_type="bad")
+
+	channel = svc.create_channel("ops", "USER01", tenant, session)
+
+	with pytest.raises(DiscussValidationError, match="body"):
+		svc.post_message(channel.id, "USER01", "", session)
+	with pytest.raises(DiscussValidationError, match="attachments"):
+		svc.post_message(channel.id, "USER01", "hello", session, attachments={"bad": True})
+	with pytest.raises(DiscussValidationError, match="limit"):
+		svc.get_channel_history(channel.id, session, limit=0)
+
+
+def test_discuss_service_normalizes_channel_and_message_inputs(session):
+	from pgappforge.plugins.erp.platform.discuss.models import DiscussChannelMember
+	from pgappforge.plugins.erp.platform.discuss.services import DiscussService
+
+	tenant = _uid()
+	svc = DiscussService()
+
+	channel = svc.create_channel(
+		" ops ",
+		"USER01",
+		tenant,
+		session,
+		description=" daily ops ",
+		channel_type="private",
+		member_ids=["USER02", "USER02", "USER01"],
+	)
+
+	assert channel.name == "ops"
+	assert channel.description == "daily ops"
+	assert channel.channel_type == "PRIVATE"
+	member_ids = {
+		member.member_id
+		for member in session.execute(
+			sa.select(DiscussChannelMember).where(
+				DiscussChannelMember.channel_id == channel.id
+			)
+		).scalars()
+	}
+	assert member_ids == {"USER01", "USER02"}
+
+	msg = svc.post_message(
+		channel.id,
+		"USER01",
+		" hello ",
+		session,
+		message_type="text",
+		attachments=[{"filename": "note.txt", "size_bytes": 12}],
+		metadata={"severity": "low"},
+	)
+
+	assert msg.body == "hello"
+	assert msg.message_type == "TEXT"
+	assert msg.attachments == [{"filename": "note.txt", "size_bytes": 12}]
+	assert msg.metadata_ == {"severity": "low"}
+
+
 def test_thread_reply(session):
 	from pgappforge.plugins.erp.platform.discuss.services import DiscussService
 
@@ -504,6 +574,7 @@ def test_unread_count(session):
 	m1 = svc.post_message(channel.id, "USER01", "Msg 1", session)
 	m2 = svc.post_message(channel.id, "USER01", "Msg 2", session)
 	m3 = svc.post_message(channel.id, "USER01", "Msg 3", session)  # noqa: F841
+	assert m2.id is not None
 
 	# Mark USER02 as having read up to m1
 	svc.mark_read(channel.id, "USER02", m1.id, session)

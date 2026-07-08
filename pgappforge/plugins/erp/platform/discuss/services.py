@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import json
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 import sqlalchemy as sa
@@ -28,6 +28,7 @@ __all__ = [
 	"DiscussServiceError",
 	"DiscussNotFoundError",
 	"DiscussStateError",
+	"DiscussValidationError",
 	"DiscussService",
 ]
 
@@ -42,6 +43,114 @@ class DiscussNotFoundError(DiscussServiceError):
 
 class DiscussStateError(DiscussServiceError):
 	"""Raised when an operation is invalid for the current state."""
+
+
+class DiscussValidationError(DiscussServiceError, ValueError):
+	"""Raised when caller-supplied inputs violate the discuss service contract."""
+
+
+_CHANNEL_TYPES = {"PUBLIC", "PRIVATE", "DIRECT", "SYSTEM"}
+_MAX_MEMBERS_PER_CREATE = 200
+_MAX_ATTACHMENTS = 20
+
+
+def _require_text(
+	value: Any,
+	field_name: str,
+	*,
+	max_length: int,
+	uppercase: bool = False,
+) -> str:
+	if not isinstance(value, str):
+		raise DiscussValidationError(f"{field_name} must be a string")
+	text = value.strip()
+	if not text:
+		raise DiscussValidationError(f"{field_name} is required")
+	if "\x00" in text:
+		raise DiscussValidationError(f"{field_name} cannot contain NUL bytes")
+	if len(text) > max_length:
+		raise DiscussValidationError(f"{field_name} cannot exceed {max_length} characters")
+	return text.upper() if uppercase else text
+
+
+def _optional_text(
+	value: Any,
+	field_name: str,
+	*,
+	max_length: int,
+	uppercase: bool = False,
+) -> str | None:
+	if value is None:
+		return None
+	return _require_text(value, field_name, max_length=max_length, uppercase=uppercase)
+
+
+def _normalize_channel_type(value: Any) -> str:
+	channel_type = _require_text(value, "channel_type", max_length=20, uppercase=True)
+	if channel_type not in _CHANNEL_TYPES:
+		raise DiscussValidationError(f"invalid channel_type: {channel_type}")
+	return channel_type
+
+
+def _normalize_member_ids(member_ids: Any) -> list[str]:
+	if member_ids is None:
+		return []
+	if not isinstance(member_ids, list):
+		raise DiscussValidationError("member_ids must be a list")
+	if len(member_ids) > _MAX_MEMBERS_PER_CREATE:
+		raise DiscussValidationError(
+			f"member_ids cannot contain more than {_MAX_MEMBERS_PER_CREATE} entries"
+		)
+	normalized: list[str] = []
+	seen: set[str] = set()
+	for item in member_ids:
+		member_id = _require_text(item, "member_id", max_length=50)
+		key = member_id.casefold()
+		if key in seen:
+			continue
+		seen.add(key)
+		normalized.append(member_id)
+	return normalized
+
+
+def _normalize_message_type(value: Any) -> str:
+	return _require_text(value, "message_type", max_length=20, uppercase=True)
+
+
+def _normalize_json_object(value: Any, field_name: str) -> dict[str, Any]:
+	if value is None:
+		return {}
+	if not isinstance(value, dict):
+		raise DiscussValidationError(f"{field_name} must be an object")
+	try:
+		return json.loads(json.dumps(value, default=str))
+	except (TypeError, ValueError) as exc:
+		raise DiscussValidationError(f"{field_name} must be JSON serializable") from exc
+
+
+def _normalize_attachments(value: Any) -> list[dict[str, Any]]:
+	if value is None:
+		return []
+	if not isinstance(value, list):
+		raise DiscussValidationError("attachments must be a list")
+	if len(value) > _MAX_ATTACHMENTS:
+		raise DiscussValidationError(
+			f"attachments cannot contain more than {_MAX_ATTACHMENTS} entries"
+		)
+	attachments: list[dict[str, Any]] = []
+	for item in value:
+		if not isinstance(item, dict):
+			raise DiscussValidationError("attachments must contain objects")
+		attachments.append(_normalize_json_object(item, "attachment"))
+	return attachments
+
+
+def _normalize_limit(value: Any) -> int:
+	if isinstance(value, bool) or not isinstance(value, int):
+		raise DiscussValidationError("limit must be an integer")
+	if value < 1 or value > 200:
+		raise DiscussValidationError("limit must be between 1 and 200")
+	return value
 
 
 class DiscussService:
@@ -69,12 +178,12 @@ class DiscussService:
 
 		Emits ChannelCreatedEvent and ChannelMemberAddedEvent per extra member.
 		"""
-		assert name, "name is required"
-		assert created_by, "created_by is required"
-		assert tenant_id, "tenant_id is required"
-		assert channel_type in ("PUBLIC", "PRIVATE", "DIRECT", "SYSTEM"), (
-			f"invalid channel_type: {channel_type}"
-		)
+		name = _require_text(name, "name", max_length=200)
+		created_by = _require_text(created_by, "created_by", max_length=50)
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		description = _optional_text(description, "description", max_length=5000)
+		channel_type = _normalize_channel_type(channel_type)
+		member_ids = _normalize_member_ids(member_ids)
 
 		channel = DiscussChannel(
 			name=name,
@@ -95,7 +204,7 @@ class DiscussService:
 		session.add(owner)
 
 		# optional extra members
-		for mid in (member_ids or []):
+		for mid in member_ids:
 			if mid == created_by:
 				continue
 			member = DiscussChannelMember(
@@ -119,7 +228,7 @@ class DiscussService:
 			session,
 		)
 
-		for mid in (member_ids or []):
+		for mid in member_ids:
 			if mid == created_by:
 				continue
 			emit_event(
@@ -155,9 +264,15 @@ class DiscussService:
 		Emits MessagePostedEvent and (for new threads) ThreadCreatedEvent.
 		Marks the author's last_read_message_id to the new message.
 		"""
-		assert channel_id, "channel_id required"
-		assert author_id, "author_id required"
-		assert body, "body required"
+		channel_id = _require_text(channel_id, "channel_id", max_length=64)
+		author_id = _require_text(author_id, "author_id", max_length=50)
+		body = _require_text(body, "body", max_length=100_000)
+		message_type = _normalize_message_type(message_type)
+		parent_message_id = _optional_text(
+			parent_message_id, "parent_message_id", max_length=64
+		)
+		attachments = _normalize_attachments(attachments)
+		metadata = _normalize_json_object(metadata, "metadata")
 
 		channel = session.execute(
 			sa.select(DiscussChannel).where(DiscussChannel.id == channel_id)
@@ -183,8 +298,8 @@ class DiscussService:
 			body=body,
 			message_type=message_type,
 			parent_message_id=parent_message_id,
-			attachments=attachments or [],
-			metadata_=metadata or {},
+			attachments=attachments,
+			metadata_=metadata,
 			tenant_id=channel.tenant_id,
 		)
 		session.add(msg)
@@ -230,6 +345,9 @@ class DiscussService:
 		session: Session,
 	) -> DiscussMessage:
 		"""Add emoji reaction.  Deduplicates; no-ops if already reacted."""
+		message_id = _require_text(message_id, "message_id", max_length=64)
+		reactor_id = _require_text(reactor_id, "reactor_id", max_length=50)
+		emoji = _require_text(emoji, "emoji", max_length=32)
 		msg = self._get_message(message_id, session)
 		reactions: dict[str, list[str]] = dict(msg.reactions or {})
 		users = reactions.get(emoji, [])
@@ -259,6 +377,9 @@ class DiscussService:
 		session: Session,
 	) -> None:
 		"""Remove emoji reaction.  Deletes the emoji key if no reactors remain."""
+		message_id = _require_text(message_id, "message_id", max_length=64)
+		reactor_id = _require_text(reactor_id, "reactor_id", max_length=50)
+		emoji = _require_text(emoji, "emoji", max_length=32)
 		msg = self._get_message(message_id, session)
 		reactions: dict[str, list[str]] = dict(msg.reactions or {})
 		users = [u for u in reactions.get(emoji, []) if u != reactor_id]
@@ -279,6 +400,10 @@ class DiscussService:
 		session: Session,
 	) -> DiscussChannelMember:
 		"""Add a user to a channel.  Idempotent — returns existing member if present."""
+		channel_id = _require_text(channel_id, "channel_id", max_length=64)
+		member_id = _require_text(member_id, "member_id", max_length=50)
+		added_by = _require_text(added_by, "added_by", max_length=50)
+
 		existing = session.execute(
 			sa.select(DiscussChannelMember).where(
 				DiscussChannelMember.channel_id == channel_id,
@@ -318,6 +443,9 @@ class DiscussService:
 		session: Session,
 	) -> None:
 		"""Advance the member's read pointer to message_id."""
+		channel_id = _require_text(channel_id, "channel_id", max_length=64)
+		member_id = _require_text(member_id, "member_id", max_length=50)
+		message_id = _require_text(message_id, "message_id", max_length=64)
 		self._update_last_read(channel_id, member_id, message_id, session)
 
 	def get_unread_count(
@@ -327,6 +455,9 @@ class DiscussService:
 		session: Session,
 	) -> int:
 		"""Count messages posted after the member's last read pointer."""
+		channel_id = _require_text(channel_id, "channel_id", max_length=64)
+		member_id = _require_text(member_id, "member_id", max_length=50)
+
 		membership = session.execute(
 			sa.select(DiscussChannelMember).where(
 				DiscussChannelMember.channel_id == channel_id,
@@ -381,6 +512,16 @@ class DiscussService:
 		BPM workflow engine calls this to fan notifications into channels tied
 		to workflow instances or to a default tenant-level system channel.
 		"""
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		notification_type = _require_text(
+			notification_type, "notification_type", max_length=100
+		)
+		payload = _normalize_json_object(payload, "payload")
+		channel_name = _optional_text(channel_name, "channel_name", max_length=200)
+		linked_module = _optional_text(linked_module, "linked_module", max_length=100)
+		linked_record_id = _optional_text(
+			linked_record_id, "linked_record_id", max_length=50
+		)
 		channel = self._find_or_create_system_channel(
 			tenant_id=tenant_id,
 			session=session,
@@ -389,7 +530,6 @@ class DiscussService:
 			linked_record_id=linked_record_id,
 		)
 
-		import json
 		body = json.dumps({"notification_type": notification_type, **payload}, default=str)
 
 		msg = DiscussMessage(
@@ -429,7 +569,9 @@ class DiscussService:
 
 		Cursor-based pagination: pass before_id to get messages older than that id.
 		"""
-		assert 1 <= limit <= 200, "limit must be between 1 and 200"
+		channel_id = _require_text(channel_id, "channel_id", max_length=64)
+		before_id = _optional_text(before_id, "before_id", max_length=64)
+		limit = _normalize_limit(limit)
 
 		q = (
 			sa.select(DiscussMessage)
@@ -454,6 +596,7 @@ class DiscussService:
 	# ── Internal helpers ─────────────────────────────────────────────────────
 
 	def _get_message(self, message_id: str, session: Session) -> DiscussMessage:
+		message_id = _require_text(message_id, "message_id", max_length=64)
 		msg = session.execute(
 			sa.select(DiscussMessage).where(DiscussMessage.id == message_id)
 		).scalar_one_or_none()
@@ -468,6 +611,9 @@ class DiscussService:
 		message_id: str,
 		session: Session,
 	) -> None:
+		channel_id = _require_text(channel_id, "channel_id", max_length=64)
+		member_id = _require_text(member_id, "member_id", max_length=50)
+		message_id = _require_text(message_id, "message_id", max_length=64)
 		membership = session.execute(
 			sa.select(DiscussChannelMember).where(
 				DiscussChannelMember.channel_id == channel_id,
@@ -487,6 +633,12 @@ class DiscussService:
 		linked_record_id: str | None,
 	) -> DiscussChannel:
 		"""Return existing SYSTEM channel matching the criteria, or create one."""
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		channel_name = _require_text(channel_name, "channel_name", max_length=200)
+		linked_module = _optional_text(linked_module, "linked_module", max_length=100)
+		linked_record_id = _optional_text(
+			linked_record_id, "linked_record_id", max_length=50
+		)
 		filters = [
 			DiscussChannel.tenant_id == tenant_id,
 			DiscussChannel.channel_type == "SYSTEM",
