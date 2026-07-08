@@ -32,6 +32,30 @@ def test_query_guard_rejects_statement_chaining() -> None:
 		validate_read_only_sql("SELECT 1; DROP TABLE pgaf_report")
 
 
+def test_query_guard_keeps_comment_markers_inside_literals() -> None:
+	from pgappforge.plugins.erp.platform.query_guard import validate_read_only_sql
+
+	sql = validate_read_only_sql(
+		"SELECT '-- not a comment; UPDATE account' AS note, '/* keep */' AS block;"
+	)
+
+	assert sql == "SELECT '-- not a comment; UPDATE account' AS note, '/* keep */' AS block"
+
+
+def test_query_guard_rejects_privileged_read_functions() -> None:
+	from pgappforge.plugins.erp.platform.query_guard import QueryGuardError, validate_read_only_sql
+
+	with pytest.raises(QueryGuardError, match="Unsafe SQL function"):
+		validate_read_only_sql("SELECT pg_read_file('/etc/passwd')")
+
+
+def test_query_guard_rejects_select_into_table_creation() -> None:
+	from pgappforge.plugins.erp.platform.query_guard import QueryGuardError, validate_read_only_sql
+
+	with pytest.raises(QueryGuardError, match="read-only"):
+		validate_read_only_sql("SELECT * INTO TEMP export_table FROM account")
+
+
 def test_query_guard_rejects_unsafe_generated_identifiers() -> None:
 	from pgappforge.plugins.erp.platform.query_guard import QueryGuardError, validate_sql_identifier
 
@@ -90,6 +114,85 @@ def test_analytics_query_cube_validates_schema_and_generated_sql() -> None:
 	assert "SUM(amount_cents) AS total_amount" in session.sql
 	assert "GROUP BY tenant_id" in session.sql
 	assert session.params == {"f0": "tenant-1"}
+
+
+def test_analytics_define_cube_normalizes_catalog_schema_shapes() -> None:
+	from pgappforge.plugins.erp.platform.analytics_engine.services import AnalyticsEngineService
+
+	class _Session:
+		def __init__(self):
+			self.added = []
+
+		def add(self, cube):
+			self.added.append(cube)
+
+	session = _Session()
+	cube = AnalyticsEngineService().define_cube(
+		"tenant-1",
+		"sales",
+		"SELECT tenant_id, amount_cents FROM fact_sales",
+		{"tenant_id": "string"},
+		{"amount_cents": "sum"},
+		session,
+		refresh_schedule="DAILY",
+	)
+
+	assert session.added == [cube]
+	assert cube.refresh_schedule == "DAILY"
+	assert cube.dimensions == [{"name": "tenant_id", "field": "tenant_id", "type": "string"}]
+	assert cube.measures == [{"name": "amount_cents", "field": "amount_cents", "agg": "SUM"}]
+
+
+def test_standard_analytics_cube_seed_accepts_catalog_shapes() -> None:
+	from pgappforge.plugins.erp.platform.analytics_engine.standard_cubes import (
+		STANDARD_CUBES,
+		seed_standard_cubes,
+	)
+
+	class _NoExistingCube:
+		def scalar_one_or_none(self):
+			return None
+
+	class _Session:
+		def __init__(self):
+			self.added = []
+
+		def execute(self, stmt):
+			return _NoExistingCube()
+
+		def add(self, cube):
+			self.added.append(cube)
+
+	session = _Session()
+
+	assert seed_standard_cubes("tenant-1", session) == len(STANDARD_CUBES)
+	assert len(session.added) == len(STANDARD_CUBES)
+	assert all(cube.refresh_schedule == "DAILY" for cube in session.added)
+	assert all(isinstance(cube.dimensions[0], dict) for cube in session.added)
+	assert all(isinstance(cube.measures[0], dict) for cube in session.added)
+
+
+def test_analytics_query_cube_validates_inputs_before_execute() -> None:
+	from pgappforge.plugins.erp.platform.analytics_engine.services import AnalyticsEngineService
+
+	class _Cube:
+		tenant_id = "tenant-1"
+		base_query = "SELECT tenant_id, amount_cents FROM fact_sales"
+		dimensions = [{"name": "tenant_id", "field": "tenant_id", "type": "string"}]
+		measures = [{"name": "total_amount", "field": "amount_cents", "agg": "SUM"}]
+
+	class _Session:
+		def get(self, model, cube_id):
+			return _Cube()
+
+		def execute(self, stmt, params=None):
+			raise AssertionError("query should not execute after invalid input")
+
+	service = AnalyticsEngineService()
+	with pytest.raises(ValueError, match="filters"):
+		service.query_cube("cube-1", ["tenant_id"], None, _Session())
+	with pytest.raises(ValueError, match="limit_rows"):
+		service.query_cube("cube-1", {}, None, _Session(), limit_rows=0)
 
 
 def test_analytics_query_cube_rejects_unsafe_measure_alias() -> None:

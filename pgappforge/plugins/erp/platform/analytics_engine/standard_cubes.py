@@ -138,8 +138,8 @@ def seed_standard_cubes(tenant_id: str, session: Any) -> int:
 				svc.define_cube(
 					name=cube_def["name"],
 					base_query=cube_def["base_query"],
-					dimensions=list(cube_def["dimensions"].keys()),
-					measures=list(cube_def["measures"].keys()),
+					dimensions=cube_def["dimensions"],
+					measures=cube_def["measures"],
 					tenant_id=tenant_id,
 					session=session,
 					refresh_schedule=cube_def.get("refresh_schedule", "DAILY"),
