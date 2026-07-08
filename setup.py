@@ -93,12 +93,6 @@ setup(
         "billing": [
             "stripe>=7.0.0, <9.0.0",       # Stripe payment processing for multi-tenant billing
         ],
-        "analytics": [
-            "pandas>=1.5.0, <3.0.0",       # Data analysis for dashboard widgets
-            "numpy>=1.21.0, <2.0.0",       # Numerical computing for metrics
-            "matplotlib>=3.5.0, <4.0.0",   # Chart generation for dashboards
-            "seaborn>=0.11.0, <1.0.0",     # Statistical visualization (optional)
-        ],
         "oauth": ["Authlib>=0.14, <2.0.0"],
         "openid": ["Flask-OpenID>=1.2.5, <2"],
         "talisman": ["flask-talisman>=1.0.0, <2.0"],
@@ -132,10 +126,13 @@ setup(
             "eventlet>=0.33.0, <1.0.0",        # Async networking for SocketIO
         ],
         "analytics": [
-            "plotly>=5.17.0",
-            "pandas>=2.1.0",
-            "scikit-learn>=1.3.0",
-            "duckdb>=0.9.0",
+            "duckdb>=0.9.0",               # Local OLAP / lakehouse prototype engine
+            "matplotlib>=3.5.0, <4.0.0",   # Chart generation for dashboards
+            "numpy>=1.21.0, <2.0.0",       # Numerical computing for metrics
+            "pandas>=2.1.0, <3.0.0",       # Data analysis for dashboard widgets
+            "plotly>=5.17.0",              # Interactive charting
+            "scikit-learn>=1.3.0",         # ML-backed analytics experiments
+            "seaborn>=0.11.0, <1.0.0",     # Statistical visualization (optional)
         ],
         "workflow": [
             "celery>=5.3.0",

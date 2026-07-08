@@ -5,7 +5,13 @@ from typing import Any
 
 import sqlalchemy as sa
 
-from pgappforge.plugins.erp.platform.analytics_engine.models import AnalyticsCube, AnalyticsReport, ReportCache
+from pgappforge.plugins.erp.platform.analytics_engine.models import AnalyticsCube
+from pgappforge.plugins.erp.platform.query_guard import (
+	validate_aggregate,
+	validate_identifier_collection,
+	validate_read_only_sql,
+	validate_sql_identifier,
+)
 
 
 def _uuid() -> str:
@@ -22,6 +28,8 @@ class AnalyticsEngineService:
 		measures: list[dict[str, Any]],
 		session: Any,
 	) -> AnalyticsCube:
+		base_query = validate_read_only_sql(base_query)
+		self._validate_cube_schema(dimensions, measures)
 		cube = AnalyticsCube(
 			id=_uuid(),
 			tenant_id=tenant_id,
@@ -39,9 +47,16 @@ class AnalyticsEngineService:
 		filters: dict[str, Any] | None,
 		group_by: list[str] | None,
 		session: Any,
+		tenant_id: str | None = None,
+		limit_rows: int = 1000,
 	) -> list[dict[str, Any]]:
 		cube = session.get(AnalyticsCube, cube_id)
-		sql = cube.base_query
+		if cube is None:
+			raise ValueError(f"Analytics cube {cube_id!r} not found")
+		if tenant_id is not None and cube.tenant_id != tenant_id:
+			raise ValueError(f"Analytics cube {cube_id!r} not found for tenant {tenant_id!r}")
+		self._validate_cube_schema(cube.dimensions or [], cube.measures or [])
+		sql = validate_read_only_sql(cube.base_query)
 		params: dict[str, Any] = {}
 		wheres = []
 		if filters:
@@ -50,6 +65,7 @@ class AnalyticsEngineService:
 				if field not in allowed:
 					raise ValueError(f"Unknown filter field {field!r}; allowed: {sorted(allowed)}")
 			for i, (field, value) in enumerate(filters.items()):
+				field = validate_sql_identifier(field, label="filter field")
 				param_key = f"f{i}"
 				wheres.append(f"{field} = :{param_key}")
 				params[param_key] = value
@@ -60,14 +76,30 @@ class AnalyticsEngineService:
 			for field in group_by:
 				if field not in allowed_gb:
 					raise ValueError(f"Unknown group_by field {field!r}")
-			cols = ", ".join(group_by)
+			cols = ", ".join(validate_identifier_collection(group_by, label="group_by field"))
 			aggs = ", ".join(
-				f"{m['agg']}({m['field']}) AS {m['name']}"
+				f"{validate_aggregate(m['agg'])}({validate_sql_identifier(m['field'], label='measure field')}) "
+				f"AS {validate_sql_identifier(m['name'], label='measure alias')}"
 				for m in cube.measures
 			)
 			sql = f"SELECT {cols}, {aggs} FROM ({sql}) _cube GROUP BY {cols}"
 		result = session.execute(sa.text(sql), params)
-		return [dict(zip(result.keys(), row)) for row in result.fetchmany(1000)]
+		row_limit = max(1, min(int(limit_rows), 5000))
+		return [dict(zip(result.keys(), row)) for row in result.fetchmany(row_limit)]
+
+	def _validate_cube_schema(
+		self,
+		dimensions: list[dict[str, Any]],
+		measures: list[dict[str, Any]],
+	) -> None:
+		for dimension in dimensions:
+			validate_sql_identifier(str(dimension.get("field", "")), label="dimension field")
+			if dimension.get("name"):
+				validate_sql_identifier(str(dimension["name"]), label="dimension alias")
+		for measure in measures:
+			validate_sql_identifier(str(measure.get("field", "")), label="measure field")
+			validate_sql_identifier(str(measure.get("name", "")), label="measure alias")
+			validate_aggregate(str(measure.get("agg", "")))
 
 	def get_financial_dashboard(self, tenant_id: str, session: Any) -> dict[str, Any]:
 		widgets: dict[str, Any] = {}

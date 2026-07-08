@@ -80,23 +80,25 @@ class ReportBuilderService:
 		sql_query: str,
 		session,
 		params: dict | None = None,
+		max_rows: int = 1000,
 	) -> list[dict]:
 		"""Execute a SELECT query and return rows as list of dicts.
 
 		Used by the designer's data-source preview panel.
-		Only SELECT statements are permitted.
+		Only one read-only SELECT/WITH statement is permitted.
 
 		Returns up to 1 000 rows (hard cap for designer safety).
 		"""
 		import sqlalchemy as sa
+		from pgappforge.plugins.erp.platform.query_guard import validate_read_only_sql
 
-		if not sql_query.upper().strip().startswith("SELECT"):
-			raise ValueError("Only SELECT queries are allowed for report data sources")
+		sql = validate_read_only_sql(sql_query)
+		row_limit = max(1, min(int(max_rows), 5000))
 
 		try:
-			result = session.execute(sa.text(sql_query), params or {})
+			result = session.execute(sa.text(sql), params or {})
 			cols = list(result.keys())
-			return [dict(zip(cols, row)) for row in result.fetchmany(1000)]
+			return [dict(zip(cols, row)) for row in result.fetchmany(row_limit)]
 		except Exception as exc:
 			log.warning("Report data query failed: %s", exc)
 			return []
@@ -235,7 +237,11 @@ class ReportBuilderService:
 		"""Fetch data for the report from its configured data source."""
 		if report.data_source_query:
 			try:
-				rows = self.get_data_for_report(report.data_source_query, session)
+				rows = self.get_data_for_report(
+					report.data_source_query,
+					session,
+					params={"tenant_id": tenant_id, "tid": tenant_id},
+				)
 				return {"rows": rows}
 			except Exception as exc:
 				log.warning("Report data_source_query failed: %s", exc)
