@@ -16,6 +16,7 @@ BPM actions registered here:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -40,11 +41,22 @@ from pgappforge.plugins.workflow.engine import BPMActionRegistry
 
 log = logging.getLogger(__name__)
 
+_ACCESS_LEVELS = {"VIEW", "COMMENT", "EDIT", "ADMIN"}
+_VISIBLE_ACCESS_LEVELS = {"VIEW", "COMMENT", "EDIT", "ADMIN"}
+_WRITE_ACCESS_LEVELS = {"EDIT", "ADMIN"}
+_ADMIN_ACCESS_LEVELS = {"ADMIN"}
+_GRANTEE_TYPES = {"USER", "ROLE"}
+_CHECKSUM_RE = re.compile(r"^[A-Fa-f0-9]{64}$")
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_SAFE_MODULE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
+
 __all__ = [
 	"DocumentService",
 	"DocumentServiceError",
+	"DocumentValidationError",
 	"DocumentNotFoundError",
 	"DocumentAccessError",
+	"DocumentStateError",
 ]
 
 
@@ -56,12 +68,20 @@ class DocumentServiceError(Exception):
 	"""Base exception for all DMS service errors."""
 
 
+class DocumentValidationError(DocumentServiceError):
+	"""Raised when caller supplied data violates the DMS service contract."""
+
+
 class DocumentNotFoundError(DocumentServiceError):
 	"""Raised when a requested document does not exist or is deleted."""
 
 
 class DocumentAccessError(DocumentServiceError):
 	"""Raised when the requestor lacks the required access level."""
+
+
+class DocumentStateError(DocumentServiceError):
+	"""Raised when a requested mutation is not valid for document state."""
 
 
 # ---------------------------------------------------------------------------
@@ -100,11 +120,21 @@ class DocumentService:
 
 		Returns the persisted Document with latest_version_id set.
 		"""
-		assert title, "title must be non-empty"
-		assert filename, "filename must be non-empty"
-		assert file_path, "file_path must be non-empty"
-		assert owner_id, "owner_id must be non-empty"
-		assert tenant_id, "tenant_id must be non-empty"
+		title = self._require_text(title, "title", max_length=500)
+		filename = self._require_text(filename, "filename", max_length=500)
+		file_path = self._require_text(file_path, "file_path", max_length=2000)
+		owner_id = self._require_text(owner_id, "owner_id", max_length=50)
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=36)
+		description = self._optional_text(description, "description", max_length=10000)
+		folder_id = self._optional_text(folder_id, "folder_id", max_length=36)
+		doc_type = self._optional_text(doc_type, "doc_type", max_length=50, uppercase=True)
+		tags = self._normalize_tags(tags)
+		source_module = self._normalize_source_module(source_module)
+		source_record_id = self._optional_text(source_record_id, "source_record_id", max_length=50)
+		mime_type = self._normalize_mime_type(mime_type)
+		file_size_bytes = self._normalize_file_size(file_size_bytes)
+		if folder_id is not None:
+			self._require_folder(folder_id, tenant_id, session)
 
 		doc = Document(
 			title=title,
@@ -114,7 +144,7 @@ class DocumentService:
 			tenant_id=tenant_id,
 			status="ACTIVE",
 			doc_type=doc_type,
-			tags=tags or [],
+			tags=tags,
 			source_module=source_module,
 			source_record_id=source_record_id,
 		)
@@ -173,6 +203,8 @@ class DocumentService:
 		mime_type: str | None = None,
 		file_size_bytes: int | None = None,
 		checksum_sha256: str | None = None,
+		tenant_id: str | None = None,
+		uploader_role_ids: list[str] | None = None,
 	) -> DocumentVersion:
 		"""Upload a new version of an existing document.
 
@@ -180,18 +212,31 @@ class DocumentService:
 		version with version_number = max(existing) + 1, and updates
 		document.latest_version_id and search_vector.
 		"""
-		assert document_id, "document_id must be non-empty"
-		assert filename, "filename must be non-empty"
-		assert file_path, "file_path must be non-empty"
-		assert uploader_id, "uploader_id must be non-empty"
+		document_id = self._require_text(document_id, "document_id", max_length=36)
+		filename = self._require_text(filename, "filename", max_length=500)
+		file_path = self._require_text(file_path, "file_path", max_length=2000)
+		uploader_id = self._require_text(uploader_id, "uploader_id", max_length=50)
+		change_summary = self._optional_text(
+			change_summary, "change_summary", max_length=5000
+		)
+		mime_type = self._normalize_mime_type(mime_type)
+		file_size_bytes = self._normalize_file_size(file_size_bytes)
+		checksum_sha256 = self._normalize_checksum(checksum_sha256)
+		tenant_id = self._optional_text(tenant_id, "tenant_id", max_length=36)
+		uploader_role_ids = self._normalize_role_ids(uploader_role_ids)
 
-		doc = session.execute(
-			sa.select(Document).where(Document.id == document_id)
-		).scalar_one_or_none()
-		if doc is None:
-			raise DocumentNotFoundError(f"Document {document_id!r} not found")
-		if doc.status == "DELETED":
-			raise DocumentNotFoundError(f"Document {document_id!r} has been deleted")
+		doc = self._get_existing_document(document_id, session, tenant_id=tenant_id)
+		self._require_active_document(doc)
+		if not self._has_required_access(
+			doc,
+			uploader_id,
+			session,
+			_WRITE_ACCESS_LEVELS,
+			role_ids=uploader_role_ids,
+		):
+			raise DocumentAccessError(
+				f"User {uploader_id!r} cannot upload a new version of document {document_id!r}"
+			)
 
 		# Mark all current versions as not current
 		session.execute(
@@ -256,6 +301,8 @@ class DocumentService:
 		requestor_id: str,
 		tenant_id: str,
 		session: Session,
+		*,
+		role_ids: list[str] | None = None,
 	) -> Document:
 		"""Return a Document if the requestor has access, else raise.
 
@@ -269,9 +316,10 @@ class DocumentService:
 		Raises DocumentNotFoundError for missing/deleted docs.
 		Raises DocumentAccessError when access is denied.
 		"""
-		assert document_id, "document_id must be non-empty"
-		assert requestor_id, "requestor_id must be non-empty"
-		assert tenant_id, "tenant_id must be non-empty"
+		document_id = self._require_text(document_id, "document_id", max_length=36)
+		requestor_id = self._require_text(requestor_id, "requestor_id", max_length=50)
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=36)
+		role_ids = self._normalize_role_ids(role_ids)
 
 		doc = session.execute(
 			sa.select(Document)
@@ -282,25 +330,13 @@ class DocumentService:
 		if doc is None or doc.status == "DELETED":
 			raise DocumentNotFoundError(f"Document {document_id!r} not found")
 
-		# Owner always has access
-		if doc.owner_id == requestor_id:
-			return doc
-
-		# Check explicit ACL (not expired)
-		now = datetime.now(timezone.utc)
-		grant = session.execute(
-			sa.select(DocumentAccess)
-			.where(DocumentAccess.document_id == document_id)
-			.where(DocumentAccess.grantee_id == requestor_id)
-			.where(
-				sa.or_(
-					DocumentAccess.expires_at.is_(None),
-					DocumentAccess.expires_at > now,
-				)
-			)
-		).scalar_one_or_none()
-
-		if grant is None:
+		if not self._has_required_access(
+			doc,
+			requestor_id,
+			session,
+			_VISIBLE_ACCESS_LEVELS,
+			role_ids=role_ids,
+		):
 			raise DocumentAccessError(
 				f"User {requestor_id!r} does not have access to document {document_id!r}"
 			)
@@ -321,6 +357,8 @@ class DocumentService:
 		tags: list | None = None,
 		owner_id: str | None = None,
 		limit: int = 50,
+		requestor_id: str | None = None,
+		role_ids: list[str] | None = None,
 	) -> list[Document]:
 		"""Full-text search over documents using PostgreSQL tsvector/tsquery.
 
@@ -328,8 +366,14 @@ class DocumentService:
 		are applied as AND conditions.  Results are ranked by ts_rank_cd
 		descending so the most relevant documents appear first.
 		"""
-		assert tenant_id, "tenant_id must be non-empty"
-		assert query, "query must be non-empty"
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=36)
+		query = self._require_text(query, "query", max_length=500)
+		doc_type = self._optional_text(doc_type, "doc_type", max_length=50, uppercase=True)
+		tags = self._normalize_tags(tags) if tags is not None else None
+		owner_id = self._optional_text(owner_id, "owner_id", max_length=50)
+		limit = self._normalize_limit(limit)
+		requestor_id = self._optional_text(requestor_id, "requestor_id", max_length=50)
+		role_ids = self._normalize_role_ids(role_ids)
 
 		tsquery_expr = sa.func.plainto_tsquery("english", query)
 
@@ -353,6 +397,20 @@ class DocumentService:
 		if owner_id is not None:
 			stmt = stmt.where(Document.owner_id == owner_id)
 
+		if requestor_id is not None:
+			stmt = stmt.where(
+				sa.or_(
+					Document.owner_id == requestor_id,
+					self._access_exists_clause(
+						Document.id,
+						tenant_id,
+						requestor_id,
+						role_ids,
+						_VISIBLE_ACCESS_LEVELS,
+					),
+				)
+			)
+
 		# Order by FTS rank descending
 		rank_expr = sa.func.ts_rank_cd(Document.search_vector, tsquery_expr)
 		stmt = stmt.order_by(rank_expr.desc()).limit(limit)
@@ -373,24 +431,38 @@ class DocumentService:
 		session: Session,
 		*,
 		expires_at: datetime | None = None,
+		tenant_id: str | None = None,
+		grantor_role_ids: list[str] | None = None,
 	) -> DocumentAccess:
 		"""Upsert a DocumentAccess row, then emit DocumentSharedEvent.
 
 		If a row already exists for (document_id, grantee_id, grantee_type)
 		it is updated in place (access_level, expires_at).
 		"""
-		assert document_id, "document_id must be non-empty"
-		assert grantee_id, "grantee_id must be non-empty"
-		assert grantee_type in ("USER", "ROLE"), "grantee_type must be USER or ROLE"
-		assert access_level in ("VIEW", "COMMENT", "EDIT", "ADMIN"), (
-			"access_level must be VIEW / COMMENT / EDIT / ADMIN"
+		document_id = self._require_text(document_id, "document_id", max_length=36)
+		grantee_id = self._require_text(grantee_id, "grantee_id", max_length=50)
+		grantee_type = self._normalize_choice(
+			grantee_type, "grantee_type", _GRANTEE_TYPES
 		)
+		access_level = self._normalize_choice(
+			access_level, "access_level", _ACCESS_LEVELS
+		)
+		granted_by = self._require_text(granted_by, "granted_by", max_length=50)
+		expires_at = self._normalize_expiry(expires_at)
+		tenant_id = self._optional_text(tenant_id, "tenant_id", max_length=36)
+		grantor_role_ids = self._normalize_role_ids(grantor_role_ids)
 
-		doc = session.execute(
-			sa.select(Document).where(Document.id == document_id)
-		).scalar_one_or_none()
-		if doc is None or doc.status == "DELETED":
-			raise DocumentNotFoundError(f"Document {document_id!r} not found")
+		doc = self._get_existing_document(document_id, session, tenant_id=tenant_id)
+		if not self._has_required_access(
+			doc,
+			granted_by,
+			session,
+			_ADMIN_ACCESS_LEVELS,
+			role_ids=grantor_role_ids,
+		):
+			raise DocumentAccessError(
+				f"User {granted_by!r} cannot manage access for document {document_id!r}"
+			)
 
 		existing = session.execute(
 			sa.select(DocumentAccess)
@@ -441,16 +513,27 @@ class DocumentService:
 		document_id: str,
 		archived_by: str,
 		session: Session,
+		*,
+		tenant_id: str | None = None,
+		actor_role_ids: list[str] | None = None,
 	) -> Document:
 		"""Set document.status = ARCHIVED and emit DocumentArchivedEvent."""
-		assert document_id, "document_id must be non-empty"
-		assert archived_by, "archived_by must be non-empty"
+		document_id = self._require_text(document_id, "document_id", max_length=36)
+		archived_by = self._require_text(archived_by, "archived_by", max_length=50)
+		tenant_id = self._optional_text(tenant_id, "tenant_id", max_length=36)
+		actor_role_ids = self._normalize_role_ids(actor_role_ids)
 
-		doc = session.execute(
-			sa.select(Document).where(Document.id == document_id)
-		).scalar_one_or_none()
-		if doc is None or doc.status == "DELETED":
-			raise DocumentNotFoundError(f"Document {document_id!r} not found")
+		doc = self._get_existing_document(document_id, session, tenant_id=tenant_id)
+		if not self._has_required_access(
+			doc,
+			archived_by,
+			session,
+			_ADMIN_ACCESS_LEVELS,
+			role_ids=actor_role_ids,
+		):
+			raise DocumentAccessError(
+				f"User {archived_by!r} cannot archive document {document_id!r}"
+			)
 
 		doc.status = "ARCHIVED"
 		session.flush()
@@ -478,6 +561,10 @@ class DocumentService:
 		source_module: str,
 		source_record_id: str,
 		session: Session,
+		*,
+		tenant_id: str | None = None,
+		attached_by: str | None = None,
+		actor_role_ids: list[str] | None = None,
 	) -> Document:
 		"""Bind a document to a record in another module.
 
@@ -485,15 +572,29 @@ class DocumentService:
 		Multiple documents can reference the same record; this is a many-to-one
 		relationship from the document side.
 		"""
-		assert document_id, "document_id must be non-empty"
-		assert source_module, "source_module must be non-empty"
-		assert source_record_id, "source_record_id must be non-empty"
+		document_id = self._require_text(document_id, "document_id", max_length=36)
+		source_module = self._normalize_source_module(source_module)
+		if source_module is None:
+			raise DocumentValidationError("source_module must be non-empty")
+		source_record_id = self._require_text(
+			source_record_id, "source_record_id", max_length=50
+		)
+		tenant_id = self._optional_text(tenant_id, "tenant_id", max_length=36)
+		attached_by = self._optional_text(attached_by, "attached_by", max_length=50)
+		actor_role_ids = self._normalize_role_ids(actor_role_ids)
 
-		doc = session.execute(
-			sa.select(Document).where(Document.id == document_id)
-		).scalar_one_or_none()
-		if doc is None or doc.status == "DELETED":
-			raise DocumentNotFoundError(f"Document {document_id!r} not found")
+		doc = self._get_existing_document(document_id, session, tenant_id=tenant_id)
+		self._require_active_document(doc)
+		if attached_by is not None and not self._has_required_access(
+			doc,
+			attached_by,
+			session,
+			_WRITE_ACCESS_LEVELS,
+			role_ids=actor_role_ids,
+		):
+			raise DocumentAccessError(
+				f"User {attached_by!r} cannot attach document {document_id!r}"
+			)
 
 		doc.source_module = source_module
 		doc.source_record_id = source_record_id
@@ -515,6 +616,7 @@ class DocumentService:
 		session: Session,
 		*,
 		entity_id: str | None = None,
+		max_depth: int = 50,
 	) -> list[dict]:
 		"""Return the complete folder hierarchy for a tenant as a list of dicts.
 
@@ -524,7 +626,9 @@ class DocumentService:
 
 		Each dict contains: id, name, parent_id, path_string, entity_id, depth.
 		"""
-		assert tenant_id, "tenant_id must be non-empty"
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=36)
+		entity_id = self._optional_text(entity_id, "entity_id", max_length=50)
+		max_depth = self._normalize_limit(max_depth, field_name="max_depth", maximum=100)
 
 		# Anchor: top-level folders (no parent)
 		anchor = (
@@ -552,7 +656,10 @@ class DocumentService:
 			DocumentFolder.path_string,
 			DocumentFolder.entity_id,
 			(anchor_cte.c.depth + 1).label("depth"),
-		).join(anchor_cte, DocumentFolder.parent_id == anchor_cte.c.id)
+		).join(anchor_cte, DocumentFolder.parent_id == anchor_cte.c.id).where(
+			DocumentFolder.tenant_id == tenant_id,
+			anchor_cte.c.depth < max_depth,
+		)
 
 		full_cte = anchor_cte.union_all(child)
 		rows = session.execute(sa.select(full_cte).order_by(full_cte.c.depth)).all()
@@ -572,6 +679,255 @@ class DocumentService:
 	# ------------------------------------------------------------------
 	# Internal helpers
 	# ------------------------------------------------------------------
+
+	def _get_existing_document(
+		self,
+		document_id: str,
+		session: Session,
+		*,
+		tenant_id: str | None = None,
+	) -> Document:
+		stmt = sa.select(Document).where(Document.id == document_id)
+		if tenant_id is not None:
+			stmt = stmt.where(Document.tenant_id == tenant_id)
+		doc = session.execute(stmt).scalar_one_or_none()
+		if doc is None or doc.status == "DELETED":
+			raise DocumentNotFoundError(f"Document {document_id!r} not found")
+		return doc
+
+	def _require_active_document(self, doc: Document) -> None:
+		if doc.status == "DELETED":
+			raise DocumentNotFoundError(f"Document {doc.id!r} not found")
+		if doc.status != "ACTIVE":
+			raise DocumentStateError(
+				f"Document {doc.id!r} is {doc.status}; only ACTIVE documents can be mutated"
+			)
+
+	def _require_folder(
+		self,
+		folder_id: str,
+		tenant_id: str,
+		session: Session,
+	) -> DocumentFolder:
+		folder = session.execute(
+			sa.select(DocumentFolder).where(
+				DocumentFolder.id == folder_id,
+				DocumentFolder.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
+		if folder is None:
+			raise DocumentNotFoundError(
+				f"Folder {folder_id!r} not found for tenant {tenant_id!r}"
+			)
+		return folder
+
+	def _has_required_access(
+		self,
+		doc: Document,
+		actor_id: str,
+		session: Session,
+		allowed_levels: set[str],
+		*,
+		role_ids: list[str] | None = None,
+	) -> bool:
+		if doc.owner_id == actor_id:
+			return True
+
+		role_ids = self._normalize_role_ids(role_ids)
+		grant = session.execute(
+			sa.select(DocumentAccess.id)
+			.where(
+				DocumentAccess.document_id == doc.id,
+				DocumentAccess.tenant_id == doc.tenant_id,
+				DocumentAccess.access_level.in_(allowed_levels),
+				self._active_grant_clause(),
+				sa.or_(
+					sa.and_(
+						DocumentAccess.grantee_type == "USER",
+						DocumentAccess.grantee_id == actor_id,
+					),
+					sa.and_(
+						DocumentAccess.grantee_type == "ROLE",
+						DocumentAccess.grantee_id.in_(role_ids),
+					) if role_ids else sa.false(),
+				),
+			)
+			.limit(1)
+		).first()
+		return grant is not None
+
+	def _access_exists_clause(
+		self,
+		document_id_expr: Any,
+		tenant_id: str,
+		requestor_id: str,
+		role_ids: list[str],
+		allowed_levels: set[str],
+	) -> Any:
+		grantee_clause = sa.or_(
+			sa.and_(
+				DocumentAccess.grantee_type == "USER",
+				DocumentAccess.grantee_id == requestor_id,
+			),
+			sa.and_(
+				DocumentAccess.grantee_type == "ROLE",
+				DocumentAccess.grantee_id.in_(role_ids),
+			) if role_ids else sa.false(),
+		)
+		return (
+			sa.select(DocumentAccess.id)
+			.where(
+				DocumentAccess.document_id == document_id_expr,
+				DocumentAccess.tenant_id == tenant_id,
+				DocumentAccess.access_level.in_(allowed_levels),
+				self._active_grant_clause(),
+				grantee_clause,
+			)
+			.exists()
+		)
+
+	@staticmethod
+	def _active_grant_clause() -> Any:
+		now = datetime.now(timezone.utc)
+		return sa.or_(DocumentAccess.expires_at.is_(None), DocumentAccess.expires_at > now)
+
+	@staticmethod
+	def _require_text(
+		value: str,
+		field_name: str,
+		*,
+		max_length: int,
+		uppercase: bool = False,
+	) -> str:
+		if not isinstance(value, str):
+			raise DocumentValidationError(f"{field_name} must be a string")
+		text = value.strip()
+		if not text:
+			raise DocumentValidationError(f"{field_name} must be non-empty")
+		if len(text) > max_length:
+			raise DocumentValidationError(
+				f"{field_name} must be {max_length} characters or fewer"
+			)
+		if _CONTROL_CHARS_RE.search(text):
+			raise DocumentValidationError(f"{field_name} contains control characters")
+		return text.upper() if uppercase else text
+
+	def _optional_text(
+		self,
+		value: str | None,
+		field_name: str,
+		*,
+		max_length: int,
+		uppercase: bool = False,
+	) -> str | None:
+		if value is None:
+			return None
+		text = self._require_text(
+			value, field_name, max_length=max_length, uppercase=uppercase
+		)
+		return text or None
+
+	def _normalize_choice(self, value: str, field_name: str, choices: set[str]) -> str:
+		text = self._require_text(value, field_name, max_length=20, uppercase=True)
+		if text not in choices:
+			allowed = ", ".join(sorted(choices))
+			raise DocumentValidationError(f"{field_name} must be one of: {allowed}")
+		return text
+
+	def _normalize_tags(self, tags: list | None) -> list[str]:
+		if tags is None:
+			return []
+		if not isinstance(tags, list):
+			raise DocumentValidationError("tags must be a list of strings")
+		if len(tags) > 50:
+			raise DocumentValidationError("tags cannot contain more than 50 entries")
+		normalized: list[str] = []
+		seen: set[str] = set()
+		for index, tag in enumerate(tags):
+			text = self._require_text(
+				tag, f"tags[{index}]", max_length=80
+			)
+			key = text.casefold()
+			if key not in seen:
+				normalized.append(text)
+				seen.add(key)
+		return normalized
+
+	def _normalize_role_ids(self, role_ids: list[str] | None) -> list[str]:
+		if role_ids is None:
+			return []
+		if not isinstance(role_ids, (list, tuple, set)):
+			raise DocumentValidationError("role_ids must be a list of strings")
+		normalized: list[str] = []
+		seen: set[str] = set()
+		for index, role_id in enumerate(role_ids):
+			text = self._require_text(role_id, f"role_ids[{index}]", max_length=50)
+			if text not in seen:
+				normalized.append(text)
+				seen.add(text)
+		return normalized
+
+	def _normalize_source_module(self, value: str | None) -> str | None:
+		text = self._optional_text(value, "source_module", max_length=100)
+		if text is None:
+			return None
+		if not _SAFE_MODULE_RE.fullmatch(text):
+			raise DocumentValidationError(
+				"source_module may contain only letters, digits, '.', '_', ':', and '-'"
+			)
+		return text
+
+	def _normalize_mime_type(self, value: str | None) -> str | None:
+		text = self._optional_text(value, "mime_type", max_length=100)
+		if text is None:
+			return None
+		if "/" not in text or text.startswith("/") or text.endswith("/"):
+			raise DocumentValidationError("mime_type must be a valid type/subtype value")
+		return text.lower()
+
+	@staticmethod
+	def _normalize_file_size(value: int | None) -> int | None:
+		if value is None:
+			return None
+		if isinstance(value, bool) or not isinstance(value, int):
+			raise DocumentValidationError("file_size_bytes must be an integer")
+		if value < 0:
+			raise DocumentValidationError("file_size_bytes cannot be negative")
+		if value > 10 * 1024 * 1024 * 1024 * 1024:
+			raise DocumentValidationError("file_size_bytes exceeds the maximum supported size")
+		return value
+
+	def _normalize_checksum(self, value: str | None) -> str | None:
+		text = self._optional_text(value, "checksum_sha256", max_length=64)
+		if text is None:
+			return None
+		if not _CHECKSUM_RE.fullmatch(text):
+			raise DocumentValidationError("checksum_sha256 must be 64 hexadecimal characters")
+		return text.lower()
+
+	@staticmethod
+	def _normalize_limit(
+		value: int,
+		*,
+		field_name: str = "limit",
+		maximum: int = 200,
+	) -> int:
+		if isinstance(value, bool) or not isinstance(value, int):
+			raise DocumentValidationError(f"{field_name} must be an integer")
+		if value < 1 or value > maximum:
+			raise DocumentValidationError(f"{field_name} must be between 1 and {maximum}")
+		return value
+
+	@staticmethod
+	def _normalize_expiry(value: datetime | None) -> datetime | None:
+		if value is None:
+			return None
+		if not isinstance(value, datetime):
+			raise DocumentValidationError("expires_at must be a datetime")
+		expiry = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+		if expiry <= datetime.now(timezone.utc):
+			raise DocumentValidationError("expires_at must be in the future")
+		return expiry
 
 	def _update_search_vector(self, doc: Document, session: Session) -> None:
 		"""Update doc.search_vector using PostgreSQL to_tsvector().
@@ -621,10 +977,27 @@ def _bpm_attach_document(
 	  module        — module name (used as source_module when not in params)
 	"""
 	svc = DocumentService()
-	document_id = params["document_id"]
+	document_id = svc._require_text(
+		params.get("document_id", ""), "document_id", max_length=36
+	)
 	source_module = params.get("source_module") or record_ctx.get("module", "")
-	source_record_id = record_ctx["record_id"]
-	doc = svc.attach_to_record(document_id, source_module, source_record_id, session)
+	source_record_id = svc._require_text(
+		record_ctx.get("record_id", ""), "record_id", max_length=50
+	)
+	attached_by = (
+		params.get("attached_by")
+		or record_ctx.get("actor_id")
+		or record_ctx.get("user_id")
+	)
+	tenant_id = params.get("tenant_id") or record_ctx.get("tenant_id")
+	doc = svc.attach_to_record(
+		document_id,
+		source_module,
+		source_record_id,
+		session,
+		tenant_id=tenant_id,
+		attached_by=attached_by,
+	)
 	return {"document_id": doc.id, "source_module": doc.source_module, "source_record_id": doc.source_record_id}
 
 
@@ -649,16 +1022,29 @@ def _bpm_request_signature(
 	import uuid as _uuid
 	from pgappforge.plugins.erp.platform.documents.events import DocumentSignatureRequestedEvent
 
-	document_id = params["document_id"]
+	svc = DocumentService()
+	document_id = svc._require_text(
+		params.get("document_id", ""), "document_id", max_length=36
+	)
 	signatories = params.get("signatories", [])
-	request_id = params.get("request_id") or str(_uuid.uuid4())
+	if not isinstance(signatories, list) or not signatories:
+		raise DocumentValidationError("signatories must be a non-empty list")
+	signatories = [
+		svc._require_text(signatory, f"signatories[{index}]", max_length=320)
+		for index, signatory in enumerate(signatories)
+	]
+	request_id = svc._optional_text(
+		params.get("request_id"), "request_id", max_length=100
+	) or str(_uuid.uuid4())
+	tenant_id = svc._optional_text(
+		params.get("tenant_id") or record_ctx.get("tenant_id"),
+		"tenant_id",
+		max_length=36,
+	)
 
 	# Look up tenant_id from the document
-	doc = session.execute(
-		sa.select(Document).where(Document.id == document_id)
-	).scalar_one_or_none()
-	if doc is None or doc.status == "DELETED":
-		raise DocumentNotFoundError(f"Document {document_id!r} not found")
+	doc = svc._get_existing_document(document_id, session, tenant_id=tenant_id)
+	svc._require_active_document(doc)
 
 	emit_event(
 		DocumentSignatureRequestedEvent(

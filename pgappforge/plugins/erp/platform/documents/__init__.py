@@ -251,8 +251,10 @@ from pgappforge.plugins.erp.platform.documents.models import (  # noqa: E402
 from pgappforge.plugins.erp.platform.documents.services import (  # noqa: E402
 	DocumentService,
 	DocumentServiceError,
+	DocumentValidationError,
 	DocumentNotFoundError,
 	DocumentAccessError,
+	DocumentStateError,
 )
 from pgappforge.plugins.erp.platform.documents.events import (  # noqa: E402
 	DocumentArchivedEvent,
@@ -275,8 +277,10 @@ __all__ = [
 	# Service
 	"DocumentService",
 	"DocumentServiceError",
+	"DocumentValidationError",
 	"DocumentNotFoundError",
 	"DocumentAccessError",
+	"DocumentStateError",
 	# Events
 	"DocumentUploadedEvent",
 	"DocumentVersionCreatedEvent",
