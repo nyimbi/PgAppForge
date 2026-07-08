@@ -6,7 +6,7 @@ from pgappforge.models.sqla import Model
 
 
 class EDIPartner(Model):
-	__tablename__ = "platform_edi_partner"
+	__tablename__ = "edi_partner"
 	__table_args__ = ({"extend_existing": True},)
 
 	id = sa.Column(sa.String(36), primary_key=True)
@@ -21,11 +21,11 @@ class EDIPartner(Model):
 
 
 class EDIMessage(Model):
-	__tablename__ = "platform_edi_message"
+	__tablename__ = "edi_message"
 	__table_args__ = ({"extend_existing": True},)
 
 	id = sa.Column(sa.String(36), primary_key=True)
-	partner_id = sa.Column(sa.String(36), sa.ForeignKey("platform_edi_partner.id"), nullable=False, index=True)
+	partner_id = sa.Column(sa.String(36), sa.ForeignKey("edi_partner.id"), nullable=False, index=True)
 	tenant_id = sa.Column(sa.String(36), nullable=False, index=True)
 	message_type = sa.Column(sa.String(10), nullable=False, comment="850, ORDERS, INVOIC, UBL, ETIMS")
 	payload = sa.Column(sa.Text, nullable=False)

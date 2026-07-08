@@ -15,15 +15,19 @@ class EDIPlugin(BasePlugin):
 			version="1.0.0",
 			description="Open EDI framework — X12, EDIFACT, Peppol BIS3, KE eTIMS message handling",
 			author="PgAppForge Contributors",
-			tags=["platform", "edi", "x12", "edifact", "peppol", "integration"],
+			tags=["platform", "edi", "x12", "edifact", "peppol", "etims", "integration"],
 			priority=PluginPriority.NORMAL,
 		)
 
 	def initialize(self) -> None: pass
-	def get_events(self) -> list[str]: return ["platform.edi.message_sent", "platform.edi.message_received", "platform.edi.message_error"]
+	def get_events(self) -> list[str]: return ["platform.edi.message.sent", "platform.edi.message.received", "platform.edi.partner.registered", "platform.edi.parse.error"]
 	def subscribe_to(self) -> list[str]: return []
 	def register_models(self) -> list: from pgappforge.plugins.erp.platform.edi import models; return [models.EDIPartner, models.EDIMessage]
 	def register_views(self) -> None: pass
 
 
-__all__ = ["EDIPlugin"]
+def create_plugin(appbuilder=None) -> EDIPlugin:
+	return EDIPlugin(appbuilder)
+
+
+__all__ = ["EDIPlugin", "create_plugin"]

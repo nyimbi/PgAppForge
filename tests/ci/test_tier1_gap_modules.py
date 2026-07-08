@@ -160,7 +160,7 @@ def test_peppol_bis3_xml():
 	svc = EDIService()
 	xml = svc.format_peppol_bis3({"id": "INV-001", "date": "2024-01-01", "total_cents": 100000, "tax_cents": 16000, "supplier_name": "SupplierCo", "customer_name": "BuyerCo"})
 	assert "Invoice" in xml
-	assert "100.00" in xml
+	assert "1000.00" in xml
 
 
 def test_tenant_plan_defaults():
