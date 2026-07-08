@@ -85,8 +85,8 @@ class NLAnalyticsPlugin(BasePlugin):
 			"NL_ANALYTICS_ENABLED": True,
 			"NL_ANALYTICS_MAX_ROWS": 500,
 			# LLM config is shared with the NLP plugin
-			"LITELLM_URL": "http://84.247.181.100:4000/v1",
-			"LITELLM_API_KEY": "sk-pjs-litellm-master-key",
+			"LITELLM_URL": "http://localhost:4000/v1",
+			"LITELLM_API_KEY": "",
 			"LLM_MODEL": "gpt-4o",
 		}
 		try:

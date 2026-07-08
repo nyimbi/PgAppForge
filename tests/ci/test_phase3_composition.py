@@ -7,6 +7,9 @@ Covers:
 """
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 
 
@@ -79,7 +82,7 @@ def test_composable_pipe_flattens():
 
 
 def test_parallel_composable():
-	from pgappforge.ai.pipeline import Lambda, Passthrough, ParallelComposable
+	from pgappforge.ai.pipeline import Lambda, Passthrough
 	double = Lambda(lambda x, **kw: x * 2, name='double')
 	# parallel() runs _first then fans result to branches
 	# double.invoke(4) = 8, then branches get 8
@@ -111,6 +114,55 @@ def test_sql_step_requires_session():
 		step.invoke({})
 
 
+def test_llm_step_uses_safe_local_defaults(monkeypatch):
+	from pgappforge.ai.pipeline import LLMStep
+
+	calls = {}
+
+	def fake_completion(**kwargs):
+		calls.update(kwargs)
+		return types.SimpleNamespace(
+			choices=[types.SimpleNamespace(
+				message=types.SimpleNamespace(content="done"),
+			)]
+		)
+
+	monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=fake_completion))
+	monkeypatch.delenv("LITELLM_URL", raising=False)
+	monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
+	monkeypatch.delenv("LITELLM_API_KEY", raising=False)
+
+	result = LLMStep(system="summarize", max_tokens=32).invoke("hello")
+
+	assert result == "done"
+	assert calls["api_base"] == "http://localhost:4000/v1"
+	assert calls["api_key"] == ""
+	assert calls["model"] == "gpt-4o-mini"
+	assert calls["max_tokens"] == 32
+
+
+def test_llm_step_rejects_unsafe_gateway(monkeypatch):
+	from pgappforge.ai.pipeline import LLMStep
+	from pgappforge.plugins.erp.platform.nlp.client import LLMConfigError
+
+	monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=lambda **kw: None))
+	monkeypatch.delenv("LITELLM_URL", raising=False)
+	monkeypatch.setenv("LITELLM_BASE_URL", "http://example.com:4000/v1")
+
+	with pytest.raises(LLMConfigError):
+		LLMStep().invoke("hello")
+
+
+def test_llm_step_rejects_injected_api_key(monkeypatch):
+	from pgappforge.ai.pipeline import LLMStep
+	from pgappforge.plugins.erp.platform.nlp.client import LLMConfigError
+
+	monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=lambda **kw: None))
+
+	with pytest.raises(LLMConfigError):
+		LLMStep(api_key="token\r\nX-Test: yes").invoke("hello")
+
+
 def test_runnable_protocol_is_abstract():
 	from pgappforge.ai.pipeline import Runnable
 	with pytest.raises(TypeError):
@@ -125,6 +177,7 @@ def test_aggregation_imports():
 	)
 	assert SYSTEM_TENANT_ID == 'SYSTEM'
 	assert callable(CrossTenantAggregator)
+	assert callable(SystemSession)
 
 
 def test_aggregation_safety_validation_table():
@@ -183,6 +236,10 @@ def test_federation_imports():
 		federated_type, key_field,
 	)
 	assert callable(FederationRegistry)
+	assert callable(FederatedTypeEntry)
+	assert callable(get_federation_registry)
+	assert callable(federated_type)
+	assert callable(key_field)
 
 
 def test_federation_registry_register_and_list():

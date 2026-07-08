@@ -132,7 +132,8 @@ class LLMStep(Runnable):
 	Args:
 		system:    System prompt text.
 		model:     LiteLLM model string (default: 'gpt-4o-mini').
-		gateway:   Base URL for LiteLLM gateway (reads LITELLM_BASE_URL env if None).
+		gateway:   Base URL for LiteLLM gateway (reads LITELLM_URL or
+		           LITELLM_BASE_URL env if None).
 		api_key:   API key (reads LITELLM_API_KEY env if None).
 	"""
 
@@ -156,28 +157,63 @@ class LLMStep(Runnable):
 			import litellm
 		except ImportError as exc:
 			raise ImportError("LLMStep requires 'litellm': pip install litellm") from exc
+		from pgappforge.plugins.erp.platform.nlp.client import (
+			LLMClient,
+			LLMResponseError,
+		)
 
-		base_url = self.gateway or os.getenv("LITELLM_BASE_URL", "http://84.247.181.100:4000/v1")
-		api_key = self.api_key or os.getenv("LITELLM_API_KEY", "sk-pgappforge")
+		gateway = (
+			self.gateway
+			if self.gateway is not None
+			else os.getenv("LITELLM_URL") or os.getenv("LITELLM_BASE_URL") or "http://localhost:4000/v1"
+		)
+		api_key = self.api_key if self.api_key is not None else os.getenv("LITELLM_API_KEY", "")
+		base_url = LLMClient._normalize_base_url(gateway)
+		api_key = LLMClient._safe_header_value(api_key)
+		model = LLMClient._normalize_model(self.model, "model")
+		max_tokens = LLMClient._normalize_max_tokens(self.max_tokens)
 
-		user_content = input if isinstance(input, str) else str(input)
+		user_content = self._normalize_text(input, "input", max_length=100_000)
 		messages = []
 		if self.system:
-			messages.append({"role": "system", "content": self.system})
+			messages.append({
+				"role": "system",
+				"content": self._normalize_text(self.system, "system", max_length=20_000),
+			})
 		messages.append({"role": "user", "content": user_content})
 
-		log.debug("LLMStep: calling %s with %d chars", self.model, len(user_content))
+		log.debug("LLMStep: calling %s with %d chars", model, len(user_content))
 		resp = litellm.completion(
-			model=self.model,
+			model=model,
 			messages=messages,
 			api_base=base_url,
 			api_key=api_key,
-			max_tokens=self.max_tokens,
+			max_tokens=max_tokens,
 		)
-		return resp.choices[0].message.content or ""
+		try:
+			choice = resp.choices[0]
+			content = choice.message.content
+		except (AttributeError, IndexError, TypeError) as exc:
+			raise LLMResponseError("LiteLLM response missing completion content") from exc
+		if content is None:
+			return ""
+		if not isinstance(content, str):
+			raise LLMResponseError("LiteLLM completion content must be text")
+		return content
 
 	def __repr__(self) -> str:
 		return f"LLMStep(model={self.model!r}, system={self.system[:30]!r})"
+
+	@staticmethod
+	def _normalize_text(value: Any, field_name: str, *, max_length: int) -> str:
+		text = value if isinstance(value, str) else str(value)
+		if "\x00" in text:
+			from pgappforge.plugins.erp.platform.nlp.client import LLMConfigError
+			raise LLMConfigError(f"{field_name} cannot contain NUL bytes")
+		if len(text) > max_length:
+			from pgappforge.plugins.erp.platform.nlp.client import LLMConfigError
+			raise LLMConfigError(f"{field_name} cannot exceed {max_length} characters")
+		return text
 
 
 class SQLStep(Runnable):

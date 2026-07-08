@@ -4,8 +4,8 @@ pgappforge/ai/codegen.py
 LLM-powered PgAppForge module generation from natural language descriptions.
 
 Config (Flask app.config):
-    LITELLM_URL     = "http://84.247.181.100:4000/v1"
-    LITELLM_API_KEY = "sk-pjs-litellm-master-key"
+    LITELLM_URL     = "http://localhost:4000/v1"
+    LITELLM_API_KEY = ""  # set from environment or deployment secrets
     CODEGEN_MODEL   = "gpt-4o"
 
 Usage:
@@ -31,7 +31,7 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 

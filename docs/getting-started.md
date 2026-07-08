@@ -153,12 +153,13 @@ install_all(appbuilder)  # activates all 20 plugins
 ## AI / ML (NLP, RAG, ML Predictions)
 
 Requires the **LiteLLM gateway** — a running LiteLLM proxy that provides
-OpenAI-compatible endpoints. The project's live gateway is pre-configured as default.
+OpenAI-compatible endpoints. Configure the gateway URL and key from your
+deployment environment; the local default is safe but may be unavailable.
 
 ```python
 # config.py — AI/ML settings
-LITELLM_URL          = "http://84.247.181.100:4000/v1"   # LiteLLM proxy
-LITELLM_API_KEY      = "sk-pjs-litellm-master-key"
+LITELLM_URL          = "http://localhost:4000/v1"   # or your HTTPS LiteLLM proxy
+LITELLM_API_KEY      = ""                           # set via deployment secrets
 LLM_MODEL            = "gpt-4o"            # for complex tasks
 LLM_FAST_MODEL       = "gpt-4o-mini"       # for classification, Q&A
 LLM_EMBEDDING_MODEL  = "text-embedding-ada-002"   # 1536-dim vectors

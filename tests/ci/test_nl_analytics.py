@@ -12,9 +12,8 @@ Run with: uv run pytest -vxs tests/ci/test_nl_analytics.py
 """
 from __future__ import annotations
 
-import types
-
-import pytest
+import datetime
+import decimal
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +51,11 @@ class TestNLAnalyticsImports:
 		assert NLAnalyticsPlugin.domain == "platform"
 		assert "foundation" in NLAnalyticsPlugin.depends_on
 		assert "nlp" in NLAnalyticsPlugin.depends_on
+		assert callable(create_plugin)
+		assert callable(NLAnalyticsService)
+		assert callable(NLAnalyticsDashboardView)
+		assert callable(create_cache_table_ddl)
+		assert callable(ensure_cache_table)
 
 
 class TestSemanticImports:
@@ -65,6 +69,10 @@ class TestSemanticImports:
 			SemanticDimension,
 			register_default_semantics,
 		)
+		assert callable(SemanticRegistry)
+		assert callable(SemanticModel)
+		assert callable(SemanticMetric)
+		assert callable(SemanticDimension)
 		assert callable(register_default_semantics)
 
 	def test_dataclasses_instantiate(self):
@@ -147,7 +155,6 @@ class TestNLAnalyticsServiceLogic:
 
 	def test_jsonify_rows_handles_decimal(self):
 		from pgappforge.plugins.erp.platform.nl_analytics.services import _jsonify_rows
-		import decimal, datetime
 		rows = [
 			{"amount": decimal.Decimal("1234.56"), "name": "foo", "nul": None},
 			{"amount": decimal.Decimal("0"), "ts": datetime.datetime(2026, 1, 1)},
@@ -370,3 +377,15 @@ class TestNLAnalyticsPluginMetadata:
 
 		plugin = NLAnalyticsPlugin(_FakeAB())
 		assert plugin.register_models() == []
+
+	def test_plugin_initialize_uses_safe_llm_defaults(self):
+		from pgappforge.plugins.erp.platform.nl_analytics import NLAnalyticsPlugin
+
+		class _FakeAB:
+			pass
+
+		plugin = NLAnalyticsPlugin(_FakeAB())
+		plugin.initialize()
+
+		assert plugin.config["LITELLM_URL"] == "http://localhost:4000/v1"
+		assert plugin.config["LITELLM_API_KEY"] == ""
