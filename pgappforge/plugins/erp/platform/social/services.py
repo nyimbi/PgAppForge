@@ -16,16 +16,38 @@ All methods accept an explicit SQLAlchemy Session.  No Flask context assumed.
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
+import re
+import urllib.parse
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 log = logging.getLogger(__name__)
+
+_REMOTE_DOMAIN_RE = re.compile(
+	r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+)
+_REMOTE_USERNAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$")
+_BLOCKED_HOSTS = {
+	"localhost",
+	"metadata.google.internal",
+	"metadata",
+}
+_BLOCKED_HOST_SUFFIXES = (
+	".localhost",
+	".local",
+	".internal",
+	".home",
+	".lan",
+)
+_MAX_REMOTE_JSON_BYTES = 1_000_000
+_MAX_FEDERATION_INBOXES = 100
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +80,100 @@ class ReactionAlreadyExistsError(SocialServiceError):
 
 class FederatedSocialService:
 	"""Stateless service for ActivityPub-based federated social features."""
+
+	@staticmethod
+	def _normalize_remote_username(value: Any) -> str:
+		username = str(value or "").strip()
+		if not _REMOTE_USERNAME_RE.fullmatch(username):
+			raise SocialServiceError("Remote ActivityPub username is malformed")
+		return username
+
+	@staticmethod
+	def _normalize_remote_domain(value: Any) -> str:
+		domain = str(value or "").strip().rstrip(".").lower()
+		if not domain:
+			raise SocialServiceError("Remote ActivityPub domain is required")
+		if "/" in domain or "\\" in domain or "@" in domain or ":" in domain:
+			raise SocialServiceError("Remote ActivityPub domain is malformed")
+		FederatedSocialService._reject_unsafe_host(domain)
+		if not _REMOTE_DOMAIN_RE.fullmatch(domain):
+			raise SocialServiceError("Remote ActivityPub domain must be a public DNS name")
+		return domain
+
+	@staticmethod
+	def _reject_unsafe_host(hostname: str) -> None:
+		host = hostname.strip().strip("[]").lower()
+		if host in _BLOCKED_HOSTS or any(host.endswith(suffix) for suffix in _BLOCKED_HOST_SUFFIXES):
+			raise SocialServiceError("Remote ActivityPub host is not allowed")
+		try:
+			ipaddress.ip_address(host)
+		except ValueError:
+			return
+		raise SocialServiceError("Remote ActivityPub IP literal hosts are not allowed")
+
+	@classmethod
+	def _normalize_remote_url(
+		cls,
+		value: Any,
+		field_name: str,
+		*,
+		allowed_domain: str | None = None,
+	) -> str:
+		url = str(value or "").strip()
+		if not url:
+			raise SocialServiceError(f"{field_name} is required")
+		parsed = urllib.parse.urlsplit(url)
+		if parsed.scheme != "https" or not parsed.netloc:
+			raise SocialServiceError(f"{field_name} must be an absolute HTTPS URL")
+		if parsed.username or parsed.password:
+			raise SocialServiceError(f"{field_name} cannot include credentials")
+		if parsed.fragment:
+			raise SocialServiceError(f"{field_name} cannot include a fragment")
+		host = cls._normalize_remote_domain(parsed.hostname)
+		if allowed_domain and not cls._host_matches_domain(host, allowed_domain):
+			raise SocialServiceError(f"{field_name} host must match the WebFinger domain")
+		netloc = host
+		try:
+			port = parsed.port
+		except ValueError as exc:
+			raise SocialServiceError(f"{field_name} has an invalid port") from exc
+		if port is not None:
+			raise SocialServiceError(f"{field_name} cannot include an explicit port")
+		return urllib.parse.urlunsplit(
+			(parsed.scheme, netloc, parsed.path or "/", parsed.query, "")
+		)
+
+	@staticmethod
+	def _host_matches_domain(host: str, domain: str) -> bool:
+		return host == domain or host.endswith(f".{domain}")
+
+	@staticmethod
+	def _read_json_object_response(resp: Any, context: str) -> dict[str, Any]:
+		payload = resp.read(_MAX_REMOTE_JSON_BYTES + 1)
+		if len(payload) > _MAX_REMOTE_JSON_BYTES:
+			raise SocialServiceError(f"{context} response is too large")
+		data = json.loads(payload)
+		if not isinstance(data, dict):
+			raise SocialServiceError(f"{context} response must be a JSON object")
+		return data
+
+	@classmethod
+	def _normalize_recipient_inboxes(cls, inboxes: list[str]) -> tuple[list[str], int]:
+		normalized: list[str] = []
+		seen: set[str] = set()
+		rejected = 0
+		for inbox in inboxes[:_MAX_FEDERATION_INBOXES]:
+			try:
+				url = cls._normalize_remote_url(inbox, "recipient inbox")
+			except SocialServiceError as exc:
+				rejected += 1
+				log.warning("FederatedSocialService: rejected unsafe inbox %r: %s", inbox, exc)
+				continue
+			if url not in seen:
+				seen.add(url)
+				normalized.append(url)
+		rejected += max(0, len(inboxes) - _MAX_FEDERATION_INBOXES)
+		return normalized, rejected
 
 	# ------------------------------------------------------------------
 	# Post
@@ -271,7 +387,15 @@ class FederatedSocialService:
 		# Fediverse handle @user@domain
 		if handle.startswith("@") and "@" in handle[1:]:
 			parts = handle.lstrip("@").split("@", 1)
-			username, domain = parts[0], parts[1]
+			try:
+				username = self._normalize_remote_username(parts[0])
+				domain = self._normalize_remote_domain(parts[1])
+			except SocialServiceError as exc:
+				log.warning(
+					"FederatedSocialService: rejected unsafe remote handle %r: %s",
+					handle, exc,
+				)
+				return None
 			# Check local cache first
 			existing = session.execute(
 				select(Actor).where(
@@ -309,9 +433,15 @@ class FederatedSocialService:
 
 		try:
 			import urllib.request
-			wf_url = f"https://{domain}/.well-known/webfinger?resource=acct:{username}@{domain}"
+			username = self._normalize_remote_username(username)
+			domain = self._normalize_remote_domain(domain)
+			resource = f"acct:{username}@{domain}"
+			wf_url = (
+				f"https://{domain}/.well-known/webfinger?"
+				+ urllib.parse.urlencode({"resource": resource})
+			)
 			with urllib.request.urlopen(wf_url, timeout=5) as resp:  # noqa: S310
-				wf_data = json.loads(resp.read())
+				wf_data = self._read_json_object_response(resp, "WebFinger")
 
 			# Extract ActivityPub actor URL from links
 			actor_url = None
@@ -321,10 +451,55 @@ class FederatedSocialService:
 					break
 			if not actor_url:
 				return None
+			actor_url = self._normalize_remote_url(
+				actor_url,
+				"actor_url",
+				allowed_domain=domain,
+			)
 
 			# Fetch actor document
 			with urllib.request.urlopen(actor_url, timeout=5) as resp:  # noqa: S310
-				actor_doc = json.loads(resp.read())
+				actor_doc = self._read_json_object_response(resp, "actor document")
+
+			inbox_url = (
+				self._normalize_remote_url(
+					actor_doc.get("inbox"),
+					"inbox_url",
+					allowed_domain=domain,
+				)
+				if actor_doc.get("inbox")
+				else None
+			)
+			outbox_url = (
+				self._normalize_remote_url(
+					actor_doc.get("outbox"),
+					"outbox_url",
+					allowed_domain=domain,
+				)
+				if actor_doc.get("outbox")
+				else None
+			)
+			followers_url = (
+				self._normalize_remote_url(
+					actor_doc.get("followers"),
+					"followers_url",
+					allowed_domain=domain,
+				)
+				if actor_doc.get("followers")
+				else None
+			)
+			following_url = (
+				self._normalize_remote_url(
+					actor_doc.get("following"),
+					"following_url",
+					allowed_domain=domain,
+				)
+				if actor_doc.get("following")
+				else None
+			)
+			public_key = actor_doc.get("publicKey")
+			if not isinstance(public_key, dict):
+				public_key = {}
 
 			stub = Actor(
 				tenant_id=tenant_id,
@@ -332,14 +507,12 @@ class FederatedSocialService:
 				username=actor_doc.get("preferredUsername", username),
 				display_name=actor_doc.get("name", username),
 				actor_type="PERSON",
-				inbox_url=actor_doc.get("inbox"),
-				outbox_url=actor_doc.get("outbox"),
-				followers_url=actor_doc.get("followers"),
-				following_url=actor_doc.get("following"),
+				inbox_url=inbox_url,
+				outbox_url=outbox_url,
+				followers_url=followers_url,
+				following_url=following_url,
 				profile_url=actor_url,
-				public_key_pem=(
-					actor_doc.get("publicKey", {}).get("publicKeyPem")
-				),
+				public_key_pem=public_key.get("publicKeyPem"),
 				is_local=False,
 				domain=domain,
 			)
@@ -510,6 +683,11 @@ class FederatedSocialService:
 
 		if not recipient_inboxes:
 			return {"delivered": 0, "failed": 0, "inboxes": []}
+		recipient_inboxes, rejected_inboxes = self._normalize_recipient_inboxes(
+			recipient_inboxes
+		)
+		if not recipient_inboxes:
+			return {"delivered": 0, "failed": rejected_inboxes, "inboxes": []}
 
 		activity_payload = json.dumps({
 			"@context": "https://www.w3.org/ns/activitystreams",
@@ -520,9 +698,8 @@ class FederatedSocialService:
 			"published": activity.published_at.isoformat(),
 		}).encode()
 
-		delivered, failed = 0, 0
+		delivered, failed = 0, rejected_inboxes
 		import urllib.request
-		import urllib.error
 
 		for inbox in recipient_inboxes:
 			try:
@@ -548,7 +725,11 @@ class FederatedSocialService:
 				failed += 1
 
 		# Derive unique domains for event
-		domains = list({inbox.split("/")[2] for inbox in recipient_inboxes if "/" in inbox})
+		domains = sorted({
+			urllib.parse.urlsplit(inbox).hostname
+			for inbox in recipient_inboxes
+			if urllib.parse.urlsplit(inbox).hostname
+		})
 
 		emit_event(
 			ActivityFederatedEvent(
@@ -584,7 +765,7 @@ class FederatedSocialService:
 
 		Unknown types are logged and ignored.
 		"""
-		from pgappforge.plugins.erp.platform.social.models import Actor, SocialActivity, Follow, Reaction
+		from pgappforge.plugins.erp.platform.social.models import Actor, SocialActivity
 		from pgappforge.plugins.erp.platform.social.events import ActivityReceivedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
