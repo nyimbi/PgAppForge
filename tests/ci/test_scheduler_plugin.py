@@ -322,6 +322,7 @@ class TestRunJob:
     def setup_method(self):
         from pgappforge.plugins.erp.platform.scheduler.services import BatchSchedulerService
         self.svc = BatchSchedulerService()
+        self.svc.allowed_module_prefixes = ("pgappforge.plugins.", "_sched_ci_")
         _register_dummy_module("do_work", return_value=99)
 
     def test_success_path_returns_success_dict(self):
@@ -349,6 +350,14 @@ class TestRunJob:
         sess = _fake_session()
         job = _make_job_mock("DAILY", method_name="nonexistent_xyz")
         self.svc._run_job(job, "tenant-1", sess)
+        assert sess.execute.call_count == 3
+
+    def test_invalid_target_is_recorded_as_failed(self):
+        sess = _fake_session()
+        job = _make_job_mock("DAILY", plugin_path="../bad")
+        result = self.svc._run_job(job, "tenant-1", sess)
+        assert result["status"] == "FAILED"
+        assert "plugin_path" in result["error"]
         assert sess.execute.call_count == 3
 
     def test_session_injected_when_parameter_present(self):
@@ -452,7 +461,7 @@ class TestRegisterJob:
             name="existing.job",
             description="desc",
             frequency="DAILY",
-            plugin_path="some.module",
+            plugin_path="pgappforge.plugins.some.module",
             service_class="Svc",
             method_name="run",
             tenant_id="t1",
@@ -469,7 +478,7 @@ class TestRegisterJob:
             name="new.job",
             description="desc",
             frequency="WEEKLY",
-            plugin_path="some.module",
+            plugin_path="pgappforge.plugins.some.module",
             service_class="Svc",
             method_name="run",
             tenant_id="t1",
@@ -480,6 +489,71 @@ class TestRegisterJob:
         assert result.name == "new.job"
         assert result.frequency == "WEEKLY"
         assert result.is_active is True
+
+    def test_register_rejects_invalid_frequency(self):
+        from pgappforge.plugins.erp.platform.scheduler.services import (
+            InvalidJobDefinitionError,
+        )
+        with pytest.raises(InvalidJobDefinitionError, match="frequency"):
+            self.svc.register_job(
+                name="new.job",
+                description="desc",
+                frequency="FORTNIGHT",
+                plugin_path="pgappforge.plugins.some.module",
+                service_class="Svc",
+                method_name="run",
+                tenant_id="t1",
+                session=_fake_session(),
+            )
+
+    def test_register_rejects_disallowed_module_path(self):
+        from pgappforge.plugins.erp.platform.scheduler.services import (
+            InvalidJobDefinitionError,
+        )
+        with pytest.raises(InvalidJobDefinitionError, match="allowed prefixes"):
+            self.svc.register_job(
+                name="new.job",
+                description="desc",
+                frequency="DAILY",
+                plugin_path="os",
+                service_class="Svc",
+                method_name="run",
+                tenant_id="t1",
+                session=_fake_session(),
+            )
+
+    def test_register_rejects_private_method_name(self):
+        from pgappforge.plugins.erp.platform.scheduler.services import (
+            InvalidJobDefinitionError,
+        )
+        with pytest.raises(InvalidJobDefinitionError, match="method_name"):
+            self.svc.register_job(
+                name="new.job",
+                description="desc",
+                frequency="DAILY",
+                plugin_path="pgappforge.plugins.some.module",
+                service_class="Svc",
+                method_name="_run",
+                tenant_id="t1",
+                session=_fake_session(),
+            )
+
+    def test_register_rejects_non_json_method_kwargs(self):
+        from pgappforge.plugins.erp.platform.scheduler.services import (
+            InvalidJobDefinitionError,
+        )
+        with pytest.raises(InvalidJobDefinitionError, match="JSON"):
+            self.svc.register_job(
+                name="new.job",
+                description="desc",
+                frequency="DAILY",
+                plugin_path="pgappforge.plugins.some.module",
+                service_class="Svc",
+                method_name="run",
+                tenant_id="t1",
+                session=_fake_session(),
+                method_kwargs={"bad": object()},
+            )
 
 
 # ---------------------------------------------------------------------------

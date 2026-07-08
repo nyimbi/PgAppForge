@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -29,6 +31,21 @@ from sqlalchemy import select, and_
 from pgappforge.plugins.erp.platform.scheduler.models import JobRunLog, ScheduledJob
 
 log = logging.getLogger(__name__)
+
+_DOTTED_NAME_RE = re.compile(
+	r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"
+)
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_VALID_FREQUENCIES = {"HOURLY", "DAILY", "WEEKLY", "MONTHLY", "ONCE"}
+_DEFAULT_JOB_MODULE_PREFIXES = ("pgappforge.plugins.",)
+
+
+class SchedulerServiceError(Exception):
+	"""Base error for scheduler service violations."""
+
+
+class InvalidJobDefinitionError(SchedulerServiceError):
+	"""Scheduled job target or cadence is not safe to execute."""
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +73,8 @@ class BatchSchedulerService:
 	is responsible for providing a properly scoped session (e.g. a Flask
 	request-scoped session or a manually opened session from the engine).
 	"""
+
+	allowed_module_prefixes = _DEFAULT_JOB_MODULE_PREFIXES
 
 	# ------------------------------------------------------------------
 	# Public API
@@ -144,6 +163,11 @@ class BatchSchedulerService:
 		Returns:
 		    The existing or newly-created ScheduledJob instance.
 		"""
+		frequency = self._normalize_frequency(frequency)
+		self._validate_job_target(plugin_path, service_class, method_name)
+		self._validate_job_name(name)
+		self._validate_method_kwargs(method_kwargs or {})
+
 		existing = session.execute(
 			select(ScheduledJob).where(
 				ScheduledJob.name == name,
@@ -299,10 +323,15 @@ class BatchSchedulerService:
 
 		t0 = time.monotonic()
 		try:
+			self._validate_job_definition(job)
 			mod = importlib.import_module(job.plugin_path)
 			cls = getattr(mod, job.service_class)
 			svc = cls()
 			method = getattr(svc, job.method_name)
+			if not callable(method):
+				raise InvalidJobDefinitionError(
+					f"Job method {job.method_name!r} is not callable"
+				)
 
 			# Inject session / tenant_id only when the method signature accepts them
 			kwargs: dict[str, Any] = dict(job.method_kwargs or {})
@@ -334,7 +363,11 @@ class BatchSchedulerService:
 					finished_at=_now(),
 					status="SUCCESS",
 					duration_ms=duration_ms,
-					records_processed=result if isinstance(result, int) else None,
+					records_processed=(
+						result
+						if isinstance(result, int) and not isinstance(result, bool)
+						else None
+					),
 				)
 			)
 			session.flush()
@@ -411,5 +444,81 @@ class BatchSchedulerService:
 		# ONCE — schedule so far ahead it effectively never re-runs
 		return now.replace(year=now.year + 100)
 
+	def _validate_job_definition(self, job: Any) -> None:
+		self._normalize_frequency(getattr(job, "frequency", ""))
+		self._validate_job_target(
+			getattr(job, "plugin_path", ""),
+			getattr(job, "service_class", ""),
+			getattr(job, "method_name", ""),
+		)
+		self._validate_job_name(getattr(job, "name", ""))
+		self._validate_method_kwargs(getattr(job, "method_kwargs", {}) or {})
 
-__all__ = ["BatchSchedulerService"]
+	def _normalize_frequency(self, frequency: str) -> str:
+		normalized = (frequency or "").strip().upper()
+		if normalized not in _VALID_FREQUENCIES:
+			allowed = ", ".join(sorted(_VALID_FREQUENCIES))
+			raise InvalidJobDefinitionError(
+				f"Invalid job frequency {frequency!r}; expected one of {allowed}"
+			)
+		return normalized
+
+	def _validate_job_target(
+		self,
+		plugin_path: str,
+		service_class: str,
+		method_name: str,
+	) -> None:
+		plugin_path = (plugin_path or "").strip()
+		if not _DOTTED_NAME_RE.fullmatch(plugin_path):
+			raise InvalidJobDefinitionError(
+				"plugin_path must be a dotted Python module path"
+			)
+		if not self._matches_allowed_prefix(plugin_path):
+			allowed = ", ".join(self.allowed_module_prefixes)
+			raise InvalidJobDefinitionError(
+				f"plugin_path {plugin_path!r} is not in allowed prefixes: {allowed}"
+			)
+		self._validate_public_identifier(service_class, "service_class")
+		self._validate_public_identifier(method_name, "method_name")
+
+	def _validate_job_name(self, name: str) -> None:
+		if not _DOTTED_NAME_RE.fullmatch((name or "").strip()):
+			raise InvalidJobDefinitionError(
+				"name must be a dotted identifier such as 'module.job_name'"
+			)
+
+	def _validate_public_identifier(self, value: str, field_name: str) -> None:
+		value = (value or "").strip()
+		if not _IDENTIFIER_RE.fullmatch(value) or value.startswith("_"):
+			raise InvalidJobDefinitionError(
+				f"{field_name} must be a public Python identifier"
+			)
+
+	def _validate_method_kwargs(self, method_kwargs: dict) -> None:
+		if not isinstance(method_kwargs, dict):
+			raise InvalidJobDefinitionError("method_kwargs must be a JSON object")
+		try:
+			json.dumps(method_kwargs)
+		except (TypeError, ValueError) as exc:
+			raise InvalidJobDefinitionError(
+				"method_kwargs must be JSON serializable"
+			) from exc
+
+	def _matches_allowed_prefix(self, plugin_path: str) -> bool:
+		for prefix in self.allowed_module_prefixes:
+			normalized = (prefix or "").strip()
+			if not normalized:
+				continue
+			if plugin_path == normalized.rstrip("."):
+				return True
+			if plugin_path.startswith(normalized):
+				return True
+		return False
+
+
+__all__ = [
+	"BatchSchedulerService",
+	"InvalidJobDefinitionError",
+	"SchedulerServiceError",
+]
