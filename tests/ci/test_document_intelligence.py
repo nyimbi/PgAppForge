@@ -16,6 +16,7 @@ import pytest
 
 from pgappforge.plugins.erp.platform.document_intelligence.services import (
 	DocumentIntelligenceService,
+	DocumentIntelligenceValidationError,
 	create_document_extraction_table,
 )
 
@@ -91,7 +92,43 @@ class TestDocumentIntelligenceService:
 		svc = DocumentIntelligenceService()
 		result = svc.extract()
 		assert result["success"] is False
-		assert "No document provided" in result["error"]
+		assert "exactly one" in result["error"]
+
+	def test_extract_unknown_document_type_returns_error(self):
+		svc = DocumentIntelligenceService()
+		with patch.object(svc, "_extract_with_llm_vision") as extract:
+			result = svc.extract(
+				file_bytes=b"fake-image",
+				document_type="unknown",
+				mime_type="image/jpeg",
+			)
+		assert result["success"] is False
+		assert "Unsupported document_type" in result["error"]
+		extract.assert_not_called()
+
+	def test_extract_invalid_mime_type_returns_error(self):
+		svc = DocumentIntelligenceService()
+		with patch.object(svc, "_extract_with_llm_vision") as extract:
+			result = svc.extract(
+				file_bytes=b"fake-image",
+				document_type="invoice",
+				mime_type="text/html",
+			)
+		assert result["success"] is False
+		assert "Unsupported mime_type" in result["error"]
+		extract.assert_not_called()
+
+	def test_extract_invalid_b64_returns_error(self):
+		svc = DocumentIntelligenceService()
+		result = svc.extract(file_b64="not valid base64 !!!", document_type="invoice")
+		assert result["success"] is False
+		assert "base64" in result["error"]
+
+	def test_extract_rejects_ambiguous_document_inputs(self):
+		svc = DocumentIntelligenceService()
+		result = svc.extract(file_bytes=b"fake", file_b64=base64.standard_b64encode(b"fake").decode())
+		assert result["success"] is False
+		assert "exactly one" in result["error"]
 
 	def test_extract_llm_failure_non_pdf_returns_error(self):
 		"""Non-PDF file with LLM failure returns error (no PDF fallback)."""
@@ -169,15 +206,44 @@ class TestSaveExtraction:
 		assert entry_id is not None
 		assert len(entry_id) > 0
 		mock_session.execute.assert_called_once()
+		params = mock_session.execute.call_args[0][1]
+		assert params["tenant_id"] == "t-001"
+		assert params["ref_type"] == "purchase_order"
+		assert params["ref_id"] == "po-001"
+		assert params["doc_type"] == "invoice"
+		assert params["confidence"] == 0.85
+		assert json.loads(params["data"])["vendor_name"] == "Acme Supplies Ltd"
 
 	def test_save_handles_db_error_gracefully(self):
 		svc = DocumentIntelligenceService()
 		mock_session = MagicMock()
 		mock_session.execute.side_effect = Exception("DB offline")
-		extraction = {"document_type": "invoice", "extracted_fields": {}, "confidence": 0, "model_used": ""}
+		extraction = {
+			"success": True,
+			"document_type": "invoice",
+			"extracted_fields": {},
+			"confidence": 0,
+			"model_used": "",
+		}
 
 		result = svc.save_extraction(extraction, "ref", "id", "t1", mock_session)
 		assert result is None
+
+	def test_save_skips_failed_extraction(self):
+		svc = DocumentIntelligenceService()
+		mock_session = MagicMock()
+		extraction = {"success": False, "document_type": "invoice", "extracted_fields": {}}
+
+		result = svc.save_extraction(extraction, "ref", "id", "t1", mock_session)
+		assert result is None
+		mock_session.execute.assert_not_called()
+
+	def test_parse_json_object_from_wrapped_response(self):
+		svc = DocumentIntelligenceService()
+
+		assert svc._parse_json_object("Here is the JSON:\n```json\n{\"ok\": true}\n```") == {"ok": True}
+		with pytest.raises(DocumentIntelligenceValidationError, match="JSON object"):
+			svc._parse_json_object("[1, 2, 3]")
 
 
 # ---------------------------------------------------------------------------
@@ -192,12 +258,10 @@ class TestExtractionPrompts:
 			assert doc_type in svc.EXTRACTION_PROMPTS
 			assert len(svc.EXTRACTION_PROMPTS[doc_type]) > 50
 
-	def test_unknown_doc_type_uses_invoice_prompt(self):
-		"""_extract_with_llm_vision falls back to invoice prompt for unknown type."""
+	def test_unknown_doc_type_is_rejected(self):
 		svc = DocumentIntelligenceService()
-		# The method internally uses .get(doc_type, EXTRACTION_PROMPTS["invoice"])
-		prompt = svc.EXTRACTION_PROMPTS.get("xyz", svc.EXTRACTION_PROMPTS["invoice"])
-		assert "vendor_name" in prompt
+		with pytest.raises(DocumentIntelligenceValidationError, match="Unsupported document_type"):
+			svc._normalize_document_type("xyz")
 
 
 # ---------------------------------------------------------------------------
