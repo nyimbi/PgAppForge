@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from flask import jsonify, render_template, request
-from pgappforge import ModelView, expose
+from pgappforge import expose
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
@@ -50,7 +50,7 @@ class RAGDocumentView(BaseERPModelView):
 		"source_id",
 		"content",
 		"language",
-		"metadata",
+		"doc_metadata",
 		"chunk_count",
 		"indexed_at",
 		"is_active",
@@ -63,7 +63,7 @@ class RAGDocumentView(BaseERPModelView):
 		"source_id",
 		"content",
 		"language",
-		"metadata",
+		"doc_metadata",
 		"is_active",
 	]
 	edit_columns = [
@@ -71,7 +71,7 @@ class RAGDocumentView(BaseERPModelView):
 		"source_type",
 		"source_id",
 		"language",
-		"metadata",
+		"doc_metadata",
 		"is_active",
 	]
 
@@ -82,6 +82,7 @@ class RAGDocumentView(BaseERPModelView):
 		"chunk_count":  "Chunks",
 		"indexed_at":   "Indexed At",
 		"is_active":    "Active",
+		"doc_metadata": "Metadata",
 		"created_at":   "Created",
 		"updated_at":   "Updated",
 	}
@@ -194,11 +195,13 @@ class RAGDashboardView(BaseERPView):
 				question       = question,
 				tenant_id      = self._tenant_id(),
 				session        = self._session(),
-				top_k          = int(payload.get("top_k", 5)),
+				top_k          = payload.get("top_k", 5),
 				source_types   = payload.get("source_types") or None,
 				system_context = payload.get("system_context", ""),
 			)
 			return jsonify(result)
+		except ValueError as exc:
+			return jsonify({"error": str(exc)}), 400
 		except Exception as exc:
 			log.exception("RAGDashboardView.ask unhandled error")
 			return jsonify({"error": str(exc)}), 500

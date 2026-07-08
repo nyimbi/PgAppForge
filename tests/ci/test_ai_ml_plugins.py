@@ -3,6 +3,8 @@ All structural/import tests — no LLM calls needed."""
 from __future__ import annotations
 import inspect
 
+import pytest
+
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
@@ -149,6 +151,129 @@ def test_rag_embed_fallback_no_llm():
 		assert result == [None]
 	finally:
 		c_mod.LLMClient.embed = orig
+
+def test_rag_ingest_document_stores_doc_metadata():
+	from pgappforge.plugins.erp.platform.rag.services import RAGService
+
+	class _NoExisting:
+		def scalar_one_or_none(self):
+			return None
+
+	class _Session:
+		def __init__(self):
+			self.added = []
+
+		def execute(self, stmt):
+			return _NoExisting()
+
+		def add(self, obj):
+			self.added.append(obj)
+
+		def flush(self):
+			return None
+
+	svc = RAGService()
+	svc._embed_chunks = lambda chunks: [[1.0, 0.0] for _ in chunks]
+	doc = svc.ingest_document(
+		"Policy",
+		"Employee travel policy content.",
+		"POLICY",
+		"tenant-1",
+		_Session(),
+		metadata={"department": "finance"},
+		chunk_size=100,
+		overlap=0,
+	)
+
+	assert doc.doc_metadata == {"department": "finance"}
+
+def test_rag_rejects_invalid_chunk_overlap():
+	from pgappforge.plugins.erp.platform.rag.services import RAGService, RAGValidationError
+
+	with pytest.raises(RAGValidationError, match="overlap"):
+		RAGService()._chunk_text("x" * 500, chunk_size=100, overlap=100)
+
+def test_rag_search_clamps_top_k_and_normalizes_sources():
+	from pgappforge.plugins.erp.platform.rag.services import RAGService
+
+	captured = {}
+	svc = RAGService()
+	svc._embed_chunks = lambda chunks: [[1.0, 0.0]]
+
+	def fake_pgvector(q_vec, tenant_id, session, top_k, source_types):
+		captured["top_k"] = top_k
+		captured["source_types"] = source_types
+		return []
+
+	svc._search_pgvector = fake_pgvector
+
+	assert svc.search(
+		"travel policy",
+		"tenant-1",
+		object(),
+		top_k=999,
+		source_types=[" POLICY ", "MANUAL", "POLICY"],
+	) == []
+	assert captured == {"top_k": 20, "source_types": ["POLICY", "MANUAL"]}
+
+def test_rag_search_rejects_invalid_source_type():
+	from pgappforge.plugins.erp.platform.rag.services import RAGService, RAGValidationError
+
+	with pytest.raises(RAGValidationError, match="source_type"):
+		RAGService().search(
+			"travel policy",
+			"tenant-1",
+			object(),
+			source_types=["POLICY;DROP"],
+		)
+
+def test_rag_ingest_erp_data_accepts_empty_source_list():
+	from pgappforge.plugins.erp.platform.rag.services import RAGService
+
+	assert RAGService().ingest_erp_data("tenant-1", object(), sources=[]) == {}
+
+def test_rag_pgvector_uses_bound_params_for_filters():
+	from pgappforge.plugins.erp.platform.rag.services import RAGService
+
+	class _Rows:
+		def fetchall(self):
+			return [("chunk-1", "doc-1", "Policy", "Content", "POLICY", 0.75)]
+
+	class _Session:
+		def __init__(self):
+			self.sql = ""
+			self.params = {}
+
+		def execute(self, stmt, params):
+			self.sql = str(stmt)
+			self.params = params
+			return _Rows()
+
+	session = _Session()
+	rows = RAGService()._search_pgvector(
+		[1.0, 0.0],
+		"tenant-1",
+		session,
+		999,
+		["POLICY"],
+	)
+
+	assert rows == [{
+		"chunk_id": "chunk-1",
+		"document_id": "doc-1",
+		"title": "Policy",
+		"content": "Content",
+		"source_type": "POLICY",
+		"score": 0.75,
+	}]
+	assert "{source_filter}" not in session.sql
+	assert "d.source_type = ANY(:source_types)" in session.sql
+	assert session.params == {
+		"tenant_id": "tenant-1",
+		"top_k": 20,
+		"vec": "[1.0,0.0]",
+		"source_types": ["POLICY"],
+	}
 
 def test_rag_plugin_metadata():
 	from pgappforge.plugins.erp.platform.rag import RAGPlugin

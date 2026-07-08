@@ -14,17 +14,27 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import re
 from datetime import datetime, timezone
 from typing import Any
+
+from pgappforge.plugins.erp.platform.nlp.client import cosine_similarity as _cosine_similarity
 
 log = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+_MAX_CHUNK_SIZE = 8000
+_MAX_CONTEXT_CHARS = 12000
+_MAX_QUERY_CHARS = 4000
+_MAX_SOURCE_TYPES = 20
+_MAX_SYSTEM_CONTEXT_CHARS = 4000
+_MAX_TOP_K = 20
+_MIN_CHUNK_SIZE = 100
+_SOURCE_TYPE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 
-from pgappforge.plugins.erp.platform.nlp.client import cosine_similarity as _cosine_similarity  # shared utility
+
+class RAGValidationError(ValueError):
+	"""Raised when RAG service inputs violate platform retrieval contracts."""
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +58,7 @@ class RAGService:
 		metadata: dict | None = None,
 		chunk_size: int = 800,
 		overlap: int = 100,
-	) -> "RAGDocument":  # type: ignore[name-defined]
+	) -> Any:
 		"""Ingest a text document: hash-dedup, chunk, embed, persist.
 
 		Args:
@@ -68,6 +78,14 @@ class RAGService:
 		"""
 		from pgappforge.plugins.erp.platform.rag.models import RAGDocument, RAGChunk
 		import sqlalchemy as sa
+
+		title = self._require_text(title, "title", max_length=500)
+		content = self._require_text(content, "content", max_length=2_000_000)
+		source_type = self._normalize_source_type(source_type)
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=64)
+		source_id = self._optional_text(source_id, "source_id", max_length=100)
+		metadata = self._normalize_metadata(metadata)
+		chunk_size, overlap = self._normalize_chunk_config(chunk_size, overlap)
 
 		content_hash = hashlib.sha256(content.encode()).hexdigest()
 
@@ -90,7 +108,7 @@ class RAGService:
 			title        = title,
 			content      = content,
 			content_hash = content_hash,
-			metadata     = metadata or {},
+			doc_metadata = metadata,
 			is_active    = True,
 		)
 		session.add(doc)
@@ -135,7 +153,9 @@ class RAGService:
 		Returns:
 			Mapping of source_type → count of documents ingested.
 		"""
-		all_sources = sources or ["GL_ACCOUNTS", "POLICIES", "MANUALS"]
+		all_sources = ["GL_ACCOUNTS", "POLICIES", "MANUALS"] if sources is None else sources
+		all_sources = self._normalize_source_types(all_sources) or []
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=64)
 		results: dict[str, int] = {}
 		for source in all_sources:
 			try:
@@ -227,11 +247,20 @@ class RAGService:
 		from pgappforge.plugins.erp.platform.rag.models import RAGChunk, RAGDocument
 		import sqlalchemy as sa
 
+		query = self._require_text(query, "query", max_length=_MAX_QUERY_CHARS)
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=64)
+		top_k = self._normalize_top_k(top_k)
+		source_types = self._normalize_source_types(source_types)
+
 		query_embeddings = self._embed_chunks([query])
 		if not query_embeddings or not query_embeddings[0]:
 			return []
 
-		q_vec = query_embeddings[0]
+		try:
+			q_vec = self._normalize_vector(query_embeddings[0])
+		except RAGValidationError as exc:
+			log.debug("RAG search skipped invalid query embedding: %s", exc)
+			return []
 
 		# Try pgvector ANN query first (sub-linear, requires `vector` extension + VECTOR column).
 		# Falls back to full in-memory scan when pgvector is unavailable or column doesn't exist.
@@ -291,26 +320,31 @@ class RAGService:
 		  CREATE INDEX ON plat_rag_chunk USING ivfflat (embedding_vector vector_cosine_ops);
 		"""
 		try:
-			import json
+			import sqlalchemy as sa
+
+			q_vec = self._normalize_vector(q_vec)
+			top_k = self._normalize_top_k(top_k)
+			source_types = self._normalize_source_types(source_types)
 			vec_literal = "[" + ",".join(str(x) for x in q_vec) + "]"
 
-			# Build the filter clause
-			filter_clause = "AND d.is_active = TRUE AND c.embedding_vector IS NOT NULL"
 			params: dict = {"tenant_id": tenant_id, "top_k": top_k, "vec": vec_literal}
+			source_filter = ""
 			if source_types:
-				filter_clause += " AND d.source_type = ANY(:source_types)"
+				source_filter = "AND d.source_type = ANY(:source_types)"
 				params["source_types"] = source_types
 
-			sql = sa.text(f"""
+			sql = sa.text("""
 				SELECT c.id, c.document_id, d.title, c.content, d.source_type,
 				       1 - (c.embedding_vector <=> :vec::vector) AS score
 				FROM plat_rag_chunk c
 				JOIN plat_rag_document d ON d.id = c.document_id
 				WHERE c.tenant_id = :tenant_id
-				  {filter_clause}
+				  AND d.is_active = TRUE
+				  AND c.embedding_vector IS NOT NULL
+				  {source_filter}
 				ORDER BY c.embedding_vector <=> :vec::vector
 				LIMIT :top_k
-			""")
+			""".format(source_filter=source_filter))
 			rows = session.execute(sql, params).fetchall()
 			return [
 				{
@@ -375,6 +409,14 @@ class RAGService:
 		"""
 		from pgappforge.plugins.erp.platform.nlp.client import LLMClient, LLMError
 
+		question = self._require_text(question, "question", max_length=_MAX_QUERY_CHARS)
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=64)
+		top_k = self._normalize_top_k(top_k)
+		source_types = self._normalize_source_types(source_types)
+		system_context = self._optional_text(
+			system_context, "system_context", max_length=_MAX_SYSTEM_CONTEXT_CHARS
+		) or ""
+
 		client = LLMClient()
 		chunks = self.search(
 			question, tenant_id, session,
@@ -392,10 +434,7 @@ class RAGService:
 				"retrieved_chunks": 0,
 			}
 
-		context = "\n\n---\n".join(
-			f"[{c['source_type']}] {c['title']}\n{c['content']}"
-			for c in chunks
-		)
+		context = self._build_context(chunks)
 
 		system = (
 			"You are a helpful ERP assistant. "
@@ -455,6 +494,9 @@ class RAGService:
 		from pgappforge.plugins.erp.platform.rag.models import RAGDocument
 		import sqlalchemy as sa
 
+		document_id = self._require_text(document_id, "document_id", max_length=36)
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=64)
+
 		session.execute(
 			sa.update(RAGDocument)
 			.where(
@@ -474,6 +516,8 @@ class RAGService:
 		"""
 		from pgappforge.plugins.erp.platform.rag.models import RAGDocument, RAGChunk
 		import sqlalchemy as sa
+
+		tenant_id = self._require_text(tenant_id, "tenant_id", max_length=64)
 
 		doc_count = session.execute(
 			sa.select(sa.func.count(RAGDocument.id)).where(
@@ -513,6 +557,8 @@ class RAGService:
 		Returns:
 			Non-empty list of chunk strings.
 		"""
+		text = self._require_text(text, "text", max_length=2_000_000)
+		chunk_size, overlap = self._normalize_chunk_config(chunk_size, overlap)
 		if len(text) <= chunk_size:
 			return [text]
 
@@ -532,13 +578,115 @@ class RAGService:
 
 		return [c for c in chunks if c]
 
+	@staticmethod
+	def _require_text(value: Any, field_name: str, *, max_length: int) -> str:
+		if not isinstance(value, str):
+			raise RAGValidationError(f"{field_name} must be a string")
+		text = value.strip()
+		if not text:
+			raise RAGValidationError(f"{field_name} is required")
+		if len(text) > max_length:
+			raise RAGValidationError(f"{field_name} cannot exceed {max_length} characters")
+		return text
+
+	@staticmethod
+	def _optional_text(value: Any, field_name: str, *, max_length: int) -> str | None:
+		if value is None:
+			return None
+		return RAGService._require_text(value, field_name, max_length=max_length)
+
+	@staticmethod
+	def _normalize_chunk_config(chunk_size: int, overlap: int) -> tuple[int, int]:
+		try:
+			chunk_size = int(chunk_size)
+			overlap = int(overlap)
+		except (TypeError, ValueError) as exc:
+			raise RAGValidationError("chunk_size and overlap must be integers") from exc
+		if chunk_size < _MIN_CHUNK_SIZE or chunk_size > _MAX_CHUNK_SIZE:
+			raise RAGValidationError(
+				f"chunk_size must be between {_MIN_CHUNK_SIZE} and {_MAX_CHUNK_SIZE}"
+			)
+		if overlap < 0 or overlap >= chunk_size:
+			raise RAGValidationError("overlap must be non-negative and smaller than chunk_size")
+		return chunk_size, overlap
+
+	@staticmethod
+	def _normalize_metadata(metadata: Any) -> dict[str, Any]:
+		if metadata is None:
+			return {}
+		if not isinstance(metadata, dict):
+			raise RAGValidationError("metadata must be a JSON object")
+		return dict(metadata)
+
+	@staticmethod
+	def _normalize_source_type(source_type: Any) -> str:
+		value = RAGService._require_text(source_type, "source_type", max_length=80)
+		if not _SOURCE_TYPE_RE.match(value):
+			raise RAGValidationError(
+				"source_type can contain only letters, numbers, underscore, dash, dot, and colon"
+			)
+		return value
+
+	@staticmethod
+	def _normalize_source_types(source_types: Any) -> list[str] | None:
+		if source_types is None:
+			return None
+		if isinstance(source_types, (str, bytes)) or not isinstance(source_types, (list, tuple, set)):
+			raise RAGValidationError("source_types must be a list of source type strings")
+		if len(source_types) > _MAX_SOURCE_TYPES:
+			raise RAGValidationError(f"source_types cannot contain more than {_MAX_SOURCE_TYPES} values")
+		normalized = [RAGService._normalize_source_type(value) for value in source_types]
+		return list(dict.fromkeys(normalized)) or None
+
+	@staticmethod
+	def _normalize_top_k(top_k: int) -> int:
+		try:
+			value = int(top_k)
+		except (TypeError, ValueError) as exc:
+			raise RAGValidationError("top_k must be a positive integer") from exc
+		if value < 1:
+			raise RAGValidationError("top_k must be a positive integer")
+		return min(value, _MAX_TOP_K)
+
+	@staticmethod
+	def _normalize_vector(vector: Any) -> list[float]:
+		if not isinstance(vector, list) or not vector:
+			raise RAGValidationError("embedding vector must be a non-empty list")
+		normalized: list[float] = []
+		for value in vector:
+			try:
+				item = float(value)
+			except (TypeError, ValueError) as exc:
+				raise RAGValidationError("embedding vector must contain only numbers") from exc
+			if not math.isfinite(item):
+				raise RAGValidationError("embedding vector must contain only finite numbers")
+			normalized.append(item)
+		return normalized
+
+	@staticmethod
+	def _build_context(chunks: list[dict]) -> str:
+		parts: list[str] = []
+		remaining = _MAX_CONTEXT_CHARS
+		for chunk in chunks:
+			if remaining <= 0:
+				break
+			header = f"[{chunk.get('source_type', '')}] {chunk.get('title', '')}\n"
+			content = str(chunk.get("content", ""))
+			available = max(0, remaining - len(header))
+			if available <= 0:
+				break
+			part = header + content[:available]
+			parts.append(part)
+			remaining -= len(part)
+		return "\n\n---\n".join(parts)
+
 	def _embed_chunks(self, chunks: list[str]) -> list[list[float] | None]:
 		"""Embed a batch of text chunks via the LiteLLM proxy.
 
 		Returns a list of the same length as ``chunks``.  Entries are ``None``
 		when embedding fails so callers can skip un-embedded chunks gracefully.
 		"""
-		from pgappforge.plugins.erp.platform.nlp.client import LLMClient, LLMError
+		from pgappforge.plugins.erp.platform.nlp.client import LLMClient
 
 		client = LLMClient()
 		try:
@@ -548,4 +696,4 @@ class RAGService:
 			return [None] * len(chunks)
 
 
-__all__ = ["RAGService"]
+__all__ = ["RAGService", "RAGValidationError"]
