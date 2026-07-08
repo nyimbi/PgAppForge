@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -13,19 +14,20 @@ from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
 from pgappforge.plugins.workflow.engine import BPMActionRegistry
 
 from .events import (
-	EmissionFactorUpdatedEvent,
 	EmissionRecordedEvent,
 	EmissionReportGeneratedEvent,
 	OffsetAppliedEvent,
-	ReductionTargetSetEvent,
 )
 from .models import CarbonOffset, EmissionFactor, EmissionRecord, GHGReport
 
-__all__ = ["CarbonTrackingService"]
+__all__ = ["CarbonTrackingService", "CarbonValidationError"]
 
 log = logging.getLogger(__name__)
 
 _DEFAULT_EFFECTIVE_FROM = date(2024, 1, 1)
+_PERIOD_RE = re.compile(
+	r"^(?P<year>\d{4})(?:-(?P<month>0[1-9]|1[0-2])|-Q(?P<quarter>[1-4]))?$"
+)
 
 # (source_type, scope, co2e_per_unit, unit, source_note)
 _KENYA_DEFAULT_FACTORS: list[tuple[str, int, Decimal, str, str]] = [
@@ -37,6 +39,10 @@ _KENYA_DEFAULT_FACTORS: list[tuple[str, int, Decimal, str, str]] = [
 	("BUSINESS_TRAVEL_KM_ECONOMY", 3, Decimal("0.133"), "KM", "BEIS 2024"),
 	("WASTE_LANDFILL_KG", 3, Decimal("0.587"), "KG", "BEIS 2024"),
 ]
+
+
+class CarbonValidationError(ValueError):
+	"""Raised when carbon accounting inputs violate the service contract."""
 
 
 def _emit(event: Any, session: Session | None = None) -> None:
@@ -59,14 +65,87 @@ def _new_id() -> str:
 
 def _period_to_date(period: str) -> date:
 	"""Convert 'YYYY-MM' or 'YYYY-QN' or 'YYYY' to a date for factor lookup."""
+	match = _PERIOD_RE.fullmatch(period)
+	if not match:
+		raise CarbonValidationError("period must use YYYY, YYYY-MM, or YYYY-QN")
+	year = int(match.group("year"))
+	if match.group("month"):
+		return date(year, int(match.group("month")), 1)
+	if match.group("quarter"):
+		return date(year, (int(match.group("quarter")) - 1) * 3 + 1, 1)
+	return date(year, 1, 1)
+
+
+def _require_text(
+	value: Any,
+	field_name: str,
+	*,
+	max_length: int,
+	uppercase: bool = False,
+) -> str:
+	if not isinstance(value, str):
+		raise CarbonValidationError(f"{field_name} must be a string")
+	text = value.strip()
+	if not text:
+		raise CarbonValidationError(f"{field_name} is required")
+	if "\x00" in text:
+		raise CarbonValidationError(f"{field_name} cannot contain NUL bytes")
+	if len(text) > max_length:
+		raise CarbonValidationError(f"{field_name} cannot exceed {max_length} characters")
+	return text.upper() if uppercase else text
+
+
+def _optional_text(
+	value: Any,
+	field_name: str,
+	*,
+	max_length: int,
+	uppercase: bool = False,
+) -> str | None:
+	if value is None:
+		return None
+	return _require_text(value, field_name, max_length=max_length, uppercase=uppercase)
+
+
+def _require_scope(value: Any) -> int:
+	if isinstance(value, bool) or not isinstance(value, int):
+		raise CarbonValidationError("scope must be an integer")
+	if value not in {1, 2, 3}:
+		raise CarbonValidationError("scope must be one of 1, 2, or 3")
+	return value
+
+
+def _require_decimal(value: Any, field_name: str) -> Decimal:
+	if isinstance(value, bool):
+		raise CarbonValidationError(f"{field_name} must be numeric")
 	try:
-		if len(period) == 7 and period[4] == "-":
-			return date(int(period[:4]), int(period[5:7]), 1)
-		if len(period) == 4:
-			return date(int(period), 1, 1)
-	except (ValueError, IndexError):
-		pass
-	return date.today()
+		number = Decimal(str(value))
+	except (InvalidOperation, TypeError, ValueError) as exc:
+		raise CarbonValidationError(f"{field_name} must be numeric") from exc
+	if not number.is_finite():
+		raise CarbonValidationError(f"{field_name} must be finite")
+	return number
+
+
+def _require_positive_decimal(value: Any, field_name: str) -> Decimal:
+	number = _require_decimal(value, field_name)
+	if number <= Decimal("0"):
+		raise CarbonValidationError(f"{field_name} must be positive")
+	return number
+
+
+def _require_int(value: Any, field_name: str, *, minimum: int | None = None) -> int:
+	if isinstance(value, bool) or not isinstance(value, int):
+		raise CarbonValidationError(f"{field_name} must be an integer")
+	if minimum is not None and value < minimum:
+		raise CarbonValidationError(f"{field_name} must be at least {minimum}")
+	return value
+
+
+def _normalize_period(value: Any) -> str:
+	period = _require_text(value, "period", max_length=20, uppercase=True)
+	_period_to_date(period)
+	return period
 
 
 class CarbonTrackingService:
@@ -92,13 +171,30 @@ class CarbonTrackingService:
 		source_record_id: str | None = None,
 		description: str | None = None,
 	) -> EmissionRecord:
-		activity = _decimal(activity_data)
-		assert activity > Decimal("0"), "activity_data must be positive"
+		scope = _require_scope(scope)
+		source_type = _require_text(
+			source_type, "source_type", max_length=100, uppercase=True
+		)
+		activity = _require_positive_decimal(activity_data, "activity_data")
+		unit = _require_text(unit, "unit", max_length=30, uppercase=True)
+		period = _normalize_period(period)
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		country_code = _require_text(
+			country_code, "country_code", max_length=3, uppercase=True
+		)
+		if len(country_code) != 3:
+			raise CarbonValidationError("country_code must be an ISO 3166-1 alpha-3 code")
+		entity_id = _optional_text(entity_id, "entity_id", max_length=50)
+		source_module = _optional_text(source_module, "source_module", max_length=100)
+		source_record_id = _optional_text(source_record_id, "source_record_id", max_length=50)
+		description = _optional_text(description, "description", max_length=5000)
 
 		period_date = _period_to_date(period)
 
 		# Find best matching emission factor: source_type + country_code, within effective date range
-		_not_expired = (EmissionFactor.effective_to.is_(None)) | (EmissionFactor.effective_to >= period_date)
+		_not_expired = (EmissionFactor.effective_to.is_(None)) | (
+			EmissionFactor.effective_to >= period_date
+		)
 		factor_stmt = (
 			select(EmissionFactor)
 			.where(EmissionFactor.tenant_id == tenant_id)
@@ -115,7 +211,9 @@ class CarbonTrackingService:
 			emission_factor_id: str | None = str(factor.id)
 		else:
 			# Fallback: try any country with same date constraints
-			_not_expired_any = (EmissionFactor.effective_to.is_(None)) | (EmissionFactor.effective_to >= period_date)
+			_not_expired_any = (EmissionFactor.effective_to.is_(None)) | (
+				EmissionFactor.effective_to >= period_date
+			)
 			factor_stmt_any = (
 				select(EmissionFactor)
 				.where(EmissionFactor.tenant_id == tenant_id)
@@ -182,6 +280,11 @@ class CarbonTrackingService:
 		entity_id: str | None = None,
 		methodology: str | None = None,
 	) -> GHGReport:
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		period = _normalize_period(period)
+		entity_id = _optional_text(entity_id, "entity_id", max_length=50)
+		methodology = _optional_text(methodology, "methodology", max_length=5000)
+
 		stmt = (
 			select(EmissionRecord)
 			.where(EmissionRecord.tenant_id == tenant_id)
@@ -241,7 +344,9 @@ class CarbonTrackingService:
 		    revenue_currency: str  — revenue expressed in whole currency units
 		    intensity_co2e_per_unit_revenue: str  — kgCO2e / currency unit
 		"""
-		assert revenue_cents > 0, "revenue_cents must be positive"
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		period = _normalize_period(period)
+		revenue_cents = _require_int(revenue_cents, "revenue_cents", minimum=1)
 
 		rec_stmt = (
 			select(EmissionRecord)
@@ -274,8 +379,22 @@ class CarbonTrackingService:
 		certificate_ref: str | None = None,
 		currency_code: str = "USD",
 	) -> CarbonOffset:
-		co2e = _decimal(co2e_kg)
-		assert co2e > Decimal("0"), "co2e_kg must be positive"
+		period = _normalize_period(period)
+		co2e = _require_positive_decimal(co2e_kg, "co2e_kg")
+		offset_type = _require_text(
+			offset_type, "offset_type", max_length=50, uppercase=True
+		)
+		provider = _optional_text(provider, "provider", max_length=200)
+		cost_cents = _require_int(cost_cents, "cost_cents", minimum=0)
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		certificate_ref = _optional_text(
+			certificate_ref, "certificate_ref", max_length=100
+		)
+		currency_code = _require_text(
+			currency_code, "currency_code", max_length=3, uppercase=True
+		)
+		if len(currency_code) != 3:
+			raise CarbonValidationError("currency_code must be an ISO 4217 alpha-3 code")
 
 		offset = CarbonOffset(
 			id=_new_id(),
@@ -308,6 +427,9 @@ class CarbonTrackingService:
 		period: str,
 		session: Session,
 	) -> dict[str, Any]:
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+		period = _normalize_period(period)
+
 		rec_stmt = (
 			select(EmissionRecord)
 			.where(EmissionRecord.tenant_id == tenant_id)
@@ -335,6 +457,8 @@ class CarbonTrackingService:
 
 	def seed_default_factors(self, tenant_id: str, session: Session) -> None:
 		"""Seed Kenya-specific emission factors if none exist for the tenant."""
+		tenant_id = _require_text(tenant_id, "tenant_id", max_length=64)
+
 		count_stmt = (
 			select(EmissionFactor)
 			.where(EmissionFactor.tenant_id == tenant_id)

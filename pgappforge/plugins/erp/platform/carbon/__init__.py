@@ -13,7 +13,7 @@ from .events import (
 	ReductionTargetSetEvent,
 )
 from .models import CarbonOffset, EmissionFactor, EmissionRecord, GHGReport
-from .services import CarbonTrackingService
+from .services import CarbonTrackingService, CarbonValidationError
 
 if TYPE_CHECKING:
 	from sqlalchemy.orm import Session
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 __all__ = [
 	"CarbonPlugin",
 	"CarbonTrackingService",
+	"CarbonValidationError",
 	"EmissionFactor",
 	"EmissionRecord",
 	"GHGReport",
@@ -105,7 +106,6 @@ class CarbonPlugin(BasePlugin):
 
 	def setup_rules(self, session: Session) -> None:
 		try:
-			from pgappforge.plugins.rules.engine import RuleEngine
 			from pgappforge.plugins.rules.models import Rule, RuleSet
 
 			existing = session.execute(
