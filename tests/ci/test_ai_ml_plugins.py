@@ -7,7 +7,7 @@ import inspect
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
 def test_llm_client_import():
-	from pgappforge.plugins.erp.platform.nlp.client import LLMClient, LLMError
+	from pgappforge.plugins.erp.platform.nlp.client import LLMClient
 	c = LLMClient()
 	assert callable(c.chat)
 	assert callable(c.embed)
@@ -16,8 +16,9 @@ def test_llm_client_import():
 def test_llm_client_no_context_uses_defaults():
 	from pgappforge.plugins.erp.platform.nlp.client import LLMClient
 	c = LLMClient()
-	assert "4000" in c._base_url  # default LiteLLM port
-	assert c._api_key.startswith("sk-")
+	assert c._base_url == "http://localhost:4000/v1"
+	assert c._api_key == ""
+	assert "Authorization" not in c._headers()
 	assert c._fast_model in ("gpt-4o-mini", "gpt-4o")
 	assert "ada" in c._embedding_model or "embedding" in c._embedding_model
 
@@ -102,7 +103,6 @@ def test_rag_models_import():
 
 def test_rag_service_import():
 	from pgappforge.plugins.erp.platform.rag.services import RAGService
-	from pgappforge.plugins.erp.platform.nlp.client import cosine_similarity as _cosine_similarity
 	svc = RAGService()
 	assert callable(svc.ingest_document)
 	assert callable(svc.search)
@@ -162,6 +162,7 @@ def test_rag_plugin_metadata():
 def test_ml_models_import():
 	from pgappforge.plugins.erp.platform.ml_predictions.models import MLPrediction, MLModelConfig
 	assert MLPrediction.__tablename__ == "plat_ml_prediction"
+	assert MLModelConfig.__tablename__ == "plat_ml_model_config"
 
 def test_ml_service_import():
 	from pgappforge.plugins.erp.platform.ml_predictions.services import MLPredictionService
@@ -172,9 +173,7 @@ def test_ml_service_import():
 
 def test_gl_anomaly_z_score_logic():
 	"""Verify z-score anomaly detection works without DB."""
-	from pgappforge.plugins.erp.platform.ml_predictions.services import MLPredictionService
 	import math
-	svc = MLPredictionService()
 	# Replicate the z-score logic directly
 	amounts = [1000, 1100, 950, 1050, 1020, 980, 1010, 1030, 1040, 900]
 	mean = sum(amounts) / len(amounts)
@@ -204,4 +203,3 @@ def test_ml_plugin_metadata():
 	p = MLPredictionsPlugin.__new__(MLPredictionsPlugin)
 	assert p.name == "ml_predictions"
 	assert "nlp" in p.depends_on
-

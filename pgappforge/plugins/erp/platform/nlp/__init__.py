@@ -77,8 +77,8 @@ class NLPPlugin(BasePlugin):
 
 	def initialize(self) -> None:
 		defaults: dict[str, Any] = {
-			"LITELLM_URL": "http://84.247.181.100:4000/v1",
-			"LITELLM_API_KEY": "sk-pjs-litellm-master-key",
+			"LITELLM_URL": "http://localhost:4000/v1",
+			"LITELLM_API_KEY": "",
 			"LLM_MODEL": "gpt-4o",
 			"LLM_FAST_MODEL": "gpt-4o-mini",
 			"LLM_EMBEDDING_MODEL": "text-embedding-ada-002",
@@ -130,15 +130,23 @@ def create_plugin(
 
 # Convenience re-exports so callers can do:
 #   from pgappforge.plugins.erp.platform.nlp import NLPService, NLPAnalysisResult
-from pgappforge.plugins.erp.platform.nlp.client import LLMClient, LLMError  # noqa: E402
+from pgappforge.plugins.erp.platform.nlp.client import (  # noqa: E402
+	LLMClient,
+	LLMConfigError,
+	LLMError,
+	LLMResponseError,
+)
 from pgappforge.plugins.erp.platform.nlp.models import NLPAnalysisResult  # noqa: E402
-from pgappforge.plugins.erp.platform.nlp.services import NLPService  # noqa: E402
+from pgappforge.plugins.erp.platform.nlp.services import NLPInputError, NLPService  # noqa: E402
 
 __all__ = [
 	"NLPPlugin",
 	"create_plugin",
 	"LLMClient",
 	"LLMError",
+	"LLMConfigError",
+	"LLMResponseError",
 	"NLPAnalysisResult",
+	"NLPInputError",
 	"NLPService",
 ]
