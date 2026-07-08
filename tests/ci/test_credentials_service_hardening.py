@@ -3,6 +3,8 @@ Focused CI tests for platform credentials service guardrails.
 """
 from __future__ import annotations
 
+import base64
+import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -19,6 +21,7 @@ class _FakeSession:
 		self.schema = schema
 		self.credential = credential
 		self.added = []
+		self.executed = []
 		self.flushed = False
 		self.get_calls = []
 
@@ -33,8 +36,23 @@ class _FakeSession:
 	def add(self, row):
 		self.added.append(row)
 
+	def execute(self, stmt):
+		self.executed.append(stmt)
+		return _FakeResult(self.credential)
+
 	def flush(self):
 		self.flushed = True
+
+
+class _FakeResult:
+	def __init__(self, row=None):
+		self.row = row
+
+	def scalar_one_or_none(self):
+		return self.row
+
+	def scalar_one(self):
+		return 0
 
 
 def _schema():
@@ -63,6 +81,7 @@ def _issued_credentials(session):
 		({"recipient_id": ""}, "recipient_id"),
 		({"evidence": []}, "evidence"),
 		({"base_url": "javascript:alert(1)"}, "base_url"),
+		({"base_url": "http://credentials.example.com"}, "base_url"),
 		({"expires_at": datetime.now(timezone.utc) - timedelta(days=1)}, "expires_at"),
 	],
 )
@@ -108,6 +127,65 @@ def test_issue_credential_normalizes_base_url_and_evidence():
 	assert "//verify" not in credential.verification_url
 	assert credential.evidence == {"score": 95}
 	assert session.flushed is True
+
+
+def test_vc_jwt_stub_is_explicitly_unsigned():
+	service = CredentialsService()
+	token = service._encode_vc_jwt_stub({"sub": "credential-1"})
+	header_segment, payload_segment, signature = token.split(".")
+
+	def decode(segment):
+		padding = "=" * (-len(segment) % 4)
+		return json.loads(base64.urlsafe_b64decode(segment + padding))
+
+	assert decode(header_segment) == {"alg": "none", "typ": "JWT", "cty": "vc+ld+json"}
+	assert decode(payload_segment) == {"sub": "credential-1"}
+	assert signature == ""
+
+
+def test_verify_credential_normalizes_full_url_and_records_exact_token():
+	service = CredentialsService()
+	token = "a" * 43
+	credential = SimpleNamespace(
+		id="cred-1",
+		tenant_id="tenant-1",
+		credential_number="CERT-2026-00001",
+		schema_id="schema-db-id",
+		issued_at=datetime.now(timezone.utc),
+		expires_at=None,
+		status="ACTIVE",
+		verification_url=f"https://credentials.example.com/verify/{token}",
+	)
+	session = _FakeSession(credential=credential)
+
+	verification = service.verify_credential(
+		session=session,
+		tenant_id="",
+		verification_token=f"https://credentials.example.com/verify/{token}?utm=ignored",
+		verifier_email="verifier@example.com",
+	)
+
+	assert verification.result == "VALID"
+	assert verification.verification_token == token
+	assert verification.tenant_id == "tenant-1"
+	assert verification.verifier_email == "verifier@example.com"
+	assert verification in session.added
+	assert session.flushed is True
+
+
+def test_verify_credential_rejects_malformed_token_before_query():
+	service = CredentialsService()
+	session = _FakeSession()
+
+	with pytest.raises(CredentialsServiceError, match="verification_token"):
+		service.verify_credential(
+			session=session,
+			tenant_id="tenant-1",
+			verification_token="short",
+		)
+
+	assert session.executed == []
+	assert session.added == []
 
 
 def test_revoke_credential_requires_reason_before_lookup():

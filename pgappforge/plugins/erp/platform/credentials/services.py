@@ -15,11 +15,9 @@ All methods accept an explicit SQLAlchemy Session.  No Flask context assumed.
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 import secrets
-import uuid
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -30,6 +28,7 @@ from sqlalchemy import select, func
 log = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_VERIFICATION_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +202,8 @@ class CredentialsService:
 	def _validate_base_url(value: str) -> str:
 		text = CredentialsService._require_non_empty(value, "base_url").rstrip("/")
 		parsed = urlparse(text)
-		if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-			raise CredentialsServiceError("base_url must be an absolute HTTP(S) URL")
+		if parsed.scheme != "https" or not parsed.netloc:
+			raise CredentialsServiceError("base_url must be an absolute HTTPS URL")
 		return text
 
 	@staticmethod
@@ -301,8 +300,8 @@ class CredentialsService:
 				_json.dumps(data, separators=(",", ":")).encode()
 			).rstrip(b"=").decode()
 
-		header = {"alg": "RS256", "typ": "JWT"}
-		return f"{_b64url(header)}.{_b64url(payload)}.UNSIGNED"
+		header = {"alg": "none", "typ": "JWT", "cty": "vc+ld+json"}
+		return f"{_b64url(header)}.{_b64url(payload)}."
 
 	# ------------------------------------------------------------------
 	# Verify
@@ -332,12 +331,19 @@ class CredentialsService:
 		from pgappforge.plugins.erp.platform.credentials.events import CredentialVerifiedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
-		# Strip full URL to token portion
-		token = verification_token.split("/")[-1]
+		tenant_id = self._normalize_optional_text(tenant_id, "tenant_id")
+		token = self._extract_verification_token(verification_token)
+		verifier_id = self._normalize_optional_text(verifier_id, "verifier_id")
+		if verifier_email is not None:
+			verifier_email = self._validate_email(verifier_email, "verifier_email")
 
+		verify_suffix = f"/verify/{token}"
 		credential = session.execute(
 			select(IssuedCredential).where(
-				IssuedCredential.verification_url.like(f"%{token}%")
+				sa.or_(
+					IssuedCredential.verification_url == token,
+					IssuedCredential.verification_url.endswith(verify_suffix),
+				)
 			)
 		).scalar_one_or_none()
 
@@ -349,7 +355,7 @@ class CredentialsService:
 		elif credential.status == "REVOKED":
 			result = "REVOKED"
 			credential_id = credential.id
-		elif credential.expires_at and credential.expires_at < now:
+		elif credential.expires_at and self._as_aware_datetime(credential.expires_at) < now:
 			result = "EXPIRED"
 			credential_id = credential.id
 			# Lazily update status
@@ -372,7 +378,7 @@ class CredentialsService:
 			details["schema_id"] = str(credential.schema_id)
 
 		verification = CredentialVerification(
-			tenant_id=tenant_id,
+			tenant_id=str(credential.tenant_id) if credential is not None else tenant_id,
 			credential_id=credential_id,
 			verification_token=token,
 			verified_at=now,
@@ -401,6 +407,33 @@ class CredentialsService:
 			token, result,
 		)
 		return verification
+
+	@staticmethod
+	def _normalize_optional_text(value: Any, field_name: str) -> str | None:
+		if value is None:
+			return None
+		text = str(value).strip()
+		if not text:
+			return None
+		if len(text) > 100:
+			raise CredentialsServiceError(f"{field_name} cannot exceed 100 characters")
+		return text
+
+	@staticmethod
+	def _extract_verification_token(value: Any) -> str:
+		text = CredentialsService._require_non_empty(value, "verification_token")
+		parsed = urlparse(text)
+		path = parsed.path if parsed.scheme or parsed.netloc else text
+		token = path.rstrip("/").split("/")[-1].strip()
+		if not _VERIFICATION_TOKEN_RE.fullmatch(token):
+			raise CredentialsServiceError("verification_token is malformed")
+		return token
+
+	@staticmethod
+	def _as_aware_datetime(value: datetime) -> datetime:
+		if value.tzinfo is None:
+			return value.replace(tzinfo=timezone.utc)
+		return value.astimezone(timezone.utc)
 
 	# ------------------------------------------------------------------
 	# Revoke
