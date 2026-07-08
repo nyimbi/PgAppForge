@@ -15,6 +15,7 @@ All methods accept an explicit SQLAlchemy Session.  No Flask context assumed.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -23,6 +24,11 @@ import sqlalchemy as sa
 from sqlalchemy import select, func
 
 log = logging.getLogger(__name__)
+
+_POLICY_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,300}$")
+_PERMISSION_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,99}$")
+_PRINCIPAL_TYPES = {"USER", "ROLE", "GROUP"}
+_POLICY_EFFECTS = {"ALLOW", "DENY"}
 
 
 # ---------------------------------------------------------------------------
@@ -391,16 +397,27 @@ class IdentityService:
 		from pgappforge.plugins.erp.platform.identity.events import AccessPolicyCreatedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
-		if effect not in ("ALLOW", "DENY"):
-			raise IdentityServiceError(f"effect must be ALLOW or DENY, got {effect!r}")
-		if principal_type not in ("USER", "ROLE", "GROUP"):
-			raise IdentityServiceError(
-				f"principal_type must be USER|ROLE|GROUP, got {principal_type!r}"
-			)
+		tenant_id = self._require_non_empty(tenant_id, "tenant_id")
+		policy_name = self._validate_policy_name(policy_name)
+		resource_type = self._validate_resource_type(resource_type)
+		resource_id = self._optional_non_empty(resource_id, "resource_id")
+		principal_type = self._normalize_choice(
+			principal_type,
+			_PRINCIPAL_TYPES,
+			"principal_type",
+		)
+		principal_id = self._require_non_empty(principal_id, "principal_id")
+		permissions = self._normalize_permissions(permissions)
+		effect = self._normalize_choice(effect, _POLICY_EFFECTS, "effect")
+		if conditions is not None and not isinstance(conditions, dict):
+			raise IdentityServiceError("conditions must be a JSON object")
 
 		# Check for duplicate policy_name
 		existing = session.execute(
-			select(AccessPolicy).where(AccessPolicy.policy_name == policy_name)
+			select(AccessPolicy).where(
+				AccessPolicy.tenant_id == tenant_id,
+				AccessPolicy.policy_name == policy_name,
+			)
 		).scalar_one_or_none()
 		if existing is not None:
 			raise PolicyConflictError(
@@ -436,6 +453,67 @@ class IdentityService:
 			session,
 		)
 		return {"policy_id": policy.id, "status": "created"}
+
+	@staticmethod
+	def _require_non_empty(value: Any, field_name: str) -> str:
+		text = str(value or "").strip()
+		if not text:
+			raise IdentityServiceError(f"{field_name} is required")
+		return text
+
+	@staticmethod
+	def _optional_non_empty(value: Any, field_name: str) -> str | None:
+		if value is None:
+			return None
+		return IdentityService._require_non_empty(value, field_name)
+
+	@staticmethod
+	def _validate_policy_name(value: str) -> str:
+		text = IdentityService._require_non_empty(value, "policy_name")
+		if not _POLICY_NAME_RE.fullmatch(text):
+			raise IdentityServiceError(
+				"policy_name must contain only letters, numbers, _, ., :, or -"
+			)
+		return text
+
+	@staticmethod
+	def _validate_resource_type(value: str) -> str:
+		text = IdentityService._require_non_empty(value, "resource_type")
+		if text == "*":
+			return text
+		if not _POLICY_NAME_RE.fullmatch(text):
+			raise IdentityServiceError(
+				"resource_type must be '*' or a dotted resource identifier"
+			)
+		return text
+
+	@staticmethod
+	def _normalize_permissions(permissions: Any) -> list[str]:
+		if isinstance(permissions, (str, bytes)) or not isinstance(permissions, (list, tuple, set)):
+			raise IdentityServiceError("permissions must be a list of action strings")
+		normalized: list[str] = []
+		for permission in permissions:
+			text = str(permission or "").strip()
+			if text == "*":
+				normalized.append(text)
+				continue
+			if not _PERMISSION_RE.fullmatch(text):
+				raise IdentityServiceError(f"Invalid permission {permission!r}")
+			normalized.append(text)
+		normalized = list(dict.fromkeys(normalized))
+		if not normalized:
+			raise IdentityServiceError("permissions cannot be empty")
+		return normalized
+
+	@staticmethod
+	def _normalize_choice(value: str, allowed: set[str], field_name: str) -> str:
+		text = IdentityService._require_non_empty(value, field_name).upper()
+		if text not in allowed:
+			allowed_text = "|".join(sorted(allowed))
+			raise IdentityServiceError(
+				f"{field_name} must be {allowed_text}, got {value!r}"
+			)
+		return text
 
 	def evaluate_access(
 		self,
