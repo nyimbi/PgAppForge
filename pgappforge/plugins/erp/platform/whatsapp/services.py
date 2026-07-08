@@ -28,6 +28,7 @@ BPM actions registered (lazily, at module import):
 """
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -36,6 +37,31 @@ from typing import Any
 import sqlalchemy as sa
 
 log = logging.getLogger(__name__)
+
+_MAX_WEBHOOK_BODY_BYTES = 256 * 1024
+_MAX_WEBHOOK_ENTRIES = 25
+_MAX_WEBHOOK_CHANGES = 50
+_MAX_WEBHOOK_ITEMS = 200
+_MAX_WA_MESSAGE_ID_CHARS = 200
+_MAX_PHONE_CHARS = 30
+_MAX_EVENT_TYPE_CHARS = 100
+_MAX_STATUS_CHARS = 20
+_MAX_TEXT_BODY_CHARS = 4096
+_MAX_SIGNATURE_CHARS = 128
+_MAX_WEBHOOK_TIMESTAMP = 4_102_444_800  # 2100-01-01 UTC
+
+_VALID_DELIVERY_STATUSES = {"SENT", "DELIVERED", "READ", "FAILED"}
+_MEDIA_MESSAGE_TYPES = {"IMAGE", "DOCUMENT", "VIDEO", "AUDIO", "STICKER"}
+_SUPPORTED_INBOUND_MESSAGE_TYPES = {
+	"TEXT",
+	*_MEDIA_MESSAGE_TYPES,
+	"BUTTON",
+	"CONTACTS",
+	"INTERACTIVE",
+	"LOCATION",
+	"REACTION",
+	"UNKNOWN",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +94,247 @@ def _now() -> datetime:
 
 def _now_iso() -> str:
 	return _now().isoformat()
+
+
+def _bounded_text(
+	value: Any,
+	field_name: str,
+	max_chars: int,
+	*,
+	required: bool = True,
+	strip: bool = True,
+) -> str:
+	if value is None:
+		if required:
+			raise ValueError(f"{field_name} is required")
+		return ""
+	if not isinstance(value, str):
+		raise ValueError(f"{field_name} must be a string")
+	text = value.strip() if strip else value
+	if required and not text:
+		raise ValueError(f"{field_name} is required")
+	if len(text) > max_chars:
+		raise ValueError(
+			f"{field_name} is {len(text)} characters; maximum is {max_chars}"
+		)
+	return text
+
+
+def _bounded_webhook_sequence(value: Any, field_name: str, max_items: int) -> list[Any]:
+	if value is None:
+		return []
+	if not isinstance(value, list):
+		raise ValueError(f"{field_name} must be a list")
+	if len(value) > max_items:
+		raise ValueError(
+			f"{field_name} contains {len(value)} items; maximum is {max_items}"
+		)
+	return value
+
+
+def _validate_webhook_payload(payload: Any) -> dict[str, Any]:
+	if not isinstance(payload, dict):
+		raise ValueError("WhatsApp webhook payload must be a JSON object")
+	try:
+		encoded = json.dumps(
+			payload,
+			ensure_ascii=False,
+			separators=(",", ":"),
+		).encode("utf-8")
+	except (TypeError, ValueError) as exc:
+		raise ValueError("WhatsApp webhook payload must be JSON serializable") from exc
+	if len(encoded) > _MAX_WEBHOOK_BODY_BYTES:
+		raise ValueError(
+			f"WhatsApp webhook payload is {len(encoded)} bytes; "
+			f"maximum is {_MAX_WEBHOOK_BODY_BYTES}"
+		)
+	return payload
+
+
+def _verify_webhook_hmac(
+	hmac_signature: str | None,
+	app_secret: str | None,
+	raw_body: bytes | None,
+) -> None:
+	if not app_secret:
+		return
+	if not hmac_signature:
+		raise ValueError(
+			"WhatsApp webhook requires X-Hub-Signature-256 when app_secret is set"
+		)
+	if raw_body is None:
+		raise ValueError("WhatsApp webhook raw_body is required for HMAC verification")
+	if not isinstance(raw_body, (bytes, bytearray)):
+		raise ValueError("WhatsApp webhook raw_body must be bytes")
+	if len(raw_body) > _MAX_WEBHOOK_BODY_BYTES:
+		raise ValueError(
+			f"WhatsApp webhook raw_body is {len(raw_body)} bytes; "
+			f"maximum is {_MAX_WEBHOOK_BODY_BYTES}"
+		)
+
+	import hashlib
+	import hmac as _hmac_lib
+
+	signature = _bounded_text(
+		hmac_signature,
+		"hmac_signature",
+		_MAX_SIGNATURE_CHARS,
+	)
+	expected = "sha256=" + _hmac_lib.new(
+		app_secret.encode(),
+		bytes(raw_body),
+		hashlib.sha256,
+	).hexdigest()
+	if not _hmac_lib.compare_digest(expected, signature):
+		raise ValueError("WhatsApp webhook HMAC verification failed; request rejected")
+
+
+def _parse_webhook_timestamp(value: Any) -> datetime | None:
+	if value in (None, ""):
+		return None
+	if isinstance(value, str):
+		raw_value = value.strip()
+		if not raw_value:
+			return None
+		if not raw_value.isdigit():
+			raise ValueError("webhook timestamp must be a unix epoch integer")
+		timestamp = int(raw_value)
+	elif isinstance(value, int) and not isinstance(value, bool):
+		timestamp = value
+	else:
+		raise ValueError("webhook timestamp must be a unix epoch integer")
+	if timestamp < 0 or timestamp > _MAX_WEBHOOK_TIMESTAMP:
+		raise ValueError("webhook timestamp is outside the supported range")
+	return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
+def _normalise_wa_message_type(value: Any) -> str:
+	raw_value = _bounded_text(
+		value or "text",
+		"message_type",
+		_MAX_STATUS_CHARS,
+		required=False,
+	)
+	message_type = (raw_value or "text").upper()
+	if message_type not in _SUPPORTED_INBOUND_MESSAGE_TYPES:
+		return "UNKNOWN"
+	return message_type
+
+
+def _extract_webhook_items(payload: dict[str, Any], item_key: str) -> list[dict[str, Any]]:
+	items: list[Any] = []
+	entries = _bounded_webhook_sequence(
+		payload.get("entry", []),
+		"payload.entry",
+		_MAX_WEBHOOK_ENTRIES,
+	)
+	for entry in entries:
+		if not isinstance(entry, dict):
+			raise ValueError("payload.entry[] must be an object")
+		changes = _bounded_webhook_sequence(
+			entry.get("changes", []),
+			"payload.entry[].changes",
+			_MAX_WEBHOOK_CHANGES,
+		)
+		for change in changes:
+			if not isinstance(change, dict):
+				raise ValueError("payload.entry[].changes[] must be an object")
+			value = change.get("value", {})
+			if not isinstance(value, dict):
+				raise ValueError("payload.entry[].changes[].value must be an object")
+			batch = _bounded_webhook_sequence(
+				value.get(item_key, []),
+				f"payload.entry[].changes[].value.{item_key}",
+				_MAX_WEBHOOK_ITEMS,
+			)
+			if len(items) + len(batch) > _MAX_WEBHOOK_ITEMS:
+				raise ValueError(
+					f"payload.{item_key} contains more than "
+					f"{_MAX_WEBHOOK_ITEMS} items"
+				)
+			items.extend(batch)
+
+	if not items and item_key in payload:
+		items = _bounded_webhook_sequence(
+			payload[item_key],
+			f"payload.{item_key}",
+			_MAX_WEBHOOK_ITEMS,
+		)
+
+	normalised_items: list[dict[str, Any]] = []
+	for index, item in enumerate(items):
+		if not isinstance(item, dict):
+			raise ValueError(f"payload.{item_key}[{index}] must be an object")
+		normalised_items.append(item)
+	return normalised_items
+
+
+def _normalise_webhook_status(status: dict[str, Any]) -> dict[str, Any]:
+	return {
+		"id": _bounded_text(
+			status.get("id"),
+			"status.id",
+			_MAX_WA_MESSAGE_ID_CHARS,
+			required=False,
+		),
+		"status": _bounded_text(
+			status.get("status"),
+			"status.status",
+			_MAX_STATUS_CHARS,
+			required=False,
+		).lower(),
+		"timestamp": _parse_webhook_timestamp(status.get("timestamp")),
+	}
+
+
+def _extract_webhook_message_body(
+	message: dict[str, Any],
+	message_type: str,
+) -> str:
+	if message_type == "TEXT":
+		text_payload = message.get("text") or {}
+		if not isinstance(text_payload, dict):
+			raise ValueError("message.text must be an object")
+		return _bounded_text(
+			text_payload.get("body"),
+			"message.text.body",
+			_MAX_TEXT_BODY_CHARS,
+			required=False,
+			strip=False,
+		)
+	if message_type in _MEDIA_MESSAGE_TYPES:
+		media_key = message_type.lower()
+		media_payload = message.get(media_key) or {}
+		if not isinstance(media_payload, dict):
+			raise ValueError(f"message.{media_key} must be an object")
+		return _bounded_text(
+			media_payload.get("caption"),
+			f"message.{media_key}.caption",
+			_MAX_TEXT_BODY_CHARS,
+			required=False,
+			strip=False,
+		)
+	return ""
+
+
+def _normalise_webhook_message(message: dict[str, Any]) -> dict[str, str]:
+	message_type = _normalise_wa_message_type(message.get("type"))
+	return {
+		"from": _bounded_text(
+			message.get("from"),
+			"message.from",
+			_MAX_PHONE_CHARS,
+			required=False,
+		),
+		"id": _bounded_text(
+			message.get("id"),
+			"message.id",
+			_MAX_WA_MESSAGE_ID_CHARS,
+			required=False,
+		),
+		"type": message_type,
+		"body": _extract_webhook_message_body(message, message_type),
+	}
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +479,14 @@ class WhatsAppService:
 		Returns:
 			Persisted WhatsAppMessage with status=QUEUED, direction=OUTBOUND.
 		"""
+		to_phone = _bounded_text(to_phone, "to_phone", _MAX_PHONE_CHARS)
+		body = _bounded_text(
+			body,
+			"body",
+			_MAX_TEXT_BODY_CHARS,
+			strip=False,
+		)
+
 		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppMessage
 		from pgappforge.plugins.erp.platform.whatsapp.events import WhatsAppMessageSentEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
@@ -287,6 +562,21 @@ class WhatsAppService:
 		Returns:
 			Persisted WhatsAppMessage (direction=INBOUND).
 		"""
+		from_phone = _bounded_text(from_phone, "from_phone", _MAX_PHONE_CHARS)
+		body = _bounded_text(
+			body,
+			"body",
+			_MAX_TEXT_BODY_CHARS,
+			required=False,
+			strip=False,
+		)
+		wa_message_id = _bounded_text(
+			wa_message_id,
+			"wa_message_id",
+			_MAX_WA_MESSAGE_ID_CHARS,
+		)
+		message_type = _normalise_wa_message_type(message_type)
+
 		from pgappforge.plugins.erp.platform.whatsapp.models import (
 			WhatsAppConversation, WhatsAppMessage,
 		)
@@ -412,6 +702,17 @@ class WhatsAppService:
 		Raises:
 			WhatsAppMessageNotFoundError: No message found with this wa_message_id.
 		"""
+		wa_message_id = _bounded_text(
+			wa_message_id,
+			"wa_message_id",
+			_MAX_WA_MESSAGE_ID_CHARS,
+		)
+		status = _bounded_text(status, "status", _MAX_STATUS_CHARS).upper()
+		if status not in _VALID_DELIVERY_STATUSES:
+			raise WhatsAppStateError(
+				f"Unsupported WhatsApp delivery status {status!r}"
+			)
+
 		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppMessage
 		from pgappforge.plugins.erp.platform.whatsapp.events import (
 			WhatsAppMessageDeliveredEvent,
@@ -502,21 +803,23 @@ class WhatsAppService:
 		"""Persist and route a raw webhook payload from WhatsApp.
 
 		Flow:
-		  0. If hmac_signature + app_secret + raw_body provided, verify
-		     X-Hub-Signature-256 before any processing (raises ValueError on mismatch).
-		  1. Append a WhatsAppWebhookLog row (processed=False).
-		  2. Route by event_type:
+		  0. If app_secret is configured, require raw_body and verify
+		     X-Hub-Signature-256 before any processing.
+		  1. Validate webhook shape, size, item counts, IDs, timestamps, and
+		     text/caption lengths before persistence.
+		  2. Append a WhatsAppWebhookLog row (processed=False).
+		  3. Route by event_type:
 		       messages.statuses  → update_delivery_status for each status entry
 		       messages.inbound   → process_inbound for each message entry
-		  3. Mark log row processed=True.
-		  4. Return {processed: True, action: "..."}.
+		  4. Mark log row processed=True.
+		  5. Return {processed: True, action: "..."}.
 
 		On any routing error the log row is left with processed=False and the
 		error is stored in log.error — caller can retry.
 
 		Args:
 			event_type:     Logical type derived by the webhook endpoint controller.
-			payload:        Raw parsed JSON from the WhatsApp webhook POST body.
+			payload:        Parsed JSON from the WhatsApp webhook POST body.
 			tenant_id:      Tenant scoping UUID string.
 			session:        Active SQLAlchemy session.
 			hmac_signature: Value of X-Hub-Signature-256 header (optional).
@@ -526,14 +829,27 @@ class WhatsAppService:
 		Returns:
 			dict with keys: processed (bool), action (str), detail (str|None).
 		"""
-		import hashlib
-		import hmac as _hmac_lib
-		if hmac_signature and app_secret and raw_body is not None:
-			expected = "sha256=" + _hmac_lib.new(
-				app_secret.encode(), raw_body, hashlib.sha256
-			).hexdigest()
-			if not _hmac_lib.compare_digest(expected, hmac_signature):
-				raise ValueError("WhatsApp webhook HMAC verification failed — request rejected")
+		_verify_webhook_hmac(hmac_signature, app_secret, raw_body)
+		event_type = _bounded_text(
+			event_type,
+			"event_type",
+			_MAX_EVENT_TYPE_CHARS,
+		)
+		payload = _validate_webhook_payload(payload)
+
+		status_updates: list[dict[str, Any]] = []
+		inbound_messages: list[dict[str, str]] = []
+		if event_type == "messages.statuses":
+			status_updates = [
+				_normalise_webhook_status(status)
+				for status in _extract_statuses(payload)
+			]
+		elif event_type == "messages.inbound":
+			inbound_messages = [
+				_normalise_webhook_message(message)
+				for message in _extract_messages(payload)
+			]
+
 		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppWebhookLog
 
 		log_row = WhatsAppWebhookLog(
@@ -553,16 +869,10 @@ class WhatsAppService:
 			if event_type == "messages.statuses":
 				# WhatsApp Cloud API format:
 				# payload.entry[].changes[].value.statuses[]
-				statuses = _extract_statuses(payload)
-				for s in statuses:
-					wa_message_id = s.get("id", "")
-					new_status = _map_wa_status(s.get("status", ""))
-					ts_str = s.get("timestamp")
-					ts = (
-						datetime.fromtimestamp(int(ts_str), tz=timezone.utc)
-						if ts_str
-						else None
-					)
+				for s in status_updates:
+					wa_message_id = s["id"]
+					new_status = _map_wa_status(s["status"])
+					ts = s["timestamp"]
 					if not wa_message_id or not new_status:
 						continue
 					try:
@@ -580,21 +890,16 @@ class WhatsAppService:
 							wa_message_id,
 						)
 				action = "statuses_updated"
-				detail = f"processed {len(statuses)} status update(s)"
+				detail = f"processed {len(status_updates)} status update(s)"
 
 			elif event_type == "messages.inbound":
 				# WhatsApp Cloud API format:
 				# payload.entry[].changes[].value.messages[]
-				messages = _extract_messages(payload)
-				for m in messages:
-					from_phone = m.get("from", "")
-					wa_msg_id = m.get("id", "")
-					msg_type = (m.get("type") or "text").upper()
-					body = ""
-					if msg_type == "TEXT":
-						body = (m.get("text") or {}).get("body", "")
-					elif msg_type in ("IMAGE", "DOCUMENT", "VIDEO", "AUDIO", "STICKER"):
-						body = (m.get(msg_type.lower()) or {}).get("caption", "")
+				for m in inbound_messages:
+					from_phone = m["from"]
+					wa_msg_id = m["id"]
+					msg_type = m["type"]
+					body = m["body"]
 					if from_phone and wa_msg_id:
 						WhatsAppService.process_inbound(
 							from_phone=from_phone,
@@ -605,7 +910,7 @@ class WhatsAppService:
 							message_type=msg_type,
 						)
 				action = "inbound_processed"
-				detail = f"processed {len(messages)} inbound message(s)"
+				detail = f"processed {len(inbound_messages)} inbound message(s)"
 
 			else:
 				action = "ignored"
@@ -728,7 +1033,7 @@ class WhatsAppService:
 				"reason": "WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN not set",
 			}
 		import requests as _req
-		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppMessage, WhatsAppTemplate
+		from pgappforge.plugins.erp.platform.whatsapp.models import WhatsAppTemplate
 		pending = self.get_pending_outbound(tenant_id, session)[:50]
 		dispatched = 0
 		errors: list[dict] = []
@@ -903,28 +1208,12 @@ class WhatsAppService:
 
 def _extract_statuses(payload: dict[str, Any]) -> list[dict[str, Any]]:
 	"""Pull statuses[] from a WhatsApp Cloud API webhook payload."""
-	statuses: list[dict[str, Any]] = []
-	for entry in payload.get("entry", []):
-		for change in entry.get("changes", []):
-			value = change.get("value", {})
-			statuses.extend(value.get("statuses", []))
-	# Also handle flat format (some BSPs)
-	if not statuses and "statuses" in payload:
-		statuses = payload["statuses"]
-	return statuses
+	return _extract_webhook_items(payload, "statuses")
 
 
 def _extract_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:
 	"""Pull messages[] from a WhatsApp Cloud API webhook payload."""
-	messages: list[dict[str, Any]] = []
-	for entry in payload.get("entry", []):
-		for change in entry.get("changes", []):
-			value = change.get("value", {})
-			messages.extend(value.get("messages", []))
-	# Also handle flat format (some BSPs)
-	if not messages and "messages" in payload:
-		messages = payload["messages"]
-	return messages
+	return _extract_webhook_items(payload, "messages")
 
 
 def _map_wa_status(wa_status: str) -> str:
