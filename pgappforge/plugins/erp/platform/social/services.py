@@ -48,6 +48,21 @@ _BLOCKED_HOST_SUFFIXES = (
 )
 _MAX_REMOTE_JSON_BYTES = 1_000_000
 _MAX_FEDERATION_INBOXES = 100
+_MAX_ACTIVITY_JSON_BYTES = 256_000
+_MAX_ACTIVITY_OBJECT_BYTES = 128_000
+_MAX_ACTIVITY_TYPE_CHARS = 15
+_MAX_OBJECT_TYPE_CHARS = 100
+
+_SUPPORTED_INBOUND_ACTIVITY_TYPES = {
+	"CREATE",
+	"UPDATE",
+	"DELETE",
+	"FOLLOW",
+	"LIKE",
+	"ANNOUNCE",
+	"BLOCK",
+	"UNDO",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +144,10 @@ class FederatedSocialService:
 			raise SocialServiceError(f"{field_name} cannot include credentials")
 		if parsed.fragment:
 			raise SocialServiceError(f"{field_name} cannot include a fragment")
-		host = cls._normalize_remote_domain(parsed.hostname)
+		try:
+			host = cls._normalize_remote_domain(parsed.hostname)
+		except SocialServiceError as exc:
+			raise SocialServiceError(f"{field_name}: {exc}") from exc
 		if allowed_domain and not cls._host_matches_domain(host, allowed_domain):
 			raise SocialServiceError(f"{field_name} host must match the WebFinger domain")
 		netloc = host
@@ -156,6 +174,100 @@ class FederatedSocialService:
 		if not isinstance(data, dict):
 			raise SocialServiceError(f"{context} response must be a JSON object")
 		return data
+
+	@staticmethod
+	def _json_size_bytes(value: Any, field_name: str, max_bytes: int) -> int:
+		try:
+			payload = json.dumps(
+				value,
+				ensure_ascii=False,
+				separators=(",", ":"),
+			).encode("utf-8")
+		except (TypeError, ValueError) as exc:
+			raise SocialServiceError(f"{field_name} must be JSON serializable") from exc
+		if len(payload) > max_bytes:
+			raise SocialServiceError(
+				f"{field_name} is {len(payload)} bytes; maximum is {max_bytes}"
+			)
+		return len(payload)
+
+	@classmethod
+	def _load_inbound_activity_json(cls, activity_json: str) -> dict[str, Any]:
+		if not isinstance(activity_json, str):
+			raise SocialServiceError("activity_json must be a JSON string")
+		if len(activity_json.encode("utf-8")) > _MAX_ACTIVITY_JSON_BYTES:
+			raise SocialServiceError(
+				f"activity_json is too large; maximum is {_MAX_ACTIVITY_JSON_BYTES} bytes"
+			)
+		try:
+			data = json.loads(activity_json)
+		except json.JSONDecodeError as exc:
+			raise SocialServiceError(f"Invalid JSON in activity_json: {exc}") from exc
+		if not isinstance(data, dict):
+			raise SocialServiceError("activity_json must decode to a JSON object")
+		cls._json_size_bytes(data, "activity_json", _MAX_ACTIVITY_JSON_BYTES)
+		return data
+
+	@staticmethod
+	def _bounded_activity_text(
+		value: Any,
+		field_name: str,
+		max_chars: int,
+		*,
+		required: bool = True,
+	) -> str:
+		if value is None:
+			if required:
+				raise SocialServiceError(f"{field_name} is required")
+			return ""
+		if not isinstance(value, str):
+			raise SocialServiceError(f"{field_name} must be a string")
+		text = value.strip()
+		if required and not text:
+			raise SocialServiceError(f"{field_name} is required")
+		if len(text) > max_chars:
+			raise SocialServiceError(
+				f"{field_name} is {len(text)} characters; maximum is {max_chars}"
+			)
+		return text
+
+	@staticmethod
+	def _remote_actor_username(actor_url: str) -> str:
+		parsed = urllib.parse.urlsplit(actor_url)
+		candidate = urllib.parse.unquote((parsed.path.rstrip("/").rsplit("/", 1)[-1] or "remote"))
+		candidate = re.sub(r"[^A-Za-z0-9_.-]+", "_", candidate).strip("._-")
+		if not candidate:
+			candidate = parsed.hostname or "remote"
+		return candidate[:100]
+
+	@classmethod
+	def _normalize_inbound_object(
+		cls,
+		object_data: Any,
+	) -> tuple[str, str | None, dict[str, Any]]:
+		if object_data is None:
+			return "Unknown", None, {}
+		if isinstance(object_data, str):
+			object_id = cls._normalize_remote_url(object_data, "activity.object")
+			return "Unknown", object_id, {}
+		if not isinstance(object_data, dict):
+			raise SocialServiceError("activity.object must be an object, string IRI, or null")
+
+		cls._json_size_bytes(
+			object_data,
+			"activity.object",
+			_MAX_ACTIVITY_OBJECT_BYTES,
+		)
+		object_type = cls._bounded_activity_text(
+			object_data.get("type", "Unknown"),
+			"activity.object.type",
+			_MAX_OBJECT_TYPE_CHARS,
+			required=False,
+		) or "Unknown"
+		object_id = object_data.get("id")
+		if object_id:
+			object_id = cls._normalize_remote_url(object_id, "activity.object.id")
+		return object_type, object_id, object_data
 
 	@classmethod
 	def _normalize_recipient_inboxes(cls, inboxes: list[str]) -> tuple[list[str], int]:
@@ -756,6 +868,10 @@ class FederatedSocialService:
 	) -> None:
 		"""Process an incoming ActivityPub activity from a remote server.
 
+		Input is validated before persistence: the payload must be a bounded
+		JSON object, actor/activity/object IRIs must be public HTTPS URLs, and
+		nested object content is capped before it is stored in JSONB.
+
 		Handles:
 		  Create → upsert Post stub
 		  Follow → create Follow (PENDING for local target)
@@ -769,17 +885,28 @@ class FederatedSocialService:
 		from pgappforge.plugins.erp.platform.social.events import ActivityReceivedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
-		try:
-			data = json.loads(activity_json)
-		except json.JSONDecodeError as exc:
-			raise SocialServiceError(f"Invalid JSON in activity_json: {exc}") from exc
+		data = self._load_inbound_activity_json(activity_json)
+		activity_type = self._bounded_activity_text(
+			data.get("type"),
+			"activity.type",
+			_MAX_ACTIVITY_TYPE_CHARS,
+		).upper()
+		if activity_type not in _SUPPORTED_INBOUND_ACTIVITY_TYPES:
+			log.info(
+				"FederatedSocialService: ignored unsupported inbound activity type %r",
+				activity_type,
+			)
+			return
 
-		activity_type = data.get("type", "")
-		actor_url = data.get("actor", "")
-		activity_iri = data.get("id", "")
-		object_data = data.get("object", {})
-		object_type = (
-			object_data.get("type") if isinstance(object_data, dict) else "Unknown"
+		actor_url = self._normalize_remote_url(data.get("actor"), "activity.actor")
+		actor_domain = urllib.parse.urlsplit(actor_url).hostname or ""
+		activity_iri = self._normalize_remote_url(
+			data.get("id"),
+			"activity.id",
+			allowed_domain=actor_domain,
+		)
+		object_type, object_id, object_content = self._normalize_inbound_object(
+			data.get("object", {})
 		)
 
 		# Upsert remote actor stub
@@ -790,10 +917,10 @@ class FederatedSocialService:
 			actor = Actor(
 				tenant_id=tenant_id,
 				actor_id=actor_url,
-				username=actor_url.rsplit("/", 1)[-1],
+				username=self._remote_actor_username(actor_url),
 				actor_type="PERSON",
 				is_local=False,
-				domain=actor_url.split("/")[2] if "/" in actor_url else None,
+				domain=actor_domain,
 			)
 			session.add(actor)
 			session.flush()
@@ -808,18 +935,10 @@ class FederatedSocialService:
 				tenant_id=tenant_id,
 				activity_id=activity_iri,
 				actor_id=actor.id,
-				activity_type=activity_type.upper()
-				if activity_type.upper() in (
-					"CREATE", "UPDATE", "DELETE", "FOLLOW",
-					"LIKE", "ANNOUNCE", "BLOCK", "UNDO",
-				) else "CREATE",
+				activity_type=activity_type,
 				object_type=str(object_type),
-				object_id=(
-					object_data.get("id")
-					if isinstance(object_data, dict)
-					else str(object_data)
-				),
-				object_content=object_data if isinstance(object_data, dict) else {},
+				object_id=object_id,
+				object_content=object_content,
 				published_at=datetime.now(timezone.utc),
 				visibility="PUBLIC",
 				is_local=False,
