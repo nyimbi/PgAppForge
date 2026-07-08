@@ -57,3 +57,5 @@ class IntegrationRun(Model):
 	errors = sa.Column(sa.Integer, nullable=False, default=0)
 	status = sa.Column(sa.String(20), nullable=False, default="RUNNING")
 	completed_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
+	result_payload = sa.Column(JSONB, nullable=True, comment="Mapped payload produced by this run")
+	error_message = sa.Column(sa.Text, nullable=True, comment="Failure reason for failed runs")

@@ -225,6 +225,8 @@ def test_execute_flow_marks_mapping_errors_as_failed_runs():
     assert run.status == "FAILED"
     assert run.records_processed == 0
     assert run.errors == 1
+    assert run.result_payload is None
+    assert "missing source field" in run.error_message
     assert session.added == [run]
     assert session.executed
 
@@ -247,3 +249,28 @@ def test_execute_flow_completes_valid_nested_mapping():
     assert run.status == "COMPLETED"
     assert run.records_processed == 1
     assert run.errors == 0
+    assert run.result_payload == {"display_name": "alice", "source": "ERP"}
+    assert run.error_message is None
+
+
+def test_execute_flow_fails_non_serializable_mapped_output():
+    service = IntegrationService()
+    session = _Session(
+        flows={
+            "flow-1": _flow(
+                [{"source_field": "$customer.payload", "target_field": "payload"}]
+            )
+        }
+    )
+
+    run = service.execute_flow(
+        "flow-1",
+        {"customer": {"payload": object()}},
+        session,
+    )
+
+    assert run.status == "FAILED"
+    assert run.records_processed == 0
+    assert run.errors == 1
+    assert run.result_payload is None
+    assert "mapped payload must be JSON serializable" in run.error_message

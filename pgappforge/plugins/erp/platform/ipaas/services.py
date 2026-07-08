@@ -172,6 +172,8 @@ class IntegrationService:
         processed = 0
         errors = 0
         status = "COMPLETED"
+        result_payload: dict[str, Any] | None = None
+        error_message: str | None = None
         try:
             mapped: dict[str, Any] = {}
             for item in self._validate_flow_mapping(flow.mapping):
@@ -180,21 +182,28 @@ class IntegrationService:
                     item["source_field"],
                     item.get("transform"),
                 )
+            self._ensure_json_serializable(mapped, "mapped payload")
+            result_payload = mapped
             processed = 1
-        except IntegrationServiceError:
+        except IntegrationServiceError as exc:
             errors = 1
             status = "FAILED"
+            error_message = str(exc)
         completed_at = datetime.now(timezone.utc)
         run.records_processed = processed
         run.errors = errors
         run.status = status
         run.completed_at = completed_at
+        run.result_payload = result_payload
+        run.error_message = error_message
         session.execute(
             sa.update(IntegrationRun).where(IntegrationRun.id == run.id).values(
                 records_processed=processed,
                 errors=errors,
                 status=status,
                 completed_at=completed_at,
+                result_payload=result_payload,
+                error_message=error_message,
             )
         )
         return run
