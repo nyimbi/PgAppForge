@@ -117,11 +117,51 @@ class TestInstallPlugin:
 		assert ok is False
 		assert "failed" in msg.lower() or "import" in msg.lower()
 
+	def test_install_rejects_invalid_module_path_before_import(self):
+		ok, msg = install_plugin("../bad", _FakeAppBuilder())
+		assert ok is False
+		assert "invalid module_path" in msg.lower()
+
+	def test_install_respects_allowed_prefixes(self):
+		_make_fake_plugin_module("test_mod_blocked", "blocked_plugin")
+		ok, msg = install_plugin(
+			"test_mod_blocked",
+			_FakeAppBuilder(),
+			allowed_prefixes=("pgappforge.plugins.",),
+		)
+		assert ok is False
+		assert "allowed prefixes" in msg
+
+	def test_install_accepts_matching_allowed_prefix(self):
+		_make_fake_plugin_module("test_mod_allowed", "allowed_plugin")
+		ok, msg = install_plugin(
+			"test_mod_allowed",
+			_FakeAppBuilder(),
+			allowed_prefixes=("test_",),
+		)
+		assert ok is True
+		assert "allowed_plugin" in msg
+
 	def test_install_no_plugin_class_fails(self):
 		empty_mod = types.ModuleType("test_mod_empty")
 		sys.modules["test_mod_empty"] = empty_mod
 		ok, msg = install_plugin("test_mod_empty", _FakeAppBuilder())
 		assert ok is False
+
+	def test_install_factory_result_must_expose_activate(self):
+		mod = types.ModuleType("test_mod_no_activate")
+
+		class NoActivate:
+			name = "no_activate"
+
+		def create_plugin(appbuilder):
+			return NoActivate()
+
+		mod.create_plugin = create_plugin
+		sys.modules["test_mod_no_activate"] = mod
+		ok, msg = install_plugin("test_mod_no_activate", _FakeAppBuilder())
+		assert ok is False
+		assert "activate" in msg.lower()
 
 	def test_install_activate_failure_returns_false(self):
 		_make_fake_plugin_module("test_mod_fail_act", "fail_plugin", fail_activate=True)
@@ -291,6 +331,11 @@ class TestHotReloadAPI:
 		app = Flask(__name__)
 		app.config["TESTING"] = True
 		app.config["SECRET_KEY"] = "test-secret"
+		app.config["PGAPPFORGE_HOT_RELOAD_ALLOWED_PREFIXES"] = (
+			"pgappforge.plugins.",
+			"test_",
+			"json",
+		)
 
 		# Stub has_access decorator to pass through
 		import pgappforge.security.decorators as sec_dec
@@ -386,10 +431,9 @@ class TestHotReloadAPI:
 		assert data["success"] is True
 
 	def test_reload_returns_200(self, client):
-		_make_fake_plugin_module("test_api_reload4", "api_reload4_plugin")
 		rv = client.post(
 			"/admin/plugins/reload",
-			json={"module_path": "test_api_reload4"},
+			json={"module_path": "json"},
 			content_type="application/json",
 		)
 		assert rv.status_code == 200

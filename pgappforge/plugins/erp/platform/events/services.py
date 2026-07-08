@@ -75,6 +75,15 @@ class EventBusService:
 			get_event_bus,
 		)
 		from pgappforge.plugins.erp.foundation.events import emit_event
+		retry_count = self._positive_policy_int(retry_count, "retry_count")
+		dead_letter_after = self._positive_policy_int(
+			dead_letter_after,
+			"dead_letter_after",
+		)
+		if retry_count > dead_letter_after:
+			raise EventBusServiceError(
+				"retry_count cannot exceed dead_letter_after"
+			)
 
 		# Check for existing active subscription
 		existing = session.execute(
@@ -285,6 +294,17 @@ class EventBusService:
 			}
 			for r in rows
 		]
+
+
+	@staticmethod
+	def _positive_policy_int(value: Any, field_name: str) -> int:
+		try:
+			parsed = int(value)
+		except (TypeError, ValueError) as exc:
+			raise EventBusServiceError(f"{field_name} must be a positive integer") from exc
+		if parsed < 1:
+			raise EventBusServiceError(f"{field_name} must be a positive integer")
+		return parsed
 
 
 __all__ = [

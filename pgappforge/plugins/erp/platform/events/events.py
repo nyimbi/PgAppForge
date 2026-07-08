@@ -116,7 +116,7 @@ class EventBus:
 		self._deliver(event, session)
 
 	def _deliver(self, event: DomainEvent, session: Any) -> None:
-		"""Deliver to self._handlers; write EventDeliveryLog for each attempt."""
+		"""Deliver to durable subscriptions; write one log row per attempt."""
 		from pgappforge.plugins.erp.platform.events.models import EventDeliveryLog
 		from pgappforge.plugins.erp.platform.events.models import EventSubscription
 		import sqlalchemy as sa
@@ -134,36 +134,154 @@ class EventBus:
 			subs = []
 
 		for sub in subs:
-			attempt = 1
-			status = "DELIVERED"
-			error_msg = None
-			# Try to call the handler function (dotted import path)
-			try:
-				handler = self._resolve_handler(sub.handler_function)
-				if handler:
-					handler(event)
-			except Exception as exc:
-				status = "FAILED"
-				error_msg = str(exc)[:2000]
-				log.warning(
-					"EventBus: handler %r for %r raised: %s",
-					sub.handler_function,
-					event.event_type,
-					exc,
-				)
-
-			try:
-				log_row = EventDeliveryLog(
-					event_id=event.event_id,
-					subscription_id=sub.id,
-					delivery_attempt=attempt,
-					delivered_at=datetime.now(timezone.utc),
-					status=status,
+			handler = self._resolve_handler(sub.handler_function)
+			max_attempts = self._max_delivery_attempts(sub)
+			if handler is None:
+				error_msg = f"Cannot resolve handler {sub.handler_function!r}"
+				self._record_delivery_attempt(
+					EventDeliveryLog,
+					event,
+					sub,
+					attempt=1,
+					status="DEAD_LETTER",
 					error_message=error_msg,
+					session=session,
 				)
-				session.add(log_row)
-			except Exception as exc:
-				log.error("EventBus: failed to write EventDeliveryLog: %s", exc)
+				self._emit_delivery_failure_event(
+					event,
+					sub,
+					attempt=1,
+					error_message=error_msg,
+					session=session,
+					dead_letter=True,
+				)
+				continue
+
+			for attempt in range(1, max_attempts + 1):
+				try:
+					handler(event)
+				except Exception as exc:
+					error_msg = str(exc)[:2000]
+					is_terminal = attempt >= max_attempts
+					status = "DEAD_LETTER" if is_terminal else "FAILED"
+					self._record_delivery_attempt(
+						EventDeliveryLog,
+						event,
+						sub,
+						attempt=attempt,
+						status=status,
+						error_message=error_msg,
+						session=session,
+					)
+					self._emit_delivery_failure_event(
+						event,
+						sub,
+						attempt=attempt,
+						error_message=error_msg,
+						session=session,
+						dead_letter=is_terminal,
+					)
+					log.warning(
+						"EventBus: handler %r for %r failed on attempt %s/%s: %s",
+						sub.handler_function,
+						event.event_type,
+						attempt,
+						max_attempts,
+						exc,
+					)
+					if is_terminal:
+						break
+					continue
+
+				self._record_delivery_attempt(
+					EventDeliveryLog,
+					event,
+					sub,
+					attempt=attempt,
+					status="DELIVERED",
+					error_message=None,
+					session=session,
+				)
+				break
+
+	@staticmethod
+	def _max_delivery_attempts(sub: Any) -> int:
+		"""Return the bounded retry count for a subscription row."""
+		retry_count = EventBus._positive_int(getattr(sub, "retry_count", None), 1)
+		dead_letter_after = EventBus._positive_int(
+			getattr(sub, "dead_letter_after", None),
+			retry_count,
+		)
+		return max(1, min(retry_count, dead_letter_after))
+
+	@staticmethod
+	def _positive_int(value: Any, default: int) -> int:
+		try:
+			parsed = int(value)
+		except (TypeError, ValueError):
+			return default
+		return parsed if parsed > 0 else default
+
+	@staticmethod
+	def _record_delivery_attempt(
+		log_model: Any,
+		event: DomainEvent,
+		sub: Any,
+		attempt: int,
+		status: str,
+		error_message: str | None,
+		session: Any,
+	) -> None:
+		try:
+			log_row = log_model(
+				event_id=event.event_id,
+				subscription_id=sub.id,
+				delivery_attempt=attempt,
+				delivered_at=datetime.now(timezone.utc),
+				status=status,
+				error_message=error_message,
+			)
+			session.add(log_row)
+		except Exception as exc:
+			log.error("EventBus: failed to write EventDeliveryLog: %s", exc)
+
+	@staticmethod
+	def _emit_delivery_failure_event(
+		event: DomainEvent,
+		sub: Any,
+		attempt: int,
+		error_message: str,
+		session: Any,
+		dead_letter: bool,
+	) -> None:
+		"""Emit best-effort delivery failure/dead-letter domain events."""
+		try:
+			emit_event(
+				EventDeliveryFailedEvent(
+					aggregate_id=event.event_id,
+					aggregate_type="DomainEvent",
+					tenant_id=event.tenant_id,
+					source_event_id=event.event_id,
+					subscription_id=str(sub.id),
+					attempt=attempt,
+					error_message=error_message,
+				),
+				session,
+			)
+			if dead_letter:
+				emit_event(
+					EventDeliveryDeadLetteredEvent(
+						aggregate_id=event.event_id,
+						aggregate_type="DomainEvent",
+						tenant_id=event.tenant_id,
+						source_event_id=event.event_id,
+						subscription_id=str(sub.id),
+						total_attempts=attempt,
+					),
+					session,
+				)
+		except Exception as exc:
+			log.warning("EventBus: failed to emit delivery outcome event: %s", exc)
 
 	def replay_events(
 		self,

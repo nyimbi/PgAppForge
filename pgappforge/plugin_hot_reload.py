@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import importlib
 import logging
+import re
+from collections.abc import Sequence
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -34,12 +36,21 @@ log = logging.getLogger(__name__)
 # Keys are plugin names; values are plugin instances.
 _dynamic_plugins: dict[str, Any] = {}
 
+_MODULE_PATH_RE = re.compile(
+	r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"
+)
+_DEFAULT_ADMIN_ALLOWED_PREFIXES = ("pgappforge.plugins.",)
+
 
 # --------------------------------------------------------------------------- #
 # Core operations                                                              #
 # --------------------------------------------------------------------------- #
 
-def install_plugin(plugin_module_path: str, appbuilder: Any) -> tuple[bool, str]:
+def install_plugin(
+	plugin_module_path: str,
+	appbuilder: Any,
+	allowed_prefixes: Sequence[str] | None = None,
+) -> tuple[bool, str]:
 	"""Install a PgAppForge plugin at runtime without restarting.
 
 	Works for plugins that:
@@ -58,6 +69,11 @@ def install_plugin(plugin_module_path: str, appbuilder: Any) -> tuple[bool, str]
 	Returns:
 		``(True, success_message)`` or ``(False, error_message)``.
 	"""
+	plugin_module_path = (plugin_module_path or "").strip()
+	validation_error = _validate_module_path(plugin_module_path, allowed_prefixes)
+	if validation_error:
+		return False, validation_error
+
 	try:
 		mod = importlib.import_module(plugin_module_path)
 	except Exception as exc:
@@ -109,6 +125,10 @@ def install_plugin(plugin_module_path: str, appbuilder: Any) -> tuple[bool, str]
 	if plugin is None:
 		return False, f"No plugin class found in {plugin_module_path}"
 
+	validation_error = _validate_plugin_instance(plugin, plugin_module_path)
+	if validation_error:
+		return False, validation_error
+
 	# ── Activate ─────────────────────────────────────────────────────────────
 	try:
 		result = plugin.activate()
@@ -124,6 +144,46 @@ def install_plugin(plugin_module_path: str, appbuilder: Any) -> tuple[bool, str]
 	msg = f"Plugin '{plugin_name}' installed successfully"
 	log.info("hot-install: %s", msg)
 	return True, msg
+
+
+def _validate_module_path(
+	module_path: str,
+	allowed_prefixes: Sequence[str] | None = None,
+) -> str | None:
+	if not module_path:
+		return "module_path is required"
+	if len(module_path) > 500:
+		return "Invalid module_path: path is too long"
+	if not _MODULE_PATH_RE.fullmatch(module_path):
+		return "Invalid module_path: use a dotted Python import path"
+	if allowed_prefixes and not _matches_allowed_prefix(module_path, allowed_prefixes):
+		allowed = ", ".join(allowed_prefixes)
+		return f"Module path {module_path!r} is not in the allowed prefixes: {allowed}"
+	return None
+
+
+def _matches_allowed_prefix(module_path: str, allowed_prefixes: Sequence[str]) -> bool:
+	for prefix in allowed_prefixes:
+		normalized = (prefix or "").strip()
+		if not normalized:
+			continue
+		if module_path == normalized.rstrip("."):
+			return True
+		if module_path.startswith(normalized):
+			return True
+	return False
+
+
+def _validate_plugin_instance(plugin: Any, module_path: str) -> str | None:
+	if not callable(getattr(plugin, "activate", None)):
+		return f"Plugin from {module_path} must expose callable activate()"
+	name = getattr(plugin, "name", None)
+	metadata = getattr(plugin, "metadata", None)
+	if name is None and metadata is not None:
+		name = getattr(metadata, "name", None)
+	if name is not None and not str(name).strip():
+		return f"Plugin from {module_path} has an empty name"
+	return None
 
 
 def disable_plugin(plugin_name: str, appbuilder: Any) -> tuple[bool, str]:
@@ -158,7 +218,11 @@ def disable_plugin(plugin_name: str, appbuilder: Any) -> tuple[bool, str]:
 	return True, msg
 
 
-def reload_plugin(plugin_module_path: str, appbuilder: Any) -> tuple[bool, str]:
+def reload_plugin(
+	plugin_module_path: str,
+	appbuilder: Any,
+	allowed_prefixes: Sequence[str] | None = None,
+) -> tuple[bool, str]:
 	"""Reload a plugin's Python module (re-reads .py files from disk).
 
 	Useful after updating a plugin's service/business-logic layer.
@@ -173,6 +237,11 @@ def reload_plugin(plugin_module_path: str, appbuilder: Any) -> tuple[bool, str]:
 	Returns:
 		``(True, message)`` or ``(False, error_message)``.
 	"""
+	plugin_module_path = (plugin_module_path or "").strip()
+	validation_error = _validate_module_path(plugin_module_path, allowed_prefixes)
+	if validation_error:
+		return False, validation_error
+
 	try:
 		mod = importlib.import_module(plugin_module_path)
 		importlib.reload(mod)
@@ -241,7 +310,15 @@ def setup_hot_reload_api(app, appbuilder: Any) -> None:
 		module_path = (data.get("module_path") or "").strip()
 		if not module_path:
 			return jsonify({"success": False, "message": "module_path is required"}), 400
-		success, message = install_plugin(module_path, appbuilder)
+		allowed_prefixes = app.config.get(
+			"PGAPPFORGE_HOT_RELOAD_ALLOWED_PREFIXES",
+			_DEFAULT_ADMIN_ALLOWED_PREFIXES,
+		)
+		success, message = install_plugin(
+			module_path,
+			appbuilder,
+			allowed_prefixes=allowed_prefixes,
+		)
 		status = 200 if success else 500
 		return jsonify({"success": success, "message": message}), status
 
@@ -263,7 +340,15 @@ def setup_hot_reload_api(app, appbuilder: Any) -> None:
 		module_path = (data.get("module_path") or "").strip()
 		if not module_path:
 			return jsonify({"success": False, "message": "module_path is required"}), 400
-		success, message = reload_plugin(module_path, appbuilder)
+		allowed_prefixes = app.config.get(
+			"PGAPPFORGE_HOT_RELOAD_ALLOWED_PREFIXES",
+			_DEFAULT_ADMIN_ALLOWED_PREFIXES,
+		)
+		success, message = reload_plugin(
+			module_path,
+			appbuilder,
+			allowed_prefixes=allowed_prefixes,
+		)
 		status = 200 if success else 500
 		return jsonify({"success": success, "message": message}), status
 
