@@ -22,12 +22,29 @@ from .events import (
 )
 from .models import Anomaly, AnomalyDetectionRun
 
-__all__ = ["AnomalyDetectionService"]
+__all__ = [
+	"AnomalyDetectionService",
+	"AnomalyDetectionServiceError",
+	"AnomalyNotFoundError",
+	"InvalidAnomalyResolutionError",
+]
 
 log = logging.getLogger(__name__)
 
 _VALID_RESOLVE_STATUSES = {"RESOLVED", "FALSE_POSITIVE"}
 _WEEKEND_DAYS = {5, 6}  # Saturday=5, Sunday=6
+
+
+class AnomalyDetectionServiceError(Exception):
+	"""Base error for anomaly detection service violations."""
+
+
+class InvalidAnomalyResolutionError(AnomalyDetectionServiceError):
+	"""Anomaly resolution input is invalid."""
+
+
+class AnomalyNotFoundError(AnomalyDetectionServiceError):
+	"""No anomaly exists for the requested id."""
 
 
 def _emit(event: Any, session: Session | None = None) -> None:
@@ -471,13 +488,19 @@ class AnomalyDetectionService:
 		status: str,
 		session: Session,
 	) -> Anomaly:
-		assert status in _VALID_RESOLVE_STATUSES, (
-			f"status must be one of {_VALID_RESOLVE_STATUSES}, got {status!r}"
-		)
+		anomaly_id = self._require_text(anomaly_id, "anomaly_id", max_length=36)
+		resolved_by = self._require_text(resolved_by, "resolved_by", max_length=50)
+		resolution = self._require_text(resolution, "resolution", max_length=5000)
+		status = self._normalize_resolution_status(status)
 
 		stmt = select(Anomaly).where(Anomaly.id == anomaly_id)
 		anomaly = session.execute(stmt).scalar_one_or_none()
-		assert anomaly is not None, f"Anomaly {anomaly_id!r} not found"
+		if anomaly is None:
+			raise AnomalyNotFoundError(f"Anomaly {anomaly_id!r} not found")
+		if getattr(anomaly, "status", "OPEN") not in {"OPEN", status}:
+			raise InvalidAnomalyResolutionError(
+				f"Anomaly {anomaly_id!r} is already {anomaly.status!r}"
+			)
 
 		anomaly.status = status
 		anomaly.resolved_by = resolved_by
@@ -494,6 +517,31 @@ class AnomalyDetectionService:
 			session,
 		)
 		return anomaly
+
+	@staticmethod
+	def _require_text(value: str, field_name: str, max_length: int) -> str:
+		if not isinstance(value, str):
+			raise InvalidAnomalyResolutionError(f"{field_name} must be a string")
+		text = value.strip()
+		if not text:
+			raise InvalidAnomalyResolutionError(f"{field_name} is required")
+		if len(text) > max_length:
+			raise InvalidAnomalyResolutionError(
+				f"{field_name} must be at most {max_length} characters"
+			)
+		return text
+
+	@staticmethod
+	def _normalize_resolution_status(value: str) -> str:
+		if not isinstance(value, str):
+			raise InvalidAnomalyResolutionError("status must be a string")
+		status = value.strip().upper()
+		if status not in _VALID_RESOLVE_STATUSES:
+			allowed = ", ".join(sorted(_VALID_RESOLVE_STATUSES))
+			raise InvalidAnomalyResolutionError(
+				f"Invalid anomaly resolution status {value!r}; expected one of {allowed}"
+			)
+		return status
 
 	def get_anomaly_dashboard(self, tenant_id: str, session: Session) -> dict[str, Any]:
 		stmt = (
