@@ -110,10 +110,14 @@ class OperationalPlugin(BasePlugin):
 		from pgappforge.plugins.erp.analytics.operational.views import (
 			AnalyticsQueryView,
 			AnalyticsReportView,
+			FinancialAnalyticsDashboardView,
 			KPIDefinitionView,
 			KPISnapshotView,
+			OperationalDashboardView,
 		)
 		cat = self.config.get("ANALYTICS_MENU_CATEGORY", "Analytics")
+		self.add_view(FinancialAnalyticsDashboardView, "Financial Dashboard", icon="fa-money", category=cat)
+		self.add_view(OperationalDashboardView, "Operational Dashboard", icon="fa-industry", category=cat)
 		self.add_view(KPIDefinitionView, "KPI Definitions", icon="fa-tachometer", category=cat)
 		self.add_view(KPISnapshotView, "KPI Snapshots", icon="fa-chart-line", category=cat)
 		self.add_view(AnalyticsQueryView, "Saved Queries", icon="fa-database", category=cat)
