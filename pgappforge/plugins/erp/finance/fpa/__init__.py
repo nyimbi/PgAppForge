@@ -149,19 +149,11 @@ class FPAPlugin(BasePlugin):
 
 	def register_views(self) -> None:
 		"""Register FP&A views under the configured menu category."""
-		# Views are defined in views.py (generated separately).
-		# Guard import so the plugin can load even before views exist.
 		try:
 			from pgappforge.plugins.erp.finance.fpa.views import (
 				BudgetCycleView,
-				BudgetDriverView,
-				BudgetLineView,
-				BudgetVersionView,
 				FPADashboardView,
-				ForecastSnapshotView,
-				KPITargetView,
 				ScenarioView,
-				FPAReportView,
 			)
 		except ImportError:
 			log.warning("FPAPlugin.register_views: views module not available — skipping.")
@@ -182,45 +174,9 @@ class FPAPlugin(BasePlugin):
 			category=cat,
 		)
 		self.add_view(
-			BudgetVersionView,
-			"Budget Versions",
-			icon="fa-code-fork",
-			category=cat,
-		)
-		self.add_view(
-			BudgetLineView,
-			"Budget Lines",
-			icon="fa-table",
-			category=cat,
-		)
-		self.add_view(
-			BudgetDriverView,
-			"Budget Drivers",
-			icon="fa-cogs",
-			category=cat,
-		)
-		self.add_view(
 			ScenarioView,
 			"Scenarios",
 			icon="fa-random",
-			category=cat,
-		)
-		self.add_view(
-			ForecastSnapshotView,
-			"Forecast Snapshots",
-			icon="fa-history",
-			category=cat,
-		)
-		self.add_view(
-			KPITargetView,
-			"KPI Targets",
-			icon="fa-bullseye",
-			category=cat,
-		)
-		self.add_view(
-			FPAReportView,
-			"FP&A Reports",
-			icon="fa-bar-chart",
 			category=cat,
 		)
 		log.info("FPAPlugin: views registered under category %r", cat)

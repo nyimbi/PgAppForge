@@ -36,6 +36,7 @@ class PeriodCloseTemplateView(ModelView):
 		'description': 'Description',
 		'tasks': 'Tasks',
 	}
+	search_columns = ['name', 'tenant_id', 'is_default']
 	add_exclude_columns = ['id']
 	edit_exclude_columns = ['id']
 
@@ -44,7 +45,7 @@ class PeriodCloseView(ModelView):
 	datamodel = SQLAInterface(PeriodClose)
 
 	list_columns = ['period', 'entity_id', 'status', 'started_at', 'closed_at', 'started_by']
-	show_columns = ['id', 'period', 'entity_id', 'status', 'started_at',
+	show_columns = ['id', 'period', 'status', 'started_at',
 					'closed_at', 'started_by', 'closed_by']
 	label_columns = {
 		'period': 'Period',
@@ -55,6 +56,7 @@ class PeriodCloseView(ModelView):
 		'started_by': 'Started By',
 		'closed_by': 'Closed By',
 	}
+	search_columns = ['period', 'entity_id', 'status', 'started_by', 'closed_by']
 	add_exclude_columns = ['id']
 	edit_exclude_columns = ['id']
 
@@ -85,6 +87,7 @@ class PeriodCloseTaskView(ModelView):
 		'depends_on': 'Depends On',
 		'notes': 'Notes',
 	}
+	search_columns = ['close_id', 'task_code', 'title', 'status', 'owner_role', 'owner_id']
 	add_exclude_columns = ['id']
 	edit_exclude_columns = ['id']
 

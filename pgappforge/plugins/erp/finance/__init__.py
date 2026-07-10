@@ -42,12 +42,12 @@ def _finance_kpi_cards(self, kpis: list[dict]) -> Markup:
 		is_cent_value = (
 			isinstance(value, int)
 			and not isinstance(value, bool)
-			and value > 1000
+			and abs(value) > 100
 			and ("cent" in label.lower() or kpi.get("format") == "currency")
 		)
 		if is_cent_value:
 			prefix = str(kpi.get("currency_prefix") or kpi.get("currency") or "$")
-			displayed = f"{prefix}{value / 100:,.0f}"
+			displayed = f"{prefix}{value // 100:,}"
 			trend = kpi.get("trend")
 			trend_html = f' <span style="font-size:0.8em">{escape(str(trend))}</span>' if trend else ""
 			parts.append(f"""

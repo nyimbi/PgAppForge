@@ -31,6 +31,7 @@ class HedgeRelationshipView(ModelView):
 		'effectiveness_lower': 'Effectiveness Lower %',
 		'effectiveness_upper': 'Effectiveness Upper %',
 	}
+	search_columns = ['name', 'hedged_item_type', 'hedging_instrument_type', 'currency_code', 'status']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -47,7 +48,7 @@ class HedgeJournalEntryView(ModelView):
 					'hedged_item_change_cents', 'effectiveness_ratio',
 					'effective_gain_cents', 'ineffective_gain_cents', 'oci_cents',
 					'pl_cents', 'gl_posted']
-	show_columns = ['id', 'period', 'hedging_instrument_change_cents',
+	show_columns = ['id', 'hedge_id', 'period', 'hedging_instrument_change_cents',
 					'hedged_item_change_cents', 'effectiveness_ratio',
 					'effective_gain_cents', 'ineffective_gain_cents', 'oci_cents',
 					'pl_cents', 'gl_posted', 'created_at']
@@ -64,6 +65,7 @@ class HedgeJournalEntryView(ModelView):
 		'gl_posted': 'GL Posted',
 		'created_at': 'Created At',
 	}
+	search_columns = ['hedge_id', 'period', 'gl_posted']
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 

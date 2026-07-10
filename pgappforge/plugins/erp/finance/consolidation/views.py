@@ -28,6 +28,7 @@ class ConsolidationGroupView(ModelView):
 		'created_at': 'Created At',
 		'updated_at': 'Updated At',
 	}
+	search_columns = ['name', 'reporting_entity_id', 'reporting_currency', 'is_active']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -37,7 +38,7 @@ class ConsolidationRunView(ModelView):
 
 	list_columns = ['group_id', 'period', 'status', 'started_at',
 					'entities_processed', 'eliminations_count']
-	show_columns = ['id', 'period', 'status', 'started_at', 'completed_at',
+	show_columns = ['id', 'group_id', 'period', 'status', 'started_at', 'completed_at',
 					'entities_processed', 'eliminations_count', 'error_message',
 					'result_data', 'created_at', 'updated_at']
 	label_columns = {
@@ -53,6 +54,7 @@ class ConsolidationRunView(ModelView):
 		'created_at': 'Created At',
 		'updated_at': 'Updated At',
 	}
+	search_columns = ['group_id', 'period', 'status']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -62,7 +64,7 @@ class IntercompanyEliminationView(ModelView):
 
 	list_columns = ['run_id', 'elimination_type', 'debtor_entity_id',
 					'creditor_entity_id', 'amount_cents', 'currency_code']
-	show_columns = ['id', 'debtor_entity_id', 'creditor_entity_id',
+	show_columns = ['id', 'run_id', 'debtor_entity_id', 'creditor_entity_id',
 					'elimination_type', 'amount_cents', 'currency_code',
 					'account_code', 'description', 'created_at', 'updated_at']
 	label_columns = {
@@ -77,6 +79,8 @@ class IntercompanyEliminationView(ModelView):
 		'created_at': 'Created At',
 		'updated_at': 'Updated At',
 	}
+	search_columns = ['run_id', 'elimination_type', 'debtor_entity_id',
+					  'creditor_entity_id', 'currency_code', 'account_code']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -86,7 +90,7 @@ class MinorityInterestView(ModelView):
 
 	list_columns = ['run_id', 'subsidiary_entity_id', 'minority_ownership_pct',
 					'subsidiary_equity_cents', 'minority_interest_cents', 'period']
-	show_columns = ['id', 'subsidiary_entity_id', 'minority_ownership_pct',
+	show_columns = ['id', 'run_id', 'subsidiary_entity_id', 'minority_ownership_pct',
 					'subsidiary_equity_cents', 'minority_interest_cents',
 					'period', 'created_at', 'updated_at']
 	label_columns = {
@@ -99,6 +103,7 @@ class MinorityInterestView(ModelView):
 		'created_at': 'Created At',
 		'updated_at': 'Updated At',
 	}
+	search_columns = ['run_id', 'subsidiary_entity_id', 'period']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 

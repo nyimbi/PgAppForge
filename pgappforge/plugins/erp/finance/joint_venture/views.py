@@ -23,6 +23,7 @@ class JointVentureView(ModelView):
 		'created_at': 'Created At',
 		'partners': 'Partners',
 	}
+	search_columns = ['name', 'operator_entity_id', 'status']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -31,7 +32,7 @@ class JVCashCallView(ModelView):
 	datamodel = SQLAInterface(JVCashCall)
 
 	list_columns = ['jv_id', 'period', 'total_cents', 'due_date', 'status']
-	show_columns = ['id', 'period', 'total_cents', 'due_date', 'status',
+	show_columns = ['id', 'jv_id', 'period', 'total_cents', 'due_date', 'status',
 					'distribution', 'created_at']
 	label_columns = {
 		'jv_id': 'Joint Venture',
@@ -42,6 +43,7 @@ class JVCashCallView(ModelView):
 		'distribution': 'Distribution',
 		'created_at': 'Created At',
 	}
+	search_columns = ['jv_id', 'period', 'status']
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 
@@ -50,7 +52,7 @@ class JVBillingRecordView(ModelView):
 	datamodel = SQLAInterface(JVBilling)
 
 	list_columns = ['jv_id', 'expense_journal_id', 'period', 'created_at']
-	show_columns = ['id', 'expense_journal_id', 'period', 'distribution',
+	show_columns = ['id', 'jv_id', 'expense_journal_id', 'period', 'distribution',
 					'created_at']
 	label_columns = {
 		'jv_id': 'Joint Venture',
@@ -59,6 +61,7 @@ class JVBillingRecordView(ModelView):
 		'created_at': 'Created At',
 		'distribution': 'Distribution',
 	}
+	search_columns = ['jv_id', 'expense_journal_id', 'period']
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 

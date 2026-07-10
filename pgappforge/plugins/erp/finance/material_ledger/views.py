@@ -50,6 +50,7 @@ class MaterialLedgerEntryView(ModelView):
 		'created_at': 'Created At',
 		'updated_at': 'Updated At',
 	}
+	search_columns = ['material_id', 'plant_id', 'period_id', 'costing_status', 'currency_code']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -59,7 +60,7 @@ class MaterialMovementView(ModelView):
 
 	list_columns = ['ledger_id', 'posting_date', 'movement_type', 'quantity',
 					'preliminary_value_cents', 'variance_type']
-	show_columns = ['id', 'posting_date', 'movement_type', 'quantity',
+	show_columns = ['id', 'ledger_id', 'posting_date', 'movement_type', 'quantity',
 					'unit_of_measure', 'preliminary_value_cents',
 					'actual_value_cents', 'variance_cents', 'variance_type',
 					'source_document_type', 'source_document_id', 'is_reversal',
@@ -80,6 +81,9 @@ class MaterialMovementView(ModelView):
 		'posting_reference': 'Posting Reference',
 		'created_at': 'Created At',
 	}
+	search_columns = ['ledger_id', 'movement_type', 'variance_type',
+					  'source_document_type', 'source_document_id',
+					  'posting_reference']
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 
@@ -90,7 +94,7 @@ class ActualCostRevaluationView(ModelView):
 	list_title = 'Actual Cost Settlement Runs'
 	list_columns = ['period_id', 'plant_id', 'status', 'run_at',
 					'materials_processed', 'total_variance_cents']
-	show_columns = ['id', 'plant_id', 'run_at', 'run_by', 'status',
+	show_columns = ['id', 'period_id', 'plant_id', 'run_at', 'run_by', 'status',
 					'levels_processed', 'materials_processed',
 					'total_variance_cents', 'error_log', 'completed_at',
 					'created_at']
@@ -107,6 +111,7 @@ class ActualCostRevaluationView(ModelView):
 		'completed_at': 'Completed At',
 		'created_at': 'Created At',
 	}
+	search_columns = ['period_id', 'plant_id', 'status', 'run_by']
 	add_exclude_columns = ['id', 'created_at']
 	edit_exclude_columns = ['id', 'created_at']
 

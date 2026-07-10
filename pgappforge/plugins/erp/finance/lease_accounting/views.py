@@ -31,6 +31,7 @@ class LeaseView(ModelView):
 		'currency_code': 'Currency',
 		'payment_schedule': 'Payment Schedule',
 	}
+	search_columns = ['name', 'lease_type', 'counterparty', 'standard', 'status', 'currency_code']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_at', 'updated_at']
 
@@ -41,7 +42,7 @@ class LeasePaymentScheduleView(ModelView):
 	list_columns = ['lease_id', 'period', 'payment_cents', 'interest_cents',
 					'principal_cents', 'rou_balance_cents', 'liability_balance_cents',
 					'gl_posted']
-	show_columns = ['id', 'period', 'payment_cents', 'interest_cents',
+	show_columns = ['id', 'lease_id', 'period', 'payment_cents', 'interest_cents',
 					'principal_cents', 'rou_balance_cents', 'liability_balance_cents',
 					'gl_posted']
 	label_columns = {
@@ -54,6 +55,7 @@ class LeasePaymentScheduleView(ModelView):
 		'liability_balance_cents': 'Liability Balance (cents)',
 		'gl_posted': 'GL Posted',
 	}
+	search_columns = ['lease_id', 'period', 'gl_posted']
 	add_exclude_columns = ['id']
 	edit_exclude_columns = ['id']
 
