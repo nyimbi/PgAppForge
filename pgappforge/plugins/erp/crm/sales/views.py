@@ -21,7 +21,7 @@ import logging
 from datetime import date, datetime, timezone
 
 import sqlalchemy as sa
-from flask import abort, jsonify, make_response, render_template, request
+from flask import abort, jsonify, make_response, request
 
 from pgappforge import expose
 from pgappforge.plugins.erp.base_view import BaseERPView
@@ -627,36 +627,68 @@ class OpportunityView(BaseERPView):
 		opps = session.execute(
 			sa.select(Opportunity)
 			.order_by(Opportunity.stage, sa.desc(Opportunity.amount_cents), Opportunity.expected_close_date)
-			.limit(1000)
 		).scalars().all()
 
 		stage_order = list(OPP_STAGE)
-		seen_stages = {opp.stage or "UNSPECIFIED" for opp in opps}
-		stages = stage_order + sorted(seen_stages.difference(stage_order))
-		columns = []
+		opps_by_stage = {}
+		for opp in opps:
+			stage = opp.stage or "UNSPECIFIED"
+			opps_by_stage.setdefault(stage, []).append(opp)
+		stages = stage_order + sorted(stage for stage in opps_by_stage if stage not in stage_order)
+		columns_html = []
 
 		for stage in stages:
-			stage_opps = [opp for opp in opps if (opp.stage or "UNSPECIFIED") == stage]
-			if not stage_opps and stage not in seen_stages:
-				continue
-			columns.append({
-				"stage": stage,
-				"count": len(stage_opps),
-				"total_value_cents": sum(opp.amount_cents or 0 for opp in stage_opps),
-				"opportunities": [
-					{
-						"id": opp.id,
-						"name": opp.opportunity_name,
-						"customer_name": getattr(opp.account, "name", None),
-						"expected_value_cents": opp.amount_cents,
-						"probability": opp.probability,
-						"close_date": opp.expected_close_date,
-					}
-					for opp in stage_opps
-				],
-			})
+			stage_opps = opps_by_stage.get(stage, [])
+			stage_total = sum(opp.amount_cents or 0 for opp in stage_opps)
+			cards_html = []
+			for opp in stage_opps:
+				account_name = getattr(getattr(opp, "account", None), "name", None)
+				close_date = opp.expected_close_date.isoformat() if opp.expected_close_date else "No close date"
+				cards_html.append(
+					f"<div class='panel panel-default' style='margin-bottom:10px'>"
+					f"<div class='panel-body' style='padding:10px'>"
+					f"<div><strong>{_he(opp.opportunity_name)}</strong></div>"
+					f"<div class='text-muted small'>{_he(account_name or opp.account_id)}</div>"
+					f"<div style='margin-top:8px'>{_cents(opp.amount_cents or 0, opp.currency_code)}</div>"
+					f"<div class='small text-muted'>{_he(close_date)} | {int(opp.probability or 0)}%</div>"
+					f"<a href='/crm/opportunities/{_he(opp.id)}' class='btn btn-xs btn-primary' style='margin-top:8px'>View</a>"
+					f"</div></div>"
+				)
+			if not cards_html:
+				cards_html.append("<div class='text-muted small'>No opportunities</div>")
+			columns_html.append(
+				f"<div class='panel panel-info' style='min-width:260px;margin-right:12px'>"
+				f"<div class='panel-heading'>"
+				f"<strong>{_he(stage.replace('_', ' ').title())}</strong>"
+				f"<span class='badge pull-right'>{len(stage_opps)}</span>"
+				f"</div>"
+				f"<div class='panel-body' style='background:#f7f9fb;min-height:260px'>"
+				f"<div class='small text-muted' style='margin-bottom:10px'>"
+				f"Total {_cents(stage_total)}"
+				f"</div>"
+				f"{''.join(cards_html)}"
+				f"</div></div>"
+			)
 
-		return render_template("crm/pipeline_board.html", columns=columns)
+		board_html = (
+			"<div class='crm-pipeline-board'>"
+			"<div class='clearfix' style='margin-bottom:12px'>"
+			f"<a href='/crm/opportunities/' class='btn btn-default btn-sm'>List View</a>"
+			"</div>"
+			"<div style='display:flex;overflow-x:auto;padding-bottom:12px'>"
+			f"{''.join(columns_html)}"
+			"</div>"
+			"</div>"
+		)
+		widgets = {
+			"search": lambda: "",
+			"list": lambda: board_html,
+		}
+		return self.render_template(
+			"appbuilder/general/model/list.html",
+			title="Opportunity Pipeline",
+			widgets=widgets,
+		)
 
 	@expose("/<string:opp_id>")
 	@has_access

@@ -38,7 +38,7 @@ class DealRegistrationView(ModelView):
 	datamodel = SQLAInterface(DealRegistration)
 	list_columns = ['partner_id', 'opportunity_name', 'customer_name', 'estimated_value_cents', 'actual_value_cents']
 	label_columns = {
-		'partner_id': 'Partner',
+		'partner_id': 'Partner Id',
 		'opportunity_name': 'Opportunity Name',
 		'customer_name': 'Customer Name',
 		'estimated_value_cents': 'Estimated Value Cents',
@@ -52,7 +52,7 @@ class MDFRequestView(ModelView):
 	datamodel = SQLAInterface(MDFRequest)
 	list_columns = ['partner_id', 'campaign_name', 'amount_requested_cents', 'approved_cents', 'period', 'status']
 	label_columns = {
-		'partner_id': 'Partner',
+		'partner_id': 'Partner Id',
 		'campaign_name': 'Campaign Name',
 		'amount_requested_cents': 'Amount Requested Cents',
 		'approved_cents': 'Approved Cents',

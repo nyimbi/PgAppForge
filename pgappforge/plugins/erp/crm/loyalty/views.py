@@ -26,7 +26,7 @@ class LoyaltyProgramView(ModelView):
 		'program_type': 'Program Type',
 		'points_per_cent': 'Points Per Cent',
 		'redemption_rate_pct': 'Redemption Rate Pct',
-		'is_active': 'Active',
+		'is_active': 'Is Active',
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -36,8 +36,8 @@ class LoyaltyAccountView(ModelView):
 	datamodel = SQLAInterface(LoyaltyAccount)
 	list_columns = ['customer_id', 'program_id', 'tier', 'points_balance', 'lifetime_points', 'last_activity_at']
 	label_columns = {
-		'customer_id': 'Customer',
-		'program_id': 'Program',
+		'customer_id': 'Customer Id',
+		'program_id': 'Program Id',
 		'tier': 'Tier',
 		'points_balance': 'Points Balance',
 		'lifetime_points': 'Lifetime Points',
@@ -51,7 +51,7 @@ class LoyaltyTransactionView(ModelView):
 	datamodel = SQLAInterface(LoyaltyTransaction)
 	list_columns = ['account_id', 'transaction_type', 'points', 'created_at']
 	label_columns = {
-		'account_id': 'Account',
+		'account_id': 'Account Id',
 		'transaction_type': 'Transaction Type',
 		'points': 'Points',
 		'created_at': 'Created At',

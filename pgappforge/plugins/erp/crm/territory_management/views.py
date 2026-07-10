@@ -24,7 +24,7 @@ class SalesTerritoryView(ModelView):
 		'name': 'Name',
 		'region': 'Region',
 		'rules': 'Rules',
-		'is_active': 'Active',
+		'is_active': 'Is Active',
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -34,8 +34,8 @@ class TerritoryAssignmentView(ModelView):
 	datamodel = SQLAInterface(TerritoryAssignment)
 	list_columns = ['territory_id', 'salesperson_id', 'effective_from', 'effective_to']
 	label_columns = {
-		'territory_id': 'Territory',
-		'salesperson_id': 'Salesperson',
+		'territory_id': 'Territory Id',
+		'salesperson_id': 'Salesperson Id',
 		'effective_from': 'Effective From',
 		'effective_to': 'Effective To',
 	}
