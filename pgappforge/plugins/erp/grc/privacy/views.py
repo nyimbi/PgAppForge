@@ -4,14 +4,14 @@ pgappforge/plugins/erp/grc/privacy/views.py
 Flask views for the GRC Privacy plugin.
 
 Endpoints:
-  ConsentView            POST /privacy/consent/
-                         GET  /privacy/consent/check
-                         POST /privacy/consent/withdraw
-  DSRView                GET  /privacy/dsr/
-                         POST /privacy/dsr/
-                         POST /privacy/dsr/<id>/transition
-  DataProcessingView     GET/POST /privacy/processing-records/
-  PrivacyReportView      GET  /privacy/reports/{consent-summary,dsr-status,overdue-dsrs}
+	ConsentView            POST /privacy/consent/
+	                       GET  /privacy/consent/check
+	                       POST /privacy/consent/withdraw
+	DSRView                GET  /privacy/dsr/
+	                       POST /privacy/dsr/
+	                       POST /privacy/dsr/<id>/transition
+	DataProcessingView     GET/POST /privacy/processing-records/
+	PrivacyReportView      GET  /privacy/reports/{consent-summary,dsr-status,overdue-dsrs}
 """
 from __future__ import annotations
 
@@ -53,6 +53,16 @@ def _svc():
 class ConsentView(BaseERPView):
 	route_base = "/privacy/consent"
 	default_view = "grant"
+	label_columns = {
+		"party_id": "Data Subject",
+		"purpose": "Purpose",
+		"legal_basis": "Legal Basis",
+		"granted_at": "Granted",
+		"withdrawn_at": "Withdrawn",
+		"expires_at": "Expires",
+		"source": "Source",
+		"version": "Version",
+	}
 
 	@expose("/", methods=["POST"])
 	@has_access
@@ -131,6 +141,16 @@ class ConsentView(BaseERPView):
 class DSRView(BaseERPView):
 	route_base = "/privacy/dsr"
 	default_view = "list"
+	label_columns = {
+		"dsr_number": "DSR Number",
+		"party_id": "Data Subject",
+		"request_type": "Request Type",
+		"status": "Status",
+		"received_at": "Received",
+		"due_at": "Due",
+		"completed_at": "Completed",
+		"response_url": "Response URL",
+	}
 
 	@expose("/")
 	@has_access
@@ -212,6 +232,16 @@ class DSRView(BaseERPView):
 class DataProcessingView(BaseERPView):
 	route_base = "/privacy/processing-records"
 	default_view = "list"
+	label_columns = {
+		"processing_purpose": "Processing Purpose",
+		"data_categories": "Data Categories",
+		"data_subjects_description": "Data Subjects",
+		"legal_basis": "Legal Basis",
+		"controller_name": "Controller",
+		"processor_name": "Processor",
+		"retention_period_days": "Retention Days",
+		"is_cross_border": "Cross-Border",
+	}
 
 	@expose("/")
 	@has_access
@@ -276,6 +306,12 @@ class PrivacyReportView(BaseERPView):
 
 	route_base = "/privacy/reports"
 	default_view = "index"
+	label_columns = {
+		"open_dsars": "Open DSARs",
+		"consents_active": "Active Consents",
+		"breaches_ytd": "Breaches YTD",
+		"processing_records": "Processing Records",
+	}
 
 	@expose("/")
 	@has_access
