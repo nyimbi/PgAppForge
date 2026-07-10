@@ -24,16 +24,32 @@ log = logging.getLogger(__name__)
 class TenantProfileView(ModelView):
 	datamodel = SQLAInterface(TenantProfile)
 	base_permissions       = ["can_list", "can_show"]
-	list_columns           = ['name', 'plan_tier', 'status', 'trial_ends_at']
-	add_exclude_columns    = ['id', 'created_on', 'changed_on', 'billing_hyperion_customer_id']
-	edit_exclude_columns   = ['id', 'created_on', 'changed_on', 'billing_hyperion_customer_id']
-	show_exclude_columns   = ['billing_hyperion_customer_id', 'feature_flags', 'usage_stats']
+	list_columns           = ['name', 'plan_tier', 'status', 'created_at']
+	show_columns           = ['name', 'plan_tier', 'status', 'feature_flags', 'usage_stats', 'billing_customer_id', 'created_at']
+	label_columns          = {
+		'name': 'Tenant Name',
+		'plan_tier': 'Plan Tier',
+		'status': 'Status',
+		'feature_flags': 'Feature Flags',
+		'usage_stats': 'Usage Stats',
+		'billing_customer_id': 'Billing Customer',
+		'created_at': 'Created',
+	}
+	add_exclude_columns    = ['id', 'created_on', 'changed_on', 'billing_customer_id']
+	edit_exclude_columns   = ['id', 'created_on', 'changed_on', 'billing_customer_id']
 
 
 class TenantUsageEventView(ModelView):
 	datamodel = SQLAInterface(TenantUsageEvent)
 	base_permissions     = ["can_list", "can_show"]
 	list_columns         = ['tenant_id', 'event_type', 'quantity', 'recorded_at']
+	show_columns         = ['tenant_id', 'event_type', 'quantity', 'recorded_at']
+	label_columns        = {
+		'tenant_id': 'Tenant',
+		'event_type': 'Event Type',
+		'quantity': 'Quantity',
+		'recorded_at': 'Recorded At',
+	}
 	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

@@ -37,6 +37,32 @@ class MLPredictionView(BaseERPModelView):
 		"model_version",
 		"created_at",
 	]
+	show_columns = [
+		"tenant_id",
+		"prediction_type",
+		"reference_type",
+		"reference_id",
+		"score",
+		"label",
+		"confidence",
+		"features_used",
+		"model_version",
+		"explanation",
+		"created_at",
+	]
+	label_columns = {
+		"tenant_id": "Tenant",
+		"prediction_type": "Prediction Type",
+		"reference_type": "Reference Type",
+		"reference_id": "Reference ID",
+		"score": "Score",
+		"label": "Label",
+		"confidence": "Confidence",
+		"features_used": "Features Used",
+		"model_version": "Model Version",
+		"explanation": "Explanation",
+		"created_at": "Created",
+	}
 	search_columns = ["prediction_type", "reference_type", "reference_id", "label"]
 	order_columns  = ["created_at", "prediction_type", "score"]
 

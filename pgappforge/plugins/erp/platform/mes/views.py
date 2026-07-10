@@ -20,21 +20,45 @@ log = logging.getLogger(__name__)
 
 class MachineDefinitionView(ModelView):
 	datamodel = SQLAInterface(MachineDefinition)
-	list_columns = ['machine_code', 'work_center_id', 'opc_ua_endpoint', 'is_active', 'downtime_threshold_minutes', 'quality_threshold_pct']
+	list_columns = ['machine_code', 'work_center_id', 'opc_ua_endpoint', 'is_active']
+	show_columns = ['tenant_id', 'machine_code', 'work_center_id', 'opc_ua_endpoint', 'telemetry_schema', 'is_active']
+	label_columns = {
+		'tenant_id': 'Tenant',
+		'machine_code': 'Machine Code',
+		'work_center_id': 'Work Center',
+		'opc_ua_endpoint': 'OPC UA Endpoint',
+		'telemetry_schema': 'Telemetry Schema',
+		'is_active': 'Active',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
 
 class MachineReadingView(ModelView):
 	datamodel = SQLAInterface(MachineReading)
-	list_columns = ['machine_id', 'reading_at', 'production_order_id']
+	list_columns = ['machine_id', 'reading_at', 'readings']
+	show_columns = ['machine_id', 'reading_at', 'readings']
+	label_columns = {
+		'machine_id': 'Machine',
+		'reading_at': 'Reading Time',
+		'readings': 'Readings',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
 
 class ProductionAlertView(ModelView):
 	datamodel = SQLAInterface(ProductionAlert)
-	list_columns = ['machine_id', 'alert_type', 'severity', 'message', 'status', 'created_at']
+	list_columns = ['machine_id', 'alert_type', 'severity', 'started_at', 'resolved_at']
+	show_columns = ['machine_id', 'alert_type', 'severity', 'started_at', 'resolved_at', 'description']
+	label_columns = {
+		'machine_id': 'Machine',
+		'alert_type': 'Alert Type',
+		'severity': 'Severity',
+		'started_at': 'Started At',
+		'resolved_at': 'Resolved At',
+		'description': 'Description',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

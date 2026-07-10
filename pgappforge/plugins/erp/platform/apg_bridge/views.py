@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from flask import jsonify, render_template, request
+from pgappforge import expose
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
@@ -42,6 +43,19 @@ class APGCapabilityCacheView(BaseERPModelView):
 		"created_at",
 		"updated_at",
 	]
+	label_columns = {
+		"capability_id": "Capability ID",
+		"name": "Capability Name",
+		"domain": "Domain",
+		"provides": "Provides",
+		"requires": "Requires",
+		"base_url": "Base URL",
+		"is_active": "Active",
+		"contract_hash": "Contract Hash",
+		"last_synced_at": "Last Synced",
+		"created_at": "Created",
+		"updated_at": "Updated",
+	}
 
 	# Read-only: no add / edit / delete
 	base_permissions = ["can_list", "can_show"]

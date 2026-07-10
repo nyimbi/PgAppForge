@@ -79,6 +79,11 @@ class ObservabilityPlugin(BasePlugin):
 	def register_models(self) -> list:
 		return []
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.platform.observability.views import TraceBrowserView
+		cat = self.config.get("OBSERVABILITY_MENU_CATEGORY", "Platform")
+		self.add_view(TraceBrowserView, "OTEL Trace Browser", icon="fa-search", category=cat)
+
 
 def create_plugin(
 	appbuilder: Any,

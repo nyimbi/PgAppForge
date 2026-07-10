@@ -24,6 +24,17 @@ log = logging.getLogger(__name__)
 class AnalyticsCubeView(ModelView):
 	datamodel = SQLAInterface(AnalyticsCube)
 	list_columns = ['name', 'base_query', 'refresh_schedule', 'last_refreshed', 'is_active']
+	show_columns = ['tenant_id', 'name', 'base_query', 'refresh_schedule', 'last_refreshed', 'dimensions', 'measures', 'is_active']
+	label_columns = {
+		'tenant_id': 'Tenant',
+		'name': 'Cube Name',
+		'base_query': 'Base Query',
+		'refresh_schedule': 'Refresh Schedule',
+		'last_refreshed': 'Last Refreshed',
+		'dimensions': 'Dimensions',
+		'measures': 'Measures',
+		'is_active': 'Active',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
@@ -31,6 +42,17 @@ class AnalyticsCubeView(ModelView):
 class AnalyticsReportView(ModelView):
 	datamodel = SQLAInterface(AnalyticsReport)
 	list_columns = ['name', 'cube_id', 'filters']
+	show_columns = ['cube_id', 'tenant_id', 'name', 'filters', 'group_by', 'order_by', 'limit_rows', 'visualization_type']
+	label_columns = {
+		'cube_id': 'Cube',
+		'tenant_id': 'Tenant',
+		'name': 'Report Name',
+		'filters': 'Filters',
+		'group_by': 'Group By',
+		'order_by': 'Order By',
+		'limit_rows': 'Row Limit',
+		'visualization_type': 'Visualization',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

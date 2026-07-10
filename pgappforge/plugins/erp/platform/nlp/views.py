@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from flask import render_template, request, jsonify
+from pgappforge import expose
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
@@ -35,6 +36,30 @@ class NLPAnalysisResultView(BaseERPModelView):
 		"latency_ms",
 		"created_at",
 	]
+	show_columns = [
+		"tenant_id",
+		"analysis_type",
+		"reference_type",
+		"reference_id",
+		"input_text_hash",
+		"result",
+		"model_used",
+		"latency_ms",
+		"source",
+		"created_at",
+	]
+	label_columns = {
+		"tenant_id": "Tenant",
+		"analysis_type": "Analysis Type",
+		"reference_type": "Reference Type",
+		"reference_id": "Reference ID",
+		"input_text_hash": "Input Hash",
+		"result": "Result",
+		"model_used": "Model Used",
+		"latency_ms": "Latency ms",
+		"source": "Source",
+		"created_at": "Created",
+	}
 	search_columns = ["analysis_type", "reference_type", "reference_id", "source"]
 	order_columns = ["created_at", "analysis_type"]
 

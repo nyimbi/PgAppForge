@@ -24,6 +24,15 @@ log = logging.getLogger(__name__)
 class AnomalyDetectionRunView(ModelView):
 	datamodel = SQLAInterface(AnomalyDetectionRun)
 	list_columns = ['run_type', 'period', 'status', 'anomalies_found', 'created_at']
+	show_columns = ['tenant_id', 'run_type', 'period', 'status', 'anomalies_found', 'created_at']
+	label_columns = {
+		'tenant_id': 'Tenant',
+		'run_type': 'Run Type',
+		'period': 'Period',
+		'status': 'Status',
+		'anomalies_found': 'Anomalies Found',
+		'created_at': 'Created',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
@@ -31,6 +40,36 @@ class AnomalyDetectionRunView(ModelView):
 class AnomalyView(ModelView):
 	datamodel = SQLAInterface(Anomaly)
 	list_columns = ['anomaly_type', 'severity', 'source_module', 'source_record_id', 'status', 'created_at']
+	show_columns = [
+		'run_id',
+		'tenant_id',
+		'anomaly_type',
+		'severity',
+		'source_module',
+		'source_record_id',
+		'description',
+		'evidence',
+		'status',
+		'resolved_by',
+		'resolved_at',
+		'resolution',
+		'created_at',
+	]
+	label_columns = {
+		'run_id': 'Detection Run',
+		'tenant_id': 'Tenant',
+		'anomaly_type': 'Anomaly Type',
+		'severity': 'Severity',
+		'source_module': 'Source Module',
+		'source_record_id': 'Source Record',
+		'description': 'Description',
+		'evidence': 'Evidence',
+		'status': 'Status',
+		'resolved_by': 'Resolved By',
+		'resolved_at': 'Resolved At',
+		'resolution': 'Resolution',
+		'created_at': 'Created',
+	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 

@@ -25,6 +25,19 @@ class RowSecurityPolicyView(ModelView):
 	datamodel = SQLAInterface(RowSecurityPolicy)
 	base_permissions     = ["can_list", "can_show", "can_add", "can_edit"]
 	list_columns         = ['name', 'entity_type', 'scope_field', 'role_id', 'is_active']
+	show_columns         = ['tenant_id', 'name', 'entity_type', 'scope_field', 'allowed_values', 'role_id', 'is_active', 'description', 'created_at', 'updated_at']
+	label_columns        = {
+		'tenant_id': 'Tenant',
+		'name': 'Policy Name',
+		'entity_type': 'Entity Type',
+		'scope_field': 'Scope Field',
+		'allowed_values': 'Allowed Values',
+		'role_id': 'Role',
+		'is_active': 'Active',
+		'description': 'Description',
+		'created_at': 'Created',
+		'updated_at': 'Updated',
+	}
 	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
 
@@ -32,10 +45,17 @@ class RowSecurityPolicyView(ModelView):
 class SecurityContextView(ModelView):
 	datamodel = SQLAInterface(SecurityContext)
 	base_permissions     = ["can_list", "can_show"]
-	list_columns         = ['entity_type', 'is_active', 'last_computed_at']
+	list_columns         = ['tenant_id', 'user_id', 'computed_at', 'expires_at']
+	show_columns         = ['tenant_id', 'user_id', 'computed_scope', 'computed_at', 'expires_at']
+	label_columns        = {
+		'tenant_id': 'Tenant',
+		'user_id': 'User',
+		'computed_scope': 'Computed Scope',
+		'computed_at': 'Computed At',
+		'expires_at': 'Expires At',
+	}
 	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
-	show_exclude_columns = ['computed_scope']
 
 
 class RowSecurityAdminView(BaseERPView):
