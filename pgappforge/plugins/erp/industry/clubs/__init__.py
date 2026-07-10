@@ -226,6 +226,7 @@ class ClubsPlugin(BasePlugin):
 			FacilityView,
 			FacilityBookingView,
 			MemberAccountView,
+			MemberChargeView,
 			GuestVisitView,
 			AccessEventView,
 		)
@@ -238,6 +239,7 @@ class ClubsPlugin(BasePlugin):
 		self.add_view(FacilityView, "Facilities", icon="fa-building", category=cat)
 		self.add_view(FacilityBookingView, "Bookings", icon="fa-calendar", category=cat)
 		self.add_view(MemberAccountView, "Member Accounts", icon="fa-money", category=cat)
+		self.add_view(MemberChargeView, "Member Charges", icon="fa-credit-card", category=cat)
 		self.add_view(GuestVisitView, "Guest Visits", icon="fa-user-plus", category=cat)
 		self.add_view(AccessEventView, "Access Log", icon="fa-shield", category=cat)
 

@@ -88,14 +88,41 @@ class ClubMemberView(BaseERPModelView):
 		"status",
 		"joined_date",
 	]
-	search_columns = ["membership_number", "full_name", "email"]
+	show_columns = [
+		"membership_number",
+		"member_type_id",
+		"customer_id",
+		"full_name",
+		"email",
+		"phone",
+		"joined_date",
+		"resigned_date",
+		"status",
+		"suspension_reason",
+		"proposer_member_id",
+		"seconder_member_id",
+		"emergency_contact",
+		"dietary_preferences",
+		"communication_preferences",
+		"photo_url",
+	]
+	search_columns = ["membership_number", "full_name", "email", "status"]
 	base_permissions = ["can_list", "can_show", "can_edit"]
 
 	label_columns = {
 		"membership_number": "Number",
 		"full_name": "Name",
 		"member_type_id": "Type",
+		"customer_id": "Customer",
 		"joined_date": "Joined",
+		"resigned_date": "Resigned",
+		"suspension_reason": "Suspension Reason",
+		"proposer_member_id": "Proposer",
+		"seconder_member_id": "Seconder",
+		"emergency_contact": "Emergency Contact",
+		"dietary_preferences": "Dietary Preferences",
+		"communication_preferences": "Communication Preferences",
+		"photo_url": "Photo",
 	}
 	description_columns = {
 		"status": "PENDING / ACTIVE / SUSPENDED / LAPSED / RESIGNED",
@@ -116,13 +143,34 @@ class MembershipApplicationView(BaseERPModelView):
 		"applied_at",
 		"decided_at",
 	]
+	show_columns = [
+		"applicant_name",
+		"applicant_email",
+		"applicant_phone",
+		"member_type_id",
+		"proposer_member_id",
+		"seconder_member_id",
+		"status",
+		"applied_at",
+		"decided_at",
+		"decided_by",
+		"resulting_member_id",
+		"notes",
+	]
+	search_columns = ["applicant_name", "applicant_email", "status"]
 	base_permissions = ["can_list", "can_show", "can_edit"]
 
 	label_columns = {
 		"applicant_name": "Applicant",
+		"applicant_email": "Email",
+		"applicant_phone": "Phone",
 		"member_type_id": "Membership Type",
+		"proposer_member_id": "Proposer",
+		"seconder_member_id": "Seconder",
 		"applied_at": "Applied",
 		"decided_at": "Decided",
+		"decided_by": "Decided By",
+		"resulting_member_id": "Resulting Member",
 	}
 
 
@@ -139,9 +187,34 @@ class FacilityView(BaseERPModelView):
 		"is_active",
 		"hourly_rate_cents",
 	]
+	show_columns = [
+		"name",
+		"code",
+		"facility_type",
+		"capacity",
+		"location",
+		"is_members_only",
+		"guest_allowed",
+		"max_guests_per_booking",
+		"hourly_rate_cents",
+		"booking_advance_hours",
+		"max_consecutive_hours",
+		"open_time",
+		"close_time",
+		"is_active",
+	]
+	search_columns = ["name", "code", "facility_type", "location"]
 	label_columns = {
+		"code": "Code",
 		"facility_type": "Type",
+		"is_members_only": "Members Only",
+		"guest_allowed": "Guest Allowed",
+		"max_guests_per_booking": "Max Guests",
 		"hourly_rate_cents": "Hourly Rate (¢)",
+		"booking_advance_hours": "Booking Advance (Hours)",
+		"max_consecutive_hours": "Max Consecutive Hours",
+		"open_time": "Opens",
+		"close_time": "Closes",
 		"is_active": "Active",
 	}
 	description_columns = {
@@ -166,6 +239,21 @@ class FacilityBookingView(BaseERPModelView):
 		"status",
 		"total_fee_cents",
 	]
+	show_columns = [
+		"booking_ref",
+		"facility_id",
+		"member_id",
+		"booking_date",
+		"start_time",
+		"end_time",
+		"duration_minutes",
+		"guest_count",
+		"total_fee_cents",
+		"status",
+		"cancellation_reason",
+		"notes",
+	]
+	search_columns = ["booking_ref", "status", "booking_date"]
 	base_permissions = ["can_list", "can_show"]
 
 	label_columns = {
@@ -175,7 +263,10 @@ class FacilityBookingView(BaseERPModelView):
 		"booking_date": "Date",
 		"start_time": "From",
 		"end_time": "To",
+		"duration_minutes": "Duration (Minutes)",
+		"guest_count": "Guests",
 		"total_fee_cents": "Fee (¢)",
+		"cancellation_reason": "Cancellation Reason",
 	}
 
 
@@ -191,12 +282,25 @@ class MemberAccountView(BaseERPModelView):
 		"credit_limit_cents",
 		"last_statement_date",
 	]
+	show_columns = [
+		"member_id",
+		"credit_limit_cents",
+		"current_balance_cents",
+		"statement_day_of_month",
+		"auto_debit",
+		"payment_method_ref",
+		"last_statement_date",
+	]
+	search_columns = ["member_id", "payment_method_ref"]
 	base_permissions = ["can_list", "can_show"]
 
 	label_columns = {
 		"member_id": "Member",
 		"current_balance_cents": "Balance (¢)",
 		"credit_limit_cents": "Credit Limit (¢)",
+		"statement_day_of_month": "Statement Day",
+		"auto_debit": "Auto Debit",
+		"payment_method_ref": "Payment Method Ref",
 		"last_statement_date": "Last Statement",
 	}
 	description_columns = {
@@ -217,11 +321,26 @@ class MemberChargeView(BaseERPModelView):
 		"amount_cents",
 		"charged_at",
 	]
+	show_columns = [
+		"member_id",
+		"account_id",
+		"charge_type",
+		"description",
+		"amount_cents",
+		"reference_id",
+		"reference_type",
+		"charged_at",
+	]
+	search_columns = ["member_id", "charge_type", "description", "reference_id", "reference_type"]
 	base_permissions = ["can_list", "can_show"]
 
 	label_columns = {
+		"member_id": "Member",
+		"account_id": "Account",
 		"charge_type": "Type",
 		"amount_cents": "Amount (¢)",
+		"reference_id": "Reference ID",
+		"reference_type": "Reference Type",
 		"charged_at": "Charged At",
 	}
 	description_columns = {
@@ -242,12 +361,28 @@ class GuestVisitView(BaseERPModelView):
 		"facility_id",
 		"levy_cents",
 	]
+	show_columns = [
+		"member_id",
+		"guest_name",
+		"guest_phone",
+		"visit_date",
+		"facility_id",
+		"purpose",
+		"levy_cents",
+		"charged_to_account",
+		"charge_id",
+	]
+	search_columns = ["guest_name", "guest_phone", "visit_date", "purpose"]
 	label_columns = {
 		"member_id": "Sponsor",
 		"guest_name": "Guest",
+		"guest_phone": "Guest Phone",
 		"visit_date": "Date",
 		"facility_id": "Facility",
+		"purpose": "Purpose",
 		"levy_cents": "Levy (¢)",
+		"charged_to_account": "Charged to Account",
+		"charge_id": "Charge",
 	}
 
 
@@ -264,12 +399,28 @@ class AccessEventView(BaseERPModelView):
 		"access_result",
 		"occurred_at",
 	]
+	show_columns = [
+		"member_id",
+		"attempted_identifier",
+		"door_id",
+		"door_name",
+		"direction",
+		"access_result",
+		"denial_reason",
+		"device_id",
+		"occurred_at",
+	]
+	search_columns = ["member_id", "attempted_identifier", "door_id", "door_name", "direction", "access_result"]
 	base_permissions = ["can_list", "can_show"]
 
 	label_columns = {
 		"member_id": "Member",
+		"attempted_identifier": "Attempted Identifier",
+		"door_id": "Door ID",
 		"door_name": "Door",
 		"access_result": "Result",
+		"denial_reason": "Denial Reason",
+		"device_id": "Device",
 		"occurred_at": "When",
 	}
 
@@ -327,6 +478,28 @@ class ClubsDashboardView(BaseERPView):
 				"icon": "fa-money",
 			},
 		])
+		member_status_rows = self._group_count_rows(ClubMember, "status", session=sess, tenant_id=tid)
+		booking_status_rows = self._group_count_rows(FacilityBooking, "status", session=sess, tenant_id=tid)
+		member_status_chart = self.chart(
+			member_status_rows,
+			chart_type="doughnut",
+			x_col="label",
+			y_col="value",
+			title="Members by Status",
+		)
+		booking_status_chart = self.chart(
+			booking_status_rows,
+			chart_type="bar",
+			x_col="label",
+			y_col="value",
+			title="Bookings by Status",
+		)
+		chart_html = f"""
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
+  <div style="border:1px solid #e5e7eb;border-radius:4px;padding:16px;background:#fff">{member_status_chart}</div>
+  <div style="border:1px solid #e5e7eb;border-radius:4px;padding:16px;background:#fff">{booking_status_chart}</div>
+</div>
+"""
 
 		tabs_html = self._render_tabs([
 			{
@@ -370,6 +543,7 @@ class ClubsDashboardView(BaseERPView):
   </span>
 </div>
 {kpi_html}
+{chart_html}
 {tabs_html}
 </body></html>"""
 		return make_response(html, 200)
@@ -412,6 +586,35 @@ class ClubsDashboardView(BaseERPView):
 			return session.execute(q).scalar_one() or 0
 		except Exception:
 			return 0
+
+	def _group_count_rows(
+		self,
+		model: type,
+		group_by: str,
+		session: Any = None,
+		tenant_id: str | None = None,
+	) -> list[dict]:
+		"""Return [{label, value}] rows for dashboard group-by charts."""
+		try:
+			if session is None:
+				from flask import current_app
+				session = current_app.appbuilder.get_session()
+			column = getattr(model, group_by)
+			q = (
+				sa.select(column, sa.func.count())
+				.select_from(model)
+				.group_by(column)
+				.order_by(column)
+			)
+			if tenant_id and hasattr(model, "tenant_id"):
+				q = q.where(model.tenant_id == tenant_id)
+			rows = [
+				{"label": str(label or "Unspecified"), "value": int(count or 0)}
+				for label, count in session.execute(q).all()
+			]
+			return rows or [{"label": "No Data", "value": 0}]
+		except Exception:
+			return [{"label": "Unavailable", "value": 0}]
 
 	def _recent_members_table(self) -> str:
 		"""HTML table of the 20 most recently joined active members."""
