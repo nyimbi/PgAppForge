@@ -131,6 +131,31 @@ def service_module(monkeypatch: pytest.MonkeyPatch):
 	)
 	foundation_events.emit_event = lambda event, session: None
 
+	# Stub out BPM registration so re-importing does not raise on re-registration
+	original_workflow_module = sys.modules.get("pgappforge.plugins.workflow")
+	original_engine_module = sys.modules.get("pgappforge.plugins.workflow.engine")
+	plugins_module = sys.modules["pgappforge.plugins"]
+	had_workflow_attr = hasattr(plugins_module, "workflow")
+	original_workflow_attr = getattr(plugins_module, "workflow", None)
+
+	if original_engine_module is None:
+		_install_module(monkeypatch, "pgappforge.plugins.workflow")
+		_engine = _install_module(monkeypatch, "pgappforge.plugins.workflow.engine")
+
+		class _BPMActionRegistry:
+			@staticmethod
+			def register(name: str, *args: Any, **kw: Any) -> Any:
+				return lambda f: f
+
+		_engine.BPMActionRegistry = _BPMActionRegistry
+	else:
+		_engine = original_engine_module
+
+	original_register = _engine.BPMActionRegistry.__dict__["register"]
+	_engine.BPMActionRegistry.register = staticmethod(
+		lambda name, *args, **kw: (lambda f: f)
+	)
+
 	spec = importlib.util.spec_from_file_location(
 		"whatsapp_services_hardening_under_test",
 		SERVICES_PATH,
@@ -138,7 +163,20 @@ def service_module(monkeypatch: pytest.MonkeyPatch):
 	assert spec is not None
 	assert spec.loader is not None
 	module = importlib.util.module_from_spec(spec)
-	spec.loader.exec_module(module)
+	try:
+		spec.loader.exec_module(module)
+	finally:
+		_engine.BPMActionRegistry.register = original_register
+		if original_engine_module is None:
+			sys.modules.pop("pgappforge.plugins.workflow.engine", None)
+		if original_workflow_module is None:
+			sys.modules.pop("pgappforge.plugins.workflow", None)
+		else:
+			sys.modules["pgappforge.plugins.workflow"] = original_workflow_module
+		if had_workflow_attr:
+			plugins_module.workflow = original_workflow_attr
+		elif hasattr(plugins_module, "workflow"):
+			delattr(plugins_module, "workflow")
 	return module
 
 
