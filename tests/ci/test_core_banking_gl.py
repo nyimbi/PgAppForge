@@ -115,6 +115,7 @@ class TestCBGLConstants:
 		required = {
 			"CASH_NOSTRO", "LOAN_RECEIVABLE", "LOAN_LOSS_RESERVE",
 			"CUSTOMER_DEPOSITS", "INTEREST_INCOME", "FEE_INCOME", "INTEREST_EXPENSE",
+			"FX_SUSPENSE",
 		}
 		assert required == set(_CB_GL.keys())
 
@@ -524,22 +525,26 @@ class TestTransactionGLCalls:
 		assert dr_line["account_code"] == "CUSTOMER_DEPOSITS"
 		assert cr_line["account_code"] == "CASH_NOSTRO"
 
-	def test_transfer_cross_currency_uses_source_amount_for_balance(self):
-		"""When exchange_rate != 1, GL lines must both use amount_cents (source currency)
-		not credit_amount_cents (destination currency) to prevent imbalanced GL entry."""
+	def test_transfer_cross_currency_posts_balanced_fx_suspense_legs(self):
+		"""Cross-currency transfers post balanced source and destination suspense legs."""
 		svc = CoreBankingService()
 		from_acct = self._fake_account("FROM-001", "from-uuid", currency="USD")
 		to_acct = self._fake_account("TO-001", "to-uuid", currency="KES")
 		# 100 USD = 13,000 KES at rate 130
 		from_acct.available_balance_cents = 10_000  # 100 USD
-		captured_lines: list[dict] = []
+		captured_batches: list[list[dict]] = []
 
 		def _fake_require(session, acc_num):
 			return from_acct if acc_num == "FROM-001" else to_acct
 
+		def _fake_resolve_gl(*args):
+			key = args[0] if len(args) == 1 else args[1]
+			return _CB_GL.get(key, key)
+
 		svc._require_account = _fake_require  # type: ignore[method-assign]
 		svc._assert_active = MagicMock()
-		svc._post_to_gl = lambda session, lines, description, tenant_id, **kw: captured_lines.extend(lines)  # type: ignore[method-assign]
+		svc._resolve_gl = _fake_resolve_gl  # type: ignore[method-assign]
+		svc._post_to_gl = lambda session, lines, description, tenant_id, **kw: captured_batches.append(list(lines))  # type: ignore[method-assign]
 
 		session = MagicMock()
 		session.get.return_value = None
@@ -554,17 +559,20 @@ class TestTransactionGLCalls:
 			tenant_id="acme",
 		)
 
-		# GL must balance: both legs use amount_cents (source currency), NOT
-		# credit_amount_cents (1_300_000 KES) which would produce DR≠CR.
-		assert _lines_balance(captured_lines), (
-			f"FX transfer GL must balance — DR and CR must both be amount_cents. "
-			f"lines={captured_lines}"
-		)
-		dr_total = sum(ln["debit_cents"] for ln in captured_lines if ln["debit_cents"] > 0)
-		cr_total = sum(ln["credit_cents"] for ln in captured_lines if ln["credit_cents"] > 0)
-		assert dr_total == cr_total == 10_000, (
-			f"Both legs should use source amount 10_000, got DR={dr_total} CR={cr_total}"
-		)
+		assert len(captured_batches) == 2
+		source_leg, dest_leg = captured_batches
+		assert _lines_balance(source_leg)
+		assert _lines_balance(dest_leg)
+		assert {ln["account_code"] for ln in source_leg} == {"CUSTOMER_DEPOSITS", "FX_SUSPENSE"}
+		assert {ln["account_code"] for ln in dest_leg} == {"FX_SUSPENSE", "CUSTOMER_DEPOSITS"}
+
+		source_dr = next(ln for ln in source_leg if ln["account_code"] == "CUSTOMER_DEPOSITS")
+		source_cr = next(ln for ln in source_leg if ln["account_code"] == "FX_SUSPENSE")
+		dest_dr = next(ln for ln in dest_leg if ln["account_code"] == "FX_SUSPENSE")
+		dest_cr = next(ln for ln in dest_leg if ln["account_code"] == "CUSTOMER_DEPOSITS")
+
+		assert source_dr["debit_cents"] == source_cr["credit_cents"] == 10_000
+		assert dest_dr["debit_cents"] == dest_cr["credit_cents"] == 1_300_000
 
 	def test_transfer_posts_customer_deposits_both_sides(self):
 		svc = CoreBankingService()
