@@ -13,7 +13,8 @@ ActivityView          /crm/activities/
 SalesReportView       /crm/reports/
   ├─ /pipeline          — Pipeline by Stage (HTML)
   ├─ /forecast          — Forecast Summary (HTML)
-  └─ /leaderboard       — Rep Leaderboard (HTML)
+  ├─ /leaderboard       — Rep Leaderboard (HTML)
+  └─ /analytics         — Advanced Analytics Dashboard (HTML/JSON)
 """
 from __future__ import annotations
 
@@ -909,6 +910,8 @@ class SalesReportView(BaseERPView):
 	GET /crm/reports/pipeline          — Pipeline by Stage (HTML)
 	GET /crm/reports/forecast          — Forecast Summary (HTML)
 	GET /crm/reports/leaderboard       — Rep Leaderboard (HTML)
+	GET /crm/reports/analytics         — Advanced Analytics Dashboard (HTML)
+	GET /crm/reports/analytics.json    — Advanced Analytics Dashboard (JSON)
 	"""
 
 	route_base = "/crm/reports"
@@ -917,71 +920,275 @@ class SalesReportView(BaseERPView):
 	@expose("/dashboard")
 	@has_access
 	def dashboard(self):
-		"""Sales dashboard — KPIs + pipeline by stage bar chart."""
+		"""Compatibility dashboard route backed by advanced analytics."""
+		return self._render_analytics_dashboard("Sales Dashboard")
+
+	@expose("/analytics")
+	@has_access
+	def analytics(self):
+		"""Advanced CRM analytics dashboard."""
+		return self._render_analytics_dashboard("CRM Advanced Analytics")
+
+	@expose("/analytics.json")
+	@has_access
+	def analytics_json(self):
+		"""Advanced CRM analytics dashboard payload."""
+		return jsonify(self._analytics_payload())
+
+	def _analytics_payload(self):
 		session = _get_session()
-		from pgappforge.plugins.erp.crm.sales.models import Opportunity
+		from pgappforge.plugins.erp.crm.sales.services import SalesService
+
 		tenant_id = request.args.get("tenant_id")
-		now = datetime.now(timezone.utc)
-		month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-		q_pipeline = sa.select(
-			sa.func.coalesce(sa.func.sum(Opportunity.amount_cents), 0)
-		).where(Opportunity.stage.not_in(["CLOSED_WON", "CLOSED_LOST"]))
-		q_won = sa.select(
-			sa.func.coalesce(sa.func.sum(Opportunity.amount_cents), 0)
-		).where(Opportunity.stage == "CLOSED_WON", Opportunity.closed_at >= month_start)
-		q_total = sa.select(sa.func.count(Opportunity.id)).where(
-			Opportunity.stage.not_in(["CLOSED_LOST"])
+		owner_id = request.args.get("owner_id")
+		svc = SalesService()
+		return svc.get_analytics_dashboard(
+			session=session,
+			tenant_id=tenant_id or None,
+			owner_id=owner_id or None,
+			period_start=request.args.get("period_start") or None,
+			period_end=request.args.get("period_end") or None,
+			win_loss_since=request.args.get("win_loss_since") or None,
 		)
-		q_won_count = sa.select(sa.func.count(Opportunity.id)).where(
-			Opportunity.stage == "CLOSED_WON"
-		)
-		q_avg = sa.select(
-			sa.func.coalesce(sa.func.avg(Opportunity.amount_cents), 0)
-		).where(Opportunity.stage == "CLOSED_WON")
-		if tenant_id:
-			for q in (q_pipeline, q_won, q_total, q_won_count, q_avg):
-				q = q.where(Opportunity.tenant_id == tenant_id)
 
-		total_pipeline_cents = int(session.execute(q_pipeline).scalar() or 0)
-		won_this_month_cents = int(session.execute(q_won).scalar() or 0)
-		total_opps = int(session.execute(q_total).scalar() or 0)
-		won_count = int(session.execute(q_won_count).scalar() or 0)
-		conversion_rate_pct = round(won_count / total_opps * 100, 1) if total_opps else 0.0
-		avg_deal_size_cents = int(session.execute(q_avg).scalar() or 0)
+	def _render_analytics_dashboard(self, title: str):
+		data = self._analytics_payload()
+		pipeline = data["pipeline_forecast"]
+		win_loss = data["win_loss_analysis"]
+		health = data["customer_health"]
+		kpis = data["kpis"]
 
 		kpi_html = self.kpi_cards([
-			{"label": "Total Pipeline", "value": total_pipeline_cents / 100, "format": "currency", "color": "#1a56db", "icon": "fa-funnel-dollar"},
-			{"label": "Won This Month", "value": won_this_month_cents / 100, "format": "currency", "color": "#057a55", "icon": "fa-trophy"},
-			{"label": "Conversion Rate", "value": conversion_rate_pct, "format": "percent", "color": "#9061f9", "icon": "fa-percentage"},
-			{"label": "Avg Deal Size", "value": avg_deal_size_cents / 100, "format": "currency", "color": "#d97706", "icon": "fa-dollar-sign"},
+			{
+				"label": "Open Pipeline",
+				"value": kpis["open_pipeline_cents"] / 100,
+				"format": "currency",
+				"color": "#1a56db",
+				"icon": "fa-line-chart",
+			},
+			{
+				"label": "Forecast",
+				"value": kpis["forecast_cents"] / 100,
+				"format": "currency",
+				"color": "#057a55",
+				"icon": "fa-bullseye",
+			},
+			{
+				"label": "Win Rate",
+				"value": kpis["win_rate_pct"],
+				"format": "percent",
+				"color": "#7e3af2",
+				"icon": "fa-trophy",
+			},
+			{
+				"label": "Avg Health",
+				"value": kpis["average_health_score"],
+				"format": "number",
+				"color": "#d97706",
+				"icon": "fa-heartbeat",
+			},
+			{
+				"label": "At-Risk Customers",
+				"value": kpis["at_risk_customer_count"],
+				"format": "integer",
+				"color": "#c81e1e",
+				"icon": "fa-warning",
+			},
 		])
 
-		# Pipeline by stage bar chart
-		q_stage = (
-			sa.select(
-				Opportunity.stage.label("label"),
-				sa.func.coalesce(sa.func.sum(Opportunity.amount_cents), 0).label("value"),
-			)
-			.where(Opportunity.stage.not_in(["CLOSED_WON", "CLOSED_LOST"]))
-			.group_by(Opportunity.stage)
-			.order_by(Opportunity.stage)
+		stage_rows = "".join(
+			f"<tr>"
+			f"<td>{_he(row['stage'].replace('_', ' ').title())}</td>"
+			f"<td class='text-right'>{row['deal_count']}</td>"
+			f"<td class='text-right'>{_cents(row['total_cents'])}</td>"
+			f"<td class='text-right'>{_cents(row['weighted_cents'])}</td>"
+			f"<td class='text-right'>{_cents(row['ai_weighted_cents'])}</td>"
+			f"</tr>"
+			for row in pipeline["by_stage"]
 		)
-		if tenant_id:
-			q_stage = q_stage.where(Opportunity.tenant_id == tenant_id)
-		stage_rows = [{"label": r.label, "value": int(r.value) / 100} for r in session.execute(q_stage).all()]
-		chart_html = self.chart(stage_rows, chart_type="bar", x_col="label", y_col="value",
-		                        title="Pipeline by Stage (USD)", height=280)
+		if not stage_rows:
+			stage_rows = "<tr><td colspan='5' class='text-muted'>No open pipeline</td></tr>"
+
+		category_rows = "".join(
+			f"<tr>"
+			f"<td>{_he(row['forecast_category'].replace('_', ' ').title())}</td>"
+			f"<td class='text-right'>{row['deal_count']}</td>"
+			f"<td class='text-right'>{_cents(row['total_cents'])}</td>"
+			f"<td class='text-right'>{_cents(row['forecast_cents'])}</td>"
+			f"</tr>"
+			for row in pipeline["by_forecast_category"]
+		)
+		if not category_rows:
+			category_rows = "<tr><td colspan='4' class='text-muted'>No forecast categories</td></tr>"
+
+		health_dist = health["distribution"]
+		health_distribution_rows = "".join(
+			f"<tr><td>{_he(label)}</td><td class='text-right'>{count}</td></tr>"
+			for label, count in (
+				("Healthy", health_dist["healthy"]),
+				("Watch", health_dist["watch"]),
+				("At Risk", health_dist["at_risk"]),
+				("Unscored", health_dist["unscored"]),
+			)
+		)
+		at_risk_customer_rows = "".join(
+			f"<tr>"
+			f"<td>{_he(row['name'])}</td>"
+			f"<td>{_he(row.get('owner_id') or '—')}</td>"
+			f"<td class='text-right'>{row['health_score']:.1f}</td>"
+			f"<td class='text-right'>{row['churn_risk_score']:.1f}</td>"
+			f"<td class='text-right'>{_cents(row['lifetime_value_cents'])}</td>"
+			f"<td class='text-right'>{_he(row.get('nps_score') if row.get('nps_score') is not None else '—')}</td>"
+			f"</tr>"
+			for row in health["at_risk_customers"]
+		)
+		if not at_risk_customer_rows:
+			at_risk_customer_rows = (
+				"<tr><td colspan='6' class='text-muted'>No at-risk customers</td></tr>"
+			)
+
+		loss_reason_rows = self._metric_group_rows(win_loss["top_loss_reasons"], "No losses")
+		win_reason_rows = self._metric_group_rows(win_loss["top_win_reasons"], "No wins")
+		competitor_rows = self._metric_group_rows(
+			win_loss["losses_by_competitor"],
+			"No competitor losses",
+		)
+		at_risk_deal_rows = "".join(
+			f"<tr>"
+			f"<td>{_he(row['name'])}</td>"
+			f"<td>{_he(row['stage'].replace('_', ' ').title())}</td>"
+			f"<td class='text-right'>{_cents(row['amount_cents'])}</td>"
+			f"<td class='text-right'>{row['probability']}%</td>"
+			f"<td>{_he(row['expected_close_date'] or '—')}</td>"
+			f"<td>{_he(row['reason'].replace('_', ' ').title())}</td>"
+			f"</tr>"
+			for row in pipeline["at_risk_deals"]
+		)
+		if not at_risk_deal_rows:
+			at_risk_deal_rows = "<tr><td colspan='6' class='text-muted'>No at-risk deals</td></tr>"
+
+		scope = data["scope"]
 
 		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Sales Dashboard</title>
+<title>{_he(title)}</title>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<style>
+body{{padding:24px;background:#f7f8fb}}
+.analytics-shell{{max-width:1180px;margin:0 auto}}
+.analytics-panel{{background:#fff;border:1px solid #d9dee8;border-radius:6px;padding:16px;margin-top:16px}}
+.analytics-summary{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}}
+.analytics-summary div{{border:1px solid #e2e6ef;border-radius:6px;padding:10px;background:#fbfcff}}
+.analytics-summary strong{{display:block;font-size:18px}}
+.nav-tabs{{margin-top:10px}}
+</style>
 </head><body style="padding:24px">
-<h3>Sales Dashboard</h3>
+<div class="analytics-shell">
+<h3>{_he(title)}</h3>
+<p class="text-muted">
+Scope: tenant {_he(scope['tenant_id'] or 'all')} · owner {_he(scope['owner_id'] or 'all')} ·
+forecast {_he(scope['period_start'])} to {_he(scope['period_end'])}
+</p>
 {kpi_html}
-<div style="max-width:700px">{chart_html}</div>
+<ul class="nav nav-tabs" role="tablist">
+  <li class="active"><a href="#forecast" role="tab" data-toggle="tab">Pipeline Forecast</a></li>
+  <li><a href="#health" role="tab" data-toggle="tab">Customer Health</a></li>
+  <li><a href="#winloss" role="tab" data-toggle="tab">Win/Loss</a></li>
+  <li><a href="#risk" role="tab" data-toggle="tab">Risk</a></li>
+</ul>
+<div class="tab-content analytics-panel">
+  <div class="tab-pane active" id="forecast">
+    <div class="analytics-summary">
+      <div><span class="text-muted">Weighted Pipeline</span><strong>{_cents(pipeline['weighted_pipeline_cents'])}</strong></div>
+      <div><span class="text-muted">AI Weighted</span><strong>{_cents(pipeline['ai_weighted_pipeline_cents'])}</strong></div>
+      <div><span class="text-muted">Closing In Period</span><strong>{_cents(pipeline['closing_this_period_cents'])}</strong></div>
+      <div><span class="text-muted">Avg Probability</span><strong>{pipeline['average_probability_pct']:.1f}%</strong></div>
+    </div>
+    <h4>Pipeline By Stage</h4>
+    <table class="table table-bordered table-condensed table-hover">
+      <thead><tr><th>Stage</th><th class="text-right">Deals</th><th class="text-right">Total</th><th class="text-right">Weighted</th><th class="text-right">AI Weighted</th></tr></thead>
+      <tbody>{stage_rows}</tbody>
+    </table>
+    <h4>Forecast Categories</h4>
+    <table class="table table-bordered table-condensed table-hover">
+      <thead><tr><th>Category</th><th class="text-right">Deals</th><th class="text-right">Pipeline</th><th class="text-right">Forecast</th></tr></thead>
+      <tbody>{category_rows}</tbody>
+    </table>
+  </div>
+  <div class="tab-pane" id="health">
+    <div class="analytics-summary">
+      <div><span class="text-muted">Accounts</span><strong>{health['account_count']}</strong></div>
+      <div><span class="text-muted">Scored</span><strong>{health['scored_account_count']}</strong></div>
+      <div><span class="text-muted">Avg Health</span><strong>{health['average_health_score']:.1f}</strong></div>
+      <div><span class="text-muted">Avg Churn Risk</span><strong>{health['average_churn_risk_score']:.1f}</strong></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-4">
+        <h4>Distribution</h4>
+        <table class="table table-bordered table-condensed">
+          <tbody>{health_distribution_rows}</tbody>
+        </table>
+      </div>
+      <div class="col-sm-8">
+        <h4>At-Risk Customers</h4>
+        <table class="table table-bordered table-condensed table-hover">
+          <thead><tr><th>Customer</th><th>Owner</th><th class="text-right">Health</th><th class="text-right">Churn</th><th class="text-right">LTV</th><th class="text-right">NPS</th></tr></thead>
+          <tbody>{at_risk_customer_rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="tab-pane" id="winloss">
+    <div class="analytics-summary">
+      <div><span class="text-muted">Closed Deals</span><strong>{win_loss['closed_deal_count']}</strong></div>
+      <div><span class="text-muted">Won Revenue</span><strong>{_cents(win_loss['won_revenue_cents'])}</strong></div>
+      <div><span class="text-muted">Lost Revenue</span><strong>{_cents(win_loss['lost_revenue_cents'])}</strong></div>
+      <div><span class="text-muted">Avg Cycle</span><strong>{win_loss['average_sales_cycle_days']:.1f} days</strong></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-4"><h4>Win Reasons</h4>{win_reason_rows}</div>
+      <div class="col-sm-4"><h4>Loss Reasons</h4>{loss_reason_rows}</div>
+      <div class="col-sm-4"><h4>Competitors</h4>{competitor_rows}</div>
+    </div>
+  </div>
+  <div class="tab-pane" id="risk">
+    <div class="analytics-summary">
+      <div><span class="text-muted">Overdue Deals</span><strong>{pipeline['overdue_deal_count']}</strong></div>
+      <div><span class="text-muted">Overdue Pipeline</span><strong>{_cents(pipeline['overdue_pipeline_cents'])}</strong></div>
+      <div><span class="text-muted">At-Risk Customers</span><strong>{len(health['at_risk_customers'])}</strong></div>
+    </div>
+    <h4>At-Risk Deals</h4>
+    <table class="table table-bordered table-condensed table-hover">
+      <thead><tr><th>Opportunity</th><th>Stage</th><th class="text-right">Amount</th><th class="text-right">Probability</th><th>Close Date</th><th>Reason</th></tr></thead>
+      <tbody>{at_risk_deal_rows}</tbody>
+    </table>
+  </div>
+</div>
+<p style="color:#888;font-size:0.75em;margin-top:16px">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
+</div>
+<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 </body></html>"""
 		return make_response(html, 200)
+
+	def _metric_group_rows(self, rows: list[dict], empty_label: str) -> str:
+		table_rows = "".join(
+			f"<tr>"
+			f"<td>{_he(row['label'])}</td>"
+			f"<td class='text-right'>{row['deal_count']}</td>"
+			f"<td class='text-right'>{_cents(row['amount_cents'])}</td>"
+			f"</tr>"
+			for row in rows
+		)
+		if not table_rows:
+			table_rows = (
+				f"<tr><td colspan='3' class='text-muted'>{_he(empty_label)}</td></tr>"
+			)
+		return (
+			"<table class='table table-bordered table-condensed table-hover'>"
+			"<thead><tr><th>Label</th><th class='text-right'>Deals</th>"
+			"<th class='text-right'>Amount</th></tr></thead>"
+			f"<tbody>{table_rows}</tbody></table>"
+		)
 
 	# ------------------------------------------------------------------
 	# Report 1: Pipeline by Stage

@@ -94,6 +94,7 @@ class SalesPlugin(BasePlugin):
 				"can_crm_activity_write",
 				"can_crm_forecast_write",
 				"can_crm_reports",
+				"can_crm_analytics",
 			],
 			safe_mode_compatible=True,
 		)
@@ -184,6 +185,7 @@ class SalesPlugin(BasePlugin):
 		self.appbuilder.add_link("Pipeline Board", href="/crm/opportunities/pipeline/", icon="fa-columns", category=cat)
 		self.add_view(ActivityView, "Activities", icon="fa-calendar-check-o", category=cat)
 		self.add_view(SalesReportView, "Sales Reports", icon="fa-chart-line", category=cat)
+		self.appbuilder.add_link("Analytics Dashboard", href="/crm/reports/analytics", icon="fa-line-chart", category=cat)
 
 		log.info("SalesPlugin: views registered under category %r", cat)
 
