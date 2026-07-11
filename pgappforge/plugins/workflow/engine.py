@@ -1383,10 +1383,13 @@ class BPMActionRegistry:
 		"""
 		def decorator(fn: Any) -> Any:
 			existing = cls._registry.get(name)
-			if existing is not None and existing["fn"] is not fn:
+			if existing is not None:
+				existing_fn = existing["fn"]
+				if existing_fn.__qualname__ == fn.__qualname__:
+					return fn
 				raise ValueError(
 					f"BPMActionRegistry: capability {name!r} already registered by "
-					f"{existing['fn'].__module__}.{existing['fn'].__qualname__}. "
+					f"{existing_fn.__module__}.{existing_fn.__qualname__}. "
 					f"Cannot override with {fn.__module__}.{fn.__qualname__}."
 				)
 			cls._registry[name] = {"fn": fn, "name": name, "description": description}
