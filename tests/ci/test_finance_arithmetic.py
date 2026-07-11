@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import types
+import json
 from datetime import date
 from dataclasses import dataclass
 from decimal import Decimal
@@ -132,7 +133,14 @@ class FakeSession:
 		self.added.append(obj)
 
 	def get(self, model, key):
-		return self.get_map.get((model, key))
+		value = self.get_map.get((model, key))
+		if value is not None:
+			return value
+		model_name = getattr(model, "__name__", model)
+		for (stored_model, stored_key), stored_value in self.get_map.items():
+			if stored_key == key and getattr(stored_model, "__name__", stored_model) == model_name:
+				return stored_value
+		return None
 
 	def execute(self, statement):
 		self.executed.append(statement)
@@ -382,4 +390,9 @@ def test_material_ledger_period_close_totals_all_variance_buckets(monkeypatch):
 	MaterialLedgerService().close_period("period-1", session)
 
 	close_events = [obj for obj in session.added if getattr(obj, "event_type", "") == "material_ledger.period_closed"]
-	assert close_events[-1].total_variance_cents == 150
+	payload = getattr(close_events[-1], "payload", None)
+	if isinstance(payload, str):
+		payload = json.loads(payload)
+	elif payload is None:
+		payload = vars(close_events[-1])
+	assert payload["total_variance_cents"] == 150

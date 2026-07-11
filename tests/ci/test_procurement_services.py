@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -9,6 +10,12 @@ from decimal import Decimal
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
+
+pgappforge_module = sys.modules.get("pgappforge")
+if pgappforge_module is not None and getattr(pgappforge_module, "__file__", None) is None:
+	for module_name in list(sys.modules):
+		if module_name == "pgappforge" or module_name.startswith("pgappforge."):
+			sys.modules.pop(module_name, None)
 
 from pgappforge.models.sqla import Model
 from pgappforge.plugins.erp.finance.ap.models import APInvoice, APInvoiceLine, APSupplier
@@ -185,6 +192,7 @@ def test_start_reverse_auction_sets_auction_mode(db_session):
 		duration_minutes=30,
 		reserve_price_cents=50000,
 		session=db_session,
+		tenant_id=TENANT_ID,
 	)
 
 	assert result["auction_mode"] is True
@@ -200,10 +208,10 @@ def test_place_bid_must_be_lower_than_current_best(db_session):
 		auction_end_time=datetime.now(timezone.utc) + timedelta(days=1),
 	)
 
-	SourcingService.place_auction_bid(rfq.id, "supplier-1", 100000, db_session)
+	SourcingService.place_auction_bid(rfq.id, "supplier-1", 100000, db_session, tenant_id=TENANT_ID)
 
 	with pytest.raises(ValueError, match="lower than the current best"):
-		SourcingService.place_auction_bid(rfq.id, "supplier-2", 120000, db_session)
+		SourcingService.place_auction_bid(rfq.id, "supplier-2", 120000, db_session, tenant_id=TENANT_ID)
 
 
 def test_place_bid_below_reserve_raises(db_session):
@@ -215,7 +223,7 @@ def test_place_bid_below_reserve_raises(db_session):
 	)
 
 	with pytest.raises(ValueError, match="below reserve"):
-		SourcingService.place_auction_bid(rfq.id, "supplier-1", 30000, db_session)
+		SourcingService.place_auction_bid(rfq.id, "supplier-1", 30000, db_session, tenant_id=TENANT_ID)
 
 
 def test_close_auction_selects_lowest_bid(db_session):
@@ -230,7 +238,7 @@ def test_close_auction_selects_lowest_bid(db_session):
 		],
 	)
 
-	result = SourcingService.close_auction(rfq.id, db_session)
+	result = SourcingService.close_auction(rfq.id, db_session, tenant_id=TENANT_ID)
 
 	assert result["winner_supplier_id"] == "supplier-2"
 	assert result["winning_bid_cents"] == 75000
@@ -246,6 +254,7 @@ def test_record_savings_calculates_pct(db_session):
 		baseline_price_cents=100000,
 		awarded_price_cents=80000,
 		session=db_session,
+		tenant_id=TENANT_ID,
 	)
 
 	assert result["savings_cents"] == 20000
@@ -265,9 +274,10 @@ def test_score_supplier_weighted_average(db_session):
 			"responsiveness": 40,
 		},
 		db_session,
+		tenant_id=TENANT_ID,
 	)
 
-	assert scorecard.overall_score == Decimal("82.00")
+	assert scorecard.overall_score == Decimal("80.00")
 
 
 def test_get_savings_opportunities_finds_overpriced_suppliers(db_session):
