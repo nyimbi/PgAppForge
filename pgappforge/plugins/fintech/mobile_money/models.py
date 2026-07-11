@@ -96,7 +96,7 @@ class MobileWallet(AuditMixin, Model):
 	msisdn: str = Column(String(20), unique=True, nullable=False, index=True)
 	customer_id: str = Column(
 		UUID(as_uuid=False),
-		ForeignKey("foundation_party.id", ondelete="RESTRICT"),
+		ForeignKey("erp_party.id", ondelete="RESTRICT"),
 		nullable=False,
 		index=True,
 	)
@@ -349,7 +349,7 @@ class Agent(AuditMixin, Model):
 
 	party_id: str = Column(
 		UUID(as_uuid=False),
-		ForeignKey("foundation_party.id", ondelete="RESTRICT"),
+		ForeignKey("erp_party.id", ondelete="RESTRICT"),
 		nullable=False,
 		index=True,
 	)
@@ -553,7 +553,7 @@ class MerchantTill(AuditMixin, Model):
 
 	merchant_id: str = Column(
 		UUID(as_uuid=False),
-		ForeignKey("foundation_party.id", ondelete="RESTRICT"),
+		ForeignKey("erp_party.id", ondelete="RESTRICT"),
 		nullable=False,
 		index=True,
 	)
@@ -932,7 +932,7 @@ class DisbursementBatch(AuditMixin, Model):
 
 	initiator_id: str = Column(
 		UUID(as_uuid=False),
-		ForeignKey("foundation_party.id", ondelete="RESTRICT"),
+		ForeignKey("erp_party.id", ondelete="RESTRICT"),
 		nullable=False,
 		index=True,
 	)

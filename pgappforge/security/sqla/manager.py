@@ -167,21 +167,42 @@ class SecurityManager(BaseSecurityManager, MFASecurityManagerMixin):
 
     @staticmethod
     def _safe_create_all(engine) -> None:
-        """Call Base.metadata.create_all, ignoring pre-existing tables/indexes.
+        """Create all tables/indexes, tolerating pre-existing objects.
 
         extend_existing=True on some models can register indexes multiple times
         in the same metadata object when modules are re-imported, causing
         DuplicateTable errors on the second CREATE INDEX even though the object
-        was just created by the same create_all call. Catching and ignoring
-        these is safe — the object already exists and that's fine.
+        was just created by the same create_all call.
 
-        When catching a DuplicateTable error we also rollback the connection
-        so it can be reused cleanly by Flask-SQLAlchemy's session pool.
+        We first deduplicate index names per table (keeping one object per name),
+        then call create_all with checkfirst=True. Any residual DuplicateTable
+        errors (e.g. from concurrent writers) are caught and the connection is
+        rolled back so it can be reused cleanly by Flask-SQLAlchemy's session pool.
         """
-        # Use checkfirst=True (the default) so existing tables and their indexes
-        # are skipped. This prevents DuplicateTable errors from extend_existing
-        # models while ensuring all tables are created even if one is already present.
-        Base.metadata.create_all(engine, checkfirst=True)
+        # Deduplicate indexes per table — extend_existing=True can attach multiple
+        # Index objects with the same name when a model is processed more than once.
+        for table in Base.metadata.tables.values():
+            seen_names: set[str] = set()
+            for idx in list(table.indexes):
+                if idx.name in seen_names:
+                    table.indexes.discard(idx)
+                else:
+                    if idx.name is not None:
+                        seen_names.add(idx.name)
+
+        from sqlalchemy.exc import ProgrammingError
+        with engine.connect() as conn:
+            try:
+                Base.metadata.create_all(conn, checkfirst=True)
+                conn.commit()
+            except ProgrammingError as exc:
+                orig = getattr(exc, "orig", None)
+                err_name = type(orig).__name__ if orig is not None else ""
+                if "DuplicateTable" in err_name or "duplicate" in str(exc).lower():
+                    conn.rollback()
+                else:
+                    conn.rollback()
+                    raise
 
     def _create_db_tables(self):
         try:

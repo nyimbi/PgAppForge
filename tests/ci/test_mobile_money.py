@@ -883,7 +883,8 @@ class TestCommission:
 	def test_calculate_commission(self, session, svc):
 		agent = _make_agent(session)
 		self._seed_txns(session, agent, 3)
-		period = date.today()
+		# Use UTC date to match initiated_at which is stored in UTC
+		period = datetime.now(timezone.utc).date()
 		comm = svc.calculate_agent_commission(agent.id, period, period)
 
 		assert comm.transaction_count == 3
