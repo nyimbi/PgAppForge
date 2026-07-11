@@ -1231,12 +1231,20 @@ def _map_wa_status(wa_status: str) -> str:
 # BPM Action registrations
 # ---------------------------------------------------------------------------
 
+_bpm_actions_registered = False
+
+
 def _register_bpm_actions() -> None:
 	"""Register WhatsApp service operations with the BPMActionRegistry.
 
 	Called at module import time; guarded by try/except so missing workflow
 	plugin never blocks startup.
 	"""
+	global _bpm_actions_registered
+	if _bpm_actions_registered:
+		return
+	_bpm_actions_registered = True
+
 	try:
 		from pgappforge.plugins.workflow.engine import BPMActionRegistry
 	except ImportError:
