@@ -26,6 +26,31 @@ class LeaveRequestView(ModelView):
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "leave_type", "status"]
 
+	@expose('/submit-approval/<string:doc_id>', methods=['POST'])
+	@has_access
+	def submit_approval(self, doc_id):
+		from pgappforge.plugins.erp.platform.approvals.views import submit_document_approval
+		return submit_document_approval(
+			document_type="leave_request",
+			document_id=doc_id,
+			document_model=LeaveRequest,
+			session=self.datamodel.session,
+			amount_getter=lambda doc: 0,
+			requester_getter=lambda doc: str(getattr(doc, "employee_id", "")),
+		)
+
+	@expose('/approve/<string:request_id>', methods=['POST'])
+	@has_access
+	def approve(self, request_id):
+		from pgappforge.plugins.erp.platform.approvals.views import approve_document_approval
+		return approve_document_approval(request_id, self.datamodel.session)
+
+	@expose('/reject/<string:request_id>', methods=['POST'])
+	@has_access
+	def reject(self, request_id):
+		from pgappforge.plugins.erp.platform.approvals.views import reject_document_approval
+		return reject_document_approval(request_id, self.datamodel.session)
+
 
 class LeaveBalanceView(ModelView):
 	datamodel = SQLAInterface(LeaveBalance)

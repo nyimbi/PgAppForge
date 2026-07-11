@@ -121,6 +121,18 @@ class TravelExpensePlugin(BasePlugin):
 			MileageLog,
 		]
 
+	def register_views(self) -> None:
+		from pgappforge.plugins.erp.hcm.travel_expense.views import (
+			ExpenseReportView,
+			TravelExpenseDashboardView,
+			TravelRequestView,
+		)
+		cat = self.config.get("TRAVEL_EXPENSE_MENU_CATEGORY", "HR")
+		self.add_view(TravelExpenseDashboardView, "Travel & Expense", icon="fa-tachometer", category=cat)
+		self.add_view(TravelRequestView, "Travel Requests", icon="fa-plane", category=cat)
+		self.add_view(ExpenseReportView, "Expense Reports", icon="fa-file-invoice-dollar", category=cat)
+		log.info("TravelExpensePlugin: views registered under %r", cat)
+
 	def get_events(self) -> list[str]:
 		"""Return dotted event-name strings emitted by this plugin."""
 		return [

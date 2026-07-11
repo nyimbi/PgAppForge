@@ -126,6 +126,7 @@ class SourcingPlugin(BasePlugin):
 		try:
 			from pgappforge.plugins.erp.procurement.sourcing.views import (
 				ProcurementSavingsView,
+				PurchaseRequisitionView,
 				RFQView,
 				SupplierBidView,
 			)
@@ -134,6 +135,7 @@ class SourcingPlugin(BasePlugin):
 			return
 		cat = self.config.get("SOURCING_MENU_CATEGORY", "Procurement")
 		self.add_view(RFQView, "RFQs", icon="fa-bullhorn", category=cat)
+		self.add_view(PurchaseRequisitionView, "Purchase Requisitions", icon="fa-shopping-basket", category=cat)
 		self.add_view(SupplierBidView, "Supplier Bids", icon="fa-gavel", category=cat)
 		self.add_view(ProcurementSavingsView, "Procurement Savings", icon="fa-line-chart", category=cat)
 		log.info("SourcingPlugin: views registered under %r", cat)
