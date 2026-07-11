@@ -55,15 +55,7 @@ from pgappforge.plugins.base_plugin import BasePlugin, PluginMetadata, PluginPri
 from .engine import WorkflowEngine
 from .mixin import WorkflowMixin
 from .models import ProcessDefinition, ProcessEvent, ProcessInstance, ProcessStep
-from .views import (
-	ProcessDashboardView,
-	ProcessDefinitionView,
-	ProcessInstanceView,
-	ProcessQueueView,
-	ProcessStepView,
-	ProcessTimelineView,
-	bpm_api,
-)
+# Views imported lazily inside register_views() to avoid circular import at collection time
 
 log = logging.getLogger(__name__)
 
@@ -191,6 +183,15 @@ class WorkflowPlugin(BasePlugin):
 
 	def register_views(self) -> None:
 		"""Mount all BPM views and the REST API blueprint."""
+		from .views import (
+			ProcessDashboardView,
+			ProcessDefinitionView,
+			ProcessInstanceView,
+			ProcessQueueView,
+			ProcessStepView,
+			ProcessTimelineView,
+			bpm_api,
+		)
 		category = "Workflows"
 		category_icon = "fa-sitemap"
 
