@@ -89,8 +89,7 @@ class Party(AuditMixin, Model):
 		Index("ix_erp_party_tenant_type", "tenant_id", "party_type"),
 		Index("ix_erp_party_tax_id", "tax_id"),
 		Index("ix_erp_party_lei", "lei"),
-		Index("ix_erp_party_name_trgm", "name", postgresql_using="gin",
-		      postgresql_ops={"name": "gin_trgm_ops"}),
+		Index("ix_erp_party_name", "name"),
 		{"extend_existing": True},
 	)
 

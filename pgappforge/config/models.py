@@ -187,12 +187,7 @@ class AppConfig(Model):
 
 	__table_args__ = (
 		Index("ix_app_config_category", "category"),
-		Index(
-			"ix_app_config_key_gin",
-			"key",
-			postgresql_using="gin",
-			postgresql_ops={"key": "gin_trgm_ops"},
-		),
+		Index("ix_app_config_key_btree", "key"),
 	)
 
 	id = Column(
