@@ -120,6 +120,12 @@ ERP_GROUPS: dict[str, dict[str, Any]] = {
 				"description": "Event subscriptions, delivery tracking, dead-letter queue, replay.",
 			},
 			{
+				"key": "platform.global_search",
+				"module": "pgappforge.plugins.erp.platform",
+				"class_name": "PlatformGlobalSearchPlugin",
+				"description": "Global ERP search across projects, risks, invoices, suppliers, employees, and opportunities.",
+			},
+			{
 				"key": "platform.pdl_designer",
 				"module": "pgappforge.pdl",
 				"class_name": "PDLPlugin",
