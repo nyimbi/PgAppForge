@@ -972,8 +972,8 @@ class InventoryReportView(BaseERPView):
 			]
 			if tenant_id:
 				abc_analysis = InventoryService().get_abc_analysis(tenant_id, session)
-		except Exception:
-			pass
+		except Exception as exc:
+			log.error("Inventory dashboard query error: %s", exc, exc_info=True)
 
 		kpi_html = self.kpi_cards([
 			{"label": "Total SKUs", "value": total_skus, "format": "integer",

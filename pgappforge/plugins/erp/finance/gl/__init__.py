@@ -147,6 +147,7 @@ class GLPlugin(BasePlugin):
 			GLPeriodView,
 			GLReportView,
 			IncomeStatementView,
+			ReportDownloadView,
 			TrialBalanceView,
 		)
 
@@ -235,6 +236,7 @@ class GLPlugin(BasePlugin):
 		)
 		self.add_view_no_menu(GLAccountView)
 		self.add_view_no_menu(GLJournalEntryView)
+		self.add_view_no_menu(ReportDownloadView)
 
 		log.info("GLPlugin: views registered under category %r", cat)
 
