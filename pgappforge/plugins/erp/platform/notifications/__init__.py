@@ -1,8 +1,9 @@
 """
 pgappforge/plugins/erp/platform/notifications/__init__.py
 
-Notification Dispatcher plugin — bridges ERP domain events to the alerting
-notification service so staff receive timely alerts for key business activity.
+Notification Dispatcher plugin — bridges ERP domain events and KPI threshold
+rules to the alerting notification service so staff receive timely alerts for
+key business activity.
 
 Events consumed (all opt-in via Flask config flags):
   lending.loan.approved          → borrower alert       (NOTIFY_LOAN_APPROVED)
@@ -53,8 +54,9 @@ class NotificationDispatcherPlugin(BasePlugin):
 			name="platform.notifications",
 			version="1.0.0",
 			description=(
-				"Event-driven notification dispatcher — subscribes to key ERP domain "
-				"events and delivers alerts via email, SMS, WhatsApp, or push channels."
+				"Event-driven notification dispatcher and KPI threshold alerting — "
+				"subscribes to key ERP domain events and delivers alerts via email, "
+				"SMS, WhatsApp, push, or in-app channels."
 			),
 			author="PgAppForge Contributors",
 			tags=["platform", "notifications", "alerts", "events", "erp"],
@@ -106,9 +108,21 @@ class NotificationDispatcherPlugin(BasePlugin):
 		)
 
 	def register_views(self) -> None:
-		"""No views — this plugin is pure infrastructure."""
-		pass
+		from pgappforge.plugins.erp.platform.notifications.views import KPIAlertRuleView
+
+		cat = self.config.get("NOTIFICATIONS_MENU_CATEGORY", "Platform")
+		self.add_view(KPIAlertRuleView, "KPI Alert Rules", icon="fa-bell", category=cat)
 
 	def register_models(self) -> list:
-		"""No models — notifications are stateless dispatches."""
-		return []
+		from pgappforge.plugins.erp.platform.notifications.models import KPIAlertRule
+		return [KPIAlertRule]
+
+
+from pgappforge.plugins.erp.platform.notifications.models import KPIAlertRule  # noqa: E402
+from pgappforge.plugins.erp.platform.notifications.services import KPIAlertService  # noqa: E402
+
+__all__ = [
+	"NotificationDispatcherPlugin",
+	"KPIAlertRule",
+	"KPIAlertService",
+]
