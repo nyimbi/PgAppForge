@@ -482,6 +482,7 @@ from pgappforge.plugins.erp.finance.ar.models import (  # noqa: E402
 	ARInvoice,
 	ARInvoiceLine,
 	ARPayment,
+	CustomerInvoice,
 )
 from pgappforge.plugins.erp.finance.ar.events import (  # noqa: E402
 	AgingSnapshotCreatedEvent,
@@ -513,6 +514,7 @@ __all__ = [
 	"create_plugin",
 	# models
 	"ARCustomer",
+	"CustomerInvoice",
 	"ARInvoice",
 	"ARInvoiceLine",
 	"ARPayment",

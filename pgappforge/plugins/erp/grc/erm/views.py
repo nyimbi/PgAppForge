@@ -7,10 +7,12 @@ from __future__ import annotations
 from flask_babel import lazy_gettext as _
 
 import logging
+from datetime import date
 
 import sqlalchemy as sa
-from flask import current_app, make_response
+from flask import current_app, make_response, redirect
 from pgappforge import ModelView, expose
+from pgappforge.actions import action
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
@@ -104,6 +106,22 @@ class RiskRegisterView(ModelView):
 	}
 	add_exclude_columns = ["id", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_at", "updated_at"]
+
+	@action('accept_risks', 'Accept Risks', 'Accept selected risks?', 'fa-thumbs-up')
+	def accept_risks(self, items):
+		for item in items:
+			item.status = 'accepted'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
+
+	@action('close_risks', 'Close Risks', 'Close selected risks?', 'fa-lock')
+	def close_risks(self, items):
+		for item in items:
+			item.status = 'closed'
+			if hasattr(item, 'closed_date'):
+				item.closed_date = date.today()
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
 
 
 class RiskMitigationActionView(ModelView):

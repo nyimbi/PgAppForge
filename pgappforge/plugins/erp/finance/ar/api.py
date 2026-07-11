@@ -19,7 +19,8 @@ from .models import (
 
 class ARCustomerRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_customer'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARCustomer)
 	list_columns = [
 		'id',
@@ -80,7 +81,8 @@ class ARCustomerRestApi(ModelRestApi):
 
 class ARInvoiceRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_invoice'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARInvoice)
 	list_columns = [
 		'id',
@@ -173,7 +175,8 @@ class ARInvoiceRestApi(ModelRestApi):
 
 class ARInvoiceLineRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_invoice_line'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARInvoiceLine)
 	list_columns = [
 		'id',
@@ -234,7 +237,8 @@ class ARInvoiceLineRestApi(ModelRestApi):
 
 class ARPaymentRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_payment'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARPayment)
 	list_columns = [
 		'id',
@@ -286,7 +290,8 @@ class ARPaymentRestApi(ModelRestApi):
 
 class ARAllocationRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_allocation'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARAllocation)
 	list_columns = [
 		'id',
@@ -319,7 +324,8 @@ class ARAllocationRestApi(ModelRestApi):
 
 class ARCreditNoteRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_credit_note'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARCreditNote)
 	list_columns = [
 		'id',
@@ -361,7 +367,8 @@ class ARCreditNoteRestApi(ModelRestApi):
 
 class ARDunningRunRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_dunning_run'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARDunningRun)
 	list_columns = [
 		'id',
@@ -396,7 +403,8 @@ class ARDunningRunRestApi(ModelRestApi):
 
 class ARDunningEventRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_dunning_event'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARDunningEvent)
 	list_columns = [
 		'id',
@@ -439,7 +447,8 @@ class ARDunningEventRestApi(ModelRestApi):
 
 class ARAgingRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ar/ar_aging'
-	openapi_spec_tag = 'Finance AR'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ARAging)
 	list_columns = [
 		'id',

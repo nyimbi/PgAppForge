@@ -17,7 +17,8 @@ from .models import (
 
 class SalesAccountRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/sales_account'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(SalesAccount)
 	list_columns = [
 		'id',
@@ -88,7 +89,8 @@ class SalesAccountRestApi(ModelRestApi):
 
 class SalesContactRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/sales_contact'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(SalesContact)
 	list_columns = [
 		'id',
@@ -159,7 +161,8 @@ class SalesContactRestApi(ModelRestApi):
 
 class LeadRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/lead'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Lead)
 	list_columns = [
 		'id',
@@ -230,7 +233,8 @@ class LeadRestApi(ModelRestApi):
 
 class OpportunityRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/opportunity'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Opportunity)
 	list_columns = [
 		'id',
@@ -298,7 +302,8 @@ class OpportunityRestApi(ModelRestApi):
 
 class ActivityRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/activity'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Activity)
 	list_columns = [
 		'id',
@@ -350,7 +355,8 @@ class ActivityRestApi(ModelRestApi):
 
 class SalesTargetRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/sales_target'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(SalesTarget)
 	list_columns = [
 		'id',
@@ -384,7 +390,8 @@ class SalesTargetRestApi(ModelRestApi):
 
 class SalesForecastRestApi(ModelRestApi):
 	resource_name = 'erp/crm/sales/sales_forecast'
-	openapi_spec_tag = 'CRM Sales'
+	openapi_spec_tag = 'CRM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(SalesForecast)
 	list_columns = [
 		'id',

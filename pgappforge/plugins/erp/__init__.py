@@ -132,6 +132,18 @@ ERP_GROUPS: dict[str, dict[str, Any]] = {
 				"description": "Cross-domain completeness, duplicate detection, and stale-record monitoring.",
 			},
 			{
+				"key": "platform.global_search",
+				"module": "pgappforge.plugins.erp.platform",
+				"class_name": "PlatformGlobalSearchPlugin",
+				"description": "Global ERP search across projects, risks, invoices, suppliers, employees, and opportunities.",
+			},
+			{
+				"key": "platform.document_management",
+				"module": "pgappforge.plugins.erp.platform.document_management",
+				"class_name": "DocumentManagementPlugin",
+				"description": "Document attachments for ERP entities.",
+			},
+			{
 				"key": "platform.pdl_designer",
 				"module": "pgappforge.pdl",
 				"class_name": "PDLPlugin",

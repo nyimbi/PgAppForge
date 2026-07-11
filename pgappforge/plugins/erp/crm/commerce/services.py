@@ -709,6 +709,108 @@ class CommerceService:
 	# Fulfilment
 	# ------------------------------------------------------------------
 
+	def create_delivery_order(
+		self,
+		order_id: str,
+		session: Any,
+		tenant_id: str = "",
+		delivery_date: date | None = None,
+		warehouse_id: str | None = None,
+		carrier: str | None = None,
+	) -> Any:
+		"""Create a delivery order from a confirmed sales order."""
+		from pgappforge.plugins.erp.crm.commerce.models import DeliveryOrder, Order
+
+		order = session.get(Order, order_id)
+		if order is None or (tenant_id and order.tenant_id != tenant_id):
+			raise OrderNotFoundError(f"Order {order_id!r} not found")
+		if order.status not in ("CONFIRMED", "PROCESSING"):
+			raise CommerceValidationError(
+				f"Delivery orders require CONFIRMED or PROCESSING order status, got {order.status!r}"
+			)
+
+		existing_count = session.execute(
+			sa.select(sa.func.count())
+			.select_from(DeliveryOrder)
+			.where(DeliveryOrder.sales_order_id == order_id)
+		).scalar() or 0
+		delivery_number = f"DEL-{order.order_number}-{int(existing_count) + 1:02d}"
+		delivery = DeliveryOrder(
+			tenant_id=order.tenant_id,
+			delivery_number=delivery_number,
+			sales_order_id=order.id,
+			customer_id=order.customer_id,
+			requested_ship_date=date.today(),
+			delivery_date=delivery_date,
+			warehouse_id=warehouse_id,
+			carrier=carrier,
+			status="READY_TO_PICK",
+			shipping_address=order.shipping_address or {},
+		)
+		session.add(delivery)
+		order.status = "PROCESSING"
+		order.updated_at = datetime.now(timezone.utc)
+		session.flush()
+		log.info("CommerceService.create_delivery_order: %s for order=%s", delivery_number, order_id)
+		return delivery
+
+	def advance_to_next_step(self, record_id: str, session: Any) -> Any:
+		"""Advance one O2C commerce document to the next workflow status."""
+		from pgappforge.plugins.erp.crm.commerce.models import DeliveryOrder, Order
+
+		now = datetime.now(timezone.utc)
+		delivery = session.get(DeliveryOrder, record_id)
+		if delivery is not None:
+			if delivery.status == "DRAFT":
+				delivery.status = "READY_TO_PICK"
+			elif delivery.status == "READY_TO_PICK":
+				delivery.status = "PICKED"
+				delivery.picked_at = now
+			elif delivery.status == "PICKED":
+				delivery.status = "SHIPPED"
+				delivery.shipped_at = now
+				if delivery.sales_order:
+					delivery.sales_order.status = "SHIPPED"
+					delivery.sales_order.updated_at = now
+			elif delivery.status == "SHIPPED":
+				delivery.status = "DELIVERED"
+				delivery.delivered_at = now
+				delivery.delivery_date = date.today()
+				if delivery.sales_order:
+					delivery.sales_order.status = "DELIVERED"
+					delivery.sales_order.updated_at = now
+			else:
+				raise CommerceValidationError(f"No delivery advance transition from {delivery.status!r}")
+			delivery.updated_at = now
+			session.flush()
+			return delivery
+
+		order = session.get(Order, record_id)
+		if order is None:
+			raise CommerceValidationError(f"O2C commerce record {record_id!r} not found")
+		if order.status == "DRAFT":
+			order.status = "CONFIRMED"
+			order.updated_at = now
+			session.flush()
+			return order
+		if order.status in ("CONFIRMED", "PROCESSING"):
+			existing_delivery = session.execute(
+				sa.select(DeliveryOrder)
+				.where(DeliveryOrder.sales_order_id == order.id)
+				.where(DeliveryOrder.status.not_in(["CANCELLED", "DELIVERED"]))
+				.order_by(DeliveryOrder.created_at.desc())
+				.limit(1)
+			).scalar_one_or_none()
+			if existing_delivery is not None:
+				return existing_delivery
+			return self.create_delivery_order(order.id, session, tenant_id=order.tenant_id)
+		if order.status == "SHIPPED":
+			order.status = "DELIVERED"
+			order.updated_at = now
+			session.flush()
+			return order
+		raise CommerceValidationError(f"No sales order advance transition from {order.status!r}")
+
 	@staticmethod
 	def fulfil_order_line(
 		session: Any,

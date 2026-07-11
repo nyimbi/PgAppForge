@@ -18,6 +18,7 @@ from .const import (
     LOGMSG_WAR_FAB_VIEW_EXISTS,
 )
 from .filters import TemplateFilters
+from .health import register_health_check
 from .menu import Menu, MenuApi, MenuApiManager
 from .views import IndexView, UtilView
 # Enhanced plugin system imports
@@ -282,6 +283,7 @@ class AppBuilder:
             else:
                 self.post_init()
         self._init_extension(app)
+        register_health_check(app, session)
 
     def _init_extension(self, app: Flask) -> None:
         app.appbuilder = self

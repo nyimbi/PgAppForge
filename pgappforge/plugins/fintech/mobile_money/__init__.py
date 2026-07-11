@@ -99,6 +99,8 @@ from .views import (
 	AgentView,
 	FloatDashboard,
 	MerchantView,
+	MobileMoneyDashboardView,
+	MobileMoneyTransactionView,
 	TransactionView,
 	WalletView,
 )
@@ -129,16 +131,28 @@ class MobileMoneyPlugin:
 	def register_views(self, appbuilder) -> None:
 		"""Register all Mobile Money views with AppBuilder."""
 		appbuilder.add_view(
+			MobileMoneyDashboardView,
+			"Dashboard",
+			icon="fa-dashboard",
+			category="Mobile Money",
+			category_icon="fa-money",
+		)
+		appbuilder.add_view(
 			WalletView,
 			"Wallets",
 			icon="fa-mobile",
 			category="Mobile Money",
-			category_icon="fa-money",
 		)
 		appbuilder.add_view(
 			TransactionView,
 			"Transactions",
 			icon="fa-list-alt",
+			category="Mobile Money",
+		)
+		appbuilder.add_view(
+			MobileMoneyTransactionView,
+			"Provider Transactions",
+			icon="fa-exchange",
 			category="Mobile Money",
 		)
 		appbuilder.add_view(
@@ -165,7 +179,7 @@ class MobileMoneyPlugin:
 			icon="fa-bar-chart",
 			category="Mobile Money",
 		)
-		log.info("MobileMoneyPlugin: registered 6 views")
+		log.info("MobileMoneyPlugin: registered 8 views")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -242,6 +256,8 @@ __all__ = [
 	# Views
 	"WalletView",
 	"TransactionView",
+	"MobileMoneyTransactionView",
+	"MobileMoneyDashboardView",
 	"AgentView",
 	"MerchantView",
 	"AgentNetworkMapView",

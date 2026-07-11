@@ -280,6 +280,8 @@ class ARInvoice(RulesMixin, AuditMixin, Model):
 		Index("ix_ar_invoice_customer", "customer_id"),
 		Index("ix_ar_invoice_status", "status"),
 		Index("ix_ar_invoice_due_date", "due_date"),
+		Index("ix_ar_invoice_sales_order", "sales_order_id"),
+		Index("ix_ar_invoice_delivery_order", "delivery_order_id"),
 		Index("ix_ar_invoice_billing_ref", "billing_reference_id"),
 		{"extend_existing": True},
 	)
@@ -307,6 +309,18 @@ class ARInvoice(RulesMixin, AuditMixin, Model):
 		ForeignKey("ar_customer.id", ondelete="RESTRICT"),
 		nullable=False,
 		index=True,
+	)
+	sales_order_id = Column(
+		UUID(as_uuid=False),
+		nullable=True,
+		index=True,
+		comment="FK to com_order.id (soft cross-plugin link)",
+	)
+	delivery_order_id = Column(
+		UUID(as_uuid=False),
+		nullable=True,
+		index=True,
+		comment="FK to com_delivery_order.id (soft cross-plugin link)",
 	)
 
 	# Dates
@@ -400,6 +414,12 @@ class ARInvoice(RulesMixin, AuditMixin, Model):
 	allocations: list[ARAllocation] = relationship(
 		"ARAllocation",
 		back_populates="invoice",
+		lazy="select",
+	)
+	payments: list[ARPayment] = relationship(
+		"ARPayment",
+		back_populates="invoice",
+		foreign_keys="ARPayment.invoice_id",
 		lazy="select",
 	)
 	billing_reference: ARInvoice = relationship(
@@ -511,6 +531,7 @@ class ARPayment(RulesMixin, AuditMixin, Model):
 		UniqueConstraint("tenant_id", "payment_number", name="uq_ar_payment_tenant_number"),
 		Index("ix_ar_payment_tenant", "tenant_id"),
 		Index("ix_ar_payment_customer", "customer_id"),
+		Index("ix_ar_payment_invoice", "invoice_id"),
 		Index("ix_ar_payment_status", "status"),
 		Index("ix_ar_payment_date", "payment_date"),
 		{"extend_existing": True},
@@ -531,6 +552,13 @@ class ARPayment(RulesMixin, AuditMixin, Model):
 		ForeignKey("ar_customer.id", ondelete="RESTRICT"),
 		nullable=False,
 		index=True,
+	)
+	invoice_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("ar_invoice.id", ondelete="SET NULL"),
+		nullable=True,
+		index=True,
+		comment="Primary customer invoice being settled; allocations remain source of truth",
 	)
 	payment_date = Column(Date, nullable=False)
 	payment_method = Column(
@@ -570,6 +598,7 @@ class ARPayment(RulesMixin, AuditMixin, Model):
 	)
 
 	customer: ARCustomer = relationship("ARCustomer", back_populates="payments", lazy="select")
+	invoice: ARInvoice | None = relationship("ARInvoice", back_populates="payments", foreign_keys=[invoice_id], lazy="select")
 	allocations: list[ARAllocation] = relationship(
 		"ARAllocation",
 		back_populates="payment",
@@ -936,8 +965,11 @@ class ARAging(Model):
 # Public API
 # ---------------------------------------------------------------------------
 
+CustomerInvoice = ARInvoice
+
 __all__ = [
 	"ARCustomer",
+	"CustomerInvoice",
 	"ARInvoice",
 	"ARInvoiceLine",
 	"ARPayment",

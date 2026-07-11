@@ -32,6 +32,8 @@ from typing import Any
 
 import sqlalchemy as sa
 
+from pgappforge.plugins.workflow.engine import BPMActionRegistry
+
 log = logging.getLogger(__name__)
 
 
@@ -1815,6 +1817,104 @@ td,th{border:1px solid #ccc;padding:4px 8px;}th{background:#f0f0f0;}</style>
 			payrun_id, len(result), prior_payrun_id,
 		)
 		return result
+
+
+# ---------------------------------------------------------------------------
+# BPM Action registrations
+# ---------------------------------------------------------------------------
+
+def _bpm_payrun_id(record_ctx: dict, payrun_id: str = "") -> str:
+	return str(payrun_id or record_ctx.get("payrun_id") or record_ctx.get("record_id") or record_ctx.get("id") or "")
+
+
+@BPMActionRegistry.register("hcm.payroll.calculate_payrun", "Calculate gross-to-net payroll for a PayrollRun")
+def _bpm_calculate_payrun(
+	record_ctx: dict,
+	session: Any,
+	payrun_id: str = "",
+	employee_data: list | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		payrun = PayrollService().calculate_payrun(
+			payrun_id=_bpm_payrun_id(record_ctx, payrun_id),
+			session=session,
+			employee_data=employee_data,
+		)
+		return {"status": "ok", "payrun_id": payrun.id, "payrun_status": payrun.status}
+	except Exception as exc:
+		log.warning("bpm payroll.calculate_payrun failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.payroll.approve_payrun", "Approve a calculated payroll run")
+def _bpm_approve_payrun(
+	record_ctx: dict,
+	session: Any,
+	payrun_id: str = "",
+	approver_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		payrun = PayrollService().approve_payrun(
+			payrun_id=_bpm_payrun_id(record_ctx, payrun_id),
+			approver_id=approver_id or str(record_ctx.get("user_id") or record_ctx.get("approver_id") or ""),
+			session=session,
+		)
+		return {"status": "ok", "payrun_id": payrun.id, "payrun_status": payrun.status}
+	except Exception as exc:
+		log.warning("bpm payroll.approve_payrun failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.payroll.mark_paid", "Mark an approved payroll run as paid")
+def _bpm_mark_paid(
+	record_ctx: dict,
+	session: Any,
+	payrun_id: str = "",
+	bank_file_ref: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		payrun = PayrollService().mark_paid(
+			_bpm_payrun_id(record_ctx, payrun_id),
+			session,
+			bank_file_ref=bank_file_ref or str(kw.get("payment_file_ref") or ""),
+		)
+		return {"status": "ok", "payrun_id": payrun.id, "payrun_status": payrun.status}
+	except Exception as exc:
+		log.warning("bpm payroll.mark_paid failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.payroll.generate_bank_file", "Generate a payroll bank transfer file")
+def _bpm_generate_bank_file(
+	record_ctx: dict,
+	session: Any,
+	payrun_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		xml = PayrollService().generate_bank_file(_bpm_payrun_id(record_ctx, payrun_id), session)
+		return {"status": "ok", "payrun_id": _bpm_payrun_id(record_ctx, payrun_id), "xml_length": len(xml)}
+	except Exception as exc:
+		log.warning("bpm payroll.generate_bank_file failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("hcm.payroll.post_to_gl", "Post payroll run totals to GL")
+def _bpm_post_to_gl(
+	record_ctx: dict,
+	session: Any,
+	payrun_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		journal = PayrollService().post_to_gl(_bpm_payrun_id(record_ctx, payrun_id), session)
+		return {"status": "ok", "payrun_id": _bpm_payrun_id(record_ctx, payrun_id), "journal": journal}
+	except Exception as exc:
+		log.warning("bpm payroll.post_to_gl failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
 
 
 __all__ = [

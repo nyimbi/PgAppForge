@@ -67,10 +67,52 @@ class SupplierSuspendedEvent(DomainEvent):
 	reason: str = ""
 
 
+# ---------------------------------------------------------------------------
+# Supplier self-service procurement events
+# ---------------------------------------------------------------------------
+
+@dataclass
+class POAcknowledgedEvent(DomainEvent):
+	"""Emitted when a supplier acknowledges a purchase order."""
+	event_type: str = "procurement.supplier_portal.po.acknowledged"
+	po_id: str = ""
+	po_source: str = ""
+	supplier_id: str = ""
+	acknowledgement_id: str = ""
+	confirmed_delivery_date: str = ""
+
+
+@dataclass
+class AdvanceShipmentNoticeSubmittedEvent(DomainEvent):
+	"""Emitted when a supplier submits an advance shipment notice."""
+	event_type: str = "procurement.supplier_portal.asn.submitted"
+	po_id: str = ""
+	po_source: str = ""
+	supplier_id: str = ""
+	asn_id: str = ""
+	asn_number: str = ""
+	tracking_number: str = ""
+
+
+@dataclass
+class VendorInvoiceSubmittedEvent(DomainEvent):
+	"""Emitted when a supplier submits an invoice for AP approval."""
+	event_type: str = "procurement.supplier_portal.invoice.submitted"
+	po_id: str = ""
+	po_source: str = ""
+	supplier_id: str = ""
+	invoice_id: str = ""
+	invoice_number: str = ""
+	amount_cents: int = 0
+
+
 __all__ = [
 	"SupplierRegisteredEvent",
 	"KYCApprovedEvent",
 	"SupplierBankDetailsVerifiedEvent",
 	"SupplierPerformanceRatedEvent",
 	"SupplierSuspendedEvent",
+	"POAcknowledgedEvent",
+	"AdvanceShipmentNoticeSubmittedEvent",
+	"VendorInvoiceSubmittedEvent",
 ]

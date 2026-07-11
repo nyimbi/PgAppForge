@@ -952,6 +952,16 @@ def _validate_criteria(criteria: dict[str, Any]) -> None:
 # BPM Action registrations
 # ---------------------------------------------------------------------------
 
+def _bpm_record_id(record_ctx: dict, explicit: str, *keys: str) -> str:
+	if explicit:
+		return explicit
+	for key in keys:
+		value = record_ctx.get(key)
+		if value:
+			return str(value)
+	return str(record_ctx.get("record_id") or record_ctx.get("id") or "")
+
+
 @BPMActionRegistry.register("procurement.sourcing.create_rfq", "Create a Request for Quotation in DRAFT status")
 def _bpm_create_rfq(
 	record_ctx: dict,
@@ -1009,6 +1019,120 @@ def _bpm_award(
 		return {"status": "ok", **result}
 	except Exception as exc:
 		log.warning("bpm sourcing.award failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("procurement.sourcing.publish_rfq", "Publish an RFQ and invite suppliers")
+def _bpm_publish_rfq(
+	record_ctx: dict,
+	session: Any,
+	rfq_id: str = "",
+	invited_supplier_ids: list | None = None,
+	**kw: Any,
+) -> dict:
+	try:
+		rfq = SourcingService.publish_rfq(
+			rfq_id=_bpm_record_id(record_ctx, rfq_id, "rfq_id"),
+			invited_supplier_ids=invited_supplier_ids or [],
+			session=session,
+			tenant_id=record_ctx.get("tenant_id"),
+		)
+		return {"status": "ok", "rfq_id": rfq.id, "rfq_status": rfq.status}
+	except Exception as exc:
+		log.warning("bpm sourcing.publish_rfq failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("procurement.sourcing.submit_bid", "Submit a supplier bid for a published RFQ")
+def _bpm_submit_bid(
+	record_ctx: dict,
+	session: Any,
+	rfq_id: str = "",
+	supplier_id: str = "",
+	line_items: list | None = None,
+	total_cents: int = 0,
+	**kw: Any,
+) -> dict:
+	try:
+		bid = SourcingService.submit_bid(
+			rfq_id=_bpm_record_id(record_ctx, rfq_id, "rfq_id"),
+			supplier_id=supplier_id or str(record_ctx.get("supplier_id") or ""),
+			line_items=line_items or [],
+			total_cents=int(total_cents),
+			session=session,
+			delivery_days=kw.get("delivery_days"),
+			validity_days=int(kw.get("validity_days", 30)),
+			quality_notes=kw.get("quality_notes"),
+			currency_code=kw.get("currency_code", "USD"),
+			tenant_id=record_ctx.get("tenant_id"),
+		)
+		return {"status": "ok", "bid_id": bid.id, "bid_status": bid.status}
+	except Exception as exc:
+		log.warning("bpm sourcing.submit_bid failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("procurement.sourcing.evaluate_bids", "Evaluate submitted bids for an RFQ")
+def _bpm_evaluate_bids(
+	record_ctx: dict,
+	session: Any,
+	rfq_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		bids = SourcingService.evaluate_bids(
+			rfq_id=_bpm_record_id(record_ctx, rfq_id, "rfq_id"),
+			session=session,
+			tenant_id=record_ctx.get("tenant_id"),
+		)
+		winner = bids[0] if bids else None
+		return {
+			"status": "ok",
+			"bid_count": len(bids),
+			"winning_bid_id": winner.id if winner else "",
+		}
+	except Exception as exc:
+		log.warning("bpm sourcing.evaluate_bids failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("procurement.sourcing.cancel_rfq", "Cancel an RFQ before award")
+def _bpm_cancel_rfq(
+	record_ctx: dict,
+	session: Any,
+	rfq_id: str = "",
+	reason: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		rfq = SourcingService.cancel_rfq(
+			rfq_id=_bpm_record_id(record_ctx, rfq_id, "rfq_id"),
+			reason=reason or str(kw.get("message") or "Cancelled by workflow"),
+			session=session,
+			tenant_id=record_ctx.get("tenant_id"),
+		)
+		return {"status": "ok", "rfq_id": rfq.id, "rfq_status": rfq.status}
+	except Exception as exc:
+		log.warning("bpm sourcing.cancel_rfq failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("procurement.sourcing.close_auction", "Close a reverse auction and select the lowest bid")
+def _bpm_close_auction(
+	record_ctx: dict,
+	session: Any,
+	rfq_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		result = SourcingService.close_auction(
+			rfq_id=_bpm_record_id(record_ctx, rfq_id, "rfq_id"),
+			session=session,
+			tenant_id=record_ctx.get("tenant_id"),
+		)
+		return {"status": "ok", **result}
+	except Exception as exc:
+		log.warning("bpm sourcing.close_auction failed: %s", exc)
 		return {"status": "error", "message": str(exc)}
 
 

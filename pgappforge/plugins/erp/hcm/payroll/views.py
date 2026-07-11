@@ -565,6 +565,12 @@ class PayrollRunView(BaseERPView):
 			return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+class PayrollDashboardView(PayrollRunView):
+	"""Compatibility surface for payroll dashboard context consumers."""
+
+	route_base = "/payroll/dashboard"
+
+
 # ---------------------------------------------------------------------------
 # PayslipView
 # ---------------------------------------------------------------------------
@@ -973,6 +979,7 @@ class PayrollReportView(BaseERPView):
 
 __all__ = [
 	"PayrollCalendarView",
+	"PayrollDashboardView",
 	"PayrollRunView",
 	"PayslipView",
 	"TaxWithholdingView",

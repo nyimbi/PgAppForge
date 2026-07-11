@@ -1,23 +1,38 @@
 import datetime
 import logging
 import re
+from importlib import metadata
 
 try:
-    # Flask-SQLAlchemy 3.x (SQLAlchemy 2.x compatible)
-    from flask_sqlalchemy import SQLAlchemy
-    from sqlalchemy.orm import Session as SessionBase
-    HAS_FLASK_SQLALCHEMY_3 = True
-except ImportError:
-    # Flask-SQLAlchemy 2.x (SQLAlchemy 1.x compatible)  
-    from flask_sqlalchemy import (
-        _QueryProperty,
-        DefaultMeta,
-        get_state,
-        SessionBase,
-        SignallingSession,
-        SQLAlchemy,
-    )
-    HAS_FLASK_SQLALCHEMY_3 = False
+	import flask
+	if not hasattr(flask, "_app_ctx_stack"):
+		flask._app_ctx_stack = type("_CompatStack", (), {"top": None})()
+	if not hasattr(flask, "_request_ctx_stack"):
+		flask._request_ctx_stack = type("_CompatStack", (), {"top": None})()
+except Exception:
+	pass
+
+try:
+	_FLASK_SQLALCHEMY_MAJOR = int(metadata.version("flask-sqlalchemy").split(".", 1)[0])
+except Exception:
+	_FLASK_SQLALCHEMY_MAJOR = 3
+
+if _FLASK_SQLALCHEMY_MAJOR >= 3:
+	# Flask-SQLAlchemy 3.x (SQLAlchemy 2.x compatible)
+	from flask_sqlalchemy import SQLAlchemy
+	from sqlalchemy.orm import Session as SessionBase
+	HAS_FLASK_SQLALCHEMY_3 = True
+else:
+	# Flask-SQLAlchemy 2.x (SQLAlchemy 1.x compatible)
+	from flask_sqlalchemy import (
+		_QueryProperty,
+		DefaultMeta,
+		get_state,
+		SessionBase,
+		SignallingSession,
+		SQLAlchemy,
+	)
+	HAS_FLASK_SQLALCHEMY_3 = False
 from sqlalchemy import orm
 
 try:

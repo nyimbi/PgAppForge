@@ -10,8 +10,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import sqlalchemy as sa
-from flask import current_app, jsonify, make_response
+from flask import current_app, jsonify, make_response, redirect
 from pgappforge import ModelView, expose
+from pgappforge.actions import action
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
@@ -111,6 +112,20 @@ class SodViolationView(ModelView):
 	}
 	add_exclude_columns = ["id", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_at", "updated_at"]
+
+	@action('false_positive', 'Mark False Positive', 'Mark selected violations as false positives?', 'fa-flag')
+	def false_positive(self, items):
+		for item in items:
+			item.status = 'false_positive'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
+
+	@action('accept_risk', 'Accept Risk', 'Accept risk for selected violations?', 'fa-check-circle')
+	def accept_risk(self, items):
+		for item in items:
+			item.status = 'accepted'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
 
 
 class SodAnalyzerView(BaseERPView):

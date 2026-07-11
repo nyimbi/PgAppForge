@@ -20,6 +20,7 @@ from .models import (
 class ProgramRestApi(ModelRestApi):
 	resource_name = 'erp/projects/program'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Program)
 	list_columns = [
 		'id',
@@ -59,6 +60,7 @@ class ProgramRestApi(ModelRestApi):
 class ProjectRestApi(ModelRestApi):
 	resource_name = 'erp/projects/project'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Project)
 	list_columns = [
 		'id',
@@ -124,6 +126,7 @@ class ProjectRestApi(ModelRestApi):
 class WBSElementRestApi(ModelRestApi):
 	resource_name = 'erp/projects/wbs_element'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(WBSElement)
 	list_columns = [
 		'id',
@@ -180,6 +183,7 @@ class WBSElementRestApi(ModelRestApi):
 class ProjectResourceRestApi(ModelRestApi):
 	resource_name = 'erp/projects/project_resource'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ProjectResource)
 	list_columns = [
 		'id',
@@ -221,6 +225,7 @@ class ProjectResourceRestApi(ModelRestApi):
 class ProjectTimesheetRestApi(ModelRestApi):
 	resource_name = 'erp/projects/project_timesheet'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ProjectTimesheet)
 	list_columns = [
 		'id',
@@ -267,6 +272,7 @@ class ProjectTimesheetRestApi(ModelRestApi):
 class ProjectMilestoneRestApi(ModelRestApi):
 	resource_name = 'erp/projects/project_milestone'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ProjectMilestone)
 	list_columns = [
 		'id',
@@ -305,6 +311,7 @@ class ProjectMilestoneRestApi(ModelRestApi):
 class ProjectRiskRestApi(ModelRestApi):
 	resource_name = 'erp/projects/project_risk'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ProjectRisk)
 	list_columns = [
 		'id',
@@ -348,6 +355,7 @@ class ProjectRiskRestApi(ModelRestApi):
 class ChangeOrderRestApi(ModelRestApi):
 	resource_name = 'erp/projects/change_order'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ChangeOrder)
 	list_columns = [
 		'id',
@@ -393,6 +401,7 @@ class ChangeOrderRestApi(ModelRestApi):
 class ProjectInvoiceRestApi(ModelRestApi):
 	resource_name = 'erp/projects/project_invoice'
 	openapi_spec_tag = 'Projects'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ProjectInvoice)
 	list_columns = [
 		'id',

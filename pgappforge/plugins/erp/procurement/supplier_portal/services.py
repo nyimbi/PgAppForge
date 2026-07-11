@@ -36,7 +36,7 @@ Public API:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -67,6 +67,14 @@ class PerformanceCardNotFoundError(SupplierPortalServiceError):
 	pass
 
 
+class PurchaseOrderNotFoundError(SupplierPortalServiceError):
+	pass
+
+
+class SupplierPortalAuthorizationError(SupplierPortalServiceError):
+	pass
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -77,6 +85,19 @@ def _dec(value: Any) -> Decimal:
 
 def _now_utc() -> datetime:
 	return datetime.now(timezone.utc)
+
+
+def _as_date(value: Any, field_name: str) -> date:
+	if isinstance(value, datetime):
+		return value.date()
+	if isinstance(value, date):
+		return value
+	if value is None:
+		raise SupplierPortalServiceError(f"{field_name} is required")
+	try:
+		return date.fromisoformat(str(value))
+	except ValueError as exc:
+		raise SupplierPortalServiceError(f"{field_name} must be ISO date YYYY-MM-DD") from exc
 
 
 def current_tenant_id() -> str | None:
@@ -156,6 +177,207 @@ def _scorecard_dict(card: Any) -> dict[str, Any]:
 		"scored_by": card.scored_by,
 		"scored_at": card.scored_at,
 	}
+
+
+def _purchase_order_candidates() -> list[dict[str, Any]]:
+	candidates: list[dict[str, Any]] = []
+	try:
+		from pgappforge.plugins.erp.operations.scm.models import PurchaseOrder
+		candidates.append({
+			"source": "SCM",
+			"model": PurchaseOrder,
+			"total_field": "total_amount_cents",
+			"delivery_field": "expected_delivery_date",
+		})
+	except Exception as exc:  # noqa: BLE001
+		log.debug("SCM PurchaseOrder unavailable: %s", exc)
+	try:
+		from pgappforge.plugins.erp.finance.ap.models import APPurchaseOrder
+		candidates.append({
+			"source": "AP",
+			"model": APPurchaseOrder,
+			"total_field": "total_cents",
+			"delivery_field": "delivery_date",
+		})
+	except Exception as exc:  # noqa: BLE001
+		log.debug("AP PurchaseOrder unavailable: %s", exc)
+	return candidates
+
+
+def _record_tenant_id(record: Any) -> str | None:
+	value = getattr(record, "tenant_id", None)
+	return str(value) if value is not None else None
+
+
+def _po_total_cents(po: Any, candidate: dict[str, Any]) -> int:
+	for field_name in (candidate.get("total_field"), "total_cents", "total_amount_cents", "subtotal_cents"):
+		if field_name and hasattr(po, field_name):
+			return int(getattr(po, field_name) or 0)
+	return 0
+
+
+def _po_currency(po: Any) -> str:
+	return str(getattr(po, "currency_code", "USD") or "USD")
+
+
+def _date_to_json(value: Any) -> str | None:
+	if isinstance(value, (datetime, date)):
+		return value.isoformat()
+	return str(value) if value is not None else None
+
+
+def _set_record_value(record: Any, field_name: str, value: Any) -> None:
+	is_mapped = False
+	try:
+		is_mapped = field_name in sa.inspect(record.__class__).attrs
+	except Exception:  # noqa: BLE001
+		is_mapped = hasattr(record, field_name)
+	if is_mapped or hasattr(record, field_name):
+		setattr(record, field_name, value)
+	else:
+		setattr(record, field_name, value)
+	if hasattr(record, "metadata_"):
+		metadata = dict(getattr(record, "metadata_", None) or {})
+		metadata[field_name] = _date_to_json(value)
+		record.metadata_ = metadata
+
+
+def _find_purchase_order(
+	po_id: str,
+	supplier_id: str,
+	session: Any,
+	tenant_id: str | None = None,
+) -> tuple[Any, dict[str, Any]]:
+	for candidate in _purchase_order_candidates():
+		po = session.get(candidate["model"], po_id)
+		if po is None:
+			continue
+		if tenant_id and _record_tenant_id(po) != str(tenant_id):
+			raise PurchaseOrderNotFoundError(f"Purchase order {po_id!r} not found for tenant {tenant_id!r}")
+		if str(getattr(po, "supplier_id", "")) != str(supplier_id):
+			raise SupplierPortalAuthorizationError("Purchase order does not belong to this supplier")
+		return po, candidate
+	raise PurchaseOrderNotFoundError(f"Purchase order {po_id!r} not found")
+
+
+def _po_line_model_for_source(source: str) -> Any:
+	if source == "SCM":
+		from pgappforge.plugins.erp.operations.scm.models import POLine
+		return POLine
+	if source == "AP":
+		from pgappforge.plugins.erp.finance.ap.models import APPOLine
+		return APPOLine
+	return None
+
+
+def _validate_po_line(
+	po: Any,
+	candidate: dict[str, Any],
+	po_line_id: str | None,
+	session: Any,
+) -> None:
+	if not po_line_id:
+		return
+	try:
+		line_model = _po_line_model_for_source(candidate["source"])
+	except Exception as exc:  # noqa: BLE001
+		log.debug("PO line model unavailable for %s: %s", candidate["source"], exc)
+		return
+	if line_model is None:
+		return
+	line = session.get(line_model, po_line_id)
+	if line is None or str(getattr(line, "po_id", "")) != str(getattr(po, "id", "")):
+		raise SupplierPortalServiceError(f"PO line {po_line_id!r} does not belong to PO {po.id!r}")
+
+
+def _normalize_asn_line_items(
+	po: Any,
+	candidate: dict[str, Any],
+	line_items: list[dict[str, Any]],
+	session: Any,
+) -> list[dict[str, Any]]:
+	if not line_items:
+		raise SupplierPortalServiceError("line_items cannot be empty")
+	normalized: list[dict[str, Any]] = []
+	for item in line_items:
+		po_line_id = item.get("po_line_id")
+		if not po_line_id:
+			raise SupplierPortalServiceError("line item po_line_id is required")
+		_validate_po_line(po, candidate, str(po_line_id), session)
+		shipped_qty = _dec(item.get("shipped_qty"))
+		if shipped_qty <= 0:
+			raise SupplierPortalServiceError("shipped_qty must be positive")
+		normalized.append({
+			"po_line_id": str(po_line_id),
+			"shipped_qty": str(shipped_qty),
+		})
+	return normalized
+
+
+def _normalize_invoice_line_items(
+	po: Any,
+	candidate: dict[str, Any],
+	line_items: list[dict[str, Any]],
+	session: Any,
+) -> list[dict[str, Any]]:
+	if not line_items:
+		raise SupplierPortalServiceError("line_items cannot be empty")
+	normalized: list[dict[str, Any]] = []
+	for index, item in enumerate(line_items, start=1):
+		po_line_id = item.get("po_line_id")
+		if po_line_id:
+			_validate_po_line(po, candidate, str(po_line_id), session)
+		row = dict(item)
+		row["line_number"] = int(row.get("line_number") or index)
+		if po_line_id:
+			row["po_line_id"] = str(po_line_id)
+		if "amount_cents" in row:
+			row["amount_cents"] = int(row["amount_cents"])
+		normalized.append(row)
+	return normalized
+
+
+def _latest_goods_receipt(
+	po_id: str,
+	tenant_id: str,
+	po_source: str,
+	session: Any,
+) -> tuple[Any | None, str | None]:
+	try:
+		if po_source == "SCM":
+			from pgappforge.plugins.erp.operations.scm.models import GoodsReceipt
+			grn = session.execute(
+				sa.select(GoodsReceipt)
+				.where(GoodsReceipt.tenant_id == tenant_id, GoodsReceipt.po_id == po_id)
+				.order_by(sa.desc(GoodsReceipt.received_date), sa.desc(GoodsReceipt.created_at))
+				.limit(1)
+			).scalar_one_or_none()
+			return grn, "SCM" if grn is not None else None
+		if po_source == "AP":
+			from pgappforge.plugins.erp.finance.ap.models import APGoodsReceipt
+			grn = session.execute(
+				sa.select(APGoodsReceipt)
+				.where(APGoodsReceipt.tenant_id == tenant_id, APGoodsReceipt.po_id == po_id)
+				.order_by(sa.desc(APGoodsReceipt.received_date), sa.desc(APGoodsReceipt.created_at))
+				.limit(1)
+			).scalar_one_or_none()
+			return grn, "AP" if grn is not None else None
+	except Exception as exc:  # noqa: BLE001
+		log.debug("Latest goods receipt lookup skipped: %s", exc)
+	return None, None
+
+
+def _generate_asn_number(session: Any, tenant_id: str) -> str:
+	from pgappforge.plugins.erp.procurement.supplier_portal.models import AdvanceShipmentNotice
+	today_str = _now_utc().strftime("%Y%m%d")
+	prefix = f"ASN-{today_str}-"
+	count = int(session.execute(
+		sa.select(sa.func.count(AdvanceShipmentNotice.id)).where(
+			AdvanceShipmentNotice.tenant_id == tenant_id,
+			AdvanceShipmentNotice.asn_number.like(f"{prefix}%"),
+		)
+	).scalar() or 0)
+	return f"{prefix}{count + 1:05d}"
 
 
 # ---------------------------------------------------------------------------
@@ -596,7 +818,348 @@ class SupplierPortalService:
 		return list(session.execute(stmt).scalars().all())
 
 	# ------------------------------------------------------------------
-	# 8. score_supplier
+	# 8. acknowledge_po
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def acknowledge_po(
+		cls,
+		po_id: str,
+		supplier_id: str,
+		confirmed_delivery_date: Any,
+		session: Any,
+	) -> Any:
+		"""Acknowledge a sent PO, recording the supplier's confirmed delivery date."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.events import POAcknowledgedEvent
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import POAcknowledgement
+
+		confirmed_date = _as_date(confirmed_delivery_date, "confirmed_delivery_date")
+		po, candidate = _find_purchase_order(po_id, supplier_id, session)
+		tenant_id = _record_tenant_id(po)
+		if tenant_id is None:
+			raise SupplierPortalServiceError("Purchase order tenant_id is required")
+
+		previous_status = str(getattr(po, "status", ""))
+		po.status = "ACKNOWLEDGED"
+		_set_record_value(po, "confirmed_delivery_date", confirmed_date)
+		_set_record_value(po, "supplier_acknowledged_at", _now_utc())
+
+		ack = session.execute(
+			sa.select(POAcknowledgement).where(
+				POAcknowledgement.tenant_id == tenant_id,
+				POAcknowledgement.po_id == po_id,
+			)
+		).scalar_one_or_none()
+		if ack is None:
+			ack = POAcknowledgement(
+				tenant_id=tenant_id,
+				po_id=po_id,
+				po_source=candidate["source"],
+				supplier_id=supplier_id,
+			)
+			session.add(ack)
+
+		ack.confirmed_delivery_date = confirmed_date
+		ack.status = "ACKNOWLEDGED"
+		ack.acknowledged_at = _now_utc()
+		ack.metadata_ = {
+			"po_number": str(getattr(po, "po_number", "")),
+			"previous_status": previous_status,
+		}
+		session.flush()
+
+		_emit(
+			POAcknowledgedEvent(
+				aggregate_id=po.id,
+				aggregate_type=po.__class__.__name__,
+				tenant_id=tenant_id,
+				po_id=po_id,
+				po_source=candidate["source"],
+				supplier_id=supplier_id,
+				acknowledgement_id=ack.id,
+				confirmed_delivery_date=confirmed_date.isoformat(),
+			),
+			session,
+		)
+		log.info("PO %s acknowledged by supplier %s", po_id, supplier_id)
+		return ack
+
+	# ------------------------------------------------------------------
+	# 9. get_open_pos_for_supplier
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def get_open_pos_for_supplier(
+		cls,
+		supplier_id: str,
+		tenant_id: str,
+		session: Any,
+	) -> list[Any]:
+		"""Return SENT purchase orders awaiting supplier acknowledgement."""
+		tenant_id = _tenant_id(tenant_id)
+		open_pos: list[Any] = []
+		for candidate in _purchase_order_candidates():
+			model = candidate["model"]
+			rows = session.execute(
+				sa.select(model)
+				.where(
+					model.tenant_id == tenant_id,
+					model.supplier_id == supplier_id,
+					model.status == "SENT",
+				)
+				.order_by(sa.desc(getattr(model, "order_date", model.id)))
+			).scalars().all()
+			open_pos.extend(rows)
+		return open_pos
+
+	# ------------------------------------------------------------------
+	# 10. submit_asn
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def submit_asn(
+		cls,
+		po_id: str,
+		supplier_id: str,
+		ship_date: Any,
+		expected_delivery_date: Any,
+		tracking_number: str,
+		line_items: list[dict[str, Any]],
+		session: Any,
+	) -> Any:
+		"""Create an advance shipment notice and request GR preparation in operations."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.events import (
+			AdvanceShipmentNoticeSubmittedEvent,
+		)
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import AdvanceShipmentNotice
+
+		po, candidate = _find_purchase_order(po_id, supplier_id, session)
+		tenant_id = _record_tenant_id(po)
+		if tenant_id is None:
+			raise SupplierPortalServiceError("Purchase order tenant_id is required")
+
+		ship_dt = _as_date(ship_date, "ship_date")
+		expected_dt = _as_date(expected_delivery_date, "expected_delivery_date")
+		normalized_lines = _normalize_asn_line_items(po, candidate, line_items, session)
+		asn_number = _generate_asn_number(session, tenant_id)
+		operations_payload = {
+			"action": "prepare_goods_receipt",
+			"po_id": str(po_id),
+			"po_source": candidate["source"],
+			"supplier_id": str(supplier_id),
+			"tracking_number": tracking_number or "",
+			"expected_delivery_date": expected_dt.isoformat(),
+			"line_items": normalized_lines,
+		}
+
+		asn = AdvanceShipmentNotice(
+			tenant_id=tenant_id,
+			asn_number=asn_number,
+			po_id=po_id,
+			po_source=candidate["source"],
+			supplier_id=supplier_id,
+			ship_date=ship_dt,
+			expected_delivery_date=expected_dt,
+			tracking_number=(tracking_number or "").strip(),
+			line_items=normalized_lines,
+			status="IN_TRANSIT",
+			operations_status="GR_PREPARATION_REQUESTED",
+			operations_payload=operations_payload,
+		)
+		session.add(asn)
+
+		po.status = "IN_TRANSIT"
+		_set_record_value(po, "asn_tracking_number", tracking_number or "")
+		_set_record_value(po, "asn_expected_delivery_date", expected_dt)
+		session.flush()
+
+		operations_payload["asn_id"] = str(asn.id)
+		asn.operations_payload = operations_payload
+		_emit(
+			AdvanceShipmentNoticeSubmittedEvent(
+				aggregate_id=asn.id,
+				aggregate_type="AdvanceShipmentNotice",
+				tenant_id=tenant_id,
+				po_id=po_id,
+				po_source=candidate["source"],
+				supplier_id=supplier_id,
+				asn_id=asn.id,
+				asn_number=asn.asn_number,
+				tracking_number=asn.tracking_number or "",
+			),
+			session,
+		)
+		log.info("ASN %s submitted for PO %s by supplier %s", asn.asn_number, po_id, supplier_id)
+		return asn
+
+	# ------------------------------------------------------------------
+	# 11. submit_invoice
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def submit_invoice(
+		cls,
+		po_id: str,
+		supplier_id: str,
+		invoice_number: str,
+		invoice_date: Any,
+		amount_cents: int,
+		line_items: list[dict[str, Any]],
+		session: Any,
+	) -> Any:
+		"""Create a supplier-submitted invoice after validating against PO value."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.events import (
+			VendorInvoiceSubmittedEvent,
+		)
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import VendorInvoice
+
+		if not str(invoice_number or "").strip():
+			raise SupplierPortalServiceError("invoice_number is required")
+		amount = int(amount_cents)
+		if amount <= 0:
+			raise SupplierPortalServiceError("amount_cents must be positive")
+
+		po, candidate = _find_purchase_order(po_id, supplier_id, session)
+		tenant_id = _record_tenant_id(po)
+		if tenant_id is None:
+			raise SupplierPortalServiceError("Purchase order tenant_id is required")
+		po_total = _po_total_cents(po, candidate)
+		if amount > po_total:
+			raise SupplierPortalServiceError(
+				f"invoice_amount {amount} exceeds PO value {po_total}"
+			)
+
+		normalized_lines = _normalize_invoice_line_items(po, candidate, line_items, session)
+		grn, grn_source = _latest_goods_receipt(po_id, tenant_id, candidate["source"], session)
+		invoice = VendorInvoice(
+			tenant_id=tenant_id,
+			po_id=po_id,
+			po_source=candidate["source"],
+			supplier_id=supplier_id,
+			goods_receipt_id=getattr(grn, "id", None),
+			goods_receipt_source=grn_source,
+			invoice_number=invoice_number.strip(),
+			invoice_date=_as_date(invoice_date, "invoice_date"),
+			amount_cents=amount,
+			currency_code=_po_currency(po),
+			line_items=normalized_lines,
+			match_status="PO_VALUE_VALIDATED",
+			status="PENDING_APPROVAL",
+			ap_notification_status="REQUESTED",
+			metadata_={
+				"po_number": str(getattr(po, "po_number", "")),
+				"po_total_cents": po_total,
+				"ap_team_notification": "requested",
+			},
+		)
+		session.add(invoice)
+		_set_record_value(po, "supplier_invoice_submitted_at", _now_utc())
+		session.flush()
+
+		_emit(
+			VendorInvoiceSubmittedEvent(
+				aggregate_id=invoice.id,
+				aggregate_type="VendorInvoice",
+				tenant_id=tenant_id,
+				po_id=po_id,
+				po_source=candidate["source"],
+				supplier_id=supplier_id,
+				invoice_id=invoice.id,
+				invoice_number=invoice.invoice_number,
+				amount_cents=invoice.amount_cents,
+			),
+			session,
+		)
+		log.info("Vendor invoice %s submitted for PO %s", invoice.invoice_number, po_id)
+		return invoice
+
+	# ------------------------------------------------------------------
+	# 12. get_supplier_dashboard
+	# ------------------------------------------------------------------
+
+	@classmethod
+	def get_supplier_dashboard(
+		cls,
+		supplier_id: str,
+		tenant_id: str,
+		session: Any,
+	) -> dict[str, Any]:
+		"""Return supplier portal dashboard metrics for a supplier."""
+		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
+			AdvanceShipmentNotice,
+			SupplierScorecard,
+			VendorInvoice,
+		)
+
+		tenant_id = _tenant_id(tenant_id)
+		open_po_rows: list[tuple[Any, dict[str, Any]]] = []
+		for candidate in _purchase_order_candidates():
+			model = candidate["model"]
+			rows = session.execute(
+				sa.select(model)
+				.where(
+					model.tenant_id == tenant_id,
+					model.supplier_id == supplier_id,
+					model.status.notin_(["CLOSED", "CANCELLED"]),
+				)
+			).scalars().all()
+			open_po_rows.extend((row, candidate) for row in rows)
+
+		pending_ack_count = len(cls.get_open_pos_for_supplier(supplier_id, tenant_id, session))
+		active_shipments = int(session.execute(
+			sa.select(sa.func.count(AdvanceShipmentNotice.id)).where(
+				AdvanceShipmentNotice.tenant_id == tenant_id,
+				AdvanceShipmentNotice.supplier_id == supplier_id,
+				AdvanceShipmentNotice.status == "IN_TRANSIT",
+			)
+		).scalar() or 0)
+		invoice_rows = session.execute(
+			sa.select(VendorInvoice.status, sa.func.count(VendorInvoice.id))
+			.where(
+				VendorInvoice.tenant_id == tenant_id,
+				VendorInvoice.supplier_id == supplier_id,
+			)
+			.group_by(VendorInvoice.status)
+		).all()
+		invoice_counts = {
+			"pending": 0,
+			"approved": 0,
+			"paid": 0,
+		}
+		for status, count in invoice_rows:
+			normalized = str(status or "").lower()
+			if normalized in ("pending", "pending_approval"):
+				invoice_counts["pending"] += int(count or 0)
+			elif normalized == "approved":
+				invoice_counts["approved"] += int(count or 0)
+			elif normalized == "paid":
+				invoice_counts["paid"] += int(count or 0)
+
+		scorecards = session.execute(
+			sa.select(SupplierScorecard)
+			.where(
+				SupplierScorecard.tenant_id == tenant_id,
+				SupplierScorecard.supplier_id == supplier_id,
+			)
+			.order_by(SupplierScorecard.period.desc())
+			.limit(3)
+		).scalars().all()
+
+		return {
+			"supplier_id": supplier_id,
+			"tenant_id": tenant_id,
+			"open_pos": {
+				"count": len(open_po_rows),
+				"total_value_cents": sum(_po_total_cents(po, candidate) for po, candidate in open_po_rows),
+			},
+			"pending_acknowledgments": pending_ack_count,
+			"active_shipments": active_shipments,
+			"submitted_invoices": invoice_counts,
+			"performance_scorecard": [_scorecard_dict(card) for card in scorecards],
+		}
+
+	# ------------------------------------------------------------------
+	# 13. score_supplier
 	# ------------------------------------------------------------------
 
 	@classmethod
@@ -920,4 +1483,6 @@ __all__ = [
 	"SupplierNotFoundError",
 	"InvalidStatusTransitionError",
 	"PerformanceCardNotFoundError",
+	"PurchaseOrderNotFoundError",
+	"SupplierPortalAuthorizationError",
 ]

@@ -87,3 +87,29 @@ def _finance_kpi_cards(self, kpis: list[dict]) -> Markup:
 
 _finance_kpi_cards._finance_cents_formatter = True  # type: ignore[attr-defined]
 BaseERPView.kpi_cards = _finance_kpi_cards
+
+
+def register_currency_views(appbuilder, category: str = "Currency Management") -> None:
+	"""Register tenant-scoped currency views on an AppBuilder instance."""
+	from pgappforge.plugins.erp.finance.currency.views import (
+		CurrencyDashboardView,
+		ExchangeRateView,
+	)
+
+	appbuilder.add_view(
+		CurrencyDashboardView,
+		"Currency Dashboard",
+		icon="fa-dashboard",
+		category=category,
+	)
+	appbuilder.add_view(
+		ExchangeRateView,
+		"Exchange Rates",
+		icon="fa-exchange",
+		category=category,
+	)
+
+
+__all__ = [
+	"register_currency_views",
+]

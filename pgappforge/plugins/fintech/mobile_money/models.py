@@ -276,6 +276,28 @@ class MobileTransaction(ImmutableRecordMixin, AuditMixin, Model):
 		viewonly=True,
 	)
 
+	@property
+	def amount(self) -> int:
+		return int(self.amount_cents or 0)
+
+	@property
+	def provider(self) -> str:
+		channel = (self.channel or "").upper()
+		transaction_id = (self.transaction_id or "").upper()
+		if "MTN" in channel:
+			return "MTN"
+		if "AIRTEL" in channel:
+			return "Airtel"
+		if "FLUTTERWAVE" in channel:
+			return "Flutterwave"
+		if channel in {"MPESA", "M-PESA", "DARAJA", "STK_PUSH"} or transaction_id.startswith("MP"):
+			return "M-Pesa"
+		return self.channel or "M-Pesa"
+
+	@property
+	def reference(self) -> str:
+		return self.transaction_id or self.confirmation_code or self.id
+
 	def __repr__(self) -> str:
 		return (
 			f"<MobileTransaction {self.transaction_id!r}"

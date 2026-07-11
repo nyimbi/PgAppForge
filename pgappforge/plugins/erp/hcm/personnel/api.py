@@ -21,7 +21,8 @@ from .models import (
 
 class EmployeeRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/employee'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Employee)
 	list_columns = [
 		'id',
@@ -96,7 +97,8 @@ class EmployeeRestApi(ModelRestApi):
 
 class EmployeeCompensationRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/employee_compensation'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(EmployeeCompensation)
 	list_columns = [
 		'id',
@@ -145,7 +147,8 @@ class EmployeeCompensationRestApi(ModelRestApi):
 
 class EmployeeDocumentRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/employee_document'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(EmployeeDocument)
 	list_columns = [
 		'id',
@@ -185,7 +188,8 @@ class EmployeeDocumentRestApi(ModelRestApi):
 
 class EmploymentContractRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/employment_contract'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(EmploymentContract)
 	list_columns = [
 		'id',
@@ -237,7 +241,8 @@ class EmploymentContractRestApi(ModelRestApi):
 
 class DisciplinaryCaseRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/disciplinary_case'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(DisciplinaryCase)
 	list_columns = [
 		'id',
@@ -303,7 +308,8 @@ class DisciplinaryCaseRestApi(ModelRestApi):
 
 class DisciplinaryActionRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/disciplinary_action'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(DisciplinaryAction)
 	list_columns = [
 		'id',
@@ -336,7 +342,8 @@ class DisciplinaryActionRestApi(ModelRestApi):
 
 class GrievanceCaseRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/grievance_case'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GrievanceCase)
 	list_columns = [
 		'id',
@@ -395,7 +402,8 @@ class GrievanceCaseRestApi(ModelRestApi):
 
 class OnboardingPlanRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/onboarding_plan'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(OnboardingPlan)
 	list_columns = [
 		'id',
@@ -434,7 +442,8 @@ class OnboardingPlanRestApi(ModelRestApi):
 
 class EmployeeExitRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/employee_exit'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(EmployeeExit)
 	list_columns = [
 		'id',
@@ -506,7 +515,8 @@ class EmployeeExitRestApi(ModelRestApi):
 
 class OrgJobGradeRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/org_job_grade'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(OrgJobGrade)
 	list_columns = [
 		'id',
@@ -539,7 +549,8 @@ class OrgJobGradeRestApi(ModelRestApi):
 
 class EmployeePositionHistoryRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/personnel/employee_position_history'
-	openapi_spec_tag = 'HCM Personnel'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(EmployeePositionHistory)
 	list_columns = [
 		'id',

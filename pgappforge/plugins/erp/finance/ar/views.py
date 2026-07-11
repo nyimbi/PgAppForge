@@ -26,9 +26,12 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 import sqlalchemy as sa
-from flask import abort, jsonify, make_response, request
+from flask import abort, jsonify, make_response, redirect, request
 
+from pgappforge.actions import action
 from pgappforge import expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.plugins.erp.finance.ar.models import ARInvoice
 from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.security.decorators import has_access
 
@@ -548,6 +551,7 @@ class ARInvoiceView(BaseERPView):
 	POST /ar/invoices/                    — create draft (JSON)
 	POST /ar/invoices/<id>/lines         — add line (JSON)
 	POST /ar/invoices/<id>/issue         — DRAFT → ISSUED
+	POST /ar/invoices/<id>/process       — advance generic O2C workflow state
 	POST /ar/invoices/<id>/dispute       — mark DISPUTED
 	POST /ar/invoices/<id>/write-off     — write off bad debt
 	POST /ar/invoices/<id>/cancel        — cancel DRAFT invoice
@@ -555,7 +559,30 @@ class ARInvoiceView(BaseERPView):
 
 	route_base = "/ar/invoices"
 	default_view = "list"
+	datamodel = SQLAInterface(ARInvoice)
 	label_columns = AR_INVOICE_LABEL_COLUMNS
+
+	@action('approve_selected', 'Approve Selected', 'Approve selected invoices?', 'fa-check')
+	def approve_selected(self, items):
+		for item in items:
+			item.status = 'ISSUED'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
+
+	@action('send_selected', 'Send Selected', 'Mark selected invoices as sent?', 'fa-envelope')
+	def send_selected(self, items):
+		for item in items:
+			item.status = 'ISSUED'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
+
+	@action('write_off_selected', 'Write Off Selected', 'Write off selected invoices (amounts < 1000)?', 'fa-eraser')
+	def write_off_selected(self, items):
+		for item in items:
+			if hasattr(item, 'total_cents') and item.total_cents < 1000:
+				item.status = 'WRITTEN_OFF'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
 
 	@expose("/")
 	@has_access
@@ -586,7 +613,9 @@ class ARInvoiceView(BaseERPView):
 			f"<td>{_he(inv.status)}</td>"
 			f"<td class='text-right'>{_cents_to_display(inv.total_cents, inv.currency_code)}</td>"
 			f"<td class='text-right'>{_cents_to_display(inv.balance_due_cents, inv.currency_code)}</td>"
-			f"<td><a href='/ar/invoices/{_he(inv.id)}' class='btn btn-xs btn-primary'>View</a></td>"
+			f"<td><a href='/ar/invoices/{_he(inv.id)}' class='btn btn-xs btn-primary'>View</a> "
+			f"<form method='post' action='/ar/invoices/{_he(inv.id)}/process' style='display:inline'>"
+			f"<button type='submit' class='btn btn-xs btn-default'>Process</button></form></td>"
 			f"</tr>"
 			for inv in invoices
 		)
@@ -618,6 +647,8 @@ class ARInvoiceView(BaseERPView):
 			"id": inv.id,
 			"invoice_number": inv.invoice_number,
 			"customer_id": inv.customer_id,
+			"sales_order_id": inv.sales_order_id,
+			"delivery_order_id": inv.delivery_order_id,
 			"invoice_date": inv.invoice_date.isoformat() if inv.invoice_date else None,
 			"due_date": inv.due_date.isoformat() if inv.due_date else None,
 			"billing_period_start": inv.billing_period_start.isoformat() if inv.billing_period_start else None,
@@ -680,6 +711,8 @@ class ARInvoiceView(BaseERPView):
 		inv = ARInvoice(
 			tenant_id=data["tenant_id"],
 			customer_id=data["customer_id"],
+			sales_order_id=data.get("sales_order_id"),
+			delivery_order_id=data.get("delivery_order_id"),
 			invoice_number=data["invoice_number"],
 			invoice_date=inv_date,
 			due_date=due_date,
@@ -776,6 +809,20 @@ class ARInvoiceView(BaseERPView):
 		except ARServiceError as exc:
 			return jsonify({"ok": False, "error": str(exc)}), 422
 
+	@expose("/<string:invoice_id>/process", methods=["POST"])
+	@has_access
+	def process(self, invoice_id: str):
+		session = _get_session()
+		from pgappforge.plugins.erp.finance.ar.services import ARService, ARServiceError
+		svc = ARService()
+		try:
+			inv = svc.advance_to_next_step(invoice_id, session)
+			session.commit()
+			return jsonify({"ok": True, "id": inv.id, "status": inv.status})
+		except ARServiceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 422
+
 	@expose("/<string:invoice_id>/dispute", methods=["POST"])
 	@has_access
 	def dispute(self, invoice_id: str):
@@ -847,6 +894,7 @@ class ARPaymentView(BaseERPView):
 	GET  /ar/payments/<id>              — detail (JSON)
 	POST /ar/payments/                  — create payment record (JSON)
 	POST /ar/payments/<id>/allocate     — apply payment to invoices (JSON)
+	POST /ar/payments/<id>/process      — allocate primary invoice when present
 	POST /ar/payments/<id>/return       — mark payment as RETURNED
 	"""
 
@@ -880,7 +928,9 @@ class ARPaymentView(BaseERPView):
 			f"<td class='text-right'>{_cents_to_display(p.amount_cents, p.currency_code)}</td>"
 			f"<td>{_he(p.status)}</td>"
 			f"<td>{_he(p.bank_reference or '')}</td>"
-			f"<td><a href='/ar/payments/{_he(p.id)}' class='btn btn-xs btn-primary'>View</a></td>"
+			f"<td><a href='/ar/payments/{_he(p.id)}' class='btn btn-xs btn-primary'>View</a> "
+			f"<form method='post' action='/ar/payments/{_he(p.id)}/process' style='display:inline'>"
+			f"<button type='submit' class='btn btn-xs btn-default'>Process</button></form></td>"
 			f"</tr>"
 			for p in payments
 		)
@@ -910,6 +960,7 @@ class ARPaymentView(BaseERPView):
 			"id": p.id,
 			"payment_number": p.payment_number,
 			"customer_id": p.customer_id,
+			"invoice_id": p.invoice_id,
 			"payment_date": p.payment_date.isoformat() if p.payment_date else None,
 			"payment_method": p.payment_method,
 			"currency_code": p.currency_code,
@@ -949,6 +1000,7 @@ class ARPaymentView(BaseERPView):
 		p = ARPayment(
 			tenant_id=data["tenant_id"],
 			customer_id=data["customer_id"],
+			invoice_id=data.get("invoice_id"),
 			payment_number=data["payment_number"],
 			payment_date=date.fromisoformat(data["payment_date"]),
 			payment_method=(data.get("payment_method") or "WIRE").upper(),
@@ -992,6 +1044,20 @@ class ARPaymentView(BaseERPView):
 			session.commit()
 			return jsonify({"ok": True, "status": p.status})
 		except ARServiceError as exc:
+			return jsonify({"ok": False, "error": str(exc)}), 422
+
+	@expose("/<string:payment_id>/process", methods=["POST"])
+	@has_access
+	def process(self, payment_id: str):
+		session = _get_session()
+		from pgappforge.plugins.erp.finance.ar.services import ARService, ARServiceError
+		svc = ARService()
+		try:
+			p = svc.advance_to_next_step(payment_id, session)
+			session.commit()
+			return jsonify({"ok": True, "id": p.id, "status": p.status})
+		except ARServiceError as exc:
+			session.rollback()
 			return jsonify({"ok": False, "error": str(exc)}), 422
 
 	@expose("/<string:payment_id>/return", methods=["POST"])

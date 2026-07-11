@@ -18,7 +18,8 @@ except ImportError:  # RFQAward may exist only in local/unreleased sourcing work
 
 class RFQRestApi(ModelRestApi):
 	resource_name = 'erp/procurement/sourcing/rfq'
-	openapi_spec_tag = 'Procurement Sourcing'
+	openapi_spec_tag = 'Procurement'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(RFQ)
 	list_columns = [
 		'id',
@@ -76,7 +77,8 @@ class RFQRestApi(ModelRestApi):
 
 class SupplierBidRestApi(ModelRestApi):
 	resource_name = 'erp/procurement/sourcing/supplier_bid'
-	openapi_spec_tag = 'Procurement Sourcing'
+	openapi_spec_tag = 'Procurement'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(SupplierBid)
 	list_columns = [
 		'id',
@@ -127,7 +129,8 @@ if RFQAward is not None:
 
 	class RFQAwardRestApi(ModelRestApi):
 		resource_name = 'erp/procurement/sourcing/rfq_award'
-		openapi_spec_tag = 'Procurement Sourcing'
+		openapi_spec_tag = 'Procurement'
+		swagger_ui_method_ui_order = "alpha"
 		datamodel = SQLAInterface(RFQAward)
 		list_columns = [
 			'id',
@@ -158,7 +161,8 @@ if RFQAward is not None:
 
 class ProcurementSavingsRestApi(ModelRestApi):
 	resource_name = 'erp/procurement/sourcing/procurement_savings'
-	openapi_spec_tag = 'Procurement Sourcing'
+	openapi_spec_tag = 'Procurement'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(ProcurementSavings)
 	list_columns = [
 		'id',

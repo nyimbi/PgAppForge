@@ -56,6 +56,8 @@ from typing import Any
 
 import sqlalchemy as sa
 
+from pgappforge.plugins.workflow.engine import BPMActionRegistry
+
 log = logging.getLogger(__name__)
 
 _ZERO = Decimal("0")
@@ -1225,6 +1227,142 @@ class ProjectService:
 				"utilization_pct": str(util_pct),
 			})
 		return result
+
+
+# ---------------------------------------------------------------------------
+# BPM Action registrations
+# ---------------------------------------------------------------------------
+
+def _bpm_ctx_id(record_ctx: dict, explicit: str, *keys: str) -> str:
+	if explicit:
+		return explicit
+	for key in keys:
+		value = record_ctx.get(key)
+		if value:
+			return str(value)
+	return str(record_ctx.get("record_id") or record_ctx.get("id") or "")
+
+
+@BPMActionRegistry.register("projects.log_time", "Log project timesheet time")
+def _bpm_projects_log_time(
+	record_ctx: dict,
+	session: Any,
+	employee_id: str = "",
+	project_id: str = "",
+	wbs_id: str | None = None,
+	work_date: str = "",
+	hours: str = "0",
+	description: str = "",
+	tenant_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		entry = ProjectService.log_time(
+			session=session,
+			employee_id=employee_id or str(record_ctx.get("employee_id") or ""),
+			project_id=_bpm_ctx_id(record_ctx, project_id, "project_id"),
+			wbs_id=wbs_id or record_ctx.get("wbs_id"),
+			work_date=date.fromisoformat(work_date) if work_date else date.today(),
+			hours=Decimal(str(hours)),
+			description=description,
+			tenant_id=tenant_id or str(record_ctx.get("tenant_id") or ""),
+		)
+		return {"status": "ok", "timesheet_id": entry.id, "timesheet_status": entry.status}
+	except Exception as exc:
+		log.warning("bpm projects.log_time failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("projects.approve_timesheet", "Approve a submitted project timesheet")
+def _bpm_projects_approve_timesheet(
+	record_ctx: dict,
+	session: Any,
+	timesheet_id: str = "",
+	approved_by: str = "",
+	tenant_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		ts = ProjectService.approve_timesheet(
+			session=session,
+			timesheet_id=_bpm_ctx_id(record_ctx, timesheet_id, "timesheet_id"),
+			approved_by=approved_by or str(record_ctx.get("user_id") or record_ctx.get("approved_by") or ""),
+			tenant_id=tenant_id or str(record_ctx.get("tenant_id") or ""),
+		)
+		return {"status": "ok", "timesheet_id": ts.id, "timesheet_status": ts.status}
+	except Exception as exc:
+		log.warning("bpm projects.approve_timesheet failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("projects.generate_invoice", "Generate a project invoice")
+def _bpm_projects_generate_invoice(
+	record_ctx: dict,
+	session: Any,
+	project_id: str = "",
+	invoice_type: str = "T_AND_M",
+	milestone_id: str | None = None,
+	tenant_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		invoice = ProjectService.generate_invoice(
+			session=session,
+			project_id=_bpm_ctx_id(record_ctx, project_id, "project_id"),
+			invoice_type=invoice_type,
+			tenant_id=tenant_id or str(record_ctx.get("tenant_id") or ""),
+			milestone_id=milestone_id,
+		)
+		return {"status": "ok", "invoice_id": invoice.id, "invoice_status": invoice.status}
+	except Exception as exc:
+		log.warning("bpm projects.generate_invoice failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("projects.recognise_revenue", "Recognise project revenue")
+def _bpm_projects_recognise_revenue(
+	record_ctx: dict,
+	session: Any,
+	project_id: str = "",
+	method: str = "POC",
+	as_of_date: str = "",
+	tenant_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		result = ProjectService.recognise_revenue(
+			session=session,
+			project_id=_bpm_ctx_id(record_ctx, project_id, "project_id"),
+			method=method,
+			as_of_date=date.fromisoformat(as_of_date) if as_of_date else date.today(),
+			tenant_id=tenant_id or str(record_ctx.get("tenant_id") or ""),
+		)
+		return {"status": "ok", **result}
+	except Exception as exc:
+		log.warning("bpm projects.recognise_revenue failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
+
+
+@BPMActionRegistry.register("projects.approve_change_order", "Approve a project change order")
+def _bpm_projects_approve_change_order(
+	record_ctx: dict,
+	session: Any,
+	co_id: str = "",
+	approved_by: str = "",
+	tenant_id: str = "",
+	**kw: Any,
+) -> dict:
+	try:
+		co = ProjectService.approve_change_order(
+			session=session,
+			co_id=_bpm_ctx_id(record_ctx, co_id, "co_id", "change_order_id"),
+			approved_by=approved_by or str(record_ctx.get("user_id") or record_ctx.get("approved_by") or ""),
+			tenant_id=tenant_id or str(record_ctx.get("tenant_id") or ""),
+		)
+		return {"status": "ok", "change_order_id": co.id, "change_order_status": co.status}
+	except Exception as exc:
+		log.warning("bpm projects.approve_change_order failed: %s", exc)
+		return {"status": "error", "message": str(exc)}
 
 
 __all__ = [

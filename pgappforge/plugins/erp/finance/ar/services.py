@@ -354,6 +354,53 @@ class ARService:
 		return payment
 
 	# ------------------------------------------------------------------
+	# advance_to_next_step
+	# ------------------------------------------------------------------
+
+	def advance_to_next_step(self, record_id: str, session: Any) -> Any:
+		"""Advance one AR O2C document to the next workflow status."""
+		from pgappforge.plugins.erp.finance.ar.models import ARAllocation, ARInvoice, ARPayment
+
+		invoice = session.get(ARInvoice, record_id)
+		if invoice is not None:
+			if invoice.status == "DRAFT":
+				return self.issue_invoice(record_id, session)
+			if invoice.status in ("ISSUED", "PARTIAL") and invoice.due_date < date.today():
+				invoice.status = "OVERDUE"
+				invoice.updated_at = datetime.now(timezone.utc)
+				session.flush()
+				return invoice
+			raise ARValidationError(f"No AR invoice advance transition from {invoice.status!r}")
+
+		payment = session.get(ARPayment, record_id)
+		if payment is not None:
+			if payment.status not in ("UNALLOCATED", "PARTIAL"):
+				raise ARValidationError(f"No AR payment advance transition from {payment.status!r}")
+			if not payment.invoice_id:
+				raise ARValidationError("ARPayment has no primary invoice_id to allocate")
+
+			invoice = session.get(ARInvoice, payment.invoice_id)
+			if invoice is None:
+				raise ARInvoiceNotFoundError(f"Invoice {payment.invoice_id!r} not found")
+			already_allocated = session.execute(
+				sa.select(sa.func.coalesce(sa.func.sum(ARAllocation.allocated_cents), 0))
+				.where(ARAllocation.payment_id == payment.id)
+			).scalar() or 0
+			available = int(payment.amount_cents or 0) - int(already_allocated or 0)
+			if available <= 0:
+				raise ARValidationError("ARPayment has no remaining unallocated amount")
+			allocated_cents = min(available, int(invoice.balance_due_cents or 0))
+			if allocated_cents <= 0:
+				raise ARValidationError("Primary invoice has no open balance")
+			return self.apply_payment(
+				payment.id,
+				[{"invoice_id": invoice.id, "allocated_cents": allocated_cents}],
+				session,
+			)
+
+		raise ARServiceError(f"AR O2C record {record_id!r} not found")
+
+	# ------------------------------------------------------------------
 	# run_aging
 	# ------------------------------------------------------------------
 

@@ -17,6 +17,7 @@ CommerceReportView     /commerce/reports/
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
@@ -55,6 +56,207 @@ def _cents(v: int | None) -> str:
 	if v is None:
 		return "—"
 	return f"{v // 100:,}.{abs(v) % 100:02d}"
+
+
+# ---------------------------------------------------------------------------
+# SalesOrderView
+# ---------------------------------------------------------------------------
+
+class SalesOrderView(BaseView):
+	"""Sales order list, detail, and workflow process action."""
+
+	route_base = "/commerce/orders"
+
+	@expose("/")
+	@has_access
+	def list(self):
+		from pgappforge.plugins.erp.crm.commerce.models import Order
+		session = _get_session()
+		q = sa.select(Order).order_by(sa.desc(Order.created_at)).limit(500)
+		if request.args.get("tenant_id"):
+			q = q.where(Order.tenant_id == request.args["tenant_id"])
+		if request.args.get("status"):
+			q = q.where(Order.status == request.args["status"].upper())
+		orders = session.execute(q).scalars().all()
+		if request.args.get("format") == "json":
+			return jsonify({"orders": [
+				{
+					"id": o.id,
+					"order_number": o.order_number,
+					"customer_id": o.customer_id,
+					"status": o.status,
+					"payment_status": o.payment_status,
+					"total_cents": o.total_cents,
+					"process_url": f"/commerce/orders/{o.id}/process",
+				}
+				for o in orders
+			]})
+		rows = "".join(
+			f"<tr><td>{_he(o.order_number)}</td><td>{_he(o.customer_id)}</td>"
+			f"<td>{_cents(o.total_cents)} {_he(o.currency_code if hasattr(o, 'currency_code') else '')}</td>"
+			f"<td>{_he(o.status)}</td><td>{_he(o.payment_status)}</td>"
+			f"<td><a href='/commerce/orders/{_he(o.id)}' class='btn btn-xs btn-primary'>View</a> "
+			f"<form method='post' action='/commerce/orders/{_he(o.id)}/process' style='display:inline'>"
+			f"<button type='submit' class='btn btn-xs btn-default'>Process</button></form></td></tr>"
+			for o in orders
+		)
+		return make_response(
+			f"<html><body><h2>Sales Orders</h2><table border='1'>"
+			f"<tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th><th>Payment</th><th></th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+	@expose("/<string:order_id>")
+	@has_access
+	def detail(self, order_id: str):
+		from pgappforge.plugins.erp.crm.commerce.models import Order
+		session = _get_session()
+		order = session.get(Order, order_id)
+		if order is None:
+			abort(404)
+		return jsonify({
+			"id": order.id,
+			"order_number": order.order_number,
+			"customer_id": order.customer_id,
+			"status": order.status,
+			"payment_status": order.payment_status,
+			"total_cents": order.total_cents,
+			"delivery_orders": [
+				{
+					"id": delivery.id,
+					"delivery_number": delivery.delivery_number,
+					"status": delivery.status,
+					"process_url": f"/commerce/deliveries/{delivery.id}/process",
+				}
+				for delivery in order.delivery_orders
+			],
+		})
+
+	@expose("/<string:order_id>/process", methods=["POST"])
+	@has_access
+	def process(self, order_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceError, CommerceService
+		session = _get_session()
+		try:
+			record = CommerceService().advance_to_next_step(order_id, session)
+			session.commit()
+			return jsonify({
+				"ok": True,
+				"id": record.id,
+				"type": record.__class__.__name__,
+				"status": getattr(record, "status", None),
+			})
+		except CommerceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+# ---------------------------------------------------------------------------
+# DeliveryOrderView
+# ---------------------------------------------------------------------------
+
+class DeliveryOrderView(BaseView):
+	"""Delivery order list, create, detail, and workflow process action."""
+
+	route_base = "/commerce/deliveries"
+
+	@expose("/")
+	@has_access
+	def list(self):
+		from pgappforge.plugins.erp.crm.commerce.models import DeliveryOrder
+		session = _get_session()
+		q = sa.select(DeliveryOrder).order_by(sa.desc(DeliveryOrder.created_at)).limit(500)
+		if request.args.get("tenant_id"):
+			q = q.where(DeliveryOrder.tenant_id == request.args["tenant_id"])
+		if request.args.get("status"):
+			q = q.where(DeliveryOrder.status == request.args["status"].upper())
+		deliveries = session.execute(q).scalars().all()
+		if request.args.get("format") == "json":
+			return jsonify({"deliveries": [
+				{
+					"id": d.id,
+					"delivery_number": d.delivery_number,
+					"sales_order_id": d.sales_order_id,
+					"customer_id": d.customer_id,
+					"delivery_date": d.delivery_date.isoformat() if d.delivery_date else None,
+					"status": d.status,
+					"process_url": f"/commerce/deliveries/{d.id}/process",
+				}
+				for d in deliveries
+			]})
+		rows = "".join(
+			f"<tr><td>{_he(d.delivery_number)}</td><td>{_he(d.sales_order_id)}</td>"
+			f"<td>{_he(d.delivery_date or '')}</td><td>{_he(d.status)}</td>"
+			f"<td><a href='/commerce/deliveries/{_he(d.id)}' class='btn btn-xs btn-primary'>View</a> "
+			f"<form method='post' action='/commerce/deliveries/{_he(d.id)}/process' style='display:inline'>"
+			f"<button type='submit' class='btn btn-xs btn-default'>Process</button></form></td></tr>"
+			for d in deliveries
+		)
+		return make_response(
+			f"<html><body><h2>Delivery Orders</h2><table border='1'>"
+			f"<tr><th>Delivery</th><th>Sales Order</th><th>Date</th><th>Status</th><th></th></tr>"
+			f"{rows}</table></body></html>"
+		)
+
+	@expose("/", methods=["POST"])
+	@has_access
+	def create(self):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceError, CommerceService
+		data = request.get_json(silent=True) or {}
+		if not data.get("order_id"):
+			return jsonify({"ok": False, "error": "order_id required"}), 400
+		session = _get_session()
+		delivery_date = date.fromisoformat(data["delivery_date"]) if data.get("delivery_date") else None
+		try:
+			delivery = CommerceService().create_delivery_order(
+				data["order_id"],
+				session,
+				tenant_id=data.get("tenant_id", ""),
+				delivery_date=delivery_date,
+				warehouse_id=data.get("warehouse_id"),
+				carrier=data.get("carrier"),
+			)
+			session.commit()
+			return jsonify({"ok": True, "id": delivery.id, "status": delivery.status}), 201
+		except CommerceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
+
+	@expose("/<string:delivery_id>")
+	@has_access
+	def detail(self, delivery_id: str):
+		from pgappforge.plugins.erp.crm.commerce.models import DeliveryOrder
+		session = _get_session()
+		delivery = session.get(DeliveryOrder, delivery_id)
+		if delivery is None:
+			abort(404)
+		return jsonify({
+			"id": delivery.id,
+			"delivery_number": delivery.delivery_number,
+			"sales_order_id": delivery.sales_order_id,
+			"customer_id": delivery.customer_id,
+			"delivery_date": delivery.delivery_date.isoformat() if delivery.delivery_date else None,
+			"warehouse_id": delivery.warehouse_id,
+			"carrier": delivery.carrier,
+			"tracking_number": delivery.tracking_number,
+			"status": delivery.status,
+			"picked_at": delivery.picked_at.isoformat() if delivery.picked_at else None,
+			"shipped_at": delivery.shipped_at.isoformat() if delivery.shipped_at else None,
+			"delivered_at": delivery.delivered_at.isoformat() if delivery.delivered_at else None,
+		})
+
+	@expose("/<string:delivery_id>/process", methods=["POST"])
+	@has_access
+	def process(self, delivery_id: str):
+		from pgappforge.plugins.erp.crm.commerce.services import CommerceError, CommerceService
+		session = _get_session()
+		try:
+			delivery = CommerceService().advance_to_next_step(delivery_id, session)
+			session.commit()
+			return jsonify({"ok": True, "id": delivery.id, "status": delivery.status})
+		except CommerceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 # ---------------------------------------------------------------------------

@@ -18,7 +18,8 @@ from .models import (
 
 class PayrollCalendarRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/payroll_calendar'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(PayrollCalendar)
 	list_columns = [
 		'id',
@@ -54,7 +55,8 @@ class PayrollCalendarRestApi(ModelRestApi):
 
 class PayrollRunRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/payroll_run'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(PayrollRun)
 	list_columns = [
 		'id',
@@ -119,7 +121,8 @@ class PayrollRunRestApi(ModelRestApi):
 
 class PayslipRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/payslip'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(Payslip)
 	list_columns = [
 		'id',
@@ -181,7 +184,8 @@ class PayslipRestApi(ModelRestApi):
 
 class PayslipLineRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/payslip_line'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(PayslipLine)
 	list_columns = [
 		'id',
@@ -221,7 +225,8 @@ class PayslipLineRestApi(ModelRestApi):
 
 class TaxWithholdingRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/tax_withholding'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(TaxWithholding)
 	list_columns = [
 		'id',
@@ -258,7 +263,8 @@ class TaxWithholdingRestApi(ModelRestApi):
 
 class PayrollYTDRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/payroll_ytd'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(PayrollYTD)
 	list_columns = [
 		'id',
@@ -307,7 +313,8 @@ class PayrollYTDRestApi(ModelRestApi):
 
 class BenefitInKindRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/benefit_in_kind'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(BenefitInKind)
 	list_columns = [
 		'id',
@@ -343,7 +350,8 @@ class BenefitInKindRestApi(ModelRestApi):
 
 class PayslipAccessLogRestApi(ModelRestApi):
 	resource_name = 'erp/hcm/payroll/payslip_access_log'
-	openapi_spec_tag = 'HCM Payroll'
+	openapi_spec_tag = 'HCM'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(PayslipAccessLog)
 	list_columns = [
 		'id',

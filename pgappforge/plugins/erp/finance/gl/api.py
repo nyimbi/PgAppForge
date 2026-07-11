@@ -20,7 +20,8 @@ from .models import (
 
 class GLAccountRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_account'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLAccount)
 	list_columns = [
 		'account_code',
@@ -79,7 +80,8 @@ class GLAccountRestApi(ModelRestApi):
 
 class GLCostCenterRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_cost_center'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLCostCenter)
 	list_columns = [
 		'id',
@@ -117,7 +119,8 @@ class GLCostCenterRestApi(ModelRestApi):
 
 class GLFiscalYearRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_fiscal_year'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLFiscalYear)
 	list_columns = [
 		'id',
@@ -153,7 +156,8 @@ class GLFiscalYearRestApi(ModelRestApi):
 
 class GLPeriodRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_period'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLPeriod)
 	list_columns = [
 		'id',
@@ -192,7 +196,8 @@ class GLPeriodRestApi(ModelRestApi):
 
 class GLJournalBatchRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_journal_batch'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLJournalBatch)
 	list_columns = [
 		'id',
@@ -244,7 +249,8 @@ class GLJournalBatchRestApi(ModelRestApi):
 
 class GLJournalEntryRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_journal_entry'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLJournalEntry)
 	list_columns = [
 		'id',
@@ -291,7 +297,8 @@ class GLJournalEntryRestApi(ModelRestApi):
 
 class GLJournalLineRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_journal_line'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLJournalLine)
 	list_columns = [
 		'id',
@@ -352,7 +359,8 @@ class GLJournalLineRestApi(ModelRestApi):
 
 class GLAccountBalanceRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_account_balance'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLAccountBalance)
 	list_columns = [
 		'id',
@@ -397,7 +405,8 @@ class GLAccountBalanceRestApi(ModelRestApi):
 
 class GLBudgetRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_budget'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLBudget)
 	list_columns = [
 		'id',
@@ -436,7 +445,8 @@ class GLBudgetRestApi(ModelRestApi):
 
 class GLDimensionDefinitionRestApi(ModelRestApi):
 	resource_name = 'erp/finance/gl/gl_dimension_definition'
-	openapi_spec_tag = 'Finance GL'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(GLDimensionDefinition)
 	list_columns = [
 		'id',

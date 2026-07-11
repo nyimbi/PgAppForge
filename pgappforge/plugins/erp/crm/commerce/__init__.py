@@ -52,6 +52,10 @@ class CommercePlugin(BasePlugin):
 				"can_com_shipping_write",
 				"can_com_tax_write",
 				"can_com_plan_write",
+				"can_com_order_list",
+				"can_com_order_process",
+				"can_com_delivery_list",
+				"can_com_delivery_process",
 				"can_com_subscription_list",
 				"can_com_subscription_write",
 				"can_com_subscription_cancel",
@@ -89,12 +93,16 @@ class CommercePlugin(BasePlugin):
 	def register_views(self) -> None:
 		from pgappforge.plugins.erp.crm.commerce.views import (
 			CommerceReportView,
+			DeliveryOrderView,
+			SalesOrderView,
 			ShippingMethodView,
 			SubscriptionPlanView,
 			SubscriptionView,
 			TaxRuleView,
 		)
 		cat = self.config.get("COM_MENU_CATEGORY", "Commerce")
+		self.add_view(SalesOrderView, "Sales Orders", icon="fa-shopping-cart", category=cat)
+		self.add_view(DeliveryOrderView, "Delivery Orders", icon="fa-truck", category=cat)
 		self.add_view(ShippingMethodView, "Shipping Methods", icon="fa-truck", category=cat)
 		self.add_view(TaxRuleView, "Tax Rules", icon="fa-percent", category=cat)
 		self.add_view(SubscriptionPlanView, "Plans", icon="fa-tags", category=cat)
@@ -104,12 +112,25 @@ class CommercePlugin(BasePlugin):
 
 	def register_models(self) -> list:
 		from pgappforge.plugins.erp.crm.commerce.models import (
+			DeliveryOrder,
+			Order,
+			OrderLine,
+			PaymentTransaction,
 			ShippingMethod,
 			Subscription,
 			SubscriptionPlan,
 			TaxRule,
 		)
-		return [ShippingMethod, TaxRule, SubscriptionPlan, Subscription]
+		return [
+			ShippingMethod,
+			TaxRule,
+			SubscriptionPlan,
+			Subscription,
+			Order,
+			OrderLine,
+			DeliveryOrder,
+			PaymentTransaction,
+		]
 
 	@staticmethod
 	def setup_rules(session: Any) -> None:
@@ -260,6 +281,11 @@ def create_plugin(appbuilder: Any, config: dict[str, Any] | None = None) -> Comm
 
 
 from pgappforge.plugins.erp.crm.commerce.models import (  # noqa: E402
+	DeliveryOrder,
+	Order,
+	OrderLine,
+	PaymentTransaction,
+	SalesOrder,
 	ShippingMethod,
 	Subscription,
 	SubscriptionPlan,
@@ -285,6 +311,11 @@ __all__ = [
 	"TaxRule",
 	"SubscriptionPlan",
 	"Subscription",
+	"SalesOrder",
+	"Order",
+	"OrderLine",
+	"DeliveryOrder",
+	"PaymentTransaction",
 	"SubscriptionActivatedEvent",
 	"SubscriptionRenewedEvent",
 	"SubscriptionCancelledEvent",

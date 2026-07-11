@@ -20,7 +20,8 @@ from .models import (
 
 class APSupplierRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_supplier'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APSupplier)
 	list_columns = [
 		'id',
@@ -101,7 +102,8 @@ class APSupplierRestApi(ModelRestApi):
 
 class APPurchaseOrderRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_purchase_order'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APPurchaseOrder)
 	list_columns = [
 		'id',
@@ -159,7 +161,8 @@ class APPurchaseOrderRestApi(ModelRestApi):
 
 class APPOLineRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/appo_line'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APPOLine)
 	list_columns = [
 		'id',
@@ -213,7 +216,8 @@ class APPOLineRestApi(ModelRestApi):
 
 class APGoodsReceiptRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_goods_receipt'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APGoodsReceipt)
 	list_columns = [
 		'id',
@@ -252,7 +256,8 @@ class APGoodsReceiptRestApi(ModelRestApi):
 
 class APGRNLineRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/apgrn_line'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APGRNLine)
 	list_columns = [
 		'id',
@@ -289,7 +294,8 @@ class APGRNLineRestApi(ModelRestApi):
 
 class APPaymentRunRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_payment_run'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APPaymentRun)
 	list_columns = [
 		'id',
@@ -339,7 +345,8 @@ class APPaymentRunRestApi(ModelRestApi):
 
 class APInvoiceRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_invoice'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APInvoice)
 	list_columns = [
 		'id',
@@ -408,7 +415,8 @@ class APInvoiceRestApi(ModelRestApi):
 
 class APInvoiceLineRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_invoice_line'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APInvoiceLine)
 	list_columns = [
 		'id',
@@ -462,7 +470,8 @@ class APInvoiceLineRestApi(ModelRestApi):
 
 class APApprovalWorkflowRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_approval_workflow'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APApprovalWorkflow)
 	list_columns = [
 		'id',
@@ -496,7 +505,8 @@ class APApprovalWorkflowRestApi(ModelRestApi):
 
 class APPaymentRestApi(ModelRestApi):
 	resource_name = 'erp/finance/ap/ap_payment'
-	openapi_spec_tag = 'Finance AP'
+	openapi_spec_tag = 'Finance'
+	swagger_ui_method_ui_order = "alpha"
 	datamodel = SQLAInterface(APPayment)
 	list_columns = [
 		'id',

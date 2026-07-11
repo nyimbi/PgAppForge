@@ -638,6 +638,12 @@ class Order(RulesMixin, AuditMixin, Model):
 		cascade="all, delete-orphan",
 		lazy="select",
 	)
+	delivery_orders: list[DeliveryOrder] = relationship(
+		"DeliveryOrder",
+		back_populates="sales_order",
+		cascade="all, delete-orphan",
+		lazy="select",
+	)
 	payments: list[PaymentTransaction] = relationship(
 		"PaymentTransaction",
 		back_populates="order",
@@ -649,6 +655,86 @@ class Order(RulesMixin, AuditMixin, Model):
 		return (
 			f"<Order {self.order_number!r} status={self.status!r} "
 			f"total={self.total_cents}¢ payment={self.payment_status!r}>"
+		)
+
+
+# ---------------------------------------------------------------------------
+# DeliveryOrder
+# ---------------------------------------------------------------------------
+
+class DeliveryOrder(AuditMixin, Model):
+	"""Delivery order for sales-order fulfilment.
+
+	status machine:
+	  DRAFT → READY_TO_PICK → PICKED → SHIPPED → DELIVERED | CANCELLED
+	"""
+
+	__allow_unmapped__ = True
+	__tablename__ = "com_delivery_order"
+	__table_args__ = (
+		UniqueConstraint("tenant_id", "delivery_number", name="uq_com_delivery_tenant_number"),
+		Index("ix_com_delivery_tenant", "tenant_id"),
+		Index("ix_com_delivery_sales_order", "sales_order_id"),
+		Index("ix_com_delivery_customer", "customer_id"),
+		Index("ix_com_delivery_status", "status"),
+		Index("ix_com_delivery_date", "delivery_date"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	delivery_number = Column(String(30), nullable=False, comment="Human-readable delivery note number")
+	sales_order_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("com_order.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+		comment="Source SalesOrder / Order",
+	)
+	customer_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="FK Party.id")
+	requested_ship_date = Column(Date, nullable=True)
+	delivery_date = Column(Date, nullable=True, comment="Planned or actual delivery date")
+	warehouse_id = Column(UUID(as_uuid=False), nullable=True, comment="Fulfilment warehouse (app-managed)")
+	carrier = Column(String(100), nullable=True)
+	tracking_number = Column(String(100), nullable=True)
+	status = Column(
+		String(20),
+		nullable=False,
+		default="DRAFT",
+		server_default="DRAFT",
+		comment="DRAFT|READY_TO_PICK|PICKED|SHIPPED|DELIVERED|CANCELLED",
+	)
+	shipping_address: Any = Column(JSONB, nullable=False, default=dict, server_default="{}")
+	picked_at = Column(DateTime(timezone=True), nullable=True)
+	shipped_at = Column(DateTime(timezone=True), nullable=True)
+	delivered_at = Column(DateTime(timezone=True), nullable=True)
+	notes = Column(Text, nullable=True)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	sales_order: Order = relationship("Order", back_populates="delivery_orders", lazy="select")
+
+	def __repr__(self) -> str:
+		return (
+			f"<DeliveryOrder {self.delivery_number!r} order={self.sales_order_id!r} "
+			f"status={self.status!r}>"
 		)
 
 
@@ -867,6 +953,8 @@ class Coupon(AuditMixin, Model):
 # Public API
 # ---------------------------------------------------------------------------
 
+SalesOrder = Order
+
 __all__ = [
 	"ShippingMethod",
 	"TaxRule",
@@ -874,7 +962,9 @@ __all__ = [
 	"Subscription",
 	"ProductCatalogue",
 	"Cart",
+	"SalesOrder",
 	"Order",
+	"DeliveryOrder",
 	"OrderLine",
 	"PaymentTransaction",
 	"Coupon",

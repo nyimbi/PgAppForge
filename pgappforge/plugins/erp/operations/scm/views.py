@@ -543,6 +543,7 @@ class SCMReportView(BaseERPView):
 	GET /scm/reports/scorecard          — Supplier Scorecard
 	GET /scm/reports/overdue-shipments  — Overdue Shipments
 	GET /scm/reports/price-comparison   — Sourcing Price Comparison
+	POST /scm/reports/p2p/process/<id>  — advance P2P workflow state
 	"""
 
 	route_base = "/scm/reports"
@@ -607,6 +608,24 @@ class SCMReportView(BaseERPView):
 		)
 		from flask import make_response as _mr
 		return _mr(_page_html("SCM Dashboard", body), 200)
+
+	@expose("/p2p/process/<string:record_id>", methods=["POST"])
+	@has_access
+	def process_p2p(self, record_id: str):
+		from pgappforge.plugins.erp.operations.scm.services import SCMService, SCMServiceError
+		session = _get_session()
+		try:
+			record = SCMService().advance_to_next_step(record_id, session)
+			session.commit()
+			return jsonify({
+				"ok": True,
+				"id": record.id,
+				"type": record.__class__.__name__,
+				"status": getattr(record, "status", None),
+			})
+		except SCMServiceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
 
 	@expose("/scorecard")
 	@has_access

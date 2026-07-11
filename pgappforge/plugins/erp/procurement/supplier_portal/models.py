@@ -25,8 +25,10 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy import (
 	Boolean,
+	BigInteger,
 	CheckConstraint,
 	Column,
+	Date,
 	DateTime,
 	ForeignKey,
 	Index,
@@ -54,6 +56,7 @@ def _uuid4() -> str:
 KYC_STATUSES = {"PENDING", "APPROVED", "REJECTED", "SUSPENDED"}
 PRIMARY_CATEGORIES = {"GOODS", "SERVICES", "WORKS"}
 RISK_TYPES = {"FINANCIAL", "OPERATIONAL", "COMPLIANCE", "GEOPOLITICAL"}
+ONBOARDING_STATUSES = {"draft", "submitted", "under_review", "approved", "rejected"}
 
 
 # ---------------------------------------------------------------------------
@@ -338,13 +341,253 @@ class SupplierRisk(AuditMixin, Model):
 		return f"<SupplierRisk supplier={self.supplier_id} type={self.risk_type} severity={self.severity}>"
 
 
+# ---------------------------------------------------------------------------
+# POAcknowledgement
+# ---------------------------------------------------------------------------
+
+class POAcknowledgement(AuditMixin, Model):
+	"""Supplier acknowledgement of an issued purchase order."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sup_po_acknowledgement"
+	__table_args__ = (
+		Index("ix_sup_po_ack_tenant_supplier", "tenant_id", "supplier_id"),
+		Index("ix_sup_po_ack_po", "po_id"),
+		UniqueConstraint("tenant_id", "po_id", name="uq_sup_po_ack_tenant_po"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	po_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to the linked PO")
+	po_source = Column(String(20), nullable=False, default="SCM", comment="SCM | AP | UNKNOWN")
+	supplier_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	confirmed_delivery_date = Column(Date, nullable=False)
+	status = Column(String(20), nullable=False, default="ACKNOWLEDGED")
+	acknowledged_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	notes = Column(Text, nullable=True)
+	metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return f"<POAcknowledgement po={self.po_id!r} supplier={self.supplier_id!r}>"
+
+
+# ---------------------------------------------------------------------------
+# AdvanceShipmentNotice
+# ---------------------------------------------------------------------------
+
+class AdvanceShipmentNotice(AuditMixin, Model):
+	"""Supplier-submitted ASN for a purchase order shipment."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sup_asn"
+	__table_args__ = (
+		Index("ix_sup_asn_tenant_supplier", "tenant_id", "supplier_id"),
+		Index("ix_sup_asn_tenant_status", "tenant_id", "status"),
+		Index("ix_sup_asn_po", "po_id"),
+		UniqueConstraint("tenant_id", "asn_number", name="uq_sup_asn_tenant_number"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	asn_number = Column(String(50), nullable=False)
+	po_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to the linked PO")
+	po_source = Column(String(20), nullable=False, default="SCM", comment="SCM | AP | UNKNOWN")
+	supplier_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	ship_date = Column(Date, nullable=False)
+	expected_delivery_date = Column(Date, nullable=False)
+	tracking_number = Column(String(200), nullable=True, index=True)
+	line_items = Column(
+		JSONB,
+		nullable=False,
+		default=list,
+		comment="[{po_line_id, shipped_qty}]",
+	)
+	status = Column(String(20), nullable=False, default="IN_TRANSIT")
+	operations_status = Column(String(40), nullable=False, default="GR_PREPARATION_REQUESTED")
+	operations_payload = Column(JSONB, nullable=False, default=dict)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return f"<AdvanceShipmentNotice {self.asn_number!r} po={self.po_id!r} status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
+# VendorInvoice
+# ---------------------------------------------------------------------------
+
+class VendorInvoice(AuditMixin, Model):
+	"""Supplier-submitted invoice awaiting AP approval."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sup_vendor_invoice"
+	__table_args__ = (
+		Index("ix_sup_vendor_invoice_tenant_supplier", "tenant_id", "supplier_id"),
+		Index("ix_sup_vendor_invoice_tenant_status", "tenant_id", "status"),
+		Index("ix_sup_vendor_invoice_po", "po_id"),
+		UniqueConstraint("tenant_id", "supplier_id", "invoice_number", name="uq_sup_vendor_invoice_number"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	po_id = Column(UUID(as_uuid=False), nullable=False, index=True, comment="Soft FK to the linked PO")
+	po_source = Column(String(20), nullable=False, default="SCM", comment="SCM | AP | UNKNOWN")
+	supplier_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	goods_receipt_id = Column(UUID(as_uuid=False), nullable=True, index=True, comment="Soft FK to the latest GRN")
+	goods_receipt_source = Column(String(20), nullable=True)
+	invoice_number = Column(String(100), nullable=False)
+	invoice_date = Column(Date, nullable=False)
+	amount_cents = Column(BigInteger, nullable=False)
+	currency_code = Column(String(3), nullable=False, default="USD")
+	line_items = Column(JSONB, nullable=False, default=list)
+	match_status = Column(String(30), nullable=False, default="PO_VALUE_VALIDATED")
+	status = Column(String(30), nullable=False, default="PENDING_APPROVAL")
+	ap_notification_status = Column(String(30), nullable=False, default="REQUESTED")
+	metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+
+	submitted_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return f"<VendorInvoice {self.invoice_number!r} po={self.po_id!r} status={self.status!r}>"
+
+
+# ---------------------------------------------------------------------------
+# SupplierOnboarding
+# ---------------------------------------------------------------------------
+
+class SupplierOnboarding(AuditMixin, Model):
+	"""Supplier self-service onboarding wizard state."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "sup_onboarding"
+	__table_args__ = (
+		CheckConstraint(
+			"status IN ('draft','submitted','under_review','approved','rejected')",
+			name="ck_sup_onboarding_status",
+		),
+		Index("ix_sup_onboarding_tenant_status", "tenant_id", "status"),
+		Index("ix_sup_onboarding_supplier", "supplier_id"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	supplier_id = Column(UUID(as_uuid=False), nullable=True, index=True, comment="Linked SupplierProfile after approval")
+	company_name = Column(String(300), nullable=True)
+	contact_email = Column(String(320), nullable=True)
+	current_step = Column(String(30), nullable=False, default="company_info")
+	status = Column(String(20), nullable=False, default="draft")
+	company_info = Column(JSONB, nullable=False, default=dict)
+	bank_details = Column(JSONB, nullable=False, default=dict)
+	compliance_docs = Column(JSONB, nullable=False, default=list)
+	tax_info = Column(JSONB, nullable=False, default=dict)
+	rejected_reason = Column(Text, nullable=True)
+	submitted_at = Column(DateTime(timezone=True), nullable=True)
+	reviewed_at = Column(DateTime(timezone=True), nullable=True)
+	reviewed_by = Column(String(50), nullable=True)
+
+	created_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+	updated_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		onupdate=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	def __repr__(self) -> str:
+		return f"<SupplierOnboarding {self.company_name!r} status={self.status!r}>"
+
+
 __all__ = [
 	"SupplierProfile",
 	"SupplierPerformanceCard",
 	"SupplierScorecard",
 	"SupplierRisk",
+	"POAcknowledgement",
+	"AdvanceShipmentNotice",
+	"VendorInvoice",
+	"SupplierOnboarding",
 	# enum sets
 	"KYC_STATUSES",
 	"PRIMARY_CATEGORIES",
 	"RISK_TYPES",
+	"ONBOARDING_STATUSES",
 ]

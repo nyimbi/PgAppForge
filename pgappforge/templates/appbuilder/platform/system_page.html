@@ -1,0 +1,48 @@
+{% extends "appbuilder/base.html" %}
+
+{% block content %}
+<div class="col-md-12">
+	<div class="panel panel-default">
+		<div class="panel-heading">
+			<h3 class="panel-title">{{ title }}</h3>
+		</div>
+		<div class="panel-body">
+			{% if settings_rows is defined %}
+			<table class="table table-striped table-hover">
+				<thead>
+					<tr>
+						<th style="width: 280px;">Setting</th>
+						<th>Value</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in settings_rows %}
+					<tr>
+						<th scope="row"><code>{{ row.key }}</code></th>
+						<td>{{ row.value }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+			{% endif %}
+
+			{% if api_links is defined %}
+			<ul>
+				{% for link in api_links %}
+				<li><a href="{{ link.href }}">{{ link.label }}</a></li>
+				{% endfor %}
+			</ul>
+			{% endif %}
+
+			{% if api_groups is defined %}
+			<h4>API Groups</h4>
+			<ul>
+				{% for group in api_groups %}
+				<li>{{ group }}</li>
+				{% endfor %}
+			</ul>
+			{% endif %}
+		</div>
+	</div>
+</div>
+{% endblock %}

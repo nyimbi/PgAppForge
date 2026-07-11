@@ -15,10 +15,11 @@ FloatDashboard       — /mobile-money/float/     : AdvancedChartsWidget, commis
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import sqlalchemy as sa
-from flask import abort, current_app, jsonify, request
+from flask import abort, current_app, jsonify, make_response, request
 from flask_babel import lazy_gettext as _
 
 from pgappforge import ModelView, expose
@@ -26,6 +27,7 @@ from pgappforge.baseviews import BaseView
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access
 
+from pgappforge.plugins.erp.base_view import BaseERPView
 from pgappforge.plugins.erp.foundation.commons import format_currency, status_badge
 from pgappforge.plugins.erp.foundation.view_helpers import (
 	chart_widget,
@@ -39,7 +41,14 @@ from pgappforge.plugins.erp.foundation.view_helpers import (
 	star_widget,
 )
 
-from .models import Agent, AgentCommission, MerchantTill, MobileTransaction, MobileWallet
+from .models import (
+	Agent,
+	AgentCommission,
+	DisbursementBatch,
+	MerchantTill,
+	MobileTransaction,
+	MobileWallet,
+)
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +81,22 @@ def _he(s: str) -> str:
 		.replace(">", "&gt;")
 		.replace('"', "&quot;")
 	)
+
+
+def _page_html(title: str, body: str) -> str:
+	return (
+		f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{_he(title)}</title>'
+		'<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">'
+		"<style>body{padding:24px}.mm-table{width:100%;border-collapse:collapse;background:#fff}"
+		".mm-table th,.mm-table td{border:1px solid #e5e7eb;padding:8px 10px;text-align:left}"
+		".mm-table th{background:#f9fafb;font-size:12px;text-transform:uppercase;color:#374151}"
+		"</style></head><body>"
+		f"{body}</body></html>"
+	)
+
+
+def _format_cents(value: object) -> str:
+	return format_currency(int(value or 0), _currency())
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +289,32 @@ class TransactionView(ModelView):
 		]),
 		"amount_cents": currency_widget(_DEFAULT_CURRENCY),
 		"fee_cents": currency_widget(_DEFAULT_CURRENCY),
+	}
+
+
+class MobileMoneyTransactionView(ModelView):
+	"""Provider-focused mobile money transaction list."""
+
+	datamodel = SQLAInterface(MobileTransaction)
+	route_base = "/mobile-money/provider-transactions"
+	list_columns = ["amount", "provider", "status", "reference", "created_at"]
+	search_columns = ["status", "transaction_id", "confirmation_code", "channel"]
+	can_add = False
+	can_edit = False
+	can_delete = False
+
+	label_columns = {
+		"amount": "Amount",
+		"provider": "Provider",
+		"status": "Status",
+		"reference": "Reference",
+		"created_at": "Created At",
+	}
+
+	formatters_columns = {
+		"amount": lambda v, ctx: format_currency(v or 0, _currency()),
+		"status": lambda v, ctx: status_badge(v or ""),
+		"reference": lambda v, ctx: f'<span class="text-monospace">{_he(v or "")}</span>',
 	}
 
 
@@ -671,6 +722,138 @@ class FloatDashboard(BaseView):
 		})
 
 
+class MobileMoneyDashboardView(BaseERPView):
+	"""Provider dashboard for M-Pesa, MTN, Airtel, and Flutterwave."""
+
+	route_base = "/erp/fintech/mobile-money"
+	default_view = "index"
+
+	@expose("/")
+	@has_access
+	def index(self):
+		session = _get_session()
+		provider_stats = self._provider_stats(session)
+		pending_reversals_count = self._pending_reversals_count(session)
+		today_disbursements_total = self._today_disbursements_total(session)
+
+		payload = {
+			"provider_stats": provider_stats,
+			"pending_reversals_count": pending_reversals_count,
+			"today_disbursements_total": today_disbursements_total,
+		}
+		if request.args.get("format") == "json":
+			return jsonify(payload)
+
+		kpi_html = self.kpi_cards([
+			{
+				"label": "Pending Reversals",
+				"value": pending_reversals_count,
+				"format": "integer",
+				"color": "#f59e0b",
+				"icon": "fa-undo",
+			},
+			{
+				"label": "Today Disbursements",
+				"value": today_disbursements_total / 100,
+				"format": "currency",
+				"color": "#057a55",
+				"icon": "fa-paper-plane",
+			},
+		])
+		rows = "".join(
+			"<tr>"
+			f"<td>{_he(row['provider'])}</td>"
+			f"<td class='text-right'>{row['volume_count']}</td>"
+			f"<td class='text-right'>{row['success_rate_pct']:.2f}%</td>"
+			f"<td class='text-right'>{_he(_format_cents(row['total_amount_cents']))}</td>"
+			"</tr>"
+			for row in provider_stats
+		)
+		body = (
+			"<h3>Mobile Money Provider Dashboard</h3>"
+			f"{kpi_html}"
+			"<table class=\"mm-table\">"
+			"<thead><tr><th>Provider</th><th class=\"text-right\">Volume Count</th>"
+			"<th class=\"text-right\">Success Rate</th><th class=\"text-right\">Total Amount</th></tr></thead>"
+			f"<tbody>{rows}</tbody></table>"
+		)
+		return make_response(_page_html("Mobile Money Dashboard", body), 200)
+
+	def _provider_stats(self, session) -> list[dict[str, object]]:
+		stats: list[dict[str, object]] = []
+		for provider, condition in self._provider_conditions():
+			try:
+				row = session.execute(
+					sa.select(
+						sa.func.count(MobileTransaction.id).label("volume_count"),
+						sa.func.coalesce(sa.func.sum(MobileTransaction.amount_cents), 0).label("total_amount_cents"),
+						sa.func.coalesce(sa.func.sum(
+							sa.case((MobileTransaction.status == "COMPLETED", 1), else_=0)
+						), 0).label("success_count"),
+					).where(condition)
+				).one()
+				volume_count = int(row.volume_count or 0)
+				success_count = int(row.success_count or 0)
+				success_rate_pct = (success_count / volume_count * 100) if volume_count else 0.0
+				stats.append({
+					"provider": provider,
+					"volume_count": volume_count,
+					"success_rate_pct": success_rate_pct,
+					"total_amount_cents": int(row.total_amount_cents or 0),
+				})
+			except Exception:
+				log.exception("MobileMoneyDashboardView: provider stats failed for %s", provider)
+				stats.append({
+					"provider": provider,
+					"volume_count": 0,
+					"success_rate_pct": 0.0,
+					"total_amount_cents": 0,
+				})
+		return stats
+
+	def _provider_conditions(self):
+		upper_channel = sa.func.upper(sa.func.coalesce(MobileTransaction.channel, ""))
+		upper_txn = sa.func.upper(sa.func.coalesce(MobileTransaction.transaction_id, ""))
+		return [
+			(
+				"M-Pesa",
+				sa.or_(
+					upper_channel.in_(("MPESA", "M-PESA", "DARAJA", "STK_PUSH")),
+					upper_txn.like("MP%"),
+				),
+			),
+			("MTN", upper_channel.like("%MTN%")),
+			("Airtel", upper_channel.like("%AIRTEL%")),
+			("Flutterwave", upper_channel.like("%FLUTTERWAVE%")),
+		]
+
+	def _pending_reversals_count(self, session) -> int:
+		try:
+			return int(session.execute(
+				sa.select(sa.func.count(MobileTransaction.id))
+				.where(MobileTransaction.transaction_type == "REVERSAL")
+				.where(MobileTransaction.status == "PENDING")
+			).scalar() or 0)
+		except Exception:
+			log.exception("MobileMoneyDashboardView: pending reversal count failed")
+			return 0
+
+	def _today_disbursements_total(self, session) -> int:
+		now = datetime.now(timezone.utc)
+		start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+		end = start + timedelta(days=1)
+		try:
+			return int(session.execute(
+				sa.select(sa.func.coalesce(sa.func.sum(DisbursementBatch.total_amount_cents), 0))
+				.where(DisbursementBatch.created_at >= start)
+				.where(DisbursementBatch.created_at < end)
+				.where(DisbursementBatch.status.in_(("APPROVED", "PROCESSING", "COMPLETED")))
+			).scalar() or 0)
+		except Exception:
+			log.exception("MobileMoneyDashboardView: today disbursement total failed")
+			return 0
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -678,8 +861,10 @@ class FloatDashboard(BaseView):
 __all__ = [
 	"WalletView",
 	"TransactionView",
+	"MobileMoneyTransactionView",
 	"AgentView",
 	"MerchantView",
 	"AgentNetworkMapView",
 	"FloatDashboard",
+	"MobileMoneyDashboardView",
 ]

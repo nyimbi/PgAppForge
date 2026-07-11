@@ -1,0 +1,17 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+{{ lib.panel_begin(title) }}
+
+<form method="post" enctype="multipart/form-data">
+	<div class="form-group">
+		<label for="file">{{ _("CSV file") }}</label>
+		<input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+	</div>
+	<button type="submit" class="btn btn-primary">{{ _("Import") }}</button>
+	<a class="btn btn-default" href="{{ request.referrer or url_for(request.endpoint.rsplit('.', 1)[0] + '.list') }}">{{ _("Back to list") }}</a>
+</form>
+
+{{ lib.panel_end() }}
+{% endblock %}

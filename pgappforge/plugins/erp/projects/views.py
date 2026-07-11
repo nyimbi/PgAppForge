@@ -11,16 +11,18 @@ from html import escape
 from typing import Any
 
 import sqlalchemy as sa
-from flask import make_response, request
+from flask import make_response, redirect, request
 
 try:
 	from pgappforge import expose
+	from pgappforge.actions import action
 	from pgappforge.models.sqla.interface import SQLAInterface
 	from pgappforge.plugins.erp.base_view import BaseERPModelView, BaseERPView
 except ImportError:  # pragma: no cover - fallback for standalone FAB installs
 	from flask_appbuilder import BaseView as BaseERPView
 	from flask_appbuilder import ModelView as BaseERPModelView
 	from flask_appbuilder import expose
+	from flask_appbuilder.actions import action
 	from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from pgappforge.security.decorators import has_access
@@ -626,6 +628,20 @@ class ProjectTimesheetView(BaseERPModelView):
 	]
 	search_columns = ["work_date", "description", "status"]
 	page_size = 25
+
+	@action('approve_timesheets', 'Approve Timesheets', 'Approve selected timesheets?', 'fa-check')
+	def approve_timesheets(self, items):
+		for item in items:
+			item.status = 'APPROVED'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
+
+	@action('reject_timesheets', 'Reject Timesheets', 'Reject selected timesheets?', 'fa-times')
+	def reject_timesheets(self, items):
+		for item in items:
+			item.status = 'REJECTED'
+		self.datamodel.session.commit()
+		return redirect(self.get_redirect())
 
 
 class ProjectMilestoneView(BaseERPModelView):

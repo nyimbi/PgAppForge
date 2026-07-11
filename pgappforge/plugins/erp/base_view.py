@@ -12,7 +12,7 @@ from typing import Any
 
 from pgappforge.baseviews import BaseView, expose
 from pgappforge.security.decorators import has_access
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 
 class BaseERPView(BaseView):
@@ -369,6 +369,59 @@ class BaseERPView(BaseView):
 		)
 		cid = f"hm_{abs(hash(title)):08x}"
 		return widget.render(rows, container_id=cid)
+
+	# ------------------------------------------------------------------
+	# Attachments
+	# ------------------------------------------------------------------
+
+	def attachment_widget(self, entity_type: str, entity_id: str) -> str:
+		"""Render upload/list/delete controls for ERP entity attachments."""
+		from flask import url_for
+		from pgappforge.plugins.erp.platform.document_management.services import AttachmentService
+
+		service = AttachmentService()
+		tenant_id = self._tenant_id()
+		try:
+			attachments = service.get_attachments(
+				self._session(),
+				tenant_id,
+				entity_type=entity_type,
+				entity_id=entity_id,
+			)
+		except Exception:
+			attachments = []
+
+		upload_url = url_for("AttachmentView.upload")
+		parts = [
+			'<div class="erp-attachment-widget">',
+			'<div class="erp-attachment-header"><strong>Attachments</strong></div>',
+			f'<form action="{escape(upload_url)}" method="post" enctype="multipart/form-data" class="erp-attachment-form">',
+			f'<input type="hidden" name="tenant_id" value="{escape(tenant_id)}">',
+			f'<input type="hidden" name="entity_type" value="{escape(entity_type)}">',
+			f'<input type="hidden" name="entity_id" value="{escape(entity_id)}">',
+			'<input type="file" name="file" required>',
+			'<input type="text" name="description" placeholder="Description">',
+			'<button type="submit" class="btn btn-sm btn-primary">Upload</button>',
+			"</form>",
+			'<ul class="erp-attachment-list">',
+		]
+		for attachment in attachments:
+			download_url = service.get_download_url(attachment)
+			delete_url = url_for("AttachmentView.delete", id=attachment.id)
+			parts.extend([
+				'<li class="erp-attachment-item">',
+				f'<a href="{escape(download_url)}">{escape(attachment.original_filename)}</a>',
+				f' <span class="text-muted">({int(attachment.file_size_bytes or 0)} bytes)</span>',
+				f'<form action="{escape(delete_url)}" method="post" style="display:inline">',
+				f'<input type="hidden" name="tenant_id" value="{escape(tenant_id)}">',
+				'<button type="submit" class="btn btn-xs btn-link text-danger">Delete</button>',
+				"</form>",
+				"</li>",
+			])
+		if not attachments:
+			parts.append('<li class="text-muted">No attachments</li>')
+		parts.extend(["</ul>", "</div>"])
+		return Markup("".join(str(part) for part in parts))
 
 	# ------------------------------------------------------------------
 	# Internal helpers
