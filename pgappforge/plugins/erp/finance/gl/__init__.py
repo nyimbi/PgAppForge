@@ -164,6 +164,19 @@ class GLPlugin(BasePlugin):
 			GLDimensionDefinitionRestApi,
 		)
 
+		from pgappforge.plugins.erp.finance.gl.api import (
+			GLAccountRestApi,
+			GLCostCenterRestApi,
+			GLFiscalYearRestApi,
+			GLPeriodRestApi,
+			GLJournalBatchRestApi,
+			GLJournalEntryRestApi,
+			GLJournalLineRestApi,
+			GLAccountBalanceRestApi,
+			GLBudgetRestApi,
+			GLDimensionDefinitionRestApi,
+		)
+
 		cat = self.config.get("GL_MENU_CATEGORY", "General Ledger")
 
 		for api_class in (
