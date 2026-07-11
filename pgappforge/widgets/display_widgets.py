@@ -125,25 +125,14 @@ class StatCardWidget:
 		color = self.color
 		spark_json = json.dumps(sparkline_data)
 		displayed = self._fmt(total)
-
-		return Markup(f"""
-{_CHARTJS}
-<div style="background:#fff;border:1px solid #dee2e6;border-radius:6px;
-            padding:16px 20px;display:flex;align-items:center;gap:16px;
-            box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-  <div style="width:48px;height:48px;border-radius:50%;background:{color}22;
-              display:flex;align-items:center;justify-content:center;flex-shrink:0">
-    <i class="fa {self.icon}" style="font-size:1.4em;color:{color}"></i>
-  </div>
-  <div style="flex:1;min-width:0">
-    <div style="font-size:1.6em;font-weight:700;color:#2c3e50;line-height:1">
-      {displayed} {arrow_html}
-    </div>
-    <div style="font-size:0.82em;color:#6c757d;margin-top:2px">{self.label}</div>
-  </div>
-  {f'<canvas id="{cid}_spark" width="80" height="40" style="flex-shrink:0"></canvas>' if sparkline_data else ''}
-</div>
-{"" if not sparkline_data else f"""
+		spark_canvas = ""
+		spark_script = ""
+		if sparkline_data:
+			spark_canvas = (
+				f'<canvas id="{cid}_spark" width="80" height="40" '
+				'style="flex-shrink:0"></canvas>'
+			)
+			spark_script = f"""
 <script>
 (function() {{
   if (!window.Chart) {{ setTimeout(arguments.callee, 100); return; }}
@@ -160,7 +149,26 @@ class StatCardWidget:
                scales:{{x:{{display:false}},y:{{display:false}}}}}}
   }});
 }})();
-</script>"""}
+</script>"""
+
+		return Markup(f"""
+{_CHARTJS}
+<div style="background:#fff;border:1px solid #dee2e6;border-radius:6px;
+            padding:16px 20px;display:flex;align-items:center;gap:16px;
+            box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+  <div style="width:48px;height:48px;border-radius:50%;background:{color}22;
+              display:flex;align-items:center;justify-content:center;flex-shrink:0">
+    <i class="fa {self.icon}" style="font-size:1.4em;color:{color}"></i>
+  </div>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:1.6em;font-weight:700;color:#2c3e50;line-height:1">
+      {displayed} {arrow_html}
+    </div>
+    <div style="font-size:0.82em;color:#6c757d;margin-top:2px">{self.label}</div>
+  </div>
+  {spark_canvas}
+</div>
+{spark_script}
 """)
 
 

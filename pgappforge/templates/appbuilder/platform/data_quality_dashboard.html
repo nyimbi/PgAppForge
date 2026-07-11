@@ -1,0 +1,214 @@
+{% extends "appbuilder/erp/base_erp.html" %}
+
+{% block title %}Data Quality — {{ appbuilder.app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+	.dq-score {
+		display: inline-flex;
+		align-items: center;
+		min-width: 58px;
+		justify-content: center;
+		border-radius: 4px;
+		padding: 2px 8px;
+		font-size: 12px;
+		font-weight: 700;
+	}
+	.dq-score-good { background: #def7ec; color: #03543f; }
+	.dq-score-warn { background: #fef3c7; color: #92400e; }
+	.dq-score-bad { background: #fee2e2; color: #991b1b; }
+	.dq-key {
+		font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+		font-size: 12px;
+		color: var(--erp-text-muted);
+	}
+	.dq-section-head {
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--erp-border);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.dq-empty {
+		padding: 28px 18px;
+		text-align: center;
+		color: var(--erp-text-muted);
+	}
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="erp-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+	<div>
+		<h1 class="erp-page-title"><i class="fa fa-check-square-o"></i> Data Quality</h1>
+		<p class="erp-page-subtitle">
+			Cross-domain completeness, duplicate detection, and stale-record monitoring.
+		</p>
+	</div>
+	<div style="font-size:12px;color:var(--erp-text-muted);margin-top:4px;">
+		{{ summary.total_records }} records checked
+	</div>
+</div>
+{% endblock %}
+
+{% block content %}
+{{ kpi_html | safe }}
+
+<div class="row">
+	<div class="col-md-5">
+		{% if domain_chart_html %}
+		<div class="erp-chart-wrap erp-mb-24">
+			<h4 class="erp-chart-title"><i class="fa fa-bar-chart"></i> Domain Completeness</h4>
+			{{ domain_chart_html | safe }}
+		</div>
+		{% endif %}
+	</div>
+	<div class="col-md-7">
+		<div class="erp-table-wrap erp-mb-24">
+			<div class="dq-section-head">
+				<h4 class="erp-chart-title erp-mb-0"><i class="fa fa-database"></i> Model Completeness</h4>
+				<span style="font-size:12px;color:var(--erp-text-muted);">{{ summary.model_count }} configured models</span>
+			</div>
+			<table class="erp-table">
+				<thead>
+					<tr>
+						<th>Domain</th>
+						<th>Model</th>
+						<th>Records</th>
+						<th>Score</th>
+						<th>Top Missing Fields</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in summary.completeness %}
+					{% set score_class = 'dq-score-good' if row.score >= 90 else ('dq-score-warn' if row.score >= 70 else 'dq-score-bad') %}
+					<tr>
+						<td>{{ row.domain }}</td>
+						<td>{{ row.model }}</td>
+						<td>{{ row.total_records }}</td>
+						<td><span class="dq-score {{ score_class }}">{{ row.score }}%</span></td>
+						<td>
+							{% if row.missing_fields %}
+								{% for field in row.missing_fields[:3] %}
+								<span class="dq-key">{{ field.field }} ({{ field.missing }})</span>{% if not loop.last %}, {% endif %}
+								{% endfor %}
+							{% elif row.error %}
+								<span style="color:var(--erp-text-muted);">{{ row.error }}</span>
+							{% else %}
+								<span style="color:var(--erp-success);">Complete</span>
+							{% endif %}
+						</td>
+					</tr>
+					{% else %}
+					<tr>
+						<td colspan="5" class="dq-empty">No model checks are available.</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="row">
+	<div class="col-md-6">
+		<div class="erp-table-wrap erp-mb-24">
+			<div class="dq-section-head">
+				<h4 class="erp-chart-title erp-mb-0"><i class="fa fa-copy"></i> Duplicate Groups</h4>
+				<span style="font-size:12px;color:var(--erp-text-muted);">{{ summary.duplicate_records }} records in duplicate groups</span>
+			</div>
+			<table class="erp-table">
+				<thead>
+					<tr>
+						<th>Domain</th>
+						<th>Model</th>
+						<th>Key</th>
+						<th>Records</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in summary.duplicates[:20] %}
+					<tr>
+						<td>{{ row.domain }}</td>
+						<td>{{ row.model }}</td>
+						<td class="dq-key">
+							{% for key, value in row.key.items() %}
+							{{ key }}={{ value }}{% if not loop.last %}; {% endif %}
+							{% endfor %}
+						</td>
+						<td>{{ row.record_count }}</td>
+					</tr>
+					{% else %}
+					<tr>
+						<td colspan="4" class="dq-empty">
+							<i class="fa fa-check-circle" style="color:var(--erp-success);margin-right:6px;"></i>
+							No duplicates detected.
+						</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+	<div class="col-md-6">
+		<div class="erp-table-wrap erp-mb-24">
+			<div class="dq-section-head">
+				<h4 class="erp-chart-title erp-mb-0"><i class="fa fa-clock-o"></i> Stale Records</h4>
+				<span style="font-size:12px;color:var(--erp-text-muted);">Oldest active records first</span>
+			</div>
+			<table class="erp-table">
+				<thead>
+					<tr>
+						<th>Domain</th>
+						<th>Model</th>
+						<th>Record</th>
+						<th>Last Updated</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in summary.stale[:20] %}
+					<tr>
+						<td>{{ row.domain }}</td>
+						<td>{{ row.model }}</td>
+						<td>
+							<div class="dq-key">{{ row.record_id }}</div>
+							{% if row.label %}
+							<div style="font-size:12px;">{{ row.label }}</div>
+							{% endif %}
+						</td>
+						<td>
+							<div style="font-size:12px;white-space:nowrap;">{{ row.stale_at }}</div>
+							<div style="font-size:11px;color:var(--erp-text-muted);">{{ row.stale_after_days }} day threshold</div>
+						</td>
+					</tr>
+					{% else %}
+					<tr>
+						<td colspan="4" class="dq-empty">
+							<i class="fa fa-check-circle" style="color:var(--erp-success);margin-right:6px;"></i>
+							No stale active records detected.
+						</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+{% if summary.errors %}
+<div class="erp-table-wrap erp-mb-24">
+	<div class="dq-section-head">
+		<h4 class="erp-chart-title erp-mb-0"><i class="fa fa-exclamation-triangle"></i> Skipped Checks</h4>
+	</div>
+	<div style="padding:16px;">
+		<ul style="margin:0;padding-left:18px;color:var(--erp-text-muted);font-size:12px;">
+			{% for error in summary.errors[:8] %}
+			<li>{{ error }}</li>
+			{% endfor %}
+		</ul>
+	</div>
+</div>
+{% endif %}
+{% endblock %}

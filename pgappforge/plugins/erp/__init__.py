@@ -126,6 +126,12 @@ ERP_GROUPS: dict[str, dict[str, Any]] = {
 				"description": "Global ERP search across projects, risks, invoices, suppliers, employees, and opportunities.",
 			},
 			{
+				"key": "platform.data_quality",
+				"module": "pgappforge.plugins.erp.platform.data_quality",
+				"class_name": "DataQualityPlugin",
+				"description": "Cross-domain completeness, duplicate detection, and stale-record monitoring.",
+			},
+			{
 				"key": "platform.pdl_designer",
 				"module": "pgappforge.pdl",
 				"class_name": "PDLPlugin",

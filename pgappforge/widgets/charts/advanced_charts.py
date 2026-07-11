@@ -111,6 +111,14 @@ class AdvancedChartsWidget(Input):
 
         # Generate unique ID for this chart instance
         chart_id = f"chart_{field.id}_{id(self)}"
+        real_time_button = ""
+        if self.real_time:
+            real_time_button = (
+                '<button type="button" class="btn btn-sm btn-outline-secondary" '
+                f'onclick="toggleRealTime(\'{chart_id}\')" '
+                f'title="{gettext("Toggle Real-time")}">'
+                '<i class="fas fa-play"></i></button>'
+            )
 
         return Markup(f"""
         <div class="advanced-charts-widget" data-field-id="{field.id}">
@@ -276,7 +284,7 @@ class AdvancedChartsWidget(Input):
                                 onclick="toggleFullscreen('{chart_id}')" title="{gettext('Fullscreen')}">
                             <i class="fas fa-expand"></i>
                         </button>
-                        {'<button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleRealTime(\'' + chart_id + '\')" title="' + gettext('Toggle Real-time') + '"><i class="fas fa-play"></i></button>' if self.real_time else ''}
+                        {real_time_button}
                     </div>
                 </div>
             </div>

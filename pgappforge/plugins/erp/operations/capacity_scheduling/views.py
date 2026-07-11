@@ -77,8 +77,8 @@ class CapacityGanttView(BaseERPView):
 			return status_map.get(str(status or "").upper(), "on-track")
 
 		today = date.today()
-			default_from = today - timedelta(days=today.weekday())
-			default_to = default_from + timedelta(days=6)
+		default_from = today - timedelta(days=today.weekday())
+		default_to = default_from + timedelta(days=6)
 		from_date = _parse_date_arg("from_date", default_from)
 		to_date = _parse_date_arg("to_date", default_to)
 		if to_date < from_date:
