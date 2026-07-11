@@ -17,7 +17,7 @@ Registered views:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 import sqlalchemy as sa
@@ -777,11 +777,10 @@ class StockMovementView(BaseERPView):
 			if val:
 				q = q.where(col == val)
 		if request.args.get("from_date"):
-			from datetime import date as date_type
-			q = q.where(StockMovement.moved_at >= date_type.fromisoformat(request.args["from_date"]))
+			q = q.where(StockMovement.moved_at >= date.fromisoformat(request.args["from_date"]))
 		if request.args.get("to_date"):
-			from datetime import date as date_type
-			q = q.where(StockMovement.moved_at <= date_type.fromisoformat(request.args["to_date"]))
+			to_date = date.fromisoformat(request.args["to_date"])
+			q = q.where(StockMovement.moved_at <= datetime.combine(to_date, time.max))
 
 		movements = session.execute(q.limit(1000)).scalars().all()
 		return jsonify({"movements": [

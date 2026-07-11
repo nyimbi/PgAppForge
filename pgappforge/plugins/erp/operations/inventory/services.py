@@ -340,10 +340,7 @@ class InventoryService:
 				)
 
 			sl.quantity_reserved = _d(sl.quantity_reserved) + qty
-			sl.quantity_available = _d(sl.quantity_on_hand) - (_d(sl.quantity_reserved) + qty - qty)
-			# Recalculate cleanly
-			sl.quantity_reserved = _d(sl.quantity_reserved)
-			sl.quantity_available = _d(sl.quantity_on_hand) - _d(sl.quantity_reserved)
+			sl.quantity_available = _d(sl.quantity_on_hand) - sl.quantity_reserved
 			sl.updated_at = _now()
 			updated_levels.append(sl)
 

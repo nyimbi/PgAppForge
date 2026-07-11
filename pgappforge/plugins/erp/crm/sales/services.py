@@ -24,9 +24,6 @@ Key methods
       Logs an activity and updates contact.last_activity_at +
       contact.engagement_score.
 
-  update_sales_target(owner_id, period_id, amount_cents, session)
-      Adds achieved_amount_cents to matching SalesTarget rows.
-
   submit_forecast(data, session) -> SalesForecast
       Creates or replaces a period forecast for a rep/manager.
 """
@@ -832,12 +829,19 @@ class SalesService:
 			score += 10
 
 		# Activity signal
-		activity_count = session.execute(
-			sa.select(sa.func.count(Activity.id))
-			.where(Activity.tenant_id == lead.tenant_id)
-			# Activities on leads are linked via the email match heuristic
-			# In production, a lead_id FK on Activity would be cleaner
-		).scalar() or 0
+		activity_filters = []
+		if lead.converted_contact_id:
+			activity_filters.append(Activity.contact_id == lead.converted_contact_id)
+		if lead.converted_opportunity_id:
+			activity_filters.append(Activity.opportunity_id == lead.converted_opportunity_id)
+
+		activity_count = 0
+		if activity_filters:
+			activity_count = session.execute(
+				sa.select(sa.func.count(Activity.id))
+				.where(Activity.tenant_id == lead.tenant_id)
+				.where(sa.or_(*activity_filters))
+			).scalar() or 0
 		if activity_count > 0:
 			score += 15
 
@@ -1284,36 +1288,6 @@ class SalesService:
 			fc.owner_id, fc.period_id, fc.commit_cents,
 		)
 		return fc
-
-	# ------------------------------------------------------------------
-	# update_sales_target
-	# ------------------------------------------------------------------
-
-	def update_sales_target(
-		self,
-		owner_id: str,
-		tenant_id: str,
-		period_id: str,
-		amount_cents: int,
-		session: Any,
-	) -> None:
-		"""Add amount_cents to achieved_amount_cents on matching SalesTarget.
-
-		Called internally by advance_stage on CLOSED_WON.
-		"""
-		from pgappforge.plugins.erp.crm.sales.models import SalesTarget
-
-		targets = session.execute(
-			sa.select(SalesTarget)
-			.where(SalesTarget.tenant_id == tenant_id)
-			.where(SalesTarget.owner_id == owner_id)
-			.where(SalesTarget.period_id == period_id)
-			.where(SalesTarget.target_type == "REVENUE")
-		).scalars().all()
-
-		for t in targets:
-			t.achieved_amount_cents += amount_cents
-			t.updated_at = datetime.now(timezone.utc)
 
 	# ------------------------------------------------------------------
 	# Internal helpers
