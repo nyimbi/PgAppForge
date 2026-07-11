@@ -70,6 +70,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pgappforge.plugins.erp.executive_dashboard import ExecutiveDashboardView
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -719,6 +721,25 @@ for _gk in _GROUP_ORDER:
 
 
 # ---------------------------------------------------------------------------
+# ERP home registration
+# ---------------------------------------------------------------------------
+
+def _register_executive_home(appbuilder: Any, *, strict: bool = False) -> None:
+	"""Register the ERP executive home view without taking over PgAppForge root."""
+	try:
+		appbuilder.add_view_no_menu(ExecutiveDashboardView)
+		app = getattr(appbuilder, "app", None)
+		if app is not None:
+			app.config["ERP_HOME_VIEW"] = "ExecutiveDashboardView"
+			app.config["ERP_HOME_ENDPOINT"] = "ExecutiveDashboardView.index"
+		log.info("install_all: ERP executive dashboard registered at /erp/executive/")
+	except Exception as exc:
+		log.error("install_all: failed registering ERP executive dashboard: %s", exc)
+		if strict:
+			raise
+
+
+# ---------------------------------------------------------------------------
 # install_all — primary public API
 # ---------------------------------------------------------------------------
 
@@ -757,6 +778,8 @@ def install_all(
 	skip_set: set[str] = set(skip or [])
 	config_overrides = config_overrides or {}
 	results: dict[str, bool] = {}
+
+	_register_executive_home(appbuilder, strict=strict)
 
 	# Resolve candidate set
 	if groups is not None:
@@ -836,6 +859,7 @@ __all__ = [
 	"ERP_GROUPS",
 	"PLUGIN_REGISTRY",
 	"COMPOSABILITY_MAP",
+	"ExecutiveDashboardView",
 	# helpers
 	"install_all",
 	"list_plugins",
