@@ -4,6 +4,7 @@ pgappforge/plugins/erp/platform/tenant_control/views.py
 Flask-AppBuilder views for the Tenant Control plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -27,13 +28,13 @@ class TenantProfileView(ModelView):
 	list_columns           = ['name', 'plan_tier', 'status', 'created_at']
 	show_columns           = ['name', 'plan_tier', 'status', 'feature_flags', 'usage_stats', 'billing_customer_id', 'created_at']
 	label_columns          = {
-		'name': 'Tenant Name',
-		'plan_tier': 'Plan Tier',
-		'status': 'Status',
-		'feature_flags': 'Feature Flags',
-		'usage_stats': 'Usage Stats',
-		'billing_customer_id': 'Billing Customer',
-		'created_at': 'Created',
+		'name': _('Tenant Name'),
+		'plan_tier': _('Plan Tier'),
+		'status': _('Status'),
+		'feature_flags': _('Feature Flags'),
+		'usage_stats': _('Usage Stats'),
+		'billing_customer_id': _('Billing Customer'),
+		'created_at': _('Created'),
 	}
 	add_exclude_columns    = ['id', 'created_on', 'changed_on', 'billing_customer_id']
 	edit_exclude_columns   = ['id', 'created_on', 'changed_on', 'billing_customer_id']
@@ -45,10 +46,10 @@ class TenantUsageEventView(ModelView):
 	list_columns         = ['tenant_id', 'event_type', 'quantity', 'recorded_at']
 	show_columns         = ['tenant_id', 'event_type', 'quantity', 'recorded_at']
 	label_columns        = {
-		'tenant_id': 'Tenant',
-		'event_type': 'Event Type',
-		'quantity': 'Quantity',
-		'recorded_at': 'Recorded At',
+		'tenant_id': _('Tenant'),
+		'event_type': _('Event Type'),
+		'quantity': _('Quantity'),
+		'recorded_at': _('Recorded At'),
 	}
 	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

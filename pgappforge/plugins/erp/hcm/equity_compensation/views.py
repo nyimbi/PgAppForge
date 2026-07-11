@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class EquityPlanView(ModelView):
 	datamodel = SQLAInterface(EquityPlan)
 	list_columns = ["name", "plan_type", "total_shares_authorized", "total_shares_issued", "plan_currency", "is_active"]
+	label_columns = {"name": _("Name"), "plan_type": _("Plan Type"), "total_shares_authorized": _("Total Shares Authorized"), "total_shares_issued": _("Total Shares Issued"), "plan_currency": _("Plan Currency"), "is_active": _("Is Active")}
+	show_columns = ["name", "plan_type", "total_shares_authorized", "total_shares_issued", "plan_currency", "is_active", "vesting_schedule_type", "vesting_period_months", "cliff_months", "exercise_price_cents", "expiry_years", "metadata_", "created_at", "updated_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "grants"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "grants"]
 	search_columns = ["name", "plan_type"]
@@ -30,6 +33,8 @@ class EquityPlanView(ModelView):
 class EquityGrantView(ModelView):
 	datamodel = SQLAInterface(EquityGrant)
 	list_columns = ["employee_id", "plan", "grant_date", "shares_granted", "vested_shares", "status"]
+	label_columns = {"employee_id": _("Employee"), "plan": _("Plan"), "grant_date": _("Grant Date"), "shares_granted": _("Shares Granted"), "vested_shares": _("Vested Shares"), "status": _("Status")}
+	show_columns = ["employee_id", "plan", "grant_date", "shares_granted", "vested_shares", "status", "unvested_shares", "grant_fmv_cents", "expiry_date", "approved_by", "notes", "metadata_", "created_at", "updated_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "vesting_events", "exercises"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "vesting_events", "exercises"]
 	search_columns = ["employee_id", "status"]
@@ -38,6 +43,8 @@ class EquityGrantView(ModelView):
 class VestingEventView(ModelView):
 	datamodel = SQLAInterface(VestingEvent)
 	list_columns = ["grant", "vest_date", "shares_vested", "is_cliff", "is_processed"]
+	label_columns = {"grant": _("Grant"), "vest_date": _("Vest Date"), "shares_vested": _("Shares Vested"), "is_cliff": _("Is Cliff"), "is_processed": _("Is Processed")}
+	show_columns = ["grant", "vest_date", "shares_vested", "is_cliff", "is_processed", "processed_at", "created_at", "updated_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["is_processed"]

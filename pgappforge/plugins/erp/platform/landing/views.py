@@ -629,6 +629,7 @@ class LandingPageView(BaseERPView):
 
 	# ------------------------------------------------------------------ index
 
+	@has_access
 	@expose("/")
 	def index(self) -> str:
 		"""Render the landing page."""
@@ -643,6 +644,7 @@ class LandingPageView(BaseERPView):
 
 	# --------------------------------------------------------- /landing/api/stats
 
+	@has_access
 	@expose("/landing/api/stats")
 	def stats_api(self):
 		"""JSON stats for the landing-page stats-bar island."""

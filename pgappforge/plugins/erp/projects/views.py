@@ -4,6 +4,7 @@ pgappforge/plugins/erp/projects/views.py
 Flask-AppBuilder views for the Projects / PSA plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from datetime import date, timedelta
 from html import escape
@@ -152,15 +153,15 @@ PROGRAM_COLUMNS = [
 	"updated_at",
 ]
 PROGRAM_LABELS = {
-	"code": "Program Code",
-	"name": "Program Name",
-	"owner_id": "Owner",
-	"status": "Status",
-	"budget_cents": "Budget",
-	"currency_code": "Currency",
-	"description": "Description",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"code": _("Program Code"),
+	"name": _("Program Name"),
+	"owner_id": _("Owner"),
+	"status": _("Status"),
+	"budget_cents": _("Budget"),
+	"currency_code": _("Currency"),
+	"description": _("Description"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 PROJECT_COLUMNS = [
@@ -187,27 +188,27 @@ PROJECT_COLUMNS = [
 	"updated_at",
 ]
 PROJECT_LABELS = {
-	"program_id": "Program",
-	"code": "Project Code",
-	"name": "Project Name",
-	"project_type": "Project Type",
-	"customer_id": "Customer",
-	"owner_id": "Project Manager",
-	"start_date": "Start Date",
-	"end_date": "End Date",
-	"status": "Status",
-	"original_budget_cents": "Original Budget",
-	"revised_budget_cents": "Revised Budget",
-	"forecast_at_completion_cents": "Forecast at Completion",
-	"billed_to_date_cents": "Billed to Date",
-	"recognised_revenue_cents": "Recognised Revenue",
-	"percent_complete": "Percent Complete",
-	"risk_level": "Risk Level",
-	"currency_code": "Currency",
-	"description": "Description",
-	"metadata_": "Metadata",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"program_id": _("Program"),
+	"code": _("Project Code"),
+	"name": _("Project Name"),
+	"project_type": _("Project Type"),
+	"customer_id": _("Customer"),
+	"owner_id": _("Project Manager"),
+	"start_date": _("Start Date"),
+	"end_date": _("End Date"),
+	"status": _("Status"),
+	"original_budget_cents": _("Original Budget"),
+	"revised_budget_cents": _("Revised Budget"),
+	"forecast_at_completion_cents": _("Forecast at Completion"),
+	"billed_to_date_cents": _("Billed to Date"),
+	"recognised_revenue_cents": _("Recognised Revenue"),
+	"percent_complete": _("Percent Complete"),
+	"risk_level": _("Risk Level"),
+	"currency_code": _("Currency"),
+	"description": _("Description"),
+	"metadata_": _("Metadata"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 WBS_COLUMNS = [
@@ -231,24 +232,24 @@ WBS_COLUMNS = [
 	"updated_at",
 ]
 WBS_LABELS = {
-	"project_id": "Project",
-	"parent_id": "Parent WBS Element",
-	"code": "WBS Code",
-	"name": "WBS Name",
-	"element_type": "Element Type",
-	"planned_start": "Planned Start",
-	"planned_end": "Planned End",
-	"actual_start": "Actual Start",
-	"actual_end": "Actual End",
-	"planned_hours": "Planned Hours",
-	"actual_hours": "Actual Hours",
-	"planned_cost_cents": "Planned Cost",
-	"actual_cost_cents": "Actual Cost",
-	"status": "Status",
-	"predecessor_ids": "Predecessors",
-	"notes": "Notes",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"parent_id": _("Parent WBS Element"),
+	"code": _("WBS Code"),
+	"name": _("WBS Name"),
+	"element_type": _("Element Type"),
+	"planned_start": _("Planned Start"),
+	"planned_end": _("Planned End"),
+	"actual_start": _("Actual Start"),
+	"actual_end": _("Actual End"),
+	"planned_hours": _("Planned Hours"),
+	"actual_hours": _("Actual Hours"),
+	"planned_cost_cents": _("Planned Cost"),
+	"actual_cost_cents": _("Actual Cost"),
+	"status": _("Status"),
+	"predecessor_ids": _("Predecessors"),
+	"notes": _("Notes"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 # ProjectResource uses employee_id as the resource key; no resource_id field exists.
@@ -267,18 +268,18 @@ RESOURCE_COLUMNS = [
 	"updated_at",
 ]
 RESOURCE_LABELS = {
-	"project_id": "Project",
-	"employee_id": "Employee",
-	"role": "Role",
-	"allocated_hours": "Allocated Hours",
-	"actual_hours": "Actual Hours",
-	"bill_rate_cents_per_hour": "Bill Rate / Hour",
-	"cost_rate_cents_per_hour": "Cost Rate / Hour",
-	"start_date": "Start Date",
-	"end_date": "End Date",
-	"is_active": "Active",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"employee_id": _("Employee"),
+	"role": _("Role"),
+	"allocated_hours": _("Allocated Hours"),
+	"actual_hours": _("Actual Hours"),
+	"bill_rate_cents_per_hour": _("Bill Rate / Hour"),
+	"cost_rate_cents_per_hour": _("Cost Rate / Hour"),
+	"start_date": _("Start Date"),
+	"end_date": _("End Date"),
+	"is_active": _("Active"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 TIMESHEET_COLUMNS = [
@@ -298,20 +299,20 @@ TIMESHEET_COLUMNS = [
 	"updated_at",
 ]
 TIMESHEET_LABELS = {
-	"project_id": "Project",
-	"wbs_element_id": "WBS Element",
-	"employee_id": "Employee",
-	"work_date": "Work Date",
-	"hours": "Hours",
-	"description": "Description",
-	"status": "Status",
-	"cost_cents": "Cost",
-	"bill_amount_cents": "Bill Amount",
-	"approved_by": "Approved By",
-	"approved_at": "Approved At",
-	"invoice_id": "Invoice",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"wbs_element_id": _("WBS Element"),
+	"employee_id": _("Employee"),
+	"work_date": _("Work Date"),
+	"hours": _("Hours"),
+	"description": _("Description"),
+	"status": _("Status"),
+	"cost_cents": _("Cost"),
+	"bill_amount_cents": _("Bill Amount"),
+	"approved_by": _("Approved By"),
+	"approved_at": _("Approved At"),
+	"invoice_id": _("Invoice"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 MILESTONE_COLUMNS = [
@@ -327,16 +328,16 @@ MILESTONE_COLUMNS = [
 	"updated_at",
 ]
 MILESTONE_LABELS = {
-	"project_id": "Project",
-	"name": "Milestone",
-	"due_date": "Due Date",
-	"achieved_date": "Achieved Date",
-	"amount_cents": "Amount",
-	"status": "Status",
-	"invoice_id": "Invoice",
-	"notes": "Notes",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"name": _("Milestone"),
+	"due_date": _("Due Date"),
+	"achieved_date": _("Achieved Date"),
+	"amount_cents": _("Amount"),
+	"status": _("Status"),
+	"invoice_id": _("Invoice"),
+	"notes": _("Notes"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 RISK_COLUMNS = [
@@ -354,18 +355,18 @@ RISK_COLUMNS = [
 	"updated_at",
 ]
 RISK_LABELS = {
-	"project_id": "Project",
-	"title": "Risk Title",
-	"description": "Description",
-	"probability": "Probability",
-	"impact": "Impact",
-	"risk_score": "Risk Score",
-	"mitigation": "Mitigation",
-	"risk_owner_id": "Risk Owner",
-	"status": "Status",
-	"review_date": "Review Date",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"title": _("Risk Title"),
+	"description": _("Description"),
+	"probability": _("Probability"),
+	"impact": _("Impact"),
+	"risk_score": _("Risk Score"),
+	"mitigation": _("Mitigation"),
+	"risk_owner_id": _("Risk Owner"),
+	"status": _("Status"),
+	"review_date": _("Review Date"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 CHANGE_ORDER_COLUMNS = [
@@ -384,19 +385,19 @@ CHANGE_ORDER_COLUMNS = [
 	"updated_at",
 ]
 CHANGE_ORDER_LABELS = {
-	"project_id": "Project",
-	"co_number": "Change Order Number",
-	"description": "Description",
-	"budget_delta_cents": "Budget Delta",
-	"schedule_delta_days": "Schedule Delta (days)",
-	"status": "Status",
-	"submitted_by": "Submitted By",
-	"submitted_at": "Submitted At",
-	"approved_by": "Approved By",
-	"approved_at": "Approved At",
-	"rejection_reason": "Rejection Reason",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"co_number": _("Change Order Number"),
+	"description": _("Description"),
+	"budget_delta_cents": _("Budget Delta"),
+	"schedule_delta_days": _("Schedule Delta (days)"),
+	"status": _("Status"),
+	"submitted_by": _("Submitted By"),
+	"submitted_at": _("Submitted At"),
+	"approved_by": _("Approved By"),
+	"approved_at": _("Approved At"),
+	"rejection_reason": _("Rejection Reason"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 INVOICE_COLUMNS = [
@@ -416,47 +417,47 @@ INVOICE_COLUMNS = [
 	"updated_at",
 ]
 INVOICE_LABELS = {
-	"project_id": "Project",
-	"invoice_number": "Invoice Number",
-	"invoice_type": "Invoice Type",
-	"invoice_date": "Invoice Date",
-	"due_date": "Due Date",
-	"amount_cents": "Amount",
-	"tax_cents": "Tax",
-	"total_cents": "Total",
-	"status": "Status",
-	"paid_at": "Paid At",
-	"gl_journal_id": "GL Journal",
-	"notes": "Notes",
-	"created_at": "Created At",
-	"updated_at": "Updated At",
+	"project_id": _("Project"),
+	"invoice_number": _("Invoice Number"),
+	"invoice_type": _("Invoice Type"),
+	"invoice_date": _("Invoice Date"),
+	"due_date": _("Due Date"),
+	"amount_cents": _("Amount"),
+	"tax_cents": _("Tax"),
+	"total_cents": _("Total"),
+	"status": _("Status"),
+	"paid_at": _("Paid At"),
+	"gl_journal_id": _("GL Journal"),
+	"notes": _("Notes"),
+	"created_at": _("Created At"),
+	"updated_at": _("Updated At"),
 }
 
 PORTFOLIO_REPORT_LABELS = {
-	"active_projects": "Active Projects",
-	"on_schedule_pct": "On Schedule",
-	"on_budget_pct": "On Budget",
-	"total_budget_cents": "Total Budget",
-	"total_spent_cents": "Total Spent",
-	"status": "Status",
+	"active_projects": _("Active Projects"),
+	"on_schedule_pct": _("On Schedule"),
+	"on_budget_pct": _("On Budget"),
+	"total_budget_cents": _("Total Budget"),
+	"total_spent_cents": _("Total Spent"),
+	"status": _("Status"),
 }
 
 EVM_REPORT_LABELS = {
-	"project_id": "Project",
-	"period": "Period",
-	"pv_cents": "Planned Value",
-	"ev_cents": "Earned Value",
-	"ac_cents": "Actual Cost",
-	"cpi": "CPI",
-	"spi": "SPI",
+	"project_id": _("Project"),
+	"period": _("Period"),
+	"pv_cents": _("Planned Value"),
+	"ev_cents": _("Earned Value"),
+	"ac_cents": _("Actual Cost"),
+	"cpi": _("CPI"),
+	"spi": _("SPI"),
 }
 
 UTILIZATION_REPORT_LABELS = {
-	"employee_id": "Resource",
-	"allocated_hours": "Allocated Hours",
-	"actual_hours": "Actual Hours",
-	"utilization_pct": "Utilization",
-	"status": "Status",
+	"employee_id": _("Resource"),
+	"allocated_hours": _("Allocated Hours"),
+	"actual_hours": _("Actual Hours"),
+	"utilization_pct": _("Utilization"),
+	"status": _("Status"),
 }
 
 
@@ -571,6 +572,8 @@ class ProjectResourceView(BaseERPModelView):
 	datamodel = SQLAInterface(ProjectResource)
 	route_base = "/projects/resources"
 	list_columns = ["project_id", "employee_id", "role", "allocated_hours", "actual_hours", "start_date", "end_date", "is_active"]
+	import_columns = ['project_id', 'employee_id', 'role', 'allocation_pct']
+	show_import = True
 	show_columns = RESOURCE_COLUMNS
 	label_columns = RESOURCE_LABELS
 	add_columns = [
@@ -604,6 +607,8 @@ class ProjectTimesheetView(BaseERPModelView):
 	datamodel = SQLAInterface(ProjectTimesheet)
 	route_base = "/projects/timesheets"
 	list_columns = ["project_id", "employee_id", "work_date", "hours", "status", "bill_amount_cents", "invoice_id"]
+	import_columns = ['date', 'hours', 'description', 'employee_id', 'project_id']
+	show_import = True
 	show_columns = TIMESHEET_COLUMNS
 	label_columns = TIMESHEET_LABELS
 	add_columns = ["project_id", "wbs_element_id", "employee_id", "work_date", "hours", "description", "status"]

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class ContingentWorkerView(ModelView):
 	datamodel = SQLAInterface(ContingentWorker)
 	list_columns = ["first_name", "last_name", "worker_type", "rate_cents", "rate_unit", "status", "start_date"]
+	label_columns = {"first_name": _("First Name"), "last_name": _("Last Name"), "worker_type": _("Worker Type"), "rate_cents": _("Rate (KES)"), "rate_unit": _("Rate Unit"), "status": _("Status"), "start_date": _("Start Date")}
+	show_columns = ["first_name", "last_name", "worker_type", "rate_cents", "rate_unit", "status", "start_date", "email", "end_date", "agency"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "sows", "timesheets"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "sows", "timesheets"]
 	search_columns = ["first_name", "last_name", "worker_type", "status"]
@@ -30,6 +33,8 @@ class ContingentWorkerView(ModelView):
 class StatementOfWorkView(ModelView):
 	datamodel = SQLAInterface(StatementOfWork)
 	list_columns = ["title", "worker", "budget_cents", "start_date", "end_date", "status"]
+	label_columns = {"title": _("Title"), "worker": _("Worker"), "budget_cents": _("Budget (KES)"), "start_date": _("Start Date"), "end_date": _("End Date"), "status": _("Status")}
+	show_columns = ["title", "worker", "budget_cents", "start_date", "end_date", "status", "description", "actual_spend_cents", "milestones", "deliverables", "approved_by"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "timesheets"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "timesheets"]
 	search_columns = ["title", "status"]
@@ -38,6 +43,8 @@ class StatementOfWorkView(ModelView):
 class ContingentTimesheetView(ModelView):
 	datamodel = SQLAInterface(ContingentTimesheet)
 	list_columns = ["worker", "period", "hours", "amount_cents", "status", "approved_by"]
+	label_columns = {"worker": _("Worker"), "period": _("Period"), "hours": _("Hours"), "amount_cents": _("Amount (KES)"), "status": _("Status"), "approved_by": _("Approved By")}
+	show_columns = ["worker", "period", "hours", "amount_cents", "status", "approved_by", "rate_at_time_cents", "approved_at", "notes", "sow"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["period", "status"]

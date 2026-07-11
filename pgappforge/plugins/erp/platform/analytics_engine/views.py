@@ -4,6 +4,7 @@ pgappforge/plugins/erp/platform/analytics_engine/views.py
 Flask-AppBuilder views for the Analytics Engine plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -26,14 +27,14 @@ class AnalyticsCubeView(ModelView):
 	list_columns = ['name', 'base_query', 'refresh_schedule', 'last_refreshed', 'is_active']
 	show_columns = ['tenant_id', 'name', 'base_query', 'refresh_schedule', 'last_refreshed', 'dimensions', 'measures', 'is_active']
 	label_columns = {
-		'tenant_id': 'Tenant',
-		'name': 'Cube Name',
-		'base_query': 'Base Query',
-		'refresh_schedule': 'Refresh Schedule',
-		'last_refreshed': 'Last Refreshed',
-		'dimensions': 'Dimensions',
-		'measures': 'Measures',
-		'is_active': 'Active',
+		'tenant_id': _('Tenant'),
+		'name': _('Cube Name'),
+		'base_query': _('Base Query'),
+		'refresh_schedule': _('Refresh Schedule'),
+		'last_refreshed': _('Last Refreshed'),
+		'dimensions': _('Dimensions'),
+		'measures': _('Measures'),
+		'is_active': _('Active'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -44,14 +45,14 @@ class AnalyticsReportView(ModelView):
 	list_columns = ['name', 'cube_id', 'filters']
 	show_columns = ['cube_id', 'tenant_id', 'name', 'filters', 'group_by', 'order_by', 'limit_rows', 'visualization_type']
 	label_columns = {
-		'cube_id': 'Cube',
-		'tenant_id': 'Tenant',
-		'name': 'Report Name',
-		'filters': 'Filters',
-		'group_by': 'Group By',
-		'order_by': 'Order By',
-		'limit_rows': 'Row Limit',
-		'visualization_type': 'Visualization',
+		'cube_id': _('Cube'),
+		'tenant_id': _('Tenant'),
+		'name': _('Report Name'),
+		'filters': _('Filters'),
+		'group_by': _('Group By'),
+		'order_by': _('Order By'),
+		'limit_rows': _('Row Limit'),
+		'visualization_type': _('Visualization'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

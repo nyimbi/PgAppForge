@@ -17,6 +17,7 @@ Endpoints:
   RecommendationView    GET       /education/learners/<id>/recommend
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -80,16 +81,16 @@ class LMSToolView(BaseView):
 		"configuration": json_widget(mode="tree"),
 	}
 	label_columns = {
-		"tool_name": "Tool Name",
-		"tool_type": "Type",
-		"launch_url": "Launch URL",
-		"client_id": "Client ID",
-		"deployment_id": "Deployment ID",
-		"jwks_url": "JWKS URL",
-		"auth_login_url": "Auth Login URL",
-		"auth_token_url": "Auth Token URL",
-		"is_active": "Active",
-		"configuration": "Configuration",
+		"tool_name": _("Tool Name"),
+		"tool_type": _("Type"),
+		"launch_url": _("Launch URL"),
+		"client_id": _("Client ID"),
+		"deployment_id": _("Deployment ID"),
+		"jwks_url": _("JWKS URL"),
+		"auth_login_url": _("Auth Login URL"),
+		"auth_token_url": _("Auth Token URL"),
+		"is_active": _("Active"),
+		"configuration": _("Configuration"),
 	}
 
 	@expose("/")
@@ -168,13 +169,13 @@ class LearningObjectView(BaseView):
 		"estimated_duration_minutes": progress_widget(max_value=480),
 	}
 	label_columns = {
-		"lo_id": "Content ID",
-		"title": "Title",
-		"lo_type": "Type",
-		"difficulty": "Difficulty",
-		"estimated_duration_minutes": "Duration (min)",
-		"is_published": "Published",
-		"competencies": "Competencies",
+		"lo_id": _("Content ID"),
+		"title": _("Title"),
+		"lo_type": _("Type"),
+		"difficulty": _("Difficulty"),
+		"estimated_duration_minutes": _("Duration (min)"),
+		"is_published": _("Published"),
+		"competencies": _("Competencies"),
 	}
 
 	@expose("/")

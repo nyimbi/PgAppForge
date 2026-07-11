@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class PerformanceCycleView(ModelView):
 	datamodel = SQLAInterface(PerformanceCycle)
 	list_columns = ["name", "cycle_type", "start_date", "end_date", "status"]
+	label_columns = {"name": _("Name"), "cycle_type": _("Cycle Type"), "start_date": _("Start Date"), "end_date": _("End Date"), "status": _("Status")}
+	show_columns = ["name", "cycle_type", "start_date", "end_date", "status", "review_form", "created_at", "updated_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "reviews", "goals"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "reviews", "goals"]
 	search_columns = ["name", "cycle_type", "status"]
@@ -30,6 +33,8 @@ class PerformanceCycleView(ModelView):
 class PerformanceReviewView(ModelView):
 	datamodel = SQLAInterface(PerformanceReview)
 	list_columns = ["employee_id", "reviewer_id", "review_type", "overall_rating", "status", "submitted_at"]
+	label_columns = {"employee_id": _("Employee"), "reviewer_id": _("Reviewer"), "review_type": _("Review Type"), "overall_rating": _("Overall Rating"), "status": _("Status"), "submitted_at": _("Submitted At")}
+	show_columns = ["employee_id", "reviewer_id", "review_type", "overall_rating", "status", "submitted_at", "competency_scores", "strengths", "development_areas", "development_notes", "created_at", "updated_at", "cycle"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["employee_id", "reviewer_id", "review_type", "status"]
@@ -38,6 +43,8 @@ class PerformanceReviewView(ModelView):
 class GoalView(ModelView):
 	datamodel = SQLAInterface(Goal)
 	list_columns = ["employee_id", "title", "goal_type", "period", "progress_pct", "status"]
+	label_columns = {"employee_id": _("Employee"), "title": _("Title"), "goal_type": _("Goal Type"), "period": _("Period"), "progress_pct": _("Progress (%)"), "status": _("Status")}
+	show_columns = ["employee_id", "title", "goal_type", "period", "progress_pct", "status", "description", "key_results", "weight_pct", "created_at", "updated_at", "cycle"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["employee_id", "title", "period", "status"]

@@ -8,6 +8,7 @@ List/report endpoints return HTML (printable, Bootstrap 3).
 
 Route summary
 -------------
+ARDashboardView     /ar/dashboard/
 ARCustomerView      /ar/customers/
 ARInvoiceView       /ar/invoices/
 ARPaymentView       /ar/payments/
@@ -19,9 +20,10 @@ ARReportView        /ar/reports/
   └─ /overdue                — Overdue Invoices Report (HTML)
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
@@ -72,6 +74,263 @@ def _cents_to_display(cents: int | None, currency: str = "USD") -> str:
 	return f"{sign}{major:,}.{minor:02d} {currency}"
 
 
+AR_DASHBOARD_LABEL_COLUMNS = {
+	"aging_buckets": _("AR Aging Buckets"),
+	"dso_days": _("Days Sales Outstanding"),
+	"top_overdue_customers": _("Top Overdue Customers"),
+}
+
+AR_CUSTOMER_LABEL_COLUMNS = {
+	"account_number": _("Account Number"),
+	"customer_type": _("Customer Type"),
+	"credit_limit_cents": _("Credit Limit (cents)"),
+	"credit_used_cents": _("Credit Used (cents)"),
+	"credit_hold": _("Credit Hold"),
+	"payment_terms_days": _("Payment Terms (days)"),
+	"dunning_level": _("Dunning Level"),
+	"dunning_blocked": _("Dunning Blocked"),
+	"gl_reconciliation_account": _("GL Reconciliation Account"),
+	"statement_frequency": _("Statement Frequency"),
+	"last_statement_date": _("Last Statement Date"),
+	"risk_score": _("Risk Score"),
+	"billing_address": _("Billing Address"),
+	"contact_email": _("Contact Email"),
+	"contact_phone": _("Contact Phone"),
+}
+
+AR_INVOICE_LABEL_COLUMNS = {
+	"invoice_number": _("Invoice Number"),
+	"customer_id": _("Customer"),
+	"invoice_date": _("Invoice Date"),
+	"due_date": _("Due Date"),
+	"billing_period_start": _("Billing Period Start"),
+	"billing_period_end": _("Billing Period End"),
+	"currency_code": _("Currency"),
+	"subtotal_cents": _("Subtotal (cents)"),
+	"discount_cents": _("Discount (cents)"),
+	"tax_cents": _("Tax (cents)"),
+	"total_cents": _("Total (cents)"),
+	"paid_cents": _("Paid (cents)"),
+	"balance_due_cents": _("Balance Due (cents)"),
+	"write_off_cents": _("Write-off (cents)"),
+	"gl_revenue_account": _("GL Revenue Account"),
+	"gl_ar_account": _("GL AR Account"),
+	"po_reference": _("PO Reference"),
+	"contract_reference": _("Contract Reference"),
+	"dispute_reason": _("Dispute Reason"),
+	"write_off_date": _("Write-off Date"),
+	"write_off_reason": _("Write-off Reason"),
+	"paid_date": _("Paid Date"),
+	"dunning_level": _("Dunning Level"),
+}
+
+AR_PAYMENT_LABEL_COLUMNS = {
+	"payment_number": _("Payment Number"),
+	"customer_id": _("Customer"),
+	"payment_date": _("Payment Date"),
+	"payment_method": _("Payment Method"),
+	"currency_code": _("Currency"),
+	"amount_cents": _("Amount (cents)"),
+	"bank_reference": _("Bank Reference"),
+	"bank_account_iban": _("Bank Account IBAN"),
+	"bank_bic": _("Bank BIC"),
+	"remittance_info": _("Remittance Information"),
+	"deposited_date": _("Deposited Date"),
+	"allocated_cents": _("Allocated (cents)"),
+	"discount_taken_cents": _("Discount Taken (cents)"),
+}
+
+AR_CREDIT_NOTE_LABEL_COLUMNS = {
+	"credit_note_number": _("Credit Note Number"),
+	"customer_id": _("Customer"),
+	"original_invoice_id": _("Original Invoice"),
+	"issue_date": _("Issue Date"),
+	"total_cents": _("Total (cents)"),
+	"applied_cents": _("Applied (cents)"),
+	"currency_code": _("Currency"),
+	"reason": _("Reason"),
+}
+
+AR_DUNNING_LABEL_COLUMNS = {
+	"run_date": _("Run Date"),
+	"dunning_level": _("Dunning Level"),
+	"batch_size": _("Batch Size"),
+	"emails_sent": _("Emails Sent"),
+	"letters_sent": _("Letters Sent"),
+	"amount_overdue_cents": _("Amount Overdue (cents)"),
+	"promise_to_pay_date": _("Promise-to-pay Date"),
+	"invoice_ids": _("Invoice IDs"),
+}
+
+AR_REPORT_LABEL_COLUMNS = {
+	"current_cents": _("Current (cents)"),
+	"days_1_30": _("1-30 Days (cents)"),
+	"days_31_60": _("31-60 Days (cents)"),
+	"days_61_90": _("61-90 Days (cents)"),
+	"days_91_plus": _("90+ Days (cents)"),
+	"total_outstanding_cents": _("Total Outstanding (cents)"),
+	"dso_days": _("Days Sales Outstanding"),
+}
+
+AR_DOWNLOAD_LABEL_COLUMNS = {
+	"invoice_id": _("Invoice"),
+	"invoice_pdf": _("Invoice PDF"),
+	"invoice_csv": _("Invoice CSV"),
+}
+
+
+# ---------------------------------------------------------------------------
+# ARDashboardView
+# ---------------------------------------------------------------------------
+
+class ARDashboardView(BaseERPView):
+	"""AR dashboard: aging, DSO, and overdue customer exposure."""
+
+	route_base = "/ar/dashboard"
+	default_view = "index"
+	label_columns = AR_DASHBOARD_LABEL_COLUMNS
+
+	@expose("/")
+	@has_access
+	def index(self):
+		session = _get_session()
+		from pgappforge.plugins.erp.finance.ar.models import ARCustomer, ARInvoice
+
+		tenant_id = request.args.get("tenant_id")
+		today = date.today()
+		open_statuses = ["CANCELLED", "PAID", "WRITTEN_OFF"]
+		bucket_specs = [
+			("current", "Current", None, 0),
+			("days_1_30", "1-30 Days Overdue", 1, 30),
+			("days_31_60", "31-60 Days Overdue", 31, 60),
+			("days_61_90", "61-90 Days Overdue", 61, 90),
+			("days_90_plus", "90+ Days Overdue", 91, None),
+		]
+		buckets = {
+			key: {"label": label, "invoice_count": 0, "total_cents": 0}
+			for key, label, _min_days, _max_days in bucket_specs
+		}
+
+		q = (
+			sa.select(ARInvoice, ARCustomer.account_number)
+			.join(ARCustomer, ARInvoice.customer_id == ARCustomer.id)
+			.where(ARInvoice.balance_due_cents > 0)
+			.where(ARInvoice.status.not_in(open_statuses))
+			.order_by(ARInvoice.due_date, ARCustomer.account_number)
+		)
+		if tenant_id:
+			q = q.where(ARInvoice.tenant_id == tenant_id)
+
+		rows = session.execute(q).all()
+		top_by_customer: dict[str, dict[str, object]] = {}
+		outstanding_cents = 0
+
+		for inv, account_number in rows:
+			due = inv.due_date.date() if hasattr(inv.due_date, "date") else inv.due_date
+			days_overdue = (today - due).days if due else 0
+			balance_cents = int(inv.balance_due_cents or 0)
+			outstanding_cents += balance_cents
+
+			if days_overdue <= 0:
+				bucket_key = "current"
+			elif days_overdue <= 30:
+				bucket_key = "days_1_30"
+			elif days_overdue <= 60:
+				bucket_key = "days_31_60"
+			elif days_overdue <= 90:
+				bucket_key = "days_61_90"
+			else:
+				bucket_key = "days_90_plus"
+
+			buckets[bucket_key]["invoice_count"] += 1
+			buckets[bucket_key]["total_cents"] += balance_cents
+
+			if days_overdue > 0:
+				customer = top_by_customer.setdefault(
+					inv.customer_id,
+					{
+						"customer_id": inv.customer_id,
+						"account_number": account_number,
+						"overdue_cents": 0,
+						"invoice_count": 0,
+						"max_days_overdue": 0,
+						"oldest_due_date": due.isoformat() if due else None,
+					},
+				)
+				customer["overdue_cents"] = int(customer["overdue_cents"]) + balance_cents
+				customer["invoice_count"] = int(customer["invoice_count"]) + 1
+				customer["max_days_overdue"] = max(int(customer["max_days_overdue"]), days_overdue)
+				if due and (customer["oldest_due_date"] is None or due.isoformat() < str(customer["oldest_due_date"])):
+					customer["oldest_due_date"] = due.isoformat()
+
+		period_start = today - timedelta(days=90)
+		sales_q = (
+			sa.select(sa.func.coalesce(sa.func.sum(ARInvoice.total_cents), 0))
+			.where(ARInvoice.invoice_date >= period_start)
+			.where(ARInvoice.status.not_in(["CANCELLED"]))
+		)
+		if tenant_id:
+			sales_q = sales_q.where(ARInvoice.tenant_id == tenant_id)
+		period_sales_cents = int(session.execute(sales_q).scalar() or 0)
+		dso_days = round((outstanding_cents / period_sales_cents) * 90, 2) if period_sales_cents else 0
+
+		top_overdue_customers = sorted(
+			top_by_customer.values(),
+			key=lambda item: int(item["overdue_cents"]),
+			reverse=True,
+		)[:10]
+
+		payload = {
+			"as_of": today.isoformat(),
+			"aging_buckets": buckets,
+			"total_outstanding_cents": outstanding_cents,
+			"period_sales_cents": period_sales_cents,
+			"dso_days": dso_days,
+			"top_overdue_customers": top_overdue_customers,
+		}
+
+		if request.args.get("format") == "json":
+			return jsonify(payload)
+
+		bucket_rows = "".join(
+			f"<tr><td>{_he(bucket['label'])}</td>"
+			f"<td class='text-right'>{bucket['invoice_count']}</td>"
+			f"<td class='text-right'>{_cents_to_display(bucket['total_cents'])}</td></tr>"
+			for bucket in buckets.values()
+		)
+		top_rows = "".join(
+			f"<tr><td>{_he(customer['account_number'])}</td>"
+			f"<td class='text-right'>{customer['invoice_count']}</td>"
+			f"<td class='text-right'>{customer['max_days_overdue']}</td>"
+			f"<td>{_he(customer['oldest_due_date'] or '')}</td>"
+			f"<td class='text-right'><strong>{_cents_to_display(int(customer['overdue_cents']))}</strong></td></tr>"
+			for customer in top_overdue_customers
+		)
+		kpi_html = self.kpi_cards([
+			{"label": "Outstanding (cents)", "value": outstanding_cents, "format": "integer", "color": "#0e9f6e", "icon": "fa-file-invoice-dollar"},
+			{"label": "DSO Days", "value": dso_days, "format": "integer", "color": "#7e3af2", "icon": "fa-clock"},
+			{"label": "90 Day Sales (cents)", "value": period_sales_cents, "format": "integer", "color": "#1a56db", "icon": "fa-chart-line"},
+		])
+		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>AR Dashboard</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<style>body{{padding:24px}} @media print{{.noprint{{display:none}}}}</style>
+</head><body>
+<h3>AR Dashboard <small>as of {today.isoformat()}</small></h3>
+{kpi_html}
+<h4>Aging Buckets</h4>
+<table class="table table-bordered table-condensed">
+<thead><tr><th>Bucket</th><th class="text-right">Invoices</th><th class="text-right">Total</th></tr></thead>
+<tbody>{bucket_rows}</tbody></table>
+<h4>Top 10 Overdue Customers</h4>
+<table class="table table-bordered table-condensed table-hover">
+<thead><tr><th>Customer</th><th class="text-right">Invoices</th><th class="text-right">Max Days</th><th>Oldest Due</th><th class="text-right">Overdue</th></tr></thead>
+<tbody>{top_rows or '<tr><td colspan="5" class="text-center text-muted">No overdue balances</td></tr>'}</tbody></table>
+<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
+</body></html>"""
+		return make_response(html, 200)
+
+
 # ---------------------------------------------------------------------------
 # ARCustomerView
 # ---------------------------------------------------------------------------
@@ -89,6 +348,7 @@ class ARCustomerView(BaseERPView):
 
 	route_base = "/ar/customers"
 	default_view = "list"
+	label_columns = AR_CUSTOMER_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -295,6 +555,7 @@ class ARInvoiceView(BaseERPView):
 
 	route_base = "/ar/invoices"
 	default_view = "list"
+	label_columns = AR_INVOICE_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -591,6 +852,7 @@ class ARPaymentView(BaseERPView):
 
 	route_base = "/ar/payments"
 	default_view = "list"
+	label_columns = AR_PAYMENT_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -763,6 +1025,7 @@ class ARCreditNoteView(BaseERPView):
 
 	route_base = "/ar/credit-notes"
 	default_view = "list"
+	label_columns = AR_CREDIT_NOTE_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -860,6 +1123,7 @@ class ARDunningView(BaseERPView):
 
 	route_base = "/ar/dunning"
 	default_view = "list_runs"
+	label_columns = AR_DUNNING_LABEL_COLUMNS
 
 	@expose("/runs")
 	@has_access
@@ -967,6 +1231,7 @@ class ARReportView(BaseERPView):
 
 	route_base = "/ar/reports"
 	default_view = "aging"
+	label_columns = AR_REPORT_LABEL_COLUMNS
 
 	# ------------------------------------------------------------------
 	# Report 1: AR Aging
@@ -1288,6 +1553,7 @@ class ARInvoiceDownloadView(BaseERPView):
 
 	route_base = "/ar/invoices"
 	default_view = "download_pdf"
+	label_columns = AR_DOWNLOAD_LABEL_COLUMNS
 
 	def _svc(self):
 		from pgappforge.plugins.erp.finance.ar.invoice_pdf import InvoicePDFService
@@ -1330,6 +1596,7 @@ class ARInvoiceDownloadView(BaseERPView):
 
 
 __all__ = [
+	"ARDashboardView",
 	"ARCustomerView",
 	"ARInvoiceView",
 	"ARPaymentView",

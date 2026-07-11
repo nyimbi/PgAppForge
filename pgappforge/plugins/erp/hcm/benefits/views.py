@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -23,6 +24,8 @@ __all__ = [
 class BenefitPlanView(ModelView):
 	datamodel = SQLAInterface(BenefitPlan)
 	list_columns = ["plan_code", "name", "plan_type", "carrier", "is_active", "effective_from"]
+	label_columns = {"plan_code": _("Plan Code"), "name": _("Name"), "plan_type": _("Plan Type"), "carrier": _("Carrier"), "is_active": _("Is Active"), "effective_from": _("Effective From")}
+	show_columns = ["plan_code", "name", "plan_type", "carrier", "is_active", "effective_from", "employee_premium_cents", "employer_premium_cents", "coverage_tiers", "effective_to", "country_code", "statutory_nhif", "metadata_"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "enrollments"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "enrollments"]
 	search_columns = ["plan_code", "name", "plan_type", "carrier"]
@@ -31,6 +34,8 @@ class BenefitPlanView(ModelView):
 class BenefitEnrollmentView(ModelView):
 	datamodel = SQLAInterface(BenefitEnrollment)
 	list_columns = ["employee_id", "plan", "coverage_tier", "status", "effective_from"]
+	label_columns = {"employee_id": _("Employee"), "plan": _("Plan"), "coverage_tier": _("Coverage Tier"), "status": _("Status"), "effective_from": _("Effective From")}
+	show_columns = ["employee_id", "plan", "coverage_tier", "status", "effective_from", "effective_to", "enrolled_by", "enrolled_at", "waiver_reason"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "claims", "deductions"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "claims", "deductions"]
 	search_columns = ["employee_id", "status"]
@@ -39,6 +44,8 @@ class BenefitEnrollmentView(ModelView):
 class BenefitClaimView(ModelView):
 	datamodel = SQLAInterface(BenefitClaim)
 	list_columns = ["employee_id", "claim_date", "claimed_amount_cents", "status", "adjudicated_at"]
+	label_columns = {"employee_id": _("Employee"), "claim_date": _("Claim Date"), "claimed_amount_cents": _("Claimed Amount (KES)"), "status": _("Status"), "adjudicated_at": _("Adjudicated At")}
+	show_columns = ["employee_id", "claim_date", "claimed_amount_cents", "status", "adjudicated_at", "claim_ref", "service_date", "approved_amount_cents", "denial_reason", "attachments", "enrollment"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "status", "claim_ref"]

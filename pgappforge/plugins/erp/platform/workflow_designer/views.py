@@ -97,6 +97,7 @@ class WorkflowDesignerView(BaseERPView):
 	# Designer canvas — new or existing workflow
 	# ------------------------------------------------------------------
 
+	@has_access
 	@expose("/design")
 	@expose("/design/<workflow_name>")
 	@has_access

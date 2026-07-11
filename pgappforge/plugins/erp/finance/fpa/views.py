@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import sqlalchemy as sa
 from flask import current_app, request
@@ -221,16 +222,16 @@ class BudgetCycleView(BaseERPModelView):
 	]
 	search_columns = ["name", "fiscal_year", "cycle_type", "status"]
 	label_columns = {
-		"id": "ID",
-		"name": "Name",
-		"fiscal_year": "Fiscal Year",
-		"cycle_type": "Cycle Type",
-		"status": "Status",
-		"input_deadline": "Input Deadline",
-		"approval_deadline": "Approval Deadline",
-		"approved_by": "Approved By",
-		"approved_at": "Approved At",
-		"tenant_id": "Tenant",
+		"id": _("ID"),
+		"name": _("Name"),
+		"fiscal_year": _("Fiscal Year"),
+		"cycle_type": _("Cycle Type"),
+		"status": _("Status"),
+		"input_deadline": _("Input Deadline"),
+		"approval_deadline": _("Approval Deadline"),
+		"approved_by": _("Approved By"),
+		"approved_at": _("Approved At"),
+		"tenant_id": _("Tenant"),
 	}
 
 
@@ -279,15 +280,15 @@ class ScenarioView(BaseERPModelView):
 	]
 	search_columns = ["name", "scenario_type", "status", "base_version_id", "generated_version_id"]
 	label_columns = {
-		"id": "ID",
-		"name": "Name",
-		"base_version_id": "Base Version",
-		"description": "Description",
-		"scenario_type": "Scenario Type",
-		"adjustment_rules": "Adjustment Rules",
-		"status": "Status",
-		"generated_version_id": "Generated Version",
-		"tenant_id": "Tenant",
+		"id": _("ID"),
+		"name": _("Name"),
+		"base_version_id": _("Base Version"),
+		"description": _("Description"),
+		"scenario_type": _("Scenario Type"),
+		"adjustment_rules": _("Adjustment Rules"),
+		"status": _("Status"),
+		"generated_version_id": _("Generated Version"),
+		"tenant_id": _("Tenant"),
 	}
 
 

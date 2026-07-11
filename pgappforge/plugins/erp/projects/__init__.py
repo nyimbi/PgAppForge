@@ -166,7 +166,32 @@ class ProjectsPlugin(BasePlugin):
 			log.debug("ProjectsPlugin.register_views: views module not yet created; skipping")
 			return
 
+		from pgappforge.plugins.erp.projects.api import (
+			ProgramRestApi,
+			ProjectRestApi,
+			WBSElementRestApi,
+			ProjectResourceRestApi,
+			ProjectTimesheetRestApi,
+			ProjectMilestoneRestApi,
+			ProjectRiskRestApi,
+			ChangeOrderRestApi,
+			ProjectInvoiceRestApi,
+		)
+
 		cat = self.config.get("PROJECTS_MENU_CATEGORY", "Projects")
+
+		for api_class in (
+			ProgramRestApi,
+			ProjectRestApi,
+			WBSElementRestApi,
+			ProjectResourceRestApi,
+			ProjectTimesheetRestApi,
+			ProjectMilestoneRestApi,
+			ProjectRiskRestApi,
+			ChangeOrderRestApi,
+			ProjectInvoiceRestApi,
+		):
+			self.appbuilder.add_api(api_class)
 
 		self.add_view(ProgramView, "Programmes", icon="fa-sitemap", category=cat)
 		self.add_view(ProjectView, "Projects", icon="fa-briefcase", category=cat)

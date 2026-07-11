@@ -4,6 +4,7 @@ pgappforge/plugins/erp/finance/tax/views.py
 Flask views for the Tax Management plugin.
 
 Routes:
+  TaxReturnSummaryView   GET      /tax/return-summary/
   TaxJurisdictionView   GET/POST /tax/jurisdictions/
   TaxCodeView           GET/POST /tax/codes/
   TaxTransactionView    GET      /tax/transactions/
@@ -17,9 +18,10 @@ Routes:
                         GET      /tax/reports/input-tax-credit
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
@@ -61,6 +63,223 @@ def _fmt(v: int | None) -> str:
 	return f"{v:,}"
 
 
+TAX_RETURN_SUMMARY_LABEL_COLUMNS = {
+	"tax_type": _("Tax Type"),
+	"output_tax_cents": _("Output Tax (cents)"),
+	"input_tax_cents": _("Input Tax (cents)"),
+	"net_tax_payable_cents": _("Net Tax Payable (cents)"),
+	"filing_status": _("Filing Status"),
+}
+
+TAX_JURISDICTION_LABEL_COLUMNS = {
+	"code": _("Jurisdiction Code"),
+	"name": _("Jurisdiction Name"),
+	"country_code": _("Country"),
+	"region_code": _("Region"),
+	"tax_type": _("Tax Type"),
+	"tax_authority_name": _("Tax Authority"),
+	"tax_authority_reference": _("Tax Authority Reference"),
+	"filing_frequency": _("Filing Frequency"),
+	"is_active": _("Active"),
+}
+
+TAX_CODE_LABEL_COLUMNS = {
+	"code": _("Tax Code"),
+	"description": _("Description"),
+	"jurisdiction_id": _("Jurisdiction"),
+	"rate": _("Rate %"),
+	"effective_from": _("Effective From"),
+	"effective_to": _("Effective To"),
+	"is_input_tax": _("Input Tax"),
+	"is_output_tax": _("Output Tax"),
+	"is_zero_rated": _("Zero-rated"),
+	"is_exempt": _("Exempt"),
+	"is_reverse_charge": _("Reverse Charge"),
+	"gl_account": _("GL Account"),
+	"is_active": _("Active"),
+}
+
+TAX_TRANSACTION_LABEL_COLUMNS = {
+	"tax_code_id": _("Tax Code"),
+	"source_document_type": _("Source Document Type"),
+	"source_document_id": _("Source Document"),
+	"taxable_amount_cents": _("Taxable Amount (cents)"),
+	"tax_amount_cents": _("Tax Amount (cents)"),
+	"is_recoverable": _("Recoverable"),
+	"posting_date": _("Posting Date"),
+	"tax_period": _("Tax Period"),
+	"currency_code": _("Currency"),
+	"reporting_tax_amount_cents": _("Reporting Tax Amount (cents)"),
+	"is_reversal": _("Reversal"),
+}
+
+TAX_RETURN_LABEL_COLUMNS = {
+	"jurisdiction_id": _("Jurisdiction"),
+	"period_start": _("Period Start"),
+	"period_end": _("Period End"),
+	"filing_date": _("Filing Date"),
+	"due_date": _("Due Date"),
+	"output_tax_cents": _("Output Tax (cents)"),
+	"input_tax_cents": _("Input Tax (cents)"),
+	"net_tax_cents": _("Net Tax (cents)"),
+	"taxable_supplies_cents": _("Taxable Supplies (cents)"),
+	"exempt_supplies_cents": _("Exempt Supplies (cents)"),
+	"reference_number": _("Reference Number"),
+	"payment_reference": _("Payment Reference"),
+	"payment_date": _("Payment Date"),
+}
+
+TAX_REPORT_LABEL_COLUMNS = {
+	"tax_type": _("Tax Type"),
+	"period": _("Period"),
+	"output_tax_cents": _("Output Tax (cents)"),
+	"input_tax_cents": _("Input Tax (cents)"),
+	"net_tax_cents": _("Net Tax (cents)"),
+	"tax_amount_cents": _("Tax Amount (cents)"),
+	"taxable_amount_cents": _("Taxable Amount (cents)"),
+	"filing_status": _("Filing Status"),
+}
+
+
+# ---------------------------------------------------------------------------
+# TaxReturnSummaryView
+# ---------------------------------------------------------------------------
+
+class TaxReturnSummaryView(BaseERPView):
+	"""Current-quarter VAT/GST return summary grouped by tax type."""
+
+	route_base = "/tax/return-summary"
+	default_view = "index"
+	label_columns = TAX_RETURN_SUMMARY_LABEL_COLUMNS
+
+	@expose("/")
+	@has_access
+	def index(self):
+		from pgappforge.plugins.erp.finance.tax.models import TaxJurisdiction, TaxReturn
+
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+		today = date.today()
+		quarter_month = ((today.month - 1) // 3) * 3 + 1
+		quarter_start = date(today.year, quarter_month, 1)
+		next_quarter_month = quarter_month + 3
+		if next_quarter_month > 12:
+			next_quarter_start = date(today.year + 1, 1, 1)
+		else:
+			next_quarter_start = date(today.year, next_quarter_month, 1)
+		quarter_end = next_quarter_start - timedelta(days=1)
+
+		type_q = sa.select(sa.distinct(TaxJurisdiction.tax_type)).where(TaxJurisdiction.is_active.is_(True))
+		if tenant_id:
+			type_q = type_q.where(TaxJurisdiction.tenant_id == tenant_id)
+		known_tax_types = [row[0] for row in session.execute(type_q).all()]
+
+		summary = {
+			tax_type: {
+				"tax_type": tax_type,
+				"output_tax_cents": 0,
+				"input_tax_cents": 0,
+				"net_tax_payable_cents": 0,
+				"return_count": 0,
+				"status_counts": {},
+				"filing_status": "not_started",
+			}
+			for tax_type in known_tax_types
+		}
+
+		q = (
+			sa.select(
+				TaxJurisdiction.tax_type,
+				TaxReturn.status,
+				sa.func.coalesce(sa.func.sum(TaxReturn.output_tax_cents), 0).label("output_tax_cents"),
+				sa.func.coalesce(sa.func.sum(TaxReturn.input_tax_cents), 0).label("input_tax_cents"),
+				sa.func.coalesce(sa.func.sum(TaxReturn.net_tax_cents), 0).label("net_tax_cents"),
+				sa.func.count(TaxReturn.id).label("return_count"),
+			)
+			.join(TaxJurisdiction, TaxReturn.jurisdiction_id == TaxJurisdiction.id)
+			.where(TaxReturn.period_start >= quarter_start)
+			.where(TaxReturn.period_end <= quarter_end)
+			.group_by(TaxJurisdiction.tax_type, TaxReturn.status)
+			.order_by(TaxJurisdiction.tax_type, TaxReturn.status)
+		)
+		if tenant_id:
+			q = q.where(TaxReturn.tenant_id == tenant_id)
+		rows = session.execute(q).all()
+
+		for row in rows:
+			tax_type = row.tax_type
+			item = summary.setdefault(
+				tax_type,
+				{
+					"tax_type": tax_type,
+					"output_tax_cents": 0,
+					"input_tax_cents": 0,
+					"net_tax_payable_cents": 0,
+					"return_count": 0,
+					"status_counts": {},
+					"filing_status": "not_started",
+				},
+			)
+			item["output_tax_cents"] += int(row.output_tax_cents or 0)
+			item["input_tax_cents"] += int(row.input_tax_cents or 0)
+			item["net_tax_payable_cents"] += max(int(row.net_tax_cents or 0), 0)
+			item["return_count"] += int(row.return_count or 0)
+			item["status_counts"][row.status] = int(row.return_count or 0)
+
+		complete_statuses = {"FILED", "PAID", "REFUND_CLAIMED"}
+		for item in summary.values():
+			statuses = set(item["status_counts"])
+			if not statuses:
+				item["filing_status"] = "not_started"
+			elif "DRAFT" in statuses:
+				item["filing_status"] = "draft"
+			elif statuses.issubset(complete_statuses):
+				item["filing_status"] = "filed"
+			else:
+				item["filing_status"] = "in_progress"
+
+		rows_data = sorted(summary.values(), key=lambda item: item["tax_type"])
+		payload = {
+			"period_start": quarter_start.isoformat(),
+			"period_end": quarter_end.isoformat(),
+			"summary": rows_data,
+		}
+		if request.args.get("format") == "json":
+			return jsonify(payload)
+
+		status_class = {
+			"filed": "success",
+			"draft": "warning",
+			"in_progress": "info",
+			"not_started": "default",
+		}
+		table_rows = "".join(
+			f"<tr><td>{_he(row['tax_type'])}</td>"
+			f"<td style='text-align:right'>{_fmt(int(row['output_tax_cents']))}</td>"
+			f"<td style='text-align:right'>{_fmt(int(row['input_tax_cents']))}</td>"
+			f"<td style='text-align:right'><strong>{_fmt(int(row['net_tax_payable_cents']))}</strong></td>"
+			f"<td style='text-align:right'>{row['return_count']}</td>"
+			f"<td><span class='label label-{status_class[row['filing_status']]}'>{_he(row['filing_status'])}</span></td></tr>"
+			for row in rows_data
+		)
+		empty_summary_row = '<tr><td colspan="6" class="text-center text-muted">No active tax return summary available</td></tr>'
+		body = (
+			f'<h3>Current-quarter Tax Return Summary <small>{quarter_start.isoformat()} to {quarter_end.isoformat()}</small></h3>'
+			'<table class="table table-bordered table-condensed table-hover">'
+			'<thead><tr><th>Tax Type</th><th style="text-align:right">Output Tax</th>'
+			'<th style="text-align:right">Input Tax</th><th style="text-align:right">Net Tax Payable</th>'
+			'<th style="text-align:right">Returns</th><th>Filing Status</th></tr></thead>'
+			f'<tbody>{table_rows or empty_summary_row}</tbody></table>'
+			f'<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</p>'
+		)
+		return make_response(
+			'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tax Return Summary</title>'
+			'<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">'
+			f'<style>body{{padding:24px}}</style></head><body>{body}</body></html>',
+			200,
+		)
+
+
 # ---------------------------------------------------------------------------
 # TaxJurisdictionView
 # ---------------------------------------------------------------------------
@@ -76,6 +295,7 @@ class TaxJurisdictionView(BaseERPView):
 
 	route_base = "/tax/jurisdictions"
 	default_view = "list"
+	label_columns = TAX_JURISDICTION_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -189,6 +409,7 @@ class TaxCodeView(BaseERPView):
 
 	route_base = "/tax/codes"
 	default_view = "list"
+	label_columns = TAX_CODE_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -325,6 +546,7 @@ class TaxTransactionView(BaseERPView):
 
 	route_base = "/tax/transactions"
 	default_view = "list"
+	label_columns = TAX_TRANSACTION_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -450,6 +672,7 @@ class TaxReturnView(BaseERPView):
 
 	route_base = "/tax/returns"
 	default_view = "list"
+	label_columns = TAX_RETURN_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -596,6 +819,7 @@ class TaxReportView(BaseERPView):
 
 	route_base = "/tax/reports"
 	default_view = "tax_liability"
+	label_columns = TAX_REPORT_LABEL_COLUMNS
 
 	@expose("/vat-return/<string:return_id>")
 	@has_access
@@ -770,18 +994,25 @@ class TaxReportView(BaseERPView):
 			q = q.where(TaxTransaction.tax_period == period)
 		rows = session.execute(q).all()
 
-		table_rows = "".join(
-			f"<tr>"
-			f"<td>{_he(r.tax_period or '—')}</td>"
-			f"<td>{_he(r.jurisdiction_name)}</td>"
-			f"<td>{_he(r.tax_code)}</td>"
-			f"<td>{'<span class=\"label label-success\">Recoverable</span>' if r.is_recoverable else '<span class=\"label label-default\">Blocked</span>'}</td>"
-			f"<td style='text-align:right'>{_fmt(int(r.total_taxable or 0))}</td>"
-			f"<td style='text-align:right'><strong>{_fmt(int(r.total_tax or 0))}</strong></td>"
-			f"<td style='text-align:right'>{r.line_count}</td>"
-			f"</tr>"
-			for r in rows
-		)
+		table_row_parts = []
+		for r in rows:
+			recoverability_label = (
+				'<span class="label label-success">Recoverable</span>'
+				if r.is_recoverable
+				else '<span class="label label-default">Blocked</span>'
+			)
+			table_row_parts.append(
+				f"<tr>"
+				f"<td>{_he(r.tax_period or '—')}</td>"
+				f"<td>{_he(r.jurisdiction_name)}</td>"
+				f"<td>{_he(r.tax_code)}</td>"
+				f"<td>{recoverability_label}</td>"
+				f"<td style='text-align:right'>{_fmt(int(r.total_taxable or 0))}</td>"
+				f"<td style='text-align:right'><strong>{_fmt(int(r.total_tax or 0))}</strong></td>"
+				f"<td style='text-align:right'>{r.line_count}</td>"
+				f"</tr>"
+			)
+		table_rows = "".join(table_row_parts)
 		html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Input Tax Credit Analysis</title>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
@@ -798,6 +1029,7 @@ class TaxReportView(BaseERPView):
 
 
 __all__ = [
+	"TaxReturnSummaryView",
 	"TaxJurisdictionView",
 	"TaxCodeView",
 	"TaxTransactionView",

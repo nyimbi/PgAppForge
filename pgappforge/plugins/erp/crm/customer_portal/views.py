@@ -4,6 +4,7 @@ pgappforge/plugins/erp/crm/customer_portal/views.py
 Flask-AppBuilder views for the Customer Portal plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -22,11 +23,11 @@ class CustomerPortalUserView(ModelView):
 	datamodel = SQLAInterface(CustomerPortalUser)
 	list_columns = ['customer_id', 'email', 'is_active', 'last_login_at', 'failed_login_count']
 	label_columns = {
-		'customer_id': 'Customer',
-		'email': 'Email',
-		'is_active': 'Active',
-		'last_login_at': 'Last Login At',
-		'failed_login_count': 'Failed Login Count',
+		'customer_id': _('Customer'),
+		'email': _('Email'),
+		'is_active': _('Active'),
+		'last_login_at': _('Last Login At'),
+		'failed_login_count': _('Failed Login Count'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'password_hash']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'password_hash']
@@ -36,12 +37,12 @@ class PortalPaymentView(ModelView):
 	datamodel = SQLAInterface(PortalPayment)
 	list_columns = ['customer_id', 'amount_cents', 'payment_method', 'reference', 'status', 'initiated_at']
 	label_columns = {
-		'customer_id': 'Customer',
-		'amount_cents': 'Amount Cents',
-		'payment_method': 'Payment Method',
-		'reference': 'Reference',
-		'status': 'Status',
-		'initiated_at': 'Initiated At',
+		'customer_id': _('Customer'),
+		'amount_cents': _('Amount Cents'),
+		'payment_method': _('Payment Method'),
+		'reference': _('Reference'),
+		'status': _('Status'),
+		'initiated_at': _('Initiated At'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

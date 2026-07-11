@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class JourneyTemplateView(ModelView):
 	datamodel = SQLAInterface(JourneyTemplate)
 	list_columns = ["name", "journey_type", "is_default", "is_active"]
+	label_columns = {"name": _("Name"), "journey_type": _("Journey Type"), "is_default": _("Is Default"), "is_active": _("Is Active")}
+	show_columns = ["name", "journey_type", "is_default", "is_active", "description", "tasks", "metadata_", "created_at", "updated_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "journeys"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "journeys"]
 	search_columns = ["name", "journey_type"]
@@ -30,6 +33,8 @@ class JourneyTemplateView(ModelView):
 class JourneyView(ModelView):
 	datamodel = SQLAInterface(Journey)
 	list_columns = ["employee_id", "journey_type", "status", "trigger_date", "completed_at"]
+	label_columns = {"employee_id": _("Employee"), "journey_type": _("Journey Type"), "status": _("Status"), "trigger_date": _("Trigger Date"), "completed_at": _("Completed At")}
+	show_columns = ["employee_id", "journey_type", "status", "trigger_date", "completed_at", "metadata_", "created_at", "updated_at", "template"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "tasks"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "tasks"]
 	search_columns = ["employee_id", "journey_type", "status"]
@@ -38,6 +43,8 @@ class JourneyView(ModelView):
 class JourneyTaskView(ModelView):
 	datamodel = SQLAInterface(JourneyTask)
 	list_columns = ["task_code", "title", "category", "status", "due_date", "owner_role", "is_mandatory"]
+	label_columns = {"task_code": _("Task Code"), "title": _("Title"), "category": _("Category"), "status": _("Status"), "due_date": _("Due Date"), "owner_role": _("Owner Role"), "is_mandatory": _("Is Mandatory")}
+	show_columns = ["task_code", "title", "category", "status", "due_date", "owner_role", "is_mandatory", "depends_on", "completed_at", "notes", "metadata_", "created_at", "updated_at", "journey"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["task_code", "title", "status"]

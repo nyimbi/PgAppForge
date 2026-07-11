@@ -9,7 +9,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 import sqlalchemy as sa
-from flask import current_app, make_response, request
+from flask import current_app, jsonify, make_response, request
 from pgappforge import expose
 from pgappforge.security.decorators import has_access
 
@@ -83,6 +83,9 @@ def _display_value(row: object, names: tuple[str, ...], fallback: str = "") -> s
 			if value:
 				return str(value)
 	return fallback
+
+
+_DENIED_PARTY_LISTS = ("OFAC", "UN", "EU", "AU")
 
 
 class ComplianceCalendarView(BaseERPView):
@@ -159,4 +162,58 @@ class ComplianceCalendarView(BaseERPView):
 		return "".join(rows)
 
 
-__all__ = ["ComplianceCalendarView"]
+class DeniedPartyDashboardView(BaseERPView):
+	"""Denied-party screening dashboard.
+
+	No denied-party ORM model exists in this repo yet, so metrics are zero-safe
+	stubs until a screening/match/list-update model is added.
+	"""
+
+	route_base = "/grc/denied-party"
+	default_view = "dashboard"
+
+	@expose("/dashboard")
+	@has_access
+	def dashboard(self):
+		metrics = {
+			"screenings_today": 0,
+			"pending_matches": 0,
+			"false_positive_rate_pct": 0.0,
+			"todo": "TODO: wire DeniedPartyScreening / SanctionsListUpdate models when available.",
+		}
+		list_updates = [
+			{
+				"list_name": name,
+				"last_updated": None,
+				"status": "TODO",
+			}
+			for name in _DENIED_PARTY_LISTS
+		]
+
+		if request.args.get("format") == "json":
+			return jsonify({**metrics, "list_updates": list_updates})
+
+		rows = "".join(
+			"<tr>"
+			f"<td>{_he(row['list_name'])}</td>"
+			f"<td>{_he(row['last_updated'] or 'Not connected')}</td>"
+			f"<td>{_he(row['status'])}</td>"
+			"</tr>"
+			for row in list_updates
+		)
+		body = (
+			"<h3>Denied-Party Screening</h3>"
+			"<div class=\"row\">"
+			f"<div class=\"col-sm-4\"><div class=\"well\"><strong>Screenings Today</strong><br>{metrics['screenings_today']}</div></div>"
+			f"<div class=\"col-sm-4\"><div class=\"well\"><strong>Pending Matches</strong><br>{metrics['pending_matches']}</div></div>"
+			f"<div class=\"col-sm-4\"><div class=\"well\"><strong>False Positive Rate</strong><br>{metrics['false_positive_rate_pct']:.2f}%</div></div>"
+			"</div>"
+			f"<p class=\"text-muted\">{_he(metrics['todo'])}</p>"
+			"<table class=\"grc-table\">"
+			"<thead><tr><th>List</th><th>Last Updated</th><th>Status</th></tr></thead>"
+			f"<tbody>{rows}</tbody></table>"
+		)
+		return make_response(_page_html("Denied-Party Screening", body), 200)
+
+
+__all__ = ["ComplianceCalendarView", "DeniedPartyDashboardView"]

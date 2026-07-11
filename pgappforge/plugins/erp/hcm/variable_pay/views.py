@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class IncentivePlanView(ModelView):
 	datamodel = SQLAInterface(IncentivePlan)
 	list_columns = ["name", "plan_type", "currency_code", "effective_from", "is_active"]
+	label_columns = {"name": _("Name"), "plan_type": _("Plan Type"), "currency_code": _("Currency Code"), "effective_from": _("Effective From"), "is_active": _("Is Active")}
+	show_columns = ["name", "plan_type", "currency_code", "effective_from", "is_active", "description", "effective_to", "tiers", "accelerator_threshold_pct", "accelerator_multiplier"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "quotas"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "quotas"]
 	search_columns = ["name", "plan_type"]
@@ -30,6 +33,8 @@ class IncentivePlanView(ModelView):
 class EmployeeQuotaView(ModelView):
 	datamodel = SQLAInterface(EmployeeQuota)
 	list_columns = ["employee_id", "plan", "period", "quota_cents", "attained_cents", "attainment_pct", "status"]
+	label_columns = {"employee_id": _("Employee"), "plan": _("Plan"), "period": _("Period"), "quota_cents": _("Quota (KES)"), "attained_cents": _("Attained (KES)"), "attainment_pct": _("Attainment (%)"), "status": _("Status")}
+	show_columns = ["employee_id", "plan", "period", "quota_cents", "attained_cents", "attainment_pct", "status"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "calculations"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "calculations"]
 	search_columns = ["employee_id", "period", "status"]
@@ -38,6 +43,8 @@ class EmployeeQuotaView(ModelView):
 class CommissionPayoutView(ModelView):
 	datamodel = SQLAInterface(CommissionPayout)
 	list_columns = ["employee_id", "period", "amount_cents", "status", "approved_by", "paid_at"]
+	label_columns = {"employee_id": _("Employee"), "period": _("Period"), "amount_cents": _("Amount (KES)"), "status": _("Status"), "approved_by": _("Approved By"), "paid_at": _("Paid At")}
+	show_columns = ["employee_id", "period", "amount_cents", "status", "approved_by", "paid_at", "approved_at", "calculation"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "period", "status"]

@@ -5,7 +5,6 @@ Flask-AppBuilder views for the Capacity Scheduling plugin.
 """
 from __future__ import annotations
 
-import calendar
 import json
 import logging
 from datetime import date, datetime, time, timedelta
@@ -78,8 +77,8 @@ class CapacityGanttView(BaseERPView):
 			return status_map.get(str(status or "").upper(), "on-track")
 
 		today = date.today()
-		default_from = today.replace(day=1)
-		default_to = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+			default_from = today - timedelta(days=today.weekday())
+			default_to = default_from + timedelta(days=6)
 		from_date = _parse_date_arg("from_date", default_from)
 		to_date = _parse_date_arg("to_date", default_to)
 		if to_date < from_date:

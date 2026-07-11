@@ -4,6 +4,7 @@ pgappforge/plugins/erp/crm/appointments/views.py
 Flask-AppBuilder views for the Appointments/Booking plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -22,12 +23,12 @@ class AppointmentServiceView(ModelView):
 	datamodel = SQLAInterface(AppointmentService)
 	list_columns = ['name', 'category', 'duration_minutes', 'price_cents', 'currency_code', 'is_active']
 	label_columns = {
-		'name': 'Name',
-		'category': 'Category',
-		'duration_minutes': 'Duration Minutes',
-		'price_cents': 'Price Cents',
-		'currency_code': 'Currency Code',
-		'is_active': 'Active',
+		'name': _('Name'),
+		'category': _('Category'),
+		'duration_minutes': _('Duration Minutes'),
+		'price_cents': _('Price Cents'),
+		'currency_code': _('Currency Code'),
+		'is_active': _('Active'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
@@ -37,13 +38,13 @@ class AppointmentView(ModelView):
 	datamodel = SQLAInterface(Appointment)
 	list_columns = ['booking_ref', 'customer_name', 'staff_id', 'start_at', 'end_at', 'status', 'amount_cents']
 	label_columns = {
-		'booking_ref': 'Booking Ref',
-		'customer_name': 'Customer Name',
-		'staff_id': 'Staff',
-		'start_at': 'Start At',
-		'end_at': 'End At',
-		'status': 'Status',
-		'amount_cents': 'Amount Cents',
+		'booking_ref': _('Booking Ref'),
+		'customer_name': _('Customer Name'),
+		'staff_id': _('Staff'),
+		'start_at': _('Start At'),
+		'end_at': _('End At'),
+		'status': _('Status'),
+		'amount_cents': _('Amount Cents'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']

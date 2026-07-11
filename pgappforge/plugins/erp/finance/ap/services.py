@@ -1013,6 +1013,79 @@ class APService:
 		)
 		return invoice
 
+	# ------------------------------------------------------------------
+	# Generic workflow advance
+	# ------------------------------------------------------------------
+
+	def advance_to_next_step(self, record_id: str, session: Any) -> Any:
+		"""Advance one AP P2P document to the next workflow status."""
+		from pgappforge.plugins.erp.finance.ap.models import (
+			APGoodsReceipt,
+			APInvoice,
+			APPayment,
+			APPurchaseOrder,
+		)
+
+		po = session.get(APPurchaseOrder, record_id)
+		if po is not None:
+			transitions = {
+				"DRAFT": "PENDING_APPROVAL",
+				"PENDING_APPROVAL": "APPROVED",
+				"APPROVED": "SENT",
+				"SENT": "PARTIAL",
+				"PARTIAL": "RECEIVED",
+				"RECEIVED": "CLOSED",
+			}
+			next_status = transitions.get(po.status)
+			if not next_status:
+				raise APWorkflowError(f"No AP PO advance transition from {po.status!r}")
+			po.status = next_status
+			po.updated_at = datetime.now(timezone.utc)
+			session.flush()
+			return po
+
+		grn = session.get(APGoodsReceipt, record_id)
+		if grn is not None:
+			if grn.status in ("DRAFT", "CONFIRMED", "QUALITY_HOLD"):
+				return self.post_grn(record_id, session)
+			raise APWorkflowError(f"No AP GRN advance transition from {grn.status!r}")
+
+		invoice = session.get(APInvoice, record_id)
+		if invoice is not None:
+			if invoice.status == "RECEIVED":
+				return self.match_invoice(record_id, session)
+			if invoice.status == "MATCHING":
+				if invoice.match_status == "EXCEPTION":
+					raise APWorkflowError("Cannot approve an invoice with match exceptions")
+				invoice.approval_status = "APPROVED"
+				invoice.status = "APPROVED"
+			elif invoice.status == "APPROVED":
+				invoice.status = "PAYMENT_SCHEDULED"
+			else:
+				raise APWorkflowError(f"No AP invoice advance transition from {invoice.status!r}")
+			invoice.updated_at = datetime.now(timezone.utc)
+			session.flush()
+			return invoice
+
+		payment = session.get(APPayment, record_id)
+		if payment is not None:
+			if payment.status == "PENDING":
+				payment.status = "SENT"
+			elif payment.status == "SENT":
+				payment.status = "CONFIRMED"
+				payment.updated_at = datetime.now(timezone.utc)
+				session.flush()
+				if payment.invoice_id:
+					return self.apply_payment(payment.invoice_id, payment.id, session)
+				return payment
+			else:
+				raise APWorkflowError(f"No AP payment advance transition from {payment.status!r}")
+			payment.updated_at = datetime.now(timezone.utc)
+			session.flush()
+			return payment
+
+		raise APServiceError(f"AP P2P record {record_id!r} not found")
+
 
 	# ------------------------------------------------------------------
 	# get_vendor_statistics

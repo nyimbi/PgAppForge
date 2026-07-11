@@ -13,6 +13,7 @@ Routes (all under /platform/reports):
   POST /data-preview         — execute data_source_query and return JSON rows
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import json
 import logging
@@ -245,7 +246,7 @@ class ReportBuilderView(BaseERPView):
 			list_html=Markup(list_html),
 			kpi_html=kpi_html,
 			appbuilder=self.appbuilder,
-			page_title="Report Builder",
+			page_title=_("Report Builder"),
 		)
 
 	# ---------------------------------------------------------------- #
@@ -268,7 +269,7 @@ class ReportBuilderView(BaseERPView):
 			list_html=Markup(form_html),
 			kpi_html=Markup(""),
 			appbuilder=self.appbuilder,
-			page_title="New Report",
+			page_title=_("New Report"),
 		)
 
 	@expose("/new", methods=["POST"])

@@ -4,6 +4,7 @@ pgappforge/plugins/erp/platform/anomaly_detection/views.py
 Flask-AppBuilder views for the Anomaly Detection plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -26,12 +27,12 @@ class AnomalyDetectionRunView(ModelView):
 	list_columns = ['run_type', 'period', 'status', 'anomalies_found', 'created_at']
 	show_columns = ['tenant_id', 'run_type', 'period', 'status', 'anomalies_found', 'created_at']
 	label_columns = {
-		'tenant_id': 'Tenant',
-		'run_type': 'Run Type',
-		'period': 'Period',
-		'status': 'Status',
-		'anomalies_found': 'Anomalies Found',
-		'created_at': 'Created',
+		'tenant_id': _('Tenant'),
+		'run_type': _('Run Type'),
+		'period': _('Period'),
+		'status': _('Status'),
+		'anomalies_found': _('Anomalies Found'),
+		'created_at': _('Created'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -56,19 +57,19 @@ class AnomalyView(ModelView):
 		'created_at',
 	]
 	label_columns = {
-		'run_id': 'Detection Run',
-		'tenant_id': 'Tenant',
-		'anomaly_type': 'Anomaly Type',
-		'severity': 'Severity',
-		'source_module': 'Source Module',
-		'source_record_id': 'Source Record',
-		'description': 'Description',
-		'evidence': 'Evidence',
-		'status': 'Status',
-		'resolved_by': 'Resolved By',
-		'resolved_at': 'Resolved At',
-		'resolution': 'Resolution',
-		'created_at': 'Created',
+		'run_id': _('Detection Run'),
+		'tenant_id': _('Tenant'),
+		'anomaly_type': _('Anomaly Type'),
+		'severity': _('Severity'),
+		'source_module': _('Source Module'),
+		'source_record_id': _('Source Record'),
+		'description': _('Description'),
+		'evidence': _('Evidence'),
+		'status': _('Status'),
+		'resolved_by': _('Resolved By'),
+		'resolved_at': _('Resolved At'),
+		'resolution': _('Resolution'),
+		'created_at': _('Created'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

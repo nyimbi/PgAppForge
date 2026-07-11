@@ -126,6 +126,7 @@ class DemandPlanningDashboardView(BaseERPView):
 			"operations_ui/demand_planning.html",
 			kpi_html=kpi_html,
 			chart_data=chart_data,
+			forecast_chart_json=json.dumps(chart_data),
 			forecast_chart=json.dumps(chart_data),
 			appbuilder=self.appbuilder,
 		)

@@ -249,7 +249,7 @@ class SupplierPerformanceCard(AuditMixin, Model):
 # ---------------------------------------------------------------------------
 
 class SupplierScorecard(AuditMixin, Model):
-	"""Monthly supplier scorecard with 1-5 qualitative dimensions."""
+	"""Monthly supplier scorecard with weighted 0-100 metric dimensions."""
 
 	__allow_unmapped__ = True
 	__tablename__ = "sup_scorecard"
@@ -273,9 +273,9 @@ class SupplierScorecard(AuditMixin, Model):
 	)
 	period = Column(String(7), nullable=False, comment="YYYY-MM")
 	on_time_delivery_pct = Column(Numeric(6, 2), nullable=False, default=0)
-	quality_score = Column(Numeric(4, 2), nullable=False, default=0)
-	price_competitiveness = Column(Numeric(4, 2), nullable=False, default=0)
-	responsiveness_score = Column(Numeric(4, 2), nullable=False, default=0)
+	quality_score = Column(Numeric(6, 2), nullable=False, default=0)
+	price_competitiveness = Column(Numeric(6, 2), nullable=False, default=0)
+	responsiveness_score = Column(Numeric(6, 2), nullable=False, default=0)
 	overall_score = Column(Numeric(8, 2), nullable=False, default=0)
 	notes = Column(Text, nullable=True)
 	scored_by = Column(String(50), nullable=False, default="")

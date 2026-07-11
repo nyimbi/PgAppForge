@@ -4,6 +4,7 @@ pgappforge/plugins/erp/platform/ipaas/views.py
 Flask-AppBuilder views for the iPaaS Integration plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -35,12 +36,12 @@ class ConnectorDefinitionView(ModelView):
 	list_columns = ['name', 'version', 'protocol', 'auth_type', 'is_builtin']
 	show_columns = ['name', 'version', 'protocol', 'auth_type', 'config_schema', 'is_builtin']
 	label_columns = {
-		'name': 'Connector',
-		'version': 'Version',
-		'protocol': 'Protocol',
-		'auth_type': 'Auth Type',
-		'config_schema': 'Configuration Schema',
-		'is_builtin': 'Built In',
+		'name': _('Connector'),
+		'version': _('Version'),
+		'protocol': _('Protocol'),
+		'auth_type': _('Auth Type'),
+		'config_schema': _('Configuration Schema'),
+		'is_builtin': _('Built In'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -51,12 +52,12 @@ class ConnectorInstanceView(ModelView):
 	list_columns = ['definition_id', 'name', 'status', 'last_sync_at']
 	show_columns = ['definition_id', 'tenant_id', 'name', 'config', 'status', 'last_sync_at']
 	label_columns = {
-		'definition_id': 'Connector Definition',
-		'tenant_id': 'Tenant',
-		'name': 'Instance',
-		'config': 'Configuration',
-		'status': 'Status',
-		'last_sync_at': 'Last Sync',
+		'definition_id': _('Connector Definition'),
+		'tenant_id': _('Tenant'),
+		'name': _('Instance'),
+		'config': _('Configuration'),
+		'status': _('Status'),
+		'last_sync_at': _('Last Sync'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'config_encrypted']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'config_encrypted']
@@ -75,13 +76,13 @@ class IntegrationFlowView(ModelView):
 		'is_active',
 	]
 	label_columns = {
-		'tenant_id': 'Tenant',
-		'name': 'Flow Name',
-		'trigger_type': 'Trigger',
-		'source_connector_id': 'Source',
-		'target_connector_id': 'Destination',
-		'mapping': 'Field Mapping',
-		'is_active': 'Active',
+		'tenant_id': _('Tenant'),
+		'name': _('Flow Name'),
+		'trigger_type': _('Trigger'),
+		'source_connector_id': _('Source'),
+		'target_connector_id': _('Destination'),
+		'mapping': _('Field Mapping'),
+		'is_active': _('Active'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

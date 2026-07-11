@@ -4,6 +4,7 @@ pgappforge/plugins/erp/grc/anti_bribery/views.py
 Flask-AppBuilder views for the Anti-Bribery & Corruption plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -76,13 +77,13 @@ class GiftEntertainmentLogView(ModelView):
 	datamodel = SQLAInterface(GiftEntertainmentLog)
 	list_columns = ["given_to_name", "given_to_organization", "gift_type", "value_cents", "gift_date", "status", "is_government_official"]
 	label_columns = {
-		"given_to_name": "Recipient",
-		"given_to_organization": "Organization",
-		"gift_type": "Type",
-		"value_cents": "Value",
-		"gift_date": "Gift Date",
-		"status": "Status",
-		"is_government_official": "Government Official",
+		"given_to_name": _("Recipient"),
+		"given_to_organization": _("Organization"),
+		"gift_type": _("Type"),
+		"value_cents": _("Value"),
+		"gift_date": _("Gift Date"),
+		"status": _("Status"),
+		"is_government_official": _("Government Official"),
 	}
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
@@ -92,11 +93,11 @@ class ConflictOfInterestDeclarationView(ModelView):
 	datamodel = SQLAInterface(ConflictOfInterestDeclaration)
 	list_columns = ["employee_id", "description", "declaration_date", "status", "reviewed_at"]
 	label_columns = {
-		"employee_id": "Employee",
-		"description": "Description",
-		"declaration_date": "Declared",
-		"status": "Status",
-		"reviewed_at": "Reviewed",
+		"employee_id": _("Employee"),
+		"description": _("Description"),
+		"declaration_date": _("Declared"),
+		"status": _("Status"),
+		"reviewed_at": _("Reviewed"),
 	}
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]

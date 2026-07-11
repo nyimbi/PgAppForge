@@ -13,7 +13,7 @@ Public API:
   complete_picklist(picklist_id, session)                             -> PickList
   create_putaway_task(grn_id, product_id, qty, session)               -> PutawayTask
   complete_putaway(putaway_task_id, actual_location_id, session)      -> PutawayTask
-  suggest_putaway_location(product_id, warehouse_id, session)         -> str|None
+  suggest_putaway_location(product_id, warehouse_id, session)         -> dict|None
   start_stock_count(warehouse_id, count_type, session)                -> StockCount
   record_stock_count_line(stock_count_id, line_id, counted_qty, session) -> StockCountLine
   record_count(count_id, location_code, product_code, counted_qty, counted_by, session) -> CycleCountLine
@@ -322,6 +322,7 @@ class WarehouseService:
 		from pgappforge.plugins.erp.operations.warehouse.models import PutawayTask
 
 		suggested_loc = self.suggest_putaway_location(product_id, warehouse_id, session, quantity)
+		suggested_location_id = suggested_loc["id"] if suggested_loc else None
 
 		task = PutawayTask(
 			tenant_id=tenant_id,
@@ -331,7 +332,7 @@ class WarehouseService:
 			quantity=_d(quantity),
 			lot_number=lot_number,
 			expiry_date=expiry_date,
-			suggested_location_id=suggested_loc,
+			suggested_location_id=suggested_location_id,
 			actual_location_id=None,
 			status="PENDING",
 		)
@@ -472,12 +473,12 @@ class WarehouseService:
 		warehouse_id: str,
 		session: Any,
 		quantity: Any = Decimal("1"),
-	) -> str | None:
+	) -> dict[str, Any] | None:
 		"""Return the best WMS storage location for directed putaway.
 
 		Uses ABC slotting when product metadata is available. A-items prefer
 		forward/low-sequence locations, C-items prefer rear/high-sequence bulk or
-		reserve locations. Returns location id or None if no active location has
+		reserve locations. Returns location data or None if no active location has
 		enough open capacity.
 		"""
 		from pgappforge.plugins.erp.operations.inventory.models import Product
@@ -508,17 +509,23 @@ class WarehouseService:
 			or getattr(product, "is_bulk", False)
 		)
 
+		available_capacity = (StorageLocation.capacity_units - StorageLocation.current_units).label(
+			"available_capacity"
+		)
 		query = (
-			sa.select(StorageLocation)
+			sa.select(StorageLocation, available_capacity)
 			.where(StorageLocation.warehouse_id == warehouse_id)
 			.where(StorageLocation.is_active.is_(True))
-			.where((StorageLocation.capacity_units - StorageLocation.current_units) >= qty)
+			.where(available_capacity >= qty)
 		)
 		if tenant_id:
 			query = query.where(StorageLocation.tenant_id == tenant_id)
 
-		locations = session.execute(query).scalars().all()
-		if not locations:
+		location_rows = [
+			(location, _d(open_capacity))
+			for location, open_capacity in session.execute(query).all()
+		]
+		if not location_rows:
 			return None
 
 		def _sequence(loc: Any) -> int:
@@ -549,11 +556,10 @@ class WarehouseService:
 				return False
 			return loc_type in ("BULK", "PICK_FACE", "RESERVE")
 
-		def _score(loc: Any) -> tuple[int, int, int, str]:
+		def _score(loc: Any, open_capacity: Decimal) -> tuple[int, int, int, str]:
 			zone = str(loc.zone_code or "").upper()
 			loc_type = str(loc.location_type or "").upper()
 			seq = _sequence(loc)
-			open_capacity = _d(loc.capacity_units) - _d(loc.current_units)
 			score = 0
 
 			if abc_class == "A":
@@ -578,11 +584,25 @@ class WarehouseService:
 
 			return (score, int(open_capacity), -seq, str(loc.location_code or ""))
 
-		scored = [loc for loc in locations if _fits_flags(loc)]
+		scored = [
+			(location, open_capacity)
+			for location, open_capacity in location_rows
+			if _fits_flags(location)
+		]
 		if not scored:
 			return None
-		best = max(scored, key=_score)
-		return str(best.id)
+		best, best_capacity = max(scored, key=lambda row: _score(row[0], row[1]))
+		best_score = _score(best, best_capacity)[0]
+		return {
+			"id": str(best.id),
+			"location_code": str(best.location_code or ""),
+			"warehouse_id": str(best.warehouse_id),
+			"zone_code": str(best.zone_code or ""),
+			"location_type": str(best.location_type or ""),
+			"available_capacity": str(best_capacity),
+			"abc_class": abc_class,
+			"score": best_score,
+		}
 
 	# ------------------------------------------------------------------
 	# Stock Count management

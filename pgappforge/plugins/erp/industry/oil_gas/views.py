@@ -13,6 +13,7 @@ Views:
   OilGasDashboardView   — Read-only consolidated O&G overview
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 from datetime import date, datetime, timezone
@@ -84,12 +85,12 @@ class FacilityView(BaseView):
 		"commissioning_date": date_widget(),
 	}
 	label_columns = {
-		"facility_code": "Facility Code",
-		"facility_type": "Type",
-		"country_code": "Country",
-		"design_capacity": "Design Capacity",
-		"capacity_unit": "Unit",
-		"commissioning_date": "Commissioned",
+		"facility_code": _("Facility Code"),
+		"facility_type": _("Type"),
+		"country_code": _("Country"),
+		"design_capacity": _("Design Capacity"),
+		"capacity_unit": _("Unit"),
+		"commissioning_date": _("Commissioned"),
 	}
 
 	@expose("/")
@@ -170,11 +171,11 @@ class AssetView(BaseView):
 		),
 	}
 	label_columns = {
-		"tag_number": "Tag Number",
-		"asset_class": "Asset Class",
-		"design_pressure_bar": "Design Pressure (bar)",
-		"design_temperature_c": "Design Temp (°C)",
-		"criticality": "Criticality",
+		"tag_number": _("Tag Number"),
+		"asset_class": _("Asset Class"),
+		"design_pressure_bar": _("Design Pressure (bar)"),
+		"design_temperature_c": _("Design Temp (°C)"),
+		"criticality": _("Criticality"),
 	}
 
 	@expose("/")
@@ -261,10 +262,10 @@ class MaintenanceWorkView(BaseView):
 		"actual_cost_cents": currency_widget("USD"),
 	}
 	label_columns = {
-		"work_order_number": "Work Order",
-		"work_type": "Type",
-		"estimated_cost_cents": "Est. Cost",
-		"actual_cost_cents": "Actual Cost",
+		"work_order_number": _("Work Order"),
+		"work_type": _("Type"),
+		"estimated_cost_cents": _("Est. Cost"),
+		"actual_cost_cents": _("Actual Cost"),
 	}
 
 	@expose("/")
@@ -310,10 +311,10 @@ class ProductionRecordView(BaseView):
 		"production_trend": chart_widget(chart_type="line"),
 	}
 	label_columns = {
-		"production_date": "Date",
-		"product_type": "Product",
-		"quantity": "Quantity",
-		"downtime_hours": "Downtime (hrs)",
+		"production_date": _("Date"),
+		"product_type": _("Product"),
+		"quantity": _("Quantity"),
+		"downtime_hours": _("Downtime (hrs)"),
 	}
 
 	@expose("/")
@@ -358,9 +359,9 @@ class HAZOPReviewView(BaseView):
 		"action_items": json_widget(mode="tree"),
 	}
 	label_columns = {
-		"review_date": "Review Date",
-		"next_review_date": "Next Review",
-		"review_leader_id": "Study Leader",
+		"review_date": _("Review Date"),
+		"next_review_date": _("Next Review"),
+		"review_leader_id": _("Study Leader"),
 	}
 
 	@expose("/")
@@ -408,10 +409,10 @@ class IncidentReportView(BaseView):
 		"severity_chart": chart_widget(chart_type="doughnut"),
 	}
 	label_columns = {
-		"incident_type": "Type",
-		"occurred_at": "Occurred",
-		"reported_at": "Reported",
-		"reported_to_regulator": "Regulator Notified",
+		"incident_type": _("Type"),
+		"occurred_at": _("Occurred"),
+		"reported_at": _("Reported"),
+		"reported_to_regulator": _("Regulator Notified"),
 	}
 
 	@expose("/")

@@ -229,6 +229,11 @@ class MaterialLedgerService:
 			PriceVariancePostedEvent, emit_event,
 		)
 
+		assert str(movement_type or "").strip(), "movement_type is required"
+		assert quantity != Decimal("0"), "quantity must be non-zero"
+		assert isinstance(value_cents, int), "value_cents must be integer cents"
+		assert posting_date is not None, "posting_date is required"
+
 		ledger = session.get(MaterialLedger, ledger_id)
 		if ledger is None:
 			raise LedgerNotFoundError(f"MaterialLedger {ledger_id!r} not found")

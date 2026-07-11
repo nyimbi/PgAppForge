@@ -17,6 +17,7 @@ Endpoints:
   GreenButtonView    GET /utilities/greenbutton/<meter_id>
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 from datetime import datetime, timezone
@@ -83,14 +84,14 @@ class GridView(BaseView):
 		]),
 	}
 	label_columns = {
-		"asset_id": "Asset ID",
-		"asset_type": "Type",
-		"name": "Name",
-		"voltage_kv": "Voltage (kV)",
-		"capacity_mva": "Capacity (MVA)",
-		"status": "Status",
-		"installation_date": "Installed",
-		"age_years": "Age (years)",
+		"asset_id": _("Asset ID"),
+		"asset_type": _("Type"),
+		"name": _("Name"),
+		"voltage_kv": _("Voltage (kV)"),
+		"capacity_mva": _("Capacity (MVA)"),
+		"status": _("Status"),
+		"installation_date": _("Installed"),
+		"age_years": _("Age (years)"),
 	}
 
 	@expose("/assets")
@@ -181,13 +182,13 @@ class MeterView(BaseView):
 		"meter_type": select2_widget(["ANALOG", "SMART", "AMI"]),
 	}
 	label_columns = {
-		"meter_id": "Meter Number",
-		"customer_id": "Customer",
-		"meter_type": "Type",
-		"tariff_code": "Tariff",
-		"time_of_use_enabled": "TOU Enabled",
-		"installed_date": "Installed",
-		"last_read_date": "Last Read",
+		"meter_id": _("Meter Number"),
+		"customer_id": _("Customer"),
+		"meter_type": _("Type"),
+		"tariff_code": _("Tariff"),
+		"time_of_use_enabled": _("TOU Enabled"),
+		"installed_date": _("Installed"),
+		"last_read_date": _("Last Read"),
 	}
 
 	@expose("/")
@@ -308,16 +309,16 @@ class OutageView(BaseView):
 		"outage_type": select2_widget(["PLANNED", "UNPLANNED", "EMERGENCY"]),
 	}
 	label_columns = {
-		"outage_id": "Outage #",
-		"outage_type": "Type",
-		"cause": "Cause",
-		"affected_customers": "Customers Affected",
-		"reported_at": "Reported",
-		"started_at": "Started",
-		"restored_at": "Restored",
-		"saidi_minutes": "SAIDI (min)",
-		"saifi_occurrences": "SAIFI",
-		"status": "Status",
+		"outage_id": _("Outage #"),
+		"outage_type": _("Type"),
+		"cause": _("Cause"),
+		"affected_customers": _("Customers Affected"),
+		"reported_at": _("Reported"),
+		"started_at": _("Started"),
+		"restored_at": _("Restored"),
+		"saidi_minutes": _("SAIDI (min)"),
+		"saifi_occurrences": _("SAIFI"),
+		"status": _("Status"),
 	}
 
 	@expose("/")

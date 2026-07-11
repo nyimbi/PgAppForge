@@ -7,6 +7,7 @@ Flask-AppBuilder views for the APG bridge plugin.
   APGBridgeDashboardView   — status dashboard + "Sync Capabilities" action
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -44,17 +45,17 @@ class APGCapabilityCacheView(BaseERPModelView):
 		"updated_at",
 	]
 	label_columns = {
-		"capability_id": "Capability ID",
-		"name": "Capability Name",
-		"domain": "Domain",
-		"provides": "Provides",
-		"requires": "Requires",
-		"base_url": "Base URL",
-		"is_active": "Active",
-		"contract_hash": "Contract Hash",
-		"last_synced_at": "Last Synced",
-		"created_at": "Created",
-		"updated_at": "Updated",
+		"capability_id": _("Capability ID"),
+		"name": _("Capability Name"),
+		"domain": _("Domain"),
+		"provides": _("Provides"),
+		"requires": _("Requires"),
+		"base_url": _("Base URL"),
+		"is_active": _("Active"),
+		"contract_hash": _("Contract Hash"),
+		"last_synced_at": _("Last Synced"),
+		"created_at": _("Created"),
+		"updated_at": _("Updated"),
 	}
 
 	# Read-only: no add / edit / delete

@@ -429,6 +429,7 @@ class GoodsReceipt(AuditMixin, Model):
 	__tablename__ = "scm_goods_receipt"
 	__table_args__ = (
 		Index("ix_scm_grn_tenant", "tenant_id"),
+		Index("ix_scm_grn_tenant_status", "tenant_id", "status"),
 		Index("ix_scm_grn_po", "po_id"),
 		Index("ix_scm_grn_received_date", "received_date"),
 		UniqueConstraint("tenant_id", "grn_number", name="uq_scm_grn_tenant_number"),
@@ -442,6 +443,12 @@ class GoodsReceipt(AuditMixin, Model):
 	grn_number = Column(String(20), nullable=False, comment="Human-readable GRN number, unique per tenant")
 	received_date = Column(Date, nullable=False, comment="Date goods were physically received")
 	received_by = Column(UUID(as_uuid=False), nullable=False, comment="FK to user / employee (app-managed)")
+	status = Column(
+		String(15),
+		nullable=False,
+		default="POSTED",
+		comment="DRAFT | CONFIRMED | POSTED | CANCELLED",
+	)
 	warehouse_id = Column(UUID(as_uuid=False), nullable=True, comment="Destination warehouse (app-managed)")
 	notes = Column(Text, nullable=True)
 
@@ -515,6 +522,7 @@ class SupplierInvoice(AuditMixin, Model):
 	__table_args__ = (
 		Index("ix_scm_sinv_tenant_status", "tenant_id", "status"),
 		Index("ix_scm_sinv_po", "po_id"),
+		Index("ix_scm_sinv_grn", "grn_id"),
 		Index("ix_scm_sinv_due_date", "due_date"),
 		UniqueConstraint("tenant_id", "supplier_id", "invoice_number", name="uq_scm_sinv_tenant_supplier_invoice"),
 		{"extend_existing": True},
@@ -524,6 +532,13 @@ class SupplierInvoice(AuditMixin, Model):
 	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
 
 	po_id = Column(UUID(as_uuid=False), ForeignKey("scm_purchase_order.id"), nullable=False, index=True)
+	grn_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("scm_goods_receipt.id"),
+		nullable=True,
+		index=True,
+		comment="Source goods receipt for 3-way match",
+	)
 	supplier_id = Column(UUID(as_uuid=False), ForeignKey("scm_supplier.id"), nullable=False, index=True)
 
 	invoice_number = Column(String(50), nullable=False, comment="Supplier's own invoice reference")
@@ -548,6 +563,7 @@ class SupplierInvoice(AuditMixin, Model):
 	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
 
 	purchase_order: PurchaseOrder = relationship("PurchaseOrder", back_populates="invoices", lazy="select")
+	goods_receipt: GoodsReceipt | None = relationship("GoodsReceipt", lazy="select")
 	supplier: Supplier = relationship("Supplier", lazy="select")
 
 	def __repr__(self) -> str:

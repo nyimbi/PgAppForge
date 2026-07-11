@@ -150,7 +150,34 @@ class GLPlugin(BasePlugin):
 			TrialBalanceView,
 		)
 
+		from pgappforge.plugins.erp.finance.gl.api import (
+			GLAccountRestApi,
+			GLCostCenterRestApi,
+			GLFiscalYearRestApi,
+			GLPeriodRestApi,
+			GLJournalBatchRestApi,
+			GLJournalEntryRestApi,
+			GLJournalLineRestApi,
+			GLAccountBalanceRestApi,
+			GLBudgetRestApi,
+			GLDimensionDefinitionRestApi,
+		)
+
 		cat = self.config.get("GL_MENU_CATEGORY", "General Ledger")
+
+		for api_class in (
+			GLAccountRestApi,
+			GLCostCenterRestApi,
+			GLFiscalYearRestApi,
+			GLPeriodRestApi,
+			GLJournalBatchRestApi,
+			GLJournalEntryRestApi,
+			GLJournalLineRestApi,
+			GLAccountBalanceRestApi,
+			GLBudgetRestApi,
+			GLDimensionDefinitionRestApi,
+		):
+			self.appbuilder.add_api(api_class)
 
 		self.add_view(
 			GLDashboardView,

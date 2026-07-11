@@ -68,6 +68,82 @@ def _page_html(title: str, body: str) -> str:
 	)
 
 
+_PAYROLL_COUNTRY_CODES = ("KE", "UG", "TZ", "RW", "GH", "NG", "ZA", "ET")
+
+
+def _payroll_run_country_code(run: object) -> str:
+	meta = getattr(run, "metadata_", None) or {}
+	if isinstance(meta, dict):
+		for key in ("country_code", "country", "jurisdiction_code"):
+			value = meta.get(key)
+			if value:
+				return str(value).upper()
+	return str(getattr(run, "country_code", "") or "").upper()
+
+
+def _payroll_country_breakdown(run: object) -> list[dict[str, int | str]]:
+	breakdown = {
+		code: {
+			"country_code": code,
+			"employee_count": 0,
+			"total_gross_cents": 0,
+			"total_net_cents": 0,
+		}
+		for code in _PAYROLL_COUNTRY_CODES
+	}
+	meta = getattr(run, "metadata_", None) or {}
+	source = meta.get("country_breakdown") if isinstance(meta, dict) else None
+	if isinstance(source, dict):
+		source = [
+			{"country_code": code, **(values if isinstance(values, dict) else {})}
+			for code, values in source.items()
+		]
+	if isinstance(source, list):
+		for row in source:
+			if not isinstance(row, dict):
+				continue
+			code = str(row.get("country_code", "")).upper()
+			if code in breakdown:
+				breakdown[code]["employee_count"] = int(row.get("employee_count") or 0)
+				breakdown[code]["total_gross_cents"] = int(row.get("total_gross_cents") or 0)
+				breakdown[code]["total_net_cents"] = int(row.get("total_net_cents") or 0)
+		return list(breakdown.values())
+
+	code = _payroll_run_country_code(run)
+	if code in breakdown:
+		breakdown[code]["employee_count"] = int(getattr(run, "employee_count", 0) or 0)
+		breakdown[code]["total_gross_cents"] = int(getattr(run, "total_gross_cents", 0) or 0)
+		breakdown[code]["total_net_cents"] = int(getattr(run, "total_net_cents", 0) or 0)
+	return list(breakdown.values())
+
+
+def _payroll_compliance_status() -> dict[str, dict[str, str]]:
+	return {
+		code: {
+			"status": "TODO",
+			"note": "TODO: wire statutory filing/compliance model for this country.",
+		}
+		for code in _PAYROLL_COUNTRY_CODES
+	}
+
+
+def _payslip_is_mobile_money(payslip: object) -> bool:
+	for attr in ("mobile_money_provider", "wallet_msisdn", "payment_channel", "payment_method"):
+		value = getattr(payslip, attr, None)
+		if value and "MOBILE" in str(value).upper():
+			return True
+	ref = str(getattr(payslip, "payment_reference", "") or "").upper()
+	return any(token in ref for token in ("MPESA", "M-PESA", "MTN", "AIRTEL", "FLUTTERWAVE", "MOBILE_MONEY"))
+
+
+def _mobile_money_rate_pct(payslips: list[object]) -> float:
+	total = len(payslips)
+	if total == 0:
+		return 0.0
+	mobile_count = sum(1 for payslip in payslips if _payslip_is_mobile_money(payslip))
+	return round((mobile_count / total) * 100, 2)
+
+
 # ---------------------------------------------------------------------------
 # PayrollCalendarView
 # ---------------------------------------------------------------------------
@@ -205,6 +281,10 @@ class PayrollRunView(BaseERPView):
 
 	route_base = "/payroll/runs"
 	default_view = "list"
+	search_columns = ["status", "payroll_type", "entity_id", "country_code"]
+	list_columns = ["entity_id", "period_start", "period_end", "pay_date", "payroll_type", "status", "employee_count", "total_gross_cents", "total_net_cents"]
+	import_columns = list_columns
+	show_import = True
 
 	@expose("/")
 	@has_access
@@ -362,6 +442,9 @@ class PayrollRunView(BaseERPView):
 			statutory_totals=None,
 			kpi_html=kpi_html,
 			approval_html=approval_html,
+			country_breakdown=_payroll_country_breakdown(run),
+			compliance_status=_payroll_compliance_status(),
+			mobile_money_rate_pct=_mobile_money_rate_pct(payslips),
 		)
 
 	@expose("/", methods=["POST"])

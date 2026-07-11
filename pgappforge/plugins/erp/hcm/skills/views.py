@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -23,6 +24,8 @@ __all__ = [
 class SkillDomainView(ModelView):
 	datamodel = SQLAInterface(SkillDomain)
 	list_columns = ["code", "name", "description"]
+	label_columns = {"code": _("Code"), "name": _("Name"), "description": _("Description")}
+	show_columns = ["code", "name", "description"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "categories"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "categories"]
 	search_columns = ["code", "name"]
@@ -31,6 +34,8 @@ class SkillDomainView(ModelView):
 class SkillView(ModelView):
 	datamodel = SQLAInterface(Skill)
 	list_columns = ["code", "name", "category", "is_technical"]
+	label_columns = {"code": _("Code"), "name": _("Name"), "category": _("Category"), "is_technical": _("Is Technical")}
+	show_columns = ["code", "name", "category", "is_technical", "description"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "employee_skills", "job_requirements"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "employee_skills", "job_requirements"]
 	search_columns = ["code", "name"]
@@ -39,6 +44,8 @@ class SkillView(ModelView):
 class EmployeeSkillView(ModelView):
 	datamodel = SQLAInterface(EmployeeSkill)
 	list_columns = ["employee_id", "skill", "proficiency_level", "verified_at", "endorsed_by"]
+	label_columns = {"employee_id": _("Employee"), "skill": _("Skill"), "proficiency_level": _("Proficiency Level"), "verified_at": _("Verified At"), "endorsed_by": _("Endorsed By")}
+	show_columns = ["employee_id", "skill", "proficiency_level", "verified_at", "endorsed_by", "evidence_url"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id"]

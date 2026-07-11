@@ -139,7 +139,30 @@ class PayrollPlugin(BasePlugin):
 			TaxWithholdingView,
 		)
 
+		from pgappforge.plugins.erp.hcm.payroll.api import (
+			PayrollCalendarRestApi,
+			PayrollRunRestApi,
+			PayslipRestApi,
+			PayslipLineRestApi,
+			TaxWithholdingRestApi,
+			PayrollYTDRestApi,
+			BenefitInKindRestApi,
+			PayslipAccessLogRestApi,
+		)
+
 		cat = self.config.get("PAYROLL_MENU_CATEGORY", "Payroll")
+
+		for api_class in (
+			PayrollCalendarRestApi,
+			PayrollRunRestApi,
+			PayslipRestApi,
+			PayslipLineRestApi,
+			TaxWithholdingRestApi,
+			PayrollYTDRestApi,
+			BenefitInKindRestApi,
+			PayslipAccessLogRestApi,
+		):
+			self.appbuilder.add_api(api_class)
 
 		self.add_view(PayrollCalendarView, "Pay Calendars", icon="fa-calendar", category=cat)
 		self.add_view(PayrollRunView, "Payroll Runs", icon="fa-play-circle", category=cat)

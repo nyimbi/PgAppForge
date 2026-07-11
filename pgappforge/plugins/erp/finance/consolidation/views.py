@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from pgappforge import ModelView
 from pgappforge.models.sqla.interface import SQLAInterface
@@ -19,14 +20,14 @@ class ConsolidationGroupView(ModelView):
 					'reporting_currency', 'is_active', 'members', 'created_at',
 					'updated_at']
 	label_columns = {
-		'name': 'Name',
-		'reporting_entity_id': 'Reporting Entity',
-		'reporting_currency': 'Reporting Currency',
-		'is_active': 'Active',
-		'description': 'Description',
-		'members': 'Members',
-		'created_at': 'Created At',
-		'updated_at': 'Updated At',
+		'name': _('Name'),
+		'reporting_entity_id': _('Reporting Entity'),
+		'reporting_currency': _('Reporting Currency'),
+		'is_active': _('Active'),
+		'description': _('Description'),
+		'members': _('Members'),
+		'created_at': _('Created At'),
+		'updated_at': _('Updated At'),
 	}
 	search_columns = ['name', 'reporting_entity_id', 'reporting_currency', 'is_active']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
@@ -42,17 +43,17 @@ class ConsolidationRunView(ModelView):
 					'entities_processed', 'eliminations_count', 'error_message',
 					'result_data', 'created_at', 'updated_at']
 	label_columns = {
-		'group_id': 'Consolidation Group',
-		'period': 'Period',
-		'status': 'Status',
-		'started_at': 'Started At',
-		'entities_processed': 'Entities Processed',
-		'eliminations_count': 'Eliminations Count',
-		'completed_at': 'Completed At',
-		'error_message': 'Error Message',
-		'result_data': 'Result Data',
-		'created_at': 'Created At',
-		'updated_at': 'Updated At',
+		'group_id': _('Consolidation Group'),
+		'period': _('Period'),
+		'status': _('Status'),
+		'started_at': _('Started At'),
+		'entities_processed': _('Entities Processed'),
+		'eliminations_count': _('Eliminations Count'),
+		'completed_at': _('Completed At'),
+		'error_message': _('Error Message'),
+		'result_data': _('Result Data'),
+		'created_at': _('Created At'),
+		'updated_at': _('Updated At'),
 	}
 	search_columns = ['group_id', 'period', 'status']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
@@ -68,16 +69,16 @@ class IntercompanyEliminationView(ModelView):
 					'elimination_type', 'amount_cents', 'currency_code',
 					'account_code', 'description', 'created_at', 'updated_at']
 	label_columns = {
-		'run_id': 'Consolidation Run',
-		'elimination_type': 'Elimination Type',
-		'debtor_entity_id': 'Debtor Entity',
-		'creditor_entity_id': 'Creditor Entity',
-		'amount_cents': 'Amount (cents)',
-		'currency_code': 'Currency',
-		'account_code': 'Account Code',
-		'description': 'Description',
-		'created_at': 'Created At',
-		'updated_at': 'Updated At',
+		'run_id': _('Consolidation Run'),
+		'elimination_type': _('Elimination Type'),
+		'debtor_entity_id': _('Debtor Entity'),
+		'creditor_entity_id': _('Creditor Entity'),
+		'amount_cents': _('Amount (cents)'),
+		'currency_code': _('Currency'),
+		'account_code': _('Account Code'),
+		'description': _('Description'),
+		'created_at': _('Created At'),
+		'updated_at': _('Updated At'),
 	}
 	search_columns = ['run_id', 'elimination_type', 'debtor_entity_id',
 					  'creditor_entity_id', 'currency_code', 'account_code']
@@ -94,14 +95,14 @@ class MinorityInterestView(ModelView):
 					'subsidiary_equity_cents', 'minority_interest_cents',
 					'period', 'created_at', 'updated_at']
 	label_columns = {
-		'run_id': 'Consolidation Run',
-		'subsidiary_entity_id': 'Subsidiary Entity',
-		'minority_ownership_pct': 'Minority Ownership %',
-		'subsidiary_equity_cents': 'Subsidiary Equity (cents)',
-		'minority_interest_cents': 'Minority Interest (cents)',
-		'period': 'Period',
-		'created_at': 'Created At',
-		'updated_at': 'Updated At',
+		'run_id': _('Consolidation Run'),
+		'subsidiary_entity_id': _('Subsidiary Entity'),
+		'minority_ownership_pct': _('Minority Ownership %'),
+		'subsidiary_equity_cents': _('Subsidiary Equity (cents)'),
+		'minority_interest_cents': _('Minority Interest (cents)'),
+		'period': _('Period'),
+		'created_at': _('Created At'),
+		'updated_at': _('Updated At'),
 	}
 	search_columns = ['run_id', 'subsidiary_entity_id', 'period']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']

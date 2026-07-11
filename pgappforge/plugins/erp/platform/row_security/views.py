@@ -4,6 +4,7 @@ pgappforge/plugins/erp/platform/row_security/views.py
 Flask-AppBuilder views for the Row-Level Security plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -27,16 +28,16 @@ class RowSecurityPolicyView(ModelView):
 	list_columns         = ['name', 'entity_type', 'scope_field', 'role_id', 'is_active']
 	show_columns         = ['tenant_id', 'name', 'entity_type', 'scope_field', 'allowed_values', 'role_id', 'is_active', 'description', 'created_at', 'updated_at']
 	label_columns        = {
-		'tenant_id': 'Tenant',
-		'name': 'Policy Name',
-		'entity_type': 'Entity Type',
-		'scope_field': 'Scope Field',
-		'allowed_values': 'Allowed Values',
-		'role_id': 'Role',
-		'is_active': 'Active',
-		'description': 'Description',
-		'created_at': 'Created',
-		'updated_at': 'Updated',
+		'tenant_id': _('Tenant'),
+		'name': _('Policy Name'),
+		'entity_type': _('Entity Type'),
+		'scope_field': _('Scope Field'),
+		'allowed_values': _('Allowed Values'),
+		'role_id': _('Role'),
+		'is_active': _('Active'),
+		'description': _('Description'),
+		'created_at': _('Created'),
+		'updated_at': _('Updated'),
 	}
 	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -48,11 +49,11 @@ class SecurityContextView(ModelView):
 	list_columns         = ['tenant_id', 'user_id', 'computed_at', 'expires_at']
 	show_columns         = ['tenant_id', 'user_id', 'computed_scope', 'computed_at', 'expires_at']
 	label_columns        = {
-		'tenant_id': 'Tenant',
-		'user_id': 'User',
-		'computed_scope': 'Computed Scope',
-		'computed_at': 'Computed At',
-		'expires_at': 'Expires At',
+		'tenant_id': _('Tenant'),
+		'user_id': _('User'),
+		'computed_scope': _('Computed Scope'),
+		'computed_at': _('Computed At'),
+		'expires_at': _('Expires At'),
 	}
 	add_exclude_columns  = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

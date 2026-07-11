@@ -8,6 +8,7 @@ Registered views:
   ProcessMiningDefinitionView — definition CRUD/list metadata
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 from datetime import datetime, timezone
@@ -34,11 +35,11 @@ class ProcessMiningDefinitionView(ModelView):
 	list_columns = ['name', 'event_types', 'last_run', 'metrics']
 	show_columns = ['tenant_id', 'name', 'event_types', 'last_run', 'metrics']
 	label_columns = {
-		'tenant_id': 'Tenant',
-		'name': 'Definition',
-		'event_types': 'Event Types',
-		'last_run': 'Last Run',
-		'metrics': 'Latest Metrics',
+		'tenant_id': _('Tenant'),
+		'name': _('Definition'),
+		'event_types': _('Event Types'),
+		'last_run': _('Last Run'),
+		'metrics': _('Latest Metrics'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

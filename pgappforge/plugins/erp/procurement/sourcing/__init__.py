@@ -127,16 +127,24 @@ class SourcingPlugin(BasePlugin):
 			from pgappforge.plugins.erp.procurement.sourcing.views import (
 				ProcurementSavingsView,
 				PurchaseRequisitionView,
+				RFQAwardView,
 				RFQView,
 				SupplierBidView,
 			)
 		except ImportError:
 			log.warning("SourcingPlugin.register_views: views module not available — skipping.")
 			return
+		from pgappforge.plugins.erp.procurement.sourcing.api import API_CLASSES
+
 		cat = self.config.get("SOURCING_MENU_CATEGORY", "Procurement")
+
+		for api_class in API_CLASSES:
+			self.appbuilder.add_api(api_class)
+
 		self.add_view(RFQView, "RFQs", icon="fa-bullhorn", category=cat)
 		self.add_view(PurchaseRequisitionView, "Purchase Requisitions", icon="fa-shopping-basket", category=cat)
 		self.add_view(SupplierBidView, "Supplier Bids", icon="fa-gavel", category=cat)
+		self.add_view(RFQAwardView, "RFQ Awards", icon="fa-trophy", category=cat)
 		self.add_view(ProcurementSavingsView, "Procurement Savings", icon="fa-line-chart", category=cat)
 		log.info("SourcingPlugin: views registered under %r", cat)
 
@@ -144,9 +152,10 @@ class SourcingPlugin(BasePlugin):
 		from pgappforge.plugins.erp.procurement.sourcing.models import (
 			ProcurementSavings,
 			RFQ,
+			RFQAward,
 			SupplierBid,
 		)
-		return [RFQ, SupplierBid, ProcurementSavings]
+		return [RFQ, SupplierBid, RFQAward, ProcurementSavings]
 
 	def activate(self) -> None:
 		self.initialize()
@@ -173,6 +182,7 @@ def create_plugin(
 from pgappforge.plugins.erp.procurement.sourcing.models import (  # noqa: E402
 	ProcurementSavings,
 	RFQ,
+	RFQAward,
 	SupplierBid,
 	RFQ_TYPES,
 	RFQ_STATUSES,
@@ -203,6 +213,7 @@ __all__ = [
 	# models
 	"RFQ",
 	"SupplierBid",
+	"RFQAward",
 	"ProcurementSavings",
 	# enum sets
 	"RFQ_TYPES",

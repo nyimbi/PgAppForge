@@ -152,6 +152,9 @@ class RFQ(AuditMixin, Model):
 	bids: list[SupplierBid] = relationship(
 		"SupplierBid", back_populates="rfq", lazy="select", cascade="all, delete-orphan"
 	)
+	awards: list[RFQAward] = relationship(
+		"RFQAward", back_populates="rfq", lazy="select", cascade="all, delete-orphan"
+	)
 
 	def __repr__(self) -> str:
 		return f"<RFQ {self.rfq_ref} [{self.status}] type={self.rfq_type}>"
@@ -246,6 +249,57 @@ class SupplierBid(AuditMixin, Model):
 
 
 # ---------------------------------------------------------------------------
+# RFQAward
+# ---------------------------------------------------------------------------
+
+class RFQAward(AuditMixin, Model):
+	"""Award record for a completed RFQ or reverse auction."""
+
+	__allow_unmapped__ = True
+	__tablename__ = "src_rfq_award"
+	__table_args__ = (
+		UniqueConstraint("rfq_id", name="uq_src_rfq_award_rfq"),
+		Index("ix_src_rfq_award_tenant_supplier", "tenant_id", "supplier_id"),
+		Index("ix_src_rfq_award_tenant_date", "tenant_id", "awarded_at"),
+		{"extend_existing": True},
+	)
+
+	id = Column(
+		UUID(as_uuid=False),
+		primary_key=True,
+		default=_uuid4,
+		server_default=sa.text("gen_random_uuid()"),
+	)
+	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+	rfq_id = Column(
+		UUID(as_uuid=False),
+		ForeignKey("src_rfq.id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	supplier_id = Column(String(50), nullable=False, comment="Winning supplier id")
+	award_price_cents = Column(BigInteger, nullable=False)
+	award_source = Column(String(30), nullable=False, default="REVERSE_AUCTION")
+	award_details = Column(
+		JSONB,
+		nullable=False,
+		server_default=sa.text("'{}'::jsonb"),
+		default=dict,
+		comment="{winning_bid, reserve_price_cents, bid_count}",
+	)
+	awarded_at = Column(
+		DateTime(timezone=True),
+		nullable=False,
+		default=lambda: datetime.now(timezone.utc),
+		server_default=sa.text("NOW()"),
+	)
+
+	rfq: RFQ = relationship("RFQ", back_populates="awards", lazy="select")
+
+	def __repr__(self) -> str:
+		return f"<RFQAward rfq={self.rfq_id} supplier={self.supplier_id} award={self.award_price_cents}¢>"
+
+
+# ---------------------------------------------------------------------------
 # ProcurementSavings
 # ---------------------------------------------------------------------------
 
@@ -293,6 +347,7 @@ class ProcurementSavings(AuditMixin, Model):
 __all__ = [
 	"RFQ",
 	"SupplierBid",
+	"RFQAward",
 	"ProcurementSavings",
 	# enum sets
 	"RFQ_TYPES",

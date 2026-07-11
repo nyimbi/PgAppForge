@@ -1106,7 +1106,7 @@ class TalentReportView(BaseERPView):
 	def dashboard(self):
 		"""Talent dashboard — KPIs + 9-box distribution chart."""
 		from pgappforge.plugins.erp.hcm.talent.models import (
-			Requisition, PerformanceReview,
+			NineBoxPlacement, Requisition, PerformanceReview,
 		)
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
@@ -1149,39 +1149,58 @@ class TalentReportView(BaseERPView):
 			{"label": "Open Positions", "value": open_positions, "format": "integer", "color": "#9061f9", "icon": "fa-briefcase"},
 		])
 
-		# --- 9-box distribution chart ---
-		# 3 performance bands × 3 potential bands; approximate via rating buckets
-		q_9box = (
-			sa.select(
-				sa.case(
-					(PerformanceReview.overall_rating >= 4, "High"),
-					(PerformanceReview.overall_rating >= 3, "Medium"),
-					else_="Low",
-				).label("perf_band"),
-				sa.func.count().label("count"),
-			)
-			.where(PerformanceReview.status == "FINAL")
-			.group_by("perf_band")
+		# --- 9-box calibration matrix ---
+		nine_box_data = [[[] for _ in range(3)] for _ in range(3)]
+		q_9box = sa.select(
+			NineBoxPlacement.employee_id,
+			NineBoxPlacement.performance_axis,
+			NineBoxPlacement.potential_axis,
 		)
 		if tenant_id:
-			q_9box = q_9box.where(PerformanceReview.tenant_id == tenant_id)
-		box_rows = [
-			{"label": r.perf_band, "value": r.count}
-			for r in session.execute(q_9box).all()
-		]
-		chart_html = self.chart(
-			box_rows,
-			chart_type="bar",
-			x_col="label",
-			y_col="value",
-			title="9-Box Performance Distribution",
-			height=280,
+			q_9box = q_9box.where(NineBoxPlacement.tenant_id == tenant_id)
+		for row in session.execute(q_9box).all():
+			performance_axis = int(row.performance_axis or 0)
+			potential_axis = int(row.potential_axis or 0)
+			if 1 <= performance_axis <= 3 and 1 <= potential_axis <= 3:
+				nine_box_data[performance_axis - 1][potential_axis - 1].append(str(row.employee_id))
+
+		axis_label = {1: "Low", 2: "Medium", 3: "High"}
+		cell_color = {
+			(3, 3): "#dcfce7",
+			(1, 1): "#fee2e2",
+			(3, 2): "#ecfdf5",
+			(2, 3): "#ecfdf5",
+			(1, 2): "#fff7ed",
+			(2, 1): "#fff7ed",
+		}
+		matrix_rows = []
+		for potential_axis in (3, 2, 1):
+			cells = [f"<th>{axis_label[potential_axis]} Potential</th>"]
+			for performance_axis in (1, 2, 3):
+				employees = nine_box_data[performance_axis - 1][potential_axis - 1]
+				names = ", ".join(_he(name) for name in employees[:5])
+				if len(employees) > 5:
+					names = f"{names}, +{len(employees) - 5} more"
+				cells.append(
+					'<td style="width:180px;height:110px;vertical-align:top;'
+					f'background:{cell_color.get((performance_axis, potential_axis), "#f8fafc")};">'
+					f'<strong>{len(employees)}</strong>'
+					f'<div style="font-size:12px;margin-top:6px">{names}</div>'
+					'</td>'
+				)
+			matrix_rows.append(f"<tr>{''.join(cells)}</tr>")
+		nine_box_html = (
+			'<h4>9-Box Calibration</h4>'
+			'<table class="table table-bordered" style="max-width:760px">'
+			'<thead><tr><th></th><th>Low Performance</th><th>Medium Performance</th><th>High Performance</th></tr></thead>'
+			f'<tbody>{"".join(matrix_rows)}</tbody>'
+			'</table>'
 		)
 
 		body = (
 			f'<h3>Talent Dashboard</h3>'
 			f'{kpi_html}'
-			f'<div style="max-width:600px">{chart_html}</div>'
+			f'{nine_box_html}'
 		)
 		return make_response(_page_html("Talent Dashboard", body), 200)
 

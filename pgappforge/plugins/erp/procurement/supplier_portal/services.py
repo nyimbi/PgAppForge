@@ -79,6 +79,26 @@ def _now_utc() -> datetime:
 	return datetime.now(timezone.utc)
 
 
+def current_tenant_id() -> str | None:
+	try:
+		from pgappforge.multitenancy.middleware import get_current_tenant_id
+		tenant_id = get_current_tenant_id()
+	except Exception:
+		tenant_id = None
+	return str(tenant_id) if tenant_id else None
+
+
+def _tenant_id(explicit_tenant_id: str | None = None) -> str:
+	tenant_id = current_tenant_id()
+	if tenant_id:
+		if explicit_tenant_id and str(explicit_tenant_id) != tenant_id:
+			raise ValueError("tenant_id does not match current tenant")
+		return tenant_id
+	if explicit_tenant_id:
+		return str(explicit_tenant_id)
+	raise ValueError("Tenant context required")
+
+
 def _emit(event: Any, session: Any = None) -> None:
 	try:
 		from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
@@ -102,12 +122,20 @@ def _generate_supplier_ref(session: Any, tenant_id: str) -> str:
 	return f"{prefix}{count + 1:05d}"
 
 
-def _compute_overall_score(supplier_id: str, session: Any) -> Decimal:
+def _compute_overall_score(
+	supplier_id: str,
+	session: Any,
+	tenant_id: str | None = None,
+) -> Decimal:
 	"""Rolling average composite_score across all SupplierPerformanceCard rows."""
 	from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierPerformanceCard
+	tenant_id = _tenant_id(tenant_id)
 	stmt = sa.select(
 		sa.func.avg(SupplierPerformanceCard.composite_score)
-	).where(SupplierPerformanceCard.supplier_id == supplier_id)
+	).where(
+		SupplierPerformanceCard.tenant_id == tenant_id,
+		SupplierPerformanceCard.supplier_id == supplier_id,
+	)
 	avg = session.execute(stmt).scalar()
 	if avg is None:
 		return _dec(0)
@@ -166,6 +194,7 @@ class SupplierPortalService:
 		)
 		from pgappforge.plugins.erp.procurement.supplier_portal.events import SupplierRegisteredEvent
 
+		tenant_id = _tenant_id(tenant_id)
 		if not company_name.strip():
 			raise SupplierPortalServiceError("company_name cannot be empty")
 		if not contact_email.strip():
@@ -221,6 +250,7 @@ class SupplierPortalService:
 		supplier_id: str,
 		documents: list[dict[str, Any]],
 		session: Any,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Append KYC documents to a supplier profile.
 
@@ -229,7 +259,13 @@ class SupplierPortalService:
 		"""
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 
@@ -262,6 +298,7 @@ class SupplierPortalService:
 		supplier_id: str,
 		approver_id: str,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Transition supplier KYC from PENDING → APPROVED.
 
@@ -272,7 +309,13 @@ class SupplierPortalService:
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 		from pgappforge.plugins.erp.procurement.supplier_portal.events import KYCApprovedEvent
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		if supplier.kyc_status not in ("PENDING", "REJECTED"):
@@ -315,6 +358,7 @@ class SupplierPortalService:
 		*,
 		bank_branch: str | None = None,
 		bank_ref: str | None = None,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Record and verify bank details for a supplier.
 
@@ -327,7 +371,13 @@ class SupplierPortalService:
 			SupplierBankDetailsVerifiedEvent,
 		)
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 
@@ -374,6 +424,7 @@ class SupplierPortalService:
 		*,
 		po_count: int = 0,
 		grn_count: int = 0,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Create or update a SupplierPerformanceCard for a given period.
 
@@ -389,7 +440,13 @@ class SupplierPortalService:
 			SupplierPerformanceRatedEvent,
 		)
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 
@@ -407,6 +464,7 @@ class SupplierPortalService:
 
 		# Upsert the performance card
 		stmt = sa.select(SupplierPerformanceCard).where(
+			SupplierPerformanceCard.tenant_id == tenant_id,
 			SupplierPerformanceCard.supplier_id == supplier_id,
 			SupplierPerformanceCard.period == period,
 		)
@@ -430,7 +488,7 @@ class SupplierPortalService:
 		session.flush()
 
 		# Update rolling overall_score on supplier profile
-		supplier.overall_score = _compute_overall_score(supplier_id, session)
+		supplier.overall_score = _compute_overall_score(supplier_id, session, tenant_id)
 		session.flush()
 
 		_emit(
@@ -461,6 +519,7 @@ class SupplierPortalService:
 		supplier_id: str,
 		reason: str,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Transition a supplier's kyc_status to SUSPENDED.
 
@@ -471,7 +530,13 @@ class SupplierPortalService:
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 		from pgappforge.plugins.erp.procurement.supplier_portal.events import SupplierSuspendedEvent
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		if supplier.kyc_status == "SUSPENDED":
@@ -516,6 +581,7 @@ class SupplierPortalService:
 		"""
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 
+		tenant_id = _tenant_id(tenant_id)
 		stmt = (
 			sa.select(SupplierProfile)
 			.where(
@@ -540,6 +606,7 @@ class SupplierPortalService:
 		period: str,
 		metrics: dict[str, Any],
 		session: Any,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Create a monthly SupplierScorecard using the requested weighted average."""
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
@@ -547,25 +614,30 @@ class SupplierPortalService:
 			SupplierScorecard,
 		)
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		if len(period) != 7 or period[4] != "-":
 			raise SupplierPortalServiceError("period must use YYYY-MM format")
 
-		otd = _dec(metrics.get("on_time_delivery_pct", 0))
-		quality = _dec(metrics.get("quality_score_1_5", metrics.get("quality_score", 0)))
-		price = _dec(metrics.get("price_competitiveness_1_5", metrics.get("price_competitiveness", 0)))
-		responsiveness = _dec(metrics.get("responsiveness_1_5", metrics.get("responsiveness_score", 0)))
+		otd = _dec(metrics.get("OTD", metrics.get("otd", metrics.get("on_time_delivery_pct", 0))))
+		quality = _dec(metrics.get("quality", metrics.get("quality_score", metrics.get("quality_score_1_5", 0))))
+		price = _dec(metrics.get("price", metrics.get("price_competitiveness", metrics.get("price_competitiveness_1_5", 0))))
+		responsiveness = _dec(metrics.get("responsiveness", metrics.get("responsiveness_score", metrics.get("responsiveness_1_5", 0))))
 		for name, value in (
-			("quality_score_1_5", quality),
-			("price_competitiveness_1_5", price),
-			("responsiveness_1_5", responsiveness),
+			("OTD", otd),
+			("quality", quality),
+			("price", price),
+			("responsiveness", responsiveness),
 		):
-			if value < 1 or value > 5:
-				raise SupplierPortalServiceError(f"{name} must be between 1 and 5")
-		if otd < 0 or otd > 100:
-			raise SupplierPortalServiceError("on_time_delivery_pct must be between 0 and 100")
+			if value < 0 or value > 100:
+				raise SupplierPortalServiceError(f"{name} must be between 0 and 100")
 
 		overall = (
 			otd * _dec("0.4")
@@ -596,20 +668,34 @@ class SupplierPortalService:
 	# ------------------------------------------------------------------
 
 	@classmethod
-	def get_supplier_360(cls, supplier_id: str, session: Any) -> dict[str, Any]:
+	def get_supplier_360(
+		cls,
+		supplier_id: str,
+		session: Any,
+		tenant_id: str | None = None,
+	) -> dict[str, Any]:
 		"""Return supplier profile, recent scorecards, PO count, spend, and compliance status."""
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
 			SupplierProfile,
 			SupplierScorecard,
 		)
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 
 		scorecards = session.execute(
 			sa.select(SupplierScorecard)
-			.where(SupplierScorecard.supplier_id == supplier_id)
+			.where(
+				SupplierScorecard.tenant_id == tenant_id,
+				SupplierScorecard.supplier_id == supplier_id,
+			)
 			.order_by(SupplierScorecard.period.desc())
 			.limit(3)
 		).scalars().all()
@@ -620,12 +706,14 @@ class SupplierPortalService:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice, APPurchaseOrder
 			open_pos_count = int(session.execute(
 				sa.select(sa.func.count(APPurchaseOrder.id)).where(
+					APPurchaseOrder.tenant_id == tenant_id,
 					APPurchaseOrder.supplier_id == supplier_id,
 					APPurchaseOrder.status.notin_(["CLOSED", "CANCELLED"]),
 				)
 			).scalar() or 0)
 			total_spend_cents = int(session.execute(
 				sa.select(sa.func.coalesce(sa.func.sum(APInvoice.total_cents), 0)).where(
+					APInvoice.tenant_id == tenant_id,
 					APInvoice.supplier_id == supplier_id,
 				)
 			).scalar() or 0)
@@ -660,6 +748,7 @@ class SupplierPortalService:
 		severity: str,
 		notes: str | None,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> dict[str, Any]:
 		"""Create a risk flag and update SupplierProfile.risk_level."""
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
@@ -668,7 +757,13 @@ class SupplierPortalService:
 			SupplierRisk,
 		)
 
-		supplier = session.get(SupplierProfile, supplier_id)
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		normalized_type = risk_type.upper().strip()
@@ -707,6 +802,7 @@ class SupplierPortalService:
 		supplier_id: str,
 		periods: int,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> list[dict[str, Any]]:
 		"""Return the last N scorecards ordered by newest period first."""
 		from pgappforge.plugins.erp.procurement.supplier_portal.models import (
@@ -714,12 +810,22 @@ class SupplierPortalService:
 			SupplierScorecard,
 		)
 
-		if session.get(SupplierProfile, supplier_id) is None:
+		tenant_id = _tenant_id(tenant_id)
+		supplier = session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
+		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		limit = max(int(periods), 0)
 		rows = session.execute(
 			sa.select(SupplierScorecard)
-			.where(SupplierScorecard.supplier_id == supplier_id)
+			.where(
+				SupplierScorecard.tenant_id == tenant_id,
+				SupplierScorecard.supplier_id == supplier_id,
+			)
 			.order_by(SupplierScorecard.period.desc())
 			.limit(limit)
 		).scalars().all()
@@ -750,6 +856,7 @@ def _bpm_approve_kyc(
 			supplier_id=supplier_id,
 			approver_id=approver_id,
 			session=session,
+			tenant_id=record_ctx.get("tenant_id"),
 		)
 		return {
 			"status": "ok",
@@ -794,6 +901,7 @@ def _bpm_rate_supplier(
 			session=session,
 			po_count=po_count,
 			grn_count=grn_count,
+			tenant_id=record_ctx.get("tenant_id"),
 		)
 		return {
 			"status": "ok",

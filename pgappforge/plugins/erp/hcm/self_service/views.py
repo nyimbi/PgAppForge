@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class LeaveRequestView(ModelView):
 	datamodel = SQLAInterface(LeaveRequest)
 	list_columns = ["employee_id", "leave_type", "start_date", "end_date", "days_requested", "status"]
+	label_columns = {"employee_id": _("Employee"), "leave_type": _("Leave Type"), "start_date": _("Start Date"), "end_date": _("End Date"), "days_requested": _("Days Requested"), "status": _("Status")}
+	show_columns = ["employee_id", "leave_type", "start_date", "end_date", "days_requested", "status"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "leave_type", "status"]
@@ -55,6 +58,8 @@ class LeaveRequestView(ModelView):
 class LeaveBalanceView(ModelView):
 	datamodel = SQLAInterface(LeaveBalance)
 	list_columns = ["employee_id", "leave_type", "year", "entitled_days", "used_days", "balance_days"]
+	label_columns = {"employee_id": _("Employee"), "leave_type": _("Leave Type"), "year": _("Year"), "entitled_days": _("Entitled Days"), "used_days": _("Used Days"), "balance_days": _("Balance Days")}
+	show_columns = ["employee_id", "leave_type", "year", "entitled_days", "used_days", "balance_days"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "leave_type"]
@@ -63,6 +68,8 @@ class LeaveBalanceView(ModelView):
 class AnnouncementView(ModelView):
 	datamodel = SQLAInterface(Announcement)
 	list_columns = ["title", "priority", "is_pinned", "published_at", "expires_at"]
+	label_columns = {"title": _("Title"), "priority": _("Priority"), "is_pinned": _("Is Pinned"), "published_at": _("Published At"), "expires_at": _("Expires At")}
+	show_columns = ["title", "priority", "is_pinned", "published_at", "expires_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["title", "priority"]

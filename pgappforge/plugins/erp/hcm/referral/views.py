@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class ReferralProgramView(ModelView):
 	datamodel = SQLAInterface(ReferralProgram)
 	list_columns = ["name", "status", "reward_amount_cents", "reward_type", "starts_at", "ends_at"]
+	label_columns = {"name": _("Name"), "status": _("Status"), "reward_amount_cents": _("Reward Amount (KES)"), "reward_type": _("Reward Type"), "starts_at": _("Starts At"), "ends_at": _("Ends At")}
+	show_columns = ["name", "status", "reward_amount_cents", "reward_type", "starts_at", "ends_at", "reward_conditions", "eligible_positions"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "submissions"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "submissions"]
 	search_columns = ["name", "status"]
@@ -30,6 +33,8 @@ class ReferralProgramView(ModelView):
 class ReferralSubmissionView(ModelView):
 	datamodel = SQLAInterface(ReferralSubmission)
 	list_columns = ["referrer_id", "candidate_name", "candidate_email", "position", "status", "submitted_at"]
+	label_columns = {"referrer_id": _("Referrer"), "candidate_name": _("Candidate Name"), "candidate_email": _("Candidate Email"), "position": _("Position"), "status": _("Status"), "submitted_at": _("Submitted At")}
+	show_columns = ["referrer_id", "candidate_name", "candidate_email", "position", "status", "submitted_at", "candidate_phone", "resume_url", "notes", "hired_at", "reward_eligible", "program", "reward"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "reward"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "reward"]
 	search_columns = ["referrer_id", "candidate_name", "status"]
@@ -38,6 +43,8 @@ class ReferralSubmissionView(ModelView):
 class ReferralRewardView(ModelView):
 	datamodel = SQLAInterface(ReferralReward)
 	list_columns = ["referrer_id", "reward_amount_cents", "reward_type", "status", "approved_by", "paid_at"]
+	label_columns = {"referrer_id": _("Referrer"), "reward_amount_cents": _("Reward Amount (KES)"), "reward_type": _("Reward Type"), "status": _("Status"), "approved_by": _("Approved By"), "paid_at": _("Paid At")}
+	show_columns = ["referrer_id", "reward_amount_cents", "reward_type", "status", "approved_by", "paid_at", "approved_at", "payment_ref", "submission"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["referrer_id", "status"]

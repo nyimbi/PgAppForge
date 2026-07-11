@@ -120,10 +120,12 @@ class TaxPlugin(BasePlugin):
 			TaxCodeView,
 			TaxJurisdictionView,
 			TaxReportView,
+			TaxReturnSummaryView,
 			TaxReturnView,
 			TaxTransactionView,
 		)
 		cat = self.config.get("TAX_MENU_CATEGORY", "Tax")
+		self.add_view(TaxReturnSummaryView, "Tax Return Summary", icon="fa-dashboard", category=cat)
 		self.add_view(TaxJurisdictionView, "Tax Jurisdictions", icon="fa-globe", category=cat)
 		self.add_view(TaxCodeView, "Tax Codes", icon="fa-percent", category=cat)
 		self.add_view(TaxTransactionView, "Tax Transactions", icon="fa-list", category=cat)

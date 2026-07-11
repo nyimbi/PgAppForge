@@ -154,14 +154,46 @@ class ARPlugin(BasePlugin):
 		from pgappforge.plugins.erp.finance.ar.views import (
 			ARCustomerView,
 			ARCreditNoteView,
+			ARDashboardView,
 			ARDunningView,
 			ARInvoiceView,
 			ARPaymentView,
 			ARReportView,
 		)
 
+		from pgappforge.plugins.erp.finance.ar.api import (
+			ARCustomerRestApi,
+			ARInvoiceRestApi,
+			ARInvoiceLineRestApi,
+			ARPaymentRestApi,
+			ARAllocationRestApi,
+			ARCreditNoteRestApi,
+			ARDunningRunRestApi,
+			ARDunningEventRestApi,
+			ARAgingRestApi,
+		)
+
 		cat = self.config.get("AR_MENU_CATEGORY", "Accounts Receivable")
 
+		for api_class in (
+			ARCustomerRestApi,
+			ARInvoiceRestApi,
+			ARInvoiceLineRestApi,
+			ARPaymentRestApi,
+			ARAllocationRestApi,
+			ARCreditNoteRestApi,
+			ARDunningRunRestApi,
+			ARDunningEventRestApi,
+			ARAgingRestApi,
+		):
+			self.appbuilder.add_api(api_class)
+
+		self.add_view(
+			ARDashboardView,
+			"AR Dashboard",
+			icon="fa-dashboard",
+			category=cat,
+		)
 		self.add_view(
 			ARCustomerView,
 			"Customers",

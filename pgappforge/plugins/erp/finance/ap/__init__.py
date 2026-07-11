@@ -143,6 +143,7 @@ class APPlugin(BasePlugin):
 
 	def register_views(self) -> None:
 		from pgappforge.plugins.erp.finance.ap.views import (
+			APDashboardView,
 			APGoodsReceiptView,
 			APInvoiceView,
 			APPaymentRunView,
@@ -151,8 +152,36 @@ class APPlugin(BasePlugin):
 			APSupplierView,
 		)
 
+		from pgappforge.plugins.erp.finance.ap.api import (
+			APSupplierRestApi,
+			APPurchaseOrderRestApi,
+			APPOLineRestApi,
+			APGoodsReceiptRestApi,
+			APGRNLineRestApi,
+			APPaymentRunRestApi,
+			APInvoiceRestApi,
+			APInvoiceLineRestApi,
+			APApprovalWorkflowRestApi,
+			APPaymentRestApi,
+		)
+
 		cat = self.config.get("AP_MENU_CATEGORY", "Accounts Payable")
 
+		for api_class in (
+			APSupplierRestApi,
+			APPurchaseOrderRestApi,
+			APPOLineRestApi,
+			APGoodsReceiptRestApi,
+			APGRNLineRestApi,
+			APPaymentRunRestApi,
+			APInvoiceRestApi,
+			APInvoiceLineRestApi,
+			APApprovalWorkflowRestApi,
+			APPaymentRestApi,
+		):
+			self.appbuilder.add_api(api_class)
+
+		self.add_view(APDashboardView, "AP Dashboard", icon="fa-dashboard", category=cat)
 		self.add_view(APSupplierView, "Suppliers", icon="fa-truck", category=cat)
 		self.add_view(APPurchaseOrderView, "Purchase Orders", icon="fa-shopping-cart", category=cat)
 		self.add_view(APGoodsReceiptView, "Goods Receipts", icon="fa-inbox", category=cat)

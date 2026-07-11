@@ -154,7 +154,28 @@ class SalesPlugin(BasePlugin):
 			SalesReportView,
 		)
 
+		from pgappforge.plugins.erp.crm.sales.api import (
+			SalesAccountRestApi,
+			SalesContactRestApi,
+			LeadRestApi,
+			OpportunityRestApi,
+			ActivityRestApi,
+			SalesTargetRestApi,
+			SalesForecastRestApi,
+		)
+
 		cat = self.config.get("SALES_MENU_CATEGORY", "Sales")
+
+		for api_class in (
+			SalesAccountRestApi,
+			SalesContactRestApi,
+			LeadRestApi,
+			OpportunityRestApi,
+			ActivityRestApi,
+			SalesTargetRestApi,
+			SalesForecastRestApi,
+		):
+			self.appbuilder.add_api(api_class)
 
 		self.add_view(SalesAccountView, "Accounts", icon="fa-building", category=cat)
 		self.add_view(SalesContactView, "Contacts", icon="fa-address-book", category=cat)

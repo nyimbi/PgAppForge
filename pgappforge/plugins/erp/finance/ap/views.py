@@ -4,6 +4,7 @@ pgappforge/plugins/erp/finance/ap/views.py
 Flask views for the Accounts Payable plugin.
 
 Registered views:
+  APDashboardView        — Payment run dashboard
   APSupplierView          — CRUD + approve/block actions
   APPurchaseOrderView     — CRUD + approve/send/close actions
   APGoodsReceiptView      — CRUD + post GRN action
@@ -18,9 +19,10 @@ All mutating endpoints: POST/PUT JSON → JSON.
 List/detail: HTML for FAB list rendering; JSON available via ?format=json.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
@@ -60,6 +62,15 @@ def _he(s: object) -> str:
 	)
 
 
+def _cents_to_display(cents: int | None, currency: str = "USD") -> str:
+	if cents is None:
+		return "—"
+	major = cents // 100
+	minor = abs(cents) % 100
+	sign = "-" if cents < 0 else ""
+	return f"{sign}{major:,}.{minor:02d} {currency}"
+
+
 def _page_html(title: str, body: str) -> str:
 	return (
 		f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{title}</title>'
@@ -67,6 +78,286 @@ def _page_html(title: str, body: str) -> str:
 		'<style>body{padding:24px} @media print{.noprint{display:none}}</style>'
 		f'</head><body>{body}</body></html>'
 	)
+
+
+AP_DASHBOARD_LABEL_COLUMNS = {
+	"aging_buckets": _("AP Aging Buckets"),
+	"cash_required_this_week_cents": _("Cash Required This Week (cents)"),
+	"cash_required_next_week_cents": _("Cash Required Next Week (cents)"),
+	"cash_required_next_month_cents": _("Cash Required Next Month (cents)"),
+	"early_payment_discounts_available_cents": _("Early-payment Discounts Available (cents)"),
+	"dpo_days": _("Days Payable Outstanding"),
+}
+
+AP_SUPPLIER_LABEL_COLUMNS = {
+	"account_number": _("Account Number"),
+	"name": _("Supplier Name"),
+	"supplier_type": _("Supplier Type"),
+	"payment_terms_days": _("Payment Terms (days)"),
+	"payment_method": _("Payment Method"),
+	"currency_code": _("Currency"),
+	"bank_account_iban": _("Bank Account IBAN"),
+	"bank_bic": _("Bank BIC"),
+	"bank_account_name": _("Bank Account Name"),
+	"tax_id": _("Tax ID"),
+	"vat_number": _("VAT Number"),
+	"approved_supplier": _("Approved Supplier"),
+	"gl_payable_account": _("GL Payable Account"),
+	"dynamic_discounting_eligible": _("Dynamic Discounting Eligible"),
+	"early_payment_discount_pct": _("Early-payment Discount %"),
+	"early_payment_days": _("Early-payment Days"),
+}
+
+AP_PURCHASE_ORDER_LABEL_COLUMNS = {
+	"po_number": _("PO Number"),
+	"supplier_id": _("Supplier"),
+	"order_date": _("Order Date"),
+	"delivery_date": _("Delivery Date"),
+	"currency_code": _("Currency"),
+	"subtotal_cents": _("Subtotal (cents)"),
+	"tax_cents": _("Tax (cents)"),
+	"total_cents": _("Total (cents)"),
+	"received_cents": _("Received (cents)"),
+	"invoiced_cents": _("Invoiced (cents)"),
+	"paid_cents": _("Paid (cents)"),
+	"approval_date": _("Approval Date"),
+}
+
+AP_GRN_LABEL_COLUMNS = {
+	"grn_number": _("GRN Number"),
+	"po_id": _("Purchase Order"),
+	"supplier_id": _("Supplier"),
+	"received_by": _("Received By"),
+	"received_date": _("Received Date"),
+	"warehouse_id": _("Warehouse"),
+	"quantity_received": _("Quantity Received"),
+	"quantity_accepted": _("Quantity Accepted"),
+	"quantity_rejected": _("Quantity Rejected"),
+}
+
+AP_INVOICE_LABEL_COLUMNS = {
+	"invoice_number_supplier": _("Supplier Invoice Number"),
+	"supplier_id": _("Supplier"),
+	"po_id": _("Purchase Order"),
+	"grn_id": _("Goods Receipt"),
+	"payment_run_id": _("Payment Run"),
+	"invoice_date": _("Invoice Date"),
+	"due_date": _("Due Date"),
+	"currency_code": _("Currency"),
+	"subtotal_cents": _("Subtotal (cents)"),
+	"discount_cents": _("Discount (cents)"),
+	"tax_cents": _("Tax (cents)"),
+	"total_cents": _("Total (cents)"),
+	"paid_cents": _("Paid (cents)"),
+	"early_payment_discount_taken_cents": _("Early-payment Discount Taken (cents)"),
+	"gl_payable_account": _("GL Payable Account"),
+	"match_status": _("Match Status"),
+	"approval_status": _("Approval Status"),
+}
+
+AP_PAYMENT_RUN_LABEL_COLUMNS = {
+	"run_number": _("Run Number"),
+	"run_date": _("Run Date"),
+	"value_date": _("Value Date"),
+	"bank_account": _("Bank Account"),
+	"bic": _("BIC"),
+	"currency_code": _("Currency"),
+	"total_payments": _("Total Payments"),
+	"total_amount_cents": _("Total Amount (cents)"),
+	"payment_file_ref": _("Payment File Reference"),
+	"iso20022_xml": _("ISO 20022 XML"),
+	"approved_by": _("Approved By"),
+	"approved_at": _("Approved At"),
+}
+
+AP_REPORT_LABEL_COLUMNS = {
+	"current_cents": _("Current (cents)"),
+	"days_1_30": _("1-30 Days (cents)"),
+	"days_31_60": _("31-60 Days (cents)"),
+	"days_61_90": _("61-90 Days (cents)"),
+	"days_90_plus": _("90+ Days (cents)"),
+	"cash_required_cents": _("Cash Required (cents)"),
+	"dpo_days": _("Days Payable Outstanding"),
+}
+
+
+# ---------------------------------------------------------------------------
+# APDashboardView
+# ---------------------------------------------------------------------------
+
+class APDashboardView(BaseERPView):
+	"""AP payment run dashboard: due buckets, cash needs, discounts, and DPO."""
+
+	route_base = "/ap/dashboard"
+	default_view = "index"
+	label_columns = AP_DASHBOARD_LABEL_COLUMNS
+
+	@expose("/")
+	@has_access
+	def index(self):
+		from decimal import Decimal, ROUND_HALF_UP
+
+		from pgappforge.plugins.erp.finance.ap.models import APInvoice, APSupplier
+
+		session = _get_session()
+		today = datetime.now(timezone.utc).date()
+		tenant_id = request.args.get("tenant_id")
+		outstanding_expr = APInvoice.total_cents - APInvoice.paid_cents
+		buckets = {
+			"current": {"label": "Current", "invoice_count": 0, "total_cents": 0},
+			"days_1_30": {"label": "1-30 Days Overdue", "invoice_count": 0, "total_cents": 0},
+			"days_31_60": {"label": "31-60 Days Overdue", "invoice_count": 0, "total_cents": 0},
+			"days_61_90": {"label": "61-90 Days Overdue", "invoice_count": 0, "total_cents": 0},
+			"days_90_plus": {"label": "90+ Days Overdue", "invoice_count": 0, "total_cents": 0},
+		}
+		cash_required = {
+			"this_week_cents": 0,
+			"next_week_cents": 0,
+			"next_month_cents": 0,
+		}
+		discount_rows = []
+
+		q = (
+			sa.select(APInvoice, APSupplier)
+			.join(APSupplier, APInvoice.supplier_id == APSupplier.id)
+			.where(APInvoice.status.not_in(["PAID", "CANCELLED"]))
+			.where(outstanding_expr > 0)
+			.order_by(APInvoice.due_date, APSupplier.name)
+		)
+		if tenant_id:
+			q = q.where(APInvoice.tenant_id == tenant_id)
+
+		rows = session.execute(q).all()
+		outstanding_total_cents = 0
+		for inv, supplier in rows:
+			due = inv.due_date.date() if hasattr(inv.due_date, "date") else inv.due_date
+			invoice_date = inv.invoice_date.date() if hasattr(inv.invoice_date, "date") else inv.invoice_date
+			days_overdue = (today - due).days if due else 0
+			outstanding_cents = int((inv.total_cents or 0) - (inv.paid_cents or 0))
+			outstanding_total_cents += outstanding_cents
+
+			if days_overdue <= 0:
+				bucket_key = "current"
+			elif days_overdue <= 30:
+				bucket_key = "days_1_30"
+			elif days_overdue <= 60:
+				bucket_key = "days_31_60"
+			elif days_overdue <= 90:
+				bucket_key = "days_61_90"
+			else:
+				bucket_key = "days_90_plus"
+			buckets[bucket_key]["invoice_count"] += 1
+			buckets[bucket_key]["total_cents"] += outstanding_cents
+
+			if due and due <= today + timedelta(days=7):
+				cash_required["this_week_cents"] += outstanding_cents
+			elif due and due <= today + timedelta(days=14):
+				cash_required["next_week_cents"] += outstanding_cents
+			elif due and due <= today + timedelta(days=30):
+				cash_required["next_month_cents"] += outstanding_cents
+
+			discount_pct = supplier.early_payment_discount_pct or Decimal("0")
+			if (
+				supplier.dynamic_discounting_eligible
+				and supplier.early_payment_days
+				and discount_pct > 0
+				and invoice_date
+			):
+				discount_deadline = invoice_date + timedelta(days=int(supplier.early_payment_days))
+				if today <= discount_deadline:
+					discount_cents = int(
+						(Decimal(outstanding_cents) * discount_pct / Decimal("100"))
+						.to_integral_value(rounding=ROUND_HALF_UP)
+					)
+					if discount_cents > 0:
+						discount_rows.append({
+							"invoice_id": inv.id,
+							"invoice_number": inv.invoice_number_supplier,
+							"supplier_id": supplier.id,
+							"supplier": supplier.name,
+							"discount_deadline": discount_deadline.isoformat(),
+							"discount_cents": discount_cents,
+							"outstanding_cents": outstanding_cents,
+						})
+
+		period_start = today - timedelta(days=90)
+		purchases_q = (
+			sa.select(sa.func.coalesce(sa.func.sum(APInvoice.total_cents), 0))
+			.where(APInvoice.invoice_date >= period_start)
+			.where(APInvoice.status.not_in(["CANCELLED"]))
+		)
+		if tenant_id:
+			purchases_q = purchases_q.where(APInvoice.tenant_id == tenant_id)
+		period_purchase_cents = int(session.execute(purchases_q).scalar() or 0)
+		dpo_days = round((outstanding_total_cents / period_purchase_cents) * 90, 2) if period_purchase_cents else 0
+
+		discount_rows = sorted(
+			discount_rows,
+			key=lambda row: int(row["discount_cents"]),
+			reverse=True,
+		)
+		discount_total_cents = sum(int(row["discount_cents"]) for row in discount_rows)
+		payload = {
+			"as_of": today.isoformat(),
+			"aging_buckets": buckets,
+			"cash_required": cash_required,
+			"cash_required_this_week_cents": cash_required["this_week_cents"],
+			"cash_required_next_week_cents": cash_required["next_week_cents"],
+			"cash_required_next_month_cents": cash_required["next_month_cents"],
+			"early_payment_discounts_available_cents": discount_total_cents,
+			"early_payment_discounts": discount_rows,
+			"period_purchase_cents": period_purchase_cents,
+			"outstanding_total_cents": outstanding_total_cents,
+			"dpo_days": dpo_days,
+		}
+
+		if request.args.get("format") == "json":
+			return jsonify(payload)
+
+		bucket_rows = "".join(
+			f"<tr><td>{_he(bucket['label'])}</td>"
+			f"<td class='text-right'>{bucket['invoice_count']}</td>"
+			f"<td class='text-right'>{_cents_to_display(bucket['total_cents'])}</td></tr>"
+			for bucket in buckets.values()
+		)
+		cash_rows = "".join(
+			f"<tr><td>{_he(label)}</td><td class='text-right'>{_cents_to_display(cents)}</td></tr>"
+			for label, cents in (
+				("This week", cash_required["this_week_cents"]),
+				("Next week", cash_required["next_week_cents"]),
+				("Next month", cash_required["next_month_cents"]),
+			)
+		)
+		discount_table_rows = "".join(
+			f"<tr><td>{_he(row['supplier'])}</td><td>{_he(row['invoice_number'])}</td>"
+			f"<td>{_he(row['discount_deadline'])}</td>"
+			f"<td class='text-right'>{_cents_to_display(int(row['discount_cents']))}</td>"
+			f"<td class='text-right'>{_cents_to_display(int(row['outstanding_cents']))}</td></tr>"
+			for row in discount_rows[:10]
+		)
+		kpi_html = self.kpi_cards([
+			{"label": "Outstanding (cents)", "value": outstanding_total_cents, "format": "integer", "color": "#e02424", "icon": "fa-file-invoice"},
+			{"label": "Discounts Available (cents)", "value": discount_total_cents, "format": "integer", "color": "#0e9f6e", "icon": "fa-tags"},
+			{"label": "DPO Days", "value": dpo_days, "format": "integer", "color": "#7e3af2", "icon": "fa-clock"},
+		])
+		empty_discount_row = '<tr><td colspan="5" class="text-center text-muted">No discounts currently available</td></tr>'
+		body = (
+			f'<h3>AP Payment Run Dashboard <small>as of {today.isoformat()}</small></h3>'
+			f'{kpi_html}'
+			'<h4>AP Aging by Due Date</h4>'
+			'<table class="table table-bordered table-condensed">'
+			'<thead><tr><th>Bucket</th><th class="text-right">Invoices</th><th class="text-right">Total</th></tr></thead>'
+			f'<tbody>{bucket_rows}</tbody></table>'
+			'<h4>Cash Required</h4>'
+			'<table class="table table-bordered table-condensed"><tbody>'
+			f'{cash_rows}</tbody></table>'
+			'<h4>Early-payment Discounts Available</h4>'
+			'<table class="table table-bordered table-condensed table-hover">'
+			'<thead><tr><th>Supplier</th><th>Invoice</th><th>Deadline</th><th class="text-right">Discount</th><th class="text-right">Outstanding</th></tr></thead>'
+			f'<tbody>{discount_table_rows or empty_discount_row}</tbody></table>'
+			f'<p style="color:#888;font-size:0.75em">Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</p>'
+		)
+		return make_response(_page_html("AP Payment Run Dashboard", body), 200)
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +377,7 @@ class APSupplierView(BaseERPView):
 
 	route_base = "/ap/suppliers"
 	default_view = "list"
+	label_columns = AP_SUPPLIER_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -113,18 +405,26 @@ class APSupplierView(BaseERPView):
 				for s in suppliers
 			]})
 
-		rows = "".join(
-			f"<tr>"
-			f"<td>{_he(s.account_number)}</td>"
-			f"<td>{_he(s.name)}</td>"
-			f"<td>{_he(s.currency_code)}</td>"
-			f"<td>{_he(s.payment_terms_days)}</td>"
-			f"<td>{'<span class=\"label label-success\">Yes</span>' if s.approved_supplier else '<span class=\"label label-danger\">No</span>'}</td>"
-			f"<td><span class=\"label label-{'success' if s.status=='active' else 'warning'}\">{_he(s.status)}</span></td>"
-			f"<td><a href='/ap/suppliers/{_he(s.id)}' class='btn btn-xs btn-primary'>View</a></td>"
-			f"</tr>"
-			for s in suppliers
-		)
+		row_parts = []
+		for s in suppliers:
+			approved_label = (
+				'<span class="label label-success">Yes</span>'
+				if s.approved_supplier
+				else '<span class="label label-danger">No</span>'
+			)
+			status_label = "success" if s.status == "active" else "warning"
+			row_parts.append(
+				f"<tr>"
+				f"<td>{_he(s.account_number)}</td>"
+				f"<td>{_he(s.name)}</td>"
+				f"<td>{_he(s.currency_code)}</td>"
+				f"<td>{_he(s.payment_terms_days)}</td>"
+				f"<td>{approved_label}</td>"
+				f"<td><span class='label label-{status_label}'>{_he(s.status)}</span></td>"
+				f"<td><a href='/ap/suppliers/{_he(s.id)}' class='btn btn-xs btn-primary'>View</a></td>"
+				f"</tr>"
+			)
+		rows = "".join(row_parts)
 		body = (
 			'<div class="noprint"><h3>Suppliers</h3>'
 			'<a href="/ap/suppliers/?status=active" class="btn btn-xs btn-default">Active</a> '
@@ -283,11 +583,13 @@ class APPurchaseOrderView(BaseERPView):
 	PUT  /ap/purchase-orders/<id>          — update (DRAFT only)
 	POST /ap/purchase-orders/<id>/approve  — PENDING_APPROVAL → APPROVED
 	POST /ap/purchase-orders/<id>/send     — APPROVED → SENT
+	POST /ap/purchase-orders/<id>/process  — advance generic P2P workflow state
 	POST /ap/purchase-orders/<id>/cancel   — → CANCELLED
 	"""
 
 	route_base = "/ap/purchase-orders"
 	default_view = "list"
+	label_columns = AP_PURCHASE_ORDER_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -308,10 +610,12 @@ class APPurchaseOrderView(BaseERPView):
 				{
 					"id": po.id, "po_number": po.po_number,
 					"supplier_id": po.supplier_id,
+					"purchase_requisition_id": po.purchase_requisition_id,
 					"order_date": po.order_date.isoformat() if po.order_date else None,
 					"total_cents": po.total_cents,
 					"currency_code": po.currency_code,
 					"status": po.status,
+					"process_url": f"/ap/purchase-orders/{po.id}/process",
 				}
 				for po in orders
 			]})
@@ -322,7 +626,9 @@ class APPurchaseOrderView(BaseERPView):
 			f"<td>{_he(po.order_date)}</td>"
 			f"<td>{_he(po.currency_code)} {po.total_cents / 100:,.2f}</td>"
 			f"<td><span class='label label-info'>{_he(po.status)}</span></td>"
-			f"<td><a href='/ap/purchase-orders/{_he(po.id)}' class='btn btn-xs btn-primary'>View</a></td>"
+			f"<td><a href='/ap/purchase-orders/{_he(po.id)}' class='btn btn-xs btn-primary'>View</a> "
+			f"<form method='post' action='/ap/purchase-orders/{_he(po.id)}/process' style='display:inline'>"
+			f"<button type='submit' class='btn btn-xs btn-default'>Process</button></form></td>"
 			f"</tr>"
 			for po in orders
 		)
@@ -345,6 +651,7 @@ class APPurchaseOrderView(BaseERPView):
 		return jsonify({
 			"id": po.id, "po_number": po.po_number,
 			"supplier_id": po.supplier_id,
+			"purchase_requisition_id": po.purchase_requisition_id,
 			"order_date": po.order_date.isoformat() if po.order_date else None,
 			"delivery_date": po.delivery_date.isoformat() if po.delivery_date else None,
 			"currency_code": po.currency_code,
@@ -400,6 +707,7 @@ class APPurchaseOrderView(BaseERPView):
 			tenant_id=data["tenant_id"],
 			po_number=data.get("po_number") or f"PO-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
 			supplier_id=data["supplier_id"],
+			purchase_requisition_id=data.get("purchase_requisition_id"),
 			requisitioner_id=data.get("requisitioner_id"),
 			order_date=order_date,
 			delivery_date=delivery_date,
@@ -464,6 +772,19 @@ class APPurchaseOrderView(BaseERPView):
 		session.commit()
 		return jsonify({"ok": True, "status": "SENT"})
 
+	@expose("/<string:po_id>/process", methods=["POST"])
+	@has_access
+	def process(self, po_id: str):
+		from pgappforge.plugins.erp.finance.ap.services import APService, APServiceError
+		session = _get_session()
+		try:
+			po = APService().advance_to_next_step(po_id, session)
+			session.commit()
+			return jsonify({"ok": True, "id": po.id, "status": po.status})
+		except APServiceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
+
 	@expose("/<string:po_id>/cancel", methods=["POST"])
 	@has_access
 	def cancel(self, po_id: str):
@@ -491,10 +812,12 @@ class APGoodsReceiptView(BaseERPView):
 	GET  /ap/grn/<id>          — detail
 	POST /ap/grn/              — create GRN with lines
 	POST /ap/grn/<id>/post     — post confirmed GRN (updates PO quantity)
+	POST /ap/grn/<id>/process  — advance generic P2P workflow state
 	"""
 
 	route_base = "/ap/grn"
 	default_view = "list"
+	label_columns = AP_GRN_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -513,6 +836,7 @@ class APGoodsReceiptView(BaseERPView):
 				"supplier_id": g.supplier_id,
 				"received_date": g.received_date.isoformat() if g.received_date else None,
 				"status": g.status,
+				"process_url": f"/ap/grn/{g.id}/process",
 			}
 			for g in grns
 		]})
@@ -602,6 +926,19 @@ class APGoodsReceiptView(BaseERPView):
 		except APServiceError as exc:
 			return jsonify({"ok": False, "error": str(exc)}), 400
 
+	@expose("/<string:grn_id>/process", methods=["POST"])
+	@has_access
+	def process(self, grn_id: str):
+		from pgappforge.plugins.erp.finance.ap.services import APService, APServiceError
+		session = _get_session()
+		try:
+			grn = APService().advance_to_next_step(grn_id, session)
+			session.commit()
+			return jsonify({"ok": True, "id": grn.id, "status": grn.status})
+		except APServiceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 # ---------------------------------------------------------------------------
 # APInvoiceView
@@ -617,10 +954,12 @@ class APInvoiceView(BaseERPView):
 	POST /ap/invoices/<id>/approve       — record approval decision
 	POST /ap/invoices/<id>/dispute       — set status=DISPUTED
 	POST /ap/invoices/<id>/post-gl       — post to GL
+	POST /ap/invoices/<id>/process       — advance generic P2P workflow state
 	"""
 
 	route_base = "/ap/invoices"
 	default_view = "list"
+	label_columns = AP_INVOICE_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -651,6 +990,7 @@ class APInvoiceView(BaseERPView):
 					"match_status": i.match_status,
 					"approval_status": i.approval_status,
 					"status": i.status,
+					"process_url": f"/ap/invoices/{i.id}/process",
 				}
 				for i in invoices
 			]})
@@ -664,7 +1004,9 @@ class APInvoiceView(BaseERPView):
 			f"<td>{_he(i.match_status)}</td>"
 			f"<td>{_he(i.approval_status)}</td>"
 			f"<td><span class='label label-{'success' if i.status=='PAID' else 'default'}'>{_he(i.status)}</span></td>"
-			f"<td><a href='/ap/invoices/{_he(i.id)}' class='btn btn-xs btn-primary'>View</a></td>"
+			f"<td><a href='/ap/invoices/{_he(i.id)}' class='btn btn-xs btn-primary'>View</a> "
+			f"<form method='post' action='/ap/invoices/{_he(i.id)}/process' style='display:inline'>"
+			f"<button type='submit' class='btn btn-xs btn-default'>Process</button></form></td>"
 			f"</tr>"
 			for i in invoices
 		)
@@ -875,6 +1217,19 @@ class APInvoiceView(BaseERPView):
 		except APServiceError as exc:
 			return jsonify({"ok": False, "error": str(exc)}), 400
 
+	@expose("/<string:invoice_id>/process", methods=["POST"])
+	@has_access
+	def process(self, invoice_id: str):
+		from pgappforge.plugins.erp.finance.ap.services import APService, APServiceError
+		session = _get_session()
+		try:
+			inv = APService().advance_to_next_step(invoice_id, session)
+			session.commit()
+			return jsonify({"ok": True, "id": inv.id, "status": inv.status})
+		except APServiceError as exc:
+			session.rollback()
+			return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 # ---------------------------------------------------------------------------
 # APPaymentRunView
@@ -892,6 +1247,7 @@ class APPaymentRunView(BaseERPView):
 
 	route_base = "/ap/payment-runs"
 	default_view = "list"
+	label_columns = AP_PAYMENT_RUN_LABEL_COLUMNS
 
 	@expose("/")
 	@has_access
@@ -1024,6 +1380,7 @@ class APReportView(BaseERPView):
 
 	route_base = "/ap/reports"
 	default_view = "aging"
+	label_columns = AP_REPORT_LABEL_COLUMNS
 
 	@expose("/aging")
 	@has_access
@@ -1264,6 +1621,7 @@ class APReportView(BaseERPView):
 
 
 __all__ = [
+	"APDashboardView",
 	"APSupplierView",
 	"APPurchaseOrderView",
 	"APGoodsReceiptView",

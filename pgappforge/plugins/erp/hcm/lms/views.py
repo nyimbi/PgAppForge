@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class LmsCourseView(ModelView):
 	datamodel = SQLAInterface(LmsCourse)
 	list_columns = ["code", "title", "course_type", "status", "duration_minutes", "is_mandatory"]
+	label_columns = {"code": _("Code"), "title": _("Title"), "course_type": _("Course Type"), "status": _("Status"), "duration_minutes": _("Duration Minutes"), "is_mandatory": _("Is Mandatory")}
+	show_columns = ["code", "title", "course_type", "status", "duration_minutes", "is_mandatory", "description", "passing_score", "max_attempts", "mandatory_roles", "due_days", "content_url", "scorm_manifest", "thumbnail_url", "tags", "created_by", "published_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "lessons", "enrollments", "certificates"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "lessons", "enrollments", "certificates"]
 	search_columns = ["code", "title", "course_type", "status"]
@@ -30,6 +33,8 @@ class LmsCourseView(ModelView):
 class LmsEnrollmentView(ModelView):
 	datamodel = SQLAInterface(LmsEnrollment)
 	list_columns = ["employee_id", "course", "status", "enrolled_at", "due_date", "passed"]
+	label_columns = {"employee_id": _("Employee"), "course": _("Course"), "status": _("Status"), "enrolled_at": _("Enrolled At"), "due_date": _("Due Date"), "passed": _("Passed")}
+	show_columns = ["employee_id", "course", "status", "enrolled_at", "due_date", "passed", "completed_at", "final_score", "attempt_number", "assigned_by", "certificate"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "progress_rows", "certificate"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "progress_rows", "certificate"]
 	search_columns = ["employee_id", "status"]
@@ -38,6 +43,8 @@ class LmsEnrollmentView(ModelView):
 class LmsCertificateView(ModelView):
 	datamodel = SQLAInterface(LmsCertificate)
 	list_columns = ["employee_id", "course", "certificate_ref", "issued_at", "expires_at"]
+	label_columns = {"employee_id": _("Employee"), "course": _("Course"), "certificate_ref": _("Certificate Ref"), "issued_at": _("Issued At"), "expires_at": _("Expires At")}
+	show_columns = ["employee_id", "course", "certificate_ref", "issued_at", "expires_at", "credential_url", "enrollment"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "certificate_ref"]

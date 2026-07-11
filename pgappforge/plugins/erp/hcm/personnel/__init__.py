@@ -171,7 +171,36 @@ class PersonnelPlugin(BasePlugin):
 			PersonnelReportView,
 		)
 
+		from pgappforge.plugins.erp.hcm.personnel.api import (
+			EmployeeRestApi,
+			EmployeeCompensationRestApi,
+			EmployeeDocumentRestApi,
+			EmploymentContractRestApi,
+			DisciplinaryCaseRestApi,
+			DisciplinaryActionRestApi,
+			GrievanceCaseRestApi,
+			OnboardingPlanRestApi,
+			EmployeeExitRestApi,
+			OrgJobGradeRestApi,
+			EmployeePositionHistoryRestApi,
+		)
+
 		cat = self.config.get("HCM_PER_MENU_CATEGORY", "HCM — Personnel")
+
+		for api_class in (
+			EmployeeRestApi,
+			EmployeeCompensationRestApi,
+			EmployeeDocumentRestApi,
+			EmploymentContractRestApi,
+			DisciplinaryCaseRestApi,
+			DisciplinaryActionRestApi,
+			GrievanceCaseRestApi,
+			OnboardingPlanRestApi,
+			EmployeeExitRestApi,
+			OrgJobGradeRestApi,
+			EmployeePositionHistoryRestApi,
+		):
+			self.appbuilder.add_api(api_class)
 
 		self.add_view(EmployeeView, "Employees", icon="fa-users", category=cat)
 		self.add_view(EmployeeCompensationView, "Compensation", icon="fa-money", category=cat)

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -20,6 +21,8 @@ __all__ = [
 class WorkforcePlanView(ModelView):
 	datamodel = SQLAInterface(WorkforcePlan)
 	list_columns = ["name", "entity_id", "plan_year", "status", "total_planned_fte", "total_budget_cents"]
+	label_columns = {"name": _("Name"), "entity_id": _("Legal Entity"), "plan_year": _("Plan Year"), "status": _("Status"), "total_planned_fte": _("Total Planned Fte"), "total_budget_cents": _("Total Budget (KES)")}
+	show_columns = ["name", "plan_year", "status", "total_planned_fte", "total_budget_cents", "approved_by", "approved_at", "gl_cost_center", "metadata_"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "positions", "scenarios"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "positions", "scenarios"]
 	search_columns = ["name", "entity_id", "status"]
@@ -28,6 +31,8 @@ class WorkforcePlanView(ModelView):
 class PlannedPositionView(ModelView):
 	datamodel = SQLAInterface(PlannedPosition)
 	list_columns = ["position_code", "position_title", "department", "planned_fte", "headcount_change_type", "approval_status"]
+	label_columns = {"position_code": _("Position Code"), "position_title": _("Position Title"), "department": _("Department"), "planned_fte": _("Planned Fte"), "headcount_change_type": _("Headcount Change Type"), "approval_status": _("Approval Status")}
+	show_columns = ["position_code", "position_title", "department", "planned_fte", "headcount_change_type", "approval_status", "grade_level", "annual_base_cost_cents", "total_annual_cost_cents", "planned_start_date", "notes", "plan"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["position_code", "position_title", "headcount_change_type"]

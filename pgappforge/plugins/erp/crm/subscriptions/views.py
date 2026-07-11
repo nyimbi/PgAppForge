@@ -4,6 +4,7 @@ pgappforge/plugins/erp/crm/subscriptions/views.py
 Flask-AppBuilder views for the Subscriptions plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -26,12 +27,12 @@ class SubscriptionPlanView(ModelView):
 	datamodel = SQLAInterface(SubscriptionPlan)
 	list_columns = ['name', 'plan_code', 'billing_interval', 'base_price_cents', 'currency_code', 'is_active']
 	label_columns = {
-		'name': 'Name',
-		'plan_code': 'Plan Code',
-		'billing_interval': 'Billing Interval',
-		'base_price_cents': 'Base Price Cents',
-		'currency_code': 'Currency Code',
-		'is_active': 'Active',
+		'name': _('Name'),
+		'plan_code': _('Plan Code'),
+		'billing_interval': _('Billing Interval'),
+		'base_price_cents': _('Base Price Cents'),
+		'currency_code': _('Currency Code'),
+		'is_active': _('Active'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -41,10 +42,10 @@ class SubscriptionView(ModelView):
 	datamodel = SQLAInterface(Subscription)
 	list_columns = ['customer_id', 'plan_id', 'status', 'current_period_start']
 	label_columns = {
-		'customer_id': 'Customer',
-		'plan_id': 'Plan',
-		'status': 'Status',
-		'current_period_start': 'Current Period Start',
+		'customer_id': _('Customer'),
+		'plan_id': _('Plan'),
+		'status': _('Status'),
+		'current_period_start': _('Current Period Start'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -54,11 +55,11 @@ class SubscriptionInvoiceView(ModelView):
 	datamodel = SQLAInterface(SubscriptionInvoice)
 	list_columns = ['subscription_id', 'status', 'amount_cents', 'currency_code', 'due_date']
 	label_columns = {
-		'subscription_id': 'Subscription',
-		'status': 'Status',
-		'amount_cents': 'Amount Cents',
-		'currency_code': 'Currency Code',
-		'due_date': 'Due Date',
+		'subscription_id': _('Subscription'),
+		'status': _('Status'),
+		'amount_cents': _('Amount Cents'),
+		'currency_code': _('Currency Code'),
+		'due_date': _('Due Date'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

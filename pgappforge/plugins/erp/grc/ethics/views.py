@@ -4,6 +4,7 @@ pgappforge/plugins/erp/grc/ethics/views.py
 Flask-AppBuilder views for the Ethics & Hotline plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 from datetime import datetime, timedelta, timezone
@@ -53,10 +54,10 @@ class EthicsReportView(ModelView):
 	datamodel = SQLAInterface(EthicsReport)
 	list_columns = ["category", "severity", "status", "submitted_at"]
 	label_columns = {
-		"category": "Category",
-		"severity": "Severity",
-		"status": "Status",
-		"submitted_at": "Submitted",
+		"category": _("Category"),
+		"severity": _("Severity"),
+		"status": _("Status"),
+		"submitted_at": _("Submitted"),
 	}
 	add_exclude_columns = ["id", "submitted_at"]
 	edit_exclude_columns = ["id", "submitted_at"]
@@ -68,11 +69,11 @@ class EthicsCaseView(ModelView):
 	datamodel = SQLAInterface(EthicsCase)
 	list_columns = ["report_id", "status", "assigned_to", "opened_at", "closed_at"]
 	label_columns = {
-		"report_id": "Report",
-		"status": "Status",
-		"assigned_to": "Investigator",
-		"opened_at": "Opened",
-		"closed_at": "Closed",
+		"report_id": _("Report"),
+		"status": _("Status"),
+		"assigned_to": _("Investigator"),
+		"opened_at": _("Opened"),
+		"closed_at": _("Closed"),
 	}
 	add_exclude_columns = ["id", "opened_at"]
 	edit_exclude_columns = ["id", "opened_at"]

@@ -11,6 +11,26 @@ def _dec(value: Any) -> Decimal:
 	return Decimal(str(value))
 
 
+def current_tenant_id() -> str | None:
+	try:
+		from pgappforge.multitenancy.middleware import get_current_tenant_id
+		tenant_id = get_current_tenant_id()
+	except Exception:
+		tenant_id = None
+	return str(tenant_id) if tenant_id else None
+
+
+def _tenant_id(explicit_tenant_id: str | None = None) -> str:
+	tenant_id = current_tenant_id()
+	if tenant_id:
+		if explicit_tenant_id and str(explicit_tenant_id) != tenant_id:
+			raise ValueError("tenant_id does not match current tenant")
+		return tenant_id
+	if explicit_tenant_id:
+		return str(explicit_tenant_id)
+	raise ValueError("Tenant context required")
+
+
 def _pct(numerator: int, denominator: int) -> Decimal:
 	if denominator <= 0:
 		return Decimal("0")
@@ -44,6 +64,7 @@ class SpendAnalyticsService:
 		to_period: str,
 		session: Any,
 	) -> dict[str, Any]:
+		tenant_id = _tenant_id(tenant_id)
 		try:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice
 		except ImportError as exc:
@@ -109,6 +130,7 @@ class SpendAnalyticsService:
 		}
 
 	def get_category_breakdown(self, tenant_id: str, session: Any) -> dict[str, int]:
+		tenant_id = _tenant_id(tenant_id)
 		try:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice
 			rows = session.execute(
@@ -126,6 +148,7 @@ class SpendAnalyticsService:
 
 	def get_savings_opportunities(self, tenant_id: str, session: Any) -> list[dict[str, Any]]:
 		"""Find suppliers with repeated invoice-line prices above category median."""
+		tenant_id = _tenant_id(tenant_id)
 		try:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice, APInvoiceLine, APSupplier
 		except ImportError:
@@ -151,6 +174,8 @@ class SpendAnalyticsService:
 			.join(APSupplier, APSupplier.id == APInvoice.supplier_id)
 			.where(
 				APInvoice.tenant_id == tenant_id,
+				APInvoiceLine.tenant_id == tenant_id,
+				APSupplier.tenant_id == tenant_id,
 				APInvoice.invoice_date >= cutoff,
 				unit_column.is_not(None),
 			)
@@ -168,6 +193,7 @@ class SpendAnalyticsService:
 			bucket = supplier_category.setdefault(
 				key,
 				{
+					"supplier_id": str(supplier_id),
 					"supplier_name": supplier_name,
 					"category": cat,
 					"prices": [],
@@ -195,6 +221,7 @@ class SpendAnalyticsService:
 			if opportunity_pct <= Decimal("10"):
 				continue
 			results.append({
+				"supplier_id": bucket["supplier_id"],
 				"supplier_name": bucket["supplier_name"],
 				"category": bucket["category"],
 				"avg_price_cents": avg_price,
@@ -206,13 +233,16 @@ class SpendAnalyticsService:
 		return sorted(results, key=lambda row: row["opportunity_pct"], reverse=True)
 
 	def get_maverick_spend(self, tenant_id: str, session: Any) -> dict[str, Any]:
-		"""Report spend from non-approved AP suppliers."""
+		"""Report spend from AP suppliers that have no Supplier Portal profile."""
+		tenant_id = _tenant_id(tenant_id)
 		try:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice, APInvoiceLine, APSupplier
+			from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 		except ImportError:
 			return {
 				"total_maverick_cents": 0,
 				"maverick_pct_of_total": Decimal("0"),
+				"maverick_suppliers": [],
 				"top_10_offending_departments": [],
 			}
 
@@ -221,8 +251,32 @@ class SpendAnalyticsService:
 			return {
 				"total_maverick_cents": 0,
 				"maverick_pct_of_total": Decimal("0"),
+				"maverick_suppliers": [],
 				"top_10_offending_departments": [],
 			}
+
+		portal_exists = sa.exists().where(
+			SupplierProfile.tenant_id == tenant_id,
+			SupplierProfile.tenant_id == APInvoice.tenant_id,
+			sa.or_(
+				SupplierProfile.id == APInvoice.supplier_id,
+				sa.and_(
+					APSupplier.account_number.is_not(None),
+					APSupplier.account_number != "",
+					SupplierProfile.supplier_ref == APSupplier.account_number,
+				),
+				sa.and_(
+					APSupplier.tax_id.is_not(None),
+					APSupplier.tax_id != "",
+					SupplierProfile.tax_id == APSupplier.tax_id,
+				),
+				sa.and_(
+					APSupplier.contact_email.is_not(None),
+					APSupplier.contact_email != "",
+					SupplierProfile.contact_email == APSupplier.contact_email,
+				),
+			),
+		)
 
 		total_spend = int(session.execute(
 			sa.select(sa.func.coalesce(sa.func.sum(total_column), 0)).where(
@@ -234,9 +288,26 @@ class SpendAnalyticsService:
 			.join(APSupplier, APSupplier.id == APInvoice.supplier_id)
 			.where(
 				APInvoice.tenant_id == tenant_id,
-				APSupplier.approved_supplier.is_(False),
+				APSupplier.tenant_id == tenant_id,
+				~portal_exists,
 			)
 		).scalar() or 0)
+		supplier_rows = session.execute(
+			sa.select(
+				APInvoice.supplier_id,
+				APSupplier.name,
+				sa.func.coalesce(sa.func.sum(total_column), 0),
+			)
+			.join(APSupplier, APSupplier.id == APInvoice.supplier_id)
+			.where(
+				APInvoice.tenant_id == tenant_id,
+				APSupplier.tenant_id == tenant_id,
+				~portal_exists,
+			)
+			.group_by(APInvoice.supplier_id, APSupplier.name)
+			.order_by(sa.desc(sa.func.coalesce(sa.func.sum(total_column), 0)))
+			.limit(10)
+		).all()
 
 		department_rows = []
 		if hasattr(APInvoiceLine, "cost_center"):
@@ -249,7 +320,9 @@ class SpendAnalyticsService:
 				.join(APSupplier, APSupplier.id == APInvoice.supplier_id)
 				.where(
 					APInvoice.tenant_id == tenant_id,
-					APSupplier.approved_supplier.is_(False),
+					APInvoiceLine.tenant_id == tenant_id,
+					APSupplier.tenant_id == tenant_id,
+					~portal_exists,
 				)
 				.group_by(APInvoiceLine.cost_center)
 				.order_by(sa.desc(sa.func.coalesce(sa.func.sum(APInvoiceLine.line_amount_cents), 0)))
@@ -259,6 +332,14 @@ class SpendAnalyticsService:
 		return {
 			"total_maverick_cents": maverick_total,
 			"maverick_pct_of_total": _pct(maverick_total, total_spend),
+			"maverick_suppliers": [
+				{
+					"supplier_id": str(supplier_id),
+					"supplier_name": supplier_name,
+					"maverick_spend_cents": int(amount or 0),
+				}
+				for supplier_id, supplier_name, amount in supplier_rows
+			],
 			"top_10_offending_departments": [
 				{
 					"department": department or "UNASSIGNED",
@@ -270,6 +351,7 @@ class SpendAnalyticsService:
 
 	def benchmark_category(self, tenant_id: str, category: str, session: Any) -> dict[str, Any]:
 		"""Benchmark unit prices for a category using PostgreSQL percentile_cont."""
+		tenant_id = _tenant_id(tenant_id)
 		try:
 			from pgappforge.plugins.erp.finance.ap.models import APInvoice, APInvoiceLine
 		except ImportError:
@@ -302,6 +384,7 @@ class SpendAnalyticsService:
 			.join(APInvoice, APInvoice.id == APInvoiceLine.invoice_id)
 			.where(
 				APInvoice.tenant_id == tenant_id,
+				APInvoiceLine.tenant_id == tenant_id,
 				category_column == category,
 				unit_column.is_not(None),
 			)

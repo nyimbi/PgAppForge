@@ -4,6 +4,7 @@ pgappforge/plugins/erp/grc/erm/views.py
 Flask views for the GRC Enterprise Risk Management (ERM) plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -92,14 +93,14 @@ class RiskRegisterView(ModelView):
 	datamodel = SQLAInterface(RiskRegister)
 	list_columns = ["name", "category", "likelihood_score", "impact_score", "risk_score", "owner_id", "status", "treatment"]
 	label_columns = {
-		"name": "Risk",
-		"category": "Category",
-		"likelihood_score": "Likelihood",
-		"impact_score": "Impact",
-		"risk_score": "Risk Score",
-		"owner_id": "Owner",
-		"status": "Status",
-		"treatment": "Treatment",
+		"name": _("Risk"),
+		"category": _("Category"),
+		"likelihood_score": _("Likelihood"),
+		"impact_score": _("Impact"),
+		"risk_score": _("Risk Score"),
+		"owner_id": _("Owner"),
+		"status": _("Status"),
+		"treatment": _("Treatment"),
 	}
 	add_exclude_columns = ["id", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_at", "updated_at"]
@@ -109,11 +110,11 @@ class RiskMitigationActionView(ModelView):
 	datamodel = SQLAInterface(RiskMitigationAction)
 	list_columns = ["risk_id", "action", "owner_id", "due_date", "status"]
 	label_columns = {
-		"risk_id": "Risk",
-		"action": "Action",
-		"owner_id": "Owner",
-		"due_date": "Due Date",
-		"status": "Status",
+		"risk_id": _("Risk"),
+		"action": _("Action"),
+		"owner_id": _("Owner"),
+		"due_date": _("Due Date"),
+		"status": _("Status"),
 	}
 	add_exclude_columns = ["id"]
 	edit_exclude_columns = ["id"]
@@ -123,12 +124,12 @@ class KRIView(ModelView):
 	datamodel = SQLAInterface(KRI)
 	list_columns = ["risk_id", "metric_name", "threshold_value", "current_value", "breach_status", "last_checked_at"]
 	label_columns = {
-		"risk_id": "Risk",
-		"metric_name": "Metric",
-		"threshold_value": "Threshold",
-		"current_value": "Current Value",
-		"breach_status": "Breach",
-		"last_checked_at": "Last Checked",
+		"risk_id": _("Risk"),
+		"metric_name": _("Metric"),
+		"threshold_value": _("Threshold"),
+		"current_value": _("Current Value"),
+		"breach_status": _("Breach"),
+		"last_checked_at": _("Last Checked"),
 	}
 	add_exclude_columns = ["id"]
 	edit_exclude_columns = ["id"]

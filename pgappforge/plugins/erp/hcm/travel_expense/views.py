@@ -65,7 +65,6 @@ class ExpenseReportView(ModelView):
 		from pgappforge.plugins.erp.platform.approvals.views import reject_document_approval
 		return reject_document_approval(request_id, self.datamodel.session)
 
-
 class TravelExpenseDashboardView(BaseERPView):
 	route_base = "/hcm/travel-expense"
 

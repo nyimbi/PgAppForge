@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from pgappforge import ModelView
 from pgappforge.models.sqla.interface import SQLAInterface
@@ -18,18 +19,18 @@ class LeaseView(ModelView):
 					'end_date', 'discount_rate', 'currency_code', 'payment_schedule',
 					'rou_asset_cents', 'lease_liability_cents', 'status', 'standard']
 	label_columns = {
-		'name': 'Name',
-		'lease_type': 'Lease Type',
-		'counterparty': 'Counterparty',
-		'standard': 'Standard',
-		'status': 'Status',
-		'start_date': 'Start Date',
-		'end_date': 'End Date',
-		'lease_liability_cents': 'Lease Liability (cents)',
-		'rou_asset_cents': 'ROU Asset (cents)',
-		'discount_rate': 'Discount Rate',
-		'currency_code': 'Currency',
-		'payment_schedule': 'Payment Schedule',
+		'name': _('Name'),
+		'lease_type': _('Lease Type'),
+		'counterparty': _('Counterparty'),
+		'standard': _('Standard'),
+		'status': _('Status'),
+		'start_date': _('Start Date'),
+		'end_date': _('End Date'),
+		'lease_liability_cents': _('Lease Liability (cents)'),
+		'rou_asset_cents': _('ROU Asset (cents)'),
+		'discount_rate': _('Discount Rate'),
+		'currency_code': _('Currency'),
+		'payment_schedule': _('Payment Schedule'),
 	}
 	search_columns = ['name', 'lease_type', 'counterparty', 'standard', 'status', 'currency_code']
 	add_exclude_columns = ['id', 'created_at', 'updated_at']
@@ -46,14 +47,14 @@ class LeasePaymentScheduleView(ModelView):
 					'principal_cents', 'rou_balance_cents', 'liability_balance_cents',
 					'gl_posted']
 	label_columns = {
-		'lease_id': 'Lease',
-		'period': 'Period',
-		'payment_cents': 'Payment (cents)',
-		'interest_cents': 'Interest (cents)',
-		'principal_cents': 'Principal (cents)',
-		'rou_balance_cents': 'ROU Balance (cents)',
-		'liability_balance_cents': 'Liability Balance (cents)',
-		'gl_posted': 'GL Posted',
+		'lease_id': _('Lease'),
+		'period': _('Period'),
+		'payment_cents': _('Payment (cents)'),
+		'interest_cents': _('Interest (cents)'),
+		'principal_cents': _('Principal (cents)'),
+		'rou_balance_cents': _('ROU Balance (cents)'),
+		'liability_balance_cents': _('Liability Balance (cents)'),
+		'gl_posted': _('GL Posted'),
 	}
 	search_columns = ['lease_id', 'period', 'gl_posted']
 	add_exclude_columns = ['id']

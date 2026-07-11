@@ -132,12 +132,28 @@ class TaxCompliancePlugin(BasePlugin):
 
 	def register_views(self) -> None:
 		"""Register compliance dashboard view."""
-		from pgappforge.plugins.erp.finance.tax_compliance.views import TaxComplianceDashboardView
+		from pgappforge.plugins.erp.finance.tax_compliance.views import (
+			ETIMSDashboardView,
+			ETIMSSubmissionView,
+			TaxComplianceDashboardView,
+		)
 		cat = self.config.get("TAX_COMPLIANCE_MENU_CATEGORY", "Tax Compliance")
 		self.add_view(
 			TaxComplianceDashboardView,
 			"Tax Compliance",
 			icon="fa-shield-alt",
+			category=cat,
+		)
+		self.add_view(
+			ETIMSDashboardView,
+			"eTIMS Dashboard",
+			icon="fa-receipt",
+			category=cat,
+		)
+		self.add_view(
+			ETIMSSubmissionView,
+			"eTIMS Submissions",
+			icon="fa-list",
 			category=cat,
 		)
 		log.info("TaxCompliancePlugin: views registered under category %r", cat)

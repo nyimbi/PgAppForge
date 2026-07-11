@@ -14,6 +14,7 @@ Endpoints:
 	PrivacyReportView      GET  /privacy/reports/{consent-summary,dsr-status,overdue-dsrs}
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -54,14 +55,14 @@ class ConsentView(BaseERPView):
 	route_base = "/privacy/consent"
 	default_view = "grant"
 	label_columns = {
-		"party_id": "Data Subject",
-		"purpose": "Purpose",
-		"legal_basis": "Legal Basis",
-		"granted_at": "Granted",
-		"withdrawn_at": "Withdrawn",
-		"expires_at": "Expires",
-		"source": "Source",
-		"version": "Version",
+		"party_id": _("Data Subject"),
+		"purpose": _("Purpose"),
+		"legal_basis": _("Legal Basis"),
+		"granted_at": _("Granted"),
+		"withdrawn_at": _("Withdrawn"),
+		"expires_at": _("Expires"),
+		"source": _("Source"),
+		"version": _("Version"),
 	}
 
 	@expose("/", methods=["POST"])
@@ -142,14 +143,14 @@ class DSRView(BaseERPView):
 	route_base = "/privacy/dsr"
 	default_view = "list"
 	label_columns = {
-		"dsr_number": "DSR Number",
-		"party_id": "Data Subject",
-		"request_type": "Request Type",
-		"status": "Status",
-		"received_at": "Received",
-		"due_at": "Due",
-		"completed_at": "Completed",
-		"response_url": "Response URL",
+		"dsr_number": _("DSR Number"),
+		"party_id": _("Data Subject"),
+		"request_type": _("Request Type"),
+		"status": _("Status"),
+		"received_at": _("Received"),
+		"due_at": _("Due"),
+		"completed_at": _("Completed"),
+		"response_url": _("Response URL"),
 	}
 
 	@expose("/")
@@ -233,14 +234,14 @@ class DataProcessingView(BaseERPView):
 	route_base = "/privacy/processing-records"
 	default_view = "list"
 	label_columns = {
-		"processing_purpose": "Processing Purpose",
-		"data_categories": "Data Categories",
-		"data_subjects_description": "Data Subjects",
-		"legal_basis": "Legal Basis",
-		"controller_name": "Controller",
-		"processor_name": "Processor",
-		"retention_period_days": "Retention Days",
-		"is_cross_border": "Cross-Border",
+		"processing_purpose": _("Processing Purpose"),
+		"data_categories": _("Data Categories"),
+		"data_subjects_description": _("Data Subjects"),
+		"legal_basis": _("Legal Basis"),
+		"controller_name": _("Controller"),
+		"processor_name": _("Processor"),
+		"retention_period_days": _("Retention Days"),
+		"is_cross_border": _("Cross-Border"),
 	}
 
 	@expose("/")
@@ -307,10 +308,10 @@ class PrivacyReportView(BaseERPView):
 	route_base = "/privacy/reports"
 	default_view = "index"
 	label_columns = {
-		"open_dsars": "Open DSARs",
-		"consents_active": "Active Consents",
-		"breaches_ytd": "Breaches YTD",
-		"processing_records": "Processing Records",
+		"open_dsars": _("Open DSARs"),
+		"consents_active": _("Active Consents"),
+		"breaches_ytd": _("Breaches YTD"),
+		"processing_records": _("Processing Records"),
 	}
 
 	@expose("/")

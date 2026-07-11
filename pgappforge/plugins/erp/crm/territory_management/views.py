@@ -4,6 +4,7 @@ pgappforge/plugins/erp/crm/territory_management/views.py
 Flask-AppBuilder views for the Territory Management plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -21,10 +22,10 @@ class SalesTerritoryView(ModelView):
 	datamodel = SQLAInterface(SalesTerritory)
 	list_columns = ['name', 'region', 'rules', 'is_active']
 	label_columns = {
-		'name': 'Name',
-		'region': 'Region',
-		'rules': 'Rules',
-		'is_active': 'Is Active',
+		'name': _('Name'),
+		'region': _('Region'),
+		'rules': _('Rules'),
+		'is_active': _('Is Active'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']
@@ -34,10 +35,10 @@ class TerritoryAssignmentView(ModelView):
 	datamodel = SQLAInterface(TerritoryAssignment)
 	list_columns = ['territory_id', 'salesperson_id', 'effective_from', 'effective_to']
 	label_columns = {
-		'territory_id': 'Territory Id',
-		'salesperson_id': 'Salesperson Id',
-		'effective_from': 'Effective From',
-		'effective_to': 'Effective To',
+		'territory_id': _('Territory Id'),
+		'salesperson_id': _('Salesperson Id'),
+		'effective_from': _('Effective From'),
+		'effective_to': _('Effective To'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on']

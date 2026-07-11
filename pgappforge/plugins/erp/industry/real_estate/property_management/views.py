@@ -32,6 +32,7 @@ WorkOrderView                     /pm/work-orders/
   └─ PUT  /pm/work-orders/<id>    — edit
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -85,13 +86,13 @@ class PropertyUnitView(BaseERPModelView):
 	edit_title = "Edit Unit"
 	search_columns = ["unit_number", "status"]
 	label_columns = {
-		"property_id": "Property",
-		"unit_number": "Unit Number",
-		"floor": "Floor",
-		"sqft": "Sq Ft",
-		"bedrooms": "Bedrooms",
-		"bathrooms": "Bathrooms",
-		"status": "Status",
+		"property_id": _("Property"),
+		"unit_number": _("Unit Number"),
+		"floor": _("Floor"),
+		"sqft": _("Sq Ft"),
+		"bedrooms": _("Bedrooms"),
+		"bathrooms": _("Bathrooms"),
+		"status": _("Status"),
 	}
 
 
@@ -132,18 +133,18 @@ class TenantLeaseView(BaseERPModelView):
 	edit_title = "Edit Lease"
 	search_columns = ["unit_id", "tenant_party_id", "lease_type", "status"]
 	label_columns = {
-		"unit_id": "Unit",
-		"tenant_party_id": "Tenant Party",
-		"landlord_id": "Landlord",
-		"lease_start": "Lease Start",
-		"lease_end": "Lease End",
-		"monthly_rent_cents": "Monthly Rent (¢)",
-		"security_deposit_cents": "Security Deposit (¢)",
-		"lease_type": "Lease Type",
-		"escalation_type": "Escalation Type",
-		"escalation_pct": "Escalation %",
-		"status": "Status",
-		"renewal_option": "Renewal Option",
+		"unit_id": _("Unit"),
+		"tenant_party_id": _("Tenant Party"),
+		"landlord_id": _("Landlord"),
+		"lease_start": _("Lease Start"),
+		"lease_end": _("Lease End"),
+		"monthly_rent_cents": _("Monthly Rent (¢)"),
+		"security_deposit_cents": _("Security Deposit (¢)"),
+		"lease_type": _("Lease Type"),
+		"escalation_type": _("Escalation Type"),
+		"escalation_pct": _("Escalation %"),
+		"status": _("Status"),
+		"renewal_option": _("Renewal Option"),
 	}
 
 
@@ -167,14 +168,14 @@ class RentPaymentView(BaseERPModelView):
 	]
 	search_columns = ["lease_id", "period_month", "status", "payment_method", "reference"]
 	label_columns = {
-		"lease_id": "Lease",
-		"period_month": "Period",
-		"due_date": "Due Date",
-		"paid_date": "Paid Date",
-		"amount_cents": "Amount (¢)",
-		"status": "Status",
-		"payment_method": "Payment Method",
-		"reference": "Reference",
+		"lease_id": _("Lease"),
+		"period_month": _("Period"),
+		"due_date": _("Due Date"),
+		"paid_date": _("Paid Date"),
+		"amount_cents": _("Amount (¢)"),
+		"status": _("Status"),
+		"payment_method": _("Payment Method"),
+		"reference": _("Reference"),
 	}
 
 
@@ -207,16 +208,16 @@ class MaintenanceRequestView(BaseERPModelView):
 	edit_title = "Edit Maintenance Request"
 	search_columns = ["unit_id", "category", "priority", "status", "description"]
 	label_columns = {
-		"unit_id": "Unit",
-		"reported_by": "Reported By",
-		"category": "Category",
-		"description": "Description",
-		"priority": "Priority",
-		"status": "Status",
-		"estimated_cost_cents": "Estimated Cost (¢)",
-		"actual_cost_cents": "Actual Cost (¢)",
-		"resolved_at": "Resolved At",
-		"photos": "Photos",
+		"unit_id": _("Unit"),
+		"reported_by": _("Reported By"),
+		"category": _("Category"),
+		"description": _("Description"),
+		"priority": _("Priority"),
+		"status": _("Status"),
+		"estimated_cost_cents": _("Estimated Cost (¢)"),
+		"actual_cost_cents": _("Actual Cost (¢)"),
+		"resolved_at": _("Resolved At"),
+		"photos": _("Photos"),
 	}
 
 
@@ -249,15 +250,15 @@ class WorkOrderView(BaseERPModelView):
 	edit_title = "Edit Work Order"
 	search_columns = ["request_id", "vendor_id", "status", "work_description"]
 	label_columns = {
-		"request_id": "Maintenance Request",
-		"vendor_id": "Vendor",
-		"work_description": "Work Description",
-		"scheduled_date": "Scheduled Date",
-		"completed_date": "Completed Date",
-		"quoted_cost_cents": "Quoted Cost (¢)",
-		"actual_cost_cents": "Actual Cost (¢)",
-		"status": "Status",
-		"notes": "Notes",
+		"request_id": _("Maintenance Request"),
+		"vendor_id": _("Vendor"),
+		"work_description": _("Work Description"),
+		"scheduled_date": _("Scheduled Date"),
+		"completed_date": _("Completed Date"),
+		"quoted_cost_cents": _("Quoted Cost (¢)"),
+		"actual_cost_cents": _("Actual Cost (¢)"),
+		"status": _("Status"),
+		"notes": _("Notes"),
 	}
 
 

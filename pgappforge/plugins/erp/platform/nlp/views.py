@@ -7,6 +7,7 @@ NLPAnalysisResultView  — paginated list of persisted analysis results.
 NLPDashboardView       — usage statistics and live API test panel.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -49,16 +50,16 @@ class NLPAnalysisResultView(BaseERPModelView):
 		"created_at",
 	]
 	label_columns = {
-		"tenant_id": "Tenant",
-		"analysis_type": "Analysis Type",
-		"reference_type": "Reference Type",
-		"reference_id": "Reference ID",
-		"input_text_hash": "Input Hash",
-		"result": "Result",
-		"model_used": "Model Used",
-		"latency_ms": "Latency ms",
-		"source": "Source",
-		"created_at": "Created",
+		"tenant_id": _("Tenant"),
+		"analysis_type": _("Analysis Type"),
+		"reference_type": _("Reference Type"),
+		"reference_id": _("Reference ID"),
+		"input_text_hash": _("Input Hash"),
+		"result": _("Result"),
+		"model_used": _("Model Used"),
+		"latency_ms": _("Latency ms"),
+		"source": _("Source"),
+		"created_at": _("Created"),
 	}
 	search_columns = ["analysis_type", "reference_type", "reference_id", "source"]
 	order_columns = ["created_at", "analysis_type"]

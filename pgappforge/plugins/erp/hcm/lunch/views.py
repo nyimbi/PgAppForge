@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,6 +23,8 @@ __all__ = [
 class LunchSupplierView(ModelView):
 	datamodel = SQLAInterface(LunchSupplier)
 	list_columns = ["name", "contact_email", "contact_phone", "is_active"]
+	label_columns = {"name": _("Name"), "contact_email": _("Contact Email"), "contact_phone": _("Contact Phone"), "is_active": _("Is Active")}
+	show_columns = ["name", "contact_email", "contact_phone", "is_active", "delivery_days", "notes"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "menus"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "menus"]
 	search_columns = ["name"]
@@ -30,6 +33,8 @@ class LunchSupplierView(ModelView):
 class LunchMenuView(ModelView):
 	datamodel = SQLAInterface(LunchMenu)
 	list_columns = ["supplier", "menu_date", "status", "cutoff_time"]
+	label_columns = {"supplier": _("Supplier"), "menu_date": _("Menu Date"), "status": _("Status"), "cutoff_time": _("Cutoff Time")}
+	show_columns = ["supplier", "menu_date", "status", "cutoff_time", "items"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "orders"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "orders"]
 	search_columns = ["menu_date", "status"]
@@ -38,6 +43,8 @@ class LunchMenuView(ModelView):
 class LunchOrderView(ModelView):
 	datamodel = SQLAInterface(LunchOrder)
 	list_columns = ["employee_id", "menu", "order_date", "subtotal_cents", "subsidy_cents", "status"]
+	label_columns = {"employee_id": _("Employee"), "menu": _("Menu"), "order_date": _("Order Date"), "subtotal_cents": _("Subtotal (KES)"), "subsidy_cents": _("Subsidy (KES)"), "status": _("Status")}
+	show_columns = ["employee_id", "menu", "order_date", "subtotal_cents", "subsidy_cents", "status", "items", "employee_pays_cents", "placed_at", "special_instructions"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "status"]

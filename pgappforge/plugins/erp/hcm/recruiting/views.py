@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -24,6 +25,8 @@ __all__ = [
 class JobRequisitionView(ModelView):
 	datamodel = SQLAInterface(JobRequisition)
 	list_columns = ["title", "department_id", "headcount", "employment_type", "status", "posted_at"]
+	label_columns = {"title": _("Title"), "department_id": _("Department"), "headcount": _("Headcount"), "employment_type": _("Employment Type"), "status": _("Status"), "posted_at": _("Posted At")}
+	show_columns = ["title", "department_id", "headcount", "employment_type", "status", "posted_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "applications"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "applications"]
 	search_columns = ["title", "status", "entity_id"]
@@ -32,6 +35,8 @@ class JobRequisitionView(ModelView):
 class JobApplicationView(ModelView):
 	datamodel = SQLAInterface(JobApplication)
 	list_columns = ["candidate_name", "candidate_email", "source", "status", "applied_at"]
+	label_columns = {"candidate_name": _("Candidate Name"), "candidate_email": _("Candidate Email"), "source": _("Source"), "status": _("Status"), "applied_at": _("Applied At")}
+	show_columns = ["candidate_name", "candidate_email", "source", "status", "applied_at"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "interviews", "offer"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at", "interviews", "offer"]
 	search_columns = ["candidate_name", "candidate_email", "status"]
@@ -40,6 +45,8 @@ class JobApplicationView(ModelView):
 class InterviewScheduleView(ModelView):
 	datamodel = SQLAInterface(InterviewSchedule)
 	list_columns = ["application", "interviewer_id", "scheduled_at", "format", "rating", "recommendation"]
+	label_columns = {"application": _("Application"), "interviewer_id": _("Interviewer"), "scheduled_at": _("Scheduled At"), "format": _("Format"), "rating": _("Rating"), "recommendation": _("Recommendation")}
+	show_columns = ["application", "interviewer_id", "scheduled_at", "format", "rating", "recommendation"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["interviewer_id", "format"]
@@ -47,7 +54,9 @@ class InterviewScheduleView(ModelView):
 
 class OfferLetterView(ModelView):
 	datamodel = SQLAInterface(OfferLetter)
-	list_columns = ["application", "offered_salary_cents", "start_date", "status", "currency_code"]
+	list_columns = ["application", "start_date", "status", "currency_code"]
+	label_columns = {"application": _("Application"), "offered_salary_cents": _("Offered Salary (KES)"), "start_date": _("Start Date"), "status": _("Status"), "currency_code": _("Currency Code")}
+	show_columns = ["application", "offered_salary_cents", "start_date", "status", "currency_code"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["status"]

@@ -216,7 +216,7 @@ class PayrollService:
 			PayrollStateError: PayrollRun not in DRAFT status.
 			PayrollCalculationError: Any per-employee calculation error.
 		"""
-		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip, PayslipLine
+		from pgappforge.plugins.erp.hcm.payroll.models import PayrollRun, Payslip, PayslipLine, TaxWithholding
 		from pgappforge.plugins.erp.hcm.payroll.events import PayrollRunCalculatedEvent
 		from pgappforge.plugins.erp.foundation.events import emit_event
 
@@ -230,6 +230,33 @@ class PayrollService:
 
 		assert employee_data is not None, "employee_data must be provided to calculate_payrun"
 
+		employee_ids = list(dict.fromkeys(str(emp["employee_id"]) for emp in employee_data))
+		existing_payslips = session.execute(
+			sa.select(Payslip)
+			.where(Payslip.payrun_id == payrun_id)
+			.where(Payslip.employee_id.in_(employee_ids))
+		).scalars().all()
+		existing_by_employee = {ps.employee_id: ps for ps in existing_payslips}
+		existing_payslip_ids = [ps.id for ps in existing_payslips]
+		if existing_payslip_ids:
+			for old_line in session.execute(
+				sa.select(PayslipLine).where(PayslipLine.payslip_id.in_(existing_payslip_ids))
+			).scalars().all():
+				session.delete(old_line)
+			session.flush()
+
+		withholding_by_employee: dict[str, Any] = {}
+		if tax_calculator is None and employee_ids:
+			withholding_rows = session.execute(
+				sa.select(TaxWithholding)
+				.where(TaxWithholding.employee_id.in_(employee_ids))
+				.where(TaxWithholding.jurisdiction_code == "DEFAULT")
+				.where(TaxWithholding.effective_from <= payrun.period_end)
+				.order_by(TaxWithholding.employee_id, sa.desc(TaxWithholding.effective_from))
+			).scalars().all()
+			for wh in withholding_rows:
+				withholding_by_employee.setdefault(wh.employee_id, wh)
+
 		total_gross = 0
 		total_emp_tax = 0
 		total_er_tax = 0
@@ -237,7 +264,7 @@ class PayrollService:
 		processed = 0
 
 		for emp in employee_data:
-			emp_id = emp["employee_id"]
+			emp_id = str(emp["employee_id"])
 			currency = emp.get("currency_code", "USD")
 
 			# --- Gross pay from earnings lines ---
@@ -268,7 +295,7 @@ class PayrollService:
 				pension_er = int(tax_result.get("pension_employer_cents", 0))
 			else:
 				# Check for TaxWithholding override
-				wh = self.get_active_tax_withholding(emp_id, "DEFAULT", payrun.period_end, session)
+				wh = withholding_by_employee.get(emp_id)
 				if wh is not None:
 					# Flat rate + additional withholding
 					income_tax = _round_cents(
@@ -290,11 +317,7 @@ class PayrollService:
 			assert isinstance(net_pay, int), "net_pay must be int"
 
 			# --- Create/update Payslip ---
-			existing = session.execute(
-				sa.select(Payslip)
-				.where(Payslip.payrun_id == payrun_id)
-				.where(Payslip.employee_id == emp_id)
-			).scalar_one_or_none()
+			existing = existing_by_employee.get(emp_id)
 
 			if existing is not None and existing.status != "DRAFT":
 				raise PayrollCalculationError(
@@ -302,10 +325,6 @@ class PayrollService:
 				)
 
 			if existing is not None:
-				# Clear existing lines before recalculating
-				for old_line in list(existing.lines):
-					session.delete(old_line)
-				session.flush()
 				ps = existing
 			else:
 				ps = Payslip(
@@ -922,25 +941,26 @@ class PayrollService:
 			.order_by(PayrollRun.period_start)
 		).scalars().all()
 
+		run_ids = [run.id for run in runs]
+		all_employee_ids: set[str] = set(
+			session.execute(
+				sa.select(Payslip.employee_id)
+				.where(Payslip.payrun_id.in_(run_ids))
+				.where(Payslip.status == "PAID")
+			).scalars().all()
+		) if run_ids else set()
+
 		run_summaries = []
 		agg_gross = 0
 		agg_emp_tax = 0
 		agg_er_tax = 0
 		agg_net = 0
-		all_employee_ids: set[str] = set()
 
 		for run in runs:
 			agg_gross += run.total_gross_cents
 			agg_emp_tax += run.total_employee_tax_cents
 			agg_er_tax += run.total_employer_tax_cents
 			agg_net += run.total_net_cents
-
-			employee_ids = session.execute(
-				sa.select(Payslip.employee_id)
-				.where(Payslip.payrun_id == run.id)
-				.where(Payslip.status == "PAID")
-			).scalars().all()
-			all_employee_ids.update(employee_ids)
 
 			run_summaries.append({
 				"payrun_id": run.id,
@@ -1181,6 +1201,37 @@ class PayrollService:
 		if tenant_id:
 			q = q.where(Payslip.tenant_id == tenant_id)
 		payslips: list[Any] = session.execute(q).scalars().all()
+		payslip_ids = [ps.id for ps in payslips]
+		line_totals: dict[str, dict[str, int]] = {}
+		if payslip_ids:
+			line_rows = session.execute(
+				sa.select(
+					PayslipLine.payslip_id,
+					sa.func.coalesce(sa.func.sum(sa.case(
+						(PayslipLine.line_type == "BIK", PayslipLine.amount_cents),
+						else_=0,
+					)), 0).label("bik_cents"),
+					sa.func.coalesce(sa.func.sum(sa.case(
+						(
+							sa.and_(
+								PayslipLine.line_type.in_(["NSSF_TIER_I", "NSSF_TIER_II"]),
+								PayslipLine.is_employer_cost.is_(False),
+							),
+							sa.func.abs(PayslipLine.amount_cents),
+						),
+						else_=0,
+					)), 0).label("nssf_emp_cents"),
+				)
+				.where(PayslipLine.payslip_id.in_(payslip_ids))
+				.group_by(PayslipLine.payslip_id)
+			).all()
+			line_totals = {
+				row.payslip_id: {
+					"bik_cents": int(row.bik_cents or 0),
+					"nssf_emp_cents": int(row.nssf_emp_cents or 0),
+				}
+				for row in line_rows
+			}
 
 		_MONTHLY_PERSONAL_RELIEF = 240000  # KES 2,400/month in cents
 
@@ -1189,20 +1240,9 @@ class PayrollService:
 		total_paye = 0
 
 		for ps in payslips:
-			# Pull BIK from PayslipLine rows (informational lines)
-			bik_cents = int(session.execute(
-				sa.select(sa.func.coalesce(sa.func.sum(PayslipLine.amount_cents), 0))
-				.where(PayslipLine.payslip_id == ps.id)
-				.where(PayslipLine.line_type == "BIK")
-			).scalar() or 0)
-
-			# Pension contribution from NSSF lines
-			nssf_emp_cents = int(session.execute(
-				sa.select(sa.func.coalesce(sa.func.sum(sa.func.abs(PayslipLine.amount_cents)), 0))
-				.where(PayslipLine.payslip_id == ps.id)
-				.where(PayslipLine.line_type.in_(["NSSF_TIER_I", "NSSF_TIER_II"]))
-				.where(PayslipLine.is_employer_cost == False)  # noqa: E712
-			).scalar() or 0)
+			totals = line_totals.get(ps.id, {})
+			bik_cents = totals.get("bik_cents", 0)
+			nssf_emp_cents = totals.get("nssf_emp_cents", 0)
 
 			taxable_pay = ps.gross_pay_cents + bik_cents
 			paye = ps.income_tax_cents
@@ -1697,18 +1737,44 @@ td,th{border:1px solid #ccc;padding:4px 8px;}th{background:#f0f0f0;}</style>
 				q = q.where(Payslip.tenant_id == tenant_id)
 			return {ps.employee_id: ps for ps in session.execute(q).scalars().all()}
 
-		def _sum_lines_for_payslip(payslip_id: str, line_types: list[str], employer_cost: bool | None = None) -> int:
-			q = (
-				sa.select(sa.func.coalesce(sa.func.sum(sa.func.abs(PayslipLine.amount_cents)), 0))
-				.where(PayslipLine.payslip_id == payslip_id)
+		def _load_line_totals(payslip_ids: list[str]) -> dict[tuple[str, str, bool], int]:
+			if not payslip_ids:
+				return {}
+			line_types = [
+				"BASIC", "ALLOWANCE", "OVERTIME", "BONUS",
+				"NSSF_TIER_I", "NSSF_TIER_II", "NHIF_SHIF", "HOUSING_LEVY", "NITA",
+			]
+			rows = session.execute(
+				sa.select(
+					PayslipLine.payslip_id,
+					PayslipLine.line_type,
+					PayslipLine.is_employer_cost,
+					sa.func.coalesce(sa.func.sum(sa.func.abs(PayslipLine.amount_cents)), 0).label("amount_cents"),
+				)
+				.where(PayslipLine.payslip_id.in_(payslip_ids))
 				.where(PayslipLine.line_type.in_(line_types))
-			)
-			if employer_cost is not None:
-				q = q.where(PayslipLine.is_employer_cost == employer_cost)
-			return int(session.execute(q).scalar() or 0)
+				.group_by(PayslipLine.payslip_id, PayslipLine.line_type, PayslipLine.is_employer_cost)
+			).all()
+			return {
+				(row.payslip_id, row.line_type, bool(row.is_employer_cost)): int(row.amount_cents or 0)
+				for row in rows
+			}
+
+		def _sum_lines_for_payslip(payslip_id: str, line_types: list[str], employer_cost: bool | None = None) -> int:
+			total = 0
+			for line_type in line_types:
+				if employer_cost is None:
+					total += line_totals.get((payslip_id, line_type, False), 0)
+					total += line_totals.get((payslip_id, line_type, True), 0)
+				else:
+					total += line_totals.get((payslip_id, line_type, employer_cost), 0)
+			return total
 
 		current_map = _load_payslips(payrun_id)
 		prior_map = _load_payslips(prior_payrun_id) if prior_payrun_id else {}
+		line_totals = _load_line_totals(
+			list({ps.id for ps in [*current_map.values(), *prior_map.values()]})
+		)
 
 		def _build_row(ps: Any) -> dict[str, Any]:
 			pid = ps.id

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -20,6 +21,8 @@ __all__ = [
 class PositionView(ModelView):
 	datamodel = SQLAInterface(Position)
 	list_columns = ["position_code", "title", "department_id", "grade_level", "employment_type", "status", "headcount_budget"]
+	label_columns = {"position_code": _("Position Code"), "title": _("Title"), "department_id": _("Department"), "grade_level": _("Grade Level"), "employment_type": _("Employment Type"), "status": _("Status"), "headcount_budget": _("Headcount Budget")}
+	show_columns = ["position_code", "title", "department_id", "grade_level", "employment_type", "status", "headcount_budget"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["position_code", "title", "status", "entity_id"]
@@ -28,6 +31,8 @@ class PositionView(ModelView):
 class HeadcountRequestView(ModelView):
 	datamodel = SQLAInterface(HeadcountRequest)
 	list_columns = ["entity_id", "request_year", "total_fte_requested", "total_fte_approved", "status", "submitted_by"]
+	label_columns = {"entity_id": _("Legal Entity"), "request_year": _("Request Year"), "total_fte_requested": _("Total Fte Requested"), "total_fte_approved": _("Total Fte Approved"), "status": _("Status"), "submitted_by": _("Submitted By")}
+	show_columns = ["request_year", "total_fte_requested", "total_fte_approved", "status", "submitted_by"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "created_at", "updated_at"]
 	search_columns = ["entity_id", "status"]

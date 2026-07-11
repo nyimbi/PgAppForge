@@ -204,6 +204,7 @@ class APPurchaseOrder(AuditMixin, Model):
 	__table_args__ = (
 		Index("ix_ap_po_tenant", "tenant_id"),
 		Index("ix_ap_po_supplier", "supplier_id"),
+		Index("ix_ap_po_purchase_requisition", "purchase_requisition_id"),
 		Index("ix_ap_po_tenant_status", "tenant_id", "status"),
 		Index("ix_ap_po_order_date", "order_date"),
 		UniqueConstraint("tenant_id", "po_number", name="uq_ap_po_tenant_number"),
@@ -214,6 +215,12 @@ class APPurchaseOrder(AuditMixin, Model):
 	tenant_id = Column(UUID(as_uuid=False), nullable=False, index=True)
 	po_number = Column(String(50), nullable=False, comment="Purchase order number; unique per tenant")
 	supplier_id = Column(UUID(as_uuid=False), ForeignKey("ap_supplier.id"), nullable=False, index=True)
+	purchase_requisition_id = Column(
+		UUID(as_uuid=False),
+		nullable=True,
+		index=True,
+		comment="FK to scm_purchase_requisition.id (soft cross-plugin link)",
+	)
 	requisitioner_id = Column(UUID(as_uuid=False), nullable=True, comment="FK to ab_user — raised by")
 	approved_by = Column(UUID(as_uuid=False), nullable=True, comment="FK to ab_user — approved by")
 	approval_date = Column(DateTime(timezone=True), nullable=True)

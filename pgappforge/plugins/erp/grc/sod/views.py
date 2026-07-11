@@ -4,6 +4,7 @@ pgappforge/plugins/erp/grc/sod/views.py
 Flask views for the GRC Segregation of Duties (SoD) plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 from datetime import datetime, timedelta, timezone
@@ -85,12 +86,12 @@ class SodConflictView(ModelView):
 	datamodel = SQLAInterface(SodConflict)
 	list_columns = ["name", "function_a", "function_b", "risk_level", "control_category", "is_active"]
 	label_columns = {
-		"name": "Conflict",
-		"function_a": "Function A",
-		"function_b": "Function B",
-		"risk_level": "Severity",
-		"control_category": "Control Category",
-		"is_active": "Active",
+		"name": _("Conflict"),
+		"function_a": _("Function A"),
+		"function_b": _("Function B"),
+		"risk_level": _("Severity"),
+		"control_category": _("Control Category"),
+		"is_active": _("Active"),
 	}
 	add_exclude_columns = ["id", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_at", "updated_at"]
@@ -100,13 +101,13 @@ class SodViolationView(ModelView):
 	datamodel = SQLAInterface(SodViolation)
 	list_columns = ["user_id", "conflict_id", "risk_level", "detected_at", "status", "accepted_by", "remediation_date"]
 	label_columns = {
-		"user_id": "User",
-		"conflict_id": "Conflict",
-		"risk_level": "Severity",
-		"detected_at": "Opened",
-		"status": "Status",
-		"accepted_by": "Accepted By",
-		"remediation_date": "Remediation Date",
+		"user_id": _("User"),
+		"conflict_id": _("Conflict"),
+		"risk_level": _("Severity"),
+		"detected_at": _("Opened"),
+		"status": _("Status"),
+		"accepted_by": _("Accepted By"),
+		"remediation_date": _("Remediation Date"),
 	}
 	add_exclude_columns = ["id", "created_at", "updated_at"]
 	edit_exclude_columns = ["id", "created_at", "updated_at"]

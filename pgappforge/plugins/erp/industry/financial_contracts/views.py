@@ -14,6 +14,7 @@ Views:
   PortfolioView    — Maturity profile dashboard
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 from datetime import date, datetime, timezone
@@ -93,15 +94,15 @@ class ContractView(BaseView):
 		"contract_terms": json_widget(mode="tree", height=300),
 	}
 	label_columns = {
-		"contract_id": "Contract ID",
-		"contract_type": "ACTUS Type",
-		"contract_role": "Role",
-		"notional_principal_cents": "Notional Principal",
-		"nominal_interest_rate": "Interest Rate",
-		"day_count_convention": "Day Count",
-		"initial_exchange_date": "IED",
-		"maturity_date": "Maturity",
-		"settlement_period": "Settlement Lag",
+		"contract_id": _("Contract ID"),
+		"contract_type": _("ACTUS Type"),
+		"contract_role": _("Role"),
+		"notional_principal_cents": _("Notional Principal"),
+		"nominal_interest_rate": _("Interest Rate"),
+		"day_count_convention": _("Day Count"),
+		"initial_exchange_date": _("IED"),
+		"maturity_date": _("Maturity"),
+		"settlement_period": _("Settlement Lag"),
 	}
 
 	@expose("/")
@@ -221,11 +222,11 @@ class CashFlowView(BaseView):
 		"cash_flow_waterfall": chart_widget(chart_type="bar"),
 	}
 	label_columns = {
-		"schedule_date": "Scheduled Date",
-		"event_type": "Event",
-		"scheduled_amount_cents": "Scheduled Amount",
-		"actual_amount_cents": "Actual Amount",
-		"actual_date": "Settlement Date",
+		"schedule_date": _("Scheduled Date"),
+		"event_type": _("Event"),
+		"scheduled_amount_cents": _("Scheduled Amount"),
+		"actual_amount_cents": _("Actual Amount"),
+		"actual_date": _("Settlement Date"),
 	}
 
 	@expose("/")
@@ -323,11 +324,11 @@ class ValuationView(BaseView):
 		"npv_history_chart": chart_widget(chart_type="bar"),
 	}
 	label_columns = {
-		"valuation_date": "Valuation Date",
-		"valuation_method": "Method",
-		"npv_cents": "NPV",
-		"duration_years": "Duration (yrs)",
-		"convexity": "Convexity",
+		"valuation_date": _("Valuation Date"),
+		"valuation_method": _("Method"),
+		"npv_cents": _("NPV"),
+		"duration_years": _("Duration (yrs)"),
+		"convexity": _("Convexity"),
 	}
 
 	@expose("/")
@@ -424,11 +425,11 @@ class RiskFactorView(BaseView):
 		),
 	}
 	label_columns = {
-		"factor_code": "Factor Code",
-		"factor_type": "Type",
-		"base_value": "Base Value",
-		"current_value": "Current Value",
-		"as_of_date": "As Of",
+		"factor_code": _("Factor Code"),
+		"factor_type": _("Type"),
+		"base_value": _("Base Value"),
+		"current_value": _("Current Value"),
+		"as_of_date": _("As Of"),
 	}
 
 	@expose("/")

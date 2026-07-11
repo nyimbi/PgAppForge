@@ -4,6 +4,7 @@ pgappforge/plugins/erp/crm/sign/views.py
 Flask-AppBuilder views for the E-Sign Portal plugin.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -22,11 +23,11 @@ class SignatureRequestView(ModelView):
 	datamodel = SQLAInterface(SignatureRequest)
 	list_columns = ['document_title', 'initiator_id', 'status', 'signing_order', 'expires_at']
 	label_columns = {
-		'document_title': 'Document Title',
-		'initiator_id': 'Initiator',
-		'status': 'Status',
-		'signing_order': 'Signing Order',
-		'expires_at': 'Expires At',
+		'document_title': _('Document Title'),
+		'initiator_id': _('Initiator'),
+		'status': _('Status'),
+		'signing_order': _('Signing Order'),
+		'expires_at': _('Expires At'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at']
@@ -36,12 +37,12 @@ class SignatureSignatoryView(ModelView):
 	datamodel = SQLAInterface(SignatureSignatory)
 	list_columns = ['signer_name', 'signer_email', 'signer_role', 'order_number', 'status', 'signed_at']
 	label_columns = {
-		'signer_name': 'Signer Name',
-		'signer_email': 'Signer Email',
-		'signer_role': 'Signer Role',
-		'order_number': 'Order Number',
-		'status': 'Status',
-		'signed_at': 'Signed At',
+		'signer_name': _('Signer Name'),
+		'signer_email': _('Signer Email'),
+		'signer_role': _('Signer Role'),
+		'order_number': _('Order Number'),
+		'status': _('Status'),
+		'signed_at': _('Signed At'),
 	}
 	add_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at', 'access_token', 'signature_image_base64']
 	edit_exclude_columns = ['id', 'created_on', 'changed_on', 'created_at', 'updated_at', 'access_token', 'signature_image_base64']

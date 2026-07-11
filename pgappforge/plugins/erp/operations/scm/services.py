@@ -405,6 +405,7 @@ class SCMService:
 			grn_number=grn_number,
 			received_date=date.today(),
 			received_by=received_by,
+			status="POSTED",
 		)
 		session.add(grn)
 		session.flush()
@@ -522,6 +523,7 @@ class SCMService:
 		from pgappforge.plugins.erp.operations.scm.models import (
 			PurchaseOrder,
 			POLine,
+			GoodsReceipt,
 			GoodsReceiptLine,
 			SupplierInvoice,
 		)
@@ -537,9 +539,17 @@ class SCMService:
 		if not isinstance(due_date, date):
 			due_date = date.fromisoformat(str(due_date))
 
+		latest_grn = session.execute(
+			sa.select(GoodsReceipt)
+			.where(GoodsReceipt.po_id == po_id)
+			.order_by(sa.desc(GoodsReceipt.received_date), sa.desc(GoodsReceipt.created_at))
+			.limit(1)
+		).scalar_one_or_none()
+
 		invoice = SupplierInvoice(
 			tenant_id=tenant_id,
 			po_id=po_id,
+			grn_id=latest_grn.id if latest_grn else invoice_data.get("grn_id"),
 			supplier_id=po.supplier_id,
 			invoice_number=invoice_data["invoice_number"],
 			invoice_date=inv_date,
@@ -619,7 +629,67 @@ class SCMService:
 		return invoice
 
 	# ------------------------------------------------------------------
-	# 7. get_supplier_performance
+	# 7. advance_to_next_step
+	# ------------------------------------------------------------------
+
+	def advance_to_next_step(self, record_id: str, session: Any) -> Any:
+		"""Advance one SCM P2P document to its next lightweight workflow state."""
+		from pgappforge.plugins.erp.operations.scm.models import (
+			GoodsReceipt,
+			PurchaseOrder,
+			PurchaseRequisition,
+			SupplierInvoice,
+		)
+
+		models = (PurchaseRequisition, PurchaseOrder, GoodsReceipt, SupplierInvoice)
+		record = None
+		for model in models:
+			record = session.get(model, record_id)
+			if record is not None:
+				break
+		if record is None:
+			raise SCMServiceError(f"P2P record {record_id!r} not found")
+
+		transitions = {
+			"PurchaseRequisition": {
+				"DRAFT": "SUBMITTED",
+				"SUBMITTED": "APPROVED",
+				"APPROVED": "PARTIALLY_ORDERED",
+				"PARTIALLY_ORDERED": "ORDERED",
+			},
+			"PurchaseOrder": {
+				"DRAFT": "SENT",
+				"SENT": "ACKNOWLEDGED",
+				"ACKNOWLEDGED": "PARTIAL",
+				"PARTIAL": "RECEIVED",
+				"RECEIVED": "INVOICED",
+				"INVOICED": "CLOSED",
+			},
+			"GoodsReceipt": {
+				"DRAFT": "CONFIRMED",
+				"CONFIRMED": "POSTED",
+			},
+			"SupplierInvoice": {
+				"RECEIVED": "MATCHED",
+				"MATCHED": "APPROVED",
+			},
+		}
+		model_name = record.__class__.__name__
+		current = getattr(record, "status", None) or "DRAFT"
+		next_status = transitions.get(model_name, {}).get(current)
+		if not next_status:
+			raise InvalidStatusTransitionError(
+				f"No P2P advance transition from {model_name}.{current}"
+			)
+		record.status = next_status
+		record.updated_at = datetime.now(timezone.utc)
+		if model_name == "PurchaseRequisition" and next_status == "APPROVED":
+			record.approved_at = record.approved_at or datetime.now(timezone.utc)
+		session.flush()
+		return record
+
+	# ------------------------------------------------------------------
+	# 8. get_supplier_performance
 	# ------------------------------------------------------------------
 
 	def get_supplier_performance(

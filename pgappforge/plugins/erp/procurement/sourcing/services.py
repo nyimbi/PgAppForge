@@ -90,12 +90,44 @@ def _now_utc() -> datetime:
 	return datetime.now(timezone.utc)
 
 
+def current_tenant_id() -> str | None:
+	try:
+		from pgappforge.multitenancy.middleware import get_current_tenant_id
+		tenant_id = get_current_tenant_id()
+	except Exception:
+		tenant_id = None
+	return str(tenant_id) if tenant_id else None
+
+
+def _tenant_id(explicit_tenant_id: str | None = None) -> str:
+	tenant_id = current_tenant_id()
+	if tenant_id:
+		if explicit_tenant_id and str(explicit_tenant_id) != tenant_id:
+			raise ValueError("tenant_id does not match current tenant")
+		return tenant_id
+	if explicit_tenant_id:
+		return str(explicit_tenant_id)
+	raise ValueError("Tenant context required")
+
+
 def _pct(numerator: int, denominator: int) -> Decimal:
 	if denominator <= 0:
 		return Decimal("0")
 	return (Decimal(str(numerator)) / Decimal(str(denominator)) * Decimal("100")).quantize(
 		Decimal("0.01"), rounding=ROUND_HALF_UP
 	)
+
+
+def _rfq_category(rfq: Any) -> str | None:
+	if getattr(rfq, "category", None):
+		return str(rfq.category)
+	for item in rfq.items or []:
+		if not isinstance(item, dict):
+			continue
+		for key in ("category", "expense_category", "item_category"):
+			if item.get(key):
+				return str(item[key])
+	return None
 
 
 def _emit(event: Any, session: Any = None) -> None:
@@ -155,6 +187,7 @@ class SourcingService:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, RFQ_TYPES
 		from pgappforge.plugins.erp.procurement.sourcing.events import RFQCreatedEvent
 
+		tenant_id = _tenant_id(tenant_id)
 		if not title.strip():
 			raise SourcingServiceError("RFQ title cannot be empty")
 		if not items:
@@ -209,6 +242,7 @@ class SourcingService:
 		rfq_id: str,
 		invited_supplier_ids: list[str],
 		session: Any,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Transition DRAFT → PUBLISHED and record invited suppliers.
 
@@ -219,7 +253,10 @@ class SourcingService:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
 		from pgappforge.plugins.erp.procurement.sourcing.events import RFQPublishedEvent
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if rfq.status != "DRAFT":
@@ -267,6 +304,7 @@ class SourcingService:
 		validity_days: int = 30,
 		quality_notes: str | None = None,
 		currency_code: str = "USD",
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Submit a supplier bid for an RFQ.
 
@@ -280,7 +318,10 @@ class SourcingService:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, SupplierBid
 		from pgappforge.plugins.erp.procurement.sourcing.events import BidSubmittedEvent
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if rfq.status != "PUBLISHED":
@@ -296,6 +337,7 @@ class SourcingService:
 
 		# Duplicate check
 		dup_stmt = sa.select(sa.func.count(SupplierBid.id)).where(
+			SupplierBid.tenant_id == tenant_id,
 			SupplierBid.rfq_id == rfq_id,
 			SupplierBid.supplier_id == supplier_id,
 		)
@@ -351,6 +393,7 @@ class SourcingService:
 		cls,
 		rfq_id: str,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> list[Any]:
 		"""Score all SUBMITTED bids and identify the best.
 
@@ -370,7 +413,10 @@ class SourcingService:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, SupplierBid
 		from pgappforge.plugins.erp.procurement.sourcing.events import BidEvaluatedEvent
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if rfq.status not in ("PUBLISHED", "CLOSED"):
@@ -379,6 +425,7 @@ class SourcingService:
 			)
 
 		stmt = sa.select(SupplierBid).where(
+			SupplierBid.tenant_id == tenant_id,
 			SupplierBid.rfq_id == rfq_id,
 			SupplierBid.status.in_(["SUBMITTED", "EVALUATED"]),
 		)
@@ -455,6 +502,7 @@ class SourcingService:
 		rfq_id: str,
 		winning_bid_id: str,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> dict[str, Any]:
 		"""Award the RFQ to a winning bid and raise a purchase order.
 
@@ -467,7 +515,10 @@ class SourcingService:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, SupplierBid
 		from pgappforge.plugins.erp.procurement.sourcing.events import PurchaseOrderAwardedEvent
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if rfq.status not in ("CLOSED", "PUBLISHED"):
@@ -475,12 +526,19 @@ class SourcingService:
 				f"award_rfq() requires CLOSED or PUBLISHED status, got {rfq.status!r}"
 			)
 
-		winning_bid = session.get(SupplierBid, winning_bid_id)
-		if winning_bid is None or winning_bid.rfq_id != rfq_id:
+		winning_bid = session.execute(
+			sa.select(SupplierBid).where(
+				SupplierBid.id == winning_bid_id,
+				SupplierBid.tenant_id == tenant_id,
+				SupplierBid.rfq_id == rfq_id,
+			)
+		).scalar_one_or_none()
+		if winning_bid is None:
 			raise BidNotFoundError(f"Bid {winning_bid_id!r} not found on RFQ {rfq_id!r}")
 
 		# Reject all other bids
 		stmt = sa.select(SupplierBid).where(
+			SupplierBid.tenant_id == tenant_id,
 			SupplierBid.rfq_id == rfq_id,
 			SupplierBid.id != winning_bid_id,
 		)
@@ -563,6 +621,7 @@ class SourcingService:
 		rfq_id: str,
 		reason: str,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> Any:
 		"""Cancel an RFQ that has not yet been awarded.
 
@@ -572,7 +631,10 @@ class SourcingService:
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
 		from pgappforge.plugins.erp.procurement.sourcing.events import RFQCancelledEvent
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if rfq.status == "AWARDED":
@@ -608,25 +670,39 @@ class SourcingService:
 		duration_minutes: int,
 		reserve_price_cents: int,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> dict[str, Any]:
 		"""Enable reverse-auction bidding for an RFQ."""
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
 
-		if duration_minutes <= 0:
+		tenant_id = _tenant_id(tenant_id)
+		try:
+			duration = int(duration_minutes)
+		except (TypeError, ValueError) as exc:
+			raise ValueError("duration_minutes must be an integer") from exc
+		try:
+			reserve = int(reserve_price_cents)
+		except (TypeError, ValueError) as exc:
+			raise ValueError("reserve_price_cents must be an integer") from exc
+		if duration <= 0:
 			raise ValueError("duration_minutes must be positive")
-		if reserve_price_cents <= 0:
+		if duration > 10080:
+			raise ValueError("duration_minutes must be no greater than 10080")
+		if reserve <= 0:
 			raise ValueError("reserve_price_cents must be positive")
 
-		rfq = session.get(RFQ, rfq_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 
 		now = _now_utc()
 		rfq.auction_mode = True
-		rfq.reserve_price_cents = int(reserve_price_cents)
+		rfq.reserve_price_cents = reserve
 		rfq.current_best_bid_cents = None
 		rfq.auction_bids = []
-		rfq.auction_end_time = now + timedelta(minutes=duration_minutes)
+		rfq.auction_end_time = now + timedelta(minutes=duration)
 		session.flush()
 
 		return {
@@ -650,11 +726,15 @@ class SourcingService:
 		supplier_id: str,
 		bid_cents: int,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> dict[str, Any]:
 		"""Place a lower reverse-auction bid without going below the reserve floor."""
 		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if not rfq.auction_mode:
@@ -662,7 +742,10 @@ class SourcingService:
 		if rfq.auction_end_time is not None and _now_utc() > rfq.auction_end_time:
 			raise ValueError("Auction has expired")
 
-		bid = int(bid_cents)
+		try:
+			bid = int(bid_cents)
+		except (TypeError, ValueError) as exc:
+			raise ValueError("bid_cents must be an integer") from exc
 		reserve = int(rfq.reserve_price_cents or 0)
 		if bid <= 0:
 			raise ValueError("bid_cents must be positive")
@@ -693,11 +776,19 @@ class SourcingService:
 	# ------------------------------------------------------------------
 
 	@classmethod
-	def close_auction(cls, rfq_id: str, session: Any) -> dict[str, Any]:
+	def close_auction(
+		cls,
+		rfq_id: str,
+		session: Any,
+		tenant_id: str | None = None,
+	) -> dict[str, Any]:
 		"""Close an auction, mark the RFQ awarded, and return the lowest bid."""
-		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ
+		from pgappforge.plugins.erp.procurement.sourcing.models import RFQ, RFQAward
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 
@@ -712,13 +803,31 @@ class SourcingService:
 		rfq.status = "AWARDED"
 		rfq.auction_mode = False
 
-		# TODO: create an RFQAward row here if a future sourcing model provides one.
+		award = session.execute(
+			sa.select(RFQAward).where(
+				RFQAward.tenant_id == tenant_id,
+				RFQAward.rfq_id == rfq.id,
+			)
+		).scalar_one_or_none()
+		if award is None:
+			award = RFQAward(tenant_id=rfq.tenant_id, rfq_id=rfq.id)
+			session.add(award)
+		award.supplier_id = winner_supplier_id
+		award.award_price_cents = winning_bid
+		award.award_source = "REVERSE_AUCTION"
+		award.award_details = {
+			"winning_bid": winning,
+			"reserve_price_cents": rfq.reserve_price_cents,
+			"bid_count": len(bids),
+		}
+		award.awarded_at = _now_utc()
 		session.flush()
 
 		reserve = int(rfq.reserve_price_cents or 0)
 		savings_pct = _pct(max(reserve - winning_bid, 0), reserve) if reserve else Decimal("0")
 		return {
 			"rfq_id": rfq.id,
+			"award_id": award.id,
 			"winner_supplier_id": winner_supplier_id,
 			"winning_bid_cents": winning_bid,
 			"savings_pct": savings_pct,
@@ -735,11 +844,15 @@ class SourcingService:
 		baseline_price_cents: int,
 		awarded_price_cents: int,
 		session: Any,
+		tenant_id: str | None = None,
 	) -> dict[str, Any]:
 		"""Persist savings achieved on an RFQ award."""
 		from pgappforge.plugins.erp.procurement.sourcing.models import ProcurementSavings, RFQ
 
-		rfq = session.get(RFQ, rfq_id)
+		tenant_id = _tenant_id(tenant_id)
+		rfq = session.execute(
+			sa.select(RFQ).where(RFQ.id == rfq_id, RFQ.tenant_id == tenant_id)
+		).scalar_one_or_none()
 		if rfq is None:
 			raise RFQNotFoundError(f"RFQ {rfq_id!r} not found")
 		if baseline_price_cents <= 0:
@@ -754,7 +867,7 @@ class SourcingService:
 			awarded_price_cents=int(awarded_price_cents),
 			savings_cents=savings_cents,
 			savings_pct=savings_pct,
-			category=getattr(rfq, "category", None),
+			category=_rfq_category(rfq),
 			recorded_at=_now_utc(),
 		)
 		session.add(record)
@@ -787,6 +900,7 @@ class SourcingService:
 		"""Aggregate procurement savings for a tenant/date window."""
 		from pgappforge.plugins.erp.procurement.sourcing.models import ProcurementSavings
 
+		tenant_id = _tenant_id(tenant_id)
 		rows = list(session.execute(
 			sa.select(ProcurementSavings).where(
 				ProcurementSavings.tenant_id == tenant_id,
@@ -890,6 +1004,7 @@ def _bpm_award(
 			rfq_id=rfq_id,
 			winning_bid_id=winning_bid_id,
 			session=session,
+			tenant_id=record_ctx.get("tenant_id"),
 		)
 		return {"status": "ok", **result}
 	except Exception as exc:

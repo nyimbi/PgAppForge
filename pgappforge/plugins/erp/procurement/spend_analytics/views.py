@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from decimal import Decimal
 
@@ -22,8 +23,24 @@ def _format_cents(value):
 class SpendSnapshotView(ModelView):
 	datamodel = SQLAInterface(SpendSnapshot)
 
+	label_columns = {
+		'period': _('Period'),
+		'supplier_id': _('Supplier'),
+		'supplier_name': _('Supplier Name'),
+		'category': _('Category'),
+		'department': _('Department'),
+		'amount_cents': _('Amount'),
+		'invoice_count': _('Invoice Count'),
+		'created_at': _('Created At'),
+		'updated_at': _('Updated At'),
+	}
 	list_columns = ['period', 'supplier_id', 'supplier_name', 'category',
 					'department', 'amount_cents', 'invoice_count']
+	show_columns = ['tenant_id', 'period', 'supplier_id', 'supplier_name',
+					'category', 'department', 'amount_cents', 'invoice_count',
+					'created_at', 'updated_at']
+	search_columns = ['period', 'supplier_id', 'supplier_name', 'category',
+					  'department']
 	add_columns = ['tenant_id', 'period', 'supplier_id', 'supplier_name', 'category',
 				   'department', 'amount_cents', 'invoice_count']
 	edit_columns = add_columns

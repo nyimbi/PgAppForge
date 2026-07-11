@@ -8,6 +8,7 @@ JobRunLogView         — read-only log viewer (list + show)
 SchedulerDashboardView — live KPI tiles + status breakdown chart
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -97,20 +98,20 @@ class ScheduledJobView(BaseERPModelView):
 	                        "next_run_at", "run_count", "failure_count", "run_logs"]
 
 	label_columns = {
-		"name": "Job Name",
-		"frequency": "Frequency",
-		"is_active": "Active",
-		"last_run_at": "Last Run",
-		"last_run_status": "Last Status",
-		"next_run_at": "Next Run",
-		"plugin_path": "Module Path",
-		"service_class": "Service Class",
-		"method_name": "Method",
-		"method_kwargs": "Extra kwargs (JSON)",
-		"cron_expression": "Cron Expression",
-		"run_count": "Total Runs",
-		"failure_count": "Failures",
-		"last_run_error": "Last Error",
+		"name": _("Job Name"),
+		"frequency": _("Frequency"),
+		"is_active": _("Active"),
+		"last_run_at": _("Last Run"),
+		"last_run_status": _("Last Status"),
+		"next_run_at": _("Next Run"),
+		"plugin_path": _("Module Path"),
+		"service_class": _("Service Class"),
+		"method_name": _("Method"),
+		"method_kwargs": _("Extra kwargs (JSON)"),
+		"cron_expression": _("Cron Expression"),
+		"run_count": _("Total Runs"),
+		"failure_count": _("Failures"),
+		"last_run_error": _("Last Error"),
 	}
 
 	search_columns = ["name", "frequency", "last_run_status", "is_active"]
@@ -152,13 +153,13 @@ class JobRunLogView(BaseERPModelView):
 	]
 
 	label_columns = {
-		"job_id": "Job",
-		"started_at": "Started",
-		"finished_at": "Finished",
-		"status": "Status",
-		"duration_ms": "Duration (ms)",
-		"records_processed": "Records",
-		"error_message": "Error",
+		"job_id": _("Job"),
+		"started_at": _("Started"),
+		"finished_at": _("Finished"),
+		"status": _("Status"),
+		"duration_ms": _("Duration (ms)"),
+		"records_processed": _("Records"),
+		"error_message": _("Error"),
 	}
 
 	search_columns = ["status", "job_id"]

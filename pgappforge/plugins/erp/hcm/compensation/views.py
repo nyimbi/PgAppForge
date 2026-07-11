@@ -1,4 +1,5 @@
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 from flask import render_template
 from pgappforge import ModelView, expose, has_access
@@ -22,7 +23,9 @@ __all__ = [
 
 class CompensationGradeView(ModelView):
 	datamodel = SQLAInterface(CompensationGrade)
-	list_columns = ["grade_code", "name", "min_salary_cents", "midpoint_cents", "max_salary_cents", "currency_code", "is_active"]
+	list_columns = ["grade_code", "name", "currency_code", "is_active"]
+	label_columns = {"grade_code": _("Grade Code"), "name": _("Name"), "min_salary_cents": _("Min Salary (KES)"), "midpoint_cents": _("Midpoint (KES)"), "max_salary_cents": _("Max Salary (KES)"), "currency_code": _("Currency Code"), "is_active": _("Is Active")}
+	show_columns = ["grade_code", "name", "min_salary_cents", "midpoint_cents", "max_salary_cents", "currency_code", "is_active", "effective_from", "effective_to"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "packages"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "packages"]
 	search_columns = ["grade_code", "name"]
@@ -30,7 +33,9 @@ class CompensationGradeView(ModelView):
 
 class CompensationPackageView(ModelView):
 	datamodel = SQLAInterface(CompensationPackage)
-	list_columns = ["employee_id", "base_salary_cents", "pay_frequency", "package_type", "effective_from", "currency_code"]
+	list_columns = ["employee_id", "pay_frequency", "package_type", "effective_from", "currency_code"]
+	label_columns = {"employee_id": _("Employee"), "base_salary_cents": _("Base Salary (KES)"), "pay_frequency": _("Pay Frequency"), "package_type": _("Package Type"), "effective_from": _("Effective From"), "currency_code": _("Currency Code")}
+	show_columns = ["employee_id", "base_salary_cents", "pay_frequency", "package_type", "effective_from", "currency_code", "effective_to", "approved_by", "approved_at", "notes", "metadata_", "grade"]
 	add_exclude_columns = ["id", "created_on", "changed_on"]
 	edit_exclude_columns = ["id", "created_on", "changed_on"]
 	search_columns = ["employee_id", "package_type"]
@@ -39,6 +44,8 @@ class CompensationPackageView(ModelView):
 class AllowanceDefinitionView(ModelView):
 	datamodel = SQLAInterface(AllowanceDefinition)
 	list_columns = ["code", "name", "allowance_type", "amount_cents", "is_taxable", "is_active"]
+	label_columns = {"code": _("Code"), "name": _("Name"), "allowance_type": _("Allowance Type"), "amount_cents": _("Amount (KES)"), "is_taxable": _("Is Taxable"), "is_active": _("Is Active")}
+	show_columns = ["code", "name", "allowance_type", "amount_cents", "is_taxable", "is_active", "percentage_of_basic", "is_pensionable", "currency_code"]
 	add_exclude_columns = ["id", "created_on", "changed_on", "employee_allowances"]
 	edit_exclude_columns = ["id", "created_on", "changed_on", "employee_allowances"]
 	search_columns = ["code", "name", "allowance_type"]

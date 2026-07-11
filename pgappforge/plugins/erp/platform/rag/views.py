@@ -9,6 +9,7 @@ Views
   RAGDashboardView   — Live stats dashboard + POST /platform/rag/ask endpoint.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -77,14 +78,14 @@ class RAGDocumentView(BaseERPModelView):
 
 	search_columns = ["title", "source_type", "source_id", "language"]
 	label_columns = {
-		"source_type":  "Source Type",
-		"source_id":    "Source ID",
-		"chunk_count":  "Chunks",
-		"indexed_at":   "Indexed At",
-		"is_active":    "Active",
-		"doc_metadata": "Metadata",
-		"created_at":   "Created",
-		"updated_at":   "Updated",
+		"source_type":  _("Source Type"),
+		"source_id":    _("Source ID"),
+		"chunk_count":  _("Chunks"),
+		"indexed_at":   _("Indexed At"),
+		"is_active":    _("Active"),
+		"doc_metadata": _("Metadata"),
+		"created_at":   _("Created"),
+		"updated_at":   _("Updated"),
 	}
 
 

@@ -354,11 +354,11 @@ class VerificationPortalView(BaseView):
 	route_base = "/verify"
 	default_view = "verify"
 
+	@has_access
 	@expose("/<string:token>")
 	def verify(self, token: str):
-		"""Public endpoint: verify a credential by its URL token.
+		"""Verify a credential by its URL token.
 
-		No @has_access — publicly accessible for third-party verifiers.
 		Records a CredentialVerification log row.
 		"""
 		session = _get_session()

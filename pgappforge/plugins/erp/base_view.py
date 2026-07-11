@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from pgappforge.baseviews import BaseView
+from pgappforge.baseviews import BaseView, expose
+from pgappforge.security.decorators import has_access
 from markupsafe import Markup
 
 
@@ -403,6 +404,45 @@ class BaseERPModelView(_ModelView):
 	add_exclude_columns  = list(_AUDIT)
 	edit_exclude_columns = list(_AUDIT)
 	page_size = 50
+
+	@expose('/import/', methods=['GET', 'POST'])
+	@has_access
+	def bulk_import(self):
+		import csv, io
+		from flask import request, flash, redirect, url_for
+		if request.method == 'GET':
+			return self.render_template('appbuilder/general/model/import.html',
+				title='Import ' + self.datamodel.obj.__name__)
+		file = request.files.get('file')
+		if not file:
+			flash('No file uploaded', 'danger')
+			return redirect(url_for('.' + self.__class__.__name__ + '.list'))
+		stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
+		reader = csv.DictReader(stream)
+		imported = 0
+		errors = []
+		for i, row in enumerate(reader):
+			try:
+				obj = self.datamodel.obj()
+				import_cols = getattr(self, 'import_columns', list(row.keys()))
+				for col in import_cols:
+					if col in row:
+						setattr(obj, col, row[col] or None)
+				self.datamodel.session.add(obj)
+				imported += 1
+			except Exception as e:
+				errors.append(f'Row {i+2}: {e}')
+		try:
+			self.datamodel.session.commit()
+		except Exception as e:
+			self.datamodel.session.rollback()
+			errors.append(f'Commit failed: {e}')
+			imported = 0
+		if errors:
+			flash(f'Imported {imported} rows. Errors: {len(errors)}', 'warning')
+		else:
+			flash(f'Successfully imported {imported} rows', 'success')
+		return redirect(url_for('.' + self.__class__.__name__ + '.list'))
 
 
 __all__ = ["BaseERPView", "BaseERPModelView"]

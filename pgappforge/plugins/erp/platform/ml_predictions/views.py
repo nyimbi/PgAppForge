@@ -7,6 +7,7 @@ MLPredictionView         — read-only list of persisted predictions.
 MLPredictionsDashboardView — live counts by prediction_type and label.
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -51,17 +52,17 @@ class MLPredictionView(BaseERPModelView):
 		"created_at",
 	]
 	label_columns = {
-		"tenant_id": "Tenant",
-		"prediction_type": "Prediction Type",
-		"reference_type": "Reference Type",
-		"reference_id": "Reference ID",
-		"score": "Score",
-		"label": "Label",
-		"confidence": "Confidence",
-		"features_used": "Features Used",
-		"model_version": "Model Version",
-		"explanation": "Explanation",
-		"created_at": "Created",
+		"tenant_id": _("Tenant"),
+		"prediction_type": _("Prediction Type"),
+		"reference_type": _("Reference Type"),
+		"reference_id": _("Reference ID"),
+		"score": _("Score"),
+		"label": _("Label"),
+		"confidence": _("Confidence"),
+		"features_used": _("Features Used"),
+		"model_version": _("Model Version"),
+		"explanation": _("Explanation"),
+		"created_at": _("Created"),
 	}
 	search_columns = ["prediction_type", "reference_type", "reference_id", "label"]
 	order_columns  = ["created_at", "prediction_type", "score"]

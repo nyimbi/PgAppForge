@@ -1,5 +1,6 @@
 """Hedge accounting service — IFRS 9 effectiveness testing and recognition."""
 from __future__ import annotations
+import re
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -48,6 +49,8 @@ class HedgeAccountingService:
 		hedged_item_change_cents: int,
 		session: Any,
 	) -> HedgeJournalEntry:
+		if not re.fullmatch(r"\d{4}-\d{2}", period or ""):
+			raise ValueError("period must match YYYY-MM")
 		hedge = session.get(HedgeRelationship, hedge_id)
 		if hedged_item_change_cents == 0:
 			ratio = None

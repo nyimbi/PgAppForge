@@ -20,6 +20,7 @@ Session key: ``wizard_<capability>_<workflow_id>``
 Value: dict mapping step_id → {field_name: value}
 """
 from __future__ import annotations
+from flask_babel import lazy_gettext as _
 
 import logging
 
@@ -128,7 +129,7 @@ class WorkflowLauncherView(BaseERPView):
 			"appbuilder/workflow/launcher.html",
 			cards=cards,
 			domains=domains,
-			page_title="Workflow Launcher",
+			page_title=_("Workflow Launcher"),
 		)
 
 	# ------------------------------------------------------------------
@@ -230,6 +231,7 @@ class WorkflowLauncherView(BaseERPView):
 	# Step: POST
 	# ------------------------------------------------------------------
 
+	@has_access
 	@expose(
 		"/wizard/<string:capability>/<string:workflow_id>/step/<string:step_id>",
 		methods=["POST"],
