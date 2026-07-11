@@ -132,6 +132,7 @@ class InventoryPlugin(BasePlugin):
 			InventoryReportView,
 			ProductCategoryView,
 			ProductView,
+			StockAgingView,
 			StockLevelView,
 			StockMovementView,
 			WarehouseView,
@@ -145,6 +146,7 @@ class InventoryPlugin(BasePlugin):
 		self.add_view(StockLevelView, "Stock Levels", icon="fa-cubes", category=cat)
 		self.add_view(StockMovementView, "Stock Movements", icon="fa-exchange", category=cat)
 		self.add_view(InventoryReportView, "Inventory Reports", icon="fa-bar-chart", category=cat)
+		self.add_view(StockAgingView, "Stock Aging", icon="fa-hourglass-half", category=cat)
 
 		log.info("InventoryPlugin: views registered under category %r", cat)
 

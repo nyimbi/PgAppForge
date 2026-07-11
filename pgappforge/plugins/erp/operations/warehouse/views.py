@@ -15,7 +15,8 @@ Registered views:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 
 import sqlalchemy as sa
 from flask import abort, jsonify, make_response, request
@@ -55,6 +56,13 @@ def _he(s: object) -> str:
 	)
 
 
+def _qty_cost_cents(qty: object, unit_cost_cents: int | None) -> int:
+	return int(
+		(Decimal(str(qty or 0)) * Decimal(int(unit_cost_cents or 0)))
+		.to_integral_value(rounding=ROUND_HALF_UP)
+	)
+
+
 def _page_html(title: str, body: str) -> str:
 	return (
 		f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{title}</title>'
@@ -82,6 +90,17 @@ class PickListView(BaseERPView):
 
 	route_base = "/wms/picklists"
 	default_view = "list"
+	show_columns = ["order_type", "order_id", "warehouse_id", "status", "assigned_to", "priority", "due_by"]
+	search_columns = ["order_type", "order_id", "warehouse_id", "status", "assigned_to"]
+	label_columns = {
+		"order_type": "Order Type",
+		"order_id": "Order",
+		"warehouse_id": "Warehouse",
+		"status": "Status",
+		"assigned_to": "Assigned To",
+		"priority": "Priority",
+		"due_by": "Due By",
+	}
 
 	@expose("/")
 	@has_access
@@ -280,6 +299,17 @@ class PutawayView(BaseERPView):
 
 	route_base = "/wms/putaway"
 	default_view = "list"
+	show_columns = ["warehouse_id", "grn_id", "product_id", "quantity", "lot_number", "status", "completed_at"]
+	search_columns = ["warehouse_id", "grn_id", "product_id", "lot_number", "status"]
+	label_columns = {
+		"warehouse_id": "Warehouse",
+		"grn_id": "GRN",
+		"product_id": "Product",
+		"quantity": "Quantity",
+		"lot_number": "Lot",
+		"status": "Status",
+		"completed_at": "Completed At",
+	}
 
 	@expose("/")
 	@has_access
@@ -396,6 +426,16 @@ class StockCountView(BaseERPView):
 
 	route_base = "/wms/counts"
 	default_view = "list"
+	show_columns = ["count_date", "count_type", "warehouse_id", "status", "total_variance_value_cents", "approved_by"]
+	search_columns = ["warehouse_id", "status", "count_type", "approved_by"]
+	label_columns = {
+		"count_date": "Count Date",
+		"count_type": "Count Type",
+		"warehouse_id": "Warehouse",
+		"status": "Status",
+		"total_variance_value_cents": "Variance Value (cents)",
+		"approved_by": "Approved By",
+	}
 
 	@expose("/")
 	@has_access
@@ -576,6 +616,14 @@ class WMSReportView(BaseERPView):
 
 	route_base = "/wms/reports"
 	default_view = "dashboard"
+	show_columns = ["active_shipments", "pending_picks", "utilization_pct", "workers_active"]
+	search_columns = ["tenant_id", "warehouse_id", "status"]
+	label_columns = {
+		"active_shipments": "Active Shipments",
+		"pending_picks": "Pending Picks",
+		"utilization_pct": "Utilization %",
+		"workers_active": "Workers Active",
+	}
 
 	@expose("/")
 	@has_access
@@ -831,9 +879,164 @@ class WMSReportView(BaseERPView):
 		return make_response(_page_html("Count Variance", body), 200)
 
 
+# Backward-compatible dashboard import name used by external checks.
+WarehouseDashboardView = WMSReportView
+
+
+# ---------------------------------------------------------------------------
+# CycleCountDashboardView
+# ---------------------------------------------------------------------------
+
+class CycleCountDashboardView(BaseERPView):
+	"""Cycle count dashboard.
+
+	GET /wms/reports/cycle-counts/ — status counts, completed variance value, overdue schedules.
+	"""
+
+	route_base = "/wms/reports/cycle-counts"
+	default_view = "dashboard"
+	show_columns = ["scheduled", "in_progress", "completed", "variance_found", "variance_amount_cents", "overdue_schedules"]
+	search_columns = ["tenant_id", "warehouse_id", "status", "scheduled_date"]
+	label_columns = {
+		"scheduled": "Scheduled",
+		"in_progress": "In Progress",
+		"completed": "Completed",
+		"variance_found": "Variance Found",
+		"variance_amount_cents": "Variance Amount (cents)",
+		"overdue_schedules": "Overdue Schedules",
+	}
+
+	@expose("/")
+	@has_access
+	def dashboard(self):
+		from pgappforge.plugins.erp.operations.inventory.models import Product
+		from pgappforge.plugins.erp.operations.warehouse.models import CycleCount, CycleCountLine
+
+		session = _get_session()
+		tenant_id = request.args.get("tenant_id")
+		warehouse_id = request.args.get("warehouse_id")
+		today = date.today()
+
+		filters = []
+		if tenant_id:
+			filters.append(CycleCount.tenant_id == tenant_id)
+		if warehouse_id:
+			filters.append(CycleCount.warehouse_id == warehouse_id)
+
+		def count_for_status(statuses: tuple[str, ...]) -> int:
+			return int(session.execute(
+				sa.select(sa.func.count()).select_from(CycleCount).where(
+					CycleCount.status.in_(statuses),
+					*filters,
+				)
+			).scalar() or 0)
+
+		status_counts = {
+			"scheduled": count_for_status(("PLANNED", "SCHEDULED")),
+			"in_progress": count_for_status(("IN_PROGRESS",)),
+			"completed": count_for_status(("COMPLETED",)),
+			"variance_found": int(session.execute(
+				sa.select(sa.func.count(sa.distinct(CycleCount.id))).select_from(CycleCount)
+				.join(CycleCountLine, CycleCountLine.count_id == CycleCount.id)
+				.where(
+					CycleCountLine.variance.is_not(None),
+					CycleCountLine.variance != 0,
+					*filters,
+				)
+			).scalar() or 0),
+		}
+
+		variance_rows = session.execute(
+			sa.select(CycleCountLine.variance, Product.cost_price_cents)
+			.join(CycleCount, CycleCountLine.count_id == CycleCount.id)
+			.outerjoin(
+				Product,
+				sa.and_(
+					Product.sku == CycleCountLine.product_code,
+					Product.tenant_id == CycleCountLine.tenant_id,
+				),
+			)
+			.where(
+				CycleCount.status == "COMPLETED",
+				CycleCountLine.variance.is_not(None),
+				CycleCountLine.variance != 0,
+				*filters,
+			)
+		).all()
+		variance_amount_cents = int(sum(
+			_qty_cost_cents(abs(Decimal(str(row.variance or 0))), row.cost_price_cents)
+			for row in variance_rows
+		))
+
+		overdue_counts = session.execute(
+			sa.select(CycleCount)
+			.where(
+				CycleCount.scheduled_date < today,
+				CycleCount.status.notin_(("COMPLETED", "CANCELLED")),
+				*filters,
+			)
+			.order_by(CycleCount.scheduled_date)
+			.limit(50)
+		).scalars().all()
+		overdue_schedules = [
+			{
+				"id": c.id,
+				"count_reference": c.count_reference,
+				"warehouse_id": c.warehouse_id,
+				"zone_code": c.zone_code,
+				"scheduled_date": c.scheduled_date.isoformat() if c.scheduled_date else None,
+				"status": c.status,
+			}
+			for c in overdue_counts
+		]
+
+		if request.args.get("format") == "json":
+			return jsonify({
+				"status_counts": status_counts,
+				"variance_amount_cents": variance_amount_cents,
+				"overdue_schedules": overdue_schedules,
+			})
+
+		kpi_html = self.kpi_cards([
+			{"label": "Scheduled", "value": status_counts["scheduled"], "format": "integer",
+			 "color": "#2563eb", "icon": "fa-calendar"},
+			{"label": "In Progress", "value": status_counts["in_progress"], "format": "integer",
+			 "color": "#d97706", "icon": "fa-spinner"},
+			{"label": "Completed", "value": status_counts["completed"], "format": "integer",
+			 "color": "#047857", "icon": "fa-check-circle"},
+			{"label": "Variance Found", "value": status_counts["variance_found"], "format": "integer",
+			 "color": "#dc2626", "icon": "fa-exclamation-circle"},
+			{"label": "Completed Variance (cents)", "value": variance_amount_cents, "format": "integer",
+			 "color": "#7c2d12", "icon": "fa-dollar-sign"},
+			{"label": "Overdue", "value": len(overdue_schedules), "format": "integer",
+			 "color": "#991b1b", "icon": "fa-clock"},
+		])
+		rows = "".join(
+			f"<tr>"
+			f"<td>{_he(c['count_reference'])}</td>"
+			f"<td>{_he(c['warehouse_id'])}</td>"
+			f"<td>{_he(c['zone_code'] or '')}</td>"
+			f"<td>{_he(c['scheduled_date'])}</td>"
+			f"<td><span class='label label-warning'>{_he(c['status'])}</span></td>"
+			f"</tr>"
+			for c in overdue_schedules
+		)
+		body = (
+			"<h3>Cycle Count Dashboard</h3>"
+			+ str(kpi_html)
+			+ '<h4>Overdue Schedules</h4>'
+			+ '<table class="table table-bordered table-condensed table-hover">'
+			+ '<thead><tr><th>Reference</th><th>Warehouse</th><th>Zone</th><th>Scheduled</th><th>Status</th></tr></thead>'
+			+ f"<tbody>{rows}</tbody></table>"
+		)
+		return make_response(_page_html("Cycle Count Dashboard", body), 200)
+
+
 __all__ = [
 	"PickListView",
 	"PutawayView",
 	"StockCountView",
 	"WMSReportView",
+	"WarehouseDashboardView",
+	"CycleCountDashboardView",
 ]

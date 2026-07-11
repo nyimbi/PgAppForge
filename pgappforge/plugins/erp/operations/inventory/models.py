@@ -155,6 +155,8 @@ class Product(AuditMixin, Model):
 	# Replenishment
 	reorder_point = Column(Numeric(15, 4), nullable=False, default=0, comment="Quantity that triggers replenishment order")
 	reorder_quantity = Column(Numeric(15, 4), nullable=False, default=0, comment="Default order quantity at reorder")
+	max_stock_level = Column(Numeric(15, 4), nullable=False, default=0, server_default="0", comment="Maximum desired stock level; 0 means no cap configured")
+	qty_issued_ytd = Column(Numeric(15, 4), nullable=False, default=0, server_default="0", comment="Quantity issued in the current year for ABC analysis")
 	lead_time_days = Column(Integer, nullable=False, default=0, comment="Supplier lead time in calendar days")
 
 	# Tracking flags
@@ -342,6 +344,8 @@ class StockLevel(AuditMixin, Model):
 	# Valuation — integer cents
 	average_cost_cents = Column(Integer, nullable=False, default=0, comment="Weighted average unit cost in cents")
 	last_movement_at = Column(DateTime(timezone=True), nullable=True)
+	last_movement_date = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date(), server_default=sa.text("CURRENT_DATE"), comment="Date of most recent stock movement")
+	receipt_date = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date(), server_default=sa.text("CURRENT_DATE"), comment="Original receipt date for lot aging")
 
 	created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))
 	updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=sa.text("NOW()"))

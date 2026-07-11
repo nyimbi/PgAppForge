@@ -164,6 +164,7 @@ class WarehousePlugin(BasePlugin):
 
 	def register_views(self) -> None:
 		from pgappforge.plugins.erp.operations.warehouse.views import (
+			CycleCountDashboardView,
 			PickListView,
 			PutawayView,
 			StockCountView,
@@ -176,6 +177,7 @@ class WarehousePlugin(BasePlugin):
 		self.add_view(PutawayView, "Putaway Tasks", icon="fa-arrow-circle-down", category=cat)
 		self.add_view(StockCountView, "Stock Counts", icon="fa-calculator", category=cat)
 		self.add_view(WMSReportView, "WMS Reports", icon="fa-bar-chart", category=cat)
+		self.add_view(CycleCountDashboardView, "Cycle Count Dashboard", icon="fa-calendar-check", category=cat)
 
 		log.info("WarehousePlugin: views registered under category %r", cat)
 

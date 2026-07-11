@@ -24,6 +24,7 @@ Public API:
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -460,7 +461,11 @@ class InventoryService:
 				sl.quantity_reserved = Decimal("0")
 			sl.quantity_available = _d(sl.quantity_on_hand) - _d(sl.quantity_reserved)
 			sl.last_movement_at = _now()
+			sl.last_movement_date = _today()
 			sl.updated_at = _now()
+			if product is not None:
+				product.qty_issued_ytd = _d(product.qty_issued_ytd or 0) + qty
+				product.updated_at = _now()
 
 			movements.append(movement)
 
@@ -970,6 +975,54 @@ class InventoryService:
 		return suggestions
 
 	# ------------------------------------------------------------------
+	# get_abc_analysis
+	# ------------------------------------------------------------------
+
+	def get_abc_analysis(self, tenant_id: str, session: Any) -> dict:
+		"""Return ABC inventory classification by annual consumption value.
+
+		annual_consumption_value = qty_issued_ytd × cost_price_cents.
+		A covers the top 20% of items by count, B the next 30%, C the rest.
+		"""
+		from pgappforge.plugins.erp.operations.inventory.models import Product
+
+		q = (
+			sa.select(Product)
+			.where(Product.tenant_id == tenant_id)
+			.where(Product.is_active.is_(True))
+		)
+		products = session.execute(q).scalars().all()
+		values: list[tuple[Any, int]] = []
+		for product in products:
+			value_cents = _cents(_d(product.qty_issued_ytd or 0), int(product.cost_price_cents or 0))
+			values.append((product, value_cents))
+
+		values.sort(key=lambda item: item[1], reverse=True)
+		total_count = len(values)
+		total_value_cents = int(sum(value for _, value in values))
+		if total_count == 0:
+			return {
+				"A": 0,
+				"B": 0,
+				"C": 0,
+				"A_value_cents": 0,
+				"total_value_cents": 0,
+			}
+
+		a_count = min(total_count, max(1, math.ceil(total_count * 0.20)))
+		b_count = min(total_count - a_count, math.ceil(total_count * 0.30))
+		c_count = total_count - a_count - b_count
+		a_value_cents = int(sum(value for _, value in values[:a_count]))
+
+		return {
+			"A": int(a_count),
+			"B": int(b_count),
+			"C": int(c_count),
+			"A_value_cents": a_value_cents,
+			"total_value_cents": total_value_cents,
+		}
+
+	# ------------------------------------------------------------------
 	# _update_stock_level (internal)
 	# ------------------------------------------------------------------
 
@@ -1028,6 +1081,8 @@ class InventoryService:
 				quantity_available=Decimal("0"),
 				quantity_in_transit=Decimal("0"),
 				average_cost_cents=0,
+				receipt_date=_today(),
+				last_movement_date=_today(),
 			)
 			session.add(sl)
 
@@ -1048,6 +1103,9 @@ class InventoryService:
 		sl.quantity_on_hand = new_qty
 		sl.quantity_available = new_qty - _d(sl.quantity_reserved)
 		sl.last_movement_at = _now()
+		sl.last_movement_date = _today()
+		if direction == 1 and not sl.receipt_date:
+			sl.receipt_date = _today()
 		sl.updated_at = _now()
 
 		return sl
