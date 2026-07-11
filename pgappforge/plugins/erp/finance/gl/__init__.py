@@ -137,20 +137,49 @@ class GLPlugin(BasePlugin):
 	def register_views(self) -> None:
 		"""Register GL views under the configured menu category."""
 		from pgappforge.plugins.erp.finance.gl.views import (
+			BalanceSheetView,
+			COAView,
+			GLDashboardView,
 			GLAccountView,
 			GLBudgetView,
 			GLJournalBatchView,
 			GLJournalEntryView,
 			GLPeriodView,
 			GLReportView,
+			IncomeStatementView,
+			TrialBalanceView,
 		)
 
 		cat = self.config.get("GL_MENU_CATEGORY", "General Ledger")
 
 		self.add_view(
-			GLAccountView,
+			GLDashboardView,
+			"GL Dashboard",
+			icon="fa-dashboard",
+			category=cat,
+		)
+		self.add_view(
+			COAView,
 			"Chart of Accounts",
 			icon="fa-list-ol",
+			category=cat,
+		)
+		self.add_view(
+			TrialBalanceView,
+			"Trial Balance",
+			icon="fa-balance-scale",
+			category=cat,
+		)
+		self.add_view(
+			IncomeStatementView,
+			"Income Statement",
+			icon="fa-line-chart",
+			category=cat,
+		)
+		self.add_view(
+			BalanceSheetView,
+			"Balance Sheet",
+			icon="fa-columns",
 			category=cat,
 		)
 		self.add_view(
@@ -177,6 +206,7 @@ class GLPlugin(BasePlugin):
 			icon="fa-file-text-o",
 			category=cat,
 		)
+		self.add_view_no_menu(GLAccountView)
 		self.add_view_no_menu(GLJournalEntryView)
 
 		log.info("GLPlugin: views registered under category %r", cat)
