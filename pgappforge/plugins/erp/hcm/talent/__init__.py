@@ -397,6 +397,7 @@ from pgappforge.plugins.erp.hcm.talent.models import (  # noqa: E402
 	NineBoxPlacement,
 	Offer,
 	TalentOnboardingPlan,
+	OnboardingPlan,
 	OnboardingTask,
 	PerformanceCycle,
 	PerformanceReview,
@@ -409,6 +410,7 @@ from pgappforge.plugins.erp.hcm.talent.models import (  # noqa: E402
 	Survey,
 	SurveyQuestion,
 	TalentSurveyResponse,
+	SurveyResponse,
 	TrainingCourse,
 	TrainingEnrollment,
 )
@@ -473,10 +475,12 @@ __all__ = [
 	"Survey",
 	"SurveyQuestion",
 	"TalentSurveyResponse",
+	"SurveyResponse",
 	# models — L&D certifications
 	"Certification",
 	# models — Onboarding
 	"TalentOnboardingPlan",
+	"OnboardingPlan",
 	"OnboardingTask",
 	# models — Interview debrief
 	"InterviewDebrief",

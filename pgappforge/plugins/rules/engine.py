@@ -33,12 +33,18 @@ log = logging.getLogger(__name__)
 _SIMPLE_CACHE: dict[str, tuple[float, list]] = {}
 
 
+_SENSITIVE_KEY_RE = _re.compile(
+	r"(password|passwd|secret|token|api[_-]?key|private[_-]?key|access[_-]?key|auth[_-]?key|credential)",
+	_re.IGNORECASE,
+)
+
+
 def _resolve_value(value: Any, context: dict[str, Any]) -> Any:
 	"""Resolve a rule value against a context dict.
 
 	Supports:
-	  "$field"         — return context[field] (dot-separated key lookup)
-	  "{{field}}"      — string template interpolation (all {{}} replaced)
+	  "$field"         — return context[field]
+	  "{{field}}"      — string template interpolation (sensitive keys left unreplaced)
 	  anything else    — returned as-is
 	"""
 	if isinstance(value, str):
@@ -46,9 +52,11 @@ def _resolve_value(value: Any, context: dict[str, Any]) -> Any:
 			field = value[1:]
 			return context.get(field)
 		if "{{" in value:
-			import re as _re
 			def _sub(m: Any) -> str:
-				return str(context.get(m.group(1), ""))
+				key = m.group(1)
+				if _SENSITIVE_KEY_RE.search(key):
+					return m.group(0)  # leave {{sensitive_key}} unreplaced
+				return str(context.get(key, ""))
 			return _re.sub(r"\{\{(\w+)\}\}", _sub, value)
 	return value
 _CACHE_TTL: float = 30.0
@@ -75,10 +83,19 @@ _OPS: dict[str, Callable[[Any, Any], bool]] = {
 	">=":           operator.ge,
 	"<=":           operator.le,
 	"contains":     lambda a, b: b in str(a),
+	"not_contains": lambda a, b: b not in str(a),
 	"in":           lambda a, b: a in (b if isinstance(b, list) else [b]),
+	"not_in":       lambda a, b: a not in (b if isinstance(b, list) else [b]),
 	"is_null":      lambda a, b: a is None,
 	"is_not_null":  lambda a, b: a is not None,
 	"starts_with":  lambda a, b: str(a).startswith(str(b)),
+	"ends_with":    lambda a, b: str(a).endswith(str(b)),
+	"matches_regex": lambda a, b: bool(_re.search(str(b), str(a), _re.IGNORECASE)),
+	"between":      lambda a, b: (
+		isinstance(b, list) and len(b) == 2 and a is not None and b[0] <= a <= b[1]
+	),
+	"length_gt":    lambda a, b: len(a) > b,
+	"length_lt":    lambda a, b: len(a) < b,
 }
 
 
@@ -91,12 +108,12 @@ class RulesValidationError(Exception):
 
 
 class RulesFieldError(RulesValidationError):
-	"""Field-level validation error raised by rules engine (field_name, message)."""
+	"""Field-level validation error raised by rules engine (field, message)."""
 
 	def __init__(self, field_name: str, message: str) -> None:
-		self.field_name = field_name
+		self.field = field_name
 		self.message = message
-		super().__init__(f"{field_name}: {message}")
+		super().__init__(message)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +191,7 @@ class RulesEngine:
 		if session is None:
 			session = self._get_session()
 
-		ctx = self._record_to_dict(record)
+		ctx = context if context is not None else self._record_to_dict(record)
 		rules = self._load_rules(session, model_name)
 
 		for rule in rules:
@@ -234,7 +251,6 @@ class RulesEngine:
 			"would_call_webhooks": [],
 			"would_create_records": [],
 			"would_start_workflows": [],
-			"would_emit_events": [],
 			"rules_matched": [],
 		}
 
@@ -274,8 +290,6 @@ class RulesEngine:
 					result["would_create_records"].append(dict(action))
 				elif atype == "start_workflow":
 					result["would_start_workflows"].append(dict(action))
-				elif atype == "emit_event":
-					result["would_emit_events"].append(dict(action))
 
 			if getattr(getattr(rule, "ruleset", None), "stop_on_match", False):
 				break
@@ -349,11 +363,11 @@ class RulesEngine:
 		"""
 		Evaluate a list of conditions with AND/OR logic.
 
-		Each condition dict: {field, op, value, logic}
-		  logic = "AND" (default) | "OR"
+		Each condition dict: {field, op, value, logic}  (flat)
+		          or        {type: "group", join: "AND"|"OR", conditions: [...], logic: ...}
 
-		OR conditions are collected into groups; the overall result is:
-		  AND of all AND-conditions, plus (OR-group is True if any OR-cond matches).
+		  logic = "AND" (default) | "OR"  — how this item combines with peers
+		  join  = "AND" | "OR"            — how items inside a group combine (recursive)
 		"""
 		if not conditions:
 			return True
@@ -362,17 +376,20 @@ class RulesEngine:
 		or_group: list[bool] = []
 
 		for cond in conditions:
-			field   = cond.get("field", "")
-			op      = cond.get("op", "=")
-			value   = _resolve_value(cond.get("value"), ctx)  # supports $field and {{template}}
-			logic   = (cond.get("logic") or "AND").upper()
+			logic = (cond.get("logic") or "AND").upper()
 
-			actual = ctx.get(field)
-			fn = _OPS.get(op)
-			try:
-				match = fn(actual, value) if fn is not None else False
-			except Exception:
-				match = False
+			if cond.get("type") == "group":
+				match = self._evaluate_conditions(cond.get("conditions") or [], ctx)
+			else:
+				field = cond.get("field", "")
+				op    = cond.get("op", "=")
+				value = _resolve_value(cond.get("value"), ctx)
+				actual = ctx.get(field)
+				fn = _OPS.get(op)
+				try:
+					match = fn(actual, value) if fn is not None else False
+				except Exception:
+					match = False
 
 			if logic == "OR":
 				or_group.append(match)
@@ -408,9 +425,9 @@ class RulesEngine:
 		"""
 		outcome = "executed"
 
-		# Run block actions first — prevents set_field mutations on a blocked record
-		block_actions = [a for a in actions if a.get("type") == "block"]
-		other_actions = [a for a in actions if a.get("type") != "block"]
+		# Run block/add_error actions first — prevents set_field mutations on a blocked record
+		block_actions = [a for a in actions if a.get("type") in ("block", "add_error")]
+		other_actions = [a for a in actions if a.get("type") not in ("block", "add_error")]
 
 		for action in block_actions + other_actions:
 			atype = action.get("type", "")
@@ -440,8 +457,8 @@ class RulesEngine:
 
 			elif atype == "add_error":
 				field = action.get("field", "")
-				message = action.get("message", "Validation error.")
-				raise RulesFieldError(field, message)
+				message = _resolve_value(action.get("message", "Validation error."), ctx)
+				raise RulesFieldError(field, str(message))
 
 			elif atype == "send_email":
 				to      = action.get("to", "")

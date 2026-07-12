@@ -1253,11 +1253,17 @@ __all__ = [
 	"Survey",
 	"SurveyQuestion",
 	"TalentSurveyResponse",
+	"SurveyResponse",
 	# L&D certifications
 	"Certification",
 	# Onboarding
 	"TalentOnboardingPlan",
+	"OnboardingPlan",
 	"OnboardingTask",
 	# Interview debrief
 	"InterviewDebrief",
 ]
+
+# Backward-compat aliases (tests and external code may use the short names)
+SurveyResponse = TalentSurveyResponse
+OnboardingPlan = TalentOnboardingPlan
