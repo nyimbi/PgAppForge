@@ -84,8 +84,9 @@ def _build_schema_ddl() -> list[str]:
 	against the shared MetaData singleton.  Each statement uses IF NOT EXISTS.
 	"""
 	return [
-		# FK stub tables
-		"CREATE TABLE IF NOT EXISTS foundation_party (id TEXT PRIMARY KEY)",
+		# FK stub tables — SQLite FK enforcement is OFF so these only need to
+		# exist if a test actually queries related rows; cb_account is needed
+		# for wallet linked_account_id resolution.
 		"CREATE TABLE IF NOT EXISTS cb_account (id TEXT PRIMARY KEY)",
 		# Domain event log (written by emit_event inside the same session)
 		"""CREATE TABLE IF NOT EXISTS erp_domain_event_log (
@@ -429,11 +430,13 @@ def db_engine():
 	def _no_fk(dbapi_conn, _):
 		dbapi_conn.execute("PRAGMA foreign_keys=OFF")
 
-	# Register FK stubs in shared MetaData so SA can resolve FK references
-	# at ORM query time (needed for relationship resolution even on SQLite).
+	# Register cb_account stub in shared MetaData so SA can resolve the FK
+	# reference from mm_wallet.linked_account_id at ORM mapper init time.
+	# The real cb_account definition (UUID pk) is provided by core_banking
+	# models when that module is imported; this String stub is only consulted
+	# if core_banking hasn't loaded yet and only matters in SQLite tests where
+	# column type enforcement is a no-op.
 	meta = MobileWallet.metadata
-	if "foundation_party" not in meta.tables:
-		sa.Table("foundation_party", meta, sa.Column("id", sa.String(36), primary_key=True))
 	if "cb_account" not in meta.tables:
 		sa.Table("cb_account", meta, sa.Column("id", sa.String(36), primary_key=True))
 
