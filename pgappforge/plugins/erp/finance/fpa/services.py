@@ -128,6 +128,18 @@ def _safe_eval_formula(expr: str, context: dict[str, float]) -> float:
 			return _SAFE_OPS[type(node.op)](_eval(node.left), _eval(node.right))
 		elif isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
 			return _SAFE_OPS[type(node.op)](_eval(node.operand))
+		elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+			container_name = node.value.id
+			if container_name not in context:
+				raise ValueError(f"Unknown variable {container_name!r} in formula")
+			container = context[container_name]
+			if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, (str, int)):
+				key = node.slice.value
+				try:
+					return float(container[key])
+				except (KeyError, TypeError, ValueError) as exc:
+					raise ValueError(f"Cannot subscript {container_name!r}[{key!r}]") from exc
+			raise ValueError(f"Formula contains disallowed subscript: {ast.dump(node)}")
 		else:
 			raise ValueError(f"Formula contains disallowed operation: {ast.dump(node)}")
 
@@ -182,7 +194,7 @@ def _eval_driver_formula(
 
 	Returns Decimal result.  Any exception propagates as FPAServiceError.
 	"""
-	context: dict[str, float] = {"base_value": float(base_value)}
+	context: dict[str, Any] = {"base_value": float(base_value), "params": params or {}}
 	for k, v in (params or {}).items():
 		if isinstance(v, (int, float, Decimal)):
 			context[k] = float(v)

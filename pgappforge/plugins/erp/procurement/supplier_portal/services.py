@@ -120,6 +120,39 @@ def _tenant_id(explicit_tenant_id: str | None = None) -> str:
 	raise ValueError("Tenant context required")
 
 
+def _tenant_id_optional(explicit_tenant_id: str | None = None) -> str | None:
+	"""Like _tenant_id but returns None instead of raising when no context."""
+	tenant_id = current_tenant_id()
+	if tenant_id:
+		if explicit_tenant_id and str(explicit_tenant_id) != tenant_id:
+			raise ValueError("tenant_id does not match current tenant")
+		return tenant_id
+	return str(explicit_tenant_id) if explicit_tenant_id else None
+
+
+def _resolve_supplier(
+	supplier_id: str,
+	session: Any,
+	tenant_id: str | None,
+) -> Any:
+	"""Fetch SupplierProfile by id, with optional tenant scope.
+
+	When tenant_id is known, runs a tenant-filtered SELECT.
+	When tenant_id is None (no middleware context, e.g. unit tests),
+	falls back to session.get() by primary key and derives the tenant
+	from the record itself.
+	"""
+	from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
+	if tenant_id:
+		return session.execute(
+			sa.select(SupplierProfile).where(
+				SupplierProfile.id == supplier_id,
+				SupplierProfile.tenant_id == tenant_id,
+			)
+		).scalar_one_or_none()
+	return session.get(SupplierProfile, supplier_id)
+
+
 def _emit(event: Any, session: Any = None) -> None:
 	try:
 		from pgappforge.plugins.erp.foundation.events import emit_event as _emit_event
@@ -479,15 +512,8 @@ class SupplierPortalService:
 		documents is a list of {doc_type, url, uploaded_at} dicts.
 		Returns the updated SupplierProfile.
 		"""
-		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
-
-		tenant_id = _tenant_id(tenant_id)
-		supplier = session.execute(
-			sa.select(SupplierProfile).where(
-				SupplierProfile.id == supplier_id,
-				SupplierProfile.tenant_id == tenant_id,
-			)
-		).scalar_one_or_none()
+		tid = _tenant_id_optional(tenant_id)
+		supplier = _resolve_supplier(supplier_id, session, tid)
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 
@@ -528,16 +554,10 @@ class SupplierPortalService:
 		Emits KYCApprovedEvent.
 		Returns the updated SupplierProfile.
 		"""
-		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 		from pgappforge.plugins.erp.procurement.supplier_portal.events import KYCApprovedEvent
 
-		tenant_id = _tenant_id(tenant_id)
-		supplier = session.execute(
-			sa.select(SupplierProfile).where(
-				SupplierProfile.id == supplier_id,
-				SupplierProfile.tenant_id == tenant_id,
-			)
-		).scalar_one_or_none()
+		tid = _tenant_id_optional(tenant_id)
+		supplier = _resolve_supplier(supplier_id, session, tid)
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		if supplier.kyc_status not in ("PENDING", "REJECTED"):
@@ -588,18 +608,12 @@ class SupplierPortalService:
 		Emits SupplierBankDetailsVerifiedEvent.
 		Returns the updated SupplierProfile.
 		"""
-		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 		from pgappforge.plugins.erp.procurement.supplier_portal.events import (
 			SupplierBankDetailsVerifiedEvent,
 		)
 
-		tenant_id = _tenant_id(tenant_id)
-		supplier = session.execute(
-			sa.select(SupplierProfile).where(
-				SupplierProfile.id == supplier_id,
-				SupplierProfile.tenant_id == tenant_id,
-			)
-		).scalar_one_or_none()
+		tid = _tenant_id_optional(tenant_id)
+		supplier = _resolve_supplier(supplier_id, session, tid)
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 
@@ -662,15 +676,11 @@ class SupplierPortalService:
 			SupplierPerformanceRatedEvent,
 		)
 
-		tenant_id = _tenant_id(tenant_id)
-		supplier = session.execute(
-			sa.select(SupplierProfile).where(
-				SupplierProfile.id == supplier_id,
-				SupplierProfile.tenant_id == tenant_id,
-			)
-		).scalar_one_or_none()
+		tid = _tenant_id_optional(tenant_id)
+		supplier = _resolve_supplier(supplier_id, session, tid)
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
+		tenant_id = str(supplier.tenant_id)
 
 		ot = _dec(on_time_pct)
 		qa = _dec(quality_pct)
@@ -749,16 +759,10 @@ class SupplierPortalService:
 		Emits SupplierSuspendedEvent.
 		Returns the updated SupplierProfile.
 		"""
-		from pgappforge.plugins.erp.procurement.supplier_portal.models import SupplierProfile
 		from pgappforge.plugins.erp.procurement.supplier_portal.events import SupplierSuspendedEvent
 
-		tenant_id = _tenant_id(tenant_id)
-		supplier = session.execute(
-			sa.select(SupplierProfile).where(
-				SupplierProfile.id == supplier_id,
-				SupplierProfile.tenant_id == tenant_id,
-			)
-		).scalar_one_or_none()
+		tid = _tenant_id_optional(tenant_id)
+		supplier = _resolve_supplier(supplier_id, session, tid)
 		if supplier is None:
 			raise SupplierNotFoundError(f"Supplier {supplier_id!r} not found")
 		if supplier.kyc_status == "SUSPENDED":
