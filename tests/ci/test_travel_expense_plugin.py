@@ -75,13 +75,17 @@ _erp_path    = str(pathlib.Path(_pgaf_root) / "pgappforge" / "plugins" / "erp")
 _hcm_path    = str(pathlib.Path(_pgaf_root) / "pgappforge" / "plugins" / "erp" / "hcm")
 _te_path     = str(pathlib.Path(_hcm_path) / "travel_expense")
 
+# Stub namespace packages so their __init__.py doesn't run during standalone collection.
+# setdefault = no-op in full suite where real modules are already loaded.
 sys.modules.setdefault("pgappforge",         _make_stub("pgappforge", [_pgaf_root]))
-sys.modules.setdefault("pgappforge.models",  _make_stub("pgappforge.models"))
+sys.modules.setdefault("pgappforge.models",  _make_stub("pgappforge.models",  [str(pathlib.Path(_pgaf_root) / "pgappforge" / "models")]))
 sys.modules.setdefault("pgappforge.plugins", _make_stub("pgappforge.plugins", [_plugin_path]))
-sys.modules.setdefault("pgappforge.plugins.erp",             _make_stub("pgappforge.plugins.erp", [_erp_path]))
-sys.modules.setdefault("pgappforge.plugins.erp.foundation",  _make_stub("pgappforge.plugins.erp.foundation"))
-sys.modules.setdefault("pgappforge.plugins.erp.hcm",         _make_stub("pgappforge.plugins.erp.hcm", [_hcm_path]))
-sys.modules.setdefault("pgappforge.plugins.base_plugin",     _make_stub("pgappforge.plugins.base_plugin"))
+sys.modules.setdefault("pgappforge.plugins.erp", _make_stub("pgappforge.plugins.erp", [_erp_path]))
+# Do NOT stub foundation — the real module is pure SQLAlchemy (no Flask context needed)
+# and must remain importable for erp_foundation tests that run in the same suite.
+sys.modules.setdefault("pgappforge.plugins.erp.hcm",        _make_stub("pgappforge.plugins.erp.hcm", [_hcm_path]))
+# pgappforge.plugins stub has __path__ = [_plugin_path], so Python finds base_plugin.py
+# naturally as a submodule — no explicit stub needed here.
 
 # Stub out pgappforge.models.sqla.Model as a plain declarative base
 from sqlalchemy.orm import DeclarativeBase
@@ -89,11 +93,18 @@ from sqlalchemy.orm import DeclarativeBase
 class _Base(DeclarativeBase):
     pass
 
-sqla_stub = _make_stub("pgappforge.models.sqla")
+_sqla_dir = str(pathlib.Path(_pgaf_root) / "pgappforge" / "models" / "sqla")
+sqla_stub = _make_stub("pgappforge.models.sqla", [_sqla_dir])
 sqla_stub.Model = _Base
-# Only replace if not already loaded by the full test suite (avoids corrupting real Model)
-if "pgappforge.models.sqla" not in sys.modules:
-    sys.modules["pgappforge.models.sqla"] = sqla_stub
+sqla_stub.Base = _Base  # alias (real module has Base = Model)
+sqla_stub.SQLA = type("SQLA", (), {})  # no-op stub — tests don't use flask-sqlalchemy init
+# Always install our stub so travel_expense models register in _Base.metadata
+# (needed for SQLite create_all). Save the real module and restore it after imports.
+_sqla_real = sys.modules.get("pgappforge.models.sqla")
+sys.modules["pgappforge.models.sqla"] = sqla_stub
+# Clear any cached travel_expense modules so they re-import using _Base
+for _k in [k for k in sys.modules if "erp.hcm.travel_expense" in k]:
+    del sys.modules[_k]
 
 # Stub AuditMixin as a no-op mixin
 class _AuditMixin:
@@ -131,29 +142,8 @@ class _DomainEvent:
 foundation_events.DomainEvent = _DomainEvent
 foundation_events.emit_event = _emit_event
 foundation_events.subscribe = lambda *a, **kw: None
-sys.modules["pgappforge.plugins.erp.foundation.events"] = foundation_events
-
-# Stub base_plugin classes
-class _PluginPriority:
-    CRITICAL = 1
-    HIGH = 2
-    NORMAL = 3
-    LOW = 4
-
-class _BasePlugin:
-    def __init__(self, appbuilder=None, config=None):
-        self.appbuilder = appbuilder
-        self.config = config or {}
-
-class _PluginMetadata:
-    def __init__(self, **kw):
-        for k, v in kw.items():
-            setattr(self, k, v)
-
-base_plugin_stub = sys.modules["pgappforge.plugins.base_plugin"]
-base_plugin_stub.BasePlugin = _BasePlugin
-base_plugin_stub.PluginMetadata = _PluginMetadata
-base_plugin_stub.PluginPriority = _PluginPriority
+# Use setdefault — don't override if real module already loaded in full suite
+sys.modules.setdefault("pgappforge.plugins.erp.foundation.events", foundation_events)
 
 # Stub GL service so _gl_post's lazy import finds a no-op instead of the real
 # GLService (which has an incompatible post_journal signature and would error).
@@ -166,9 +156,10 @@ _gl_svc_stub = _make_stub("pgappforge.plugins.erp.finance.gl.services")
 _gl_svc_stub.GLService = _GLServiceStub
 sys.modules.setdefault("pgappforge.plugins.erp.finance", _make_stub("pgappforge.plugins.erp.finance"))
 sys.modules.setdefault("pgappforge.plugins.erp.finance.gl", _make_stub("pgappforge.plugins.erp.finance.gl"))
-sys.modules["pgappforge.plugins.erp.finance.gl.services"] = _gl_svc_stub
+# Use setdefault so we don't override a real GL module already loaded in full suite
+sys.modules.setdefault("pgappforge.plugins.erp.finance.gl.services", _gl_svc_stub)
 
-# Now import the actual plugin modules
+# Now import the actual plugin modules (sqla stub is active — models register in _Base)
 from pgappforge.plugins.erp.hcm.travel_expense import models as M
 from pgappforge.plugins.erp.hcm.travel_expense import services as S
 from pgappforge.plugins.erp.hcm.travel_expense import events as E
@@ -179,6 +170,12 @@ from pgappforge.plugins.erp.hcm.travel_expense.services import (
     ExpenseStateError,
     ExpensePolicyError,
 )
+
+# Restore the real sqla module so other tests aren't affected by our stub
+if _sqla_real is not None:
+    sys.modules["pgappforge.models.sqla"] = _sqla_real
+elif "pgappforge.models.sqla" in sys.modules:
+    del sys.modules["pgappforge.models.sqla"]
 
 # ---------------------------------------------------------------------------
 # SQLite in-memory engine + session fixture
@@ -215,6 +212,19 @@ def _patch_for_sqlite():
 
 _patch_for_sqlite()
 _Base.metadata.create_all(_engine)
+
+
+@pytest.fixture(autouse=True)
+def _capture_foundation_events(monkeypatch):
+    """Patch emit_event on whichever foundation.events module is active so
+    _events_emitted is populated regardless of full-suite vs standalone context.
+    Uses sys.modules directly to avoid traversing stub parent packages."""
+    _fev = sys.modules.get("pgappforge.plugins.erp.foundation.events")
+    if _fev is None:
+        # Not yet loaded — install our stub and get it
+        sys.modules.setdefault("pgappforge.plugins.erp.foundation.events", foundation_events)
+        _fev = sys.modules["pgappforge.plugins.erp.foundation.events"]
+    monkeypatch.setattr(_fev, "emit_event", _emit_event)
 
 
 @pytest.fixture
