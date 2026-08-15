@@ -66,12 +66,12 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -156,7 +156,7 @@ jobs:
         coverage html -d test_results/coverage_html
 
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results-python${{ matrix.python-version }}-${{ matrix.test-config }}
@@ -166,7 +166,7 @@ jobs:
         retention-days: 30
 
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       if: matrix.python-version == '3.11' && matrix.test-config == 'minimal'
       with:
         name: coverage-reports
@@ -175,7 +175,7 @@ jobs:
 
     - name: Comment test results on PR
       if: github.event_name == 'pull_request' && matrix.python-version == '3.11' && matrix.test-config == 'minimal'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v9
       with:
         script: |
           const fs = require('fs');
@@ -240,10 +240,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: 3.11
         cache: 'pip'
@@ -281,10 +281,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Run security scan on tutorial examples
-      uses: github/super-linter@v4
+      uses: github/super-linter@v7
       env:
         DEFAULT_BRANCH: master
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -300,7 +300,7 @@ jobs:
         bandit -r examples/tutorial_getting_started/ -f json -o bandit-report.json || true
 
     - name: Upload security scan results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: security-scan-results
         path: bandit-report.json
@@ -312,10 +312,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: 3.11
 
@@ -331,7 +331,7 @@ jobs:
 
     - name: Deploy documentation
       if: github.ref == 'refs/heads/master'
-      uses: peaceiris/actions-gh-pages@v3
+      uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: docs/_build/html
