@@ -28,3 +28,6 @@ CLAUDE.md
 hardware_store/
 .DS_Store
 **/.DS_Store
+
+# zvec-grep local workspace index
+.zvec-grep/
