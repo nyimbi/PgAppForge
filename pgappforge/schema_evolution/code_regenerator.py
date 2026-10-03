@@ -1045,3 +1045,32 @@ def create_conflict_report(result: RegenerationResult, output_path: str = "confl
         f.write(html_content)
     
     logger.info(f"Conflict report saved to {output_path}")
+
+@dataclass
+class RegenerationTask:
+    """A queued code-regeneration task (schema change detected, views to rebuild)."""
+
+    path: str
+    strategy: MergeStrategy = MergeStrategy.UPDATE_GENERATED
+    status: str = "pending"
+    source: CodeSource = CodeSource.UNKNOWN
+    changes: list = field(default_factory=list)
+    result: Optional[RegenerationResult] = None
+
+    def mark_running(self) -> "RegenerationTask":
+        self.status = "running"
+        return self
+
+    def mark_done(self, result: Optional[RegenerationResult] = None) -> "RegenerationTask":
+        self.status = "done"
+        self.result = result
+        return self
+
+    def mark_failed(self, reason: str = "") -> "RegenerationTask":
+        self.status = "failed"
+        self.changes = [*self.changes, reason]
+        return self
+
+
+#: Historical alias.
+CodeRegenerator = SmartCodeRegenerator

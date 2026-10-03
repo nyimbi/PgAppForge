@@ -17,7 +17,7 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 from collections import deque, defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from email.mime.text import MimeText
+from email.mime.text import MIMEText as MimeText
 from email.mime.multipart import MimeMultipart
 
 import psutil

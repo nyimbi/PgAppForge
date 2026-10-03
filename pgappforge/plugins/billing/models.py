@@ -578,3 +578,8 @@ __all__ = [
 	"DiscountType",
 	"DunningStatus",
 ]
+
+
+#: Historical aliases used by the billing engine and API.
+Coupon = BillingCoupon
+Subscription = BillingSubscription
