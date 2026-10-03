@@ -375,7 +375,7 @@ class IdentityReportView(BaseView):
 	def mfa_coverage(self):
 		from pgappforge.plugins.erp.platform.identity.models import MFADevice
 		from sqlalchemy import func as F
-		from pgappforge.security.manager import current_user
+		from flask_login import current_user
 		session = _get_session()
 		tenant_id = request.args.get("tenant_id")
 		q = sa.select(

@@ -18,7 +18,7 @@ from sqlalchemy.orm import relationship
 from pgappforge.models.sqla import Model
 
 try:
-	from uuid_extensions import uuid7str
+	from pgappforge._uuid7 import uuid7str
 except ImportError:
 	from uuid6 import uuid7
 

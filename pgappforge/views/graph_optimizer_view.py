@@ -14,7 +14,7 @@ from pgappforge import permission_name
 from pgappforge.security.decorators import has_access
 from pgappforge.baseviews import BaseView, expose, expose_api
 from werkzeug.exceptions import BadRequest, Forbidden
-from uuid_extensions import uuid7str
+from pgappforge._uuid7 import uuid7str
 
 try:
 	import numpy as np

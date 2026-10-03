@@ -722,7 +722,7 @@ class AIWorkflowOptimizer:
                             event_data: Optional[Dict[str, Any]] = None):
         """Record workflow analytics event."""
         from ..models import db
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
 
         analytics = WorkflowAnalytics(
             id=uuid7str(),
@@ -742,7 +742,7 @@ class AIWorkflowOptimizer:
     def store_insight(self, insight: WorkflowInsight) -> str:
         """Store AI insight in database."""
         from ..models import db
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
 
         ai_insight = AIWorkflowInsight(
             id=uuid7str(),

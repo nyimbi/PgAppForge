@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Any
 
 from flask import Flask
-from pgappforge.base import BaseManager
+from pgappforge.basemanagermanager import BaseManager
 from pgappforge.const import AUTH_LDAP, AUTH_DB, AUTH_OID, AUTH_OAUTH, AUTH_REMOTE_USER
 
 from ..models.tenant_context import TenantMiddleware, init_tenant_middleware

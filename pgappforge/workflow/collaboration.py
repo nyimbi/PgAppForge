@@ -451,7 +451,7 @@ class WorkflowCollaborationManager:
                    comment_text: str, comment_type: str = 'comment') -> str:
         """Add comment to workflow step."""
         from ..models import db
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
 
         comment = WorkflowComment(
             id=uuid7str(),
@@ -590,7 +590,7 @@ class WorkflowCollaborationManager:
                 
                 # Create conflict record
                 from ..models import db
-                from uuid_extensions import uuid7str
+                from pgappforge._uuid7 import uuid7str
 
                 conflict = ConflictResolution(
                     id=uuid7str(),

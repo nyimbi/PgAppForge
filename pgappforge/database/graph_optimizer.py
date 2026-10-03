@@ -24,7 +24,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 import psycopg2
 from pydantic import BaseModel, Field
-from uuid_extensions import uuid7str
+from pgappforge._uuid7 import uuid7str
 
 from .graph_manager import GraphManager
 from .activity_tracker import track_database_activity, ActivityType, ActivitySeverity

@@ -33,10 +33,10 @@ from typing import Any
 from sqlalchemy import select, and_, func
 
 from .models import (
-	ProcessDefinition,
+	BpmProcessDefinition,
 	ProcessEvent,
-	ProcessInstance,
-	ProcessStep,
+	BpmProcessInstance,
+	BpmProcessStep,
 	ProcessToken,
 	ProcessTransition,
 	UserDelegation,
@@ -104,30 +104,30 @@ class WorkflowEngine:
 		record_id: int,
 		started_by_id: int | None = None,
 		record_ctx: dict[str, Any] | None = None,
-	) -> ProcessInstance:
+	) -> BpmProcessInstance:
 		"""
-		Create a new ProcessInstance for *record_id* and advance it to the
+		Create a new BpmProcessInstance for *record_id* and advance it to the
 		first step.  Raises ValueError if the definition is inactive or has
 		no steps.
 
 		*record_ctx* is an optional plain-dict of record fields used for
 		dynamic role resolution (GAP 5).
 		"""
-		defn = self.session.get(ProcessDefinition, definition_id)
+		defn = self.session.get(BpmProcessDefinition, definition_id)
 		if defn is None:
-			raise ValueError(f"ProcessDefinition #{definition_id} not found")
+			raise ValueError(f"BpmProcessDefinition #{definition_id} not found")
 		if not defn.is_active:
-			raise ValueError(f"ProcessDefinition {defn.name!r} is not active")
+			raise ValueError(f"BpmProcessDefinition {defn.name!r} is not active")
 		if not defn.steps:
-			raise ValueError(f"ProcessDefinition {defn.name!r} has no steps")
+			raise ValueError(f"BpmProcessDefinition {defn.name!r} has no steps")
 
-		first_step: ProcessStep = defn.steps[0]
+		first_step: BpmProcessStep = defn.steps[0]
 		now = _NOW()
 
 		# GAP 5: resolve dynamic role for the first step
 		resolved_role = self._resolve_role(first_step, record_ctx or {}, self.session)
 
-		inst = ProcessInstance(
+		inst = BpmProcessInstance(
 			definition_id=definition_id,
 			model_name=model_name,
 			record_id=record_id,
@@ -153,7 +153,7 @@ class WorkflowEngine:
 		)
 
 		log.info(
-			"WorkflowEngine: started ProcessInstance #%d for %s#%d (def=%s v%d, step='%s', role='%s')",
+			"WorkflowEngine: started BpmProcessInstance #%d for %s#%d (def=%s v%d, step='%s', role='%s')",
 			inst.id, model_name, record_id, defn.name, defn.version, first_step.name, resolved_role,
 		)
 		return inst
@@ -186,14 +186,14 @@ class WorkflowEngine:
 		"""
 		inst = self._get_active_instance(instance_id)
 		defn = inst.definition
-		steps: list[ProcessStep] = defn.steps  # already ordered by order_num
+		steps: list[BpmProcessStep] = defn.steps  # already ordered by order_num
 
 		current_idx = next(
 			(i for i, s in enumerate(steps) if s.id == inst.current_step_id), None
 		)
 		if current_idx is None:
 			raise ValueError(
-				f"ProcessInstance #{instance_id}: current_step_id={inst.current_step_id!r} "
+				f"BpmProcessInstance #{instance_id}: current_step_id={inst.current_step_id!r} "
 				"not found in definition steps"
 			)
 
@@ -213,10 +213,10 @@ class WorkflowEngine:
 				chosen = self._pick_xor_transition(transitions, ctx)
 				if chosen is None:
 					raise ValueError(
-						f"ProcessInstance #{instance_id}: XOR_SPLIT at step "
+						f"BpmProcessInstance #{instance_id}: XOR_SPLIT at step "
 						f"'{from_step.name}' — no condition matched and no default transition."
 					)
-				to_step = self.session.get(ProcessStep, chosen.to_step_id)
+				to_step = self.session.get(BpmProcessStep, chosen.to_step_id)
 				if to_step is None:
 					raise ValueError(
 						f"ProcessTransition #{chosen.id} references missing step #{chosen.to_step_id}"
@@ -228,7 +228,7 @@ class WorkflowEngine:
 					# Fall through to linear order
 					to_step = None
 				else:
-					to_step = self.session.get(ProcessStep, chosen.to_step_id)
+					to_step = self.session.get(BpmProcessStep, chosen.to_step_id)
 		else:
 			chosen = None
 			to_step = None
@@ -290,7 +290,7 @@ class WorkflowEngine:
 		reset to step 0 (stays at Draft / first step) and record a rejection event.
 		"""
 		inst = self._get_active_instance(instance_id)
-		steps: list[ProcessStep] = inst.definition.steps
+		steps: list[BpmProcessStep] = inst.definition.steps
 
 		current_idx = next(
 			(i for i, s in enumerate(steps) if s.id == inst.current_step_id), None
@@ -331,7 +331,7 @@ class WorkflowEngine:
 		self,
 		instance_id: int,
 		actor_id: int | None = None,
-	) -> ProcessInstance:
+	) -> BpmProcessInstance:
 		"""Mark the process instance as completed."""
 		inst = self._get_active_instance(instance_id)
 
@@ -355,7 +355,7 @@ class WorkflowEngine:
 		instance_id: int,
 		actor_id: int | None = None,
 		comment: str = "",
-	) -> ProcessInstance:
+	) -> BpmProcessInstance:
 		"""Cancel an active process instance."""
 		inst = self._get_active_instance(instance_id)
 		inst.status = "cancelled"
@@ -391,12 +391,12 @@ class WorkflowEngine:
 		inst = self._get_active_instance(instance_id)
 		from_step = inst.current_step
 		if from_step is None:
-			raise ValueError(f"ProcessInstance #{instance_id}: no current step")
+			raise ValueError(f"BpmProcessInstance #{instance_id}: no current step")
 
 		transitions = self._load_transitions(from_step.id, inst.definition_id)
 		if not transitions:
 			raise ValueError(
-				f"ProcessInstance #{instance_id}: AND_SPLIT step '{from_step.name}' "
+				f"BpmProcessInstance #{instance_id}: AND_SPLIT step '{from_step.name}' "
 				"has no outgoing transitions — cannot split."
 			)
 
@@ -440,14 +440,14 @@ class WorkflowEngine:
 		step_id: int | None,
 		actor_id: int | None = None,
 		session=None,
-	) -> ProcessInstance:
+	) -> BpmProcessInstance:
 		"""
 		Mark the token for *step_id* as completed.
 
 		If all tokens for this instance are now completed, advance the instance
 		to the AND_JOIN step's next step (linear order_num+1 logic).
 
-		Returns the ProcessInstance (possibly now completed / advanced).
+		Returns the BpmProcessInstance (possibly now completed / advanced).
 		"""
 		session = session or self.session
 		inst = self._get_active_instance(instance_id)
@@ -482,17 +482,17 @@ class WorkflowEngine:
 			return inst
 
 		# All branches complete — find the AND_JOIN step and advance past it
-		join_step: ProcessStep | None = None
+		join_step: BpmProcessStep | None = None
 		if step_id is not None:
 			join_step = session.execute(
-				select(ProcessStep)
-				.where(ProcessStep.definition_id == inst.definition_id)
-				.where(ProcessStep.step_type == "AND_JOIN")
-				.order_by(ProcessStep.order_num.asc())
+				select(BpmProcessStep)
+				.where(BpmProcessStep.definition_id == inst.definition_id)
+				.where(BpmProcessStep.step_type == "AND_JOIN")
+				.order_by(BpmProcessStep.order_num.asc())
 				.limit(1)
 			).scalar_one_or_none()
 
-		steps: list[ProcessStep] = inst.definition.steps
+		steps: list[BpmProcessStep] = inst.definition.steps
 		join_idx = next(
 			(i for i, s in enumerate(steps) if join_step and s.id == join_step.id), None
 		)
@@ -541,25 +541,25 @@ class WorkflowEngine:
 		self,
 		definition_id: int,
 		session=None,
-	) -> ProcessDefinition:
+	) -> BpmProcessDefinition:
 		"""
 		Clone *definition_id* as a new version.
 
 		- Old definition: is_latest = False
 		- New definition: version = old.version + 1, is_latest = True,
 		  parent_definition_id = old.id
-		- All ProcessStep rows are cloned for the new definition.
+		- All BpmProcessStep rows are cloned for the new definition.
 
-		Returns the new ProcessDefinition (not yet committed).
+		Returns the new BpmProcessDefinition (not yet committed).
 		"""
 		session = session or self.session
-		old_defn = session.get(ProcessDefinition, definition_id)
+		old_defn = session.get(BpmProcessDefinition, definition_id)
 		if old_defn is None:
-			raise ValueError(f"ProcessDefinition #{definition_id} not found")
+			raise ValueError(f"BpmProcessDefinition #{definition_id} not found")
 
 		old_defn.is_latest = False
 
-		new_defn = ProcessDefinition(
+		new_defn = BpmProcessDefinition(
 			name=old_defn.name,
 			description=old_defn.description,
 			is_active=old_defn.is_active,
@@ -574,7 +574,7 @@ class WorkflowEngine:
 
 		# Clone all steps
 		for step in old_defn.steps:
-			new_step = ProcessStep(
+			new_step = BpmProcessStep(
 				definition_id=new_defn.id,
 				name=step.name,
 				order_num=step.order_num,
@@ -611,12 +611,12 @@ class WorkflowEngine:
 		Returns the list of escalation events created.
 		"""
 		stmt = (
-			select(ProcessInstance)
-			.where(ProcessInstance.status == "active")
-			.where(ProcessInstance.current_step_id.isnot(None))
-			.where(ProcessInstance.step_entered_at.isnot(None))
+			select(BpmProcessInstance)
+			.where(BpmProcessInstance.status == "active")
+			.where(BpmProcessInstance.current_step_id.isnot(None))
+			.where(BpmProcessInstance.step_entered_at.isnot(None))
 		)
-		instances: list[ProcessInstance] = list(self.session.execute(stmt).scalars())
+		instances: list[BpmProcessInstance] = list(self.session.execute(stmt).scalars())
 
 		events: list[ProcessEvent] = []
 		now = _NOW()
@@ -696,12 +696,12 @@ class WorkflowEngine:
 		session = session or self.session
 
 		stmt = (
-			select(ProcessInstance)
-			.where(ProcessInstance.status == "active")
-			.where(ProcessInstance.current_step_id.isnot(None))
-			.where(ProcessInstance.step_entered_at.isnot(None))
+			select(BpmProcessInstance)
+			.where(BpmProcessInstance.status == "active")
+			.where(BpmProcessInstance.current_step_id.isnot(None))
+			.where(BpmProcessInstance.step_entered_at.isnot(None))
 		)
-		instances: list[ProcessInstance] = list(session.execute(stmt).scalars())
+		instances: list[BpmProcessInstance] = list(session.execute(stmt).scalars())
 
 		now = _NOW()
 		triggered = advanced = rejected = escalated = errors = 0
@@ -805,18 +805,18 @@ class WorkflowEngine:
 		self,
 		model_name: str,
 		record_id: int,
-	) -> ProcessInstance | None:
+	) -> BpmProcessInstance | None:
 		"""Return the most recent active instance for a record, or None."""
 		return self.session.execute(
-			select(ProcessInstance)
-			.where(ProcessInstance.model_name == model_name)
-			.where(ProcessInstance.record_id == record_id)
-			.where(ProcessInstance.status == "active")
-			.order_by(ProcessInstance.started_at.desc())
+			select(BpmProcessInstance)
+			.where(BpmProcessInstance.model_name == model_name)
+			.where(BpmProcessInstance.record_id == record_id)
+			.where(BpmProcessInstance.status == "active")
+			.order_by(BpmProcessInstance.started_at.desc())
 			.limit(1)
 		).scalar_one_or_none()
 
-	def get_queue(self, role_name: str, user_id: int | None = None) -> list[ProcessInstance]:
+	def get_queue(self, role_name: str, user_id: int | None = None) -> list[BpmProcessInstance]:
 		"""
 		Return all active instances whose current step is assigned to *role_name*.
 
@@ -827,11 +827,11 @@ class WorkflowEngine:
 		# Primary: instances directly assigned to the role
 		direct = list(
 			self.session.execute(
-				select(ProcessInstance)
-				.join(ProcessStep, ProcessInstance.current_step_id == ProcessStep.id)
-				.where(ProcessInstance.status == "active")
-				.where(ProcessStep.assigned_role == role_name)
-				.order_by(ProcessInstance.step_entered_at.asc())
+				select(BpmProcessInstance)
+				.join(BpmProcessStep, BpmProcessInstance.current_step_id == BpmProcessStep.id)
+				.where(BpmProcessInstance.status == "active")
+				.where(BpmProcessStep.assigned_role == role_name)
+				.order_by(BpmProcessInstance.step_entered_at.asc())
 			).scalars()
 		)
 
@@ -868,18 +868,18 @@ class WorkflowEngine:
 		# We use the ab_user_role association table directly via text SQL join
 		from sqlalchemy import text
 		delegated_instance_ids_row = self.session.execute(
-			select(ProcessInstance.id)
-			.join(ProcessStep, ProcessInstance.current_step_id == ProcessStep.id)
-			.where(ProcessInstance.status == "active")
-			.where(ProcessStep.assigned_role == role_name)
-			.where(ProcessInstance.started_by_id.in_(relevant_delegator_ids))
+			select(BpmProcessInstance.id)
+			.join(BpmProcessStep, BpmProcessInstance.current_step_id == BpmProcessStep.id)
+			.where(BpmProcessInstance.status == "active")
+			.where(BpmProcessStep.assigned_role == role_name)
+			.where(BpmProcessInstance.started_by_id.in_(relevant_delegator_ids))
 		).scalars().all()
 
 		direct_ids = {i.id for i in direct}
-		extra: list[ProcessInstance] = []
+		extra: list[BpmProcessInstance] = []
 		for inst_id in delegated_instance_ids_row:
 			if inst_id not in direct_ids:
-				inst = self.session.get(ProcessInstance, inst_id)
+				inst = self.session.get(BpmProcessInstance, inst_id)
 				if inst:
 					extra.append(inst)
 
@@ -892,9 +892,9 @@ class WorkflowEngine:
 		seconds: int,
 	) -> ProcessEvent:
 		"""Log how long the user spent on the form (JS telemetry)."""
-		inst = self.session.get(ProcessInstance, instance_id)
+		inst = self.session.get(BpmProcessInstance, instance_id)
 		if inst is None:
-			raise ValueError(f"ProcessInstance #{instance_id} not found")
+			raise ValueError(f"BpmProcessInstance #{instance_id} not found")
 
 		evt = _record_event(
 			self.session,
@@ -977,27 +977,27 @@ class WorkflowEngine:
 		today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 		active_count: int = self.session.execute(
-			select(func.count()).select_from(ProcessInstance)
-			.where(ProcessInstance.status == "active")
+			select(func.count()).select_from(BpmProcessInstance)
+			.where(BpmProcessInstance.status == "active")
 		).scalar_one()
 
 		completed_today: int = self.session.execute(
-			select(func.count()).select_from(ProcessInstance)
-			.where(ProcessInstance.status == "completed")
-			.where(ProcessInstance.completed_at >= today_start)
+			select(func.count()).select_from(BpmProcessInstance)
+			.where(BpmProcessInstance.status == "completed")
+			.where(BpmProcessInstance.completed_at >= today_start)
 		).scalar_one()
 
 		total_definitions: int = self.session.execute(
-			select(func.count()).select_from(ProcessDefinition)
-			.where(ProcessDefinition.is_active.is_(True))
+			select(func.count()).select_from(BpmProcessDefinition)
+			.where(BpmProcessDefinition.is_active.is_(True))
 		).scalar_one()
 
 		# Overdue: active instances where step_entered_at is beyond timeout
 		# We load all active and filter in Python to avoid a complex SQL join
-		active_instances: list[ProcessInstance] = list(
+		active_instances: list[BpmProcessInstance] = list(
 			self.session.execute(
-				select(ProcessInstance)
-				.where(ProcessInstance.status == "active")
+				select(BpmProcessInstance)
+				.where(BpmProcessInstance.status == "active")
 			).scalars()
 		)
 		overdue_count = sum(1 for i in active_instances if i.is_overdue)
@@ -1084,19 +1084,19 @@ class WorkflowEngine:
 	# Internals
 	# ------------------------------------------------------------------
 
-	def _get_active_instance(self, instance_id: int) -> ProcessInstance:
-		inst = self.session.get(ProcessInstance, instance_id)
+	def _get_active_instance(self, instance_id: int) -> BpmProcessInstance:
+		inst = self.session.get(BpmProcessInstance, instance_id)
 		if inst is None:
-			raise ValueError(f"ProcessInstance #{instance_id} not found")
+			raise ValueError(f"BpmProcessInstance #{instance_id} not found")
 		if inst.status != "active":
 			raise ValueError(
-				f"ProcessInstance #{instance_id} is not active (status={inst.status!r})"
+				f"BpmProcessInstance #{instance_id} is not active (status={inst.status!r})"
 			)
 		return inst
 
 	def _complete_with_event(
 		self,
-		inst: ProcessInstance,
+		inst: BpmProcessInstance,
 		actor_id: int | None,
 		comment: str,
 	) -> ProcessEvent:
@@ -1218,7 +1218,7 @@ class WorkflowEngine:
 
 	def _resolve_role(
 		self,
-		step: ProcessStep,
+		step: BpmProcessStep,
 		record_ctx: dict[str, Any],
 		session,
 	) -> str | None:

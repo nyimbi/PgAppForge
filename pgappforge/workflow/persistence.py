@@ -167,7 +167,7 @@ class WorkflowStatePersistence:
                        metadata: Optional[Dict[str, Any]] = None) -> str:
         """Create a snapshot of workflow state."""
         from ..models import db
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
         import hashlib
 
         try:
@@ -401,7 +401,7 @@ class WorkflowStatePersistence:
                               recovery_data: Optional[Dict[str, Any]] = None):
         """Log recovery operation."""
         from ..models import db
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
 
         try:
             recovery_log = WorkflowRecoveryLog(

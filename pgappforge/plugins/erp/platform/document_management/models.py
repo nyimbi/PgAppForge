@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from pgappforge.models.sqla import Model
 
 try:
-	from uuid_extensions import uuid7str
+	from pgappforge._uuid7 import uuid7str
 except ImportError:
 	try:
 		from uuid6 import uuid7

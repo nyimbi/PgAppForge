@@ -39,7 +39,7 @@ from pgappforge.models.sqla import Model
 log = logging.getLogger(__name__)
 
 
-class ProcessDefinition(Model):
+class BpmProcessDefinition(Model):
 	"""Defines a workflow: name, description, ordered steps, escalation config."""
 
 	__allow_unmapped__ = True
@@ -68,22 +68,22 @@ class ProcessDefinition(Model):
 	)
 	is_latest = Column(Boolean, nullable=False, default=True)
 
-	steps: list[ProcessStep] = relationship(
-		"ProcessStep",
-		order_by="ProcessStep.order_num",
+	steps: list[BpmProcessStep] = relationship(
+		"BpmProcessStep",
+		order_by="BpmProcessStep.order_num",
 		back_populates="definition",
 		cascade="all, delete-orphan",
 		lazy="select",
 	)
-	instances: list[ProcessInstance] = relationship(
-		"ProcessInstance",
+	instances: list[BpmProcessInstance] = relationship(
+		"BpmProcessInstance",
 		back_populates="definition",
 		cascade="all, delete-orphan",
 		lazy="select",
 	)
 
 	def __repr__(self) -> str:
-		return f"<ProcessDefinition {self.name!r} active={self.is_active}>"
+		return f"<BpmProcessDefinition {self.name!r} active={self.is_active}>"
 
 	@property
 	def active_step_count(self) -> int:
@@ -98,7 +98,7 @@ class ProcessDefinition(Model):
 		return self.config.get("notify_emails", []) if self.config else []
 
 
-class ProcessStep(Model):
+class BpmProcessStep(Model):
 	"""One step in a process definition."""
 
 	__allow_unmapped__ = True
@@ -145,10 +145,10 @@ class ProcessStep(Model):
 		comment="Python expression for dynamic role: e.g. record.requester.manager_role",
 	)
 
-	definition: ProcessDefinition = relationship("ProcessDefinition", back_populates="steps")
+	definition: BpmProcessDefinition = relationship("BpmProcessDefinition", back_populates="steps")
 
 	def __repr__(self) -> str:
-		return f"<ProcessStep #{self.order_num} {self.name!r} role={self.assigned_role!r}>"
+		return f"<BpmProcessStep #{self.order_num} {self.name!r} role={self.assigned_role!r}>"
 
 	@property
 	def is_final(self) -> bool:
@@ -163,7 +163,7 @@ class ProcessStep(Model):
 		return self.actions.get("on_exit", []) if self.actions else []
 
 
-class ProcessInstance(Model):
+class BpmProcessInstance(Model):
 	"""A running instance of a process for a specific record."""
 
 	__allow_unmapped__ = True
@@ -202,8 +202,8 @@ class ProcessInstance(Model):
 		comment="Snapshot of definition.version at start time",
 	)
 
-	definition: ProcessDefinition = relationship("ProcessDefinition", back_populates="instances")
-	current_step: ProcessStep | None = relationship("ProcessStep", foreign_keys=[current_step_id])
+	definition: BpmProcessDefinition = relationship("BpmProcessDefinition", back_populates="instances")
+	current_step: BpmProcessStep | None = relationship("BpmProcessStep", foreign_keys=[current_step_id])
 	history: list[ProcessEvent] = relationship(
 		"ProcessEvent",
 		back_populates="instance",
@@ -214,7 +214,7 @@ class ProcessInstance(Model):
 
 	def __repr__(self) -> str:
 		return (
-			f"<ProcessInstance #{self.id} {self.model_name}#{self.record_id} "
+			f"<BpmProcessInstance #{self.id} {self.model_name}#{self.record_id} "
 			f"status={self.status!r}>"
 		)
 
@@ -283,12 +283,12 @@ class ProcessEvent(Model):
 	# For form_time events: seconds the user had the form open
 	duration_seconds = Column(Integer, nullable=True)
 
-	instance: ProcessInstance = relationship("ProcessInstance", back_populates="history")
-	from_step: ProcessStep | None = relationship(
-		"ProcessStep", foreign_keys=[from_step_id], lazy="joined"
+	instance: BpmProcessInstance = relationship("BpmProcessInstance", back_populates="history")
+	from_step: BpmProcessStep | None = relationship(
+		"BpmProcessStep", foreign_keys=[from_step_id], lazy="joined"
 	)
-	to_step: ProcessStep | None = relationship(
-		"ProcessStep", foreign_keys=[to_step_id], lazy="joined"
+	to_step: BpmProcessStep | None = relationship(
+		"BpmProcessStep", foreign_keys=[to_step_id], lazy="joined"
 	)
 
 	def __repr__(self) -> str:
@@ -341,12 +341,12 @@ class ProcessTransition(Model):
 	# fallback when no condition matches (XOR_SPLIT)
 	is_default    = Column(Boolean, nullable=False, default=False)
 
-	definition: ProcessDefinition = relationship("ProcessDefinition")
-	from_step: ProcessStep | None = relationship(
-		"ProcessStep", foreign_keys=[from_step_id], lazy="joined"
+	definition: BpmProcessDefinition = relationship("BpmProcessDefinition")
+	from_step: BpmProcessStep | None = relationship(
+		"BpmProcessStep", foreign_keys=[from_step_id], lazy="joined"
 	)
-	to_step: ProcessStep | None = relationship(
-		"ProcessStep", foreign_keys=[to_step_id], lazy="joined"
+	to_step: BpmProcessStep | None = relationship(
+		"BpmProcessStep", foreign_keys=[to_step_id], lazy="joined"
 	)
 
 	def __repr__(self) -> str:
@@ -390,8 +390,8 @@ class ProcessToken(Model):
 	created_at   = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 	completed_at = Column(DateTime(timezone=True), nullable=True)
 
-	instance: ProcessInstance = relationship("ProcessInstance")
-	step: ProcessStep | None  = relationship("ProcessStep", foreign_keys=[step_id])
+	instance: BpmProcessInstance = relationship("BpmProcessInstance")
+	step: BpmProcessStep | None  = relationship("BpmProcessStep", foreign_keys=[step_id])
 
 	def __repr__(self) -> str:
 		return (
@@ -447,9 +447,9 @@ class UserDelegation(Model):
 
 
 __all__ = [
-	"ProcessDefinition",
-	"ProcessStep",
-	"ProcessInstance",
+	"BpmProcessDefinition",
+	"BpmProcessStep",
+	"BpmProcessInstance",
 	"ProcessEvent",
 	"ProcessTransition",
 	"ProcessToken",

@@ -45,7 +45,7 @@ from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access_api
 
 from .engine import WorkflowEngine
-from .models import ProcessDefinition, ProcessEvent, ProcessInstance, ProcessStep, UserDelegation
+from .models import BpmProcessDefinition, ProcessEvent, BpmProcessInstance, BpmProcessStep, UserDelegation
 
 log = logging.getLogger(__name__)
 
@@ -414,13 +414,13 @@ _QUEUE_TMPL = """
 
 
 # ---------------------------------------------------------------------------
-# ModelView: ProcessDefinition CRUD
+# ModelView: BpmProcessDefinition CRUD
 # ---------------------------------------------------------------------------
 
 class ProcessDefinitionView(ModelView):
-	"""CRUD management for ProcessDefinition and its steps."""
+	"""CRUD management for BpmProcessDefinition and its steps."""
 
-	datamodel = SQLAInterface(ProcessDefinition)
+	datamodel = SQLAInterface(BpmProcessDefinition)
 	route_base = "/bpm/definitions"
 
 	list_title = "Process Definitions"
@@ -448,7 +448,7 @@ class ProcessDefinitionView(ModelView):
 class ProcessStepView(ModelView):
 	"""Inline CRUD for process steps — typically embedded, not in the menu."""
 
-	datamodel = SQLAInterface(ProcessStep)
+	datamodel = SQLAInterface(BpmProcessStep)
 	route_base = "/bpm/steps"
 
 	list_columns = ["definition_id", "name", "order_num", "assigned_role", "timeout_hours", "escalate_to_role"]
@@ -461,7 +461,7 @@ class ProcessStepView(ModelView):
 class ProcessInstanceView(ModelView):
 	"""Read-only list of all process instances."""
 
-	datamodel = SQLAInterface(ProcessInstance)
+	datamodel = SQLAInterface(BpmProcessInstance)
 	route_base = "/bpm/instances"
 
 	list_title = "Process Instances"
@@ -502,7 +502,7 @@ class ProcessDashboardView(BaseView):
 		user_roles = _current_user_roles()
 
 		# My queue — union of queues for all roles the current user holds
-		my_queue: list[ProcessInstance] = []
+		my_queue: list[BpmProcessInstance] = []
 		seen_ids: set[int] = set()
 		for role in user_roles:
 			for inst in eng.get_queue(role):
@@ -512,9 +512,9 @@ class ProcessDashboardView(BaseView):
 
 		# Overdue instances (all active, filter in Python — engine already does this)
 		from sqlalchemy import select
-		active_instances: list[ProcessInstance] = list(
+		active_instances: list[BpmProcessInstance] = list(
 			eng.session.execute(
-				select(ProcessInstance).where(ProcessInstance.status == "active")
+				select(BpmProcessInstance).where(BpmProcessInstance.status == "active")
 			).scalars()
 		)
 		overdue = [i for i in active_instances if i.is_overdue]
@@ -577,7 +577,7 @@ class ProcessTimelineView(BaseView):
 	@has_access
 	def index(self, instance_id: int):
 		session = _get_session()
-		inst: ProcessInstance | None = session.get(ProcessInstance, instance_id)
+		inst: BpmProcessInstance | None = session.get(BpmProcessInstance, instance_id)
 		if inst is None:
 			from flask import abort
 			abort(404)
@@ -621,7 +621,7 @@ class ProcessQueueView(BaseView):
 		user_roles = _current_user_roles()
 		user_id = _current_user_id()
 
-		queue: list[ProcessInstance] = []
+		queue: list[BpmProcessInstance] = []
 		seen_ids: set[int] = set()
 		for role in user_roles:
 			for inst in eng.get_queue(role):
@@ -1037,7 +1037,7 @@ class BPMNDesignerView(BaseView):
 	GET  /bpm/designer/<definition_id>          — render designer.html
 	GET  /bpm/designer/<definition_id>?xml_only=1 — return saved XML as JSON
 	POST /bpm/designer/save                     — persist bpmn_xml in definition.config
-	POST /bpm/designer/sync-steps               — parse XML → upsert ProcessStep rows
+	POST /bpm/designer/sync-steps               — parse XML → upsert BpmProcessStep rows
 	"""
 
 	route_base = "/bpm/designer"
@@ -1054,7 +1054,7 @@ class BPMNDesignerView(BaseView):
 		from flask import render_template, request as _req
 
 		session = _get_session()
-		defn: ProcessDefinition | None = session.get(ProcessDefinition, definition_id)
+		defn: BpmProcessDefinition | None = session.get(BpmProcessDefinition, definition_id)
 		if defn is None:
 			from flask import abort
 			abort(404)
@@ -1080,7 +1080,7 @@ class BPMNDesignerView(BaseView):
 	@has_access
 	def save(self):
 		"""
-		Persist bpmn_xml into ProcessDefinition.config['bpmn_xml'].
+		Persist bpmn_xml into BpmProcessDefinition.config['bpmn_xml'].
 
 		JSON body:
 		  {
@@ -1102,9 +1102,9 @@ class BPMNDesignerView(BaseView):
 		ext_data: dict = body.get("ext_data", {})
 
 		session = _get_session()
-		defn: ProcessDefinition | None = session.get(ProcessDefinition, definition_id)
+		defn: BpmProcessDefinition | None = session.get(BpmProcessDefinition, definition_id)
 		if defn is None:
-			return jsonify({"error": f"ProcessDefinition #{definition_id} not found"}), 404
+			return jsonify({"error": f"BpmProcessDefinition #{definition_id} not found"}), 404
 
 		cfg: dict = dict(defn.config or {})
 		cfg["bpmn_xml"] = bpmn_xml
@@ -1129,7 +1129,7 @@ class BPMNDesignerView(BaseView):
 	@has_access
 	def sync_steps(self):
 		"""
-		Parse BPMN 2.0 XML and upsert ProcessStep + ProcessTransition rows.
+		Parse BPMN 2.0 XML and upsert BpmProcessStep + ProcessTransition rows.
 
 		Mapping
 		-------
@@ -1167,9 +1167,9 @@ class BPMNDesignerView(BaseView):
 		ext_data: dict[str, dict] = body.get("ext_data", {})
 
 		session = _get_session()
-		defn: ProcessDefinition | None = session.get(ProcessDefinition, definition_id)
+		defn: BpmProcessDefinition | None = session.get(BpmProcessDefinition, definition_id)
 		if defn is None:
-			return jsonify({"error": f"ProcessDefinition #{definition_id} not found"}), 404
+			return jsonify({"error": f"BpmProcessDefinition #{definition_id} not found"}), 404
 
 		# Parse XML --------------------------------------------------------
 		try:
@@ -1191,7 +1191,7 @@ class BPMNDesignerView(BaseView):
 			return tag.split("}")[-1] if "}" in tag else tag
 
 		def _step_type_for(local_tag: str, gateway_seen: dict) -> str:
-			"""Map BPMN element local tag → ProcessStep step_type."""
+			"""Map BPMN element local tag → BpmProcessStep step_type."""
 			if local_tag in ("Task", "UserTask", "ServiceTask", "ScriptTask", "BusinessRuleTask", "CallActivity", "SubProcess"):
 				return "TASK"
 			if local_tag == "StartEvent":
@@ -1249,15 +1249,15 @@ class BPMNDesignerView(BaseView):
 		if not elements:
 			return jsonify({"error": "No BPMN flow elements found in the XML"}), 400
 
-		# Build bpmn_id → existing ProcessStep mapping -----------------
-		existing_steps: list[ProcessStep] = list(
+		# Build bpmn_id → existing BpmProcessStep mapping -----------------
+		existing_steps: list[BpmProcessStep] = list(
 			session.execute(
-				_select(ProcessStep).where(ProcessStep.definition_id == definition_id)
+				_select(BpmProcessStep).where(BpmProcessStep.definition_id == definition_id)
 			).scalars()
 		)
 		# We store the BPMN element ID in the step name after a separator so we
 		# can look it up on re-sync.  Format: "<human name> [bpmn:<id>]"
-		def _bpmn_id_from_step(step: ProcessStep) -> str | None:
+		def _bpmn_id_from_step(step: BpmProcessStep) -> str | None:
 			if step.name and "[bpmn:" in step.name:
 				try:
 					return step.name.split("[bpmn:")[1].rstrip("]")
@@ -1265,7 +1265,7 @@ class BPMNDesignerView(BaseView):
 					pass
 			return None
 
-		step_by_bpmn: dict[str, ProcessStep] = {}
+		step_by_bpmn: dict[str, BpmProcessStep] = {}
 		for s in existing_steps:
 			bid = _bpmn_id_from_step(s)
 			if bid:
@@ -1284,7 +1284,7 @@ class BPMNDesignerView(BaseView):
 		}
 
 		steps_upserted = 0
-		new_step_by_bpmn: dict[str, ProcessStep] = {}
+		new_step_by_bpmn: dict[str, BpmProcessStep] = {}
 
 		for idx, el in enumerate(elements):
 			bpmn_id: str = el["bpmn_id"]
@@ -1311,7 +1311,7 @@ class BPMNDesignerView(BaseView):
 				step.timeout_hours = timeout_h
 			else:
 				# Insert new
-				step = ProcessStep(
+				step = BpmProcessStep(
 					definition_id=definition_id,
 					name=stored_name,
 					order_num=idx,

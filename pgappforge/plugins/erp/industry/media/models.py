@@ -311,7 +311,7 @@ class MediaAsset(AuditMixin, Model):
 		nullable=True,
 		comment="EXIF DateTimeOriginal converted to UTC (iptc_asset.taken_at)",
 	)
-	metadata: dict[str, Any] = Column(
+	technical_metadata: dict[str, Any] = Column(
 		JSONB,
 		nullable=False,
 		default=dict,

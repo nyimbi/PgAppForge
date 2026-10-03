@@ -21,7 +21,7 @@ sys.path.insert(0, str(fab_path))
 try:
     from pgappforge.models.sqla import Model
     from pgappforge.collaborative.core.team_manager import (
-        Team, TeamInvitation, team_members, team_role_permissions
+        Team, TeamInvitation, TeamMember, TeamRolePermission
     )
     from pgappforge.collaborative.core.workspace_manager import (
         Workspace, WorkspaceResource, WorkspaceMember, ResourceVersion, 

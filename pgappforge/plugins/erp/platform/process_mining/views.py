@@ -78,20 +78,20 @@ class ProcessMiningDashboardView(BaseERPView):
 
 	def _timeline_rows(self) -> tuple[list[dict], str]:
 		try:
-			from pgappforge.plugins.workflow.models import ProcessDefinition, ProcessInstance
+			from pgappforge.plugins.workflow.models import BpmProcessDefinition, BpmProcessInstance
 		except Exception as exc:
-			return [], f"ProcessInstance model unavailable: {exc}"
+			return [], f"BpmProcessInstance model unavailable: {exc}"
 
 		session = self._session()
 		stmt = (
 			sa.select(
-				ProcessDefinition.name.label("process_definition"),
-				ProcessInstance.status,
-				ProcessInstance.started_at,
-				ProcessInstance.completed_at,
+				BpmProcessDefinition.name.label("process_definition"),
+				BpmProcessInstance.status,
+				BpmProcessInstance.started_at,
+				BpmProcessInstance.completed_at,
 			)
-			.join(ProcessDefinition, ProcessInstance.definition_id == ProcessDefinition.id)
-			.order_by(ProcessDefinition.name, ProcessInstance.status, ProcessInstance.started_at)
+			.join(BpmProcessDefinition, BpmProcessInstance.definition_id == BpmProcessDefinition.id)
+			.order_by(BpmProcessDefinition.name, BpmProcessInstance.status, BpmProcessInstance.started_at)
 		)
 		rows = session.execute(stmt).all()
 		now = datetime.now(timezone.utc)

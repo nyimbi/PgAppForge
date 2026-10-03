@@ -1103,7 +1103,7 @@ class AdvancedVisualizationEngine:
 		Returns:
 			Visualization configuration ID
 		"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		config_id = uuid7str()
 		

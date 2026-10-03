@@ -58,3 +58,15 @@ else:
         if isinstance(s, str):
             return s.decode('utf-8')
         return unicode(s)  # noqa
+
+def with_metaclass(meta, *bases, **kwargs):
+    """Create a base class with ``meta`` as its metaclass (SQLAlchemy <2 style).
+
+    Kept so modules written against the 1.4 API keep importing on SQLAlchemy 2.x.
+    """
+    if not bases:
+        bases = (object,)
+    class metaclass(type):
+        def __new__(cls, name, this_bases, namespace):
+            return meta(name, bases, namespace, **kwargs)
+    return type.__new__(metaclass, "temporary_class", (), {})

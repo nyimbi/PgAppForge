@@ -20,7 +20,7 @@ from flask_login import current_user
 from sqlalchemy import and_, or_
 from werkzeug.exceptions import BadRequest, Forbidden, TooManyRequests
 
-from ...security import current_user
+from flask_login import current_user
 from ..models.process_models import ProcessDefinition, ProcessInstance, ProcessStep
 from ..models.audit_models import ProcessAuditLog
 from pgappforge.models.tenant_context import get_current_tenant_id

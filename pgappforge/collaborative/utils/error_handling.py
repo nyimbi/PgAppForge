@@ -25,6 +25,29 @@ class ErrorSeverity(Enum):
     CRITICAL = "critical"
 
 
+class ErrorType(Enum):
+    """Machine-readable error kinds.
+
+    API handlers report a stable ``ErrorType`` alongside the human message so
+    clients and alerting can key on identity rather than text.
+    """
+
+    API_ERROR = "api_error"
+    CONFIGURATION_ERROR = "configuration_error"
+    DATA_ERROR = "data_error"
+    DATA_PROCESSING_ERROR = "data_processing_error"
+    DATABASE_ERROR = "database_error"
+    FEDERATION_ERROR = "federation_error"
+    NETWORK_ERROR = "network_error"
+    PERMISSION_ERROR = "permission_error"
+    QUERY_EXECUTION_ERROR = "query_execution_error"
+    RUNTIME_ERROR = "runtime_error"
+    SERVICE_ERROR = "service_error"
+    SYSTEM_ERROR = "system_error"
+    USER_ERROR = "user_error"
+    VALIDATION_ERROR = "validation_error"
+
+
 class ErrorCategory(Enum):
     """Error category classifications."""
 

@@ -429,7 +429,7 @@ class UsageRecord(Model):
 		default=lambda: datetime.now(timezone.utc),
 		index=True,
 	)
-	metadata: dict[str, Any] = Column(JSONB, nullable=False, default=dict)
+	context_data: dict[str, Any] = Column(JSONB, nullable=False, default=dict)
 
 	subscription: "BillingSubscription" = relationship(
 		"BillingSubscription", back_populates="usage_records"

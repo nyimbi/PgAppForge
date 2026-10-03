@@ -305,7 +305,7 @@ class NaturalLanguageProcessor:
 		Returns:
 			QuerySuggestion with Cypher translation
 		"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		natural_query = natural_query.lower().strip()
 		
@@ -354,7 +354,7 @@ class NaturalLanguageProcessor:
 	
 	def _generate_fallback_query(self, natural_query: str) -> QuerySuggestion:
 		"""Generate fallback query when no patterns match"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		# Extract potential node/property names
 		entities = re.findall(r"['\"]([^'\"]+)['\"]", natural_query)
@@ -414,7 +414,7 @@ class GraphAnalysisEngine:
 	@performance_cache(ttl_seconds=3600)
 	def analyze_graph_structure(self, graph_name: str) -> AIInsight:
 		"""Analyze basic graph structure and provide insights"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		try:
 			graph_manager = get_graph_manager(graph_name)
@@ -452,7 +452,7 @@ class GraphAnalysisEngine:
 	
 	def detect_anomalies(self, graph_name: str) -> List[AIInsight]:
 		"""Detect anomalies in graph data"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		insights = []
 		
@@ -512,7 +512,7 @@ class GraphAnalysisEngine:
 	
 	def suggest_analysis_paths(self, graph_name: str, user_context: Dict[str, Any] = None) -> List[AnalysisRecommendation]:
 		"""Suggest analysis paths based on graph characteristics"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		recommendations = []
 		
@@ -787,7 +787,7 @@ class GraphAnalysisEngine:
 	
 	def _create_error_insight(self, analysis_type: str, error_message: str) -> AIInsight:
 		"""Create an error insight"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		return AIInsight(
 			insight_id=uuid7str(),

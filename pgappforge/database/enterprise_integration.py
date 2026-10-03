@@ -263,7 +263,7 @@ class SecureCredentialManager:
 		Returns:
 			Credential ID
 		"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		credential_id = uuid7str()
 		
@@ -390,7 +390,7 @@ class LDAPIntegration:
 		if not LDAP_AVAILABLE:
 			raise ImportError("ldap3 library not available")
 		
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		connection_id = uuid7str()
 		config = config or {}
@@ -581,7 +581,7 @@ class APIManager:
 						 rate_limit: Dict[str, Any] = None,
 						 permissions: List[str] = None) -> str:
 		"""Register new API endpoint"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		endpoint_id = uuid7str()
 		
@@ -754,7 +754,7 @@ class AuditLogger:
 		Returns:
 			Log entry ID
 		"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		log_id = uuid7str()
 		
@@ -893,7 +893,7 @@ class ExternalConnector:
 	def create_database_connector(self, name: str, credential_id: str, 
 								 connection_string: str, database_type: str) -> str:
 		"""Create database connector"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		connector_id = uuid7str()
 		
@@ -918,7 +918,7 @@ class ExternalConnector:
 	def create_rest_api_connector(self, name: str, credential_id: str,
 								 base_url: str, headers: Dict[str, str] = None) -> str:
 		"""Create REST API connector"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		connector_id = uuid7str()
 		
@@ -1155,7 +1155,7 @@ class EnterpriseIntegrationSuite:
 	def configure_sso_provider(self, provider_type: str, provider_name: str,
 							  configuration: Dict[str, Any]) -> str:
 		"""Configure SSO provider"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		provider_id = uuid7str()
 		

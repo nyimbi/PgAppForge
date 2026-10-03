@@ -544,7 +544,7 @@ class WorkflowBatchProcessor:
         """Batch insert analytics records."""
         from ..models import db
         from .ai_optimization import WorkflowAnalytics
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
 
         analytics_records = []
         for data in analytics_data:
@@ -560,7 +560,7 @@ class WorkflowBatchProcessor:
         """Batch create workflow snapshots."""
         from ..models import db
         from .persistence import WorkflowStateSnapshot
-        from uuid_extensions import uuid7str
+        from pgappforge._uuid7 import uuid7str
 
         snapshot_records = []
         for data in snapshot_data:

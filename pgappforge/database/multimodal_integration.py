@@ -44,7 +44,7 @@ except ImportError:
     PSYCOPG2_AVAILABLE = False
 
 from pydantic import BaseModel, Field
-from uuid_extensions import uuid7str
+from pgappforge._uuid7 import uuid7str
 
 # Internal imports with fallbacks
 try:

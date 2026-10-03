@@ -16,7 +16,7 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-from uuid_extensions import uuid7str
+from pgappforge._uuid7 import uuid7str
 
 try:
 	import requests

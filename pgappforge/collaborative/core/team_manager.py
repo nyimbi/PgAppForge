@@ -10,7 +10,7 @@ import uuid
 from typing import Dict, List, Any, Optional, Set, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from collections import defaultdict
 from contextlib import contextmanager
@@ -143,6 +143,47 @@ team_role_permissions = Table(
     Column("role", String(50), primary_key=True),
     Column("permission", String(100), primary_key=True),
 )
+
+
+class TeamMember(Model, AuditMixin):
+    """Membership of a user in a team with a role."""
+
+    __tablename__ = "fab_team_members"
+
+    id = Column(Integer, primary_key=True)
+    team_id = Column(Integer, ForeignKey("fab_teams.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("ab_user.id"), nullable=False, index=True)
+    role_id = Column(Integer, ForeignKey("fab_team_roles.id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    left_at = Column(DateTime, nullable=True)
+    __table_args__ = (
+        UniqueConstraint("team_id", "user_id", name="uq_fab_team_member"),
+    )
+
+    team = relationship("Team", back_populates="members")
+    role = relationship("TeamRole", back_populates="members")
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return f"<TeamMember team={self.team_id} user={self.user_id} role={self.role_id}>"
+
+
+class TeamRolePermission(Model, AuditMixin):
+    """Permission granted to a team role."""
+
+    __tablename__ = "fab_team_role_permissions"
+
+    id = Column(Integer, primary_key=True)
+    role_id = Column(Integer, ForeignKey("fab_team_roles.id"), nullable=False, index=True)
+    permission = Column(String(100), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission", name="uq_fab_team_role_permission"),
+    )
+
+    role = relationship("TeamRole", back_populates="permissions")
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return f"<TeamRolePermission role={self.role_id} {self.permission}>"
 
 
 class Team(Model, AuditMixin):

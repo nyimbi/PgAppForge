@@ -38,8 +38,8 @@ Public surface
 WorkflowPlugin, create_plugin          — plugin lifecycle
 WorkflowEngine                          — core state machine
 WorkflowMixin                           — model mixin
-ProcessDefinition, ProcessStep,
-ProcessInstance, ProcessEvent           — SQLAlchemy models
+BpmProcessDefinition, BpmProcessStep,
+BpmProcessInstance, ProcessEvent           — SQLAlchemy models
 bpm_api                                 — Flask Blueprint with REST API
 ProcessDefinitionView, ProcessStepView,
 ProcessInstanceView, ProcessDashboardView,
@@ -54,7 +54,7 @@ from pgappforge.plugins.base_plugin import BasePlugin, PluginMetadata, PluginPri
 
 from .engine import WorkflowEngine
 from .mixin import WorkflowMixin
-from .models import ProcessDefinition, ProcessEvent, ProcessInstance, ProcessStep
+from .models import BpmProcessDefinition, ProcessEvent, BpmProcessInstance, BpmProcessStep
 # Views imported lazily inside register_views() to avoid circular import at collection time
 
 log = logging.getLogger(__name__)
@@ -247,7 +247,7 @@ class WorkflowPlugin(BasePlugin):
 	# ------------------------------------------------------------------
 
 	def register_models(self) -> list:
-		return [ProcessDefinition, ProcessStep, ProcessInstance, ProcessEvent]
+		return [BpmProcessDefinition, BpmProcessStep, BpmProcessInstance, ProcessEvent]
 
 	# ------------------------------------------------------------------
 	# Hook overrides
@@ -287,11 +287,11 @@ class WorkflowPlugin(BasePlugin):
 
 			from sqlalchemy import select as _select
 			defn = session.execute(
-				_select(ProcessDefinition).where(ProcessDefinition.name == defn_name)
+				_select(BpmProcessDefinition).where(BpmProcessDefinition.name == defn_name)
 			).scalar_one_or_none()
 			if defn is None:
 				log.warning(
-					"WorkflowPlugin.on_record_save: ProcessDefinition %r not found — "
+					"WorkflowPlugin.on_record_save: BpmProcessDefinition %r not found — "
 					"skipping auto-start for %s#%s.",
 					defn_name, model_class.__name__, record_id,
 				)
@@ -304,7 +304,7 @@ class WorkflowPlugin(BasePlugin):
 			)
 			session.commit()
 			log.info(
-				"WorkflowPlugin: auto-started ProcessInstance #%d for %s#%s (def=%r)",
+				"WorkflowPlugin: auto-started BpmProcessInstance #%d for %s#%s (def=%r)",
 				inst.id, model_class.__name__, record_id, defn_name,
 			)
 		except Exception:
@@ -524,9 +524,9 @@ __all__ = [
 	# Mixin
 	"WorkflowMixin",
 	# Models
-	"ProcessDefinition",
-	"ProcessStep",
-	"ProcessInstance",
+	"BpmProcessDefinition",
+	"BpmProcessStep",
+	"BpmProcessInstance",
 	"ProcessEvent",
 	# Views
 	"ProcessDashboardView",

@@ -23,7 +23,7 @@ from email.mime.multipart import MimeMultipart
 import psutil
 import numpy as np
 from pydantic import BaseModel, Field
-from uuid_extensions import uuid7str
+from pgappforge._uuid7 import uuid7str
 
 from ..utils.error_handling import WizardErrorHandler, WizardErrorType, WizardErrorSeverity
 

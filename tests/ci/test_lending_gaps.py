@@ -598,24 +598,22 @@ class TestStandingOrders:
 # ===========================================================================
 
 class TestBatchJobIdempotency:
-	def test_acquire_claims_via_insert_then_reselect(self, lms):
+	def test_acquire_claims_with_a_single_insert(self, lms):
 		session = _make_session()
-		claimed = MagicMock()
-		claimed.status = "running"
-		claimed.id = str(uuid.uuid4())
-		session.execute.return_value.scalar_one_or_none.return_value = claimed
+		session.execute.return_value.rowcount = 1   # our INSERT won
 
 		job_run = lms._acquire_batch_job(session, "daily_aging", date.today(), "t-001")
 
-		# Claimed with INSERT ... ON CONFLICT DO NOTHING then re-SELECT FOR
-		# UPDATE, not SELECT-then-INSERT — two runners both seeing "no row" and
-		# both inserting is what used to end in an IntegrityError.
-		assert session.execute.call_count >= 2
-		assert job_run is claimed
-		assert not session.add.called
+		# Claimed with INSERT ... ON CONFLICT DO NOTHING — SELECT-then-INSERT let
+		# two runners both see "no row" and both insert, which ended in an
+		# IntegrityError for the loser.
+		assert session.execute.call_count == 1
+		assert job_run.status == "running"
+		assert job_run.tenant_id == "t-001"
 
-	def test_acquire_raises_when_the_claimed_row_is_missing(self, lms):
+	def test_acquire_raises_when_the_conflicting_row_vanishes(self, lms):
 		session = _make_session()
+		session.execute.return_value.rowcount = 0        # conflict
 		session.execute.return_value.scalar_one_or_none.return_value = None
 
 		with pytest.raises(RuntimeError, match="could not be claimed"):

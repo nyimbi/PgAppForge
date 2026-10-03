@@ -540,7 +540,7 @@ class ImportExportPipeline:
 		Returns:
 			Job ID for tracking
 		"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		job_id = uuid7str()
 		job = DataExchangeJob(
@@ -578,7 +578,7 @@ class ImportExportPipeline:
 		Returns:
 			Job ID for tracking
 		"""
-		from uuid_extensions import uuid7str
+		from pgappforge._uuid7 import uuid7str
 		
 		job_id = uuid7str()
 		job = DataExchangeJob(

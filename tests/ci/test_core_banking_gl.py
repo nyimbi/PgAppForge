@@ -114,6 +114,7 @@ class TestCBGLConstants:
 	def test_required_keys_present(self):
 		required = {
 			"CASH_NOSTRO", "LOAN_RECEIVABLE", "LOAN_LOSS_RESERVE",
+			"ECL_ALLOWANCE", "LOAN_LOSS_EXPENSE", "PENALTY_INCOME",
 			"CUSTOMER_DEPOSITS", "INTEREST_INCOME", "FEE_INCOME", "INTEREST_EXPENSE",
 			"FX_SUSPENSE",
 		}
@@ -390,6 +391,7 @@ class TestLoanGLMethods:
 	# ---- post_loan_write_off --------------------------------------------
 
 	def test_write_off_balanced(self):
+		"""With no booked allowance the whole balance is an expense."""
 		lines = self._capture_lines(
 			"post_loan_write_off",
 			loan_id="loan-8",
@@ -398,18 +400,36 @@ class TestLoanGLMethods:
 		)
 		assert _lines_balance(lines)
 		codes = {ln["account_code"] for ln in lines}
-		assert "LOAN_LOSS_RESERVE" in codes
+		assert "LOAN_LOSS_EXPENSE" in codes
 		assert "LOAN_RECEIVABLE" in codes
+		assert "LOAN_LOSS_RESERVE" not in codes
 
-	def test_write_off_dr_reserve_equals_amount(self):
+	def test_write_off_dr_expense_equals_amount_when_unprovisioned(self):
 		lines = self._capture_lines(
 			"post_loan_write_off",
 			loan_id="loan-9",
 			write_off_cents=30_000,
 			tenant_id="t1",
 		)
-		dr_reserve = sum(ln["debit_cents"] for ln in lines if ln["account_code"] == "LOAN_LOSS_RESERVE")
-		assert dr_reserve == 30_000
+		dr_expense = sum(
+			ln["debit_cents"] for ln in lines if ln["account_code"] == "LOAN_LOSS_EXPENSE"
+		)
+		assert dr_expense == 30_000
+
+	def test_write_off_splits_the_booked_allowance(self):
+		lines = self._capture_lines(
+			"post_loan_write_off",
+			loan_id="loan-9b",
+			write_off_cents=30_000,
+			provision_cents=12_000,
+			tenant_id="t1",
+		)
+		assert _lines_balance(lines)
+		dr = {ln["account_code"]: ln["debit_cents"] for ln in lines}
+		assert dr["ECL_ALLOWANCE"] == 12_000
+		assert dr["LOAN_LOSS_EXPENSE"] == 18_000
+		cr = next(ln for ln in lines if ln["account_code"] == "LOAN_RECEIVABLE")
+		assert cr["credit_cents"] == 30_000
 
 	# ---- post_loan_recovery ---------------------------------------------
 
@@ -424,7 +444,8 @@ class TestLoanGLMethods:
 		assert _lines_balance(lines)
 		codes = {ln["account_code"] for ln in lines}
 		assert "CASH_NOSTRO" in codes
-		assert "LOAN_LOSS_RESERVE" in codes
+		# Reinstates the allowance the write-off consumed.
+		assert "ECL_ALLOWANCE" in codes
 
 	def test_recovery_dr_cash_equals_recovered(self):
 		lines = self._capture_lines(
@@ -499,7 +520,7 @@ class TestTransactionGLCalls:
 		entry = self._fake_entry()
 		captured_lines: list[dict] = []
 
-		svc._require_account = MagicMock(return_value=acct)
+		svc._lock_account = MagicMock(return_value=acct)
 		svc._assert_active = MagicMock()
 		svc._assert_channel_allowed = MagicMock()
 		svc._daily_debit_total = MagicMock(return_value=0)
@@ -534,16 +555,11 @@ class TestTransactionGLCalls:
 		from_acct.available_balance_cents = 10_000  # 100 USD
 		captured_batches: list[list[dict]] = []
 
-		def _fake_require(session, acc_num):
-			return from_acct if acc_num == "FROM-001" else to_acct
+		def _fake_lock(session, *acc_nums):
+			return {n: (from_acct if n == "FROM-001" else to_acct) for n in acc_nums}
 
-		def _fake_resolve_gl(*args):
-			key = args[0] if len(args) == 1 else args[1]
-			return _CB_GL.get(key, key)
-
-		svc._require_account = _fake_require  # type: ignore[method-assign]
+		svc._lock_accounts = _fake_lock  # type: ignore[method-assign]
 		svc._assert_active = MagicMock()
-		svc._resolve_gl = _fake_resolve_gl  # type: ignore[method-assign]
 		svc._post_to_gl = lambda session, lines, description, tenant_id, **kw: captured_batches.append(list(lines))  # type: ignore[method-assign]
 
 		session = MagicMock()
@@ -580,10 +596,10 @@ class TestTransactionGLCalls:
 		to_acct = self._fake_account("TO-001", "to-uuid")
 		captured_lines: list[dict] = []
 
-		def _fake_require(session, acc_num):
-			return from_acct if acc_num == "FROM-001" else to_acct
+		def _fake_lock(session, *acc_nums):
+			return {n: (from_acct if n == "FROM-001" else to_acct) for n in acc_nums}
 
-		svc._require_account = _fake_require  # type: ignore[method-assign]
+		svc._lock_accounts = _fake_lock  # type: ignore[method-assign]
 		svc._assert_active = MagicMock()
 		svc._post_to_gl = lambda session, lines, description, tenant_id, **kw: captured_lines.extend(lines)  # type: ignore[method-assign]
 

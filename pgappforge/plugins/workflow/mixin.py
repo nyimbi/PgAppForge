@@ -51,12 +51,12 @@ class WorkflowMixin:
 
 	Class-level attributes (set on your subclass):
 	  WORKFLOW_DEFINITION : str | None
-	      Name of the ProcessDefinition to auto-start when start_workflow()
+	      Name of the BpmProcessDefinition to auto-start when start_workflow()
 	      is called without an explicit definition_name.  If None, the caller
 	      must always supply definition_name.
 
 	Instance-level attributes populated by the mixin (all lazy / cached):
-	  _wf_instance_cache : ProcessInstance | None | sentinel
+	  _wf_instance_cache : BpmProcessInstance | None | sentinel
 	      Internal cache; invalidated by any mutating method.
 	"""
 
@@ -78,7 +78,7 @@ class WorkflowMixin:
 	@property
 	def workflow_instance(self):
 		"""
-		Active ProcessInstance for this record, or None.
+		Active BpmProcessInstance for this record, or None.
 		Result is cached for the lifetime of this Python object.
 		"""
 		if self._wf_instance_cache is WorkflowMixin._WF_NOT_LOADED:
@@ -151,7 +151,7 @@ class WorkflowMixin:
 			session:         SQLAlchemy session (uses app default if omitted).
 
 		Returns:
-			ProcessInstance
+			BpmProcessInstance
 		"""
 		name = definition_name or self.WORKFLOW_DEFINITION
 		if not name:
@@ -163,13 +163,13 @@ class WorkflowMixin:
 		engine = _get_engine(session)
 
 		# Resolve definition by name
-		from pgappforge.plugins.workflow.models import ProcessDefinition
+		from pgappforge.plugins.workflow.models import BpmProcessDefinition
 		from sqlalchemy import select
 		defn = engine.session.execute(
-			select(ProcessDefinition).where(ProcessDefinition.name == name)
+			select(BpmProcessDefinition).where(BpmProcessDefinition.name == name)
 		).scalar_one_or_none()
 		if defn is None:
-			raise ValueError(f"ProcessDefinition {name!r} not found")
+			raise ValueError(f"BpmProcessDefinition {name!r} not found")
 
 		record_id = getattr(self, "id", None)
 		if record_id is None:

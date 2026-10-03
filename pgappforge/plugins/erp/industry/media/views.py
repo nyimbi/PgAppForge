@@ -504,7 +504,7 @@ class AssetView(BaseView):
 			"usage_rights": asset.usage_rights,
 			"geo_point": asset.geo_point,
 			"taken_at": asset.taken_at.isoformat() if asset.taken_at else None,
-			"metadata": asset.metadata,
+			"metadata": asset.technical_metadata,
 			"_widgets": widget_hints,
 		})
 

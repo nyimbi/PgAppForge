@@ -72,10 +72,10 @@ class MarketingCampaign(AuditMixin, Model):
 	utm_params JSONB schema: {source, medium, campaign, content}
 	"""
 
-	__tablename__ = "mkt_campaign"
+	__tablename__ = "mkt_automation_campaign"
 	__table_args__ = (
-		Index("ix_mkt_campaign_tenant_status", "tenant_id", "status"),
-		Index("ix_mkt_campaign_tenant_type", "tenant_id", "campaign_type"),
+		Index("ix_mkt_automation_campaign_tenant_status", "tenant_id", "status"),
+		Index("ix_mkt_automation_campaign_tenant_type", "tenant_id", "campaign_type"),
 	)
 
 	id = Column(
@@ -141,7 +141,7 @@ class MarketingSequence(AuditMixin, Model):
 
 	campaign_id = Column(
 		UUID(as_uuid=False),
-		ForeignKey("mkt_campaign.id", ondelete="CASCADE"),
+		ForeignKey("mkt_automation_campaign.id", ondelete="CASCADE"),
 		nullable=False,
 	)
 	step_number = Column(Integer, nullable=False)
@@ -191,7 +191,7 @@ class CampaignContact(AuditMixin, Model):
 
 	campaign_id = Column(
 		UUID(as_uuid=False),
-		ForeignKey("mkt_campaign.id", ondelete="CASCADE"),
+		ForeignKey("mkt_automation_campaign.id", ondelete="CASCADE"),
 		nullable=False,
 	)
 	contact_id = Column(String(50), nullable=False)
@@ -283,7 +283,7 @@ class CampaignAttribution(AuditMixin, Model):
 
 	campaign_id = Column(
 		UUID(as_uuid=False),
-		ForeignKey("mkt_campaign.id", ondelete="CASCADE"),
+		ForeignKey("mkt_automation_campaign.id", ondelete="CASCADE"),
 		nullable=False,
 	)
 	contact_id = Column(String(50), nullable=False)
