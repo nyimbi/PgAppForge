@@ -92,7 +92,7 @@ class WorkflowAnalytics(AuditMixin):
     duration_seconds = Column(Float, nullable=True)
     success = Column(Boolean, default=True)
     error_message = Column(Text, nullable=True)
-    metadata = Column(JSON, default=lambda: {})
+    record_metadata = Column(JSON, default=lambda: {})
 
     # Relationships
     workflow_state = relationship("WorkflowState", backref="analytics")

@@ -79,7 +79,6 @@ class ApprovalWorkflowEngine:
         
         # Database transaction management
         self.transaction_manager = DatabaseTransactionManager()
-        )
     
     def _get_db_session(self):
         """Get database session using connection pool manager."""

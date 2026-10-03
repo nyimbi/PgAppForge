@@ -21,7 +21,8 @@ from urllib.parse import quote
 
 import requests
 from cryptography.fernet import Fernet
-from flask import current_app, current_user
+from flask import current_app
+from flask_login import current_user
 from pgappforge.models.mixins import AuditMixin
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, Integer, LargeBinary, Numeric, String, Text, event

@@ -34,7 +34,7 @@ class TestSecurityIntegration:
         """Test secret key validation in application context."""
         # Test with weak secret key
         weak_app = Flask(__name__)
-        weak_app.config['SECRET_KEY'] = 'dev'
+        weak_app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
 
         # Should log warning about weak secret key
         with patch('pgappforge.base.log') as mock_log:

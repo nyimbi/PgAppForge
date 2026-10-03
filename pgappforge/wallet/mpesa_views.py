@@ -442,4 +442,4 @@ class MPESACallbackModelView(ModelView):
         else:
             flash(gettext('No callbacks were successfully reprocessed'), 'warning')
         
-        return redirect(url_for('MPESACallbackModelView.list')
+        return redirect(url_for('MPESACallbackModelView.list'))

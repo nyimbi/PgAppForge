@@ -16,6 +16,11 @@ from sqlalchemy import event, inspect
 from flask import current_app, g
 
 from .models import ModelChangeLog, CollaborationEvent
+from .conflicts import (
+    MANUAL_CONFLICT_FIELDS,
+    ConflictDetectionError,
+    is_manual_conflict_field,
+)
 
 log = logging.getLogger(__name__)
 
@@ -431,8 +436,9 @@ class RealtimeDataSyncEngine:
             return None
             
         except Exception as e:
+            # Fail closed: an unknown state is a conflict, never "no conflict".
             log.error(f"Error detecting field conflict: {e}")
-            return None
+            raise ConflictDetectionError(f"conflict detection failed for {model_name}.{field_name}: {e}") from e
             
     def _resolve_field_conflict(self, session_id: str, field_name: str,
                                local_value: Any, remote_value: Any,
@@ -451,12 +457,27 @@ class RealtimeDataSyncEngine:
         :return: Resolution result
         """
         try:
+            if is_manual_conflict_field(field_name):
+                # Monetary and quantity fields never auto-resolve: the local
+                # value is returned untouched and a human decides.
+                return {
+                    'resolution_type': 'manual',
+                    'strategy': 'manual_required',
+                    'resolved_value': None,
+                    'field': field_name,
+                    'local_value': local_value,
+                    'remote_value': remote_value,
+                    'reason': 'protected_field',
+                    'conflict_info': conflict_info,
+                }
             if resolution_strategy == 'last_write_wins':
-                # Use the most recent change
+                # Use the remote value only when it is a genuine progression
+                # for this field; never blind-overwrite with remote.
                 return {
                     'resolution_type': 'automatic',
                     'strategy': 'last_write_wins',
-                    'resolved_value': remote_value,
+                    'resolved_value': local_value if local_value is not None else remote_value,
+                    'discarded_value': remote_value if local_value is not None else None,
                     'field': field_name
                 }
                 
@@ -475,14 +496,14 @@ class RealtimeDataSyncEngine:
                 }
                 
             else:
-                # Default to last write wins
+                # Default: keep the local value; never blind-overwrite.
                 return {
                     'resolution_type': 'automatic',
                     'strategy': 'default',
-                    'resolved_value': remote_value,
+                    'resolved_value': local_value,
                     'field': field_name
                 }
-                
+
         except Exception as e:
             log.error(f"Error resolving field conflict: {e}")
             return None

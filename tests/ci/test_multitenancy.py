@@ -13,7 +13,11 @@ Test strategy
 """
 from __future__ import annotations
 
+import concurrent.futures
+import inspect
 import os
+import threading
+import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
@@ -390,8 +394,11 @@ class TestRLSDatabase:
 		assert result == tid
 		engine.dispose()
 
-	def test_clear_tenant_context_sets_system(self):
-		from pgappforge.multitenancy.rls import set_tenant_context, clear_tenant_context
+	def test_clear_tenant_context_drops_tenant_scope(self):
+		"""Clearing the context must fail safe: zero rows, no bypass."""
+		from pgappforge.multitenancy.rls import (
+			set_tenant_context, clear_tenant_context, get_bypass_rls,
+		)
 		engine = self._make_engine()
 
 		with engine.begin() as conn:
@@ -400,8 +407,9 @@ class TestRLSDatabase:
 			result = conn.execute(
 				sa.text("SELECT current_setting('app.tenant_id', true)")
 			).scalar()
+			assert get_bypass_rls(conn) is False
 
-		assert result == "SYSTEM"
+		assert result in ("", None)
 		engine.dispose()
 
 	def test_rls_isolation(self):
@@ -446,10 +454,10 @@ class TestRLSDatabase:
 			conn.execute(sa.text(f"DROP TABLE IF EXISTS {table}"))
 		engine.dispose()
 
-	def test_system_bypass_sees_all_rows(self):
-		"""SYSTEM tenant context bypasses RLS and sees all rows."""
+	def test_bypass_rls_sees_all_rows(self):
+		"""set_bypass_rls (batch-job path) lifts RLS for the transaction."""
 		from pgappforge.multitenancy.rls import (
-			enable_rls_on_table, set_tenant_context, clear_tenant_context
+			enable_rls_on_table, init_bypass_rls, set_bypass_rls,
 		)
 		engine = self._make_engine()
 		table = f"_rls_test_{uuid.uuid4().hex[:8]}"
@@ -464,10 +472,14 @@ class TestRLSDatabase:
 					f"INSERT INTO {table} (id, tenant_id, value) VALUES (:id, :tid, :val)"
 				), {"id": str(uuid.uuid4()), "tid": tid, "val": val})
 
+		# Allow-list the role this test connects as, so the bypass is legitimate.
+		with engine.connect() as conn:
+			me = conn.execute(sa.text("SELECT current_user")).scalar()
+		init_bypass_rls(engine, system_role=me)
 		enable_rls_on_table(table, engine)
 
 		with engine.begin() as conn:
-			clear_tenant_context(conn)	# SYSTEM bypass
+			set_bypass_rls(conn, on=True)
 			rows = conn.execute(sa.text(f"SELECT value FROM {table}")).fetchall()
 
 		values = {r[0] for r in rows}
@@ -476,6 +488,23 @@ class TestRLSDatabase:
 
 		with engine.begin() as conn:
 			conn.execute(sa.text(f"DROP TABLE IF EXISTS {table}"))
+		engine.dispose()
+
+	def test_bypass_refused_for_unlisted_role(self):
+		"""A role outside app.bypass_rls_roles cannot lift RLS (42501)."""
+		from pgappforge.multitenancy.rls import init_bypass_rls, set_bypass_rls
+		engine = self._make_engine()
+		with engine.connect() as conn:
+			me = conn.execute(sa.text("SELECT current_user")).scalar()
+		init_bypass_rls(engine, system_role=me)
+
+		with engine.begin() as conn:
+			conn.execute(sa.text(
+				"SELECT set_config('app.bypass_rls_roles', :r, true)"
+			), {"r": "definitely_not_this_role"})
+			with pytest.raises(sa.exc.DBAPIError) as excinfo:
+				set_bypass_rls(conn, on=True)
+		assert "42501" in str(excinfo.value) or "not permitted" in str(excinfo.value)
 		engine.dispose()
 
 	def test_get_rls_status_returns_list(self):
@@ -533,3 +562,309 @@ class TestTenantModelDatabase:
 		# Table either exists (created by FAB) or we just skip the assertion
 		# since in test isolation the schema may be reset
 		engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# 7. Tenant context propagation — no PostgreSQL required
+# ---------------------------------------------------------------------------
+
+class _StubTenant:
+	"""Minimal stand-in for a Tenant row (id + slug are all we bind)."""
+
+	def __init__(self, tenant_id: int, slug: str = "acme") -> None:
+		self.id = tenant_id
+		self.slug = slug
+		self.is_active = True
+
+
+@pytest.fixture
+def flask_app():
+	from flask import Flask
+	app = Flask(__name__)
+	app.config["ALLOW_NO_TENANT"] = False
+	return app
+
+
+class TestTenantScopeContextVar:
+	def test_set_get_round_trip(self, flask_app):
+		from pgappforge.models.tenant_context import (
+			get_current_tenant, get_current_tenant_id, tenant_context,
+		)
+		with flask_app.app_context():
+			tenant = _StubTenant(7)
+			tenant_context.set_tenant_context(tenant)
+			assert get_current_tenant_id() == 7
+			assert get_current_tenant() is tenant
+			tenant_context.clear_tenant_context()
+			assert get_current_tenant_id() is None
+
+	def test_scope_carries_slug_and_system_flag(self, flask_app):
+		from pgappforge.models.tenant_context import get_tenant_scope, tenant_context
+		with flask_app.app_context():
+			tenant_context.set_tenant_context(_StubTenant(7, slug="acme"))
+			scope = get_tenant_scope()
+			assert scope.tenant_id == 7
+			assert scope.slug == "acme"
+			assert scope.is_system is False
+			assert scope.scope_id and scope.created_at > 0
+			tenant_context.clear_tenant_context()
+			assert get_tenant_scope() is None
+
+	def test_singleton_exists_and_construction_still_works(self):
+		from pgappforge.models.tenant_context import TenantContext, tenant_context
+		assert isinstance(tenant_context, TenantContext)
+		assert isinstance(TenantContext(), TenantContext)
+
+	def test_dev_host_override_is_gone(self):
+		"""Header/query-string tenant override must no longer exist."""
+		from pgappforge.models.tenant_context import tenant_context
+		assert not hasattr(tenant_context, "_resolve_tenant_from_dev_context")
+		assert not hasattr(tenant_context, "_is_development_host")
+
+	def test_run_with_tenant_restores_previous(self, flask_app):
+		from pgappforge.models.tenant_context import (
+			get_current_tenant_id, run_with_tenant, tenant_context,
+		)
+		with flask_app.app_context():
+			tenant_context.set_tenant_context(_StubTenant(1))
+			assert run_with_tenant(2, get_current_tenant_id) == 2
+			assert get_current_tenant_id() == 1
+			tenant_context.clear_tenant_context()
+
+	def test_run_with_tenant_restores_on_exception(self, flask_app):
+		from pgappforge.models.tenant_context import (
+			get_current_tenant_id, run_with_tenant, tenant_context,
+		)
+
+		def boom() -> None:
+			raise RuntimeError("boom")
+
+		with flask_app.app_context():
+			tenant_context.set_tenant_context(_StubTenant(1))
+			with pytest.raises(RuntimeError):
+				run_with_tenant(2, boom)
+			assert get_current_tenant_id() == 1
+			tenant_context.clear_tenant_context()
+
+	def test_run_with_tenant_none_drops_scope(self, flask_app):
+		"""None means "no scope", so reads fall back to g, then to nothing."""
+		from pgappforge.models.tenant_context import (
+			get_current_tenant_id, get_tenant_scope, run_with_tenant, tenant_context,
+		)
+		with flask_app.app_context():
+			tenant_context.set_tenant_context(_StubTenant(1))
+			assert run_with_tenant(None, lambda: get_tenant_scope()) is None
+			assert run_with_tenant(None, get_current_tenant_id) == 1	# g fallback
+			assert get_current_tenant_id() == 1
+			tenant_context.clear_tenant_context()
+
+
+class TestWorkItem:
+	def test_requires_app_outside_context(self):
+		from pgappforge.models.tenant_context import work_item
+		with pytest.raises(RuntimeError, match="requires app"):
+			work_item(1, lambda: None)
+
+	def test_carries_tenant_into_thread(self, flask_app):
+		from pgappforge.models import tenant_context as tc
+		job = tc.work_item(11, tc.get_current_tenant_id, app=flask_app)
+		results: list[int] = []
+		th = threading.Thread(target=lambda: results.append(job()))
+		th.start()
+		th.join()
+		assert results == [11]
+		assert tc.get_tenant_scope() is None	# caller's context untouched
+
+	def test_carries_tenant_into_thread_pool(self, flask_app):
+		from pgappforge.models import tenant_context as tc
+		jobs = [tc.work_item(i, tc.get_current_tenant_id, app=flask_app) for i in range(4)]
+		with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+			assert sorted(pool.map(lambda j: j(), jobs)) == [0, 1, 2, 3]
+
+	def test_pushes_flask_app_context_on_worker(self, flask_app):
+		from flask import has_app_context
+		from pgappforge.models import tenant_context as tc
+		job = tc.work_item(21, lambda: (has_app_context(), tc.get_current_tenant_id()), app=flask_app)
+		results: list = []
+		th = threading.Thread(target=lambda: results.append(job()))
+		th.start()
+		th.join()
+		assert results == [(True, 21)]
+
+	def test_uses_ambient_app_context_when_not_given(self, flask_app):
+		from pgappforge.models import tenant_context as tc
+		with flask_app.app_context():
+			job = tc.work_item(31, tc.get_current_tenant_id)
+		results: list = []
+		th = threading.Thread(target=lambda: results.append(job()))
+		th.start()
+		th.join()
+		assert results == [31]
+
+	def test_tenant_isolated_between_concurrent_items(self, flask_app):
+		from pgappforge.models import tenant_context as tc
+		jobs = [tc.work_item(i, tc.get_current_tenant_id, app=flask_app) for i in range(16)]
+		with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+			assert sorted(pool.map(lambda j: j(), jobs)) == list(range(16))
+
+
+class TestMixinTenantAgreement:
+	# The mixin transitively imports models/tenant_models.py, which currently
+	# fails SQLAlchemy's annotation check on its own (pre-existing, unrelated
+	# to tenant resolution). Skip loudly rather than assert nothing.
+	def _mixin(self):
+		try:
+			from pgappforge.mixins.multi_tenancy_mixin import MultiTenancyMixin
+		except Exception as exc:
+			pytest.skip(f"multi_tenancy_mixin unimportable: {exc}")
+		return MultiTenancyMixin
+
+	def test_mixin_reads_contextvar_and_mirrors_to_g(self, flask_app):
+		from flask import g
+		from pgappforge.models.tenant_context import tenant_context
+		mixin = self._mixin()
+		with flask_app.app_context():
+			tenant_context.set_tenant_context(_StubTenant(5))
+			assert mixin.get_current_tenant_id() == 5
+			assert g.tenant_id == 5
+			tenant_context.clear_tenant_context()
+
+	def test_mixin_still_reads_g_tenant_id(self, flask_app):
+		from flask import g
+		mixin = self._mixin()
+		with flask_app.app_context():
+			g.tenant_id = "direct-uuid"
+			assert mixin.get_current_tenant_id() == "direct-uuid"
+
+
+class TestRLSSentinelRemoved:
+	def test_system_sentinel_attribute_gone(self):
+		from pgappforge.multitenancy import rls
+		assert not hasattr(rls, "_SYSTEM_SENTINEL")
+
+	def test_module_source_never_mentions_sentinel(self):
+		from pgappforge.multitenancy import rls
+		src = inspect.getsource(rls)
+		assert "_SYSTEM_SENTINEL" not in src
+		# the only remaining mention is the changelog note in the docstring
+		assert "'SYSTEM'``" in src
+
+	def test_policy_tests_bypass_guc(self):
+		from pgappforge.multitenancy import rls
+		src = inspect.getsource(rls)
+		assert rls._BYPASS_VAR == "app.bypass_rls"
+		assert "OR current_setting('{_BYPASS_VAR}', true) = 'on'" in src
+
+	def test_bypass_helpers_exist(self):
+		from pgappforge.multitenancy import rls
+		for name in ("init_bypass_rls", "set_bypass_rls", "get_bypass_rls"):
+			assert callable(getattr(rls, name)), name
+
+	def test_bypass_function_is_security_definer_and_role_checked(self):
+		from pgappforge.multitenancy import rls
+		ddl = rls._BYPASS_FUNCTION_DDL
+		assert "SECURITY DEFINER" in ddl
+		assert "session_user" in ddl
+		assert "app.bypass_rls_roles" in ddl
+		assert "42501" in ddl
+
+	def test_invalid_role_name_rejected(self):
+		from pgappforge.multitenancy.rls import init_bypass_rls
+		with pytest.raises(ValueError):
+			init_bypass_rls(None, system_role='evil"; DROP TABLE x; --')
+
+
+class TestRLSFilterCacheTTL:
+	def test_zero_ttl_expires_immediately(self):
+		from pgappforge.mixins.rls_mixin import RLSFilterCache
+		cache = RLSFilterCache(maxsize=4, ttl=0)
+		cache.set(1, "sc_member", ["tenant_id = 1"])
+		assert cache.get(1, "sc_member") is None
+
+	def test_entry_survives_until_ttl(self):
+		from pgappforge.mixins.rls_mixin import RLSFilterCache
+		cache = RLSFilterCache(maxsize=4, ttl=30)
+		cache.set(1, "sc_member", ["tenant_id = 1"])
+		assert cache.get(1, "sc_member") == ["tenant_id = 1"]
+
+	def test_entry_expires_after_ttl(self):
+		from pgappforge.mixins.rls_mixin import RLSFilterCache
+		cache = RLSFilterCache(maxsize=4, ttl=0.05)
+		cache.set(1, "sc_member", ["tenant_id = 1"])
+		assert cache.get(1, "sc_member") is not None
+		time.sleep(0.08)
+		assert cache.get(1, "sc_member") is None
+
+	def test_fallback_cache_honours_ttl_under_fake_clock(self, monkeypatch):
+		from pgappforge.mixins.rls_mixin import _SimpleTTLCache
+		clock = [1000.0]
+		monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+		cache = _SimpleTTLCache(maxsize=4, ttl=10)
+		cache["k"] = "v"
+		assert cache.get("k") == "v"
+		clock[0] += 9
+		assert cache.get("k") == "v"
+		clock[0] += 2
+		assert cache.get("k") is None
+		assert "k" not in cache
+		with pytest.raises(KeyError):
+			cache["k"]
+
+	def test_fallback_cache_evicts_oldest_on_overflow(self):
+		from pgappforge.mixins.rls_mixin import _SimpleTTLCache
+		cache = _SimpleTTLCache(maxsize=2, ttl=60)
+		cache["a"] = 1
+		cache["b"] = 2
+		cache["c"] = 3
+		assert cache.get("a") is None
+		assert cache.get("c") == 3
+
+	def test_close_empties_cache(self):
+		from pgappforge.mixins.rls_mixin import RLSFilterCache
+		cache = RLSFilterCache(maxsize=4, ttl=30)
+		cache.set(1, "sc_member", ["x"])
+		cache.close()
+		assert cache.get(1, "sc_member") is None
+
+
+class TestPolicyContextErrors:
+	def test_has_permission_without_app_context_raises(self):
+		from pgappforge.security.policies import HasPermission, PolicyContextError
+		with pytest.raises(PolicyContextError):
+			HasPermission("sc_member_can_read").check(object())
+
+	def test_has_permission_none_user_is_false(self):
+		from pgappforge.security.policies import HasPermission
+		assert HasPermission("sc_member_can_read").check(None) is False
+
+	def test_has_permission_delegates_to_security_manager(self, flask_app):
+		from types import SimpleNamespace
+		from pgappforge.security.policies import HasPermission
+
+		class SM:
+			def has_access(self, permission, view):
+				return permission == "allowed"
+
+		flask_app.appbuilder = SimpleNamespace(sm=SM())
+		with flask_app.app_context():
+			assert HasPermission("allowed").check(object()) is True
+			assert HasPermission("denied").check(object()) is False
+
+	def test_not_implemented_has_access_raises_policy_error(self, flask_app):
+		from types import SimpleNamespace
+		from pgappforge.security.policies import HasPermission, PolicyContextError
+
+		class SM:
+			def has_access(self, permission, view):
+				raise NotImplementedError
+
+		flask_app.appbuilder = SimpleNamespace(sm=SM())
+		with flask_app.app_context():
+			with pytest.raises(PolicyContextError):
+				HasPermission("x").check(object())
+
+	def test_missing_appbuilder_raises_policy_error(self, flask_app):
+		from pgappforge.security.policies import HasPermission, PolicyContextError
+		with flask_app.app_context():
+			with pytest.raises(PolicyContextError):
+				HasPermission("x").check(object())

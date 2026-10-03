@@ -12,11 +12,18 @@ import inspect
 
 # SQLAlchemy imports
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Date, Float, Numeric
-from sqlalchemy.sql.sqltypes import (
-    ARRAY, BIGINT, BINARY, BIT, BLOB, BOOLEAN, CHAR, CLOB, DATE, DATETIME,
-    DECIMAL, FLOAT, INTEGER, INTERVAL, LARGEBINARY, NCHAR, NUMERIC, NVARCHAR, 
+from sqlalchemy.sql.sqltypes import (  # noqa: F401  # noqa: F401
+    ARRAY, BIGINT, BINARY, BLOB, BOOLEAN, CHAR, CLOB, DATE, DATETIME,
+    DECIMAL, FLOAT, INTEGER, NCHAR, NUMERIC, NVARCHAR,
     REAL, SMALLINT, TEXT, TIME, TIMESTAMP, VARBINARY, VARCHAR
 )
+try:  # SQLAlchemy 1.4 exported these; 2.x keeps only PostgreSQL BIT/VARBIT
+    from sqlalchemy.sql.sqltypes import BIT, LARGEBINARY  # noqa: F401
+except ImportError:  # pragma: no cover
+    from sqlalchemy.dialects.postgresql import BIT  # noqa: F401
+    LARGEBINARY = BINARY
+from sqlalchemy import VARBINARY  # noqa: F401
+from sqlalchemy.dialects.postgresql import INTERVAL  # noqa: F401  (2.x removed it from sqlalchemy.sql.sqltypes)
 from sqlalchemy.types import TypeEngine, UserDefinedType
 from sqlalchemy.orm import RelationshipProperty
 from sqlalchemy.ext.hybrid import hybrid_property

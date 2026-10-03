@@ -95,7 +95,7 @@ class WorkflowStateSnapshot(AuditMixin):
     step_id = Column(String(100), nullable=True)
     form_data = Column(JSON, default=lambda: {})
     state_data = Column(LargeBinary, nullable=True)  # Compressed serialized state
-    metadata = Column(JSON, default=lambda: {})
+    record_metadata = Column(JSON, default=lambda: {})
     checksum = Column(String(64), nullable=False)
     user_id = Column(Integer, nullable=True)
     is_recoverable = Column(Boolean, default=True)

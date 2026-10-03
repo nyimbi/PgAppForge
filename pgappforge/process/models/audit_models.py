@@ -284,7 +284,7 @@ class ProcessComplianceLog(Base, Model):
     data_categories = Column(String(200), nullable=True)  # PII, PHI, financial, etc.
     
     # Additional metadata
-    metadata = Column(Text, nullable=True)  # JSON string with additional metadata
+    record_metadata = Column(Text, nullable=True)  # JSON string with additional metadata
     
     # Retention and archival
     retention_period = Column(Integer, nullable=True)  # Days to retain
@@ -308,9 +308,9 @@ class ProcessComplianceLog(Base, Model):
     @property
     def metadata_dict(self) -> Dict[str, Any]:
         """Get metadata as dictionary."""
-        if self.metadata:
+        if self.record_metadata:
             try:
-                return json.loads(self.metadata)
+                return json.loads(self.record_metadata)
             except (json.JSONDecodeError, TypeError):
                 return {}
         return {}
@@ -319,9 +319,9 @@ class ProcessComplianceLog(Base, Model):
     def metadata_dict(self, value: Dict[str, Any]):
         """Set metadata from dictionary."""
         if value:
-            self.metadata = json.dumps(value, default=str)
+            self.record_metadata = json.dumps(value, default=str)
         else:
-            self.metadata = None
+            self.record_metadata = None
     
     def archive(self):
         """Mark compliance log as archived."""

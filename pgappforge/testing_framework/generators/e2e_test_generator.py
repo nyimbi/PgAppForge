@@ -992,7 +992,7 @@ class Test{model_name}Accessibility:
 
         for element in text_elements[:10]:  # Test first 10 elements
             # Get computed styles
-            styles = await element.evaluate('''
+            styles = await element.evaluate("""
                 el => {{
                     const computed = getComputedStyle(el);
                     return {{
@@ -1001,7 +1001,7 @@ class Test{model_name}Accessibility:
                         fontSize: computed.fontSize
                     }};
                 }}
-            ''')
+            """)
 
             # Basic check that text isn't same color as background
             assert styles['color'] != styles['backgroundColor'], "Text color same as background"
@@ -1019,7 +1019,7 @@ class Test{model_name}Accessibility:
             await element.focus()
 
             # Check if focus is visible
-            has_focus_style = await element.evaluate('''
+            has_focus_style = await element.evaluate("""
                 el => {{
                     const computed = getComputedStyle(el);
                     // Check for common focus indicators
@@ -1027,7 +1027,7 @@ class Test{model_name}Accessibility:
                            computed.boxShadow !== 'none' ||
                            computed.border !== computed.getPropertyValue('--original-border');
                 }}
-            ''')
+            """)
 
             # Focus should be clearly visible
             # Note: This is a simplified check - real focus testing is more complex

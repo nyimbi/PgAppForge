@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -94,29 +95,63 @@ Index("ix_rls_audit_org_model", rls_audit_log.c.organisation_id, rls_audit_log.c
 # Minimal TTL cache fallback when cachetools is absent
 # ---------------------------------------------------------------------------
 class _SimpleTTLCache:
-	"""FIFO-eviction dict used when cachetools is not installed."""
+	"""FIFO-eviction TTL dict used when cachetools is not installed.
 
-	def __init__(self, maxsize: int = 1000, ttl: int = 300) -> None:
-		self._store: dict[str, Any] = {}
+	Honours *ttl*: entries carry a monotonic deadline and are treated as
+	missing once passed.  Eviction is insertion-ordered on size, not on
+	expiry, so a long-lived entry can still be pushed out by new writes.
+	"""
+
+	def __init__(self, maxsize: int = 1000, ttl: float = 300) -> None:
+		self._store: dict[str, tuple[float, Any]] = {}
 		self._maxsize = maxsize
-		# ttl ignored in fallback — document this limitation clearly
+		self._ttl = float(ttl)
+
+	def _now(self) -> float:
+		return time.monotonic()
 
 	def get(self, key: str) -> Any | None:
-		return self._store.get(key)
+		entry = self._store.get(key)
+		if entry is None:
+			return None
+		expires_at, value = entry
+		if expires_at <= self._now():
+			self._store.pop(key, None)
+			return None
+		return value
 
 	def __setitem__(self, key: str, value: Any) -> None:
-		if len(self._store) >= self._maxsize:
-			oldest = next(iter(self._store))
-			del self._store[oldest]
-		self._store[key] = value
+		if key not in self._store and len(self._store) >= self._maxsize:
+			del self._store[next(iter(self._store))]
+		self._store[key] = (self._now() + self._ttl, value)
 
 	def __getitem__(self, key: str) -> Any:
-		return self._store[key]
+		entry = self._store.get(key)
+		if entry is None:
+			raise KeyError(key)
+		expires_at, value = entry
+		if expires_at <= self._now():
+			del self._store[key]
+			raise KeyError(key)
+		return value
+
+	def __contains__(self, key: str) -> bool:
+		return self.get(key) is not None
+
+	def __len__(self) -> int:
+		return len(self._store)
 
 	def pop(self, key: str, default: Any = None) -> Any:
-		return self._store.pop(key, default)
+		entry = self._store.pop(key, None)
+		if entry is None or entry[0] <= self._now():
+			return default
+		return entry[1]
 
 	def clear(self) -> None:
+		self._store.clear()
+
+	def close(self) -> None:
+		"""Drop every entry (cachetools parity)."""
 		self._store.clear()
 
 
@@ -153,6 +188,14 @@ class RLSFilterCache:
 	def invalidate(self, user_id: int | None = None, model: str | None = None) -> None:
 		if user_id and model:
 			self._cache.pop(self._key(user_id, model), None)
+		else:
+			self._cache.clear()
+
+	def close(self) -> None:
+		"""Release every cached filter list (call on shutdown)."""
+		close = getattr(self._cache, "close", None)
+		if callable(close):
+			close()
 		else:
 			self._cache.clear()
 

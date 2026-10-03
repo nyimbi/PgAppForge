@@ -43,6 +43,12 @@ class MPESATransactionStatus(Enum):
     TIMEOUT = "timeout"
 
 
+#: States from which no further transition is possible. A callback that tries
+#: to move a transaction out of one of these is ignored, which is what makes
+#: ``process_stk_callback`` safe to replay.
+_TERMINAL_STATUSES = frozenset(s.value for s in MPESATransactionStatus if s is not MPESATransactionStatus.PENDING)
+
+
 class MPESAAccount(AuditMixin, Model):
     """
     MPESA account linking for users.
@@ -80,10 +86,12 @@ class MPESAAccount(AuditMixin, Model):
     shortcode = Column(String(10), nullable=True)  # Business shortcode
     
     # Metadata
-    metadata = Column(Text, nullable=True)  # JSON metadata
+    account_metadata = Column(Text, nullable=True)  # JSON metadata (renamed from `metadata`: reserved by the Declarative API)
     
     # Relationships
-    user = relationship("User", back_populates="mpesa_accounts", foreign_keys=[user_id])
+    # No back_populates: `mpesa_accounts` is declared on UserWallet, not on
+    # User, and is paired by the `wallet` relationship below.
+    user = relationship("User", foreign_keys=[user_id])
     wallet = relationship("UserWallet", back_populates="mpesa_accounts")
     transactions = relationship("MPESATransaction", back_populates="mpesa_account")
     
@@ -111,13 +119,13 @@ class MPESAAccount(AuditMixin, Model):
     def get_metadata_dict(self) -> Dict[str, Any]:
         """Get metadata as dictionary."""
         try:
-            return json.loads(self.metadata) if self.metadata else {}
+            return json.loads(self.account_metadata) if self.account_metadata else {}
         except json.JSONDecodeError:
             return {}
     
     def set_metadata(self, metadata_dict: Dict[str, Any]):
         """Set metadata from dictionary."""
-        self.metadata = json.dumps(metadata_dict)
+        self.account_metadata = json.dumps(metadata_dict)
     
     def verify_account(self, verification_code: str = None) -> bool:
         """Mark account as verified."""
@@ -175,7 +183,8 @@ class MPESATransaction(AuditMixin, Model):
     transaction_date = Column(DateTime, nullable=True)  # MPESA transaction time
     response_code = Column(String(10), nullable=True)  # MPESA response code
     response_description = Column(Text, nullable=True)  # MPESA response message
-    
+    idempotency_key = Column(String(64), nullable=True, unique=True)  # gateway dedup key
+
     # Callback data
     callback_received = Column(Boolean, default=False, nullable=False)
     callback_data = Column(Text, nullable=True)  # Full callback JSON
@@ -225,8 +234,20 @@ class MPESATransaction(AuditMixin, Model):
         self.callback_data = json.dumps(callback_dict)
         self.callback_received = True
     
-    def mark_completed(self, mpesa_receipt: str, response_data: Dict[str, Any] = None):
-        """Mark transaction as completed with MPESA receipt."""
+    def mark_completed(self, mpesa_receipt: str, response_data: Dict[str, Any] = None) -> bool:
+        """Mark transaction as completed with MPESA receipt.
+
+        Idempotent: a transaction that already reached a terminal state is
+        never advanced again, so a replayed callback cannot move it to
+        COMPLETED or re-credit the linked wallet. Returns True only when this
+        call performed the transition.
+        """
+        if self.status in _TERMINAL_STATUSES:
+            log.warning(
+                "Ignoring completion of MPESA transaction %s already in terminal state %s",
+                self.checkout_request_id, self.status,
+            )
+            return False
         self.status = MPESATransactionStatus.COMPLETED.value
         self.mpesa_receipt_number = mpesa_receipt
         self.transaction_date = datetime.now(tz=timezone.utc)
@@ -242,12 +263,16 @@ class MPESATransaction(AuditMixin, Model):
                         self.transaction_date = datetime.strptime(date_str, '%Y%m%d%H%M%S')
                 except (ValueError, TypeError):
                     pass
+        return True
     
-    def mark_failed(self, error_message: str, error_code: str = None):
-        """Mark transaction as failed with error details."""
+    def mark_failed(self, error_message: str, error_code: str = None) -> bool:
+        """Mark transaction as failed with error details. Idempotent."""
+        if self.status in _TERMINAL_STATUSES:
+            return False
         self.status = MPESATransactionStatus.FAILED.value
         self.response_description = error_message
         self.response_code = error_code or "FAILED"
+        return True
     
     def is_completed(self) -> bool:
         """Check if transaction is completed."""

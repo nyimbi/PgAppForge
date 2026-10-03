@@ -75,7 +75,7 @@ class TestBasePlugin:
     def setup_method(self):
         """Set up test environment."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test_secret_key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.appbuilder = Mock()
 
     def test_concrete_plugin_implementation(self):
@@ -301,7 +301,7 @@ class TestPluginManager:
     def setup_method(self):
         """Set up test environment."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test_secret'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.appbuilder = Mock()
         self.manager = PluginManager(self.appbuilder)
 
@@ -705,7 +705,7 @@ class TestPluginIntegration:
     def setup_method(self):
         """Set up test environment."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test_secret_key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 
     def test_plugin_system_initialization(self):

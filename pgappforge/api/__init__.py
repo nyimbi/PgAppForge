@@ -112,11 +112,59 @@ QueryRelatedFieldsFilters = Dict[str, List[List[Any]]]
 def get_error_msg() -> str:
     """
     (inspired on Superset code)
+
+    A stack trace carries file paths, schema and query fragments, so it is
+    gated on two conditions rather than one: the app must be in debug AND
+    PGAF_API_SHOW_STACKTRACE must be explicitly set. Either alone is
+    insufficient -- debug is frequently left on in staging, and the env flag
+    is frequently left set in a deployed config.
+
     :return: (str)
     """
-    if current_app.config.get("PGAF_API_SHOW_STACKTRACE"):
+    if current_app.debug and current_app.config.get("PGAF_API_SHOW_STACKTRACE"):
         return traceback.format_exc()
     return "Fatal error"
+
+
+# Stable client-facing codes for PostgreSQL integrity violations. The driver
+# detail (table, column, constraint name, offending value) is logged at ERROR
+# but never returned -- it hands an attacker the schema.
+_INTEGRITY_ERROR_CODES = {
+    "23505": "DUPLICATE_KEY",
+    "23503": "FOREIGN_KEY_VIOLATION",
+    "23502": "NOT_NULL_VIOLATION",
+    "23514": "CHECK_VIOLATION",
+    "23000": "INTEGRITY_CONSTRAINT_VIOLATION",
+    "23001": "RESTRICT_VIOLATION",
+    "23512": "NOT_NULL_VIOLATION",
+    "23513": "NOT_NULL_VIOLATION",
+    "23514 ": "CHECK_VIOLATION",
+}
+_INTEGRITY_ERROR_DEFAULT = "INTEGRITY_CONSTRAINT_VIOLATION"
+
+
+def _integrity_error_response(self, e: IntegrityError) -> Response:
+    """Map an IntegrityError to a stable 422 code without leaking DB detail.
+
+    ``e.orig`` is the driver exception. psycopg2 exposes ``pgcode``;
+    asyncpg surfaces ``sqlstate``; some drivers carry the state only on the
+    message text. All three are probed, and the raw detail is logged, never
+    returned.
+    """
+    orig = getattr(e, "orig", None)
+    sqlstate = getattr(orig, "pgcode", None) or getattr(orig, "sqlstate", None)
+    if not sqlstate:
+        match = re.search(r"\b([0-9A-Z]{5})\b", str(orig or ""))
+        sqlstate = match.group(1) if match else None
+    code = _INTEGRITY_ERROR_CODES.get(str(sqlstate), _INTEGRITY_ERROR_DEFAULT)
+    log.error(
+        "Integrity error (%s) sqlstate=%s: %s",
+        code,
+        sqlstate,
+        orig,
+        exc_info=True,
+    )
+    return self.response_422(message=code)
 
 
 def safe(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -264,6 +312,8 @@ class BaseApi(AbstractViewApi):
     """
 
     endpoint: Optional[str] = None
+
+    _integrity_error_response = staticmethod(_integrity_error_response)
 
     version: Optional[str] = "v1"
     route_base: Optional[str] = None
@@ -1596,7 +1646,7 @@ class ModelRestApi(BaseModelApi):
                 },
             )
         except IntegrityError as e:
-            return self.response_422(message=str(e.orig))
+            return self._integrity_error_response(e)
 
     @expose("/", methods=["POST"])
     @protect()
@@ -1659,7 +1709,7 @@ class ModelRestApi(BaseModelApi):
                 **{API_RESULT_RES_KEY: self.edit_model_schema.dump(item, many=False)},
             )
         except IntegrityError as e:
-            return self.response_422(message=str(e.orig))
+            return self._integrity_error_response(e)
 
     @expose("/<pk>", methods=["PUT"])
     @protect()
@@ -1717,7 +1767,7 @@ class ModelRestApi(BaseModelApi):
             self.post_delete(item)
             return self.response(200, message="OK")
         except IntegrityError as e:
-            return self.response_422(message=str(e.orig))
+            return self._integrity_error_response(e)
 
     @expose("/<pk>", methods=["DELETE"])
     @protect()

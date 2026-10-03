@@ -1,6 +1,6 @@
 # Flask-AppBuilder Quality Gates Makefile
 
-.PHONY: help quality-check quality-strict syntax tests docs security pipeline clean install-dev
+.PHONY: help quality-check quality-strict syntax lint tests docs security pipeline quick fix clean install-dev ci-simulation pre-commit-install production-check
 
 # Default target
 help:
@@ -11,6 +11,9 @@ help:
 	@echo "  quality-check   Run all quality gates (permissive mode)"
 	@echo "  quality-strict  Run all quality gates (strict mode)"
 	@echo "  syntax          Check syntax errors only"
+	@echo "  lint            compileall + flake8 (same as CI)"
+	@echo ""
+	@echo "  tests needs PostgreSQL; override the target with PGAF_TEST_DATABASE_URI"
 	@echo "  tests          Run test suite only"
 	@echo "  docs           Check documentation coverage"
 	@echo "  security       Run security scans"
@@ -44,13 +47,20 @@ quality-strict:
 # Syntax validation only
 syntax:
 	@echo "🔍 Checking syntax errors..."
-	@python tests/validation/fix_syntax_errors.py flask_appbuilder --analyze-only
+	@python -m compileall -q pgappforge
 	@echo "✅ Syntax validation complete"
 
-# Run test suite only
+# Lint gate — mirrors .github/workflows/ci.yml lint job
+lint:
+	@echo "🔍 Running lint..."
+	@python -m compileall -q pgappforge
+	@python -m flake8 pgappforge tests
+	@echo "✅ Lint complete"
+
+# Run test suite only. Needs a reachable PostgreSQL; set PGAF_TEST_DATABASE_URI.
 tests:
 	@echo "🧪 Running test suite..."
-	@python -m pytest tests/ci/test_integration_workflows.py tests/ci/test_documentation_validation.py -v
+	@python -m pytest tests/ci -q
 
 # Check documentation coverage
 docs:
@@ -59,7 +69,7 @@ docs:
 	import sys; \
 	sys.path.append('tests/ci'); \
 	from test_documentation_validation import DocumentationValidator; \
-	v = DocumentationValidator('flask_appbuilder'); \
+	v = DocumentationValidator('pgappforge'); \
 	r = v.analyze_directory(['__pycache__', '.git', 'tests', 'examples']); \
 	c = r['summary']['documentation_coverage_percentage']; \
 	print(f'📊 Documentation Coverage: {c:.1f}%'); \
@@ -72,7 +82,7 @@ security:
 	@echo "🔒 Running security scans..."
 	@if command -v bandit >/dev/null 2>&1; then \
 		echo "🔍 Running Bandit security scan..."; \
-		bandit -r flask_appbuilder -f txt || echo "⚠️ Security issues found"; \
+		bandit -r pgappforge -f txt || echo "⚠️ Security issues found"; \
 	else \
 		echo "⚠️ Bandit not installed - run 'pip install bandit'"; \
 	fi
@@ -86,12 +96,12 @@ security:
 # Run comprehensive quality pipeline
 pipeline:
 	@echo "🔧 Running comprehensive quality pipeline..."
-	@python tests/validation/quality_validation_pipeline.py flask_appbuilder
+	@python tests/validation/quality_validation_pipeline.py pgappforge
 
 # Run quick validation (essential checks only)
 quick:
 	@echo "⚡ Running quick validation..."
-	@python tests/validation/fix_syntax_errors.py flask_appbuilder --analyze-only
+	@python tests/validation/fix_syntax_errors.py pgappforge --analyze-only
 	@python -m pytest tests/ci/test_integration_workflows.py::TestUserRegistrationWorkflow::test_user_creation_workflow -v --tb=short
 
 # Fix common issues automatically
@@ -99,11 +109,11 @@ fix:
 	@echo "🔧 Fixing common issues..."
 	@if command -v black >/dev/null 2>&1; then \
 		echo "🎨 Formatting code with Black..."; \
-		black flask_appbuilder --line-length=100; \
+		black pgappforge --line-length=100; \
 	fi
 	@if command -v isort >/dev/null 2>&1; then \
 		echo "📦 Organizing imports with isort..."; \
-		isort flask_appbuilder --profile=black; \
+		isort pgappforge --profile=black; \
 	fi
 	@echo "✅ Automated fixes complete"
 

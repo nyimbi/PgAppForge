@@ -51,7 +51,7 @@ class TestTOTPService:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.app.config['MFA_TOTP_ISSUER'] = 'Test App'
         
         with self.app.app_context():
@@ -144,7 +144,7 @@ class TestWebAuthnService:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.app.config['WEBAUTHN_RP_ID'] = 'localhost'
         self.app.config['WEBAUTHN_RP_NAME'] = 'Test App'
         self.app.config['WEBAUTHN_ORIGIN'] = 'https://localhost'
@@ -221,7 +221,7 @@ class TestTokenGenerationService:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.app.config['MFA_TOKEN_LENGTH'] = 6
         
         with self.app.app_context():
@@ -275,7 +275,7 @@ class TestMFAOrchestrationService:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         # Mock user object
         self.mock_user = Mock()
@@ -313,7 +313,7 @@ class TestApprovalSecurityIntegration:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         self.app.config['MFA_ENABLED'] = True
         self.app.config['MFA_TOTP_ENABLED'] = True
         
@@ -383,7 +383,7 @@ class TestSecurityValidation:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
     
     def test_rate_limiting_with_burst_protection(self):
         """Test rate limiting with burst protection."""
@@ -412,7 +412,7 @@ class TestErrorHandling:
     def setup_method(self):
         """Set up test fixtures."""
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
     
     def test_sms_service_without_providers(self):
         """Test SMS service behavior when no providers are configured."""
@@ -456,7 +456,7 @@ class TestPerformanceAndScalability:
     def test_token_generation_performance(self):
         """Test token generation performance."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test-secret-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         with app.app_context():
             token_service = TokenGenerationService()
@@ -473,7 +473,7 @@ class TestPerformanceAndScalability:
     def test_backup_code_generation_performance(self):
         """Test backup code generation performance."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test-secret-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         with app.app_context():
             with patch('pgappforge.db.session') as mock_db:

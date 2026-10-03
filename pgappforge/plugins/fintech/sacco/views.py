@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 from flask import flash, redirect, request, url_for
-from flask_appbuilder import BaseView, ModelView, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
+from pgappforge import BaseView, ModelView, expose
+from pgappforge.models.sqla.interface import SQLAInterface
 
 from pgappforge.plugins.erp.foundation.view_helpers import (
 	currency_widget,

@@ -15,9 +15,9 @@ import logging
 from typing import Any
 
 from flask import current_app
-from flask_appbuilder import expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import has_access
+from pgappforge import expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.erp.base_view import BaseERPModelView, BaseERPView
 from pgappforge.plugins.fintech.card_issuing.models import (

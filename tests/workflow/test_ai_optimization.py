@@ -68,7 +68,7 @@ class TestAIWorkflowOptimizer(unittest.TestCase):
         self.app = Flask(__name__)
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.config['SECRET_KEY'] = 'test_secret_key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         # Mock Ollama configuration
         self.app.config['OLLAMA_HOST'] = 'http://localhost:11434'
@@ -412,7 +412,7 @@ class TestIntegration(unittest.TestCase):
         self.app = Flask(__name__)
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.config['SECRET_KEY'] = 'test_secret_key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         with self.app.app_context():
             self.db = SQLAlchemy(self.app)

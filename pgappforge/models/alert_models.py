@@ -289,7 +289,7 @@ class MetricSnapshot(Model):
     tags = Column(JSON, default=dict)
     
     # Additional metadata
-    metadata = Column(JSON, default=dict)
+    record_metadata = Column(JSON, default=dict)
     
     def __repr__(self):
         return f"<MetricSnapshot {self.metric_name}={self.value} @ {self.timestamp}>"
@@ -303,7 +303,7 @@ class MetricSnapshot(Model):
             'timestamp': self.timestamp.isoformat(),
             'source': self.source,
             'tags': self.tags or {},
-            'metadata': self.metadata or {}
+            'metadata': self.record_metadata or {}
         }
 
     @classmethod

@@ -18,7 +18,11 @@ from datetime import datetime
 from pathlib import Path
 
 from wtforms import Field, ValidationError, StringField
-from wtforms.widgets import HTMLString, html_params
+try:
+    from markupsafe import Markup as HTMLString
+except ImportError:  # pragma: no cover
+    from wtforms.widgets import HTMLString
+from wtforms.widgets import html_params
 from markupsafe import Markup
 from sqlalchemy import TypeDecorator, Text, JSON
 from sqlalchemy.ext.mutable import MutableDict

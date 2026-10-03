@@ -45,6 +45,7 @@ from functools import wraps
 from typing import Any, Callable
 
 import sqlalchemy as sa
+from flask import abort, current_app
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +91,6 @@ def log_ai_action(
 	"""
 	try:
 		if session is None:
-			from flask import current_app  # type: ignore[import-untyped]
 			session = current_app.appbuilder.get_session()
 
 		user_id, user_email = _get_current_user()
@@ -164,17 +164,15 @@ def require_ai_permission(permission_name: str) -> Callable:
 	def decorator(fn: Callable) -> Callable:
 		@wraps(fn)
 		def wrapper(*args: Any, **kwargs: Any) -> Any:
-			try:
-				from flask import abort, current_app  # type: ignore[import-untyped]
-				if not current_app.appbuilder.sm.has_access(permission_name, "AI"):
-					log.warning(
-						"AI permission denied: %s for user %s",
-						permission_name,
-						_get_current_user()[1],
-					)
-					abort(403)
-			except Exception as exc:
-				log.debug("AI permission check skipped: %s", exc)
+			# No blanket try/except here: abort(403) raises werkzeug's
+			# Forbidden, and swallowing it would run the AI action anyway.
+			if not current_app.appbuilder.sm.has_access(permission_name, "AI"):
+				log.warning(
+					"AI permission denied: %s for user %s",
+					permission_name,
+					_get_current_user()[1],
+				)
+				abort(403)
 			return fn(*args, **kwargs)
 
 		return wrapper

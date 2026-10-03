@@ -18,10 +18,25 @@ from enum import Enum
 from flask import current_app
 from pgappforge import Model
 from pgappforge.models.mixins import AuditMixin
+# Registers the `User` and `UserProfile` mappers with SQLAlchemy's registry.
+# `relationship("User", ...)` below resolves by class name at mapper
+# configuration time, so a standalone `import pgappforge.wallet.models` fails
+# with "expression 'User' failed to locate a name" unless this module has
+# already been imported.
+import pgappforge.security.sqla.models  # noqa: F401
+
+# Registers the `MPESAAccount` mapper. `UserWallet.mpesa_accounts` resolves by
+# class name, and pgappforge/wallet/__init__.py imports .views immediately after
+# this module -- views.py builds SQLAInterface(UserWallet) at import time, which
+# configures every mapper before mpesa_models would otherwise be reached.
+# mpesa_models does not import this module, so pulling it in here is not a cycle.
+from . import mpesa_models  # noqa: F401
+
 from flask_login import current_user
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Boolean, Numeric, 
-    ForeignKey, Index, CheckConstraint, UniqueConstraint, event
+    Column, Integer, String, Text, DateTime, Boolean, Numeric,
+    ForeignKey, Index, CheckConstraint, UniqueConstraint, event,
+    update, select
 )
 from sqlalchemy.orm import relationship, validates
 from contextlib import contextmanager
@@ -50,6 +65,33 @@ class TransactionStatus(Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     PROCESSING = "processing"
+
+
+def _signing_secret() -> str:
+    """Return SECRET_KEY, raising if it is absent.
+
+    Centralised so signing and verification agree on the key, and so a missing
+    key is one explicit failure rather than an empty-string HMAC that anyone
+    could reproduce.
+    """
+    secret = current_app.config.get('SECRET_KEY')
+    if not secret:
+        raise RuntimeError("SECRET_KEY is not configured; cannot sign transaction")
+    return secret
+
+
+def _as_transaction_type(value) -> TransactionType:
+    """Coerce a stored type string (or enum member) to a TransactionType."""
+    if isinstance(value, TransactionType):
+        return value
+    return TransactionType(value)
+
+
+class InsufficientFundsError(ValueError):
+    """Raised when a debit would drive a wallet's available balance below zero.
+
+    Subclasses ValueError so existing `except ValueError` callers keep working.
+    """
 
 
 class BudgetPeriod(Enum):
@@ -87,8 +129,10 @@ class UserWallet(AuditMixin, Model):
                         name='uq_user_wallet_currency_name'),
         Index('ix_user_wallets_user_currency', 'user_id', 'currency_code'),
         Index('ix_user_wallets_active', 'is_active'),
-        CheckConstraint('balance >= 0 OR allow_negative_balance = true', 
-                       name='ck_wallet_balance_non_negative')
+        CheckConstraint('balance >= 0 OR allow_negative_balance = true',
+                       name='ck_wallet_balance_non_negative'),
+        CheckConstraint('available_balance >= 0 OR allow_negative_balance = true',
+                       name='ck_wallet_available_balance_non_negative')
     )
     
     # Core wallet fields
@@ -124,7 +168,6 @@ class UserWallet(AuditMixin, Model):
     
     # Relationships
     user = relationship("User", backref="wallets", foreign_keys=[user_id])
-    user_profile = relationship("UserProfile", back_populates="wallets")
     transactions = relationship("WalletTransaction", back_populates="wallet", 
                               cascade="all, delete-orphan")
     budgets = relationship("WalletBudget", back_populates="wallet",
@@ -166,27 +209,51 @@ class UserWallet(AuditMixin, Model):
         result = query.scalar()
         return result or Decimal('0.00')
     
-    def can_transact(self, amount: Decimal, transaction_type: TransactionType) -> tuple[bool, str]:
-        """Check if a transaction is allowed."""
+    def can_transact(self, amount: Decimal, transaction_type: TransactionType,
+                     target_wallet: 'UserWallet' = None) -> tuple[bool, str]:
+        """Check if a transaction is allowed.
+
+        `target_wallet` is only used by TRANSFER to reject cross-currency
+        movements; the currency check needs the counterparty.
+        """
         amount = Decimal(str(amount))
-        
+
+        # Amount sign: only an adjustment may move money backwards.
+        if transaction_type == TransactionType.ADJUSTMENT:
+            if amount == 0:
+                return False, "Adjustment amount cannot be zero"
+        elif amount <= 0:
+            return False, "Amount must be greater than zero"
+
         # Check if wallet is active
         if not self.is_active:
             return False, "Wallet is inactive"
-        
+
         # Check if wallet is locked
         if self.is_locked:
             if self.locked_until and self.locked_until > datetime.now(tz=timezone.utc):
                 return False, f"Wallet is locked until {self.locked_until}"
             elif self.locked_until is None:
                 return False, "Wallet is permanently locked"
-        
-        # Check for expenses
-        if transaction_type == TransactionType.EXPENSE:
-            # Check negative balance allowance
-            if not self.allow_negative_balance and (self.available_balance - amount) < 0:
+
+        # Check for cross-currency transfers
+        if transaction_type == TransactionType.TRANSFER and target_wallet is not None:
+            if self.currency_code != target_wallet.currency_code:
+                return False, "cross-currency transfer requires the FX service"
+
+        # Every value-decreasing movement validates the funds, not just expenses:
+        # a transfer debits this wallet exactly like an expense does.
+        debits_wallet = (
+            transaction_type in (TransactionType.EXPENSE, TransactionType.TRANSFER)
+            or (transaction_type == TransactionType.ADJUSTMENT and amount < 0)
+        )
+        if debits_wallet and not self.allow_negative_balance:
+            available = Decimal(str(self.available_balance or 0))
+            if (available - abs(amount)) < 0:
                 return False, "Insufficient funds"
-            
+
+        # Spending limits apply to every value-decreasing movement
+        if debits_wallet:
             # Check daily limit
             if self.daily_limit:
                 today_start = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -195,7 +262,7 @@ class UserWallet(AuditMixin, Model):
                 )
                 if (today_expenses + amount) > self.daily_limit:
                     return False, f"Daily limit of {self.currency_code} {self.daily_limit} exceeded"
-            
+
             # Check monthly limit
             if self.monthly_limit:
                 month_start = datetime.now(tz=timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -204,72 +271,117 @@ class UserWallet(AuditMixin, Model):
                 )
                 if (month_expenses + amount) > self.monthly_limit:
                     return False, f"Monthly limit of {self.currency_code} {self.monthly_limit} exceeded"
-            
+
             # Check approval requirement
             if self.require_approval and self.approval_limit and amount > self.approval_limit:
                 return False, f"Transactions over {self.currency_code} {self.approval_limit} require approval"
-        
+
         return True, "Transaction allowed"
     
     def add_transaction(self, amount: Decimal, transaction_type: TransactionType,
                        description: str = None, category_id: int = None,
                        payment_method_id: int = None, metadata: dict = None,
-                       auto_commit: bool = True, bypass_approval: bool = False) -> 'WalletTransaction':
-        """Add a new transaction to the wallet with security validation."""
-        from sqlalchemy.orm import sessionmaker
-        
+                       auto_commit: bool = True, bypass_approval: bool = False,
+                       external_id: str = None) -> 'WalletTransaction':
+        """Add a new transaction to the wallet with security validation.
+
+        The balance change is issued as a single conditional UPDATE inside a
+        row lock, so concurrent debits serialise instead of overwriting each
+        other with an absolute value computed from a stale attribute.
+
+        `external_id` doubles as the idempotency key: when a transaction with
+        the same (user_id, external_id) already exists it is returned as-is
+        instead of creating a second one.
+        """
+        from pgappforge import db
+
         amount = Decimal(str(amount))
-        
+        if not amount.is_finite():
+            raise ValueError("Amount must be a finite number")
+
         # Validate transaction
         can_transact, message = self.can_transact(amount, transaction_type)
         if not can_transact:
             raise ValueError(f"Transaction not allowed: {message}")
-        
+
+        user_id = self.user_id if self.user_id else (current_user.id if current_user else None)
+
+        # Idempotency: replay the original transaction instead of double-spending
+        if external_id:
+            existing = db.session.query(WalletTransaction).filter_by(
+                user_id=user_id, external_id=external_id
+            ).first()
+            if existing:
+                log.info(f"Idempotent replay of transaction {existing.id} for key {external_id}")
+                return existing
+
         # Check if approval is required and not bypassed
         requires_approval = (
-            self.require_approval and 
-            self.approval_limit and 
-            amount > self.approval_limit and 
+            self.require_approval and
+            self.approval_limit and
+            amount > self.approval_limit and
             not bypass_approval
         )
-        
+
         # Create secure transaction
         transaction = SecureWalletTransaction.create_secure_transaction(
             wallet_id=self.id,
-            user_id=self.user.id if hasattr(self, 'user') and self.user else current_user.id,
+            user_id=user_id,
             amount=amount,
             transaction_type=transaction_type,
             description=description,
             category_id=category_id,
             payment_method_id=payment_method_id,
             metadata=metadata,
-            requires_approval=requires_approval
+            requires_approval=requires_approval,
+            external_id=external_id
         )
-        
+
         # If approval required, set status to pending
         if requires_approval:
             transaction.status = TransactionStatus.PENDING.value
             transaction.requires_approval = True
         else:
             transaction.status = TransactionStatus.COMPLETED.value
-            # Update wallet balance immediately for non-approval transactions
-            self._apply_transaction_to_balance(transaction, transaction_type, amount)
-        
-        # Update last transaction date
-        self.last_transaction_date = datetime.now(tz=timezone.utc)
-        
-        # Add to session
-        from pgappforge import db
+
+        # Add to session and flush so the row exists before the balance UPDATE
         db.session.add(transaction)
-        
+        db.session.flush()
+
+        if not requires_approval:
+            with self._lock_wallet_for_transaction() as locked_wallet:
+                locked_wallet._apply_transaction_to_balance(transaction, transaction_type, amount)
+
         # Create approval workflow if required
         if requires_approval:
             self._create_transaction_approval_workflow(transaction)
-        
+
+        # Stored budget totals are kept in step with the money path so the
+        # progress bars and get_budget_analytics stay truthful.
+        self.refresh_budget_spend()
+
         if auto_commit:
             db.session.commit()
-        
+
         return transaction
+
+    def refresh_budget_spend(self):
+        """Recompute spent_amount for every budget whose period covers this wallet now.
+
+        Deliberately one query per covering budget: budgets are per-wallet and
+        few, and recomputing only at read time would leave the stored columns
+        permanently stale between refreshes.
+        """
+        from pgappforge import db
+        now = datetime.now(tz=timezone.utc)
+        budgets = db.session.query(WalletBudget).filter(
+            WalletBudget.wallet_id == self.id,
+            WalletBudget.is_active.is_(True),
+            WalletBudget.period_start <= now,
+            WalletBudget.period_end >= now,
+        ).all()
+        for budget in budgets:
+            budget.update_spent_amount(auto_commit=False)
     
     @contextmanager
     def _lock_wallet_for_transaction(self):
@@ -278,57 +390,115 @@ class UserWallet(AuditMixin, Model):
         CRITICAL SECURITY FIX: Prevents race conditions in concurrent transactions
         by using SELECT FOR UPDATE to lock the wallet row during balance modifications.
         """
-        # Use PgAppForge's session access pattern
-        from flask import g
-        db_session = g.appbuilder.get_session if hasattr(g, 'appbuilder') else None
-        if not db_session:
-            from pgappforge import db
-            db_session = db.session
-        
+        from pgappforge import db
+        db_session = db.session
+
         try:
             # Lock this wallet instance for update
             locked_wallet = db_session.query(UserWallet).filter_by(
                 id=self.id
             ).with_for_update().first()
-            
+
             if not locked_wallet:
                 raise ValueError(f"Wallet {self.id} not found or could not be locked")
-            
+
             yield locked_wallet
         except Exception as e:
             log.error(f"Database locking failed for wallet {self.id}: {e}")
             db_session.rollback()
             raise
-    
-    def _apply_transaction_to_balance(self, transaction: 'WalletTransaction', 
-                                    transaction_type: TransactionType, amount: Decimal):
-        """Apply transaction to wallet balance (internal method with locking).
-        
-        SECURITY FIX: This method now operates within a database lock context
-        to prevent race conditions during concurrent balance updates.
+
+    @contextmanager
+    def _lock_wallet_pair(self, other: 'UserWallet'):
+        """Lock both wallets of a transfer in id order to avoid deadlocks.
+
+        Concurrent A→B and B→A transfers would otherwise grab the same two rows
+        in opposite order; ordering by id gives every transfer one global lock
+        order.
         """
-        # This method should now only be called within _lock_wallet_for_transaction context
+        from pgappforge import db
+        db_session = db.session
+
+        try:
+            rows = db_session.execute(
+                select(UserWallet)
+                .where(UserWallet.id.in_([self.id, other.id]))
+                .order_by(UserWallet.id)
+                .with_for_update()
+            ).scalars().all()
+
+            locked = {row.id: row for row in rows}
+            if self.id not in locked or other.id not in locked:
+                raise ValueError("Both wallets must exist to complete a transfer")
+
+            yield locked[self.id], locked[other.id]
+        except Exception as e:
+            log.error(f"Database locking failed for wallet pair {self.id}/{other.id}: {e}")
+            db_session.rollback()
+            raise
+
+    def _apply_transaction_to_balance(self, transaction: 'WalletTransaction',
+                                    transaction_type: TransactionType, amount: Decimal):
+        """Apply a signed delta to the wallet balance in one atomic statement.
+
+        Emits `SET balance = balance + delta` rather than an absolute value, so
+        a stale in-session attribute cannot turn a concurrent debit into a lost
+        update. A debit is additionally guarded by `available_balance >= amount`
+        in the WHERE clause; if no row matches, funds are insufficient.
+        """
+        from pgappforge import db
+
         log.info(f"Applying {transaction_type.value} of {amount} to wallet {self.id}")
-        
-        if transaction_type == TransactionType.INCOME:
-            self.balance += amount
-            self.available_balance += amount
-        elif transaction_type == TransactionType.EXPENSE:
-            self.balance -= amount
-            self.available_balance -= amount
-        elif transaction_type == TransactionType.REFUND:
-            self.balance += amount
-            self.available_balance += amount
-        elif transaction_type == TransactionType.ADJUSTMENT:
-            # Adjustment can be positive or negative
-            if amount >= 0:
-                self.balance += amount
-                self.available_balance += amount
-            else:
-                self.balance += amount  # amount is already negative
-                self.available_balance += amount
-        
-        log.info(f"Wallet {self.id} balance updated: {self.balance} (available: {self.available_balance})")
+
+        delta = self._signed_delta(transaction_type, amount, transaction)
+        now = datetime.now(tz=timezone.utc)
+
+        stmt = update(UserWallet).where(UserWallet.id == self.id)
+        if delta < 0:
+            # Conditional guard: the row only matches if it can absorb the debit
+            stmt = stmt.where(UserWallet.available_balance >= -delta)
+
+        result = db.session.execute(stmt.values(
+            balance=UserWallet.balance + delta,
+            available_balance=UserWallet.available_balance + delta,
+            last_transaction_date=now,
+        ))
+
+        if delta < 0 and result.rowcount != 1:
+            raise InsufficientFundsError(
+                f"Insufficient funds in wallet {self.id}: cannot debit {-delta} {self.currency_code}"
+            )
+
+        db.session.expire(self, ['balance', 'available_balance', 'last_transaction_date'])
+
+        log.info(f"Wallet {self.id} balance updated by {delta}")
+
+    @staticmethod
+    def _signed_delta(transaction_type: TransactionType, amount: Decimal,
+                      transaction: 'WalletTransaction' = None) -> Decimal:
+        """Signed effect of a transaction on its wallet's balance.
+
+        A TRANSFER is a debit on the source wallet and a credit on the target;
+        which one this row is comes from the transfer metadata written by
+        transfer_to.
+        """
+        amount = Decimal(str(amount))
+
+        if transaction_type == TransactionType.EXPENSE:
+            return -amount
+        if transaction_type == TransactionType.TRANSFER:
+            is_incoming = False
+            if transaction is not None:
+                try:
+                    is_incoming = (transaction.metadata_dict or {}).get('transfer_type') == 'incoming'
+                except Exception:
+                    is_incoming = False
+            return amount if is_incoming else -amount
+        if transaction_type in (TransactionType.INCOME, TransactionType.REFUND):
+            return amount
+        if transaction_type == TransactionType.ADJUSTMENT:
+            return amount
+        raise ValueError(f"Unsupported transaction type: {transaction_type}")
     
     def _create_transaction_approval_workflow(self, transaction: 'WalletTransaction'):
         """Create approval workflow for high-value transactions."""
@@ -425,22 +595,46 @@ class UserWallet(AuditMixin, Model):
             }
     
     def transfer_to(self, target_wallet: 'UserWallet', amount: Decimal,
-                   description: str = None, auto_commit: bool = True) -> tuple['WalletTransaction', 'WalletTransaction']:
-        """Transfer funds to another wallet with cryptographic security."""
+                   description: str = None, auto_commit: bool = True,
+                   external_id: str = None) -> tuple['WalletTransaction', 'WalletTransaction']:
+        """Transfer funds to another wallet with cryptographic security.
+
+        Both rows are locked in id order and moved with signed SQL deltas, so a
+        partial transfer cannot survive a crash and concurrent opposite-direction
+        transfers cannot interleave.
+        """
+        from pgappforge import db
+
         amount = Decimal(str(amount))
-        
+        if not amount.is_finite():
+            raise ValueError("Amount must be a finite number")
+
         if target_wallet.id == self.id:
             raise ValueError("Cannot transfer to the same wallet")
-        
+
+        if self.currency_code != target_wallet.currency_code:
+            raise ValueError("cross-currency transfer requires the FX service")
+
         # Validate source wallet can make the transfer
-        can_transact, message = self.can_transact(amount, TransactionType.TRANSFER)
+        can_transact, message = self.can_transact(
+            amount, TransactionType.TRANSFER, target_wallet=target_wallet
+        )
         if not can_transact:
             raise ValueError(f"Transfer not allowed: {message}")
-        
+
+        # Idempotency: replay the original transfer pair instead of moving money twice
+        if external_id:
+            existing = db.session.query(WalletTransaction).filter_by(
+                user_id=self.user_id, external_id=external_id
+            ).first()
+            if existing:
+                log.info(f"Idempotent replay of transfer {existing.id} for key {external_id}")
+                return existing, existing.linked_transaction
+
         # Create secure transfer pair with cryptographic linking
         transfer_id = secrets.token_urlsafe(32)
         transfer_timestamp = datetime.now(tz=timezone.utc)
-        
+
         # Metadata for transfer linking
         outgoing_metadata = {
             'transfer_type': 'outgoing',
@@ -449,7 +643,7 @@ class UserWallet(AuditMixin, Model):
             'transfer_id': transfer_id,
             'transfer_timestamp': transfer_timestamp.isoformat()
         }
-        
+
         incoming_metadata = {
             'transfer_type': 'incoming',
             'source_wallet_id': self.id,
@@ -457,82 +651,94 @@ class UserWallet(AuditMixin, Model):
             'transfer_id': transfer_id,
             'transfer_timestamp': transfer_timestamp.isoformat()
         }
-        
+
+        # Both legs belong to the wallet owner. A service-to-service transfer has
+        # no current_user, and attributing it to whoever happened to be logged in
+        # on the request thread mis-assigns the credit leg.
+        transfer_user_id = self.user_id
+
         # Create secure outgoing transaction
         outgoing = SecureWalletTransaction.create_secure_transaction(
             wallet_id=self.id,
-            user_id=current_user.id if current_user else self.user.id,
+            user_id=transfer_user_id,
             amount=amount,
             transaction_type=TransactionType.TRANSFER,
             description=f"Transfer to {target_wallet.wallet_name}: {description}" if description else f"Transfer to {target_wallet.wallet_name}",
             metadata=outgoing_metadata,
-            transaction_date=transfer_timestamp
+            transaction_date=transfer_timestamp,
+            external_id=external_id
         )
-        
+
         # Create secure incoming transaction
         incoming = SecureWalletTransaction.create_secure_transaction(
             wallet_id=target_wallet.id,
-            user_id=current_user.id if current_user else self.user.id,
+            user_id=transfer_user_id,
             amount=amount,
             transaction_type=TransactionType.TRANSFER,
             description=f"Transfer from {self.wallet_name}: {description}" if description else f"Transfer from {self.wallet_name}",
             metadata=incoming_metadata,
             transaction_date=transfer_timestamp
         )
-        
-        # Link transactions cryptographically
-        outgoing.linked_transaction_id = incoming.id
-        incoming.linked_transaction_id = outgoing.id
-        
-        # Update transfer signatures to include both transaction IDs
-        outgoing._update_transfer_signature(incoming.id)
-        incoming._update_transfer_signature(outgoing.id)
-        
+
         # Check if either transaction requires approval
         source_requires_approval = (
-            self.require_approval and 
-            self.approval_limit and 
+            self.require_approval and
+            self.approval_limit and
             amount > self.approval_limit
         )
-        
+
         if source_requires_approval:
             outgoing.status = TransactionStatus.PENDING.value
             incoming.status = TransactionStatus.PENDING.value
             outgoing.requires_approval = True
         else:
-            # Apply balance changes immediately
             outgoing.status = TransactionStatus.COMPLETED.value
             incoming.status = TransactionStatus.COMPLETED.value
-            
-            self.balance -= amount
-            self.available_balance -= amount
-            self.last_transaction_date = transfer_timestamp
-            
-            target_wallet.balance += amount
-            target_wallet.available_balance += amount
-            target_wallet.last_transaction_date = transfer_timestamp
-        
-        # Add to session
-        from pgappforge import db
+
+        # Add to session and flush so both rows have ids before they are linked
         db.session.add(outgoing)
         db.session.add(incoming)
-        
+        db.session.flush()
+
+        # Link transactions cryptographically
+        outgoing.linked_transaction_id = incoming.id
+        incoming.linked_transaction_id = outgoing.id
+
+        # Update transfer signatures to include both transaction IDs
+        outgoing._update_transfer_signature(incoming.id)
+        incoming._update_transfer_signature(outgoing.id)
+
+        if not source_requires_approval:
+            with self._lock_wallet_pair(target_wallet) as (locked_source, locked_target):
+                locked_source._apply_transaction_to_balance(
+                    outgoing, TransactionType.TRANSFER, amount
+                )
+                locked_target._apply_transaction_to_balance(
+                    incoming, TransactionType.TRANSFER, amount
+                )
+
         # Create approval workflow if required
         if source_requires_approval:
             self._create_transaction_approval_workflow(outgoing)
-        
+
+        # Budget spend is refreshed on both wallets: the source may have budgeted
+        # for the outflow even though the transfer is not an expense.
+        self.refresh_budget_spend()
+        target_wallet.refresh_budget_spend()
+
         if auto_commit:
             db.session.commit()
-        
+
         return outgoing, incoming
     
     def get_balance_history(self, days: int = 30) -> List[Dict]:
         """Get balance history for the specified number of days."""
         end_date = datetime.now(tz=timezone.utc)
         start_date = end_date - timedelta(days=days)
-        
+
         # Get transactions in date range with optimized query
         from sqlalchemy.orm import selectinload
+        from pgappforge import db
         transactions = db.session.query(WalletTransaction).options(
             selectinload(WalletTransaction.category)
         ).filter(
@@ -541,26 +747,20 @@ class UserWallet(AuditMixin, Model):
             WalletTransaction.transaction_date <= end_date,
             WalletTransaction.status == TransactionStatus.COMPLETED.value
         ).order_by(WalletTransaction.transaction_date.asc()).all()
-        
-        # Calculate running balance
+
+        # Every movement type contributes a signed delta; anything unhandled
+        # would silently vanish from the history and corrupt the running balance.
+        deltas = [UserWallet._signed_delta(_as_transaction_type(t.transaction_type), t.amount, t)
+                  for t in transactions]
+        net_change = sum(deltas, Decimal('0.00'))
+
+        # Current balance minus everything in the window is the balance as of
+        # the day before the oldest entry.
         balance_history = []
-        current_balance = self.balance
-        
-        # Start from current balance and work backwards
-        for i in range(len(transactions) - 1, -1, -1):
-            trans = transactions[i]
-            if trans.transaction_type == TransactionType.INCOME.value:
-                current_balance -= trans.amount
-            elif trans.transaction_type == TransactionType.EXPENSE.value:
-                current_balance += trans.amount
-        
-        # Now work forward to create history
-        for trans in transactions:
-            if trans.transaction_type == TransactionType.INCOME.value:
-                current_balance += trans.amount
-            elif trans.transaction_type == TransactionType.EXPENSE.value:
-                current_balance -= trans.amount
-            
+        current_balance = Decimal(str(self.balance or 0)) - net_change
+
+        for trans, delta in zip(transactions, deltas):
+            current_balance += delta
             balance_history.append({
                 'date': trans.transaction_date,
                 'balance': float(current_balance),
@@ -568,7 +768,7 @@ class UserWallet(AuditMixin, Model):
                 'transaction_type': trans.transaction_type,
                 'amount': float(trans.amount)
             })
-        
+
         return balance_history
     
     @validates('currency_code')
@@ -738,35 +938,33 @@ class UserWallet(AuditMixin, Model):
         
         # Process transactions for statement
         statement_transactions = []
-        running_balance = self.balance if include_balance else None
-        
-        # If including balance, we need to calculate from oldest to newest
+
+        # The statement is emitted newest-first, so the running balance is
+        # pre-computed oldest-first into a lookup keyed by transaction id.
+        # Walking the display order and then patching it afterwards produced a
+        # wrong balance on every row.
+        running_balances = {}
         if include_balance:
-            # Reverse order for balance calculation
-            transactions_for_balance = list(reversed(transactions))
-            
-            # Calculate starting balance (current balance minus net changes)
-            net_change = Decimal('0')
+            net_change = Decimal('0.00')
             for txn in transactions:
-                if txn.transaction_type == TransactionType.INCOME.value:
-                    net_change += txn.amount
-                elif txn.transaction_type == TransactionType.EXPENSE.value:
-                    net_change -= txn.amount
-            
-            starting_balance = self.balance - net_change
-            running_balance = starting_balance
-        
+                net_change += UserWallet._signed_delta(
+                    _as_transaction_type(txn.transaction_type), txn.amount, txn
+                )
+
+            balance = Decimal(str(self.balance or 0)) - net_change
+            for txn in reversed(transactions):  # oldest first
+                balance += UserWallet._signed_delta(
+                    _as_transaction_type(txn.transaction_type), txn.amount, txn
+                )
+                running_balances[txn.id] = balance
+
         # Process each transaction
-        for i, txn in enumerate(transactions):
+        for txn in transactions:
             # Update totals
             if txn.transaction_type == TransactionType.INCOME.value:
                 total_income += txn.amount
-                if include_balance:
-                    running_balance += txn.amount
             elif txn.transaction_type == TransactionType.EXPENSE.value:
                 total_expense += txn.amount
-                if include_balance:
-                    running_balance -= txn.amount
             
             # Parse metadata
             metadata = {}
@@ -794,17 +992,7 @@ class UserWallet(AuditMixin, Model):
             
             # Add running balance if requested
             if include_balance:
-                # For display, show balance after this transaction
-                # Since we're displaying newest first, reverse the running balance calculation
-                display_balance = running_balance
-                if i < len(transactions) - 1:  # Not the oldest transaction
-                    next_txn = transactions[i + 1]
-                    if next_txn.transaction_type == TransactionType.INCOME.value:
-                        display_balance -= next_txn.amount
-                    elif next_txn.transaction_type == TransactionType.EXPENSE.value:
-                        display_balance += next_txn.amount
-                
-                transaction_details['balance_after'] = float(display_balance)
+                transaction_details['balance_after'] = float(running_balances[txn.id])
             
             statement_transactions.append(transaction_details)
         
@@ -891,7 +1079,10 @@ class WalletTransaction(AuditMixin, Model):
         Index('ix_wallet_transactions_type_status', 'transaction_type', 'status'),
         Index('ix_wallet_transactions_category', 'category_id'),
         Index('ix_wallet_transactions_user_date', 'user_id', 'transaction_date'),
-        CheckConstraint('amount > 0', name='ck_transaction_amount_positive')
+        # NULLs are distinct in PostgreSQL, so a null external_id never collides
+        UniqueConstraint('user_id', 'external_id', name='uq_wallet_transaction_user_external'),
+        # Adjustments may be negative; only a zero-amount row is meaningless
+        CheckConstraint('amount <> 0', name='ck_transaction_amount_positive')
     )
     
     # Core transaction fields
@@ -954,8 +1145,15 @@ class WalletTransaction(AuditMixin, Model):
     }
     
     @hybrid_property
-    def metadata(self):
-        """Get metadata as dictionary."""
+    def metadata_dict(self):
+        """Get metadata as dictionary.
+
+        Named `metadata_dict`, not `metadata`: SQLAlchemy reserves
+        `metadata` on the declarative Base. A mapped attribute of that name
+        shadows `Base.metadata` for the whole registry, which breaks table
+        creation and raises "Boolean value of this clause is not defined"
+        on any truthiness test -- including this hybrid property.
+        """
         if self.metadata_json:
             try:
                 return json.loads(self.metadata_json)
@@ -963,8 +1161,8 @@ class WalletTransaction(AuditMixin, Model):
                 return {}
         return {}
     
-    @metadata.setter
-    def metadata(self, value):
+    @metadata_dict.setter
+    def metadata_dict(self, value):
         """Set metadata from dictionary."""
         if value is not None:
             self.metadata_json = json.dumps(value)
@@ -1009,7 +1207,34 @@ class WalletTransaction(AuditMixin, Model):
         valid_types = [t.value for t in TransactionType]
         if transaction_type not in valid_types:
             raise ValueError(f"Invalid transaction type: {transaction_type}")
+        # amount and transaction_type are assigned independently, so whichever
+        # lands second re-runs the sign check against the pair.
+        self._check_amount_sign(transaction_type, getattr(self, 'amount', None))
         return transaction_type
+
+    def _check_amount_sign(self, transaction_type, amount):
+        """Negative amounts are only meaningful for adjustments."""
+        if amount is None or transaction_type is None:
+            return
+        if not isinstance(amount, Decimal):
+            amount = Decimal(str(amount))
+        if amount < 0 and transaction_type != TransactionType.ADJUSTMENT.value:
+            raise ValueError(
+                f"Negative amounts are only allowed for adjustments, got {amount}"
+            )
+
+    @validates('amount')
+    def validate_amount(self, key, amount):
+        """Reject zero-amount rows. Negatives are legal for adjustments only."""
+        if amount is None:
+            raise ValueError("Amount is required")
+        amount = Decimal(str(amount))
+        if not amount.is_finite():
+            raise ValueError("Amount must be a finite number")
+        if amount == 0:
+            raise ValueError("Transaction amount cannot be zero")
+        self._check_amount_sign(getattr(self, 'transaction_type', None), amount)
+        return amount
     
     @validates('status')
     def validate_status(self, key, status):
@@ -1027,33 +1252,66 @@ class WalletTransaction(AuditMixin, Model):
         return self.mpesa_transaction is not None
     
     def verify_transaction_integrity(self) -> bool:
-        """Verify transaction cryptographic integrity."""
+        """Verify the stored hash *and* signature against a fresh computation.
+
+        Both are recomputed and compared in constant time. An unavailable
+        SECRET_KEY (outside an app context) is treated as unverifiable rather
+        than as an error, so callers get a boolean either way.
+        """
         if not self.transaction_hash or not self.digital_signature:
             return False
-        
-        # Recreate hash from transaction data
-        expected_hash = self._calculate_transaction_hash()
-        return hmac.compare_digest(self.transaction_hash, expected_hash)
-    
-    def _calculate_transaction_hash(self) -> str:
-        """Calculate SHA-512 hash of transaction data."""
-        # Include all critical transaction fields
-        data_to_hash = (
-            f"{self.wallet_id}|{self.user_id}|{self.amount}|"
-            f"{self.transaction_type}|{self.transaction_date.isoformat()}|"
-            f"{self.reference_number or ''}|{self.description or ''}"
+
+        try:
+            expected_hash = self._calculate_transaction_hash()
+            expected_signature = self._generate_digital_signature()
+        except Exception as e:
+            log.warning(f"Cannot verify transaction {self.id}: {e}")
+            return False
+
+        if not hmac.compare_digest(self.transaction_hash, expected_hash):
+            return False
+        return hmac.compare_digest(self.digital_signature, expected_signature)
+
+    def reseal(self):
+        """Recompute hash and signature after an intentional, authorised change.
+
+        Any status transition (approve, reject, void) invalidates the original
+        seal; re-signing keeps `verify_transaction_integrity` meaningful instead
+        of permanently failing.
+        """
+        self.transaction_hash = self._calculate_transaction_hash()
+        self.digital_signature = self._generate_digital_signature()
+        return self
+
+    def _canonical_transaction_data(self) -> str:
+        """Canonical string over the fields that must not change after the fact."""
+        amount = Decimal(str(self.amount or 0)).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
         )
-        
-        return hashlib.sha512(data_to_hash.encode('utf-8')).hexdigest()
-    
+        transaction_date = (
+            self.transaction_date.isoformat() if self.transaction_date else ''
+        )
+        return (
+            f"{self.wallet_id}|{self.user_id}|{self.status}|{amount}|"
+            f"{self.transaction_type}|{self.external_id or ''}|"
+            f"{transaction_date}|{self.reference_number or ''}|"
+            f"{self.linked_transaction_id or ''}|"
+            f"{self.description or ''}"
+        )
+
+    def _calculate_transaction_hash(self) -> str:
+        """SHA-512 hash of the canonical transaction data."""
+        return hashlib.sha512(
+            self._canonical_transaction_data().encode('utf-8')
+        ).hexdigest()
+
     def _generate_digital_signature(self) -> str:
-        """Generate HMAC digital signature for transaction."""
-        # Use application secret key for HMAC
-        secret_key = current_app.config.get('SECRET_KEY', '').encode('utf-8')
+        """HMAC-SHA256 signature of the hash, keyed by SECRET_KEY."""
+        secret_key = _signing_secret()
         transaction_hash = self._calculate_transaction_hash()
-        
+
         return hmac.new(
-            secret_key,
+            secret_key.encode('utf-8'),
             transaction_hash.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
@@ -1075,11 +1333,8 @@ class WalletTransaction(AuditMixin, Model):
             raise ValueError("Transaction failed integrity check - cannot approve")
         
         # Use PgAppForge's session access pattern
-        from flask import g
-        db_session = g.appbuilder.get_session if hasattr(g, 'appbuilder') else None
-        if not db_session:
-            from pgappforge import db
-            db_session = db.session
+        from pgappforge import db
+        db_session = db.session
         
         try:
             # CRITICAL: Use database-level locking for wallet balance updates
@@ -1096,29 +1351,37 @@ class WalletTransaction(AuditMixin, Model):
                 fresh_transaction.approved_by_id = approver_id
                 fresh_transaction.approved_at = datetime.now(tz=timezone.utc)
                 fresh_transaction.status = TransactionStatus.COMPLETED.value
-                
+
+                # The seal covers status, so re-sign after the transition
+                fresh_transaction.reseal()
+
                 # Apply balance changes to locked wallet
                 transaction_type = TransactionType(fresh_transaction.transaction_type)
                 locked_wallet._apply_transaction_to_balance(fresh_transaction, transaction_type, fresh_transaction.amount)
-                
+
                 # Handle linked transactions (transfers) with proper locking
                 if fresh_transaction.linked_transaction_id:
                     linked_txn = db_session.query(WalletTransaction).filter_by(
                         id=fresh_transaction.linked_transaction_id
                     ).with_for_update().first()
-                    
+
                     if linked_txn and linked_txn.status == TransactionStatus.PENDING.value:
                         # Lock the target wallet for the linked transaction
                         with linked_txn.wallet._lock_wallet_for_transaction() as linked_locked_wallet:
                             linked_txn.approved_by_id = approver_id
                             linked_txn.approved_at = datetime.now(tz=timezone.utc)
                             linked_txn.status = TransactionStatus.COMPLETED.value
-                            
+                            linked_txn.reseal()
+
                             # Apply balance to target wallet
                             linked_type = TransactionType(linked_txn.transaction_type)
                             linked_locked_wallet._apply_transaction_to_balance(
                                 linked_txn, linked_type, linked_txn.amount
                             )
+                            linked_txn.wallet.refresh_budget_spend()
+
+                # Spending the budget only becomes real once the expense completes
+                locked_wallet.refresh_budget_spend()
                 
                 # Log approval in audit trail
                 WalletAudit.log_event(
@@ -1158,11 +1421,8 @@ class WalletTransaction(AuditMixin, Model):
             raise ValueError(f"Cannot reject transaction with status: {self.status}")
         
         # Use PgAppForge's session access pattern
-        from flask import g
-        db_session = g.appbuilder.get_session if hasattr(g, 'appbuilder') else None
-        if not db_session:
-            from pgappforge import db
-            db_session = db.session
+        from pgappforge import db
+        db_session = db.session
         
         try:
             # CRITICAL: Use database-level locking to prevent concurrent approve/reject
@@ -1181,13 +1441,16 @@ class WalletTransaction(AuditMixin, Model):
             fresh_transaction.approved_by_id = approver_id
             fresh_transaction.approved_at = datetime.now(tz=timezone.utc)
             fresh_transaction.status = TransactionStatus.CANCELLED.value
-            
+
+            # Re-seal: status is an input to the hash
+            fresh_transaction.reseal()
+
             # Add rejection reason to metadata
-            current_metadata = fresh_transaction.metadata.copy() if fresh_transaction.metadata else {}
+            current_metadata = fresh_transaction.metadata_dict.copy() if fresh_transaction.metadata_dict else {}
             current_metadata['rejection_reason'] = reason
             current_metadata['rejected_by'] = approver_id
             current_metadata['rejected_at'] = datetime.now(tz=timezone.utc).isoformat()
-            fresh_transaction.metadata = current_metadata
+            fresh_transaction.metadata_dict = current_metadata
             
             # Handle linked transactions (transfers) with proper locking
             if fresh_transaction.linked_transaction_id:
@@ -1201,11 +1464,11 @@ class WalletTransaction(AuditMixin, Model):
                     linked_txn.status = TransactionStatus.CANCELLED.value
                     
                     # Add rejection reason to linked transaction
-                    linked_metadata = linked_txn.metadata.copy() if linked_txn.metadata else {}
+                    linked_metadata = linked_txn.metadata_dict.copy() if linked_txn.metadata_dict else {}
                     linked_metadata['rejection_reason'] = reason
                     linked_metadata['rejected_by'] = approver_id
                     linked_metadata['rejected_at'] = datetime.now(tz=timezone.utc).isoformat()
-                    linked_txn.metadata = linked_metadata
+                    linked_txn.metadata_dict = linked_metadata
             
             # Log rejection in audit trail
             WalletAudit.log_event(
@@ -1222,7 +1485,7 @@ class WalletTransaction(AuditMixin, Model):
             self.approved_by_id = fresh_transaction.approved_by_id
             self.approved_at = fresh_transaction.approved_at
             self.status = fresh_transaction.status
-            self.metadata = fresh_transaction.metadata
+            self.metadata_dict = fresh_transaction.metadata_dict
             
             if auto_commit:
                 db_session.commit()
@@ -1550,11 +1813,59 @@ class PaymentMethod(AuditMixin, Model):
         self.last_used_date = datetime.now(tz=timezone.utc)
         self.total_transactions += 1
         self.total_amount += Decimal(str(amount))
-        
+
         if auto_commit:
             from pgappforge import db
             db.session.commit()
-    
+
+    def recompute_totals(self, auto_commit: bool = True):
+        """Rebuild total_transactions/total_amount from the transaction ledger.
+
+        Incremental counters drift: a void creates a reversal rather than
+        deleting the original, and the reversal's sign depends on the original
+        type, so nothing decrements the counter on its own. Recomputing from
+        the rows is the only way these totals are authoritative.
+        """
+        from pgappforge import db
+        row = db.session.query(
+            func.count(WalletTransaction.id),
+            func.coalesce(func.sum(WalletTransaction.amount), Decimal('0.00')),
+        ).filter(
+            WalletTransaction.payment_method_id == self.id,
+            WalletTransaction.status == TransactionStatus.COMPLETED.value,
+        ).one()
+
+        self.total_transactions = row[0] or 0
+        self.total_amount = Decimal(str(row[1] or 0))
+
+        if auto_commit:
+            db.session.commit()
+        return self
+
+    @classmethod
+    def reconcile_totals(cls, auto_commit: bool = True) -> dict[str, int]:
+        """Recompute totals for every payment method.
+
+        Run after a bulk correction (bulk void, backfill, reconciliation job) or
+        on a schedule to repair drift introduced outside the money path.
+        """
+        from pgappforge import db
+        recomputed = {}
+        for method in db.session.query(cls).all():
+            before = (method.total_transactions, Decimal(str(method.total_amount or 0)))
+            method.recompute_totals(auto_commit=False)
+            after = (method.total_transactions, Decimal(str(method.total_amount or 0)))
+            if before != after:
+                recomputed[method.id] = method.total_transactions
+                log.info(
+                    f"Reconciled payment method {method.id}: "
+                    f"{before[0]} -> {after[0]} transactions"
+                )
+
+        if auto_commit:
+            db.session.commit()
+        return recomputed
+
     def __repr__(self):
         return f"<PaymentMethod(id={self.id}, name='{self.name}', type='{self.method_type}')>"
 
@@ -1798,8 +2109,15 @@ class WalletAudit(AuditMixin, Model):
             self.new_values = None
     
     @hybrid_property
-    def metadata(self):
-        """Get metadata as dictionary."""
+    def metadata_dict(self):
+        """Get metadata as dictionary.
+
+        Named `metadata_dict`, not `metadata`: SQLAlchemy reserves
+        `metadata` on the declarative Base. A mapped attribute of that name
+        shadows `Base.metadata` for the whole registry, which breaks table
+        creation and raises "Boolean value of this clause is not defined"
+        on any truthiness test -- including this hybrid property.
+        """
         if self.metadata_json:
             try:
                 return json.loads(self.metadata_json)
@@ -1807,8 +2125,8 @@ class WalletAudit(AuditMixin, Model):
                 return {}
         return {}
     
-    @metadata.setter
-    def metadata(self, value):
+    @metadata_dict.setter
+    def metadata_dict(self, value):
         """Set metadata from dictionary."""
         if value is not None:
             self.metadata_json = json.dumps(value, default=str)
@@ -1840,7 +2158,7 @@ class WalletAudit(AuditMixin, Model):
         if new_values:
             audit.new_data = new_values
         if metadata:
-            audit.metadata = metadata
+            audit.metadata_dict = metadata
         
         # Capture request context if available
         try:
@@ -1873,13 +2191,17 @@ class SecureWalletTransaction:
         transaction_type: TransactionType, description: str = None,
         category_id: int = None, payment_method_id: int = None,
         metadata: dict = None, requires_approval: bool = False,
-        transaction_date: datetime = None
+        transaction_date: datetime = None, external_id: str = None
     ) -> WalletTransaction:
-        """Create a cryptographically secure transaction."""
-        
+        """Create a cryptographically secure transaction.
+
+        `status` is set before sealing: the hash covers status, so a caller that
+        flips it to PENDING afterwards must reseal or the seal is stale.
+        """
+
         # Generate reference number
         reference_number = f"TXN-{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}-{secrets.token_urlsafe(8)}"
-        
+
         # Create transaction object
         transaction = WalletTransaction(
             wallet_id=wallet_id,
@@ -1892,13 +2214,14 @@ class SecureWalletTransaction:
             metadata_json=json.dumps(metadata) if metadata else None,
             reference_number=reference_number,
             transaction_date=transaction_date or datetime.now(tz=timezone.utc),
-            requires_approval=requires_approval
+            external_id=external_id,
+            requires_approval=requires_approval,
+            status=TransactionStatus.COMPLETED.value
         )
-        
+
         # Generate cryptographic hash and signature
-        transaction.transaction_hash = transaction._calculate_transaction_hash()
-        transaction.digital_signature = transaction._generate_digital_signature()
-        
+        transaction.reseal()
+
         return transaction
     
     @staticmethod
@@ -1916,18 +2239,28 @@ class WalletTransactionSecurityMixin:
     """Mixin to add security methods to WalletTransaction."""
     
     def _update_transfer_signature(self, linked_transaction_id: int):
-        """Update signature to include linked transaction for transfers."""
-        if self.transaction_type == TransactionType.TRANSFER.value:
-            # Include linked transaction in signature
-            enhanced_data = f"{self._calculate_transaction_hash()}|{linked_transaction_id}"
-            secret_key = current_app.config.get('SECRET_KEY', '').encode('utf-8')
-            
-            self.digital_signature = hmac.new(
-                secret_key,
-                enhanced_data.encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
+        """Re-seal the transfer now that its counterpart row exists.
 
+        `linked_transaction_id` is part of the canonical hash input, so the seal
+        has to be recomputed rather than merely re-signed.
+        """
+        if self.transaction_type == TransactionType.TRANSFER.value:
+            if self.linked_transaction_id is None:
+                self.linked_transaction_id = linked_transaction_id
+            self.reseal()
+
+
+# Register the MPESA models here, at the bottom of this module. The package
+# __init__ imports .views straight after .models, and views.py calls
+# SQLAInterface(UserWallet) at class-body scope, which forces mapper
+# configuration. The MPESA relationships below are declared by string, so their
+# target classes must already be in the registry by then or the mapper fails to
+# resolve "MPESAAccount". mpesa_models imports only the pgappforge base, never
+# this module, so importing it here is not circular.
+try:
+    from . import mpesa_models  # noqa: F401
+except ImportError:  # pragma: no cover - MPESA models are optional
+    pass
 
 # Apply security mixin to WalletTransaction
 WalletTransaction.__bases__ = WalletTransaction.__bases__ + (WalletTransactionSecurityMixin,)

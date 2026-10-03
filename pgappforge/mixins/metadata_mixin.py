@@ -103,7 +103,7 @@ class MetadataMixin:
 	# ------------------------------------------------------------------
 
 	@declared_attr
-	def metadata(cls):
+	def entity_metadata(cls):
 		"""JSONB/JSON column, defaulting to a copy of ``__metadata_defaults__``."""
 		return Column(
 			MutableDict.as_mutable(JSONBType),
@@ -118,12 +118,12 @@ class MetadataMixin:
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		# Ensure metadata dict is initialised even when ORM skips __init__
-		if self.metadata is None:
-			self.metadata = self.__metadata_defaults__.copy()
-		self._original_metadata: dict[str, Any] = dict(self.metadata)
+		if self.entity_metadata is None:
+			self.entity_metadata = self.__metadata_defaults__.copy()
+		self._original_metadata: dict[str, Any] = dict(self.entity_metadata)
 		if self.__metadata_version__:
-			self.metadata.setdefault("_version", 1)
-			self.metadata.setdefault("_updated_at", _utcnow_iso())
+			self.entity_metadata.setdefault("_version", 1)
+			self.entity_metadata.setdefault("_updated_at", _utcnow_iso())
 
 	# ------------------------------------------------------------------
 	# Public write API
@@ -146,7 +146,7 @@ class MetadataMixin:
 		if self.__track_metadata__:
 			self._track_change(key, value)
 
-		self.metadata[key] = value
+		self.entity_metadata[key] = value
 		self._bump_version()
 
 	def update_metadata(self, data: dict[str, Any], validate: bool = True) -> None:
@@ -169,7 +169,7 @@ class MetadataMixin:
 			for key, value in data.items():
 				self._track_change(key, value)
 
-		self.metadata.update(data)
+		self.entity_metadata.update(data)
 		self._bump_version()
 
 	def delete_metadata(self, key: str) -> bool:
@@ -181,11 +181,11 @@ class MetadataMixin:
 		if key in self.__metadata_required__:
 			raise ValueError(f"Cannot delete required metadata field: {key!r}")
 
-		existed = key in self.metadata
+		existed = key in self.entity_metadata
 		if existed:
 			if self.__track_metadata__:
 				self._track_change(key, None)
-			del self.metadata[key]
+			del self.entity_metadata[key]
 			self._bump_version()
 		return existed
 
@@ -197,12 +197,12 @@ class MetadataMixin:
 				``__metadata_required__`` keys are preserved.
 		"""
 		if keep_required:
-			preserved = {k: v for k, v in self.metadata.items() if k in self.__metadata_required__}
-			self.metadata.clear()
-			self.metadata.update(preserved)
+			preserved = {k: v for k, v in self.entity_metadata.items() if k in self.__metadata_required__}
+			self.entity_metadata.clear()
+			self.entity_metadata.update(preserved)
 		else:
-			self.metadata.clear()
-			self.metadata.update(self.__metadata_defaults__)
+			self.entity_metadata.clear()
+			self.entity_metadata.update(self.__metadata_defaults__)
 
 	# ------------------------------------------------------------------
 	# Public read API
@@ -210,7 +210,7 @@ class MetadataMixin:
 
 	def get_metadata(self, key: str, default: Any = None) -> Any:
 		"""Return value for *key*, coercing via ``__metadata_types__`` if defined."""
-		value = self.metadata.get(key, default)
+		value = self.entity_metadata.get(key, default)
 		coerce = self.__metadata_types__.get(key)
 		if coerce is not None:
 			try:
@@ -227,8 +227,8 @@ class MetadataMixin:
 				``_`` (version, updated_at) are omitted.
 		"""
 		if include_system:
-			return dict(self.metadata)
-		return {k: v for k, v in self.metadata.items() if not k.startswith("_")}
+			return dict(self.entity_metadata)
+		return {k: v for k, v in self.entity_metadata.items() if not k.startswith("_")}
 
 	# ------------------------------------------------------------------
 	# Validation
@@ -246,18 +246,18 @@ class MetadataMixin:
 		"""
 		errors: list[str] = []
 
-		missing = set(self.__metadata_required__) - set(self.metadata)
+		missing = set(self.__metadata_required__) - set(self.entity_metadata)
 		if missing:
 			errors.append(f"Missing required fields: {', '.join(sorted(missing))}")
 
 		if self.__metadata_fields__:
 			# Exclude system keys from the "invalid field" check
-			user_keys = {k for k in self.metadata if not k.startswith("_")}
+			user_keys = {k for k in self.entity_metadata if not k.startswith("_")}
 			invalid = user_keys - set(self.__metadata_fields__)
 			if invalid:
 				errors.append(f"Invalid fields: {', '.join(sorted(invalid))}")
 
-		for key, value in self.metadata.items():
+		for key, value in self.entity_metadata.items():
 			coerce = self.__metadata_types__.get(key)
 			if coerce is not None:
 				try:
@@ -268,9 +268,9 @@ class MetadataMixin:
 					)
 
 		for key, validator in self.__metadata_validators__.items():
-			if key in self.metadata:
+			if key in self.entity_metadata:
 				try:
-					if not validator(self.metadata[key]):
+					if not validator(self.entity_metadata[key]):
 						errors.append(f"Validation failed for {key!r}")
 				except Exception as exc:
 					errors.append(f"Validator error for {key!r}: {exc}")
@@ -288,7 +288,7 @@ class MetadataMixin:
 		"""Recompute all fields listed in ``__metadata_computed__`` and write results."""
 		for key, computer in self.__metadata_computed__.items():
 			try:
-				self.metadata[key] = computer(self)
+				self.entity_metadata[key] = computer(self)
 			except Exception as exc:
 				logger.error("Error computing metadata field %r: %s", key, exc)
 		if self.__metadata_computed__:
@@ -322,10 +322,10 @@ class MetadataMixin:
 		for key, value in kwargs.items():
 			if isinstance(value, (list, tuple)):
 				conditions.append(
-					cls.metadata[key].astext.in_([json.dumps(v) for v in value])
+					cls.entity_metadata[key].astext.in_([json.dumps(v) for v in value])
 				)
 			else:
-				conditions.append(cls.metadata[key].astext == json.dumps(value))
+				conditions.append(cls.entity_metadata[key].astext == json.dumps(value))
 
 		combine = or_ if operator == "or_" else and_
 		stmt = select(cls).where(combine(*conditions))
@@ -334,7 +334,7 @@ class MetadataMixin:
 	@classmethod
 	def get_unique_metadata_keys(cls, session: Any) -> list[str]:
 		"""Return a sorted list of every metadata key present across all rows."""
-		stmt = select(cls.metadata)
+		stmt = select(cls.entity_metadata)
 		rows = session.execute(stmt).all()
 		keys: set[str] = set()
 		for (blob,) in rows:
@@ -372,8 +372,8 @@ class MetadataMixin:
 	def _bump_version(self) -> None:
 		"""Increment ``_version`` and refresh ``_updated_at`` when versioning is on."""
 		if self.__metadata_version__:
-			self.metadata["_version"] = self.metadata.get("_version", 0) + 1
-			self.metadata["_updated_at"] = _utcnow_iso()
+			self.entity_metadata["_version"] = self.entity_metadata.get("_version", 0) + 1
+			self.entity_metadata["_updated_at"] = _utcnow_iso()
 
 	def _validate_field(self, key: str, value: Any) -> None:
 		coerce = self.__metadata_types__.get(key)

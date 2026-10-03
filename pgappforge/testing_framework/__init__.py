@@ -1,45 +1,49 @@
-"""
-PgAppForge Testing Automation Framework
+"""Optional test-generation helpers.
 
-Revolutionary testing system that automatically generates comprehensive test suites
-for PgAppForge applications based on database schema analysis.
-
-Features:
-- Comprehensive test coverage (unit, integration, e2e, performance, security)
-- AI-powered realistic test data generation
-- Master-detail relationship testing
-- Performance benchmarking and scalability testing
-- Security vulnerability testing with OWASP compliance
-- Automated test execution and reporting
-
-Usage:
-    from pgappforge.testing_framework import TestGenerator, TestGenerationConfig
-    
-    config = TestGenerationConfig(
-        generate_unit_tests=True,
-        generate_integration_tests=True,
-        generate_e2e_tests=True,
-        target_coverage_percentage=95
-    )
-    
-    generator = TestGenerator(config=config, inspector=inspector)
-    test_suite = generator.generate_complete_test_suite(schema)
-    results = generator.execute_test_suite(test_suite)
+Every dependency here is optional (numpy for data generation, pytest for the
+runner). Importing this package must never fail, because plugin modules import
+the generators at import time. Each name is therefore bound only when its
+module actually loaded; use ``hasattr(pgappforge.testing_framework, name)`` or
+the ``available_*`` helpers to test for it.
 """
 
-from .core.test_generator import TestGenerator
-from .core.config import TestGenerationConfig
-from .core.test_runner import TestRunner
-from .core.test_reporter import TestReporter
-from .data.realistic_data_generator import RealisticDataGenerator
+import logging
 
-__version__ = "1.0.0"
-__author__ = "PgAppForge Evolution Team"
+log = logging.getLogger(__name__)
 
 __all__ = [
-    "TestGenerator",
-    "TestGenerationConfig", 
-    "TestRunner",
-    "TestReporter",
-    "RealisticDataGenerator"
+    "TestGenerator", "TestGenerationConfig", "TestRunner", "TestReporter",
+    "RealisticDataGenerator", "ScenarioGenerator", "available", "load_all",
 ]
+
+
+def _try(module_name: str, *names: str) -> None:
+    import importlib
+
+    try:
+        module = importlib.import_module(f"{__name__}.{module_name}")
+    except Exception as exc:  # optional dependency missing or broken module
+        log.warning("pgappforge.testing_framework.%s unavailable: %s", module_name, exc)
+        return
+    for name in names:
+        value = getattr(module, name, None)
+        if value is not None:
+            globals()[name] = value
+
+
+_try("core.test_generator", "TestGenerator")
+_try("core.config", "TestGenerationConfig")
+_try("core.test_runner", "TestRunner")
+_try("core.test_reporter", "TestReporter")
+_try("data.realistic_data_generator", "RealisticDataGenerator")
+_try("generators.scenario_generator", "ScenarioGenerator")
+
+
+def available(name: str) -> bool:
+    """True when an optional helper was loaded successfully."""
+    return name in globals() and globals()[name] is not None
+
+
+def load_all() -> dict:
+    """What loaded and what did not; use for a startup log or a health check."""
+    return {name: name in globals() for name in __all__ if name != "available" and name != "load_all"}

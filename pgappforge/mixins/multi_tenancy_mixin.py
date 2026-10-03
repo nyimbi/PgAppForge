@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Generator
 
-from flask import current_app, g
+from flask import current_app, g, has_app_context
 from pgappforge import Model
 from sqlalchemy import (
 	JSON,
@@ -652,22 +652,34 @@ class MultiTenancyMixin:
 	# ------------------------------------------------------------------
 
 	@staticmethod
-	def get_current_tenant_id() -> uuid.UUID | str:
+	def get_current_tenant_id() -> uuid.UUID | str | int:
 		"""
-		Resolve the active tenant ID from Flask's request context (``g.tenant_id``).
+		Resolve the active tenant ID.
 
-		Falls back to ``DEFAULT_TENANT_ID`` from app config when
-		``ALLOW_NO_TENANT`` is True.
+		Resolution order:
 
-		Returns:
-			Active tenant UUID (or string for non-Postgres backends).
+		1. The shared tenant ContextVar in ``pgappforge.models.tenant_context``
+		   — this is the value that survives a thread or task hop.  A hit is
+		   mirrored onto ``g.tenant_id`` so both systems agree.
+		2. ``g.tenant_id`` for callers that still set it directly.
+		3. ``DEFAULT_TENANT_ID`` from app config when ``ALLOW_NO_TENANT`` is True.
 
 		Raises:
 			ValueError: When no tenant is set and fallback is disabled.
 		"""
-		tenant_id = getattr(g, "tenant_id", None)
+		from pgappforge.models.tenant_context import (
+			get_current_tenant_id as _ctx_tenant_id,
+		)
+
+		tenant_id = _ctx_tenant_id()
 		if tenant_id is not None:
+			if has_app_context():
+				g.tenant_id = tenant_id
 			return tenant_id
+		if has_app_context():
+			tenant_id = getattr(g, "tenant_id", None)
+			if tenant_id is not None:
+				return tenant_id
 		try:
 			app_cfg = current_app.config
 		except RuntimeError:

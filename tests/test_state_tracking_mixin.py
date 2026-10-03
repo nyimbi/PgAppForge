@@ -35,7 +35,7 @@ class TestStateTrackingMixin(unittest.TestCase):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)

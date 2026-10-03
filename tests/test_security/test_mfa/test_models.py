@@ -36,7 +36,7 @@ class TestMFAEncryptionMixin:
     def app(self):
         """Create test Flask application with encryption key."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test-secret-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['MFA_ENCRYPTION_KEY'] = Fernet.generate_key()
         app.config['TESTING'] = True
         return app
@@ -57,7 +57,7 @@ class TestMFAEncryptionMixin:
     def test_get_encryption_key_missing_production(self, encryption_mixin):
         """Test encryption key error in production without key."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['TESTING'] = False  # Production mode
         
         with app.app_context():
@@ -67,7 +67,7 @@ class TestMFAEncryptionMixin:
     def test_get_encryption_key_debug_autogenerate(self, encryption_mixin):
         """Test auto-generation of encryption key in debug mode."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['DEBUG'] = True
         
         with app.app_context():

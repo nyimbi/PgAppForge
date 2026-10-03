@@ -8,10 +8,11 @@ including wallet management, transactions, budgets, and analytics.
 import json
 import logging
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, List, Any, Optional
 
 from flask import request, jsonify, flash, redirect, url_for, render_template
+from werkzeug.exceptions import BadRequest
 from pgappforge import BaseView, ModelView, expose, has_access
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.actions import action
@@ -32,6 +33,29 @@ from .services import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def _parse_amount(raw) -> Decimal:
+    """Parse a user-supplied money string into a 2dp Decimal, or reject it.
+
+    Bare Decimal() raises InvalidOperation on junk, which surfaces as a 500, and
+    it happily accepts NaN/Infinity and excess scale that PostgreSQL then
+    rounds silently. Quantizing here makes the value the user submits the value
+    the database stores.
+    """
+    try:
+        amount = Decimal(str(raw).strip())
+    except (InvalidOperation, ValueError, TypeError, ArithmeticError):
+        raise BadRequest("Amount must be a valid number")
+
+    if not amount.is_finite():
+        raise BadRequest("Amount must be a finite number")
+
+    amount = amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    if amount <= 0:
+        raise BadRequest("Amount must be greater than zero")
+
+    return amount
 
 
 class WalletDashboardView(BaseView):
@@ -117,7 +141,7 @@ class WalletDashboardView(BaseView):
             
             # Get form data
             wallet_id = request.form.get('wallet_id', type=int)
-            amount = Decimal(request.form.get('amount', '0'))
+            amount = _parse_amount(request.form.get('amount', ''))
             transaction_type = request.form.get('transaction_type')
             description = request.form.get('description')
             
@@ -321,7 +345,7 @@ class TransactionFormView(BaseView):
             if request.method == 'POST':
                 # Process form submission
                 wallet_id = request.form.get('wallet_id', type=int)
-                amount = Decimal(request.form.get('amount', '0'))
+                amount = _parse_amount(request.form.get('amount', ''))
                 transaction_type = request.form.get('transaction_type')
                 description = request.form.get('description')
                 category_id = request.form.get('category_id', type=int) or None
@@ -376,7 +400,7 @@ class TransactionFormView(BaseView):
                 # Process transfer
                 source_wallet_id = request.form.get('source_wallet_id', type=int)
                 target_wallet_id = request.form.get('target_wallet_id', type=int)
-                amount = Decimal(request.form.get('amount', '0'))
+                amount = _parse_amount(request.form.get('amount', ''))
                 description = request.form.get('description')
                 
                 transfer_request = TransferRequest(

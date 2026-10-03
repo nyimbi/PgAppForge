@@ -12,6 +12,8 @@ from typing import Dict, List, Any, Optional
 
 from flask import request, jsonify, flash, redirect, url_for, current_app, g
 from pgappforge import ModelView, expose, action, has_access
+
+log = logging.getLogger(__name__)
 from pgappforge.api import ModelRestApi, BaseApi
 from pgappforge.models.sqla.interface import SQLAInterface
 from pgappforge.security.decorators import has_access_api, permission_name, protect

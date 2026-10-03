@@ -27,17 +27,18 @@ Official Safaricom Error Codes Supported:
 
 import base64
 import json
+import hashlib
 import logging
 import requests
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, List, Any, Optional, Tuple
 import secrets
 import string
 
 from flask import current_app
 from pgappforge import db
-from pgappforge.security import current_user
+from flask_login import current_user
 
 from .mpesa_models import (
     MPESAAccount, MPESATransaction, MPESACallback, MPESAConfiguration,
@@ -304,7 +305,13 @@ class MPESAService:
             log.error(f"STK Query error: {e}")
             return False, f"Status query failed: {str(e)}", None
     
-    def process_stk_callback(self, callback_data: Dict[str, Any]) -> Tuple[bool, str]:
+    @staticmethod
+    def _callback_idempotency_key(checkout_request_id: str, result_code: Any, receipt: str) -> str:
+        """Content-derived key so a redelivered callback is a no-op."""
+        raw = f"{checkout_request_id}|{result_code}|{receipt}".encode("utf-8")
+        return hashlib.sha256(b"pgappforge.mpesa.stk." + raw).hexdigest()
+
+    def process_stk_callback(self, callback_data: Dict[str, Any], verified_event_id: str = None) -> Tuple[bool, str]:
         """
         Process STK Push callback from MPESA.
         
@@ -330,14 +337,21 @@ class MPESAService:
                 log.error("Callback missing CheckoutRequestID")
                 return False, "Invalid callback data"
             
-            # Find transaction record
+            # Find transaction record. FOR UPDATE so two concurrent deliveries
+            # of the same callback cannot both pass the state checks below.
             transaction = db.session.query(MPESATransaction).filter_by(
                 checkout_request_id=checkout_request_id
-            ).first()
-            
+            ).with_for_update().first()
+
             if not transaction:
                 log.error(f"Transaction not found for checkout request: {checkout_request_id}")
+                db.session.rollback()
                 return False, "Transaction not found"
+
+            if verified_event_id and transaction.callback_received and transaction.callback_processed:
+                log.info("STK callback for %s already processed (event %s)", checkout_request_id, verified_event_id)
+                db.session.rollback()
+                return True, "Duplicate callback ignored"
             
             # Update transaction with callback data
             transaction.set_callback_data(callback_data)
@@ -366,23 +380,94 @@ class MPESAService:
                         amount_paid = value
                 
                 if mpesa_receipt:
-                    transaction.mark_completed(mpesa_receipt, callback_data)
-                    
-                    # Verify amount matches (additional security check)
-                    if amount_paid and float(amount_paid) != float(transaction.amount):
-                        log.warning(f"Amount mismatch in callback: expected {transaction.amount}, got {amount_paid}")
-                    
+                    # A callback may be delivered more than once. The
+                    # idempotency key is derived from the content the provider
+                    # sent, so a replay is a no-op and a second, different
+                    # callback for the same checkout request is rejected.
+                    idempotency_key = self._callback_idempotency_key(
+                        checkout_request_id, result_code, mpesa_receipt
+                    )
+                    existing = db.session.query(MPESATransaction).filter_by(
+                        idempotency_key=idempotency_key
+                    ).first()
+                    if existing is not None:
+                        log.info(
+                            "Duplicate STK callback for %s (key %s); ignoring",
+                            checkout_request_id, idempotency_key[:12],
+                        )
+                        callback_record.mark_processed()
+                        transaction.callback_processed = True
+                        db.session.commit()
+                        return True, "Duplicate callback ignored"
+
+                    # The amount actually collected must equal the amount
+                    # requested. A mismatch is a failed payment, not a warning.
+                    if amount_paid is not None:
+                        try:
+                            amount_paid_dec = Decimal(str(amount_paid)).quantize(
+                                Decimal("0.01"), rounding=ROUND_HALF_UP
+                            )
+                        except (InvalidOperation, ValueError):
+                            transaction.mark_failed("Unparseable amount in callback", str(result_code))
+                            callback_record.mark_processed()
+                            transaction.callback_processed = True
+                            db.session.commit()
+                            return False, "Unparseable amount in callback"
+                        if amount_paid_dec != Decimal(transaction.amount).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_UP
+                        ):
+                            log.error(
+                                "Amount mismatch for %s: expected %s, collected %s",
+                                checkout_request_id, transaction.amount, amount_paid_dec,
+                            )
+                            transaction.mark_failed("Amount mismatch", str(result_code))
+                            transaction.response_description = (
+                                f"Expected {transaction.amount}, collected {amount_paid_dec}"
+                            )
+                            callback_record.mark_processed()
+                            transaction.callback_processed = True
+                            db.session.commit()
+                            return False, "Amount mismatch"
+
+                    # The phone number that paid must be the one we asked.
+                    if phone_number and transaction.phone_number:
+                        if phone_number.lstrip("+").replace(" ", "") != str(
+                            transaction.phone_number
+                        ).lstrip("+").replace(" ", ""):
+                            log.error(
+                                "Phone mismatch for %s: expected %s, callback %s",
+                                checkout_request_id, transaction.phone_number, phone_number,
+                            )
+                            transaction.mark_failed("Phone number mismatch", str(result_code))
+                            callback_record.mark_processed()
+                            transaction.callback_processed = True
+                            db.session.commit()
+                            return False, "Phone number mismatch"
+
+                    if not transaction.mark_completed(mpesa_receipt, callback_data):
+                        # Already terminal (a previous delivery won the race).
+                        log.info(
+                            "STK callback for %s arrived after the transaction reached %s; ignoring",
+                            checkout_request_id, transaction.status,
+                        )
+                        callback_record.mark_processed()
+                        transaction.callback_processed = True
+                        db.session.commit()
+                        return True, "Callback ignored (transaction already terminal)"
+                    transaction.idempotency_key = idempotency_key
+
                     # Create wallet transaction if linked
                     if transaction.mpesa_account and transaction.mpesa_account.wallet:
                         wallet = transaction.mpesa_account.wallet
-                        wallet_txn = wallet.deposit(
-                            amount=transaction.amount,
-                            description=f"MPESA Deposit - {mpesa_receipt}",
-                            reference=mpesa_receipt,
-                            auto_commit=False
-                        )
+                        with wallet._lock_wallet_for_transaction() as locked_wallet:
+                            wallet_txn = locked_wallet.deposit(
+                                amount=transaction.amount,
+                                description=f"MPESA Deposit - {mpesa_receipt}",
+                                reference=mpesa_receipt,
+                                auto_commit=False
+                            )
                         transaction.wallet_transaction_id = wallet_txn.id
-                    
+
                     log.info(f"STK Push completed: {mpesa_receipt}")
                 
                 else:

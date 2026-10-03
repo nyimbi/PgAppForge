@@ -24,7 +24,7 @@ class TestXSSProtectionIntegration:
     def app(self):
         """Create Flask app with XSS protection enabled."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test-secret-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['ENABLE_CSP_HEADERS'] = True
 
         # Initialize XSS filters

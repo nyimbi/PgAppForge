@@ -1,6 +1,9 @@
 from io import BytesIO
+import json
 import os
 import shutil
+import sys
+import time
 from typing import Optional, Union
 from urllib.request import urlopen
 from zipfile import ZipFile
@@ -424,6 +427,97 @@ try:
 except ImportError:
     pass
 
+# ── Worker health ────────────────────────────────────────────────────────────
+
+DEFAULT_HEARTBEAT_MAX_AGE = 300.0
+
+
+def _heartbeat_path(app=None) -> str:
+    """Resolve the worker heartbeat file path.
+
+    ``PGAF_WORKER_HEARTBEAT`` wins; otherwise it lives beside the app instance
+    path, which is what the worker container mounts as a volume.
+    """
+    configured = os.environ.get("PGAF_WORKER_HEARTBEAT")
+    if configured:
+        return configured
+    try:
+        base = current_app.instance_path
+    except Exception:
+        base = os.getcwd()
+    return os.path.join(base, "worker-heartbeat.json")
+
+
+def _heartbeat_max_age() -> float:
+    try:
+        return float(os.environ.get("PGAF_WORKER_HEARTBEAT_MAX_AGE", DEFAULT_HEARTBEAT_MAX_AGE))
+    except ValueError:
+        return DEFAULT_HEARTBEAT_MAX_AGE
+
+
+def _check_celery_broker(app) -> str | None:
+    """Return None when the broker is reachable, else a failure description."""
+    celery_app = app.extensions.get("celery") if hasattr(app, "extensions") else None
+    if celery_app is None:
+        return None if not app.config.get("CELERY_BROKER_URL") else "no celery app registered"
+    try:
+        with celery_app.connection_or_acquire() as conn:
+            conn.ensure_connection(max_retries=0, timeout=3)
+        return None
+    except Exception as exc:
+        return f"broker unreachable ({type(exc).__name__})"
+
+
+@click.command()
+@click.option("--max-age", type=float, default=None, help="Heartbeat max age in seconds")
+def worker_status(max_age):
+    """Check worker liveness for container healthchecks.
+
+    Pings the Celery broker when Celery is registered on the app, otherwise
+    falls back to the heartbeat file written by pgappforge.events.worker.
+    Exits 0 when healthy, 1 otherwise — the Docker healthcheck depends on it.
+    """
+    app = current_app._get_current_object()
+
+    celery_app = app.extensions.get("celery") if hasattr(app, "extensions") else None
+    if celery_app is not None:
+        problem = _check_celery_broker(app)
+        if problem is None:
+            click.echo("worker alive: celery broker reachable")
+            sys.exit(0)
+        click.echo(f"worker unhealthy: {problem}", err=True)
+        sys.exit(1)
+
+    path = _heartbeat_path(app)
+    effective_max_age = max_age if max_age is not None else _heartbeat_max_age()
+    try:
+        with open(path, "r") as fh:
+            beat = json.load(fh)
+    except FileNotFoundError:
+        click.echo(f"worker unhealthy: no heartbeat at {path}", err=True)
+        sys.exit(1)
+    except (OSError, ValueError) as exc:
+        click.echo(f"worker unhealthy: unreadable heartbeat ({type(exc).__name__})", err=True)
+        sys.exit(1)
+
+    written = beat.get("written_at") if isinstance(beat, dict) else None
+    if written is None:
+        click.echo("worker unhealthy: heartbeat has no written_at", err=True)
+        sys.exit(1)
+
+    age = max(0.0, time.time() - float(written))
+    if age > effective_max_age:
+        click.echo(
+            f"worker unhealthy: heartbeat {age:.0f}s old (max {effective_max_age:.0f}s)",
+            err=True,
+        )
+        sys.exit(1)
+
+    detail = beat.get("detail") or ""
+    click.echo(f"worker alive: heartbeat {age:.0f}s old{' — ' + detail if detail else ''}")
+    sys.exit(0)
+
+
 # Register all commands with the fab group
 forge.add_command(create_app)
 forge.add_command(create_addon)
@@ -432,6 +526,7 @@ forge.add_command(reset_password)
 forge.add_command(list_users)
 forge.add_command(list_views)
 forge.add_command(create_ext_app)
+forge.add_command(worker_status)
 
 # Import and register screenshot commands
 try:

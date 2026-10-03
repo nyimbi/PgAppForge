@@ -180,7 +180,7 @@ class PaymentOrderView(ModelView):
 	def cancel_order(self, pk: str) -> Any:
 		"""Cancel a PENDING/VALIDATED payment via the service layer."""
 		from .services import PaymentsService, PaymentImmutableError, PaymentNotFoundError
-		from pgappforge.security import current_user  # type: ignore[attr-defined]
+		from flask_login import current_user
 		session = _get_session()
 		if session is None:
 			abort(500, "Database session unavailable")
@@ -294,7 +294,7 @@ class PaymentBatchView(ModelView):
 	def generate_pain001(self, pk: str) -> Any:
 		"""Generate ISO 20022 PAIN.001 XML for a batch."""
 		from .services import PaymentsService
-		from pgappforge.security import current_user  # type: ignore[attr-defined]
+		from flask_login import current_user
 		session = _get_session()
 		if session is None:
 			abort(500, "Database session unavailable")
@@ -323,7 +323,7 @@ class PaymentBatchView(ModelView):
 	def submit_batch(self, pk: str) -> Any:
 		"""Submit a DRAFT/VALIDATED/AUTHORIZED batch to the clearing rail."""
 		from .services import PaymentsService, PaymentImmutableError, RailNotAvailableError
-		from pgappforge.security import current_user  # type: ignore[attr-defined]
+		from flask_login import current_user
 		session = _get_session()
 		if session is None:
 			abort(500, "Database session unavailable")
@@ -445,7 +445,7 @@ class StandingOrderView(ModelView):
 	def pause(self, pk: str) -> Any:
 		"""Pause an ACTIVE standing order via the service layer."""
 		from .services import PaymentsService, PaymentNotFoundError
-		from pgappforge.security import current_user  # type: ignore[attr-defined]
+		from flask_login import current_user
 		session = _get_session()
 		if session is None:
 			abort(500, "Database session unavailable")
@@ -474,7 +474,7 @@ class StandingOrderView(ModelView):
 	def resume(self, pk: str) -> Any:
 		"""Resume a PAUSED standing order via the service layer."""
 		from .services import PaymentsService, PaymentNotFoundError
-		from pgappforge.security import current_user  # type: ignore[attr-defined]
+		from flask_login import current_user
 		session = _get_session()
 		if session is None:
 			abort(500, "Database session unavailable")

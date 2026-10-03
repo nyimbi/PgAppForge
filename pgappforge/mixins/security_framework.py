@@ -16,7 +16,8 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
-from flask import current_app, current_user, request
+from flask import current_app, request
+from flask_login import current_user
 from pgappforge import db
 from sqlalchemy.exc import IntegrityError, OperationalError, DataError
 

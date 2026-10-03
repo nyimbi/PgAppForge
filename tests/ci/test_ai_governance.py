@@ -93,6 +93,32 @@ class TestRequireHumanApproval:
 
 # ── require_ai_permission decorator ──────────────────────────────────────────
 
+class _StubSecurityManager:
+	"""Minimal stand-in for FAB's security manager."""
+
+	def __init__(self, allowed: bool):
+		self.allowed = allowed
+		self.calls = []
+
+	def has_access(self, permission_name, view_name):
+		self.calls.append((permission_name, view_name))
+		return self.allowed
+
+
+def _app_with_access(allowed: bool):
+	"""Build a Flask app carrying a stub appbuilder, plus that stub."""
+	from flask import Flask
+
+	application = Flask(__name__)
+	application.appbuilder = _StubAppBuilder(allowed)
+	return application
+
+
+class _StubAppBuilder:
+	def __init__(self, allowed: bool):
+		self.sm = _StubSecurityManager(allowed)
+
+
 class TestRequireAiPermission:
 	def test_returns_decorator(self):
 		dec = require_ai_permission("can_use_ai_chat")
@@ -105,19 +131,45 @@ class TestRequireAiPermission:
 		wrapped = require_ai_permission("can_ai_query_data")(my_view)
 		assert wrapped.__name__ == "my_view"
 
-	def test_wrapped_function_executes_outside_app_context(self):
-		# Outside an app context the permission check is skipped; fn still runs
+	def test_outside_app_context_raises_rather_than_skipping(self):
+		"""No app context means no security manager to consult.
+
+		The decorator used to swallow that and run the function unchecked, so
+		calling a guarded view from a thread or a script was an auth bypass.
+		"""
 		def ai_fn():
+			raise AssertionError("guarded function must not run")
+
+		wrapped = require_ai_permission("can_use_ai_chat")(ai_fn)
+		with pytest.raises(RuntimeError):
+			wrapped()
+
+	def test_permitted_call_runs_the_function(self):
+		calls = []
+
+		def ai_fn():
+			calls.append(1)
 			return "result"
 
 		wrapped = require_ai_permission("can_use_ai_chat")(ai_fn)
-		assert wrapped() == "result"
+		app = _app_with_access(True)
+		with app.app_context():
+			assert wrapped() == "result"
+		assert calls == [1]
 
 	def test_accepts_any_registered_permission(self):
 		for perm in AI_PERMISSIONS:
-			dec = require_ai_permission(perm)
-			fn = dec(lambda: perm)
-			assert fn() == perm
+			fn = require_ai_permission(perm)(lambda p=perm: p)
+			app = _app_with_access(True)
+			with app.app_context():
+				assert fn() == perm
+
+	def test_check_targets_the_ai_view(self):
+		fn = require_ai_permission("can_ai_query_data")(lambda: "ok")
+		app = _app_with_access(True)
+		with app.app_context():
+			fn()
+		assert app.appbuilder.sm.calls == [("can_ai_query_data", "AI")]
 
 	def test_works_on_method_with_self(self):
 		class MyView:
@@ -126,7 +178,60 @@ class TestRequireAiPermission:
 				return "code"
 
 		view = MyView()
-		assert view.generate() == "code"
+		app = _app_with_access(True)
+		with app.app_context():
+			assert view.generate() == "code"
+
+
+# ── require_ai_permission: Forbidden must propagate ──────────────────────────
+#
+# Regression guard. The decorator used to wrap the access check and the abort
+# in `except Exception`, which swallowed werkzeug's Forbidden and ran the
+# decorated function anyway -- the check was decorative.
+
+
+class TestRequireAiPermissionDenies:
+	"""Forbidden has to escape the decorator, not be absorbed by it."""
+
+	def _guarded(self, calls):
+		@require_ai_permission("can_ai_query_data")
+		def guarded():
+			calls.append("called")
+			return "ok"
+
+		return guarded
+
+	def test_forbidden_raised_and_function_not_called(self):
+		from werkzeug.exceptions import Forbidden
+
+		calls = []
+		guarded = self._guarded(calls)
+
+		app = _app_with_access(False)
+		with app.app_context():
+			with pytest.raises(Forbidden):
+				guarded()
+
+		assert calls == [], "decorated function ran despite denied permission"
+
+	def test_denied_check_records_the_permission(self):
+		from werkzeug.exceptions import Forbidden
+
+		app = _app_with_access(False)
+		with app.app_context():
+			with pytest.raises(Forbidden):
+				self._guarded([])()
+
+		assert app.appbuilder.sm.calls == [("can_ai_query_data", "AI")]
+
+	def test_forbidden_is_not_downgraded_to_a_warning(self):
+		"""A bare Forbidden (no description) must still abort."""
+		from werkzeug.exceptions import Forbidden
+
+		app = _app_with_access(False)
+		with app.app_context():
+			with pytest.raises(Forbidden):
+				self._guarded([])()
 
 
 # ── log_ai_action (no DB, graceful) ──────────────────────────────────────────

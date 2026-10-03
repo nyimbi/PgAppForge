@@ -21,13 +21,65 @@ worker identified via an env-var flag.
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Heartbeat — lets `flask fab worker-status` (and the container healthcheck)
+# distinguish a working worker from a wedged one without touching the broker.
+# ---------------------------------------------------------------------------
+
+def heartbeat_path() -> str:
+	"""Resolve the heartbeat file path (``PGAF_WORKER_HEARTBEAT`` wins)."""
+	configured = os.environ.get("PGAF_WORKER_HEARTBEAT")
+	if configured:
+		return configured
+	try:
+		from flask import current_app
+		base = current_app.instance_path
+	except Exception:
+		base = os.path.join(os.getcwd(), "instance")
+	return os.path.join(base, "worker-heartbeat.json")
+
+
+def write_heartbeat(detail: str = "", path: str | None = None) -> str | None:
+	"""Atomically write the heartbeat file; returns the path or ``None``.
+
+	Written to a temp file then renamed, so the healthcheck never reads a
+	half-written JSON document while the poll loop is mid-update.
+	"""
+	target = path or heartbeat_path()
+	payload = {
+		"written_at": time.time(),
+		"iso": datetime.now(timezone.utc).isoformat(),
+		"pid": os.getpid(),
+		"detail": detail,
+	}
+	directory = os.path.dirname(target) or "."
+	try:
+		os.makedirs(directory, exist_ok=True)
+		fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+		try:
+			with os.fdopen(fd, "w") as fh:
+				json.dump(payload, fh)
+			os.replace(tmp, target)
+		except BaseException:
+			if os.path.exists(tmp):
+				os.unlink(tmp)
+			raise
+		return target
+	except OSError as exc:
+		log.warning("EventWorker: heartbeat write failed (%s): %s", type(exc).__name__, exc)
+		return None
+
 
 # ---------------------------------------------------------------------------
 # Table definition (SQLAlchemy Core — avoids ORM mapper conflicts)
@@ -219,6 +271,9 @@ class EventWorker:
 				log.exception("EventWorker: unhandled error in poll loop")
 			with self._lock:
 				self._stats["last_poll"] = datetime.now(timezone.utc)
+				polls = self._stats.get("polls", 0)
+				handled = self._stats.get("dispatched", 0) + self._stats.get("failed", 0)
+			write_heartbeat(f"poll #{polls}, {handled} handled")
 			# Interruptible sleep: wakes immediately on stop()
 			self._stop_event.wait(timeout=self._poll_interval)
 

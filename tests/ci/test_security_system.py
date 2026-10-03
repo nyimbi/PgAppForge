@@ -472,7 +472,7 @@ class TestSecurityConfiguration(FABTestCase):
         """Test AUTH_DB configuration"""
         app = Flask(__name__)
         app.config['AUTH_TYPE'] = AUTH_DB
-        app.config['SECRET_KEY'] = 'test-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
 
         db = SQLA(app)
@@ -482,7 +482,7 @@ class TestSecurityConfiguration(FABTestCase):
     def test_security_config_validation(self):
         """Test security configuration validation"""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         
         # Test that AppBuilder can be created with valid config

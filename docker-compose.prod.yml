@@ -26,6 +26,8 @@ services:
       FLASK_ENV: "production"
       FLASK_DEBUG: "0"
       OTEL_ENABLED: "true"
+      PGAF_LOG_FORMAT: "json"
+      PGAF_LOG_LEVEL: "info"
       # Override OTEL_EXPORTER_ENDPOINT in .env with your collector address
     volumes:
       # No source mount in prod — baked into image
@@ -42,7 +44,7 @@ services:
         --log-level info
         "app:create_app()"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -66,6 +68,9 @@ services:
       SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://pguser:pguserpassword@postgres:5432/app"
       FLASK_ENV: "production"
       OTEL_ENABLED: "true"
+      PGAF_LOG_FORMAT: "json"
+      PGAF_LOG_LEVEL: "info"
+      PGAF_WORKER_HEARTBEAT: "/app/logs/worker-heartbeat.json"
     volumes:
       - app_logs:/app/logs
     command: flask fab run-scheduler
@@ -98,7 +103,9 @@ services:
     depends_on:
       - app
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      # Probe the app upstream's readiness, not nginx's own /health — a
+      # gateway that is up while the app is down is not healthy.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://app:8080/readyz"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -70,6 +70,7 @@ setup(
         "werkzeug<4",
         "itsdangerous>=1.1.0, <3.0.0",  # Required for tenant email verification
         "inflect>=7.0.0, <8",
+        "inflection>=0.5.1",  # test generators use inflection.camelize/underscore
         "bleach>=6.0.0",  # XSS sanitisation for widgets
         "psycopg2-binary>=2.9.0",  # PostgreSQL only
         "uuid6>=2022.10.25",        # UUID v7 (time-sortable) for audit log IDs

@@ -19,7 +19,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import current_app, current_user, g
+from flask import current_app, g
+from flask_login import current_user
 from pgappforge.models.mixins import AuditMixin
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text, event

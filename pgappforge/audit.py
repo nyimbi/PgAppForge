@@ -124,6 +124,8 @@ class AuditLog:
 	session_id  = Column(String(100), nullable=True)
 	request_id  = Column(String(36),  nullable=True)   # correlation with web request
 	module      = Column(String(100), nullable=True)   # e.g. "hcm.payroll", "finance.gl"
+	prev_hash   = Column(String(64),  nullable=True)    # entry_hash of the previous row
+	entry_hash  = Column(String(64),  nullable=True)    # sha256(prev_hash + canonical entry)
 
 
 # ── Model base mixin ──────────────────────────────────────────────────────────
@@ -223,12 +225,103 @@ def _get_request_ip() -> str | None:
 
 
 def _get_request_id() -> str | None:
-	"""Return correlation request_id from Flask ``g``, safe outside request."""
+	"""Return the correlation request id, safe outside a request context.
+
+	Resolution order: the observability context (which honours an inbound
+	``X-Request-ID`` and mints one otherwise), then ``g.request_id`` for apps
+	that set it directly, then a fresh UUID4.  The last fallback matters: this
+	hook also fires from CLI commands and background jobs, where the old
+	implementation returned ``None`` and left ``request_id`` permanently null.
+	"""
+	try:
+		from pgappforge.observability.context import current_request_id
+		rid = current_request_id()
+		if rid:
+			return rid
+	except Exception:
+		pass
 	try:
 		from flask import g
-		return getattr(g, "request_id", None)
+		rid = getattr(g, "request_id", None)
+		if rid:
+			return rid
 	except Exception:
-		return None
+		pass
+	import uuid as _uuid_mod
+	return str(_uuid_mod.uuid4())
+
+
+# ── Hash chain ───────────────────────────────────────────────────────────────
+
+def _canonical(entry: dict[str, Any]) -> str:
+	"""Deterministic JSON for hashing: sorted keys, no insignificant whitespace."""
+	return json.dumps(entry, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _entry_hash(prev_hash: str | None, entry: dict[str, Any]) -> str:
+	"""sha256 over ``prev_hash`` plus the canonical entry payload.
+
+	Chaining each entry's hash into the next makes any later mutation of the
+	log detectable: editing row N invalidates every hash from N onward.
+	"""
+	payload = {
+		"table_name":     entry.get("table_name"),
+		"record_id":      entry.get("record_id"),
+		"operation":      entry.get("operation"),
+		"user_id":        entry.get("user_id"),
+		"changed_fields": entry.get("changed_fields"),
+		"created_at":     entry["created_at"].isoformat()
+			if isinstance(entry.get("created_at"), datetime) else entry.get("created_at"),
+	}
+	return hashlib.sha256(f"{prev_hash or ''}{_canonical(payload)}".encode()).hexdigest()
+
+
+def verify_audit_chain(session, limit: int = 1000) -> bool:
+	"""Verify the integrity of the most recent ``limit`` audit rows.
+
+	Recomputes ``entry_hash`` for each row and checks that it both matches the
+	stored value and that its ``prev_hash`` equals the previous row's
+	``entry_hash``.  Exposed for auditors and scheduled jobs — deliberately not
+	called in the request path, where it would add a scan per request.
+
+	Returns:
+		True when every link in the window is intact, False on any break.
+		Returns False (and logs) when the table is absent or unchained.
+	"""
+	try:
+		rows = session.execute(
+			sa.text(
+				"SELECT id, table_name, record_id, operation, user_id, "
+				"changed_fields, created_at, prev_hash, entry_hash "
+				"FROM pgaf_audit_log ORDER BY created_at ASC, id ASC LIMIT :lim"
+			),
+			{"lim": int(limit)},
+		).fetchall()
+	except Exception as exc:
+		log.warning("verify_audit_chain: table unreadable: %s", type(exc).__name__)
+		return False
+
+	prev: str | None = None
+	for row in rows:
+		entry = {
+			"table_name":     row.table_name,
+			"record_id":      row.record_id,
+			"operation":      row.operation,
+			"user_id":        row.user_id,
+			"changed_fields": row.changed_fields,
+			"created_at":     row.created_at,
+		}
+		if row.prev_hash != prev:
+			log.warning("verify_audit_chain: broken link at %s", row.id)
+			return False
+		if row.entry_hash and row.entry_hash != _entry_hash(row.prev_hash, entry):
+			log.warning("verify_audit_chain: hash mismatch at %s", row.id)
+			return False
+		if not row.entry_hash:
+			log.warning("verify_audit_chain: unchained entry at %s", row.id)
+			return False
+		prev = row.entry_hash
+	return True
 
 
 # ── Module inference ──────────────────────────────────────────────────────────
@@ -256,6 +349,21 @@ def _get_module_for_table(table_name: str) -> str | None:
 		if table_name.startswith(prefix):
 			return module
 	return None
+
+
+def _latest_entry_hash(session) -> str | None:
+	"""Return the newest ``entry_hash`` in the chain, or ``None`` if empty.
+
+	A failed lookup (table not provisioned yet, concurrent insert) starts a
+	fresh chain rather than aborting the audit write — availability of the
+	audit trail beats a perfectly linked one.
+	"""
+	try:
+		return session.execute(
+			sa.text("SELECT entry_hash FROM pgaf_audit_log ORDER BY created_at DESC, id DESC LIMIT 1")
+		).scalar()
+	except Exception:
+		return None
 
 
 # ── Event listener setup ──────────────────────────────────────────────────────
@@ -381,15 +489,19 @@ def setup_audit_listeners(session_factory=None) -> None:
 			if not audit_rows:
 				return
 
+			# Hash chain: each row carries the previous row's hash, so any later
+			# edit or delete is detectable by verify_audit_chain().
+			prev = _latest_entry_hash(session)
+
 			session.execute(
 				sa.text(
 					"INSERT INTO pgaf_audit_log "
 					"(id, table_name, record_id, operation, user_id, user_email, "
 					"before_json, after_json, changed_fields, created_at, "
-					"ip_address, request_id, module) "
+					"ip_address, request_id, module, prev_hash, entry_hash) "
 					"VALUES (:id, :table_name, :record_id, :operation, :user_id, :user_email, "
 					":before_json::jsonb, :after_json::jsonb, :changed_fields::jsonb, :created_at, "
-					":ip_address, :request_id, :module)"
+					":ip_address, :request_id, :module, :prev_hash, :entry_hash)"
 				),
 				[
 					{
@@ -397,6 +509,8 @@ def setup_audit_listeners(session_factory=None) -> None:
 						"before_json":    json.dumps(r["before_json"])    if r["before_json"]    is not None else None,
 						"after_json":     json.dumps(r["after_json"])     if r["after_json"]     is not None else None,
 						"changed_fields": json.dumps(r["changed_fields"]) if r["changed_fields"] is not None else None,
+						"prev_hash":      prev,
+						"entry_hash":     (prev := _entry_hash(prev, r)),
 					}
 					for r in audit_rows
 				],
@@ -433,7 +547,9 @@ def create_audit_table(engine) -> None:
 		ip_address      INET,
 		session_id      VARCHAR(100),
 		request_id      VARCHAR(36),
-		module          VARCHAR(100)
+		module          VARCHAR(100),
+		prev_hash       VARCHAR(64),
+		entry_hash      VARCHAR(64)
 	);
 	CREATE INDEX IF NOT EXISTS ix_pgaf_audit_table_record
 		ON pgaf_audit_log(table_name, record_id);
@@ -512,4 +628,5 @@ __all__ = [
 	"setup_audit_listeners",
 	"create_audit_table",
 	"query_audit",
+	"verify_audit_chain",
 ]

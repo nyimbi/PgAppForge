@@ -474,7 +474,7 @@ class TestMFARequired:
     def app(self):
         """Create test Flask application."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test-secret-key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         # Mock appbuilder
         app.appbuilder = MagicMock()

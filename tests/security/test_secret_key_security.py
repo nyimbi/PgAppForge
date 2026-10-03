@@ -302,7 +302,7 @@ class SecretKeyIntegrationTest(unittest.TestCase):
     def test_security_audit_tools(self):
         """Test that security audit tools can detect issues."""
         # Test that the generator can detect weak keys in environment
-        os.environ['SECRET_KEY'] = 'weak-key'
+        os.environ['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
 
         result = subprocess.run([
             sys.executable, 'bin/generate_secret_key.py', '--check-env'

@@ -289,7 +289,7 @@ class TestSMSService:
     def test_sms_service_no_providers(self):
         """Test SMS service with no providers configured."""
         app = Flask(__name__)
-        app.config['SECRET_KEY'] = 'test'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         with app.app_context():
             service = SMSService()

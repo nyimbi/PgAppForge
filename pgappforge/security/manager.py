@@ -139,7 +139,7 @@ def _oauth_tokengetter(token=None):
     from session cookie.
     """
     token = session.get("oauth")
-    log.debug("Token Get: %s", token)
+    log.debug("oauth token present: %s", bool(token))
     return token
 
 

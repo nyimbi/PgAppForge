@@ -237,7 +237,7 @@ class PoolLaneSecurityManager:
     
     def get_available_roles(self, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get available roles from PgAppForge security manager."""
-        from pgappforge.security import current_user
+        from flask_login import current_user
         from flask import current_app
         
         try:

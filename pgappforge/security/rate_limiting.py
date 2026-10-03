@@ -55,7 +55,15 @@ class SecurityRateLimiter:
         log.info("Security rate limiter initialized")
     
     def _get_limiter_key(self) -> str:
-        """Get key for rate limiting (IP + user agent fingerprint for better security)"""
+        """Get key for rate limiting (IP + user agent fingerprint for better security)
+
+        NOTE: get_remote_address() returns whatever Flask sees in
+        request.remote_addr. Behind a reverse proxy or load balancer that is the
+        proxy's address, so every client shares one bucket. The app factory MUST
+        apply werkzeug.middleware.proxy_fix.ProxyFix with the real number of
+        trusted proxy hops, and flask-limiter must be configured with matching
+        trusted proxy settings, or these limits are per-proxy, not per-client.
+        """
         ip = get_remote_address()
         
         # Add user agent hash for better fingerprinting
@@ -71,10 +79,6 @@ class SecurityRateLimiter:
         if path.startswith('/health') or path.startswith('/static'):
             return True
         
-        # Skip for internal requests (if using service-to-service auth)
-        if request.headers.get('X-Internal-Request') == 'true':
-            return True
-            
         return False
     
     def limit_auth_endpoint(self, endpoint_type: str = 'login'):

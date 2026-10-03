@@ -11,7 +11,8 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
-from flask import session, request, current_user
+from flask import session, request
+from flask_login import current_user
 import bleach
 from collections import defaultdict
 

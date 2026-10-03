@@ -20,7 +20,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from flask import current_user, g
+from flask import g
+from flask_login import current_user
 from pgappforge.models.mixins import AuditMixin, FileColumn, ImageColumn
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey, Integer, String, Text, event

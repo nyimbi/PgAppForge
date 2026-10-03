@@ -1,9 +1,12 @@
 """pgappforge security integrations: Keycloak SSO and SpiceDB authorization."""
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
+import secrets
+import time
 from typing import Any
 from urllib.parse import urljoin
 
@@ -18,6 +21,111 @@ log = logging.getLogger(__name__)
 def _slugify(name: str) -> str:
 	"""Convert an arbitrary name to a safe identifier (lowercase, hyphens)."""
 	return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def _b64url_decode(segment: str) -> bytes:
+	"""Decode a base64url JWT segment, tolerating missing padding."""
+	pad = "=" * (-len(segment) % 4)
+	return base64.urlsafe_b64decode(segment + pad)
+
+
+def _decode_jwt_payload(token: str) -> dict[str, Any]:
+	"""Decode a JWT payload without verifying its signature."""
+	parts = token.split(".")
+	if len(parts) != 3:
+		raise ValueError("id_token is not a well-formed JWT")
+	return json.loads(_b64url_decode(parts[1]))
+
+
+def _verify_oidc_id_token(
+	id_token: str,
+	expected_nonce: str | None,
+	issuer: str,
+	client_id: str,
+	jwks_url: str | None,
+) -> None:
+	"""Verify an OIDC id_token, raising ValueError on any mismatch.
+
+	The nonce was minted into the session at /login and never read back. Without
+	this check a replayed or substituted id_token is accepted as a valid login.
+
+	Signature verification needs PyJWT plus a reachable JWKS endpoint. When
+	PyJWT is missing the claims are still validated, but signature checking is
+	impossible -- that is logged loudly rather than silently passed, because
+	"validated the nonce" and "proved the token was minted by the issuer" are
+	different assurances.
+
+	The token itself is never logged.
+	"""
+	if not id_token:
+		raise ValueError("no id_token in token response")
+	
+	claims: dict[str, Any] | None = None
+	verified = False
+	
+	if jwks_url:
+		try:
+			import jwt as _pyjwt  # type: ignore[import-untyped]
+			from jwt import PyJWKClient  # type: ignore[import-untyped]
+			import requests as _requests_mod
+			
+			signing_key = PyJWKClient(jwks_url).get_signing_key_from_jwt(id_token)
+			claims = _pyjwt.decode(
+				id_token,
+				signing_key.key,
+				algorithms=["RS256", "RS384", "RS512", "ES256", "PS256"],
+				audience=client_id,
+				issuer=issuer,
+				options={"require": ["exp", "iss", "aud"]},
+			)
+			verified = True
+		except ImportError:
+			log.error(
+				"PyJWT is not installed: OIDC id_token signature cannot be "
+				"verified. Claims are still validated below, but the token is "
+				"not proven to come from the issuer. Install PyJWT."
+			)
+		except Exception as e:
+			# JWKS unreachable or signature genuinely bad.
+			log.error("OIDC id_token signature verification failed: %s", e)
+			raise ValueError("id_token signature verification failed")
+	
+	if claims is None:
+		claims = _decode_jwt_payload(id_token)
+	
+	if not verified:
+		log.warning(
+			"OIDC id_token claims validated WITHOUT signature verification "
+			"(PyJWT absent or JWKS unavailable)."
+		)
+	
+	# nonce: the whole point of the check.
+	nonce = claims.get("nonce")
+	if not expected_nonce:
+		raise ValueError("no oidc_nonce in session -- cannot verify id_token")
+	if not nonce:
+		raise ValueError("id_token has no nonce claim")
+	if not (isinstance(nonce, str) and isinstance(expected_nonce, str)):
+		raise ValueError("nonce is not a string")
+	if len(expected_nonce) >= 32 and not secrets.compare_digest(nonce, expected_nonce):
+		raise ValueError("id_token nonce mismatch -- possible replay")
+	
+	# iss / aud / exp, checked independently of PyJWT's own validation so the
+	# no-PyJWT path is not a free pass.
+	if claims.get("iss") != issuer:
+		raise ValueError("id_token issuer mismatch")
+	
+	aud = claims.get("aud")
+	aud_list = aud if isinstance(aud, list) else [aud]
+	if client_id not in aud_list:
+		raise ValueError("id_token audience mismatch")
+	
+	exp = claims.get("exp")
+	if not isinstance(exp, (int, float)):
+		raise ValueError("id_token has no exp claim")
+	if exp < time.time():
+		raise ValueError("id_token has expired")
+	
 
 
 def _permission_to_scope(permission_name: str) -> str:
@@ -426,8 +534,6 @@ class KeycloakIntegration:
 			)
 			app.register_blueprint(bp)
 		"""
-		import secrets as _secrets
-
 		try:
 			import requests as _requests  # type: ignore[import-untyped]
 		except ImportError as exc:
@@ -450,8 +556,8 @@ class KeycloakIntegration:
 
 		@bp.route("/login")
 		def login():  # type: ignore[return]
-			state = _secrets.token_urlsafe(32)
-			nonce = _secrets.token_urlsafe(32)
+			state = secrets.token_urlsafe(32)
+			nonce = secrets.token_urlsafe(32)
 			session["oidc_state"] = state
 			session["oidc_nonce"] = nonce
 
@@ -511,6 +617,19 @@ class KeycloakIntegration:
 			tokens: dict[str, Any] = token_resp.json()
 			access_token: str = tokens.get("access_token", "")
 			id_token: str = tokens.get("id_token", "")
+			
+			expected_nonce = session.pop("oidc_nonce", None)
+			try:
+				_verify_oidc_id_token(
+					id_token,
+					expected_nonce,
+					issuer=_realm_url,
+					client_id=client_id,
+					jwks_url=f"{_realm_url}/protocol/openid-connect/certs",
+				)
+			except ValueError as e:
+				log.warning("Keycloak OIDC: id_token rejected -- %s", e)
+				return redirect(url_for(post_login_endpoint))
 
 			userinfo_resp = _requests.get(
 				_userinfo_url,

@@ -37,7 +37,7 @@ class ProcessSecurityTestCase(TestCase):
         """Create test Flask app."""
         app = Flask(__name__)
         app.config['TESTING'] = True
-        app.config['SECRET_KEY'] = 'test_secret_key'
+        app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         app.config['WTF_CSRF_ENABLED'] = False
         

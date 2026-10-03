@@ -54,7 +54,7 @@ class TestCoreAppBuilderInitialization(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -105,7 +105,7 @@ class TestCoreBaseView(FABTestCase):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -151,7 +151,7 @@ class TestCoreModelView(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         
@@ -208,7 +208,7 @@ class TestCoreDataModel(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -254,7 +254,7 @@ class TestCoreSecurity(FABTestCase):
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -305,7 +305,7 @@ class TestCoreValidation(FABTestCase):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -331,7 +331,7 @@ class TestCoreErrorHandling(FABTestCase):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)
@@ -359,7 +359,7 @@ class TestCoreAsyncSupport(FABTestCase):
         self.app = Flask(__name__)
         self.app.config['TESTING'] = True
         self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI", "postgresql:///pgaf_test")
-        self.app.config['SECRET_KEY'] = 'test-secret-key'
+        self.app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
         
         self.db = SQLA(self.app)
         self.appbuilder = AppBuilder(self.app, self.db.session)

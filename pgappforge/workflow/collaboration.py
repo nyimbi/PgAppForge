@@ -180,7 +180,7 @@ class WorkflowComment(AuditMixin):
     resolved = Column(Boolean, default=False)
     resolved_by = Column(Integer, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
-    metadata = Column(JSON, default=lambda: {})
+    record_metadata = Column(JSON, default=lambda: {})
 
     # Relationships
     workflow_state = relationship("WorkflowState", backref="comments")

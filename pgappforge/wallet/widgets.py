@@ -13,7 +13,7 @@ from typing import Dict, List, Any, Optional, Union
 
 from flask import render_template_string, url_for
 from pgappforge.widgets import FormWidget, ListWidget, ShowWidget
-from pgappforge.security import current_user
+from flask_login import current_user
 from markupsafe import Markup
 
 from .models import UserWallet, WalletTransaction, WalletBudget

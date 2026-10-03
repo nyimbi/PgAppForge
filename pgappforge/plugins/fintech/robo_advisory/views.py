@@ -21,9 +21,9 @@ import logging
 from typing import Any
 
 from flask import request
-from flask_appbuilder import BaseView, ModelView, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import has_access
+from pgappforge import BaseView, ModelView, expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.erp.foundation.view_helpers import (
 	chart_widget,

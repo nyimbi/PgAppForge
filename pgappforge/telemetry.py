@@ -25,6 +25,20 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+#: Setup outcome, for ``telemetry_health()`` and startup diagnostics.
+#: ``{"configured": bool, "reason": str, "degraded": bool, "error": str | None}``
+_STATE: dict[str, Any] = {
+	"configured": False,
+	"reason": "not configured",
+	"degraded": True,
+	"error": None,
+}
+
+
+def telemetry_state() -> dict[str, Any]:
+	"""Return a copy of the telemetry setup state."""
+	return dict(_STATE)
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -36,7 +50,7 @@ def setup_telemetry(
 	service_version: str = "4.8.0",
 	exporter_endpoint: str | None = None,
 	exporter_type: str = "otlp",
-) -> None:
+) -> bool:
 	"""Set up OpenTelemetry instrumentation for PgAppForge.
 
 	Call once in your app factory after creating the Flask app and SQLAlchemy
@@ -50,7 +64,12 @@ def setup_telemetry(
 		exporter_endpoint: OTLP collector endpoint, e.g. ``"http://jaeger:4317"``.
 		                   Overridden by ``OTEL_EXPORTER_ENDPOINT`` in app.config.
 		exporter_type:     ``"otlp"`` | ``"console"`` | ``"none"``.
+
+	Returns:
+		True when a tracer provider was installed, False when telemetry is
+		inactive (deps missing, ``OTEL_ENABLED=False``, or an SDK error).
 	"""
+	_STATE.update(configured=False, reason="starting", degraded=True, error=None)
 	try:
 		from opentelemetry import trace, metrics  # noqa: F401
 		from opentelemetry.sdk.trace import TracerProvider
@@ -59,25 +78,37 @@ def setup_telemetry(
 			ConsoleSpanExporter,
 		)
 		from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-	except ImportError:
-		log.info(
+	except ImportError as exc:
+		_STATE.update(reason="opentelemetry not installed", error=str(exc))
+		log.warning(
 			"opentelemetry not installed — telemetry disabled. "
 			"pip install opentelemetry-sdk opentelemetry-instrumentation-flask "
 			"opentelemetry-instrumentation-sqlalchemy"
 		)
-		return
+		return False
 
 	# ── Resolve config from Flask app ────────────────────────────────────────
 	if app is not None:
 		cfg = app.config
 		if not cfg.get("OTEL_ENABLED", True):
-			log.debug("OTel: disabled via OTEL_ENABLED=False")
-			return
+			_STATE.update(reason="disabled via OTEL_ENABLED=False")
+			log.info("OTel: disabled via OTEL_ENABLED=False")
+			return False
 		exporter_endpoint = exporter_endpoint or cfg.get("OTEL_EXPORTER_ENDPOINT")
 		exporter_type = cfg.get("OTEL_EXPORTER_TYPE", exporter_type)
 		service_name = cfg.get("OTEL_SERVICE_NAME", service_name)
 		service_version = cfg.get("OTEL_SERVICE_VERSION", service_version)
 
+	try:
+		return _setup(app, engine, service_name, service_version, exporter_endpoint, exporter_type)
+	except Exception as exc:
+		_STATE.update(reason=f"setup failed: {exc}", error=str(exc))
+		log.warning("OTel: telemetry setup failed, continuing without traces: %s", exc, exc_info=True)
+		return False
+
+
+def _setup(app, engine, service_name, service_version, exporter_endpoint, exporter_type) -> bool:
+	"""Internal setup body, split out so ``setup_telemetry`` owns the guard."""
 	# ── Resource ─────────────────────────────────────────────────────────────
 	resource = Resource.create({
 		SERVICE_NAME: service_name,
@@ -136,7 +167,9 @@ def setup_telemetry(
 	# ── Metrics provider (best-effort) ────────────────────────────────────────
 	_setup_metrics(exporter_endpoint, exporter_type, resource)
 
+	_STATE.update(configured=True, reason=f"configured for '{service_name}'", degraded=False)
 	log.info("OTel: telemetry setup complete for service '%s' v%s", service_name, service_version)
+	return True
 
 
 def trace_view(operation_name: str | None = None):
@@ -197,8 +230,8 @@ def record_business_metric(
 			description=f"PgAppForge business metric: {name}",
 		)
 		counter.add(value, attributes or {})
-	except Exception:
-		pass
+	except Exception as exc:
+		log.warning("record_business_metric(%r) failed: %s", name, exc)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -244,7 +277,8 @@ def _setup_metrics(
 		metrics.set_meter_provider(meter_provider)
 		log.debug("OTel: MeterProvider configured")
 	except Exception as exc:
-		log.debug("OTel: metrics setup skipped: %s", exc)
+		_STATE["degraded"] = True
+		log.warning("OTel: metrics setup skipped: %s", exc)
 
 
 __all__ = [

@@ -18,7 +18,9 @@ Usage:
     ADDON_MANAGERS = ['pgappforge.security.wallet.WalletManager']
 """
 
-from pgappforge.base import BaseManager
+# BaseManager is defined in pgappforge.basemanager; pgappforge.base only
+# imports it under TYPE_CHECKING, so it is not importable at runtime.
+from pgappforge.basemanager import BaseManager
 from .wallet_api import WalletApi, WalletView
 import logging
 

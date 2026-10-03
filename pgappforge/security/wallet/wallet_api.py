@@ -13,9 +13,14 @@ from pgappforge import expose
 from pgappforge.api import BaseApi, safe
 from pgappforge.security.decorators import has_access_api
 from ...baseviews import BaseView
-from .. import current_user
+from flask_login import current_user
 
 # MPESA integration imports (with graceful fallback)
+from pgappforge.webhooks import (
+    WebhookRejected,
+    WebhookStoreUnavailable,
+    verify_stk_callback as verify_stk_push,
+)
 try:
     from ...wallet.mpesa_service import get_mpesa_service
     from ...wallet.mpesa_models import MPESATransaction, MPESAAccount
@@ -947,25 +952,38 @@ class WalletApi(BaseApi):
         """
         try:
             # Log the callback for debugging
-            callback_data = request.get_json()
-            headers_data = dict(request.headers)
-            
-            log.info(f"MPESA callback received: {json.dumps(callback_data)}")
-            
+            # Verify before anything else: size, content type, Safaricom source
+            # ranges, optional HMAC signature, replay window, deduplication.
+            # The payload is never logged verbatim.
+            try:
+                event = verify_stk_push(request)
+            except WebhookRejected as exc:
+                log.warning("MPESA callback rejected (%s): %s", exc.code, exc)
+                # Always 200 so Safaricom does not hammer a rejecting endpoint.
+                return jsonify({'ResultCode': 1, 'ResultDesc': 'Rejected'}), 200
+            except WebhookStoreUnavailable as exc:
+                log.error("MPESA callback store unavailable: %s", exc)
+                return jsonify({'ResultCode': 1, 'ResultDesc': 'Service unavailable'}), 503
+            log.info(
+                "MPESA callback accepted: event=%s ip=%s", event.event_id[:16], event.client_ip
+            )
+
             # Check MPESA availability and get service
             if not MPESA_AVAILABLE:
                 log.error("MPESA integration not available for callback processing")
                 return jsonify({'ResultCode': 1, 'ResultDesc': 'Service unavailable'}), 503
-            
+
             try:
                 mpesa_service = get_mpesa_service()
             except Exception as e:
                 log.error(f"Failed to initialize MPESA service for callback: {e}")
                 return jsonify({'ResultCode': 1, 'ResultDesc': 'Service unavailable'}), 503
-            
+
             # Process callback
-            success, message = mpesa_service.process_stk_callback(callback_data)
-            
+            success, message = mpesa_service.process_stk_callback(
+                event.payload, verified_event_id=event.event_id
+            )
+
             if success:
                 # Acknowledge callback to MPESA
                 return jsonify({
@@ -1208,7 +1226,11 @@ class WalletApi(BaseApi):
             data = request.get_json()
             if not data:
                 return jsonify({'error': 'Invalid JSON payload'}), 400
-            
+
+            # Optional retry key: a repeat of the same logical transfer returns
+            # the original pair instead of moving the money again.
+            idempotency_key = request.headers.get('Idempotency-Key')
+
             from_wallet_id = data.get('from_wallet_id')
             to_wallet_id = data.get('to_wallet_id')
             amount = data.get('amount')
@@ -1258,7 +1280,8 @@ class WalletApi(BaseApi):
                     target_wallet=to_wallet,
                     amount=amount,
                     description=description or f"Transfer to {to_wallet.wallet_name}",
-                    auto_commit=True
+                    auto_commit=True,
+                    external_id=idempotency_key
                 )
                 
                 return jsonify({

@@ -12,13 +12,25 @@ Design decisions
 - Uses ``current_setting('app.tenant_id', true)`` (the ``true`` arg means
   it returns NULL rather than raising when the variable is unset, so
   unauthenticated sessions see zero rows — fail-safe).
-- SYSTEM bypass: setting ``app.tenant_id`` to the literal string ``'SYSTEM'``
-  grants superuser-style full visibility.  Guard this carefully.
+- No magic tenant string.  An earlier version treated ``app.tenant_id =
+  'SYSTEM'`` as a bypass, which meant any code holding a session could
+  disable every policy by writing one string.  Bypass is now a separate
+  GUC (``app.bypass_rls``) that only
+  :func:`pgappforge.set_bypass_rls` can turn on, and only for a role
+  listed in ``app.bypass_rls_roles``.
 - Infrastructure tables (``ab_*``, ``pgaf_*``, ``alembic_version``) are
   explicitly excluded from RLS because they hold platform data shared across
   all tenants.
 - ``FORCE ROW LEVEL SECURITY`` is set so that the table owner (the app DB
   role) is also subject to the policy.
+
+Cross-tenant escape hatch — batch jobs only
+-------------------------------------------
+``set_bypass_rls(conn, on=True)`` lifts RLS for the current transaction.
+It exists for batch jobs, migrations and reporting that must span tenants.
+Never call it from request handling: an RLS bypass in a request path is a
+cross-tenant data leak, and the audit trail cannot distinguish it from an
+attack.  Prefer iterating tenants and running under each tenant's scope.
 
 Usage
 -----
@@ -27,7 +39,7 @@ Usage
     from pgappforge.multitenancy.rls import (
         enable_rls_all_tenant_tables,
         set_tenant_context,
-        clear_tenant_context,
+        set_bypass_rls,
     )
 
     # Called once at startup (after all tables exist)
@@ -36,10 +48,16 @@ Usage
     # Called per-request (middleware handles this automatically)
     with session.begin():
         set_tenant_context(session, tenant_id="tenant-uuid-here")
+
+    # Batch job only:
+    with session.begin():
+        set_bypass_rls(session, on=True)
 """
 from __future__ import annotations
 
 import logging
+import os
+import re
 from typing import Any
 
 import sqlalchemy as sa
@@ -76,7 +94,22 @@ RLS_EXCLUDE_TABLES: frozenset[str] = frozenset([
 
 # The session variable name used by all RLS policies
 _TENANT_VAR = "app.tenant_id"
-_SYSTEM_SENTINEL = "SYSTEM"
+# Explicit cross-tenant bypass switch — policies test this, never the tenant id.
+_BYPASS_VAR = "app.bypass_rls"
+# Comma-separated role names permitted to set the bypass switch.
+_BYPASS_ROLES_VAR = "app.bypass_rls_roles"
+# Database role that owns the SECURITY DEFINER bypass function.
+DEFAULT_SYSTEM_ROLE = os.environ.get("PGAF_SYSTEM_ROLE", "pgappforge_system")
+
+# Unquoted-identifier shape; anything else is rejected rather than interpolated.
+_ROLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+
+
+def _check_role_name(role: str) -> str:
+	"""Reject role names that would not survive identifier interpolation."""
+	if not _ROLE_NAME_RE.match(role or ""):
+		raise ValueError(f"Invalid PostgreSQL role name: {role!r}")
+	return role
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +123,7 @@ def enable_rls_on_table(table_name: str, engine: Any) -> None:
 
 	Raises on DDL error (caller should catch and log).
 	"""
+	_check_role_name(table_name)
 	policy_name = "pgaf_tenant_isolation"
 	# Two-statement DDL must be separate executions (PostgreSQL parser rule)
 	with engine.begin() as conn:
@@ -106,11 +140,11 @@ def enable_rls_on_table(table_name: str, engine: Any) -> None:
 			CREATE POLICY {policy_name} ON {table_name}
 				USING (
 					tenant_id::text = current_setting('{_TENANT_VAR}', true)::text
-					OR current_setting('{_TENANT_VAR}', true) = '{_SYSTEM_SENTINEL}'
+					OR current_setting('{_BYPASS_VAR}', true) = 'on'
 				)
 				WITH CHECK (
 					tenant_id::text = current_setting('{_TENANT_VAR}', true)::text
-					OR current_setting('{_TENANT_VAR}', true) = '{_SYSTEM_SENTINEL}'
+					OR current_setting('{_BYPASS_VAR}', true) = 'on'
 				)
 		"""))
 	log.info("multitenancy: RLS enabled on %s", table_name)
@@ -119,8 +153,9 @@ def enable_rls_on_table(table_name: str, engine: Any) -> None:
 def disable_rls_on_table(table_name: str, engine: Any) -> None:
 	"""Remove the tenant isolation policy and disable RLS on *table_name*.
 
-	Useful during schema migrations run as SYSTEM.
+	Useful during schema migrations run under :func:`set_bypass_rls`.
 	"""
+	_check_role_name(table_name)
 	with engine.begin() as conn:
 		conn.execute(sa.text(
 			f"DROP POLICY IF EXISTS pgaf_tenant_isolation ON {table_name}"
@@ -129,6 +164,95 @@ def disable_rls_on_table(table_name: str, engine: Any) -> None:
 			f"ALTER TABLE {table_name} DISABLE ROW LEVEL SECURITY"
 		))
 	log.info("multitenancy: RLS disabled on %s", table_name)
+
+
+# ---------------------------------------------------------------------------
+# Bypass switch — batch jobs only, never a request path
+# ---------------------------------------------------------------------------
+
+_BYPASS_FUNCTION_DDL = """
+CREATE OR REPLACE FUNCTION pgappforge.set_bypass_rls("on" boolean)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $fn$
+DECLARE
+	allowed text;
+	wanted boolean;
+BEGIN
+	wanted := "on";
+	allowed := current_setting('app.bypass_rls_roles', true);
+	IF allowed IS NULL OR allowed = '' THEN
+		RAISE EXCEPTION 'pgappforge: % is not configured for database %',
+			'app.bypass_rls_roles', current_database()
+			USING ERRCODE = '55000';
+	END IF;
+	IF session_user <> ALL (string_to_array(allowed, ',')) THEN
+		RAISE EXCEPTION
+			'pgappforge: role % is not permitted to bypass row-level security', session_user
+			USING ERRCODE = '42501';
+	END IF;
+	PERFORM set_config('app.bypass_rls', CASE WHEN wanted THEN 'on' ELSE 'off' END, true);
+END
+$fn$;
+"""
+
+
+def init_bypass_rls(engine: Any, system_role: str | None = None) -> str:
+	"""Create ``pgappforge.set_bypass_rls`` and publish the allowed role list.
+
+	Idempotent — call it on every startup.  The role list lands in the
+	``app.bypass_rls_roles`` GUC as a database-level default, so every future
+	session sees the same allow-list without the application having to set it.
+
+	Returns the role name that was published.
+	"""
+	role = _check_role_name(system_role or DEFAULT_SYSTEM_ROLE)
+	with engine.begin() as conn:
+		conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS pgappforge"))
+		conn.execute(sa.text(_BYPASS_FUNCTION_DDL))
+		database = conn.execute(sa.text("SELECT current_database()")).scalar()
+		quoted_db = '"' + str(database).replace('"', '""') + '"'
+		conn.execute(sa.text(
+			f"ALTER DATABASE {quoted_db} SET {_BYPASS_ROLES_VAR} = '{role}'"
+		))
+		try:
+			conn.execute(sa.text(
+				f"ALTER ROLE {role} IN DATABASE {quoted_db} "
+				f"SET {_BYPASS_ROLES_VAR} = '{role}'"
+			))
+		except Exception as exc:
+			log.debug("multitenancy: ALTER ROLE for %s skipped: %s", role, exc)
+	dispose = getattr(engine, "dispose", None)
+	if callable(dispose):
+		dispose()
+	log.info("multitenancy: RLS bypass restricted to role %s", role)
+	return role
+
+
+def set_bypass_rls(session_or_conn: Any, on: bool = True) -> None:
+	"""Lift row-level security for the current transaction.
+
+	BATCH JOBS ONLY.  The switch is transaction-local and only roles listed in
+	``app.bypass_rls_roles`` may set it; anyone else gets error 42501.  A
+	bypass inside request handling is an unaudited cross-tenant read, so call
+	this from workers, migrations and cross-tenant reports only.
+	"""
+	session_or_conn.execute(
+		sa.text("SELECT pgappforge.set_bypass_rls(:on)"), {"on": bool(on)}
+	)
+
+
+def get_bypass_rls(conn: Any) -> bool:
+	"""True when the bypass switch is currently on for this session."""
+	try:
+		row = conn.execute(
+			sa.text("SELECT current_setting(:var, true)"), {"var": _BYPASS_VAR}
+		).scalar()
+		return row == "on"
+	except Exception:
+		return False
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +266,10 @@ def enable_rls_all_tenant_tables(engine: Any) -> int:
 
 	Returns the number of tables successfully configured.
 	"""
+	try:
+		init_bypass_rls(engine)
+	except Exception as exc:
+		log.warning("multitenancy: bypass function init failed, policies will deny bypass: %s", exc)
 	with engine.connect() as conn:
 		# Build the exclusion tuple dynamically — IN (:excluded) with a tuple
 		# works for SQLAlchemy text() only via expanding bindparam
@@ -220,7 +348,9 @@ def set_tenant_context(session_or_conn: Any, tenant_id: str) -> None:
 		SQLAlchemy :class:`~sqlalchemy.orm.Session` or
 		:class:`~sqlalchemy.engine.Connection`.
 	tenant_id:
-		Tenant UUID string.  Pass ``'SYSTEM'`` for admin/migration bypass.
+		Tenant UUID string.  There is no bypass value here — a tenant id is
+		always a tenant id; cross-tenant work goes through
+		:func:`set_bypass_rls`.
 	"""
 	if not tenant_id:
 		return
@@ -231,14 +361,19 @@ def set_tenant_context(session_or_conn: Any, tenant_id: str) -> None:
 
 
 def clear_tenant_context(session_or_conn: Any) -> None:
-	"""Set tenant context to ``SYSTEM`` (bypasses all RLS policies).
+	"""Drop the tenant scope for this transaction: policies match zero rows.
 
-	Use for background jobs and admin operations that must touch data across
-	tenants.  Resets at transaction end (``is_local=true``).
+	Fails safe.  Also switches the bypass off so a stale ``on`` from earlier
+	in the same transaction cannot survive.  Resets at transaction end
+	(``is_local=true``).
 	"""
 	session_or_conn.execute(
 		sa.text("SELECT set_config(:var, :val, true)"),
-		{"var": _TENANT_VAR, "val": _SYSTEM_SENTINEL},
+		{"var": _TENANT_VAR, "val": ""},
+	)
+	session_or_conn.execute(
+		sa.text("SELECT set_config(:var, :val, true)"),
+		{"var": _BYPASS_VAR, "val": "off"},
 	)
 
 
@@ -255,10 +390,14 @@ def get_current_db_tenant(conn: Any) -> str | None:
 
 __all__ = [
 	"RLS_EXCLUDE_TABLES",
+	"DEFAULT_SYSTEM_ROLE",
 	"enable_rls_on_table",
 	"disable_rls_on_table",
 	"enable_rls_all_tenant_tables",
 	"get_rls_status",
+	"init_bypass_rls",
+	"set_bypass_rls",
+	"get_bypass_rls",
 	"set_tenant_context",
 	"clear_tenant_context",
 	"get_current_db_tenant",

@@ -603,7 +603,6 @@ class MemberAccount(AuditMixin, Model):
 	)
 	statements: list[MemberStatement] = relationship(
 		"MemberStatement",
-		back_populates="member",
 		lazy="select",
 		primaryjoin="MemberAccount.member_id == MemberStatement.member_id",
 		foreign_keys="MemberStatement.member_id",

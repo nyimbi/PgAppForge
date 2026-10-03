@@ -21,9 +21,9 @@ import logging
 from typing import Any
 
 from flask import flash, redirect, url_for, request
-from flask_appbuilder import ModelView, BaseView, expose
-from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import has_access
+from pgappforge import ModelView, BaseView, expose
+from pgappforge.models.sqla.interface import SQLAInterface
+from pgappforge.security.decorators import has_access
 
 from pgappforge.plugins.fintech.treasury.models import (
 	FXDeal,

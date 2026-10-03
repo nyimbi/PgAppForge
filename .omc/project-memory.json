@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1780726238848,
+  "lastScanned": 1783812378891,
   "projectRoot": "/Users/nyimbiodero/src/pjs/fab-ext",
   "techStack": {
     "languages": [
@@ -26,8 +26,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "python3 << 'EOF'\nimport json\nimport re\nfrom collections import Counter\nfrom pathlib import Path\n\nfiles = \"\"\"\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-fab-ext/dd289155-eb7a-4e13-b443-798bbc9be8bf/subagents/agent-a3ec415ba7a406da3.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-apg/c7e42fb1-1448-4c68-9e62-5c4c11611a56.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-lindela/3acc96d2-5e52-4783-912d-d881bfaa15a4.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-fab-ext/dd289155-eb7a-4e13-b443-798bbc9be8bf.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-dArchiva/7d44d79c-3339-44e5-86e7-403b9ea9ae3f.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-token/0277fc2d-2e28-4e81-b814-ca1ae02b75fa/subagents/agent-a29444f2b1dbf4dc6.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-lindela/3acc96d2-5e52-4783-912d-d881bfaa15a4/subagents/workflows/wf_a683cf87-d55/journal.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-lindela/3acc96d2-5e52-4783-912d-d881bfaa15a4/subagents/workflows/wf_a683cf87-d55/agent-a1201c972f93d5305.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-token/0277fc2d-2e28-4e81-b814-ca1ae02b75fa.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-token/0277fc2d-2e28-4e81-b814-ca1ae02b75fa/subagents/agent-a335e727d1c14e754.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/133502a7-06ef-4da0-9342-d2d7ba4ffbb5.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/2590de9d-0300-4fdc-aaa0-43d49744a9af.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-token/0277fc2d-2e28-4e81-b814-ca1ae02b75fa/subagents/agent-abe888051cac05013.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-token/0277fc2d-2e28-4e81-b814-ca1ae02b75fa/subagents/agent-a32112e577c35682a.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/f94e0368-3762-42a7-a133-67e883096b78.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/a053210f-7b04-43c0-bfc9-c729889b8c1d.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-token/0277fc2d-2e28-4e81-b814-ca1ae02b75fa/subagents/agent-a132c5677ff993f01.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/a2eed551-30cb-4d89-ae4e-86b8568f9197.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-pswitch/f5b2eb11-4578-477b-acac-4307a01c48fc.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-pswitch/f5b2eb11-4578-477b-acac-4307a01c48fc/subagents/agent-a5dfea1a679df0e4c.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-abf866bb9b3a1b249.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a2e805fb541afb0a9.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a54a24cd1b6f83c0a.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/917bc942-d3b8-48b5-81b8-32560e04011d.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a5fd51f2b33f18e8c.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/69510c27-eab3-42fd-97fd-26fe57471c9a.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a529e154fb79a4955.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a420b4bcca57d9c34.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a82dc5ad3a30a722d.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-a1816fbb939b2a372.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/bdc6edf0-45ab-42a4-b484-0c3eab2e674b.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/a52a86ff-4009-40f9-b710-845ee3a88bb6.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/22b914fe-0d68-4424-8acd-b21b297194fb.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-dArchiva/7d44d79c-3339-44e5-86e7-403b9ea9ae3f/subagents/agent-a1c0e2da0e1654da7.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/7903e7ec-6d56-4b21-8fb2-3708a7028003.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/67e16559-5aba-4f56-90fa-b990c1abde34.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-strategy-execution-platform/5ea76c92-b4eb-43b4-9f3a-0a2b7fc5ac23.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-af3278f36f238e615.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-strategy-execution-platform/5ea76c92-b4eb-43b4-9f3a-0a2b7fc5ac23/subagents/agent-ae9db99dc6429276c.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/29d8b875-7e1c-42e7-9f21-d6f2532ff95e.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-Thuon/b804c617-9072-47ae-bdff-c22602d701ee/subagents/agent-ab84bbfb0872caa56.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-apg/c7e42fb1-1448-4c68-9e62-5c4c11611a56/subagents/agent-aa29d4aecc346536d.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-apg/c7e42fb1-1448-4c68-9e62-5c4c11611a56/subagents/agent-ae5cb5cdebb4adaec.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-dArchiva/7d44d79c-3339-44e5-86e7-403b9ea9ae3f/subagents/agent-a37827133d8d781c3.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-tooling-neditor/d19148fe-ad43-4923-9676-16a3e9ebec5b.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-lindela/3acc96d2-5e52-4783-912d-d881bfaa15a4/subagents/workflows/wf_a683cf87-d55/agent-af8aacbf7c9c3dc97.jsonl\n/Users/nyimbiodero/.claude/projects/-private-tmp/27539e5f-dc84-4c4e-82d4-4509c3c352b3.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-lindela/3acc96d2-5e52-4783-912d-d881bfaa15a4/subagents/workflows/wf_a683cf87-d55/agent-a48b5516598397120.jsonl\n/Users/nyimbiodero/.claude/projects/-Users-nyimbiodero-src-pjs-lindela/3acc96d2-5e52-4783-912d-d881bfaa15a4/subagents/workflows/wf_a683cf87-d55/agent-aa0aec209f82049ba.jsonl\n\"\"\".strip().splitlines()\n\n# Collect actual full commands to inspect\nbash_full = Counter()\nmcp_counter = Counter()\n\nfor fpath in files:\n    p = Path(fpath.strip())\n    if not p.exists():\n        continue\n    try:\n        with open(p) as f:\n            for line in f:\n                line = line.strip()\n                if not line:\n                    continue\n                try:\n                    obj = json.loads(line)\n                except:\n                    continue\n                \n                msg = obj.get('message', {})\n                if obj.get('type') == 'assistant' or msg.get('role') == 'assistant':\n                    content = msg.get('content', [])\n                    if isinstance(content, list):\n                        for item in content:\n                            if isinstance(item, dict) and item.get('type') == 'tool_use':\n                                name = item.get('name', '')\n                                inp = item.get('input', {})\n                                \n                                if name == 'Bash':\n                                    cmd = inp.get('command', '').strip()\n                                    # Normalize leading whitespace\n                                    cmd = ' '.join(cmd.split()[:6])  # first 6 tokens for pattern detection\n                                    bash_full[cmd] += 1\n                                \n                                elif name.startswith('mcp__'):\n                                    mcp_counter[name] += 1\n    except Exception as e:\n        pass\n\n# Focus on uv run specifically - what subcommands?\nprint(\"=== uv run variants ===\")\nfor cmd, cnt in bash_full.most_common():\n    if 'uv run' in cmd or cmd.startswith('uv '):\n        print(f\"{cnt:4d}  {cmd}\")\n\nprint(\"\\n=== psql variants ===\")\nfor cmd, cnt in bash_full.most_common():\n    if cmd.startswith('psql'):\n        print(f\"{cnt:4d}  {cmd}\")\n\nprint(\"\\n=== npx/tsc variants ===\")\nfor cmd, cnt in bash_full.most_common():\n    if cmd.startswith('npx') or (cmd.startswith('tsc') and 'tsc' in cmd[:5]):\n        print(f\"{cnt:4d}  {cmd}\")\n\nprint(\"\\n=== pnpm variants ===\")\nfor cmd, cnt in bash_full.most_common():\n    if cmd.startswith('pnpm'):\n        print(f\"{cnt:4d}  {cmd}\")\n\nprint(\"\\n=== go variants ===\")\nfor cmd, cnt in bash_full.most_common():\n    if cmd.startswith('go '):\n        print(f\"{cnt:4d}  {cmd}\")\n\nprint(\"\\n=== curl variants ===\")\nfor cmd, cnt in bash_full.most_common():\n    if cmd.startswith('curl'):\n        print(f\"{cnt:4d}  {cmd}\")\nEOF\n",
-    "testCommand": "/Users/nyimbiodero/src/pjs/fab-ext/.venv/bin/python -m pytest tests/ci/test_ui_wizard_fk.py --tb=short -q --no-header 2>&1; echo \"EXIT_CODE:$?\"",
+    "buildCommand": "make build",
+    "testCommand": ".venv/bin/python -m pytest tests/ci/test_multitenancy.py -q --tb=short 2>&1 | tail -30",
     "lintCommand": "ruff check",
     "devCommand": null,
     "scripts": {}
@@ -59,7 +59,7 @@
       "path": "Flask_AppBuilder.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780726238834,
+      "lastAccessed": 1783812378875,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -71,21 +71,21 @@
     "__pycache__": {
       "path": "__pycache__",
       "purpose": null,
-      "fileCount": 5,
-      "lastAccessed": 1780726238835,
+      "fileCount": 6,
+      "lastAccessed": 1783812378876,
       "keyFiles": [
         "init_db.cpython-313.pyc",
         "setup.cpython-311.pyc",
         "setup.cpython-313.pyc",
-        "test_import_basic.cpython-311.pyc",
-        "test_security_integration.cpython-311.pyc"
+        "setup.cpython-314.pyc",
+        "test_import_basic.cpython-311.pyc"
       ]
     },
     "babel": {
       "path": "babel",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780726238835,
+      "lastAccessed": 1783812378877,
       "keyFiles": [
         "babel.cfg",
         "messages.pot"
@@ -95,7 +95,7 @@
       "path": "bin",
       "purpose": "Executable scripts",
       "fileCount": 13,
-      "lastAccessed": 1780726238836,
+      "lastAccessed": 1783812378878,
       "keyFiles": [
         "babel_extract.sh",
         "babel_init.sh",
@@ -104,18 +104,27 @@
         "db_create.py"
       ]
     },
+    "custom_fields": {
+      "path": "custom_fields",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1783812378879,
+      "keyFiles": [
+        "example_sacco_member.yaml"
+      ]
+    },
     "docker": {
       "path": "docker",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1780726238836,
+      "lastAccessed": 1783812378880,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
-      "fileCount": 66,
-      "lastAccessed": 1780726238838,
+      "fileCount": 73,
+      "lastAccessed": 1783812378881,
       "keyFiles": [
         "AI_SECURITY_DEPLOYMENT_GUIDE.md",
         "API_DOCUMENTATION.md",
@@ -127,8 +136,8 @@
     "examples": {
       "path": "examples",
       "purpose": "Example code",
-      "fileCount": 15,
-      "lastAccessed": 1780726238838,
+      "fileCount": 16,
+      "lastAccessed": 1783812378882,
       "keyFiles": [
         "README.md",
         "README.rst",
@@ -140,8 +149,8 @@
     "hardware_store": {
       "path": "hardware_store",
       "purpose": null,
-      "fileCount": 10,
-      "lastAccessed": 1780726238839,
+      "fileCount": 11,
+      "lastAccessed": 1783812378882,
       "keyFiles": [
         "app.json",
         "babel.config.js",
@@ -154,7 +163,7 @@
       "path": "images",
       "purpose": null,
       "fileCount": 23,
-      "lastAccessed": 1780726238839,
+      "lastAccessed": 1783812378883,
       "keyFiles": [
         "ListThumbnail.png",
         "chart.png",
@@ -167,17 +176,26 @@
       "path": "init-scripts",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780726238839,
+      "lastAccessed": 1783812378883,
       "keyFiles": [
         "01-init-age.sql",
         "02-sample-data.sql"
+      ]
+    },
+    "logs": {
+      "path": "logs",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1783812378883,
+      "keyFiles": [
+        "dev_assistant_audit.jsonl"
       ]
     },
     "nginx": {
       "path": "nginx",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1780726238839,
+      "lastAccessed": 1783812378883,
       "keyFiles": [
         "nginx.conf"
       ]
@@ -185,28 +203,28 @@
     "packages": {
       "path": "packages",
       "purpose": null,
-      "fileCount": 0,
-      "lastAccessed": 1780726238840,
+      "fileCount": 1,
+      "lastAccessed": 1783812378884,
       "keyFiles": []
     },
     "pgappforge": {
       "path": "pgappforge",
       "purpose": null,
-      "fileCount": 26,
-      "lastAccessed": 1780726238841,
+      "fileCount": 36,
+      "lastAccessed": 1783812378885,
       "keyFiles": [
         "IMPLEMENTATION_COMPLETE.md",
         "__init__.py",
         "_compat.py",
         "actions.py",
-        "base.py"
+        "agent_memory.py"
       ]
     },
     "pgappforge.egg-info": {
       "path": "pgappforge.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780726238841,
+      "lastAccessed": 1783812378885,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -219,7 +237,7 @@
       "path": "pgforge.egg-info",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1780726238842,
+      "lastAccessed": 1783812378885,
       "keyFiles": [
         "PKG-INFO",
         "SOURCES.txt",
@@ -232,7 +250,7 @@
       "path": "requirements",
       "purpose": null,
       "fileCount": 17,
-      "lastAccessed": 1780726238843,
+      "lastAccessed": 1783812378885,
       "keyFiles": [
         "ai.in",
         "base.in",
@@ -245,7 +263,7 @@
       "path": "requirements-fe",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1780726238843,
+      "lastAccessed": 1783812378885,
       "keyFiles": [
         "package-lock.json",
         "package.json"
@@ -255,7 +273,7 @@
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 11,
-      "lastAccessed": 1780726238843,
+      "lastAccessed": 1783812378886,
       "keyFiles": [
         "babel_extract.sh",
         "babel_init.sh",
@@ -267,8 +285,8 @@
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 103,
-      "lastAccessed": 1780726238844,
+      "fileCount": 104,
+      "lastAccessed": 1783812378886,
       "keyFiles": [
         "AUTHENTICATION_BYPASS_SECURITY_VALIDATION.md",
         "COMPREHENSIVE_ISSUE_RESOLUTION_REPORT.md",
@@ -280,8 +298,8 @@
     "tmp": {
       "path": "tmp",
       "purpose": null,
-      "fileCount": 6,
-      "lastAccessed": 1780726238845,
+      "fileCount": 7,
+      "lastAccessed": 1783812378886,
       "keyFiles": [
         "gen_models.py",
         "gen_views.py",
@@ -290,11 +308,22 @@
         "nx_widgets.py"
       ]
     },
+    "workflows": {
+      "path": "workflows",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1783812378887,
+      "keyFiles": [
+        "leave_request.yaml",
+        "purchase_order_approval.yaml",
+        "sacco_loan_approval.yaml"
+      ]
+    },
     "works": {
       "path": "works",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1780726238845,
+      "lastAccessed": 1783812378887,
       "keyFiles": [
         "REMEDIATION_PLAN.md",
         "REORGANIZATION_LOG.md",
@@ -307,7 +336,7 @@
       "path": "hardware_store/app",
       "purpose": "Application code",
       "fileCount": 1,
-      "lastAccessed": 1780726238846,
+      "lastAccessed": 1783812378888,
       "keyFiles": [
         "_layout.tsx"
       ]
@@ -316,36 +345,25 @@
       "path": "hardware_store/components",
       "purpose": "UI components",
       "fileCount": 0,
-      "lastAccessed": 1780726238846,
+      "lastAccessed": 1783812378888,
       "keyFiles": []
     },
     "hardware_store/lib": {
       "path": "hardware_store/lib",
       "purpose": "Library code",
       "fileCount": 5,
-      "lastAccessed": 1780726238847,
+      "lastAccessed": 1783812378888,
       "keyFiles": [
         "auth.ts",
         "config.ts",
         "permissions.ts"
       ]
     },
-    "pgappforge/api": {
-      "path": "pgappforge/api",
-      "purpose": "API routes",
-      "fileCount": 5,
-      "lastAccessed": 1780726238847,
-      "keyFiles": [
-        "__init__.py",
-        "convert.py",
-        "manager.py"
-      ]
-    },
     "tmp/utils": {
       "path": "tmp/utils",
       "purpose": "Utility functions",
       "fileCount": 10,
-      "lastAccessed": 1780726238848,
+      "lastAccessed": 1783812378891,
       "keyFiles": [
         "__init__.py",
         "additional-utils.md",
@@ -355,303 +373,129 @@
   },
   "hotPaths": [
     {
-      "path": "pgappforge/plugins/fintech/core_banking/services.py",
-      "accessCount": 270,
-      "lastAccessed": 1781171149956,
+      "path": "tests/ci/test_travel_expense_plugin.py",
+      "accessCount": 21,
+      "lastAccessed": 1783819166365,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/payments/services.py",
-      "accessCount": 137,
-      "lastAccessed": 1781171611463,
+      "path": "pgappforge/plugins/rules/engine.py",
+      "accessCount": 15,
+      "lastAccessed": 1783819675742,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/core_banking/models.py",
-      "accessCount": 124,
-      "lastAccessed": 1781171138970,
+      "path": "tests/ci/test_mobile_money.py",
+      "accessCount": 12,
+      "lastAccessed": 1783815261561,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/sacco/services.py",
-      "accessCount": 121,
-      "lastAccessed": 1781151941315,
+      "path": "pgappforge/plugins/erp/procurement/supplier_portal/services.py",
+      "accessCount": 12,
+      "lastAccessed": 1783842698539,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/lending/services.py",
-      "accessCount": 120,
-      "lastAccessed": 1781072946660,
+      "path": "pgappforge/security/sqla/manager.py",
+      "accessCount": 7,
+      "lastAccessed": 1783841486235,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/lending/models.py",
-      "accessCount": 119,
-      "lastAccessed": 1781151757503,
+      "path": "tests/ci/test_rules_engine_enhancements.py",
+      "accessCount": 5,
+      "lastAccessed": 1783819608125,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/regulatory/models.py",
-      "accessCount": 105,
-      "lastAccessed": 1780522374311,
+      "path": "pgappforge/plugins/erp/finance/fpa/services.py",
+      "accessCount": 5,
+      "lastAccessed": 1783842689806,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/sacco/models.py",
-      "accessCount": 94,
-      "lastAccessed": 1781332721535,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/payments/models.py",
-      "accessCount": 92,
-      "lastAccessed": 1781179833908,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/regulatory/services.py",
-      "accessCount": 90,
-      "lastAccessed": 1781111341691,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/trade_finance/services.py",
-      "accessCount": 79,
-      "lastAccessed": 1780611758404,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/core_banking/__init__.py",
-      "accessCount": 72,
-      "lastAccessed": 1781171144690,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/trade_finance/models.py",
-      "accessCount": 69,
-      "lastAccessed": 1780611634591,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/mobile_money/services.py",
-      "accessCount": 65,
-      "lastAccessed": 1781171173640,
+      "path": "tests/ci/test_supplier_portal_plugin.py",
+      "accessCount": 4,
+      "lastAccessed": 1783842545868,
       "type": "file"
     },
     {
       "path": "pgappforge/plugins/fintech/mobile_money/models.py",
-      "accessCount": 60,
-      "lastAccessed": 1780502957925,
+      "accessCount": 3,
+      "lastAccessed": 1783812539737,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/payments/views.py",
-      "accessCount": 51,
-      "lastAccessed": 1780508272870,
+      "path": "pgappforge/plugins/erp/hcm/talent/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1783819480543,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/core_banking/events.py",
-      "accessCount": 51,
-      "lastAccessed": 1781171143060,
+      "path": "pgappforge/plugins/erp/hcm/talent/models.py",
+      "accessCount": 2,
+      "lastAccessed": 1783819418734,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/payments/events.py",
-      "accessCount": 50,
-      "lastAccessed": 1780507454145,
+      "path": "tests/base.py",
+      "accessCount": 2,
+      "lastAccessed": 1783841458098,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/fintech/core_banking/views.py",
-      "accessCount": 47,
-      "lastAccessed": 1781318419656,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/regulatory/events.py",
-      "accessCount": 46,
-      "lastAccessed": 1780502559418,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/mobile_money/events.py",
-      "accessCount": 45,
-      "lastAccessed": 1780502473788,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/trade_finance/events.py",
-      "accessCount": 44,
-      "lastAccessed": 1780569382965,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/erp/foundation/events.py",
-      "accessCount": 44,
-      "lastAccessed": 1781171052632,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/regulatory/__init__.py",
-      "accessCount": 41,
-      "lastAccessed": 1780480298769,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/sacco/events.py",
-      "accessCount": 40,
-      "lastAccessed": 1780479989656,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/lending/events.py",
-      "accessCount": 40,
-      "lastAccessed": 1780480193626,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/lending/views.py",
-      "accessCount": 40,
-      "lastAccessed": 1780480193830,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/mobile_money/views.py",
-      "accessCount": 37,
-      "lastAccessed": 1780480209706,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/trade_finance/views.py",
-      "accessCount": 36,
-      "lastAccessed": 1780480217865,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/regulatory/views.py",
-      "accessCount": 36,
-      "lastAccessed": 1780480298571,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/erp/foundation/commons.py",
-      "accessCount": 36,
-      "lastAccessed": 1781179847352,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/erp/finance/gl/services.py",
-      "accessCount": 34,
-      "lastAccessed": 1781163740547,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/mobile_money/__init__.py",
-      "accessCount": 28,
-      "lastAccessed": 1780502992654,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/trade_finance/__init__.py",
-      "accessCount": 28,
-      "lastAccessed": 1780569375696,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/__init__.py",
-      "accessCount": 21,
-      "lastAccessed": 1781173172026,
-      "type": "file"
-    },
-    {
-      "path": "tests/ci/test_core_banking_gl.py",
-      "accessCount": 20,
-      "lastAccessed": 1780611770383,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/erp/finance/gl/models.py",
-      "accessCount": 20,
-      "lastAccessed": 1780819365824,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/sacco/views.py",
-      "accessCount": 18,
-      "lastAccessed": 1780479432630,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/payments/COMPARISON.md",
-      "accessCount": 16,
-      "lastAccessed": 1780507644937,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/payments/__init__.py",
-      "accessCount": 15,
-      "lastAccessed": 1780501320794,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/lending/__init__.py",
-      "accessCount": 13,
-      "lastAccessed": 1780507155002,
-      "type": "file"
-    },
-    {
-      "path": "tests/ci/conftest.py",
-      "accessCount": 12,
-      "lastAccessed": 1781073359873,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/sacco/__init__.py",
-      "accessCount": 10,
-      "lastAccessed": 1781151988872,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/core_banking/COMPARISON.md",
-      "accessCount": 9,
-      "lastAccessed": 1780521023073,
+      "path": "tests/ci/test_multitenancy.py",
+      "accessCount": 2,
+      "lastAccessed": 1783842830596,
       "type": "file"
     },
     {
       "path": "pgappforge/plugins/erp/foundation/models.py",
-      "accessCount": 8,
-      "lastAccessed": 1780740581867,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/lending/COMPARISON.md",
-      "accessCount": 5,
-      "lastAccessed": 1780506299755,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/erp/foundation/services.py",
-      "accessCount": 3,
-      "lastAccessed": 1780570314488,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/fintech/mobile_money/COMPARISON.md",
-      "accessCount": 2,
-      "lastAccessed": 1780502275505,
-      "type": "file"
-    },
-    {
-      "path": "pgappforge/plugins/rules/scheduler.py",
       "accessCount": 1,
-      "lastAccessed": 1780466845105,
+      "lastAccessed": 1783812496189,
       "type": "file"
     },
     {
-      "path": "pgappforge/plugins/erp/industry/financial_services/models.py",
+      "path": "pgappforge/plugins/fintech/core_banking/models.py",
       "accessCount": 1,
-      "lastAccessed": 1780473251056,
+      "lastAccessed": 1783812638663,
+      "type": "file"
+    },
+    {
+      "path": "tests/ci/conftest.py",
+      "accessCount": 1,
+      "lastAccessed": 1783812687519,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/models/sqla/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1783812800226,
+      "type": "file"
+    },
+    {
+      "path": "tests/ci/test_data_models.py",
+      "accessCount": 1,
+      "lastAccessed": 1783812826393,
+      "type": "file"
+    },
+    {
+      "path": "pgappforge/plugins/fintech/mobile_money/services.py",
+      "accessCount": 1,
+      "lastAccessed": 1783813387660,
+      "type": "file"
+    },
+    {
+      "path": "tests/ci/test_talent_gaps.py",
+      "accessCount": 1,
+      "lastAccessed": 1783841691097,
+      "type": "file"
+    },
+    {
+      "path": "tests/ci/test_fpa_plugin.py",
+      "accessCount": 1,
+      "lastAccessed": 1783842665896,
       "type": "file"
     }
   ],

@@ -4,7 +4,8 @@ Shared utilities for all pgappforge ERP plugins.
 Import pattern:
 	from pgappforge.plugins.erp.foundation.commons import (
 		ERPBaseMixin, SoftDeleteMixin, ImmutableRecordMixin,
-		money_add, money_subtract, money_multiply, money_divide,
+		money_add, money_subtract, money_subtract_checked, money_multiply, money_divide,
+		MoneyUnderflowError, InsufficientFundsError,
 		percent_of, cents_to_display, format_currency,
 		validate_iban, validate_bic, validate_email, validate_isin, validate_lei,
 		mask_national_id, hash_sensitive,
@@ -45,9 +46,32 @@ def money_add(a: int, b: int) -> int:
 	return int(a) + int(b)
 
 
+class MoneyUnderflowError(ArithmeticError):
+	"""A cent arithmetic operation would leave the balance negative."""
+
+
+class InsufficientFundsError(MoneyUnderflowError):
+	"""Spending or debiting more than the balance permits."""
+
+
 def money_subtract(a: int, b: int) -> int:
-	"""Subtract cent values. Returns 0 if result would be negative (guard)."""
-	return max(0, int(a) - int(b))
+	"""Subtract cent values. Plain subtraction — the result may be negative.
+
+	Use money_subtract_checked() wherever the balance is real money: a clamped
+	subtraction silently converts an overdraft into a zero balance.
+	"""
+	return int(a) - int(b)
+
+
+def money_subtract_checked(a: int, b: int, context: str = "") -> int:
+	"""Subtract cent values, raising InsufficientFundsError on underflow."""
+	result = int(a) - int(b)
+	if result < 0:
+		where = f" ({context})" if context else ""
+		raise InsufficientFundsError(
+			f"Underflow{where}: cannot subtract {int(b)} from {int(a)} — short by {-result} cents"
+		)
+	return result
 
 
 def money_multiply(cents: int, rate: Decimal | float | str) -> int:

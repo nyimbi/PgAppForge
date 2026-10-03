@@ -80,22 +80,7 @@ class PublicIndexView(BaseView):
             }
             
             # Extended field configurations for demo
-            extended_fields_demos = self._get_extended_fields_config(),
-                'audio': {
-                    'format': AudioFormat.WAV.value,
-                    'max_duration': 60,
-                    'quality': 44100
-                },
-                'gps': {
-                    'map_provider': 'leaflet',
-                    'zoom_level': 15,
-                    'enable_tracking': True
-                },
-                'gallery': {
-                    'media_types': [MediaType.PHOTO.value, MediaType.VIDEO.value, MediaType.AUDIO.value],
-                    'max_files': 10
-                }
-            }
+            extended_fields_demos = self._get_extended_fields_config()
             
             # Application statistics for showcase
             app_stats = self._get_app_statistics()

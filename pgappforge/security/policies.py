@@ -84,6 +84,15 @@ class HasRole(Policy):
 		return f"HasRole({self.role_name!r})"
 
 
+class PolicyContextError(RuntimeError):
+	"""A policy was evaluated without the context it needs.
+
+	Distinct from a denial: the answer is unknown, not "no".  Callers must
+	decide explicitly (establish a request context, or pass the decision in)
+	rather than treating it as a failed check.
+	"""
+
+
 class HasPermission(Policy):
 	"""True if user has the named permission (FAB permission string)."""
 
@@ -93,15 +102,30 @@ class HasPermission(Policy):
 	def check(self, user: Any, context: dict[str, Any] | None = None) -> bool:
 		if user is None:
 			return False
-		# FAB security manager: check via appbuilder.sm
+		# FAB security manager is the only authority for permissions; there is
+		# no ad-hoc getattr(user, "permissions") fallback, because that turns
+		# a missing context into a silent answer nobody checked.
 		try:
-			from flask import current_app
-			sm = current_app.appbuilder.sm
-			return sm.has_access(self.permission, '')
-		except Exception:
-			# Outside request context: check user.permissions if available
-			perms = getattr(user, 'permissions', [])
-			return self.permission in perms
+			from flask import current_app, has_app_context
+		except ImportError as exc:  # pragma: no cover — Flask is a hard dep
+			raise PolicyContextError("Flask is required to evaluate HasPermission") from exc
+
+		if not has_app_context():
+			raise PolicyContextError(
+				"HasPermission requires an active Flask application context"
+			)
+		sm = getattr(getattr(current_app, "appbuilder", None), "sm", None)
+		if sm is None:
+			raise PolicyContextError(
+				"HasPermission requires an AppBuilder with a security manager"
+			)
+		try:
+			return bool(sm.has_access(self.permission, ''))
+		except NotImplementedError as exc:
+			raise PolicyContextError(
+				f"{type(sm).__name__}.has_access() is not implemented; "
+				f"HasPermission({self.permission!r}) cannot be evaluated"
+			) from exc
 
 	def __repr__(self) -> str:
 		return f"HasPermission({self.permission!r})"
@@ -265,7 +289,8 @@ ADMIN_ONLY = IsAdmin()
 
 
 __all__ = [
-	'Policy', 'HasRole', 'HasPermission', 'IsOwner', 'IsAuthenticated', 'IsAdmin', 'Lambda',
+	'Policy', 'PolicyContextError', 'HasRole', 'HasPermission', 'IsOwner',
+	'IsAuthenticated', 'IsAdmin', 'Lambda',
 	'AllOf', 'AnyOf', 'Not',
 	'require_policy',
 	'ALLOW_ALL', 'DENY_ALL', 'AUTH_ONLY', 'ADMIN_ONLY',

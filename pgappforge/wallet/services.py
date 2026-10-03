@@ -15,7 +15,7 @@ from enum import Enum
 
 from flask import current_app
 from pgappforge import db
-from pgappforge.security import current_user
+from flask_login import current_user
 from sqlalchemy import func, and_, or_, text
 from sqlalchemy.orm import sessionmaker
 
@@ -355,16 +355,20 @@ class TransactionService:
     
     @staticmethod
     def process_transaction(wallet_id: int, request: TransactionRequest,
-                          user_id: int = None, auto_commit: bool = True) -> WalletTransaction:
+                          user_id: int = None, auto_commit: bool = True,
+                          idempotency_key: str = None) -> WalletTransaction:
         """
         Process a wallet transaction.
-        
+
         Args:
             wallet_id: ID of the wallet
             request: TransactionRequest with transaction details
             user_id: ID of the user (optional, will use current_user if not provided)
             auto_commit: Whether to commit the transaction
-            
+            idempotency_key: Caller-supplied key for safe retries. Falls back to
+                request.external_id; when set, a repeat call returns the original
+                transaction instead of moving money twice.
+
         Returns:
             Created WalletTransaction instance
         """
@@ -375,13 +379,26 @@ class TransactionService:
             
             if not user_id:
                 raise ValidationError("User not authenticated")
-            
+
+            # Idempotency: an explicit key wins over request.external_id
+            idempotency_key = idempotency_key or request.external_id
+            if idempotency_key:
+                existing = db.session.query(WalletTransaction).filter_by(
+                    user_id=user_id, external_id=idempotency_key
+                ).first()
+                if existing:
+                    log.info(
+                        f"Idempotent replay: returning transaction {existing.id} "
+                        f"for key {idempotency_key}"
+                    )
+                    return existing
+
             # Get wallet
             wallet = UserWallet.query.filter_by(
                 id=wallet_id,
                 user_id=user_id
             ).first()
-            
+
             if not wallet:
                 raise ValidationError("Wallet not found or access denied")
             
@@ -412,13 +429,14 @@ class TransactionService:
                 category_id=request.category_id,
                 payment_method_id=request.payment_method_id,
                 metadata=request.metadata,
-                auto_commit=False
+                auto_commit=False,
+                external_id=idempotency_key
             )
-            
+
             # Set additional fields
             if request.reference_number:
                 transaction.reference_number = request.reference_number
-            if request.external_id:
+            if request.external_id and not idempotency_key:
                 transaction.external_id = request.external_id
             if request.location:
                 transaction.location = request.location
@@ -426,7 +444,11 @@ class TransactionService:
                 transaction.receipt_url = request.receipt_url
             if request.tags:
                 transaction.tag_list = request.tags
-            
+
+            # reference_number and external_id are hash inputs, so re-seal after
+            # overwriting what the factory used
+            transaction.reseal()
+
             transaction.user_id = user_id
             
             # Update payment method stats
@@ -465,15 +487,18 @@ class TransactionService:
     
     @staticmethod
     def transfer_funds(request: TransferRequest, user_id: int = None,
-                      auto_commit: bool = True) -> Tuple[WalletTransaction, WalletTransaction]:
+                      auto_commit: bool = True,
+                      idempotency_key: str = None) -> Tuple[WalletTransaction, WalletTransaction]:
         """
         Transfer funds between wallets.
-        
+
         Args:
             request: TransferRequest with transfer details
             user_id: ID of the user (optional)
             auto_commit: Whether to commit the transaction
-            
+            idempotency_key: Caller-supplied key for safe retries. A repeat call
+                returns the original (outgoing, incoming) pair.
+
         Returns:
             Tuple of (outgoing_transaction, incoming_transaction)
         """
@@ -484,7 +509,19 @@ class TransactionService:
             
             if not user_id:
                 raise ValidationError("User not authenticated")
-            
+
+            # Idempotency: replay the original transfer pair
+            if idempotency_key:
+                existing = db.session.query(WalletTransaction).filter_by(
+                    user_id=user_id, external_id=idempotency_key
+                ).first()
+                if existing:
+                    log.info(
+                        f"Idempotent replay: returning transfer {existing.id} "
+                        f"for key {idempotency_key}"
+                    )
+                    return existing, existing.linked_transaction
+
             # Get wallets
             source_wallet = UserWallet.query.filter_by(
                 id=request.source_wallet_id,
@@ -506,17 +543,24 @@ class TransactionService:
                 target_wallet=target_wallet,
                 amount=request.amount,
                 description=request.description,
-                auto_commit=False
+                auto_commit=False,
+                external_id=idempotency_key
             )
-            
+
             # Set user IDs
             outgoing.user_id = user_id
             incoming.user_id = user_id
-            
+
+            # Re-seal so the stored signature always matches a fresh verification
+            outgoing.reseal()
+            incoming.reseal()
+
             # Add metadata if provided
             if request.metadata:
-                outgoing.metadata = {**outgoing.metadata, **request.metadata}
-                incoming.metadata = {**incoming.metadata, **request.metadata}
+                outgoing.metadata_dict = {**outgoing.metadata_dict, **request.metadata}
+                incoming.metadata_dict = {**incoming.metadata_dict, **request.metadata}
+                outgoing.reseal()
+                incoming.reseal()
             
             if auto_commit:
                 db.session.commit()
@@ -664,9 +708,25 @@ class TransactionService:
             
             reversal.user_id = user_id
             reversal.reference_number = f"VOID-{original.id}"
-            
+            # reference_number is a hash input
+            reversal.reseal()
+
             # Update original transaction
             original.status = TransactionStatus.CANCELLED.value
+            # status is a hash input: the original must be re-sealed or its
+            # integrity check fails forever after
+            original.reseal()
+
+            # Reversing money changes the wallet balance, so the budget and the
+            # payment-method counters both need re-deriving from the ledger
+            original.wallet.refresh_budget_spend()
+            if original.payment_method_id:
+                payment_method = PaymentMethod.query.filter_by(
+                    id=original.payment_method_id,
+                    user_id=user_id
+                ).first()
+                if payment_method:
+                    payment_method.recompute_totals(auto_commit=False)
             
             if auto_commit:
                 db.session.commit()

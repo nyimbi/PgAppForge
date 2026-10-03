@@ -564,7 +564,7 @@ def app():
     
     app = Flask(__name__)
     app.config['TESTING'] = True
-    app.config['SECRET_KEY'] = 'test-secret-key'
+    app.config['SECRET_KEY'] = 'test-secret-key-not-for-production-0123456789'
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['WTF_CSRF_ENABLED'] = False

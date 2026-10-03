@@ -16,8 +16,10 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["pgappforge"]
+branch = true
 omit = [
     "*/migrations/*",
+    "pgappforge/tests/*",
     "*/tests/*",
     "*/__pycache__/*",
     "*/site-packages/*",

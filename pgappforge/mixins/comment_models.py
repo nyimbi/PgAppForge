@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from flask import current_user
+from flask_login import current_user
 from pgappforge import Model
 from pgappforge.models.mixins import AuditMixin
 from sqlalchemy import (

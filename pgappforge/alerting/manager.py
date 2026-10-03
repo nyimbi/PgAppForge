@@ -5,6 +5,7 @@ Provides proper integration with PgAppForge's manager lifecycle and
 view registration system following FAB patterns.
 """
 
+import atexit
 import logging
 from pgappforge.basemanager import BaseManager
 from .alert_views import AlertConfigView, AlertHistoryView
@@ -31,6 +32,7 @@ class AlertingManager(BaseManager):
         self.alert_manager = None
         self.threshold_monitor = None
         self.notification_service = None
+        self._monitoring_started = False
     
     def init_app(self, app):
         """Initialize the alerting system with Flask app."""
@@ -44,6 +46,10 @@ class AlertingManager(BaseManager):
             # TODO: Load config from app.config
         )
         
+        # Start the threshold monitor.  It was constructed but never started,
+        # so alert thresholds were evaluated by nothing at all.
+        self.start()
+
         # Store references for view access
         app.extensions['alerting_manager'] = self
         app.extensions['alert_manager'] = self.alert_manager
@@ -52,6 +58,37 @@ class AlertingManager(BaseManager):
         
         log.info("Alerting Manager initialized successfully")
     
+    def start(self):
+        """Start the threshold monitor. Idempotent.
+
+        Failures are logged, not raised: alerting is an observability feature
+        and must not be the reason an app fails to boot.
+        """
+        if self._monitoring_started:
+            return
+        monitor = self.threshold_monitor
+        if monitor is None:
+            return
+        try:
+            monitor.start_monitoring()
+            self._monitoring_started = True
+            atexit.register(self.stop)
+            log.info("Alerting threshold monitor started")
+        except Exception as e:
+            log.error("Failed to start threshold monitor: %s", e)
+
+    def stop(self):
+        """Stop the threshold monitor. Safe to call when never started."""
+        if not self._monitoring_started:
+            return
+        self._monitoring_started = False
+        try:
+            if self.threshold_monitor is not None:
+                self.threshold_monitor.stop_monitoring()
+            log.info("Alerting threshold monitor stopped")
+        except Exception as e:
+            log.error("Failed to stop threshold monitor: %s", e)
+
     def register_views(self):
         """Register alerting views with PgAppForge."""
         try:

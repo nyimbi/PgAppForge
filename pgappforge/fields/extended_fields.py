@@ -930,8 +930,7 @@ class CodeEditorWidget:
             selected = 'selected' if lang.value == selected_language else ''
             display_name = lang.value.title()
             options.append(f'<option value="{lang.value}" {selected}>{display_name}</option>')
-        return '
-'.join(options)
+        return ''.join(options)
 
 
 class DateTimePickerWidget:
@@ -1025,8 +1024,7 @@ class DateTimePickerWidget:
         for tz_id, tz_name in common_timezones:
             selected = 'selected' if tz_id == selected_tz else ''
             options.append(f'<option value="{tz_id}" {selected}>{tz_name}</option>')
-        return '
-'.join(options)
+        return ''.join(options)
 
 
 class ColorPickerWidget:
@@ -1649,8 +1647,7 @@ class PhoneNumberWidget:
         for code, name in countries:
             selected = 'selected' if code == selected_country else ''
             options.append(f'<option value="{code}" {selected}>{name}</option>')
-        return '
-'.join(options)
+        return ''.join(options)
 
 
 class AddressWidget:
@@ -1778,8 +1775,7 @@ class AddressWidget:
         for code, name in countries:
             selected = 'selected' if code == selected_country else ''
             options.append(f'<option value="{code}" {selected}>{name}</option>')
-        return '
-'.join(options)
+        return ''.join(options)
 
 
 class DrawingWidget:

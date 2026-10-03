@@ -211,3 +211,50 @@ class Model(object):
     This is for retro compatibility
 """
 Base = Model
+
+
+class _DbProxy:
+    """Lazily resolves to the SQLAlchemy extension instance of the running app.
+
+    Applications build their own ``SQLA(app)`` and register it on the Flask app.
+    Dozens of modules inside ``pgappforge`` need ``db.session`` / ``db.engine``
+    without knowing how that app was built, so ``from pgappforge import db``
+    yields this proxy instead of a second, unbound extension. Outside an app
+    context every attribute raises a clear error rather than silently
+    returning a detached session.
+    """
+
+    __slots__ = ()
+
+    def _target(self):
+        from flask import current_app
+
+        extensions = getattr(current_app, "extensions", None) or {}
+        for key in ("sqlalchemy", "db", "fab_sqlalchemy"):
+            target = extensions.get(key)
+            if target is not None:
+                return target
+        raise RuntimeError(
+            "No SQLAlchemy extension is registered on this application. "
+            "Call SQLA(app) or db.init_app(app) before using pgappforge.db."
+        )
+
+    @property
+    def session(self):
+        return self._target().session
+
+    @property
+    def engine(self):
+        return self._target().engine
+
+    def __getattr__(self, name: str):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return getattr(self._target(), name)
+
+    def __repr__(self) -> str:
+        return "<pgappforge.db proxy>"
+
+
+#: Import as ``from pgappforge import db``; resolves per application at runtime.
+db = _DbProxy()

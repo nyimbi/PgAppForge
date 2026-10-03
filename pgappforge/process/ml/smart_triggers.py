@@ -552,10 +552,12 @@ class SmartTriggerEngine:
                 trigger_config = json.loads(trigger.configuration) if trigger.configuration else {}
                 input_data.update(trigger_config.get('input_data', {}))
                 
-                instance = await engine.start_process(
-                    definition_id=trigger.process_definition_id,
-                    input_data=input_data,
-                    initiated_by=None  # System-initiated
+                instance = asyncio.run(
+                    engine.start_process(
+                        definition_id=trigger.process_definition_id,
+                        input_data=input_data,
+                        initiated_by=None  # System-initiated
+                    )
                 )
                 
                 log.info(f"Process {instance.id} started by trigger {trigger.name}")

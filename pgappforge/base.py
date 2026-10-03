@@ -274,6 +274,41 @@ class AppBuilder:
 
         self._add_global_static()
         self._add_global_filters()
+
+        # Observability + startup assertions.  Ordering matters: logging first
+        # so everything below reports through the new formatter, request
+        # context next so before_request handlers can read g.request_id, then
+        # the config assertion that is allowed to stop the boot.
+        from .observability.logging import configure_logging
+        from .observability.context import install_request_context
+        from .observability import init_telemetry
+        try:
+            configure_logging(app)
+        except Exception as _e:  # pragma: no cover - configure_logging is guarded
+            log.warning("configure_logging raised: %s", _e)
+        try:
+            install_request_context(app)
+        except Exception as _e:  # pragma: no cover
+            log.warning("install_request_context failed: %s", _e)
+        try:
+            from .security.startup_checks import assert_secure_config
+            assert_secure_config(app)
+        except Exception as _e:
+            log.critical("Startup configuration check failed: %s", _e, exc_info=True)
+            raise
+        try:
+            init_telemetry(app, self._db_engine())
+        except Exception as _e:  # pragma: no cover
+            log.warning("Telemetry init failed: %s", _e)
+        try:
+            from .audit import create_audit_table, setup_audit_listeners
+            _engine = self._db_engine()
+            if _engine is not None:
+                create_audit_table(_engine)
+            setup_audit_listeners(session.__class__ if session is not None else None)
+        except Exception as _e:
+            log.warning("Audit subsystem unavailable: %s", _e)
+
         app.before_request(self.sm.before_request)
         with app.app_context():
             self._add_admin_views()
@@ -284,6 +319,19 @@ class AppBuilder:
                 self.post_init()
         self._init_extension(app)
         register_health_check(app, session)
+
+    def _db_engine(self):
+        """Best-effort SQLAlchemy engine for instrumentation; None when absent."""
+        try:
+            from sqlalchemy import inspect as _sa_inspect
+            for ext in ("sqlalchemy", "db"):
+                ext_obj = getattr(self.app, ext, None) if self.app else None
+                if ext_obj is not None and hasattr(ext_obj, "engine"):
+                    return ext_obj.engine
+            return None
+        except Exception as _e:
+            log.debug("engine lookup failed: %s", _e)
+            return None
 
     def _init_extension(self, app: Flask) -> None:
         app.appbuilder = self

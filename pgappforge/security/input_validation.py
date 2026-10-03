@@ -8,6 +8,8 @@ Prevents XSS, SQL injection, and other input-based attacks.
 import html
 import re
 import logging
+
+import bleach
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Dict, List, Union
 from markupsafe import escape
@@ -37,6 +39,27 @@ class InputValidator:
         r'--',
         r'/\*.*\*/',
     ]
+    
+    # bleach allow-list: tags permitted when HTML is explicitly allowed.
+    # Deliberately excludes script, style, iframe, object, embed, form and
+    # every event-handler attribute (attributes are allow-listed, so on*
+    # handlers cannot survive).
+    ALLOWED_TAGS = [
+        'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'div', 'em', 'h1', 'h2',
+        'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'li', 'ol', 'p', 'pre', 'span',
+        'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th', 'thead', 'tr',
+        'u', 'ul',
+    ]
+    ALLOWED_ATTRIBUTES = {
+        'a': ['href', 'title', 'rel'],
+        'abbr': ['title'],
+        'span': ['class'],
+        'div': ['class'],
+        'p': ['class'],
+        'td': ['colspan', 'rowspan'],
+        'th': ['colspan', 'rowspan', 'scope'],
+    }
+    ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
     
     # XSS patterns
     XSS_PATTERNS = [
@@ -73,12 +96,20 @@ class InputValidator:
     
     @classmethod
     def _sanitize_html(cls, value: str) -> str:
-        """Basic HTML sanitization (for when HTML is allowed)"""
-        # Remove script tags and dangerous attributes
-        for pattern in cls.XSS_PATTERNS:
-            value = re.sub(pattern, '', value, flags=re.IGNORECASE)
-        
-        return value
+        """Sanitize HTML with bleach's allow-list.
+
+        Regex stripping cannot parse HTML; obfuscated payloads such as
+        ``<scr<script>ipt>`` or unclosed tags survive it. bleach runs the real
+        html5lib parser and re-serializes only the allowed subset, so anything
+        unlisted is dropped by construction.
+        """
+        return bleach.clean(
+            value,
+            tags=cls.ALLOWED_TAGS,
+            attributes=cls.ALLOWED_ATTRIBUTES,
+            protocols=cls.ALLOWED_PROTOCOLS,
+            strip=True,
+        )
     
     @classmethod
     def validate_email(cls, email: str) -> bool:
@@ -131,21 +162,27 @@ class InputValidator:
     
     @classmethod
     def sanitize_search_query(cls, query: str, max_length: int = 100) -> str:
-        """Sanitize search query input"""
+        """Normalise a free-text search query.
+
+        Only whitespace and length are normalised. Words are never stripped:
+        SQL keyword filtering silently corrupts legitimate searches ("delete my
+        draft", "union jack") while buying nothing, since the query is bound as
+        a parameter by the caller. Injection defence belongs at the query
+        layer, not in the search box.
+        """
         if not query:
             return ""
         
-        # Basic sanitization
-        query = cls.sanitize_string(query, max_length, allow_html=False)
+        if not isinstance(query, str):
+            query = str(query)
         
-        # Remove potential SQL injection patterns
-        for pattern in cls.SQL_INJECTION_PATTERNS:
-            query = re.sub(pattern, '', query, flags=re.IGNORECASE)
+        query = re.sub(r'\s+', ' ', query).strip()
         
-        # Remove multiple spaces
-        query = re.sub(r'\s+', ' ', query)
+        if len(query) > max_length:
+            log.warning(f"Search query truncated from {len(query)} to {max_length} characters")
+            query = query[:max_length]
         
-        return query.strip()
+        return query
     
     @classmethod
     def validate_url(cls, url: str, allowed_schemes: List[str] = None) -> bool:
