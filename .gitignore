@@ -31,3 +31,10 @@ hardware_store/
 
 # zvec-grep local workspace index
 .zvec-grep/
+
+# salvage archives from worktree cleanup 2026-10-03
+.salvage/
+
+# local environment overrides — never commit
+.env
+!.env.example

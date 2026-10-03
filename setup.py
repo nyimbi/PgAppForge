@@ -18,7 +18,7 @@ def read(fname):
 
 
 def desc():
-    return read("README.rst")
+    return read("README.md")
 
 
 setup(
@@ -35,7 +35,7 @@ setup(
         "62 schema templates, actor pattern, multi-tenant support, and AI augmentation."
     ),
     long_description=desc(),
-    long_description_content_type="text/x-rst",
+    long_description_content_type="text/markdown",
     packages=find_packages(exclude=["tests*"]),
     package_data={"": ["LICENSE"]},
     entry_points={
