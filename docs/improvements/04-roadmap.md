@@ -20,6 +20,7 @@ fail silently in production.
 |---|---|---|
 | P61 | `compileall` as the first CI job on `pgappforge/`; fix the five broken files; flake8 with a `select` list; `.coveragerc` and `Makefile` pointed at `pgappforge`; CI check failing on `*_old`, `*_bak*`, zero-reference packages | A1, A14 |
 | P59 | One `uv` lockfile for Python 3.14; regenerate `requirements/` from it; CI, tox and Docker all install it; PostgreSQL-only test environments replace the SQLite defaults | A3 |
+| P67, P69, T4 | pytest becomes the single runner in `ci.yml` and `tox.ini` (nose2 collects 6 of 4,003); delete the session-wide `flask_appbuilder` stub in `tests/ci/conftest.py:25-49`; delete `.coveragerc` so the coverage gate binds; registry-isolation fixture and mapper smoke gate; `make tests` runs `tests/ci` | T1, T2, T4, T5, T20 |
 | S1, S7 | Remove the `except Exception` around `abort(403)` in `ai_governance.py`; remove the `X-Internal-Request` bypass | S1, S7 |
 | S4, S5 | Delete the OAuth-token log line and the three `.bak` copies; map `IntegrityError` to a stable code; default `PGAF_API_SHOW_STACKTRACE` to false with a production override | S4, S5, O11 |
 | S8, S9 | Delete the `X-Tenant-ID` / `?tenant_id=` dev override; remove the `SYSTEM` sentinel; startup assertion that the dev path is unreachable when `FLASK_ENV=production` | S8, S9 |
@@ -27,9 +28,10 @@ fail silently in production.
 | V1, V2 | Forbid last-write-wins on monetary and quantity fields; make conflict detection raise instead of returning "no conflict" | V1, V2 |
 | O2, O6 | Mint a request id in one `before_request`; call `setup_telemetry` from the app factory; implement `flask fab worker-status` or replace the healthcheck | O2, O6, O5 |
 
-**Exit criteria:** `python -m compileall pgappforge` clean; CI green; zero
-`except Exception` around an `abort`; zero client-visible driver text; one
-request id present on every audit row and log line.
+**Exit criteria:** `python -m compileall pgappforge` clean; CI green and
+collecting 4,003 tests rather than 6; zero `except Exception` around an `abort`;
+zero client-visible driver text; one request id present on every audit row and
+log line.
 
 ---
 
@@ -85,7 +87,8 @@ Runs alongside Phases 1 and 2 because it is mostly deletion and constraint work.
 
 **Exit criteria:** `alembic check` clean on every PR; no `ADD COLUMN NOT NULL`
 without a backfill plan in the tree; one error envelope at the API boundary; zero
-upstream imports.
+upstream imports; P68 schema round-trip green against PostgreSQL; coverage
+`fail_under` binding (currently resolves to 0.0).
 
 ---
 

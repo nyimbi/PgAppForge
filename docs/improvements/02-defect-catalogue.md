@@ -10,17 +10,18 @@ reading but not independently re-checked here; these should be triaged against a
 live PostgreSQL instance before scheduling. Severity is impact-based, not CVSS
 scored.
 
-**Counts:** 86 findings. Critical 9, High 30, Medium 34, Low 13.
+**Counts:** 132 findings. Critical 11, High 52, Medium 59, Low 10.
 
 | Section | Theme | Findings |
 |---|---|---|
-| S | Security and trust | 22 |
+| S | Security and trust | 21 |
 | C | Concurrency | 16 |
 | V | Data veracity and schema evolution | 17 |
 | O | Observability and operability | 13 |
 | P | Scalability and data path | 13 |
 | A | Architecture, build and maintainability | 17 |
 | U | Frontend robustness and accessibility | 12 |
+| T | Tests, coverage and build gates | 23 |
 
 ---
 
@@ -638,3 +639,137 @@ indication entirely; `general/lib.html:265-274` emits `<th>` and `<td>` inside
 **U12 LOW `[R]` — Translation coverage about 9 percent.** 598 `_(...)` calls in
 45 of 279 templates against roughly 6,083 literal strings; `{% trans %}` used
 zero times; 16 locale catalogues ship for the core shell only.
+
+---
+
+## T. Tests, coverage and build gates
+
+Added after the tests auditor ran the suite. The `[V]` findings here were
+reproduced in this session (`pytest --collect-only`, `coverage debug config`,
+`py_compile`, targeted reads); the full-suite numbers are from the auditor's
+15-minute run of `pytest tests/ci -q` against the current tree.
+
+**T1 CRITICAL `[V]` — CI executes 6 of 4,003 tests.** `.github/workflows/ci.yml:85`
+runs `nose2 ... tests`; nose2's unittest discovery collects only `unittest.TestCase`
+subclasses, and 142 of the 146 files in `tests/ci` are pytest-function-only.
+`pytest --collect-only tests/ci` collects 4,003. Every behaviour in the suite is
+unverified in CI.
+Fix: pytest as the single runner in `ci.yml` and `tox.ini`.
+
+**T2 CRITICAL `[V]` — Coverage measures a package that does not exist and gates
+nothing.** `.coveragerc:2` `source = flask_appbuilder`; `coverage debug config`
+reports `source: flask_appbuilder`, `fail_under: 0.0`. The `fail_under = 70` in
+`pyproject.toml:32` and the `coverage = pgappforge` in `setup.cfg:4-6` are both
+overridden.
+Fix: delete `.coveragerc`; keep one coverage config.
+
+**T3 CRITICAL `[V]` — The CI command aborts on a syntax error.** With
+`setup.cfg:5` `always-on = True`, coverage instruments every module at report
+time and nose2 dies on `Couldn't parse 'pgappforge/process/approval/workflow_engine.py'`.
+Six shipped files fail `py_compile` (A1 lists five; the sixth is
+`process/ml/smart_triggers.py:555`, `'await' outside async function` `[V]`).
+
+**T4 HIGH `[V]` — The whole session runs against a stubbed framework.**
+`tests/ci/conftest.py:25-49` installs 13 fake `flask_appbuilder` modules into
+`sys.modules` and binds `ModelView`, `BaseView`, `expose`, `has_access`,
+`MasterDetailView`, `RestCRUDView`, `SQLAInterface` and others to a `_Stub` whose
+`__init__` swallows every argument and returns `self` for every call. Eleven
+further `tests/ci` files re-stub. PgAppForge *is* Flask-AppBuilder; the plugin
+tests therefore prove that module-level code runs, nothing more. No teardown.
+Fix: install the package; delete the stubs.
+
+**T5 HIGH `[R]` — One broken relationship poisons the SQLAlchemy registry for the
+process.** 668 of the 781 failures are `InvalidRequestError` from
+`MemberStatement.member` not back-referencing `MemberAccount.statements`
+(`plugins/erp/industry/clubs`); `configure_mappers()` then fails for every
+subsequent test in unrelated files. A production bug camouflaged as 668 test
+failures.
+
+**T6 HIGH `[V]` — The suite fails one test in five.** `pytest tests/ci -q`:
+781 failed, 3,130 passed, 25 skipped, 2 xfailed, 65 errors in 15m24s
+(19.9 percent of 3,977 outcomes). No baseline comparison against `master` was
+made, so it is unknown how many are pre-existing.
+
+**T7 HIGH `[V]` — The local gate is SQLite in a PostgreSQL-only project.**
+`tox.ini:2` `envlist = flake8, api-sqlite`; `:34` `SQLALCHEMY_DATABASE_URI =
+sqlite:///`. RLS, JSONB, arrays and `DISTINCT ON` never run locally, which is why
+21 test files patch JSONB to JSON.
+
+**T8 HIGH `[R]` — Test isolation is keyed on collection order and its failures
+are silenced.** `tests/ci/conftest.py:76-81, 172-187`: the schema reset fires
+only when `request.node.cls.__name__` changes; every exception in the reset is
+downgraded to a warning and in the truncate path swallowed with
+`except Exception: pass`.
+
+**T9 HIGH `[V]` — mypy runs in CI with errors globally ignored.**
+`setup.cfg [mypy] ignore_errors = True`; `.github/workflows/ci.yml:33` runs
+`mypy pgappforge`. Three modules opt back in. `pyright`, mandated by CLAUDE.md,
+is absent from the repository and the virtualenv.
+
+**T10 HIGH `[V]` — flake8 has 874,121 violations, including 706 undefined names.**
+W191 429,490 and E101 315,376 are tab-indentation complaints against a codebase
+whose own convention mandates tabs, and the config never ignores them, so
+`ci.yml:32` can never pass. The 706 `F821` undefined-name findings are a real
+bug class hiding in the noise.
+
+**T11 HIGH `[V]` — The CI matrix cannot install the package on three of four
+legs.** `ci.yml:44` tests Python 3.9 to 3.12; `setup.py:191` declares
+`python_requires=">=3.12"`.
+
+**T12 HIGH `[V]` — Tenancy is tested by import only.**
+`tests/ci/test_multitenancy.py:37-101`: `test_package_imports`,
+`test_rls_module_imports`, `test_middleware_module_imports`,
+`test_models_module_imports`, `test_exclude_tables_is_frozenset`,
+`test_platform_tables_excluded`, `test_app_tables_not_excluded`. No test creates
+two tenants and asserts one cannot read the other. Fourteen "cross-tenant"
+strings exist repo-wide, all in security tests.
+
+**T13 HIGH `[R]` — The GL test declines to test the ledger.**
+`tests/ci/test_core_banking_gl.py:1-16`: "We do NOT stand up a real PostgreSQL +
+GLPeriod setup"; the bridge is exercised by patching `_post_to_gl`.
+
+**T14 MEDIUM `[R]` — No migration is ever executed by a test.**
+`migrations/versions/` holds one revision; `tests/ci/test_pdl.py:271, 294`
+asserts the *string* `"def upgrade()"` appears in source.
+
+**T15 MEDIUM `[R]` — No property or invariant tests.** `hypothesis` is neither
+used nor a dependency. No double-entry, non-negativity or rounding property is
+asserted anywhere.
+
+**T16 MEDIUM `[R]` — No API contract tests.** No `schemathesis` or `openapi-diff`;
+the 15 tests that mention "contract" assert internal decorators.
+
+**T17 MEDIUM `[R]` — Mocks, against an explicit project rule.** 1,137
+`MagicMock`/`Mock` instances and 203 `patch()` calls in `tests/ci` alone;
+CLAUDE.md states "No mocks (except LLM)".
+
+**T18 MEDIUM `[R]` — Sleeps are the only synchronisation primitive.** 41
+`time.sleep` calls across 25 files, 6 of them in
+`tests/test_concurrency_and_locking.py`.
+
+**T19 MEDIUM `[V]` — The untested surface is exactly the risky surface.**
+Test-to-code ratio 0.18 by lines. With zero tests: `plugins/billing`,
+`plugins/forms`, `plugins/realtime`, `plugins/tenancy`, `plugins/classify`,
+`plugins/analytics`, `plugins/voice`, `plugins/integrations`, `plugins/chatbot`,
+`plugins/data_hub`, `visual_ide`, `ai_data`, `devops_automation`,
+`security_automation`, `multi_db`, `migrations`, `monitoring`, `fields`,
+`help`. Two to five test files each for `core_banking` (8,654 lines), `sacco`,
+`regulatory`, `lending`, `mobile_money`, `payments`, `wallet`.
+
+**T20 MEDIUM `[V]` — `make tests` and the quality-gates workflow run 2 files of
+4,003.** `Makefile:62-65`; `.github/workflows/quality-gates.yml:36`. The latter
+reports documentation coverage, not code coverage, and reports "NEEDS REVIEW"
+rather than failing.
+
+**T21 LOW `[R]` — Async mode is unconfigured.** `pyproject.toml` sets no
+`asyncio_mode`; 10 tests carry `@pytest.mark.asyncio` and 14 async tests exist,
+so 4 are unmarked and silently warn under the default strict mode.
+
+**T22 LOW `[R]` — Empty test files present as coverage optics.**
+`tests/ci/test_supplier_invoice.py` is 0 bytes; `tests/integration/
+test_wizard_standalone.py`, `tests/scripts/test_faiss_integration_fixed.py` and
+`tests/test_all_models.py` contain no test functions.
+
+**T23 MEDIUM `[V]` — Ratios.** 147,993 test lines against 815,781 source lines
+(0.18); `plugins/erp` alone is 309,230 lines against 87 test files; 314 test
+files against 1,762 source files.

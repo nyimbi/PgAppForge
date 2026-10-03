@@ -9,15 +9,15 @@ import, AST, grep or targeted read.
 |---|---|
 | `00-baseline-and-method.md` | Measured facts: scale, dependency reality, dead code, per-dimension situation |
 | `01-enhancements.md` | 50 non-incremental proposals (P1 to P50) plus 16 supporting (P51 to P66), scored Impact × 5 / Effort |
-| `02-defect-catalogue.md` | 86 findings (S, C, V, O, P, A, U), disjoint from the proposals, with verification tags |
+| `02-defect-catalogue.md` | 132 findings (S, C, V, O, P, A, U, T), disjoint from the proposals, with verification tags |
 | `03-capability-gap-analysis.md` | ERP and fintech domain matrix, horizontal-layer scores, prior assertion to close gaps |
 | `04-roadmap.md` | Eight phases, dependency graph, critical path, resource allocation |
 
 ## Verdict
 
 The platform has the breadth of a Tier-1 ERP on paper and the defects of a
-prototype in the money path. Nine critical findings, thirty high. The ones that
-matter most:
+prototype in the money path. Eleven critical findings, fifty-two high. The ones
+that matter most:
 
 - **The wallet loses money under concurrency.** The debit path reads a balance,
    checks it in Python, mutates the ORM attribute and commits; the

@@ -726,6 +726,38 @@ for any P-series capability.
 measured kill rate; no `if config.get(...)` scattered across the tree.
 Impact 3, Effort 5, Priority 3.0 (B). Depends on P8.
 
+### P67. Coverage as an SLO with per-risk-tier gates `[P]`
+Coverage today measures a package that does not exist and gates nothing
+(`.coveragerc` → `fail_under: 0.0`). Four tiers with different floors (money
+movement 90, authorization 90, tenant isolation 95, plugin aggregate 60), line
+and branch, gating the diff rather than the codebase: new code in a tier-1 module
+without coverage fails the build.
+**Target:** tier-1 coverage measured rather than asserted; zero regressions on
+any pull request touching `plugins/fintech`, `plugins/erp/finance`, `tenants`,
+`security`.
+Impact 4, Effort 4, Priority 5.0 (A). Depends on P59.
+
+### P68. Schema round-trip harness with a golden catalog `[P]`
+One Alembic revision, zero executed migrations; `test_pdl.py:271` checks that the
+string `def upgrade()` exists. A harness applies `base → head → base → head`
+against PostgreSQL, snapshots `information_schema`, and diffs against a committed
+golden file, so every revision is proven reversible and an upgrade from the
+previous release converges on a fresh install.
+**Target:** upgrade-from-previous-release proven identical to a fresh install.
+Impact 4, Effort 5, Priority 4.0 (B). Depends on P35, P59.
+
+### P69. Declarative-registry isolation fixture and mapper smoke gate `[P]`
+One broken relationship in `plugins/erp/industry/clubs` failed
+`configure_mappers()` and turned into 668 `InvalidRequestError` failures across
+60 unrelated files; the whole CI run additionally executes against a permissive
+`flask_appbuilder` stub installed by `tests/ci/conftest.py:25-49` with no
+teardown. An autouse fixture snapshots and restores the registry and
+`Base.metadata` per file, a subprocess smoke test calls `configure_mappers()` on
+every plugin model, and the stub is deleted.
+**Target:** one broken mapper fails exactly one test; every plugin model proven
+mapper-valid; plugin tests exercising the real framework.
+Impact 4, Effort 4, Priority 5.0 (A). Depends on P59.
+
 ---
 
 ## 10. Scored matrix
@@ -797,9 +829,12 @@ Impact 3, Effort 5, Priority 3.0 (B). Depends on P8.
 | P60 | Continuous verification with mutation testing | 4 | 10 | 2.0 | B | P1, P59 |
 | P7 | Deterministic replay and simulation | 4 | 10 | 2.0 | A | P1, P6 |
 | P28 | Lock-order analysis | 3 | 4 | 3.8 | B | — |
+| P67 | Coverage as an SLO with per-tier gates | 4 | 4 | 5.0 | A | P59 |
+| P69 | Registry isolation fixture and mapper smoke gate | 4 | 4 | 5.0 | A | P59 |
+| P68 | Schema round-trip harness with golden catalog | 4 | 5 | 4.0 | B | P35, P59 |
 | P23 | Citus partitioning | 3 | 16 | 0.9 | C | P8 |
 
-Sixty-six proposals are recorded; the fifty required are P1 to P50. P51 to P66
+Sixty-nine proposals are recorded; the fifty required are P1 to P50. P51 to P69
 are included because the roadmap's later phases depend on them.
 
 ---
