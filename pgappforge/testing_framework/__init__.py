@@ -33,8 +33,8 @@ def _try(module_name: str, *names: str) -> None:
 
 _try("core.test_generator", "TestGenerator")
 _try("core.config", "TestGenerationConfig")
-_try("core.test_runner", "TestRunner")
-_try("core.test_reporter", "TestReporter")
+_try("runner.test_runner", "TestRunner")
+_try("runner.test_reporter", "TestReporter")
 _try("data.realistic_data_generator", "RealisticDataGenerator")
 _try("generators.scenario_generator", "ScenarioGenerator")
 

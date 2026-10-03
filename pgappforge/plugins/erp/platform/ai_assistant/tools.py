@@ -209,6 +209,46 @@ def create_purchase_requisition(item_code: str, quantity: float, notes: str = ""
 		return _json({"available": False, "reason": str(exc)})
 
 
+def log_risk(area: str, description: str, severity: str = "medium", likelihood: str = "medium") -> str:
+	"""Write-capable: record a risk in the plugin's audit/risk log."""
+	audit = _model("pgappforge.plugins.erp.platform.ai_assistant.models.AuditLog")
+	if audit is None:
+		return _json({"available": False, "reason": "ai_assistant models not installed"})
+	try:
+		from flask import g
+
+		row = audit(
+			action=f"risk.{area}",
+			details=_json({"description": description, "severity": severity, "likelihood": likelihood}),
+			user_id=getattr(getattr(g, "user", None), "id", None),
+		)
+		_session().add(row)
+		_session().commit()
+		return _json({"available": True, "logged": row.id})
+	except Exception as exc:
+		_session().rollback()
+		return _json({"available": False, "reason": str(exc)})
+
+
+def schedule_compliance_check(framework_id: int, days_ahead: int = 30) -> str:
+	"""Write-capable: schedule the next compliance review for a framework."""
+	try:
+		from pgappforge.plugins.erp.grc.compliance.services import schedule_review  # type: ignore
+	except Exception:
+		return _json(
+			{
+				"available": False,
+				"reason": "compliance scheduling service not installed",
+				"framework_id": framework_id,
+				"days_ahead": days_ahead,
+			}
+		)
+	try:
+		return _json({"available": True, "result": schedule_review(framework_id, days_ahead)})
+	except Exception as exc:
+		return _json({"available": False, "reason": str(exc)})
+
+
 READ_TOOLS: dict[str, Callable[..., str]] = {
 	"get_vendor_risk_score": get_vendor_risk_score,
 	"get_employee_leave_balance": get_employee_leave_balance,
@@ -217,7 +257,11 @@ READ_TOOLS: dict[str, Callable[..., str]] = {
 	"get_compliance_overdue": get_compliance_overdue,
 	"get_risk_heatmap_summary": get_risk_heatmap_summary,
 }
-WRITE_TOOLS: dict[str, Callable[..., str]] = {"create_purchase_requisition": create_purchase_requisition}
+WRITE_TOOLS: dict[str, Callable[..., str]] = {
+	"create_purchase_requisition": create_purchase_requisition,
+	"log_risk": log_risk,
+	"schedule_compliance_check": schedule_compliance_check,
+}
 
 READ_TOOL_NAMES = _CORE_READ_TOOL_NAMES | frozenset(READ_TOOLS)
 WRITE_TOOL_NAMES = _CORE_WRITE_TOOL_NAMES | frozenset(WRITE_TOOLS)

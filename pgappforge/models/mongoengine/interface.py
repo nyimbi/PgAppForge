@@ -1,18 +1,24 @@
 import logging
 import sys
 
-from mongoengine.fields import (
-    BooleanField,
-    DateTimeField,
-    FileField,
-    FloatField,
-    ImageField,
-    IntField,
-    ListField,
-    ObjectIdField,
-    ReferenceField,
-    StringField,
-)
+try:
+    from mongoengine.fields import (
+        BooleanField,
+        DateTimeField,
+        FileField,
+        FloatField,
+        ImageField,
+        IntField,
+        ListField,
+        ObjectIdField,
+        ReferenceField,
+        StringField,
+    )
+except ImportError as exc:  # pragma: no cover - PostgreSQL-only product
+    raise RuntimeError(
+        "PgAppForge targets PostgreSQL only; the MongoEngine model interface is unavailable. "
+        "Use pgappforge.models.sqla instead."
+    ) from exc
 
 from . import filters
 from ..base import BaseInterface

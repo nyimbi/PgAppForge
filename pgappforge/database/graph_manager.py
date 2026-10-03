@@ -891,3 +891,8 @@ def get_graph_manager(database_uri: str = None, graph_name: str = "default_graph
     if _graph_manager is None or (database_uri and _graph_manager.database_uri != database_uri):
         _graph_manager = GraphDatabaseManager(database_uri, graph_name)
     return _graph_manager
+
+#: Historical name kept for callers that imported it before the rename.
+GraphManager = GraphDatabaseManager
+
+__all__ = [n for n in dir() if not n.startswith("_")]

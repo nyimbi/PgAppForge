@@ -20,8 +20,8 @@ from ..generators.performance_test_generator import PerformanceTestGenerator
 from ..generators.security_test_generator import SecurityTestGenerator
 from ..data.realistic_data_generator import RealisticDataGenerator
 from .config import TestGenerationConfig
-from .test_runner import TestRunner
-from .test_reporter import TestReporter
+from ..runner.test_runner import TestRunner
+from ..runner.test_reporter import TestReporter
 
 logger = logging.getLogger(__name__)
 

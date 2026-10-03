@@ -22,7 +22,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.preprocessing import StandardScaler
 
-import spacy
+try:  # optional NLP stack
+    import spacy
+except ImportError:  # pragma: no cover - optional dependency
+    spacy = None
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
